@@ -1,9 +1,24 @@
 import * as Schema from "effect/Schema";
 import * as Predicate from "effect/Predicate";
-import { AKERU_ARCHIVE_FORMAT, AKERU_ARCHIVE_VERSION, BALANCED_BOT_PERSONALITY_TONE, EventId, MessageId, isGroupBotMember, type PortabilityArchiveRecord, type OrchestrationReadModel, type ServerSettings } from "@akeru/contracts";
+import {
+  AKERU_ARCHIVE_FORMAT,
+  AKERU_ARCHIVE_VERSION,
+  BALANCED_BOT_PERSONALITY_TONE,
+  EventId,
+  MessageId,
+  isGroupBotMember,
+  type PortabilityArchiveRecord,
+  type OrchestrationReadModel,
+  type ServerSettings,
+} from "@akeru/contracts";
 
 import { portabilityChecksum, canonicalJson, canonicalValue } from "./portabilityChecksums.ts";
-import { safeText, safeServerSettings, safeMcpConfiguration, portableProjectData } from "./portabilitySafety.ts";
+import {
+  safeText,
+  safeServerSettings,
+  safeMcpConfiguration,
+  portableProjectData,
+} from "./portabilitySafety.ts";
 
 export const BUILTIN_MCP_PREFIX = "builtin-";
 
@@ -24,6 +39,7 @@ export const ARCHIVE_EXCLUSIONS = [
 ] as const;
 
 type WithoutChecksum<T> = T extends PortabilityArchiveRecord ? Omit<T, "checksum"> : never;
+
 export type RecordCore = WithoutChecksum<PortabilityArchiveRecord>;
 
 export function withChecksum(record: RecordCore): PortabilityArchiveRecord {
@@ -39,12 +55,15 @@ const ApprovalActivityKind = Schema.Literals([
   "approval.resolved",
   "provider.approval.respond.failed",
 ]);
+
 export const APPROVAL_ACTIVITY_KINDS = new Set<string>(ApprovalActivityKind.literals);
+
 const isApprovalActivityKind = Schema.is(ApprovalActivityKind);
 
 export function stringField(payload: unknown, key: string): string | undefined {
   if (!Predicate.isObjectOrArray(payload) || !Predicate.hasProperty(payload, key)) return undefined;
   const value = payload[key];
+
   return Predicate.isString(value) && value.trim().length > 0 ? safeText(value) : undefined;
 }
 
@@ -54,6 +73,7 @@ export function portableRecords(
 ): PortabilityArchiveRecord[] {
   const mcpServerIds = new Set((snapshot.mcpServers ?? []).map((server) => server.id));
   const threadIds = new Set(snapshot.threads.map((thread) => thread.id));
+
   const records: RecordCore[] = [
     {
       type: "server-settings",
@@ -137,11 +157,13 @@ export function portableRecords(
               createdAt: message.createdAt,
               updatedAt: message.updatedAt,
             };
+
             return {
               id: MessageId.make(portableId("message", { threadId: thread.id, index, ...data })),
               ...data,
             };
           });
+
         const proposedPlans = [...thread.proposedPlans]
           .toSorted(
             (left, right) =>
@@ -158,14 +180,17 @@ export function portableRecords(
               createdAt: plan.createdAt,
               updatedAt: plan.updatedAt,
             };
+
             return {
               id: portableId("plan", { threadId: thread.id, index, ...data }),
               ...data,
             };
           });
+
         const approvalHistory = thread.activities
           .flatMap((activity) => {
             const archivedKind = stringField(activity.payload, "originalKind");
+
             const originalKind = isApprovalActivityKind(activity.kind)
               ? activity.kind
               : activity.kind === "approval.history" &&
@@ -173,6 +198,7 @@ export function portableRecords(
                   isApprovalActivityKind(archivedKind)
                 ? archivedKind
                 : undefined;
+
             if (originalKind === undefined) return [];
             const requestId = stringField(activity.payload, "requestId");
             const requestKind = stringField(activity.payload, "requestKind");
@@ -182,6 +208,7 @@ export function portableRecords(
             const target = stringField(activity.payload, "target");
             const action = stringField(activity.payload, "action");
             const outcome = stringField(activity.payload, "outcome");
+
             return [
               {
                 originalKind,
@@ -209,6 +236,7 @@ export function portableRecords(
             id: EventId.make(portableId("approval", { threadId: thread.id, index, ...activity })),
             ...activity,
           }));
+
         return {
           type: "thread" as const,
           id: thread.id,
@@ -244,6 +272,7 @@ export function portableRecords(
         };
       }),
   ];
+
   return records
     .sort((left, right) =>
       left.type === right.type
@@ -259,6 +288,7 @@ export function createPortabilityArchive(
   exportedAt: string,
 ) {
   const records = portableRecords(snapshot, settings);
+
   const body = {
     format: AKERU_ARCHIVE_FORMAT,
     version: AKERU_ARCHIVE_VERSION,
@@ -274,6 +304,7 @@ export function createPortabilityArchive(
     },
     records,
   } as const;
+
   return { ...body, checksum: portabilityChecksum(body) };
 }
 

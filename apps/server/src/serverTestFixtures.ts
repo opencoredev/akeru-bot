@@ -1,32 +1,37 @@
 // @effect-diagnostics globalDate:off nodeBuiltinImport:off
-import { BotId, EnvironmentId, EventId, type OrchestrationThreadActivity, type OrchestrationThreadShell, type OrchestrationEvent, ProjectId, ProviderDriverKind, ProviderInstanceId, ThreadId, TurnId } from "@akeru/contracts";
+import {
+  BotId,
+  EnvironmentId,
+  EventId,
+  type OrchestrationThreadActivity,
+  type OrchestrationThreadShell,
+  type OrchestrationEvent,
+  ProjectId,
+  ProviderDriverKind,
+  ProviderInstanceId,
+  ThreadId,
+  TurnId,
+} from "@akeru/contracts";
 
 import * as DateTime from "effect/DateTime";
 
-
 export const TEST_EPOCH = DateTime.makeUnsafe("1970-01-01T00:00:00.000Z");
-
 
 export const defaultProjectId = ProjectId.make("project-default");
 
-
 export const defaultThreadId = ThreadId.make("thread-default");
 
-
 export const defaultDesktopBootstrapToken = "test-desktop-bootstrap-token";
-
 
 export const defaultModelSelection = {
   instanceId: ProviderInstanceId.make("codex"),
   model: "gpt-5-codex",
 } as const;
 
-
 export const worktreeTestModelSelection = {
   instanceId: ProviderInstanceId.make("opencode"),
   model: "test-model",
 } as const;
-
 
 export const readyWorktreeProvider = {
   instanceId: worktreeTestModelSelection.instanceId,
@@ -42,13 +47,11 @@ export const readyWorktreeProvider = {
   skills: [],
 };
 
-
 export const readyDefaultProvider = {
   ...readyWorktreeProvider,
   instanceId: defaultModelSelection.instanceId,
   driver: ProviderDriverKind.make("codex"),
 };
-
 
 export const makeLiveToolActivityEvent = (
   sequence: number,
@@ -67,6 +70,7 @@ export const makeLiveToolActivityEvent = (
     turnId: TurnId.make("turn-edit"),
     createdAt: "2026-01-01T00:00:01.000Z",
   };
+
   return {
     sequence,
     eventId: EventId.make(`event-tool-${sequence}`),
@@ -82,7 +86,6 @@ export const makeLiveToolActivityEvent = (
   };
 };
 
-
 export const testEnvironmentDescriptor = {
   environmentId: EnvironmentId.make("environment-test"),
   label: "Test environment",
@@ -96,9 +99,9 @@ export const testEnvironmentDescriptor = {
   },
 };
 
-
 export const makeDefaultOrchestrationReadModel = () => {
   const now = "2026-01-01T00:00:00.000Z";
+
   return {
     snapshotSequence: 0,
     updatedAt: now,
@@ -144,7 +147,6 @@ export const makeDefaultOrchestrationReadModel = () => {
   };
 };
 
-
 export const makeChannelTestBot = () => ({
   id: BotId.make("bot-channel-test"),
   name: "Channel bot",
@@ -166,13 +168,11 @@ export const makeChannelTestBot = () => ({
   updatedAt: "2026-01-01T00:00:00.000Z",
 });
 
-
-
-
 export const makeDefaultOrchestrationThreadShell = (
   overrides: Partial<OrchestrationThreadShell> = {},
 ): OrchestrationThreadShell => {
   const now = "2026-01-01T00:00:00.000Z";
+
   return {
     id: defaultThreadId,
     projectId: defaultProjectId,

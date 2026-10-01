@@ -1,7 +1,15 @@
 // @effect-diagnostics globalDate:off nodeBuiltinImport:off
 import * as NodeHttpServer from "@effect/platform-node/NodeHttpServer";
 import * as NodeServices from "@effect/platform-node/NodeServices";
-import { DEFAULT_SERVER_SETTINGS, KeybindingRule, type PreviewEvent, ProviderDriverKind, ProviderInstanceId, ResolvedKeybindingRule, WS_METHODS } from "@akeru/contracts";
+import {
+  DEFAULT_SERVER_SETTINGS,
+  KeybindingRule,
+  type PreviewEvent,
+  ProviderDriverKind,
+  ProviderInstanceId,
+  ResolvedKeybindingRule,
+  WS_METHODS,
+} from "@akeru/contracts";
 import { assert, it } from "@effect/vitest";
 import { assertTrue } from "@effect/vitest/utils";
 import * as Deferred from "effect/Deferred";
@@ -21,10 +29,10 @@ import { getWsServerUrl, withWsRpcClient } from "./serverTestClients.ts";
 import { testEnvironmentDescriptor } from "./serverTestFixtures.ts";
 
 it.layer(NodeServices.layer)("server router seam", (it) => {
-
   it.effect("does not block server config when editor discovery never resolves", () =>
     Effect.gen(function* () {
       const discoveryInterrupted = yield* Deferred.make<void>();
+
       const responseFiber = yield* resolveAvailableEditorsForConfig(
         Effect.never.pipe(
           Effect.onInterrupt(() => Deferred.succeed(discoveryInterrupted, undefined)),
@@ -39,10 +47,10 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
     }),
   );
 
-
   it.effect("does not block server config when file manager reveal discovery never resolves", () =>
     Effect.gen(function* () {
       const discoveryInterrupted = yield* Deferred.make<void>();
+
       const responseFiber = yield* resolveFileManagerRevealKindForConfig(
         Effect.never.pipe(
           Effect.onInterrupt(() => Deferred.succeed(discoveryInterrupted, undefined)),
@@ -57,13 +65,13 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
     }),
   );
 
-
   it.effect("routes websocket rpc server.upsertKeybinding", () =>
     Effect.gen(function* () {
       const rule: KeybindingRule = {
         command: "terminal.toggle",
         key: "ctrl+k",
       };
+
       const resolved: ResolvedKeybindingRule = {
         command: "terminal.toggle",
         shortcut: {
@@ -85,6 +93,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
       });
 
       const wsUrl = yield* getWsServerUrl("/ws");
+
       const response = yield* Effect.scoped(
         withWsRpcClient(wsUrl, (client) => client[WS_METHODS.serverUpsertKeybinding](rule)),
       );
@@ -94,13 +103,13 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
     }).pipe(Effect.provide(NodeHttpServer.layerTest)),
   );
 
-
   it.effect("routes websocket rpc server.removeKeybinding", () =>
     Effect.gen(function* () {
       const rule: KeybindingRule = {
         command: "terminal.toggle",
         key: "ctrl+k",
       };
+
       const resolved: ResolvedKeybindingRule = {
         command: "terminal.toggle",
         shortcut: {
@@ -122,6 +131,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
       });
 
       const wsUrl = yield* getWsServerUrl("/ws");
+
       const response = yield* Effect.scoped(
         withWsRpcClient(wsUrl, (client) => client[WS_METHODS.serverRemoveKeybinding](rule)),
       );
@@ -131,10 +141,10 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
     }).pipe(Effect.provide(NodeHttpServer.layerTest)),
   );
 
-
   it.effect("routes websocket rpc subscribeServerConfig streams snapshot then update", () =>
     Effect.gen(function* () {
       const path = yield* Path.Path;
+
       const providers = [
         {
           instanceId: ProviderInstanceId.make("codex"),
@@ -150,6 +160,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
           skills: [],
         },
       ] as const;
+
       const changeEvent = {
         keybindings: [],
         issues: [],
@@ -175,6 +186,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
       });
 
       const wsUrl = yield* getWsServerUrl("/ws");
+
       const events = yield* Effect.scoped(
         withWsRpcClient(wsUrl, (client) =>
           client[WS_METHODS.subscribeServerConfig]({}).pipe(Stream.take(2), Stream.runCollect),
@@ -183,6 +195,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
 
       const [first, second] = Array.from(events);
       assert.equal(first?.type, "snapshot");
+
       if (first?.type === "snapshot") {
         assert.equal(first.version, 1);
         assert.deepEqual(first.config.keybindings, []);
@@ -196,6 +209,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
         assert.equal(first.config.observability.otlpMetricsEnabled, true);
         assert.deepEqual(first.config.settings, DEFAULT_SERVER_SETTINGS);
       }
+
       assert.deepEqual(second, {
         version: 1,
         type: "keybindingsUpdated",
@@ -204,12 +218,12 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
     }).pipe(Effect.provide(NodeHttpServer.layerTest)),
   );
 
-
   it.effect("routes websocket resource telemetry through the subscription", () =>
     Effect.gen(function* () {
       yield* buildAppUnderTest();
 
       const wsUrl = yield* getWsServerUrl("/ws");
+
       const snapshot = yield* Effect.scoped(
         withWsRpcClient(wsUrl, (client) =>
           client[WS_METHODS.subscribeResourceTelemetry]({}).pipe(Stream.runHead),
@@ -221,7 +235,6 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
       assert.equal(snapshot.value.groups.backend.processCount, 0);
     }).pipe(Effect.provide(NodeHttpServer.layerTest)),
   );
-
 
   it.effect("routes websocket rpc subscribeServerConfig emits provider status updates", () =>
     Effect.gen(function* () {
@@ -258,6 +271,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
       });
 
       const wsUrl = yield* getWsServerUrl("/ws");
+
       const events = yield* Effect.scoped(
         withWsRpcClient(wsUrl, (client) =>
           client[WS_METHODS.subscribeServerConfig]({}).pipe(Stream.take(2), Stream.runCollect),
@@ -266,9 +280,11 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
 
       const [first, second] = Array.from(events);
       assert.equal(first?.type, "snapshot");
+
       if (first?.type === "snapshot") {
         assert.deepEqual(first.config.providers, []);
       }
+
       assert.deepEqual(second, {
         version: 1,
         type: "providerStatuses",
@@ -276,7 +292,6 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
       });
     }).pipe(Effect.provide(NodeHttpServer.layerTest)),
   );
-
 
   it.effect("subscribePreviewEvents forwards the chat scope to the preview manager", () =>
     Effect.gen(function* () {
@@ -289,11 +304,13 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
           serverEpoch: "test-server",
           revision: 1,
         }) as PreviewEvent;
+
       const published = [
         previewEvent("thread-preview-b", "tab-1"),
         previewEvent("thread-preview-a", "tab-2"),
         previewEvent("thread-preview-a", "tab-3"),
       ];
+
       const requestedScopes: Array<string | undefined> = [];
 
       yield* buildAppUnderTest({
@@ -301,6 +318,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
           previewManager: {
             streamEvents: (input) => {
               requestedScopes.push(input.threadId);
+
               return Stream.fromIterable(published).pipe(
                 Stream.filter(PreviewManager.previewEventMatchesSubscription(input)),
               );
@@ -310,6 +328,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
       });
 
       const wsUrl = yield* getWsServerUrl("/ws");
+
       const events = yield* Effect.scoped(
         withWsRpcClient(wsUrl, (client) =>
           client[WS_METHODS.subscribePreviewEvents]({ threadId: "thread-preview-a" }).pipe(
@@ -327,10 +346,10 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
     }).pipe(Effect.provide(NodeHttpServer.layerTest)),
   );
 
-
   it.effect("subscribeServerConfig probes a stale available provider once across clients", () =>
     Effect.gen(function* () {
       const instanceId = ProviderInstanceId.make("codex");
+
       const staleProvider = {
         instanceId,
         driver: ProviderDriverKind.make("codex"),
@@ -344,12 +363,14 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
         slashCommands: [],
         skills: [],
       };
+
       // An instance whose driver is missing has nothing to probe.
       const unavailableProvider = {
         ...staleProvider,
         instanceId: ProviderInstanceId.make("missing_driver"),
         availability: "unavailable" as const,
       };
+
       const releaseProbe = yield* Deferred.make<void>();
       const probeSucceeded = yield* Deferred.make<boolean>();
       const probedInstanceIds: Array<string> = [];
@@ -369,9 +390,11 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
       });
 
       const wsUrl = yield* getWsServerUrl("/ws");
+
       const takeSnapshot = withWsRpcClient(wsUrl, (client) =>
         client[WS_METHODS.subscribeServerConfig]({}).pipe(Stream.take(1), Stream.runCollect),
       );
+
       // Each snapshot is sent after that subscription decided whether to
       // probe, and the first probe stays blocked until both have arrived.
       yield* Effect.scoped(Effect.all([takeSnapshot, takeSnapshot], { concurrency: "unbounded" }));
@@ -383,7 +406,6 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
       assert.isTrue(yield* Deferred.await(probeSucceeded));
     }).pipe(Effect.provide(NodeHttpServer.layerTest), TestClock.withLive),
   );
-
 
   it.effect(
     "routes websocket rpc subscribeServerLifecycle replays snapshot and streams updates",
@@ -401,6 +423,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
             },
           },
         ] as const;
+
         const liveEvents = Stream.make({
           version: 1 as const,
           sequence: 2,
@@ -421,6 +444,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
         });
 
         const wsUrl = yield* getWsServerUrl("/ws");
+
         const events = yield* Effect.scoped(
           withWsRpcClient(wsUrl, (client) =>
             client[WS_METHODS.subscribeServerLifecycle]({}).pipe(Stream.take(2), Stream.runCollect),
@@ -433,4 +457,5 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
         assert.equal(second?.type, "ready");
         assert.equal(second?.sequence, 2);
       }).pipe(Effect.provide(NodeHttpServer.layerTest)),
-  );});
+  );
+});

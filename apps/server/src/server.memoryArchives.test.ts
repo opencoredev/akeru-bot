@@ -3,7 +3,22 @@
 import * as NodeCrypto from "node:crypto";
 import * as NodeHttpServer from "@effect/platform-node/NodeHttpServer";
 import * as NodeServices from "@effect/platform-node/NodeServices";
-import { AkeruMemoryEntityId, AkeruMemoryId, AkeruMemoryPartitionId, AkeruMemoryRootId, AkeruMemoryTenantId, AkeruMemoryUserId, type AkeruMemoryArchiveV2, type AkeruMemoryRevision, type AkeruMemoryThreadAccess, BotId, MessageId, ProjectId, ThreadId, WS_METHODS } from "@akeru/contracts";
+import {
+  AkeruMemoryEntityId,
+  AkeruMemoryId,
+  AkeruMemoryPartitionId,
+  AkeruMemoryRootId,
+  AkeruMemoryTenantId,
+  AkeruMemoryUserId,
+  type AkeruMemoryArchiveV2,
+  type AkeruMemoryRevision,
+  type AkeruMemoryThreadAccess,
+  BotId,
+  MessageId,
+  ProjectId,
+  ThreadId,
+  WS_METHODS,
+} from "@akeru/contracts";
 import { assert, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
@@ -12,16 +27,26 @@ import { encodeMemoryArchiveJson } from "./memory/MemoryArchiveJson.ts";
 import { memoryRevisionArchivePath, renderMemoryRevision } from "./memory/MemoryExport.ts";
 
 import { buildAppUnderTest } from "./serverTestApp.ts";
-import { getWsServerUrl, withWsRpcClient, exchangeAccessToken, fetchEffect, getHttpServerUrl, responseJsonEffect } from "./serverTestClients.ts";
-import { defaultDesktopBootstrapToken, makeDefaultOrchestrationThreadShell } from "./serverTestFixtures.ts";
+import {
+  getWsServerUrl,
+  withWsRpcClient,
+  exchangeAccessToken,
+  fetchEffect,
+  getHttpServerUrl,
+  responseJsonEffect,
+} from "./serverTestClients.ts";
+import {
+  defaultDesktopBootstrapToken,
+  makeDefaultOrchestrationThreadShell,
+} from "./serverTestFixtures.ts";
 
 it.layer(NodeServices.layer)("server router seam", (it) => {
-
   it.effect("routes durable memory archive RPCs through thread authorization", () =>
     Effect.gen(function* () {
       yield* buildAppUnderTest();
       const wsUrl = yield* getWsServerUrl("/ws");
       const threadId = ThreadId.make("missing-memory-thread");
+
       const exportError = yield* Effect.flip(
         Effect.scoped(
           withWsRpcClient(wsUrl, (client) =>
@@ -33,7 +58,9 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
           ),
         ),
       );
+
       assert.equal(exportError._tag, "AkeruMemoryOperationError");
+
       const invalidArchive = {
         schemaVersion: 2,
         anchorThreadId: threadId,
@@ -45,6 +72,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
         conversations: [],
         manifestSha256: "0".repeat(64),
       } as never;
+
       const previewError = yield* Effect.flip(
         Effect.scoped(
           withWsRpcClient(wsUrl, (client) =>
@@ -56,7 +84,9 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
           ),
         ),
       );
+
       assert.equal(previewError._tag, "AkeruMemoryOperationError");
+
       const applyError = yield* Effect.flip(
         Effect.scoped(
           withWsRpcClient(wsUrl, (client) =>
@@ -70,6 +100,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
           ),
         ),
       );
+
       assert.equal(applyError._tag, "AkeruMemoryOperationError");
 
       // Existing V3 memory.documents.* methods remain available while T17
@@ -81,6 +112,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
           ),
         ),
       );
+
       assert.equal(v3Error._tag, "AkeruMemoryOperationError");
 
       // A read-scoped token can export and preview, while apply requires the
@@ -88,7 +120,9 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
       const readToken = yield* exchangeAccessToken(defaultDesktopBootstrapToken, {
         scope: "orchestration:read",
       });
+
       assert.equal(readToken.response.status, 200);
+
       const ticketResponse = yield* fetchEffect(
         yield* getHttpServerUrl("/api/auth/websocket-ticket"),
         {
@@ -96,8 +130,10 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
           headers: { authorization: `Bearer ${readToken.body.access_token ?? ""}` },
         },
       );
+
       const ticketBody = yield* responseJsonEffect<{ readonly ticket: string }>(ticketResponse);
       const readWsUrl = `${yield* getWsServerUrl("/ws", { authenticated: false })}?wsTicket=${encodeURIComponent(ticketBody.ticket)}`;
+
       const deniedApply = yield* Effect.flip(
         Effect.scoped(
           withWsRpcClient(readWsUrl, (client) =>
@@ -111,10 +147,10 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
           ),
         ),
       );
+
       assert.equal(deniedApply._tag, "EnvironmentAuthorizationError");
     }).pipe(Effect.provide(NodeHttpServer.layerTest)),
   );
-
 
   it.effect("durable memory archives export, preview, and apply over WS", () =>
     Effect.gen(function* () {
@@ -270,7 +306,9 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
       const readToken = yield* exchangeAccessToken(defaultDesktopBootstrapToken, {
         scope: "orchestration:read",
       });
+
       assert.equal(readToken.response.status, 200);
+
       const ticketResponse = yield* fetchEffect(
         yield* getHttpServerUrl("/api/auth/websocket-ticket"),
         {
@@ -278,6 +316,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
           headers: { authorization: `Bearer ${readToken.body.access_token ?? ""}` },
         },
       );
+
       const ticketBody = yield* responseJsonEffect<{ readonly ticket: string }>(ticketResponse);
       const readWsUrl = `${yield* getWsServerUrl("/ws", { authenticated: false })}?wsTicket=${encodeURIComponent(ticketBody.ticket)}`;
       const wsUrl = yield* getWsServerUrl("/ws");
@@ -291,6 +330,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
           }),
         ),
       );
+
       assert.equal(archive.schemaVersion, 2);
       assert.equal(archive.anchorThreadId, threadId);
       assert.equal(archive.target, "thread");
@@ -308,6 +348,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
             client[WS_METHODS.memoryArchiveExport]({ threadId, target, complete: true }),
           ),
         ).pipe(Effect.map((result) => result.revisions.map(({ revision }) => revision.id).sort()));
+
       assert.deepEqual(yield* exportIds("thread"), [seededThreadRevision.id]);
       assert.deepEqual(yield* exportIds("bot"), [botRevision.id]);
       assert.deepEqual(yield* exportIds("project"), []);
@@ -322,6 +363,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
           }),
         ),
       );
+
       assert.deepEqual(
         preview.items.map((item) => item.classification),
         ["skipped"],
@@ -334,6 +376,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
         supersedesId: seededThreadRevision.id,
         fact: "WS durable memory diverged fact",
       });
+
       yield* repository.revise({
         access: access(),
         revision: divergentRevision,
@@ -349,6 +392,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
           }),
         ),
       );
+
       assert.deepEqual(
         conflictedPreview.items.map((item) => item.classification),
         ["conflicting"],
@@ -367,6 +411,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
           ),
         ),
       );
+
       assert.equal(deniedApply._tag, "EnvironmentAuthorizationError");
 
       const applyResult = yield* Effect.scoped(
@@ -380,6 +425,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
           }),
         ),
       );
+
       // The one conflicting root was resolved with use-archive, so nothing is
       // counted as new, changed, or skipped.
       assert.deepEqual(applyResult, { imported: 0, changed: 0, skipped: 0 });
@@ -388,6 +434,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
         access: access(),
         rootId: seededThreadRevision.rootId,
       });
+
       assert.equal(restored.id, seededThreadRevision.id);
       assert.equal(restored.fact, seededThreadRevision.fact);
 
@@ -401,6 +448,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
       ): AkeruMemoryArchiveV2 => {
         const revisions = archive.revisions.map(({ revision }) => {
           const next = revisionPatch ? revisionPatch(revision) : revision;
+
           return {
             revision: next,
             sha256: NodeCrypto.createHash("sha256")
@@ -408,8 +456,10 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
               .digest("hex"),
           };
         });
+
         const files = revisions.map(({ revision }) => {
           const content = renderMemoryRevision(revision);
+
           return {
             path: memoryRevisionArchivePath(revision),
             mediaType: "text/markdown" as const,
@@ -417,7 +467,9 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
             content,
           };
         });
+
         const conversations = archive.conversations;
+
         const manifest = encodeMemoryArchiveJson({
           schemaVersion: 2,
           anchorThreadId: overrides.anchorThreadId ?? archive.anchorThreadId,
@@ -436,6 +488,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
             sha256,
           })),
         });
+
         return {
           ...archive,
           ...overrides,
@@ -444,6 +497,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
           manifestSha256: NodeCrypto.createHash("sha256").update(manifest).digest("hex"),
         };
       };
+
       const mismatchedArchives: ReadonlyArray<AkeruMemoryArchiveV2> = [
         forgeArchive({ anchorThreadId: foreignThreadId }, (revision) => ({
           ...revision,
@@ -464,6 +518,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
           entityId: AkeruMemoryEntityId.make(foreignProjectId),
         })),
       ];
+
       for (const candidate of mismatchedArchives) {
         const previewError = yield* Effect.flip(
           Effect.scoped(
@@ -476,11 +531,11 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
             ),
           ),
         );
+
         assert.equal(previewError._tag, "AkeruMemoryOperationError");
       }
     }).pipe(Effect.provide(NodeHttpServer.layerTest)),
   );
-
 
   it.effect("clearing chat observations leaves durable facts and the bot intact", () =>
     Effect.gen(function* () {
@@ -494,6 +549,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
       const cleared: Array<ThreadId> = [];
       const botWrites: Array<string> = [];
       let dispatches = 0;
+
       const project = {
         id: projectId,
         title: "Memory clear",
@@ -506,12 +562,14 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
         createdAt: now,
         updatedAt: now,
       };
+
       const thread = makeDefaultOrchestrationThreadShell({
         id: threadId,
         projectId,
         botId,
         respondingBotId: null,
       });
+
       const access: AkeruMemoryThreadAccess = {
         tenantId,
         userId,
@@ -524,6 +582,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
         respondingBotId: null,
         groupMemberBotIds: [],
       };
+
       const revision = (id: string, scope: "thread" | "bot"): AkeruMemoryRevision => ({
         id: AkeruMemoryId.make(id),
         rootId: AkeruMemoryRootId.make(id),
@@ -555,6 +614,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
         sensitive: false,
         affectedBotIds: [botId],
       });
+
       const threadFact = revision("clear-thread-fact", "thread");
       const botFact = revision("clear-bot-fact", "bot");
 
@@ -575,14 +635,12 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
             dispatch: () =>
               Effect.sync(() => {
                 dispatches += 1;
+
                 return { sequence: 1 };
               }),
           },
           projectionBots: {
-            upsert: (bot) =>
-              Effect.sync(
-                () => void botWrites.push(bot.botId),
-              ),
+            upsert: (bot) => Effect.sync(() => void botWrites.push(bot.botId)),
           },
           projectionSnapshotQuery: {
             getShellSnapshot: () =>
@@ -606,6 +664,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
       });
 
       const wsUrl = yield* getWsServerUrl("/ws");
+
       const exportFacts = (target: "thread" | "bot") =>
         Effect.scoped(
           withWsRpcClient(wsUrl, (client) =>
@@ -625,4 +684,5 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
       assert.deepEqual(botWrites, []);
       assert.equal(dispatches, 0);
     }).pipe(Effect.provide(NodeHttpServer.layerTest)),
-  );});
+  );
+});

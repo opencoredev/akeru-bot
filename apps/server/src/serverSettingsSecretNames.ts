@@ -1,6 +1,9 @@
-import { type CloudSandboxProvider, type ProviderInstanceEnvironmentVariable, type SandboxProviderConnection, ServerSettings } from "@akeru/contracts";
-
-
+import {
+  type CloudSandboxProvider,
+  type ProviderInstanceEnvironmentVariable,
+  type SandboxProviderConnection,
+  ServerSettings,
+} from "@akeru/contracts";
 
 export const textEncoder = new TextEncoder();
 
@@ -27,8 +30,10 @@ export function redactProviderEnvironmentVariable(
 ): ProviderInstanceEnvironmentVariable {
   if (!variable.sensitive) {
     const { valueRedacted: _omit, ...rest } = variable;
+
     return rest;
   }
+
   return {
     ...variable,
     value: "",
@@ -56,7 +61,9 @@ export function redactServerSettingsForClient(settings: ServerSettings): ServerS
         : instance,
     ]),
   );
+
   const browserProvider = settings.browserProvider;
+
   return {
     ...settings,
     providerInstances,

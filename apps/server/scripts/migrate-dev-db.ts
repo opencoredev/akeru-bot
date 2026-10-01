@@ -36,12 +36,21 @@ import { Command, Flag } from "effect/unstable/cli";
 import { runMigrations } from "../src/persistence/Migrations.ts";
 import * as NodeSqliteClient from "../src/persistence/NodeSqliteClient.ts";
 
-import { type RunMigrateDevDbInput, type RunMigrateDevDbOptions, MigrateDevDbNotInWorktreeError, MigrateDevDbSourceMissingError, MigrateDevDbSharedHomeError, MigrateDevDbSourceIsDestinationError, MigrateDevDbPhaseError } from "./migrateDevDbTypes.ts";
+import {
+  type RunMigrateDevDbInput,
+  type RunMigrateDevDbOptions,
+  MigrateDevDbNotInWorktreeError,
+  MigrateDevDbSourceMissingError,
+  MigrateDevDbSharedHomeError,
+  MigrateDevDbSourceIsDestinationError,
+  MigrateDevDbPhaseError,
+} from "./migrateDevDbTypes.ts";
 import { ensureNotInUse } from "./migrateDevDbSafety.ts";
 import { verifyMigrationSlots, pruneSnapshot } from "./migrateDevDbSnapshot.ts";
 
 const removeDatabaseFiles = Effect.fn("removeDatabaseFiles")(function* (databasePath: string) {
   const fs = yield* FileSystem.FileSystem;
+
   for (const suffix of ["", "-wal", "-shm"]) {
     yield* fs.remove(`${databasePath}${suffix}`).pipe(Effect.orElseSucceed(() => undefined));
   }
@@ -56,12 +65,14 @@ export const runMigrateDevDb = Effect.fn("runMigrateDevDb")(function* (
   if (input.projects < 1 || input.threadsPerProject < 0) {
     return yield* Effect.die("projects must be >= 1 and threadsPerProject >= 0");
   }
+
   const fs = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
 
   const sharedHome = path.resolve(
     options.sharedHome ?? path.join(NodeOS.homedir(), PRODUCT_HOME_DIRNAME),
   );
+
   const sourcePath = path.resolve(
     input.source ?? path.join(sharedHome, "userdata", "state.sqlite"),
   );
@@ -70,9 +81,11 @@ export const runMigrateDevDb = Effect.fn("runMigrateDevDb")(function* (
     input.baseDir !== undefined
       ? path.resolve(input.baseDir)
       : yield* resolveWorktreeT3Home(process.cwd());
+
   if (baseDir === undefined) {
     return yield* new MigrateDevDbNotInWorktreeError();
   }
+
   const stateDir = path.join(baseDir, "userdata");
   const databasePath = path.join(stateDir, "state.sqlite");
   const snapshotPath = `${databasePath}.migrate-dev-db-tmp`;
@@ -80,23 +93,28 @@ export const runMigrateDevDb = Effect.fn("runMigrateDevDb")(function* (
   if (!(yield* fs.exists(sourcePath))) {
     return yield* new MigrateDevDbSourceMissingError({ sourcePath });
   }
+
   const [canonicalBaseDir, canonicalSharedHome] = yield* Effect.all([
     fs.realPath(baseDir).pipe(Effect.orElseSucceed(() => baseDir)),
     fs.realPath(sharedHome).pipe(Effect.orElseSucceed(() => sharedHome)),
   ]);
+
   if (canonicalBaseDir === canonicalSharedHome) {
     return yield* new MigrateDevDbSharedHomeError();
   }
+
   // The destination db and snapshot both get deleted below; a --source that
   // resolves to either (e.g. a leftover snapshot file) would be destroyed
   // before it is ever read.
   const canonicalSourcePath = yield* fs
     .realPath(sourcePath)
     .pipe(Effect.orElseSucceed(() => sourcePath));
+
   for (const destination of [databasePath, snapshotPath]) {
     const canonicalDestination = yield* fs
       .realPath(destination)
       .pipe(Effect.orElseSucceed(() => destination));
+
     if (canonicalSourcePath === canonicalDestination) {
       return yield* new MigrateDevDbSourceIsDestinationError({ sourcePath });
     }
@@ -115,6 +133,7 @@ export const runMigrateDevDb = Effect.fn("runMigrateDevDb")(function* (
       );
 
   yield* removeDatabaseFiles(snapshotPath);
+
   // The snapshot is a full-size copy of the source; make sure it is removed
   // even when a phase fails partway through.
   const { executedMigrations, pruned } = yield* Effect.gen(function* () {
@@ -132,10 +151,12 @@ export const runMigrateDevDb = Effect.fn("runMigrateDevDb")(function* (
     // Running against the full snapshot also exercises new migrations on the
     // same data volume the real database would face.
     yield* Console.log("Running migrations on the snapshot...");
+
     const executed = yield* Effect.gen(function* () {
       const sql = yield* SqlClient.SqlClient;
       // Mirror server boot (persistence/Layers/Sqlite.ts).
       yield* sql.unsafe("PRAGMA foreign_keys = ON").unprepared;
+
       return yield* runMigrations();
     }).pipe(
       Effect.provide(NodeSqliteClient.layer({ filename: snapshotPath })),
@@ -158,6 +179,7 @@ export const runMigrateDevDb = Effect.fn("runMigrateDevDb")(function* (
     yield* Console.log(
       `Pruning to ${input.projects} projects, ${input.threadsPerProject} stopped threads each...`,
     );
+
     const result = yield* pruneSnapshot(input).pipe(
       Effect.provide(NodeSqliteClient.layer({ filename: snapshotPath })),
       wrapPhase("prune", snapshotPath),
@@ -175,8 +197,10 @@ export const runMigrateDevDb = Effect.fn("runMigrateDevDb")(function* (
       Effect.provide(NodeSqliteClient.layer({ filename: snapshotPath })),
       wrapPhase("compact", databasePath),
     );
+
     return { executedMigrations: executed, pruned: result };
   }).pipe(Effect.ensuring(removeDatabaseFiles(snapshotPath)));
+
   yield* fs.chmod(databasePath, 0o600);
 
   yield* Effect.gen(function* () {
@@ -190,6 +214,7 @@ export const runMigrateDevDb = Effect.fn("runMigrateDevDb")(function* (
   );
 
   const size = (yield* fs.stat(databasePath)).size;
+
   return {
     databasePath,
     sizeBytes: Number(size),
@@ -232,13 +257,16 @@ export const migrateDevDbCommand = Command.make(
         baseDir: Option.getOrUndefined(baseDir),
         source: Option.getOrUndefined(source),
       });
+
       yield* Console.log("");
       yield* Console.log(
         `Dev database ready: ${result.databasePath} (${formatSize(result.sizeBytes)})`,
       );
+
       for (const project of result.projects) {
         yield* Console.log(`  ${project.title}: ${project.threads} threads`);
       }
+
       yield* Console.log(`  ${result.eventCount} orchestration events kept`);
       yield* Console.log(
         result.executedMigrations.length === 0
@@ -259,6 +287,20 @@ if (import.meta.main) {
   );
 }
 
-export { MigrateDevDbNotInWorktreeError, MigrateDevDbSharedHomeError, MigrateDevDbSourceMissingError, MigrateDevDbSourceIsDestinationError, MigrateDevDbPhaseError, type RunMigrateDevDbInput, type RunMigrateDevDbOptions } from "./migrateDevDbTypes.ts";
-export { MigrateDevDbServerRunningError, MigrateDevDbDestinationBusyError, ensureNotInUse } from "./migrateDevDbSafety.ts";
+export {
+  MigrateDevDbNotInWorktreeError,
+  MigrateDevDbSharedHomeError,
+  MigrateDevDbSourceMissingError,
+  MigrateDevDbSourceIsDestinationError,
+  MigrateDevDbPhaseError,
+  type RunMigrateDevDbInput,
+  type RunMigrateDevDbOptions,
+} from "./migrateDevDbTypes.ts";
+
+export {
+  MigrateDevDbServerRunningError,
+  MigrateDevDbDestinationBusyError,
+  ensureNotInUse,
+} from "./migrateDevDbSafety.ts";
+
 export { MigrateDevDbSlotCollisionError } from "./migrateDevDbSnapshot.ts";

@@ -1,7 +1,5 @@
 import * as Schema from "effect/Schema";
 
-
-
 export class MigrateDevDbNotInWorktreeError extends Schema.TaggedErrorClass<MigrateDevDbNotInWorktreeError>()(
   "MigrateDevDbNotInWorktreeError",
   {},

@@ -18,6 +18,7 @@ function formatClientMetadata(metadata: AuthClientMetadata): string {
     metadata.browser,
     metadata.ipAddress,
   ]);
+
   return details.length > 0 ? details.join(" | ") : "unlabeled client";
 }
 
@@ -38,6 +39,7 @@ export function formatIssuedPairingCredential(
           const url = new URL("/pair", options.baseUrl);
           url.searchParams.delete("token");
           url.hash = new URLSearchParams([["token", credential.credential]]).toString();
+
           return url.toString();
         })()
       : undefined;

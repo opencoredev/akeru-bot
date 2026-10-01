@@ -11,15 +11,11 @@ import { FetchHttpClient, HttpClient } from "effect/unstable/http";
 
 import { OtlpSerialization, OtlpTracer } from "effect/unstable/observability";
 
-
 export const browserOtlpTracingLayer = Layer.mergeAll(
   FetchHttpClient.layer,
   OtlpSerialization.layerJson,
   Layer.succeed(HttpClient.TracerDisabledWhen, () => true),
 );
-
-
-
 
 export const makeBrowserOtlpPayload = (spanName: string) =>
   Effect.gen(function* () {
@@ -38,6 +34,7 @@ export const makeBrowserOtlpPayload = (spanName: string) =>
           let resolveFirstRequest:
             | ((request: { readonly body: string; readonly contentType: string | null }) => void)
             | undefined;
+
           const firstRequest = new Promise<{
             readonly body: string;
             readonly contentType: string | null;
@@ -64,8 +61,10 @@ export const makeBrowserOtlpPayload = (spanName: string) =>
           server.on("error", reject);
           server.listen(0, "127.0.0.1", () => {
             const address = server.address();
+
             if (!address || typeof address === "string") {
               reject(new Error("Expected TCP collector address"));
+
               return;
             }
 
@@ -77,8 +76,10 @@ export const makeBrowserOtlpPayload = (spanName: string) =>
                   server.close((error) => {
                     if (error) {
                       rejectClose(error);
+
                       return;
                     }
+
                     resolveClose();
                   });
                 }),
@@ -116,6 +117,7 @@ export const makeBrowserOtlpPayload = (spanName: string) =>
         Effect.andThen(Effect.die(new Error("Timed out waiting for OTLP trace export"))),
       ),
     );
+
     // @effect-diagnostics-next-line preferSchemaOverJson:off
     return JSON.parse(request.body) as OtlpTracer.TraceData;
   });

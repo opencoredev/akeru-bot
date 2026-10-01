@@ -14,10 +14,10 @@ import { buildAppUnderTest } from "./serverTestApp.ts";
 import { getWsServerUrl, withWsRpcClient } from "./serverTestClients.ts";
 
 it.layer(NodeServices.layer)("server router seam", (it) => {
-
   it.effect("routes websocket rpc orchestration methods", () =>
     Effect.gen(function* () {
       const now = "2026-01-01T00:00:00.000Z";
+
       const snapshot = {
         snapshotSequence: 1,
         updatedAt: now,
@@ -103,6 +103,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
       });
 
       const wsUrl = yield* getWsServerUrl("/ws");
+
       const dispatchResult = yield* Effect.scoped(
         withWsRpcClient(wsUrl, (client) =>
           client[ORCHESTRATION_WS_METHODS.dispatchCommand]({
@@ -113,6 +114,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
           }),
         ),
       );
+
       assert.equal(dispatchResult.sequence, 7);
 
       const turnDiffResult = yield* Effect.scoped(
@@ -124,6 +126,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
           }),
         ),
       );
+
       assert.equal(turnDiffResult.diff, "turn-diff");
 
       const fullDiffResult = yield* Effect.scoped(
@@ -134,6 +137,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
           }),
         ),
       );
+
       assert.equal(fullDiffResult.diff, "full-diff");
 
       const searchResult = yield* Effect.scoped(
@@ -143,6 +147,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
           }),
         ),
       );
+
       assert.deepEqual(searchResult.matches, [
         {
           threadId: ThreadId.make("thread-1"),
@@ -155,13 +160,13 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
     }).pipe(Effect.provide(NodeHttpServer.layerTest)),
   );
 
-
   it.effect("routes websocket rpc orchestration shell snapshot errors", () =>
     Effect.gen(function* () {
       const projectionError = new PersistenceSqlError({
         operation: "ProjectionSnapshotQuery.getShellSnapshot:test",
         detail: "failed to read projection shell snapshot",
       });
+
       yield* buildAppUnderTest({
         layers: {
           projectionSnapshotQuery: {
@@ -171,6 +176,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
       });
 
       const wsUrl = yield* getWsServerUrl("/ws");
+
       const result = yield* Effect.scoped(
         withWsRpcClient(wsUrl, (client) =>
           client[ORCHESTRATION_WS_METHODS.subscribeShell]({}).pipe(Stream.runCollect),
@@ -182,4 +188,5 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
       assertTrue(result.failure.cause instanceof Error);
       assert.include(result.failure.cause.message, projectionError.message);
     }).pipe(Effect.provide(NodeHttpServer.layerTest)),
-  );});
+  );
+});

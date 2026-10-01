@@ -2,7 +2,14 @@
 import * as Predicate from "effect/Predicate";
 import * as NodeHttpServer from "@effect/platform-node/NodeHttpServer";
 import * as NodeServices from "@effect/platform-node/NodeServices";
-import { EventId, MessageId, type OrchestrationShellStreamItem, type OrchestrationEvent, ORCHESTRATION_WS_METHODS, TurnId } from "@akeru/contracts";
+import {
+  EventId,
+  MessageId,
+  type OrchestrationShellStreamItem,
+  type OrchestrationEvent,
+  ORCHESTRATION_WS_METHODS,
+  TurnId,
+} from "@akeru/contracts";
 import { assert, it } from "@effect/vitest";
 import { assertTrue } from "@effect/vitest/utils";
 import * as Deferred from "effect/Deferred";
@@ -12,12 +19,23 @@ import * as Option from "effect/Option";
 import * as PubSub from "effect/PubSub";
 import * as Stream from "effect/Stream";
 
-import { defaultThreadId, makeLiveToolActivityEvent, makeDefaultOrchestrationThreadShell, makeDefaultOrchestrationReadModel, defaultProjectId } from "./serverTestFixtures.ts";
+import {
+  defaultThreadId,
+  makeLiveToolActivityEvent,
+  makeDefaultOrchestrationThreadShell,
+  makeDefaultOrchestrationReadModel,
+  defaultProjectId,
+} from "./serverTestFixtures.ts";
 import { buildAppUnderTest } from "./serverTestApp.ts";
-import { jsonRequestBody, getWsServerUrl, createWsRpcClient, withFirstWsAckHeld, withWsRpcClient } from "./serverTestClients.ts";
+import {
+  jsonRequestBody,
+  getWsServerUrl,
+  createWsRpcClient,
+  withFirstWsAckHeld,
+  withWsRpcClient,
+} from "./serverTestClients.ts";
 
 it.layer(NodeServices.layer)("server router seam", (it) => {
-
   it.effect(
     "stops an overflowing thread producer without an ACK and replays the missing events",
     () =>
@@ -32,6 +50,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
         const replayCalls: Array<{ afterSequence: number; headSequence: number }> = [];
         let headSequence = 0;
         let snapshotCalls = 0;
+
         const message = (sequence: number, text: string) =>
           ({
             sequence,
@@ -55,6 +74,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
               updatedAt: "2026-01-01T00:00:01.000Z",
             },
           }) satisfies OrchestrationEvent;
+
         const events = [
           message(1, "a".repeat(4 * 1024 * 1024)),
           message(2, "b".repeat(4 * 1024 * 1024)),
@@ -70,6 +90,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
                 Effect.gen(function* () {
                   const subscription = yield* PubSub.subscribe(liveEvents);
                   yield* Deferred.succeed(attached, undefined);
+
                   return Stream.fromSubscription(subscription);
                 }),
               ).pipe(Stream.ensuring(Deferred.succeed(detached, undefined))),
@@ -78,10 +99,12 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
                   afterSequence: fromSequenceExclusive,
                   headSequence: toSequenceInclusive,
                 });
+
                 const range = events.filter(
                   (event) =>
                     event.sequence > fromSequenceExclusive && event.sequence <= toSequenceInclusive,
                 );
+
                 return Stream.concat(
                   Stream.fromEffect(Deferred.succeed(replayStarted, undefined)).pipe(Stream.drain),
                   Stream.fromIterable(range),
@@ -92,6 +115,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
                   (event) =>
                     event.sequence > fromSequenceExclusive && event.sequence <= toSequenceInclusive,
                 );
+
                 return Effect.succeed({
                   eventCount: range.length,
                   payloadBytes: range.reduce(
@@ -106,6 +130,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
               getThreadDetailSnapshot: () =>
                 Effect.sync(() => {
                   snapshotCalls += 1;
+
                   return Option.none();
                 }),
             },
@@ -118,6 +143,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
             Effect.gen(function* () {
               let cursor = 0;
               const received: number[] = [];
+
               const attempt = yield* client[ORCHESTRATION_WS_METHODS.subscribeThread]({
                 threadId: defaultThreadId,
                 afterSequence: cursor,
@@ -126,12 +152,14 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
                   if (item.kind !== "event") return Effect.void;
                   cursor = item.event.sequence;
                   received.push(cursor);
+
                   return Deferred.succeed(firstApplied, undefined);
                 }),
                 Stream.runDrain,
                 Effect.result,
                 Effect.forkScoped,
               );
+
               yield* Deferred.await(attached);
               yield* Deferred.await(replayStarted);
               headSequence = 1;
@@ -159,6 +187,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
                 Stream.takeUntil((item) => item.kind === "synchronized"),
                 Stream.runCollect,
               );
+
               assert.deepEqual(
                 recovered.map((item) => (item.kind === "event" ? item.event.sequence : item.kind)),
                 [2, 3, 4, "synchronized"],
@@ -183,7 +212,6 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
       }).pipe(Effect.scoped, Effect.provide(NodeHttpServer.layerTest)),
   );
 
-
   it.effect("stops an overflowing shell producer without an ACK and recovers deleted entries", () =>
     Effect.gen(function* () {
       const liveEvents = yield* PubSub.unbounded<OrchestrationEvent>();
@@ -195,9 +223,11 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
       let replayCalls = 0;
       const thread = makeDefaultOrchestrationThreadShell();
       const project = makeDefaultOrchestrationReadModel().projects[0]!;
+
       const events: OrchestrationEvent[] = Array.from({ length: 1_001 }, (_, index) =>
         makeLiveToolActivityEvent(index + 2, "tool.completed"),
       );
+
       events.push(
         {
           ...events[0]!,
@@ -227,6 +257,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
             ),
             readEvents: () => {
               replayCalls += 1;
+
               return Stream.empty;
             },
           },
@@ -234,6 +265,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
             getShellSnapshot: () =>
               Effect.sync(() => {
                 snapshotCalls += 1;
+
                 return {
                   snapshotSequence: headSequence,
                   bots: [],
@@ -252,12 +284,14 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
         Effect.flatMap((client) =>
           Effect.gen(function* () {
             const received: OrchestrationShellStreamItem[] = [];
+
             const attempt = yield* client[ORCHESTRATION_WS_METHODS.subscribeShell]({}).pipe(
               Stream.tap((item) => Effect.sync(() => received.push(item))),
               Stream.runDrain,
               Effect.result,
               Effect.forkScoped,
             );
+
             yield* Deferred.await(ackHeld);
             headSequence = 1_004;
             yield* PubSub.publishAll(liveEvents, events);
@@ -279,6 +313,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
               Stream.takeUntil((item) => item.kind === "synchronized"),
               Stream.runCollect,
             );
+
             const snapshot = recovered[0];
             assertTrue(snapshot?.kind === "snapshot");
             assert.equal(snapshot.snapshot.snapshotSequence, 1_004);
@@ -294,7 +329,6 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
     }).pipe(Effect.scoped, Effect.provide(NodeHttpServer.layerTest)),
   );
 
-
   it.effect("subscriptions snapshot instead of decoding an oversized replay range", () =>
     Effect.gen(function* () {
       let readEventsCalls = 0;
@@ -309,6 +343,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
             getThreadReplayStats: () =>
               Effect.sync(() => {
                 replayStatsCalls += 1;
+
                 return {
                   eventCount: 5,
                   payloadBytes: 8 * 1024 * 1024 + 1,
@@ -317,11 +352,13 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
               }),
             readThreadEvents: () => {
               readEventsCalls += 1;
+
               return Stream.empty;
             },
             readEvents: () =>
               Stream.sync(() => {
                 readEventsCalls += 1;
+
                 return {} as OrchestrationEvent;
               }),
           },
@@ -329,6 +366,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
             getEventReplayStats: () =>
               Effect.sync(() => {
                 replayStatsCalls += 1;
+
                 return { eventCount: 5, payloadBytes: 8 * 1024 * 1024 + 1 };
               }),
             getThreadDetailSnapshot: () =>
@@ -348,6 +386,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
       });
 
       const wsUrl = yield* getWsServerUrl("/ws");
+
       const threadItems = yield* Effect.scoped(
         withWsRpcClient(wsUrl, (client) =>
           client[ORCHESTRATION_WS_METHODS.subscribeThread]({
@@ -357,6 +396,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
           }).pipe(Stream.take(2), Stream.runCollect),
         ),
       );
+
       const shellItems = yield* Effect.scoped(
         withWsRpcClient(wsUrl, (client) =>
           client[ORCHESTRATION_WS_METHODS.subscribeShell]({
@@ -373,4 +413,5 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
       assert.equal(replayStatsCalls, 2);
       assert.equal(readEventsCalls, 0);
     }).pipe(Effect.provide(NodeHttpServer.layerTest)),
-  );});
+  );
+});

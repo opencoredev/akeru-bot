@@ -1,7 +1,14 @@
 // @effect-diagnostics globalDate:off nodeBuiltinImport:off
 import * as NodeHttpServer from "@effect/platform-node/NodeHttpServer";
 import * as NodeServices from "@effect/platform-node/NodeServices";
-import { EventId, type OrchestrationShellStreamItem, type OrchestrationEvent, ORCHESTRATION_WS_METHODS, ProjectId, ThreadId } from "@akeru/contracts";
+import {
+  EventId,
+  type OrchestrationShellStreamItem,
+  type OrchestrationEvent,
+  ORCHESTRATION_WS_METHODS,
+  ProjectId,
+  ThreadId,
+} from "@akeru/contracts";
 import { assert, it } from "@effect/vitest";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
@@ -18,7 +25,6 @@ import { makeDefaultOrchestrationThreadShell } from "./serverTestFixtures.ts";
 import { getWsServerUrl, withWsRpcClient } from "./serverTestClients.ts";
 
 it.layer(NodeServices.layer)("server router seam", (it) => {
-
   it.effect("subscribeShell coalesces live bursts after the synchronization marker", () =>
     Effect.gen(function* () {
       const busyThreadId = ThreadId.make("thread-live-busy");
@@ -68,6 +74,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
             getThreadShellById: (threadId) =>
               Effect.sync(() => {
                 shellFetches.push(threadId);
+
                 return Option.some(makeDefaultOrchestrationThreadShell({ id: threadId }));
               }),
             getThreadRuntimeContext: () => Effect.die("unused"),
@@ -77,6 +84,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
       });
 
       const wsUrl = yield* getWsServerUrl("/ws");
+
       const items = yield* Effect.scoped(
         Effect.gen(function* () {
           const itemsFiber = yield* withWsRpcClient(wsUrl, (client) =>
@@ -92,6 +100,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
                 if (item.kind === "thread-upserted") {
                   observedLiveThreadIds.add(item.thread.id);
                 }
+
                 return (
                   observedLiveThreadIds.has(busyThreadId) && observedLiveThreadIds.has(newThreadId)
                 );
@@ -101,6 +110,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
           ).pipe(Effect.forkScoped);
 
           yield* Deferred.await(synchronized);
+
           for (const event of [
             ...Array.from({ length: 20 }, (_unused, index) => messageEvent(index + 1)),
             createdEvent,
@@ -114,15 +124,16 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
 
       assert.equal(items[0]?.kind, "snapshot");
       assert.equal(items[1]?.kind, "synchronized");
+
       const liveUpsertedIds = Array.from(items)
         .slice(2)
         .flatMap((item) => (item.kind === "thread-upserted" ? [item.thread.id] : []));
+
       assert.include(liveUpsertedIds, busyThreadId);
       assert.include(liveUpsertedIds, newThreadId);
       assert.isBelow(shellFetches.filter((id) => id === busyThreadId).length, 20);
     }).pipe(Effect.provide(NodeHttpServer.layerTest), TestClock.withLive),
   );
-
 
   it.effect("subscribeShell skips a thread upsert whose shell did not change", () =>
     Effect.gen(function* () {
@@ -159,6 +170,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
             getThreadShellById: (threadId) =>
               Effect.sync(() => {
                 shellFetches.push(threadId);
+
                 return Option.some(
                   makeDefaultOrchestrationThreadShell({
                     id: threadId,
@@ -173,6 +185,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
       });
 
       const wsUrl = yield* getWsServerUrl("/ws");
+
       const upsertedIds = yield* Effect.scoped(
         Effect.gen(function* () {
           yield* withWsRpcClient(wsUrl, (client) =>
@@ -184,11 +197,13 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
           const takeUpsert = Effect.gen(function* () {
             while (true) {
               const item = yield* Queue.take(received);
+
               if (item.kind === "thread-upserted") {
                 return `${item.thread.id}:${item.thread.title}@${item.sequence}`;
               }
             }
           });
+
           const waitForSynchronized = Effect.gen(function* () {
             while ((yield* Queue.take(received)).kind !== "synchronized") {}
           });
@@ -209,6 +224,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
           // 500 events behind, so reconnects stay inside the replay window.
           yield* PubSub.publish(liveEvents, threadEvent(504, quietThreadId));
           const fourth = yield* takeUpsert;
+
           return [first, second, third, fourth];
         }),
       );
@@ -222,7 +238,6 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
       assert.equal(shellFetches.filter((id) => id === quietThreadId).length, 4);
     }).pipe(Effect.provide(NodeHttpServer.layerTest), TestClock.withLive),
   );
-
 
   it.effect("subscribeShell coalescing still emits a removal for a deleted thread", () =>
     Effect.gen(function* () {
@@ -270,6 +285,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
       });
 
       const wsUrl = yield* getWsServerUrl("/ws");
+
       const items = yield* Effect.scoped(
         withWsRpcClient(wsUrl, (client) =>
           client[ORCHESTRATION_WS_METHODS.subscribeShell]({ afterSequence: 0 }).pipe(
@@ -284,7 +300,6 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
       assert.equal(first?.kind === "thread-removed" ? first.threadId : null, goneThreadId);
     }).pipe(Effect.provide(NodeHttpServer.layerTest)),
   );
-
 
   it.effect("subscribeShell retries a transient shell projection refetch failure", () =>
     Effect.gen(function* () {
@@ -316,6 +331,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
             getThreadShellById: () =>
               Effect.suspend(() => {
                 attempts += 1;
+
                 return attempts === 1
                   ? Effect.fail(
                       new PersistenceSqlError({
@@ -334,6 +350,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
       });
 
       const wsUrl = yield* getWsServerUrl("/ws");
+
       const items = yield* Effect.scoped(
         withWsRpcClient(wsUrl, (client) =>
           client[ORCHESTRATION_WS_METHODS.subscribeShell]({ afterSequence: 0 }).pipe(
@@ -349,7 +366,6 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
       assert.equal(attempts, 2);
     }).pipe(Effect.provide(NodeHttpServer.layerTest)),
   );
-
 
   it.effect("subscribeShell coalescing still removes a project after a trailing update", () =>
     Effect.gen(function* () {
@@ -394,6 +410,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
       });
 
       const wsUrl = yield* getWsServerUrl("/ws");
+
       const items = yield* Effect.scoped(
         withWsRpcClient(wsUrl, (client) =>
           client[ORCHESTRATION_WS_METHODS.subscribeShell]({ afterSequence: 0 }).pipe(
@@ -407,4 +424,5 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
       assert.equal(first?.kind, "project-removed");
       assert.equal(first?.kind === "project-removed" ? first.projectId : null, projectId);
     }).pipe(Effect.provide(NodeHttpServer.layerTest)),
-  );});
+  );
+});

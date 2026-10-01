@@ -1,9 +1,26 @@
-import { DEFAULT_BOT_SANDBOX_BROWSER_SHARING, McpServerId, PortabilityArchive, ProjectId, type PortabilityArchiveRecord, type PortabilityImportItem, type PortabilityImportPreview, type PortabilityProjectFolderMap, type PortabilitySafeServerSettings, type OrchestrationReadModel, type ServerSettings } from "@akeru/contracts";
+import {
+  DEFAULT_BOT_SANDBOX_BROWSER_SHARING,
+  McpServerId,
+  PortabilityArchive,
+  ProjectId,
+  type PortabilityArchiveRecord,
+  type PortabilityImportItem,
+  type PortabilityImportPreview,
+  type PortabilityProjectFolderMap,
+  type PortabilitySafeServerSettings,
+  type OrchestrationReadModel,
+  type ServerSettings,
+} from "@akeru/contracts";
 import { normalizeProjectPathForDispatch } from "@akeru/shared/path";
 
 import { portabilityChecksum, canonicalJson } from "./portabilityChecksums.ts";
 import { portableRecords } from "./portabilityArchive.ts";
-import { normalizePortabilityProjectFolders, resolveExistingProjectRestoreMatches, resolveProjectRestoreMatches, mutableProjectData } from "./portabilityProjectRestore.ts";
+import {
+  normalizePortabilityProjectFolders,
+  resolveExistingProjectRestoreMatches,
+  resolveProjectRestoreMatches,
+  mutableProjectData,
+} from "./portabilityProjectRestore.ts";
 
 export function item(record: PortabilityArchiveRecord): PortabilityImportItem {
   const title =
@@ -14,6 +31,7 @@ export function item(record: PortabilityArchiveRecord): PortabilityImportItem {
         : record.type === "bot" || record.type === "group"
           ? record.data.name
           : record.data.title;
+
   return { recordType: record.type, id: record.id, title };
 }
 
@@ -72,22 +90,27 @@ export function previewPortabilityImport(
   const current = new Map(
     portableRecords(snapshot, settings).map((record) => [`${record.type}:${record.id}`, record]),
   );
+
   const normalizedProjectFolders = normalizePortabilityProjectFolders(
     archive,
     snapshot,
     projectFolders,
   );
+
   const existingProjectMatches = resolveExistingProjectRestoreMatches(archive, snapshot);
   const projectMatches = resolveProjectRestoreMatches(archive, snapshot, normalizedProjectFolders);
   const additions: PortabilityImportItem[] = [];
   const changes: PortabilityImportItem[] = [];
   const conflicts: PortabilityImportItem[] = [];
+
   const deletedThreadIds = new Set<string>(
     snapshot.threads.filter((thread) => thread.deletedAt !== null).map((thread) => thread.id),
   );
+
   const enabledMcpServerIds = new Set(
     (snapshot.mcpServers ?? []).filter((server) => server.enabled).map((server) => server.id),
   );
+
   const missingProviders = [
     ...new Set(
       archive.records.flatMap((record) =>
@@ -109,7 +132,9 @@ export function previewPortabilityImport(
       ),
     ),
   ].sort();
+
   const missingProviderIds = new Set(missingProviders);
+
   const uncreatableProjectIds = new Set(
     archive.records.flatMap((record) =>
       record.type === "project" &&
@@ -119,6 +144,7 @@ export function previewPortabilityImport(
         : [],
     ),
   );
+
   const unavailableBotIds = new Set(
     archive.records.flatMap((record) =>
       record.type === "bot" &&
@@ -128,15 +154,19 @@ export function previewPortabilityImport(
         : [],
     ),
   );
+
   const unavailableGroupIds = new Set(
     archive.records.flatMap((record) => {
       if (record.type !== "group") return [];
+
       const hasUnavailableMember = record.data.members.some((member) =>
         unavailableBotIds.has(member.botId),
       );
+
       return record.data.bossBotId === null || hasUnavailableMember ? [record.id] : [];
     }),
   );
+
   for (const record of archive.records) {
     const projectMatch =
       record.type === "project"
@@ -144,13 +174,16 @@ export function previewPortabilityImport(
         : record.type === "thread"
           ? projectMatches.get(record.data.projectId)
           : undefined;
+
     if (projectMatch?.kind === "unsupported") {
       continue;
     }
+
     if (projectMatch?.kind === "conflict") {
       conflicts.push(item(record));
       continue;
     }
+
     if (
       (record.type === "bot" && unavailableBotIds.has(record.id)) ||
       (record.type === "server-settings" &&
@@ -175,12 +208,15 @@ export function previewPortabilityImport(
       conflicts.push(item(record));
       continue;
     }
+
     const existingKey =
       record.type === "project" &&
       (projectMatch?.kind === "matched" || projectMatch?.kind === "created")
         ? `project:${projectMatch.targetId}`
         : `${record.type}:${record.id}`;
+
     const existing = current.get(existingKey);
+
     const importedData =
       record.type === "thread" &&
       (projectMatch?.kind === "matched" || projectMatch?.kind === "created")
@@ -188,6 +224,7 @@ export function previewPortabilityImport(
         : record.type === "server-settings"
           ? portableSettingsWithArchiveDefaults(record.data)
           : record.data;
+
     if (!existing) additions.push(item(record));
     else if (
       record.type === "project" &&
@@ -200,6 +237,7 @@ export function previewPortabilityImport(
       if (record.type === "mcp-server" && enabledMcpServerIds.has(McpServerId.make(record.id))) {
         changes.push(item(record));
       }
+
       continue;
     } else if (
       record.type === "thread" &&
@@ -229,6 +267,7 @@ export function previewPortabilityImport(
       conflicts.push(item(record));
     } else changes.push(item(record));
   }
+
   return {
     snapshotSequence: snapshot.snapshotSequence,
     stateChecksum: portabilityChecksum({

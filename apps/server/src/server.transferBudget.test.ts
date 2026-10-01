@@ -1,6 +1,12 @@
 // @effect-diagnostics globalDate:off nodeBuiltinImport:off
 import * as NodeServices from "@effect/platform-node/NodeServices";
-import { CommandId, MessageId, type OrchestrationThreadStreamItem, ORCHESTRATION_WS_METHODS, ProviderDriverKind } from "@akeru/contracts";
+import {
+  CommandId,
+  MessageId,
+  type OrchestrationThreadStreamItem,
+  ORCHESTRATION_WS_METHODS,
+  ProviderDriverKind,
+} from "@akeru/contracts";
 import { assert, it } from "@effect/vitest";
 import * as Config from "effect/Config";
 import * as Effect from "effect/Effect";
@@ -10,15 +16,40 @@ import * as Queue from "effect/Queue";
 import * as Stream from "effect/Stream";
 import { isThreadDetailEvent } from "./ws.ts";
 import { makeOrchestrationIntegrationHarness } from "../integration/OrchestrationEngineHarness.integration.ts";
-import { countingWsRpcProtocolLayer, makeCountingWsRpcClient, makeWebSocketTransferRecorder, measureHttpGet, transferDelta } from "../integration/NetworkTransferMeasurement.integration.ts";
-import { expectedMeasuredAssistantText, queueMeasuredTransferTurn, seedTransferBudgetHistory, TRANSFER_HISTORY_TURN_COUNT, TRANSFER_MEASURED_TURN_CREATED_AT, TRANSFER_MEASURED_TURN_INDEX, TRANSFER_THREAD_ID, transferModelSelection, waitForTurnQuiesced } from "../integration/TransferBudgetScenario.integration.ts";
-import { formatTransferBudgetReport, formatTransferBudgetResult, type TransferBudgetRun, transferBudgetViolations } from "../integration/TransferBudgetReport.integration.ts";
+import {
+  countingWsRpcProtocolLayer,
+  makeCountingWsRpcClient,
+  makeWebSocketTransferRecorder,
+  measureHttpGet,
+  transferDelta,
+} from "../integration/NetworkTransferMeasurement.integration.ts";
+import {
+  expectedMeasuredAssistantText,
+  queueMeasuredTransferTurn,
+  seedTransferBudgetHistory,
+  TRANSFER_HISTORY_TURN_COUNT,
+  TRANSFER_MEASURED_TURN_CREATED_AT,
+  TRANSFER_MEASURED_TURN_INDEX,
+  TRANSFER_THREAD_ID,
+  transferModelSelection,
+  waitForTurnQuiesced,
+} from "../integration/TransferBudgetScenario.integration.ts";
+import {
+  formatTransferBudgetReport,
+  formatTransferBudgetResult,
+  type TransferBudgetRun,
+  transferBudgetViolations,
+} from "../integration/TransferBudgetReport.integration.ts";
 
 import { buildAppUnderTest } from "./serverTestApp.ts";
 import { readyWorktreeProvider } from "./serverTestFixtures.ts";
-import { getHttpServerUrl, getAuthenticatedSessionCookieHeader, decodeTransferThreadSnapshot, collectQueueUntil, NodeHttpServerTestWithWsDeflate } from "./serverTestClients.ts";
-
-
+import {
+  getHttpServerUrl,
+  getAuthenticatedSessionCookieHeader,
+  decodeTransferThreadSnapshot,
+  collectQueueUntil,
+  NodeHttpServerTestWithWsDeflate,
+} from "./serverTestClients.ts";
 
 it.live(
   "reports thread HTTP and WebSocket transfer budgets",
@@ -47,6 +78,7 @@ it.live(
 
                 const recorder = makeWebSocketTransferRecorder();
                 const wsUrl = baseUrl.replace(/^http:/, "ws:") + "/ws";
+
                 const protocolLayer = countingWsRpcProtocolLayer({
                   url: wsUrl,
                   cookie,
@@ -61,11 +93,14 @@ it.live(
                       url: `${baseUrl}/api/orchestration/threads/${TRANSFER_THREAD_ID}`,
                       headers: { cookie },
                     });
+
                     assert.equal(threadSnapshot.status, 200);
                     assert.equal(threadSnapshot.contentEncoding, "gzip");
+
                     const decodedThread = yield* decodeTransferThreadSnapshot(
                       Buffer.from(threadSnapshot.decodedBody).toString("utf8"),
                     );
+
                     assert.equal(
                       decodedThread.thread.messages.length,
                       TRANSFER_HISTORY_TURN_COUNT * 2,
@@ -82,11 +117,13 @@ it.live(
                       ),
                       Effect.forkScoped,
                     );
+
                     const initialThreadItems = yield* collectQueueUntil(
                       threadItems,
                       (item) => item.kind === "synchronized",
                       `${provider} thread subscription to synchronize`,
                     );
+
                     assert.isFalse(initialThreadItems.some((item) => item.kind === "snapshot"));
                     assert.include(recorder.negotiatedExtensions(), "permessage-deflate");
 
@@ -108,6 +145,7 @@ it.live(
                       createdAt: TRANSFER_MEASURED_TURN_CREATED_AT,
                     });
                     yield* waitForTurnQuiesced(harness, TRANSFER_MEASURED_TURN_INDEX + 1);
+
                     const finalThreadSequence = yield* harness.engine
                       .readEvents(decodedThread.snapshotSequence, 10_000)
                       .pipe(
@@ -119,6 +157,7 @@ it.live(
                               : sequence,
                         ),
                       );
+
                     assert.isAbove(finalThreadSequence, decodedThread.snapshotSequence);
 
                     yield* collectQueueUntil(
@@ -132,11 +171,14 @@ it.live(
                     const finalThreadSnapshot = yield* harness.snapshotQuery
                       .getThreadDetailSnapshot(TRANSFER_THREAD_ID)
                       .pipe(Effect.map(Option.getOrThrow));
+
                     const expectedAssistantText = expectedMeasuredAssistantText(provider);
+
                     const measuredAssistant = finalThreadSnapshot.thread.messages.find(
                       (message) =>
                         message.role === "assistant" && message.text === expectedAssistantText,
                     );
+
                     assert.isDefined(measuredAssistant);
                     assert.isTrue(
                       finalThreadSnapshot.thread.messages.length >= TRANSFER_HISTORY_TURN_COUNT * 2,
@@ -163,20 +205,25 @@ it.live(
 
       const report = formatTransferBudgetReport(runs);
       yield* Effect.logInfo(`\n${report}`);
+
       const reportPath = yield* Config.string("T3CODE_TRANSFER_BUDGET_REPORT_PATH").pipe(
         Config.option,
       );
+
       if (Option.isSome(reportPath)) {
         const fileSystem = yield* FileSystem.FileSystem;
         yield* fileSystem.writeFileString(reportPath.value, report);
       }
+
       const resultPath = yield* Config.string("T3CODE_TRANSFER_BUDGET_RESULT_PATH").pipe(
         Config.option,
       );
+
       if (Option.isSome(resultPath)) {
         const fileSystem = yield* FileSystem.FileSystem;
         yield* fileSystem.writeFileString(resultPath.value, formatTransferBudgetResult(runs));
       }
+
       assert.deepEqual(transferBudgetViolations(runs), []);
     }).pipe(Effect.provide(NodeServices.layer)),
   120_000,

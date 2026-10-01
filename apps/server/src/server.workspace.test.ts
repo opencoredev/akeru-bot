@@ -3,7 +3,17 @@ import * as Predicate from "effect/Predicate";
 import * as NodeHttpServer from "@effect/platform-node/NodeHttpServer";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { HostProcessPlatform } from "@akeru/shared/hostProcess";
-import { CommandId, ExternalLauncherCommandNotFoundError, ORCHESTRATION_WS_METHODS, ProjectId, ProviderInstanceId, RoutineId, RoutineRunId, WS_METHODS, EditorId } from "@akeru/contracts";
+import {
+  CommandId,
+  ExternalLauncherCommandNotFoundError,
+  ORCHESTRATION_WS_METHODS,
+  ProjectId,
+  ProviderInstanceId,
+  RoutineId,
+  RoutineRunId,
+  WS_METHODS,
+  EditorId,
+} from "@akeru/contracts";
 import { assert, it } from "@effect/vitest";
 import { assertFailure, assertTrue } from "@effect/vitest/utils";
 import * as Effect from "effect/Effect";
@@ -17,7 +27,6 @@ import { getWsServerUrl, withWsRpcClient } from "./serverTestClients.ts";
 import { TEST_EPOCH } from "./serverTestFixtures.ts";
 
 it.layer(NodeServices.layer)("server router seam", (it) => {
-
   it.effect("routes websocket rpc projects.searchEntries", () =>
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
@@ -31,6 +40,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
       yield* buildAppUnderTest();
 
       const wsUrl = yield* getWsServerUrl("/ws");
+
       const response = yield* Effect.scoped(
         withWsRpcClient(wsUrl, (client) =>
           client[WS_METHODS.projectsSearchEntries]({
@@ -47,7 +57,6 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
     }).pipe(Effect.provide(NodeHttpServer.layerTest), TestClock.withLive),
   );
 
-
   it.effect("routes websocket rpc projects.listEntries and projects.readFile", () =>
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
@@ -62,6 +71,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
       yield* buildAppUnderTest();
 
       const wsUrl = yield* getWsServerUrl("/ws");
+
       const response = yield* Effect.scoped(
         withWsRpcClient(wsUrl, (client) =>
           Effect.all({
@@ -84,14 +94,15 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
     }).pipe(Effect.provide(NodeHttpServer.layerTest), TestClock.withLive),
   );
 
-
   it.effect("routes websocket rpc projects.searchEntries excludes gitignored files", () =>
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
+
       const workspaceDir = yield* fs.makeTempDirectoryScoped({
         prefix: "t3-ws-project-search-gitignored-",
       });
+
       yield* fs.writeFileString(path.join(workspaceDir, ".gitignore"), ".venv/\n");
       yield* fs.makeDirectory(path.join(workspaceDir, ".venv", "lib"), { recursive: true });
       yield* fs.writeFileString(
@@ -127,6 +138,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
       });
 
       const wsUrl = yield* getWsServerUrl("/ws");
+
       const response = yield* Effect.scoped(
         withWsRpcClient(wsUrl, (client) =>
           client[WS_METHODS.projectsSearchEntries]({
@@ -142,17 +154,19 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
     }).pipe(Effect.provide(NodeHttpServer.layerTest), TestClock.withLive),
   );
 
-
   it.effect("preserves structured workspace rpc failures", () =>
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
+
       const workspaceDir = yield* fs.makeTempDirectoryScoped({
         prefix: "t3-ws-workspace-errors-",
       });
+
       const outsideDir = yield* fs.makeTempDirectoryScoped({
         prefix: "t3-ws-workspace-errors-outside-",
       });
+
       const outsideFile = path.join(outsideDir, "outside.txt");
       yield* fs.writeFileString(outsideFile, "outside\n");
       yield* fs.symlink(outsideFile, path.join(workspaceDir, "linked-outside.txt"));
@@ -163,6 +177,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
       const invalidWorkspace = path.join(workspaceDir, "missing-workspace");
       const sensitiveQuery = "authorization: Bearer secret-token";
       const wsUrl = yield* getWsServerUrl("/ws");
+
       const results = yield* Effect.scoped(
         withWsRpcClient(wsUrl, (client) =>
           Effect.all({
@@ -188,6 +203,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
       ) {
         assert.fail("Expected a ProjectSearchEntriesError");
       }
+
       const searchError = results.search.failure;
       assert.equal(
         searchError.message,
@@ -209,6 +225,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
       ) {
         assert.fail("Expected a ProjectListEntriesError");
       }
+
       const listError = results.list.failure;
       assert.equal(listError.message, `Failed to list workspace entries in '${invalidWorkspace}'.`);
       assert.equal(listError.cwd, invalidWorkspace);
@@ -216,9 +233,13 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
       assert.equal(listError.normalizedCwd, invalidWorkspace);
       assert.isDefined(listError.cause);
 
-      if (!Predicate.isTagged(results.read, "Failure") || !Predicate.isTagged(results.read.failure, "ProjectReadFileError")) {
+      if (
+        !Predicate.isTagged(results.read, "Failure") ||
+        !Predicate.isTagged(results.read.failure, "ProjectReadFileError")
+      ) {
         assert.fail("Expected a ProjectReadFileError");
       }
+
       const readError = results.read.failure;
       assert.equal(
         readError.message,
@@ -232,16 +253,17 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
     }).pipe(Effect.provide(NodeHttpServer.layerTest)),
   );
 
-
   it.effect("reports workspace root stat failures without relabeling them as missing", () =>
     Effect.gen(function* () {
       if ((yield* HostProcessPlatform) === "win32") return;
 
       const fs = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
+
       const blockedRoot = yield* fs.makeTempDirectoryScoped({
         prefix: "t3-ws-workspace-stat-error-",
       });
+
       const workspaceRoot = path.join(blockedRoot, "workspace");
       yield* fs.makeDirectory(workspaceRoot);
       yield* fs.chmod(blockedRoot, 0o000);
@@ -249,6 +271,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
       const result = yield* Effect.gen(function* () {
         yield* buildAppUnderTest();
         const wsUrl = yield* getWsServerUrl("/ws");
+
         return yield* Effect.scoped(
           withWsRpcClient(wsUrl, (client) =>
             client[WS_METHODS.projectsListEntries]({ cwd: workspaceRoot }).pipe(Effect.result),
@@ -256,16 +279,19 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
         );
       }).pipe(Effect.ensuring(fs.chmod(blockedRoot, 0o700).pipe(Effect.ignore)));
 
-      if (!Predicate.isTagged(result, "Failure") || !Predicate.isTagged(result.failure, "ProjectListEntriesError")) {
+      if (
+        !Predicate.isTagged(result, "Failure") ||
+        !Predicate.isTagged(result.failure, "ProjectListEntriesError")
+      ) {
         assert.fail("Expected a ProjectListEntriesError");
       }
+
       const error = result.failure;
       assert.equal(error.failure, "workspace_root_stat_failed");
       assert.equal(error.normalizedCwd, workspaceRoot);
       assert.equal(error.detail, "validate-existing");
     }).pipe(Effect.provide(NodeHttpServer.layerTest)),
   );
-
 
   it.effect("routes websocket rpc projects.writeFile", () =>
     Effect.gen(function* () {
@@ -276,6 +302,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
       yield* buildAppUnderTest();
 
       const wsUrl = yield* getWsServerUrl("/ws");
+
       const response = yield* Effect.scoped(
         withWsRpcClient(wsUrl, (client) =>
           client[WS_METHODS.projectsWriteFile]({
@@ -292,7 +319,6 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
     }).pipe(Effect.provide(NodeHttpServer.layerTest)),
   );
 
-
   it.effect("creates a missing workspace root during websocket project.create dispatch", () =>
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
@@ -303,6 +329,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
       yield* buildAppUnderTest();
 
       const wsUrl = yield* getWsServerUrl("/ws");
+
       const response = yield* Effect.scoped(
         withWsRpcClient(wsUrl, (client) =>
           client[ORCHESTRATION_WS_METHODS.dispatchCommand]({
@@ -320,13 +347,13 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
           }),
         ),
       );
+
       const stat = yield* fs.stat(missingWorkspaceRoot);
 
       assert.isAtLeast(response.sequence, 0);
       assert.equal(stat.type, "Directory");
     }).pipe(Effect.provide(NodeHttpServer.layerTest)),
   );
-
 
   it.effect("reports a manual routine run that does not start", () =>
     Effect.gen(function* () {
@@ -337,6 +364,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
             dispatch: () =>
               Effect.sync(() => {
                 dispatchCount += 1;
+
                 return { sequence: 7 };
               }),
           },
@@ -348,6 +376,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
       });
 
       const wsUrl = yield* getWsServerUrl("/ws");
+
       const result = yield* Effect.scoped(
         withWsRpcClient(wsUrl, (client) =>
           client[ORCHESTRATION_WS_METHODS.dispatchCommand]({
@@ -362,9 +391,11 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
       );
 
       assert.equal(result._tag, "Failure");
+
       if (Predicate.isTagged(result, "Failure")) {
         assert.include(result.failure.message, "did not start");
       }
+
       assert.equal(dispatchCount, 0);
     }).pipe(Effect.provide(NodeHttpServer.layerTest)),
   );
@@ -377,6 +408,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
       yield* buildAppUnderTest();
 
       const wsUrl = yield* getWsServerUrl("/ws");
+
       const result = yield* Effect.scoped(
         withWsRpcClient(wsUrl, (client) =>
           client[WS_METHODS.projectsWriteFile]({
@@ -387,9 +419,13 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
         ).pipe(Effect.result),
       );
 
-      if (!Predicate.isTagged(result, "Failure") || !Predicate.isTagged(result.failure, "ProjectWriteFileError")) {
+      if (
+        !Predicate.isTagged(result, "Failure") ||
+        !Predicate.isTagged(result.failure, "ProjectWriteFileError")
+      ) {
         assert.fail("Expected a ProjectWriteFileError");
       }
+
       const writeError = result.failure;
       assert.equal(
         writeError.message,
@@ -402,7 +438,6 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
       assert.notProperty(writeError, "contents");
     }).pipe(Effect.provide(NodeHttpServer.layerTest)),
   );
-
 
   it.effect("routes websocket rpc shell.openInEditor", () =>
     Effect.gen(function* () {
@@ -432,13 +467,13 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
     }).pipe(Effect.provide(NodeHttpServer.layerTest)),
   );
 
-
   it.effect("routes websocket rpc shell.openInEditor errors", () =>
     Effect.gen(function* () {
       const externalLauncherError = new ExternalLauncherCommandNotFoundError({
         editor: "cursor",
         command: "cursor",
       });
+
       yield* buildAppUnderTest({
         layers: {
           externalLauncher: {
@@ -448,6 +483,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
       });
 
       const wsUrl = yield* getWsServerUrl("/ws");
+
       const result = yield* Effect.scoped(
         withWsRpcClient(wsUrl, (client) =>
           client[WS_METHODS.shellOpenInEditor]({
@@ -461,10 +497,10 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
     }).pipe(Effect.provide(NodeHttpServer.layerTest)),
   );
 
-
   it.effect("routes websocket rpc shell.revealAttachment to the stored file", () =>
     Effect.gen(function* () {
       let revealed: unknown = null;
+
       const config = yield* buildAppUnderTest({
         layers: {
           externalLauncher: {
@@ -475,6 +511,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
           },
         },
       });
+
       const fileSystem = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
       const attachmentId = "thread-reveal-00000000-0000-4000-8000-000000000001";
@@ -483,10 +520,12 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
       yield* fileSystem.writeFile(attachmentPath, new Uint8Array([1, 2, 3]));
 
       const wsUrl = yield* getWsServerUrl("/ws");
+
       const missing = yield* Effect.scoped(
         withWsRpcClient(wsUrl, (client) =>
           Effect.gen(function* () {
             yield* client[WS_METHODS.shellRevealAttachment]({ attachmentId });
+
             return yield* client[WS_METHODS.shellRevealAttachment]({
               attachmentId: "thread-reveal-00000000-0000-4000-8000-000000000002",
             }).pipe(Effect.result);
@@ -498,4 +537,5 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
       assertTrue(Predicate.isTagged(missing, "Failure"));
       assertTrue(Predicate.isTagged(missing.failure, "AttachmentNotFoundError"));
     }).pipe(Effect.provide(NodeHttpServer.layerTest)),
-  );});
+  );
+});

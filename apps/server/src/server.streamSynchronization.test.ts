@@ -2,7 +2,18 @@
 import * as Predicate from "effect/Predicate";
 import * as NodeHttpServer from "@effect/platform-node/NodeHttpServer";
 import * as NodeServices from "@effect/platform-node/NodeServices";
-import { type AkeruDelegationRecord, BotId, DelegationId, EventId, MessageId, type OrchestrationEvent, ORCHESTRATION_WS_METHODS, ProjectId, ThreadId, TurnId } from "@akeru/contracts";
+import {
+  type AkeruDelegationRecord,
+  BotId,
+  DelegationId,
+  EventId,
+  MessageId,
+  type OrchestrationEvent,
+  ORCHESTRATION_WS_METHODS,
+  ProjectId,
+  ThreadId,
+  TurnId,
+} from "@akeru/contracts";
 import { assert, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
@@ -13,10 +24,14 @@ import { toShellDelegation } from "./orchestration/ShellDelegations.ts";
 
 import { buildAppUnderTest } from "./serverTestApp.ts";
 import { getWsServerUrl, withWsRpcClient } from "./serverTestClients.ts";
-import { makeDefaultOrchestrationReadModel, defaultThreadId, makeDefaultOrchestrationThreadShell, makeLiveToolActivityEvent } from "./serverTestFixtures.ts";
+import {
+  makeDefaultOrchestrationReadModel,
+  defaultThreadId,
+  makeDefaultOrchestrationThreadShell,
+  makeLiveToolActivityEvent,
+} from "./serverTestFixtures.ts";
 
 it.layer(NodeServices.layer)("server router seam", (it) => {
-
   it.effect("marks an empty shell catch-up replay as synchronized when requested", () =>
     Effect.gen(function* () {
       yield* buildAppUnderTest({
@@ -28,6 +43,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
       });
 
       const wsUrl = yield* getWsServerUrl("/ws");
+
       const firstItem = yield* Effect.scoped(
         withWsRpcClient(wsUrl, (client) =>
           client[ORCHESTRATION_WS_METHODS.subscribeShell]({
@@ -41,13 +57,13 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
     }).pipe(Effect.provide(NodeHttpServer.layerTest)),
   );
 
-
   it.effect("subscribeShell keeps sparse replay below the captured head", () =>
     Effect.gen(function* () {
       const liveEvents = yield* PubSub.unbounded<OrchestrationEvent>();
       const now = "2026-01-01T00:00:00.000Z";
       const replayProjectId = ProjectId.make("project-replayed");
       const liveProjectId = ProjectId.make("project-live");
+
       const projectDeleted = (sequence: number, projectId: ProjectId): OrchestrationEvent => ({
         sequence,
         eventId: EventId.make(`event-project-deleted-${sequence}`),
@@ -61,6 +77,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
         type: "project.deleted",
         payload: { projectId, deletedAt: now },
       });
+
       const replayed = projectDeleted(1, replayProjectId);
       const newer = projectDeleted(6, liveProjectId);
       let replayHead: number | undefined;
@@ -72,6 +89,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
             streamDomainEvents: Stream.fromPubSub(liveEvents),
             readEvents: (_afterSequence, _limit, toSequenceInclusive) => {
               replayHead = toSequenceInclusive;
+
               return Stream.fromEffect(PubSub.publish(liveEvents, newer)).pipe(
                 Stream.flatMap(() =>
                   Stream.fromIterable(
@@ -91,6 +109,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
       });
 
       const wsUrl = yield* getWsServerUrl("/ws");
+
       const items = yield* Effect.scoped(
         withWsRpcClient(wsUrl, (client) =>
           client[ORCHESTRATION_WS_METHODS.subscribeShell]({
@@ -111,10 +130,10 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
     }).pipe(Effect.provide(NodeHttpServer.layerTest)),
   );
 
-
   it.effect("maps delegation lifecycle events into shell upserts", () =>
     Effect.gen(function* () {
       const now = "2026-08-31T00:00:00.000Z";
+
       const record = (delegationId: DelegationId): AkeruDelegationRecord => ({
         delegationId,
         parentDelegationId: null,
@@ -146,7 +165,9 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
         createdAt: now,
         updatedAt: now,
       });
+
       const created = record(DelegationId.make("delegation-created"));
+
       const updated: AkeruDelegationRecord = {
         ...record(DelegationId.make("delegation-updated")),
         phase: {
@@ -163,6 +184,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
           acknowledgedAt: null,
         },
       };
+
       const events = [
         {
           sequence: 1,
@@ -202,6 +224,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
       });
 
       const wsUrl = yield* getWsServerUrl("/ws");
+
       const items = yield* Effect.scoped(
         withWsRpcClient(wsUrl, (client) =>
           client[ORCHESTRATION_WS_METHODS.subscribeShell]({ afterSequence: 0 }).pipe(
@@ -225,7 +248,6 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
     }).pipe(Effect.provide(NodeHttpServer.layerTest)),
   );
 
-
   it.effect("marks a socket thread snapshot as synchronized when requested", () =>
     Effect.gen(function* () {
       const thread = makeDefaultOrchestrationReadModel().threads[0]!;
@@ -239,6 +261,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
       });
 
       const wsUrl = yield* getWsServerUrl("/ws");
+
       const items = yield* Effect.scoped(
         withWsRpcClient(wsUrl, (client) =>
           client[ORCHESTRATION_WS_METHODS.subscribeThread]({
@@ -253,10 +276,10 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
     }).pipe(Effect.provide(NodeHttpServer.layerTest)),
   );
 
-
   it.effect("buffers shell events published while the fallback snapshot loads", () =>
     Effect.gen(function* () {
       const liveEvents = yield* PubSub.unbounded<OrchestrationEvent>();
+
       const deletedEvent = {
         sequence: 2,
         eventId: EventId.make("event-shell-thread-deleted"),
@@ -284,6 +307,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
             getShellSnapshot: () =>
               Effect.gen(function* () {
                 yield* PubSub.publish(liveEvents, deletedEvent);
+
                 return {
                   snapshotSequence: 1,
                   bots: [],
@@ -299,6 +323,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
       });
 
       const wsUrl = yield* getWsServerUrl("/ws");
+
       const items = yield* Effect.scoped(
         withWsRpcClient(wsUrl, (client) =>
           client[ORCHESTRATION_WS_METHODS.subscribeShell]({
@@ -313,11 +338,11 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
     }).pipe(Effect.provide(NodeHttpServer.layerTest), TestClock.withLive),
   );
 
-
   it.effect("buffers thread events published while the initial snapshot loads", () =>
     Effect.gen(function* () {
       const thread = makeDefaultOrchestrationReadModel().threads[0]!;
       const liveEvents = yield* PubSub.unbounded<OrchestrationEvent>();
+
       const messageEvent = {
         sequence: 2,
         eventId: EventId.make("event-message"),
@@ -351,6 +376,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
             getThreadDetailSnapshot: () =>
               Effect.gen(function* () {
                 yield* PubSub.publish(liveEvents, messageEvent);
+
                 return Option.some({ snapshotSequence: 1, thread });
               }),
           },
@@ -358,6 +384,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
       });
 
       const wsUrl = yield* getWsServerUrl("/ws");
+
       const items = yield* Effect.scoped(
         withWsRpcClient(wsUrl, (client) =>
           client[ORCHESTRATION_WS_METHODS.subscribeThread]({
@@ -376,7 +403,6 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
       assert.equal(items[2]?.kind, "synchronized");
     }).pipe(Effect.provide(NodeHttpServer.layerTest)),
   );
-
 
   it.effect("coalesces buffered live tool updates before websocket delivery", () =>
     Effect.gen(function* () {
@@ -398,6 +424,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
                   makeLiveToolActivityEvent(3),
                   makeLiveToolActivityEvent(4),
                 ]);
+
                 return Option.some({ snapshotSequence: 1, thread });
               }),
           },
@@ -405,6 +432,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
       });
 
       const wsUrl = yield* getWsServerUrl("/ws");
+
       const items = yield* Effect.scoped(
         withWsRpcClient(wsUrl, (client) =>
           client[ORCHESTRATION_WS_METHODS.subscribeThread]({
@@ -417,4 +445,5 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
       assert.equal(items[1]?.kind, "event");
       assert.equal(items[1]?.kind === "event" ? items[1].event.sequence : null, 4);
     }).pipe(Effect.provide(NodeHttpServer.layerTest), TestClock.withLive),
-  );});
+  );
+});

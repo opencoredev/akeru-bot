@@ -1,7 +1,14 @@
 // @effect-diagnostics globalDate:off nodeBuiltinImport:off
 import * as NodeHttpServer from "@effect/platform-node/NodeHttpServer";
 import * as NodeServices from "@effect/platform-node/NodeServices";
-import { BotId, RoutineId, RoutineRunId, type RoutineRun, ThreadId, WS_METHODS } from "@akeru/contracts";
+import {
+  BotId,
+  RoutineId,
+  RoutineRunId,
+  type RoutineRun,
+  ThreadId,
+  WS_METHODS,
+} from "@akeru/contracts";
 import { assert, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
@@ -15,11 +22,11 @@ import { buildAppUnderTest } from "./serverTestApp.ts";
 import { getWsServerUrl, withWsRpcClient } from "./serverTestClients.ts";
 
 it.layer(NodeServices.layer)("server router seam", (it) => {
-
   it.effect("pages routine runs for one chat beyond the shell snapshot cap", () =>
     Effect.gen(function* () {
       const threadId = ThreadId.make("routine-history-thread");
       const routineId = RoutineId.make("routine-history");
+
       const runs: RoutineRun[] = Array.from({ length: 151 }, (_, index) => ({
         id: RoutineRunId.make(`history-run-${index}`),
         routineId,
@@ -36,6 +43,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
         createdAt: new Date(Date.UTC(2026, 8, 29, 0, index)).toISOString(),
         updatedAt: "2026-09-29T00:01:00.000Z",
       }));
+
       yield* buildAppUnderTest({
         layers: {
           routineRepository: {
@@ -43,6 +51,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
               if (id !== threadId) return Effect.succeed({ runs: [], nextCursor: null });
               const start = beforeRunId ? runs.findIndex((run) => run.id === beforeRunId) + 1 : 0;
               const page = runs.slice(start, start + 100);
+
               return Effect.succeed({
                 runs: page,
                 nextCursor: start + page.length < runs.length ? (page.at(-1)?.id ?? null) : null,
@@ -53,16 +62,20 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
       });
 
       const wsUrl = yield* getWsServerUrl("/ws");
+
       const first = yield* Effect.scoped(
         withWsRpcClient(wsUrl, (client) => client[WS_METHODS.routinesListThreadRuns]({ threadId })),
       );
+
       assert.equal(first.runs.length, 100);
       assert.equal(first.nextCursor, runs[99]?.id);
+
       const second = yield* Effect.scoped(
         withWsRpcClient(wsUrl, (client) =>
           client[WS_METHODS.routinesListThreadRuns]({ threadId, beforeRunId: first.nextCursor! }),
         ),
       );
+
       assert.deepEqual(
         [...first.runs, ...second.runs].map((run) => run.id),
         runs.map((run) => run.id),
@@ -71,11 +84,11 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
     }).pipe(Effect.provide(NodeHttpServer.layerTest)),
   );
 
-
   it.effect("publishes typed per-bot usage with the server-owned cap", () =>
     Effect.gen(function* () {
       const botId = BotId.make("bot-usage-rpc");
       const missingBotId = BotId.make("bot-usage-missing");
+
       const summarize = vi.fn<BotUsageLedgerShape["summarize"]>(() =>
         Effect.succeed({
           botId,
@@ -90,6 +103,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
           entries: [],
         }),
       );
+
       const bot = {
         botId,
         name: "Usage bot",
@@ -124,13 +138,16 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
       });
 
       const wsUrl = yield* getWsServerUrl("/ws");
+
       const result = yield* Effect.scoped(
         withWsRpcClient(wsUrl, (client) =>
           Effect.gen(function* () {
             const usage = yield* client[WS_METHODS.botUsage]({ botId });
+
             const missing = yield* client[WS_METHODS.botUsage]({ botId: missingBotId }).pipe(
               Effect.flip,
             );
+
             return { usage, missing };
           }),
         ),
@@ -157,7 +174,6 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
     }).pipe(Effect.provide(NodeHttpServer.layerTest)),
   );
 
-
   it.effect("syncs connector incidents through botInbox.list", () =>
     Effect.gen(function* () {
       const bot = {
@@ -179,6 +195,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
         createdAt: "2026-08-30T20:00:00.000Z",
         updatedAt: "2026-08-30T20:00:00.000Z",
       } satisfies ProjectionBots.ProjectionBot;
+
       const config = yield* buildAppUnderTest({
         layers: {
           projectionBots: {
@@ -186,6 +203,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
           },
         },
       });
+
       const fileSystem = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
       const authPath = path.join(config.secretsDir, "subscription-auth.json");
@@ -261,4 +279,5 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
         ),
       );
     }).pipe(Effect.provide(NodeHttpServer.layerTest)),
-  );});
+  );
+});

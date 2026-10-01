@@ -1,8 +1,35 @@
-import { AuthSessionId, DEFAULT_SERVER_SETTINGS, GroupId, ProjectId, ProviderInstanceId, ThreadId } from "@akeru/contracts";
+import {
+  AuthSessionId,
+  DEFAULT_SERVER_SETTINGS,
+  GroupId,
+  ProjectId,
+  ProviderInstanceId,
+  ThreadId,
+} from "@akeru/contracts";
 import { describe, expect, it } from "vite-plus/test";
-import { canonicalJson, commandsForPortabilityImport, createPortabilityArchive, isPortabilityPreviewCurrent, parsePortabilityArchive, portabilityChecksum, portableRecords, previewPortabilityImport, serializePortabilityArchive } from "./portability.ts";
+import {
+  canonicalJson,
+  commandsForPortabilityImport,
+  createPortabilityArchive,
+  isPortabilityPreviewCurrent,
+  parsePortabilityArchive,
+  portabilityChecksum,
+  portableRecords,
+  previewPortabilityImport,
+  serializePortabilityArchive,
+} from "./portability.ts";
 
-import { makeSnapshot, makeSettings, NOW, AVAILABLE_PROVIDER_IDS, resignArchive, BOT_ID, LATER, GROUP_ID, URL_MCP_ID } from "./portabilityTestSupport.ts";
+import {
+  makeSnapshot,
+  makeSettings,
+  NOW,
+  AVAILABLE_PROVIDER_IDS,
+  resignArchive,
+  BOT_ID,
+  LATER,
+  GROUP_ID,
+  URL_MCP_ID,
+} from "./portabilityTestSupport.ts";
 
 describe("portability archive", () => {
   it("creates deterministic sorted records and an exact manifest", () => {
@@ -32,7 +59,6 @@ describe("portability archive", () => {
     expect(parsePortabilityArchive(serializePortabilityArchive(first))).toEqual(first);
   });
 
-
   it("roundtrips sandbox browser sharing and leaves it unchanged for older archives", () => {
     const snapshot = makeSnapshot();
     const sharedSettings = { ...makeSettings(), botSandboxBrowserSharing: "shared" as const };
@@ -41,12 +67,14 @@ describe("portability archive", () => {
     expect(settingsRecord?.data.botSandboxBrowserSharing).toBe("shared");
 
     const separateSettings = { ...sharedSettings, botSandboxBrowserSharing: "separate" as const };
+
     const preview = previewPortabilityImport(
       archive,
       snapshot,
       separateSettings,
       AVAILABLE_PROVIDER_IDS,
     );
+
     expect(preview.changes).toContainEqual(
       expect.objectContaining({ recordType: "server-settings" }),
     );
@@ -63,9 +91,11 @@ describe("portability archive", () => {
       archive.records.map((record) => {
         if (record.type !== "server-settings") return record;
         const { botSandboxBrowserSharing: _sharing, ...data } = record.data;
+
         return { ...record, data };
       }),
     );
+
     const parsedLegacy = parsePortabilityArchive(JSON.stringify(legacy));
     expect(
       previewPortabilityImport(parsedLegacy, snapshot, separateSettings, AVAILABLE_PROVIDER_IDS)
@@ -84,7 +114,6 @@ describe("portability archive", () => {
         .settingsPatch,
     ).toEqual(expect.objectContaining({ botSandboxBrowserSharing: "separate" }));
   });
-
 
   it("removes credentials, local state, Git state, and event internals", () => {
     const text = serializePortabilityArchive(
@@ -120,6 +149,7 @@ describe("portability archive", () => {
     ]) {
       expect(text).not.toContain(excluded);
     }
+
     expect(text).toContain('"command": "local-tool"');
     expect(text).toContain('"serve"');
     expect(text).toContain('"--safe"');
@@ -130,9 +160,9 @@ describe("portability archive", () => {
     expect(text).toContain('"proposedPlans"');
   });
 
-
   it("omits paired people while preserving bot group membership", () => {
     const snapshot = makeSnapshot();
+
     const source = {
       ...snapshot,
       groups: [
@@ -149,10 +179,12 @@ describe("portability archive", () => {
         },
       ],
     };
+
     const archive = createPortabilityArchive(source, makeSettings(), NOW);
     const group = archive.records.find((record) => record.type === "group");
 
     expect(group?.data.members).toEqual([{ kind: "bot", botId: BOT_ID, role: "boss" }]);
+
     const commandTypes = commandsForPortabilityImport(
       archive,
       source,
@@ -164,16 +196,15 @@ describe("portability archive", () => {
     expect(commandTypes).not.toContain("group.person.unassign");
   });
 
-
   it("rejects paired identities in imported group records", () => {
     const archive = createPortabilityArchive(makeSnapshot(), makeSettings(), NOW);
+
     const withPerson = resignArchive(
       archive,
       archive.records.map((record) =>
         record.type === "group"
-          ? (
-            // SAFETY: This deliberately invalid record tests rejection of paired identities.
-            {
+          ? // SAFETY: This deliberately invalid record tests rejection of paired identities.
+            ({
               ...record,
               data: {
                 ...record.data,
@@ -194,9 +225,9 @@ describe("portability archive", () => {
     expect(() => parsePortabilityArchive(serializePortabilityArchive(withPerson))).toThrow();
   });
 
-
   it("allows one bot to belong to multiple groups", () => {
     const secondGroupId = GroupId.make("group-second");
+
     const source = makeSnapshot({
       groups: [
         makeSnapshot().groups[0]!,
@@ -207,9 +238,11 @@ describe("portability archive", () => {
         },
       ],
     });
+
     const archive = parsePortabilityArchive(
       serializePortabilityArchive(createPortabilityArchive(source, makeSettings(), NOW)),
     );
+
     const preview = previewPortabilityImport(
       archive,
       makeSnapshot(),
@@ -223,11 +256,11 @@ describe("portability archive", () => {
     expect(preview.conflicts).not.toContainEqual(expect.objectContaining({ recordType: "group" }));
   });
 
-
   it("omits deleted threads and projects and does not restore over them", () => {
     const base = makeSnapshot();
     const deletedProjectId = ProjectId.make("project-deleted");
     const deletedThreadId = ThreadId.make("thread-deleted");
+
     const snapshot = {
       ...base,
       projects: [
@@ -249,46 +282,54 @@ describe("portability archive", () => {
         },
       ],
     };
+
     const text = serializePortabilityArchive(
       createPortabilityArchive(snapshot, makeSettings(), NOW),
     );
+
     expect(text).not.toContain("Deleted secret project");
     expect(text).not.toContain("Deleted secret thread");
     expect(text).not.toContain("project-deleted");
     expect(text).not.toContain("thread-deleted");
 
     const archive = createPortabilityArchive(makeSnapshot(), makeSettings(), NOW);
+
     const target = {
       ...base,
       threads: [{ ...base.threads[0]!, deletedAt: NOW }],
     };
+
     const preview = previewPortabilityImport(
       archive,
       target,
       makeSettings(),
       AVAILABLE_PROVIDER_IDS,
     );
+
     expect(preview.conflicts.map((entry) => `${entry.recordType}:${entry.id}`)).toContain(
       "thread:thread-portable",
     );
+
     const plan = commandsForPortabilityImport(
       archive,
       target,
       makeSettings(),
       AVAILABLE_PROVIDER_IDS,
     );
+
     expect(plan.commands.filter((command) => command.type.startsWith("thread."))).toEqual([]);
   });
 
-
   it("rejects tampering, unsafe MCP recipes, bad counts, and broken references", () => {
     const archive = createPortabilityArchive(makeSnapshot(), makeSettings(), NOW);
+
     const changed = {
       ...archive,
       records: archive.records.map((record, index) =>
         index === 0 ? { ...record, updatedAt: LATER } : record,
       ),
     };
+
     expect(() => parsePortabilityArchive(JSON.stringify(changed))).toThrow("Checksum failed");
 
     const badMcp = resignArchive(
@@ -308,6 +349,7 @@ describe("portability archive", () => {
           : record,
       ),
     );
+
     expect(() => parsePortabilityArchive(JSON.stringify(badMcp))).toThrow("local path");
 
     const badCountsBody = {
@@ -317,11 +359,14 @@ describe("portability archive", () => {
         recordCounts: { ...archive.manifest.recordCounts, bot: 99 },
       },
     };
+
     const { checksum: _badCountsChecksum, ...badCountsUnsigned } = badCountsBody;
+
     const badCounts = {
       ...badCountsUnsigned,
       checksum: portabilityChecksum(badCountsUnsigned),
     };
+
     expect(() => parsePortabilityArchive(JSON.stringify(badCounts))).toThrow("record counts");
 
     const broken = resignArchive(
@@ -332,6 +377,7 @@ describe("portability archive", () => {
           : record,
       ),
     );
+
     expect(() => parsePortabilityArchive(JSON.stringify(broken))).toThrow("missing project");
 
     const unsafeAvatar = resignArchive(
@@ -352,6 +398,7 @@ describe("portability archive", () => {
           : record,
       ),
     );
+
     expect(() => parsePortabilityArchive(JSON.stringify(unsafeAvatar))).toThrow(
       "image avatar path",
     );
@@ -364,8 +411,10 @@ describe("portability archive", () => {
           : record,
       ),
     );
+
     expect(() => parsePortabilityArchive(JSON.stringify(unsafeText))).toThrow("unsafe text");
-  });});
+  });
+});
 
 describe("portability import", () => {
   it("previews additions, conflicts, missing providers, and excluded data", () => {
@@ -386,7 +435,9 @@ describe("portability import", () => {
         },
       ],
     });
+
     const archive = createPortabilityArchive(source, makeSettings(), NOW);
+
     const target = makeSnapshot({
       snapshotSequence: 8,
       bots: [],
@@ -394,6 +445,7 @@ describe("portability import", () => {
       mcpServers: [],
       threads: [],
     });
+
     const preview = previewPortabilityImport(
       archive,
       target,
@@ -411,7 +463,6 @@ describe("portability import", () => {
     expect(preview.skippedSecrets).toHaveLength(3);
     expect(preview.unsupported).toEqual([]);
   });
-
 
   it("uses live provider availability instead of static settings keys", () => {
     const archive = createPortabilityArchive(makeSnapshot(), makeSettings(), NOW);
@@ -432,9 +483,9 @@ describe("portability import", () => {
     ]);
   });
 
-
   it("reports newer target records and unrestorable groups as conflicts", () => {
     const archive = createPortabilityArchive(makeSnapshot(), makeSettings(), NOW);
+
     const newerTarget = makeSnapshot({
       mcpServers: [
         {
@@ -445,6 +496,7 @@ describe("portability import", () => {
       ],
       groups: [{ ...makeSnapshot().groups[0]!, bossBotId: null, members: [] }],
     });
+
     const groupWithoutBoss = resignArchive(
       archive,
       archive.records.map((record) =>
@@ -453,6 +505,7 @@ describe("portability import", () => {
           : record,
       ),
     );
+
     const preview = previewPortabilityImport(
       groupWithoutBoss,
       newerTarget,
@@ -466,7 +519,6 @@ describe("portability import", () => {
     ]);
   });
 
-
   it("derives the current projection only from safe records", () => {
     const records = portableRecords(makeSnapshot(), makeSettings());
     expect(records.map((record) => record.type)).toEqual([
@@ -478,4 +530,5 @@ describe("portability import", () => {
       "server-settings",
       "thread",
     ]);
-  });});
+  });
+});

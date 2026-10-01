@@ -14,7 +14,12 @@ import { createSettingsSecretRollback } from "./serverSettingsSecretRollback.ts"
  *
  * @module ServerSettings
  */
-import { DEFAULT_SERVER_SETTINGS, ServerSettings, ServerSettingsError, type ServerSettingsPatch } from "@akeru/contracts";
+import {
+  DEFAULT_SERVER_SETTINGS,
+  ServerSettings,
+  ServerSettingsError,
+  type ServerSettingsPatch,
+} from "@akeru/contracts";
 import * as Cache from "effect/Cache";
 import * as Cause from "effect/Cause";
 import * as Context from "effect/Context";
@@ -40,14 +45,21 @@ import { applyServerSettingsPatch } from "@akeru/shared/serverSettings";
 import * as ServerSecretStore from "./auth/ServerSecretStore.ts";
 import { normalizeImageGenerationPatch } from "./image-generation/service.ts";
 
-import { normalizeServerSettings, resolveTextGenerationProvider, foldProviderInstanceEnabledFlags, restoreUsedProviders } from "./serverSettingsProviders.ts";
-import { type PersistedOptionalProviderSettings, decodeServerSettingsJsonExit, decodePersistedOptionalProviderSettingsJsonExit, stripDefaultServerSettings, PERSISTED_SERVER_SETTINGS_DEFAULTS } from "./serverSettingsPersistence.ts";
-
-
+import {
+  normalizeServerSettings,
+  resolveTextGenerationProvider,
+  foldProviderInstanceEnabledFlags,
+  restoreUsedProviders,
+} from "./serverSettingsProviders.ts";
+import {
+  type PersistedOptionalProviderSettings,
+  decodeServerSettingsJsonExit,
+  decodePersistedOptionalProviderSettingsJsonExit,
+  stripDefaultServerSettings,
+  PERSISTED_SERVER_SETTINGS_DEFAULTS,
+} from "./serverSettingsPersistence.ts";
 
 const encodeServerSettingsJson = Schema.encodeUnknownEffect(fromJsonStringPretty(ServerSettings));
-
-
 
 export class ServerSettingsService extends Context.Service<
   ServerSettingsService,
@@ -84,13 +96,16 @@ export class ServerSettingsService extends Context.Service<
 type TestSettingsOverrides = Omit<
   DeepPartial<ServerSettings>,
   "automaticGitFetchInterval" | "providerHealthRefreshInterval"
-> & Partial<Pick<ServerSettings, "automaticGitFetchInterval" | "providerHealthRefreshInterval">>;
+> &
+  Partial<Pick<ServerSettings, "automaticGitFetchInterval" | "providerHealthRefreshInterval">>;
 
 const makeTest = (overrides: TestSettingsOverrides = {}) =>
   Effect.gen(function* () {
     const { automaticGitFetchInterval, providerHealthRefreshInterval, ...overridesForMerge } =
       overrides;
+
     const merged = deepMerge(DEFAULT_SERVER_SETTINGS, overridesForMerge);
+
     const initialSettings = yield* normalizeServerSettings({
       ...merged,
       ...(automaticGitFetchInterval !== undefined
@@ -100,6 +115,7 @@ const makeTest = (overrides: TestSettingsOverrides = {}) =>
         ? { providerHealthRefreshInterval: providerHealthRefreshInterval }
         : {}),
     });
+
     const currentSettingsRef = yield* Ref.make<ServerSettings>(initialSettings);
 
     return {
@@ -168,11 +184,17 @@ const make = Effect.gen(function* () {
       const raw = yield* readRawConfig;
       const decoded = decodeServerSettingsJsonExit(raw);
       const persistedSettings = decodePersistedOptionalProviderSettingsJsonExit(raw);
+
       if (Predicate.isTagged(persistedSettings, "Success")) {
         persisted = persistedSettings.value;
       }
-      if (Predicate.isTagged(decoded, "Failure") || Predicate.isTagged(persistedSettings, "Failure")) {
+
+      if (
+        Predicate.isTagged(decoded, "Failure") ||
+        Predicate.isTagged(persistedSettings, "Failure")
+      ) {
         const failure = Predicate.isTagged(decoded, "Failure") ? decoded : persistedSettings;
+
         if (Predicate.isTagged(failure, "Failure")) {
           yield* Effect.logWarning("failed to parse settings.json, using defaults", {
             path: settingsPath,
@@ -214,9 +236,11 @@ const make = Effect.gen(function* () {
     const normalized = foldProviderInstanceEnabledFlags(
       restoreUsedProviders(settings, persisted, providerHistory),
     );
+
     yield* validatePersistedSandboxSecrets(normalized);
     const sandboxMaterialized = yield* materializeSandboxEnvironmentSecrets(normalized);
     yield* validateSandboxSettings(sandboxMaterialized);
+
     return normalized;
   });
 
@@ -226,8 +250,13 @@ const make = Effect.gen(function* () {
   });
 
   const getSettingsFromCache = Cache.get(settingsCache, cacheKey);
-  const { materializeSandboxEnvironmentSecrets, validatePersistedSandboxSecrets, validateSandboxSettings, materializeAllSecrets } = createSettingsSecretReads(secretStore, settingsPath);
 
+  const {
+    materializeSandboxEnvironmentSecrets,
+    validatePersistedSandboxSecrets,
+    validateSandboxSettings,
+    materializeAllSecrets,
+  } = createSettingsSecretReads(secretStore, settingsPath);
 
   // Hot paths (runtime ingestion reads settings per streamed delta) must not
   // hit the secret store every call. The materialized result is reused while
@@ -241,7 +270,9 @@ const make = Effect.gen(function* () {
       readonly materialized: ServerSettings;
     };
   };
+
   const materializedRef = yield* Ref.make<MaterializedState>({ generation: 0 });
+
   const bumpMaterializedGeneration = Ref.update(materializedRef, (state) => ({
     generation: state.generation + 1,
   }));
@@ -249,21 +280,27 @@ const make = Effect.gen(function* () {
   const readMaterializedEntry = Effect.gen(function* () {
     const settings = yield* getSettingsFromCache;
     const { generation, entry } = yield* Ref.get(materializedRef);
+
     return {
       settings,
       generation,
       cached: entry?.source === settings ? entry.materialized : undefined,
     };
   });
+
   // Misses run one at a time so a burst of reads after a change shares one
   // secret read instead of each materializing the same settings.
   const materializeSemaphore = yield* Semaphore.make(1);
+
   const getMaterializedSettings = Effect.gen(function* () {
     const first = yield* readMaterializedEntry;
+
     if (first.cached) return first.cached;
+
     return yield* materializeSemaphore.withPermits(1)(
       Effect.gen(function* () {
         const { settings, generation, cached } = yield* readMaterializedEntry;
+
         if (cached) return cached;
         const materialized = yield* materializeAllSecrets(settings);
         yield* Ref.update(materializedRef, (state) =>
@@ -271,12 +308,16 @@ const make = Effect.gen(function* () {
             ? { generation, entry: { source: settings, materialized } }
             : state,
         );
+
         return materialized;
       }),
     );
   });
-  const { snapshotSettingsSecrets, rollbackSettingsSecrets } = createSettingsSecretRollback(secretStore, settingsPath);
 
+  const { snapshotSettingsSecrets, rollbackSettingsSecrets } = createSettingsSecretRollback(
+    secretStore,
+    settingsPath,
+  );
 
   const materializeChanges = (changes: Stream.Stream<ServerSettings>) =>
     changes.pipe(
@@ -294,8 +335,12 @@ const make = Effect.gen(function* () {
       ),
       Stream.map(resolveTextGenerationProvider),
     );
-  const { persistProviderEnvironmentSecrets, persistSandboxEnvironmentSecrets, persistBrowserProviderSecret } = createSettingsSecretWrites(secretStore, settingsPath);
 
+  const {
+    persistProviderEnvironmentSecrets,
+    persistSandboxEnvironmentSecrets,
+    persistBrowserProviderSecret,
+  } = createSettingsSecretWrites(secretStore, settingsPath);
 
   const writeSettingsAtomically = Effect.fnUntraced(
     function* (settings: ServerSettings) {
@@ -370,6 +415,7 @@ const make = Effect.gen(function* () {
 
   const start = Effect.gen(function* () {
     const shouldStart = yield* Ref.modify(startedRef, (started) => [!started, true]);
+
     if (!shouldStart) {
       return yield* Deferred.await(startedDeferred);
     }
@@ -381,8 +427,10 @@ const make = Effect.gen(function* () {
     });
 
     const startupExit = yield* Effect.exit(startup);
+
     if (Predicate.isTagged(startupExit, "Failure")) {
       yield* Deferred.failCause(startedDeferred, startupExit.cause).pipe(Effect.orDie);
+
       return yield* Effect.failCause(startupExit.cause);
     }
 
@@ -398,6 +446,7 @@ const make = Effect.gen(function* () {
         Effect.gen(function* () {
           yield* bumpMaterializedGeneration;
           const current = yield* getSettingsFromCache;
+
           const normalizedPatch = patch.imageGeneration
             ? {
                 ...patch,
@@ -407,26 +456,32 @@ const make = Effect.gen(function* () {
                 ),
               }
             : patch;
+
           const patched = applyServerSettingsPatch(current, normalizedPatch);
           const sandboxMaterialized = yield* materializeSandboxEnvironmentSecrets(patched);
           yield* validateSandboxSettings(sandboxMaterialized);
           const secretSnapshots = yield* snapshotSettingsSecrets(current, patched);
+
           const next = yield* Effect.gen(function* () {
             const providerSecretsPersisted = yield* persistProviderEnvironmentSecrets(
               current,
               patched,
             );
+
             const nextPersisted = yield* persistSandboxEnvironmentSecrets(current, {
               ...providerSecretsPersisted,
               sandbox: sandboxMaterialized.sandbox,
             });
+
             const browserSecretPersisted = yield* persistBrowserProviderSecret(nextPersisted);
             const normalized = yield* normalizeServerSettings(browserSecretPersisted);
             yield* writeSettingsAtomically(normalized);
+
             return normalized;
           }).pipe(
             Effect.onExit((exit) => {
               if (Exit.isSuccess(exit)) return Effect.void;
+
               return rollbackSettingsSecrets(secretSnapshots).pipe(
                 Effect.mapError(
                   (rollbackError) =>
@@ -442,8 +497,10 @@ const make = Effect.gen(function* () {
               );
             }),
           );
+
           yield* Cache.set(settingsCache, cacheKey, next);
           yield* emitChange(next);
+
           if (patch.analyticsEnabled === false) {
             yield* Effect.all(
               [analyticsStatePath, anonymousIdPath].map((filePath) =>
@@ -461,7 +518,9 @@ const make = Effect.gen(function* () {
               { concurrency: "unbounded", discard: true },
             );
           }
+
           const materialized = yield* materializeAllSecrets(next);
+
           return resolveTextGenerationProvider(materialized);
         }).pipe(Effect.ensuring(bumpMaterializedGeneration)),
       ),

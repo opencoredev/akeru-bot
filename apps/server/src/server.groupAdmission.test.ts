@@ -2,7 +2,16 @@
 import * as Predicate from "effect/Predicate";
 import * as NodeHttpServer from "@effect/platform-node/NodeHttpServer";
 import * as NodeServices from "@effect/platform-node/NodeServices";
-import { BotId, CommandId, GroupId, MessageId, ORCHESTRATION_WS_METHODS, ProviderDriverKind, ProviderInstanceId, ThreadId } from "@akeru/contracts";
+import {
+  BotId,
+  CommandId,
+  GroupId,
+  MessageId,
+  ORCHESTRATION_WS_METHODS,
+  ProviderDriverKind,
+  ProviderInstanceId,
+  ThreadId,
+} from "@akeru/contracts";
 import { assert, describe, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
@@ -13,16 +22,23 @@ import * as OrchestrationEngine from "./orchestration/Services/OrchestrationEngi
 import * as ProjectionBots from "./persistence/Services/ProjectionBots.ts";
 import * as ProjectionGroups from "./persistence/Services/ProjectionGroups.ts";
 
-import { makeChannelTestBot, readyDefaultProvider, makeDefaultOrchestrationThreadShell, defaultThreadId, defaultModelSelection, defaultDesktopBootstrapToken } from "./serverTestFixtures.ts";
+import {
+  makeChannelTestBot,
+  readyDefaultProvider,
+  makeDefaultOrchestrationThreadShell,
+  defaultThreadId,
+  defaultModelSelection,
+  defaultDesktopBootstrapToken,
+} from "./serverTestFixtures.ts";
 import { buildAppUnderTest } from "./serverTestApp.ts";
 import { getWsServerUrl, withWsRpcClient, exchangeAccessToken } from "./serverTestClients.ts";
 
 it.layer(NodeServices.layer)("server router seam", (it) => {
-
   it.effect("checks the responding group bot's engine before dispatch", () =>
     Effect.gen(function* () {
       const botId = BotId.make("bot-group-claude");
       const groupId = GroupId.make("group-model-preflight");
+
       const bot = {
         ...makeChannelTestBot(),
         botId,
@@ -30,9 +46,11 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
         imageProvider: null,
         groupId,
       } satisfies ProjectionBots.ProjectionBot;
+
       const dispatch = vi.fn<OrchestrationEngine.OrchestrationEngineService["Service"]["dispatch"]>(
         () => Effect.succeed({ sequence: 1 }),
       );
+
       yield* buildAppUnderTest({
         layers: {
           providerRegistry: {
@@ -58,6 +76,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
       });
 
       const wsUrl = yield* getWsServerUrl("/ws");
+
       const error = yield* Effect.scoped(
         withWsRpcClient(wsUrl, (client) =>
           client[ORCHESTRATION_WS_METHODS.dispatchCommand]({
@@ -78,20 +97,23 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
           }).pipe(Effect.flip),
         ),
       );
+
       assert.equal(error._tag, "OrchestrationDispatchCommandError");
+
       if (Predicate.isTagged(error, "OrchestrationDispatchCommandError")) {
         assert.equal(error.unavailability, "temporary-failure");
       }
+
       assert.equal(dispatch.mock.calls.length, 0);
     }).pipe(Effect.provide(NodeHttpServer.layerTest)),
   );
-
 
   describe("group turns addressed by an @bot token", () => {
     const groupId = GroupId.make("group-mention-preflight");
     const bossId = BotId.make("bot-group-boss");
     const memberId = BotId.make("bot-group-member");
     const unavailableEngine = { provider: "claudeAgent", model: "claude-sonnet" };
+
     const makeGroupBot = (botId: BotId, engine: typeof unavailableEngine | null) =>
       ({
         ...makeChannelTestBot(),
@@ -100,17 +122,20 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
         imageProvider: null,
         groupId,
       }) satisfies ProjectionBots.ProjectionBot;
+
     const buildGroupApp = (unavailable: BotId) =>
       Effect.gen(function* () {
         const dispatch = vi.fn<
           OrchestrationEngine.OrchestrationEngineService["Service"]["dispatch"]
         >(() => Effect.succeed({ sequence: 1 }));
+
         const bots = new Map(
           [bossId, memberId].map((botId) => [
             botId,
             makeGroupBot(botId, botId === unavailable ? unavailableEngine : null),
           ]),
         );
+
         yield* buildAppUnderTest({
           layers: {
             providerRegistry: {
@@ -152,8 +177,10 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
             orchestrationEngine: { dispatch, readEvents: () => Stream.empty },
           },
         });
+
         return dispatch;
       });
+
     const mentionTurn = (commandId: string) => ({
       type: "thread.turn.start" as const,
       commandId: CommandId.make(commandId),
@@ -187,6 +214,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
       Effect.gen(function* () {
         const dispatch = yield* buildGroupApp(memberId);
         const wsUrl = yield* getWsServerUrl("/ws");
+
         const error = yield* Effect.scoped(
           withWsRpcClient(wsUrl, (client) =>
             client[ORCHESTRATION_WS_METHODS.dispatchCommand](
@@ -194,6 +222,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
             ).pipe(Effect.flip),
           ),
         );
+
         assert.equal(error._tag, "OrchestrationDispatchCommandError");
         assert.equal(dispatch.mock.calls.length, 0);
       }).pipe(Effect.provide(NodeHttpServer.layerTest)),
@@ -202,27 +231,31 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
     it.effect("checks the mentioned member over HTTP", () =>
       Effect.gen(function* () {
         const dispatch = yield* buildGroupApp(memberId);
+
         const { body: tokenBody } = yield* exchangeAccessToken(defaultDesktopBootstrapToken, {
           scope: "orchestration:operate",
         });
+
         const response = yield* HttpClient.post("/api/orchestration/dispatch", {
           headers: { authorization: `Bearer ${tokenBody.access_token ?? ""}` },
           body: yield* HttpBody.json(mentionTurn("cmd-http-mention-unavailable")),
         });
+
         assert.equal(response.status, 400);
         assert.equal(dispatch.mock.calls.length, 0);
       }).pipe(Effect.provide(NodeHttpServer.layerTest)),
     );
   });
 
-
   it.effect("replays an accepted turn retry after its provider becomes unavailable", () =>
     Effect.gen(function* () {
       const commandId = CommandId.make("cmd-accepted-retry");
       const threadId = ThreadId.make("thread-accepted-retry");
+
       const dispatch = vi.fn<OrchestrationEngine.OrchestrationEngineService["Service"]["dispatch"]>(
         () => Effect.succeed({ sequence: 7 }),
       );
+
       yield* buildAppUnderTest({
         layers: {
           providerRegistry: {
@@ -254,6 +287,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
       });
 
       const wsUrl = yield* getWsServerUrl("/ws");
+
       const result = yield* Effect.scoped(
         withWsRpcClient(wsUrl, (client) =>
           client[ORCHESTRATION_WS_METHODS.dispatchCommand]({
@@ -273,17 +307,18 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
           }),
         ),
       );
+
       assert.equal(result.sequence, 7);
       assert.equal(dispatch.mock.calls.length, 1);
     }).pipe(Effect.provide(NodeHttpServer.layerTest)),
   );
-
 
   it.effect("rejects capped group responders selected by boss or mention", () =>
     Effect.gen(function* () {
       const groupId = GroupId.make("group-usage-cap");
       const bossId = BotId.make("bot-capped-boss");
       const memberId = BotId.make("bot-capped-member");
+
       const bots = [
         { ...makeChannelTestBot(), botId: bossId, name: "Boss", groupId },
         { ...makeChannelTestBot(), botId: memberId, name: "Member", groupId },
@@ -292,6 +327,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
         imageProvider: null,
         usageCap: { unit: "tokens" as const, limit: 100 },
       })) satisfies ProjectionBots.ProjectionBot[];
+
       const group = {
         groupId,
         name: "Team",
@@ -303,10 +339,13 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
         createdAt: "2026-01-01T00:00:00.000Z",
         updatedAt: "2026-01-01T00:00:00.000Z",
       } satisfies ProjectionGroups.ProjectionGroup;
+
       let memberCapped = true;
+
       const dispatch = vi.fn<OrchestrationEngine.OrchestrationEngineService["Service"]["dispatch"]>(
         () => Effect.succeed({ sequence: 1 }),
       );
+
       yield* buildAppUnderTest({
         layers: {
           providerRegistry: { getProviders: Effect.succeed([readyDefaultProvider]) },
@@ -320,6 +359,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
           projectionBots: {
             getById: ({ botId }) => {
               const bot = bots.find((candidate) => candidate.botId === botId);
+
               return Effect.succeed(bot ? Option.some(bot) : Option.none());
             },
             listAll: () => Effect.succeed(bots),
@@ -344,6 +384,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
       });
 
       const wsUrl = yield* getWsServerUrl("/ws");
+
       for (const [index, text] of ["Ask the team", `Ask @bot:${memberId} now`].entries()) {
         const error = yield* Effect.scoped(
           withWsRpcClient(wsUrl, (client) =>
@@ -364,15 +405,20 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
             }).pipe(Effect.flip),
           ),
         );
+
         assert.equal(error._tag, "OrchestrationDispatchCommandError");
+
         if (Predicate.isTagged(error, "OrchestrationDispatchCommandError")) {
           assert.equal(error.unavailability, "usage-cap");
         }
       }
+
       assert.equal(dispatch.mock.calls.length, 0);
+
       const { body: tokenBody } = yield* exchangeAccessToken(defaultDesktopBootstrapToken, {
         scope: "orchestration:operate",
       });
+
       for (const [index, text] of ["Ask the team", `Ask @bot:${memberId} now`].entries()) {
         const response = yield* HttpClient.post("/api/orchestration/dispatch", {
           headers: { authorization: `Bearer ${tokenBody.access_token ?? ""}` },
@@ -392,10 +438,12 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
             createdAt: "2026-01-01T00:00:00.000Z",
           }),
         });
+
         assert.equal(response.status, 400);
         const error = (yield* response.json) as Record<string, unknown>;
         assert.equal(error.unavailability, "usage-cap");
       }
+
       assert.equal(dispatch.mock.calls.length, 0);
       memberCapped = false;
       yield* Effect.scoped(
@@ -421,12 +469,12 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
     }).pipe(Effect.provide(NodeHttpServer.layerTest)),
   );
 
-
   it.effect("retries a turn after a transient provider failure", () =>
     Effect.gen(function* () {
       const dispatch = vi.fn<OrchestrationEngine.OrchestrationEngineService["Service"]["dispatch"]>(
         () => Effect.succeed({ sequence: 1 }),
       );
+
       yield* buildAppUnderTest({
         layers: {
           providerRegistry: {
@@ -445,6 +493,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
       });
 
       const wsUrl = yield* getWsServerUrl("/ws");
+
       const result = yield* Effect.scoped(
         withWsRpcClient(wsUrl, (client) =>
           client[ORCHESTRATION_WS_METHODS.dispatchCommand]({
@@ -464,7 +513,9 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
           }),
         ),
       );
+
       assert.equal(result.sequence, 1);
       assert.equal(dispatch.mock.calls.length, 1);
     }).pipe(Effect.provide(NodeHttpServer.layerTest)),
-  );});
+  );
+});

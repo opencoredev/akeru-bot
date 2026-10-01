@@ -2,7 +2,15 @@
 import * as Predicate from "effect/Predicate";
 import * as NodeHttpServer from "@effect/platform-node/NodeHttpServer";
 import * as NodeServices from "@effect/platform-node/NodeServices";
-import { BotId, CommandId, DEFAULT_SERVER_SETTINGS, MessageId, ORCHESTRATION_WS_METHODS, ProviderDriverKind, ThreadId } from "@akeru/contracts";
+import {
+  BotId,
+  CommandId,
+  DEFAULT_SERVER_SETTINGS,
+  MessageId,
+  ORCHESTRATION_WS_METHODS,
+  ProviderDriverKind,
+  ThreadId,
+} from "@akeru/contracts";
 import { assert, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
@@ -16,16 +24,22 @@ import * as OrchestrationEngine from "./orchestration/Services/OrchestrationEngi
 import * as ProjectionBots from "./persistence/Services/ProjectionBots.ts";
 
 import { buildAppUnderTest } from "./serverTestApp.ts";
-import { readyDefaultProvider, defaultProjectId, defaultModelSelection, defaultDesktopBootstrapToken, makeChannelTestBot } from "./serverTestFixtures.ts";
+import {
+  readyDefaultProvider,
+  defaultProjectId,
+  defaultModelSelection,
+  defaultDesktopBootstrapToken,
+  makeChannelTestBot,
+} from "./serverTestFixtures.ts";
 import { getWsServerUrl, withWsRpcClient, exchangeAccessToken } from "./serverTestClients.ts";
 
 it.layer(NodeServices.layer)("server router seam", (it) => {
-
   it.effect("checks a new chat's bootstrap model before creating its thread", () =>
     Effect.gen(function* () {
       const dispatch = vi.fn<OrchestrationEngine.OrchestrationEngineService["Service"]["dispatch"]>(
         () => Effect.succeed({ sequence: 1 }),
       );
+
       yield* buildAppUnderTest({
         layers: {
           providerRegistry: {
@@ -36,6 +50,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
       });
 
       const wsUrl = yield* getWsServerUrl("/ws");
+
       const error = yield* Effect.scoped(
         withWsRpcClient(wsUrl, (client) =>
           client[ORCHESTRATION_WS_METHODS.dispatchCommand]({
@@ -66,20 +81,23 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
           }).pipe(Effect.flip),
         ),
       );
+
       assert.equal(error._tag, "OrchestrationDispatchCommandError");
+
       if (Predicate.isTagged(error, "OrchestrationDispatchCommandError")) {
         assert.equal(error.unavailability, "temporary-failure");
       }
+
       assert.equal(dispatch.mock.calls.length, 0);
     }).pipe(Effect.provide(NodeHttpServer.layerTest)),
   );
-
 
   it.effect("rejects an unavailable bootstrap model through HTTP before dispatch", () =>
     Effect.gen(function* () {
       const dispatch = vi.fn<OrchestrationEngine.OrchestrationEngineService["Service"]["dispatch"]>(
         () => Effect.succeed({ sequence: 1 }),
       );
+
       yield* buildAppUnderTest({
         layers: {
           providerRegistry: {
@@ -92,6 +110,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
       const { body: tokenBody } = yield* exchangeAccessToken(defaultDesktopBootstrapToken, {
         scope: "orchestration:operate",
       });
+
       const response = yield* HttpClient.post("/api/orchestration/dispatch", {
         headers: { authorization: `Bearer ${tokenBody.access_token ?? ""}` },
         body: yield* HttpBody.json({
@@ -131,7 +150,6 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
     }).pipe(Effect.provide(NodeHttpServer.layerTest)),
   );
 
-
   it.effect(
     "lets an HTTP turn use an instance's own credential when the shared login is revoked",
     () =>
@@ -139,12 +157,15 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
         const dispatch = vi.fn<
           OrchestrationEngine.OrchestrationEngineService["Service"]["dispatch"]
         >(() => Effect.succeed({ sequence: 1 }));
+
         // The subscription service reads its files once at startup.
         const fileSystem = yield* FileSystem.FileSystem;
         const path = yield* Path.Path;
+
         const baseDir = yield* fileSystem.makeTempDirectoryScoped({
           prefix: "t3-http-credential-",
         });
+
         const { secretsDir } = yield* ServerConfig.deriveServerPaths(baseDir, undefined);
         const authPath = path.join(secretsDir, "subscription-auth.json");
         yield* fileSystem.makeDirectory(secretsDir, { recursive: true });
@@ -187,6 +208,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
         const { body: tokenBody } = yield* exchangeAccessToken(defaultDesktopBootstrapToken, {
           scope: "orchestration:operate",
         });
+
         const response = yield* HttpClient.post("/api/orchestration/dispatch", {
           headers: { authorization: `Bearer ${tokenBody.access_token ?? ""}` },
           body: yield* HttpBody.json({
@@ -222,14 +244,15 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
       }).pipe(Effect.provide(NodeHttpServer.layerTest)),
   );
 
-
   it.effect("dispatches an accepted HTTP turn retry after provider availability changes", () =>
     Effect.gen(function* () {
       const commandId = CommandId.make("cmd-http-accepted-retry");
       const threadId = ThreadId.make("thread-http-accepted-retry");
+
       const dispatch = vi.fn<OrchestrationEngine.OrchestrationEngineService["Service"]["dispatch"]>(
         () => Effect.succeed({ sequence: 7 }),
       );
+
       yield* buildAppUnderTest({
         layers: {
           providerRegistry: {
@@ -256,6 +279,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
       const { body: tokenBody } = yield* exchangeAccessToken(defaultDesktopBootstrapToken, {
         scope: "orchestration:operate",
       });
+
       const response = yield* HttpClient.post("/api/orchestration/dispatch", {
         headers: { authorization: `Bearer ${tokenBody.access_token ?? ""}` },
         body: yield* HttpBody.json({
@@ -291,19 +315,21 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
     }).pipe(Effect.provide(NodeHttpServer.layerTest)),
   );
 
-
   it.effect("rejects a capped bot chat through HTTP before dispatch", () =>
     Effect.gen(function* () {
       const botId = BotId.make("bot-http-bootstrap-capped");
+
       const bot = {
         ...makeChannelTestBot(),
         botId,
         imageProvider: null,
         usageCap: { unit: "tokens" as const, limit: 100 },
       } satisfies ProjectionBots.ProjectionBot;
+
       const dispatch = vi.fn<OrchestrationEngine.OrchestrationEngineService["Service"]["dispatch"]>(
         () => Effect.succeed({ sequence: 1 }),
       );
+
       yield* buildAppUnderTest({
         layers: {
           providerRegistry: { getProviders: Effect.succeed([readyDefaultProvider]) },
@@ -333,6 +359,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
       const { body: tokenBody } = yield* exchangeAccessToken(defaultDesktopBootstrapToken, {
         scope: "orchestration:operate",
       });
+
       const response = yield* HttpClient.post("/api/orchestration/dispatch", {
         headers: { authorization: `Bearer ${tokenBody.access_token ?? ""}` },
         body: yield* HttpBody.json({
@@ -373,19 +400,21 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
     }).pipe(Effect.provide(NodeHttpServer.layerTest)),
   );
 
-
   it.effect("checks a new bot chat's usage cap before creating its thread", () =>
     Effect.gen(function* () {
       const botId = BotId.make("bot-bootstrap-capped");
+
       const bot = {
         ...makeChannelTestBot(),
         botId,
         imageProvider: null,
         usageCap: { unit: "tokens" as const, limit: 100 },
       } satisfies ProjectionBots.ProjectionBot;
+
       const dispatch = vi.fn<OrchestrationEngine.OrchestrationEngineService["Service"]["dispatch"]>(
         () => Effect.succeed({ sequence: 1 }),
       );
+
       yield* buildAppUnderTest({
         layers: {
           providerRegistry: { getProviders: Effect.succeed([readyDefaultProvider]) },
@@ -413,6 +442,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
       });
 
       const wsUrl = yield* getWsServerUrl("/ws");
+
       const error = yield* Effect.scoped(
         withWsRpcClient(wsUrl, (client) =>
           client[ORCHESTRATION_WS_METHODS.dispatchCommand]({
@@ -445,10 +475,14 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
           }).pipe(Effect.flip),
         ),
       );
+
       assert.equal(error._tag, "OrchestrationDispatchCommandError");
+
       if (Predicate.isTagged(error, "OrchestrationDispatchCommandError")) {
         assert.equal(error.unavailability, "usage-cap");
       }
+
       assert.equal(dispatch.mock.calls.length, 0);
     }).pipe(Effect.provide(NodeHttpServer.layerTest)),
-  );});
+  );
+});

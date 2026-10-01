@@ -48,13 +48,16 @@ interface PackageJson {
 }
 
 const PackageJsonPrettyJson = fromJsonStringPretty(Schema.Unknown);
+
 const encodePackageJson = Schema.encodeEffect(PackageJsonPrettyJson);
 
 const WorkspaceConfig = Schema.Struct({
   catalog: Schema.optional(Schema.Record(Schema.String, Schema.String)),
   overrides: Schema.optional(Schema.Record(Schema.String, Schema.String)),
 });
+
 type WorkspaceConfig = typeof WorkspaceConfig.Type;
+
 const decodeWorkspaceConfig = Schema.decodeEffect(fromYaml(WorkspaceConfig));
 
 const RepoRoot = Effect.service(Path.Path).pipe(
@@ -66,6 +69,7 @@ const readWorkspaceConfig = Effect.fn("readWorkspaceConfig")(function* () {
   const fs = yield* FileSystem.FileSystem;
   const repoRoot = yield* RepoRoot;
   const workspaceYaml = yield* fs.readFileString(path.join(repoRoot, "pnpm-workspace.yaml"));
+
   return yield* decodeWorkspaceConfig(workspaceYaml);
 });
 
@@ -92,6 +96,7 @@ const preparePublishIcons = Effect.fn("preparePublishIcons")(function* (
   const path = yield* Path.Path;
   const fs = yield* FileSystem.FileSystem;
   const brand = resolveWebAssetBrandForPackageVersion(version);
+
   const icons = resolveWebIconOverrides(brand, "dist/client").map((override) => ({
     sourcePath: path.join(repoRoot, override.sourceRelativePath),
     targetPath: path.join(serverDir, override.targetRelativePath),
@@ -101,6 +106,7 @@ const preparePublishIcons = Effect.fn("preparePublishIcons")(function* (
     if (!(yield* fs.exists(icon.sourcePath))) {
       return yield* new ServerCliPublishIconSourceMissingError({ sourcePath: icon.sourcePath });
     }
+
     if (!(yield* fs.exists(icon.targetPath))) {
       return yield* new ServerCliPublishIconTargetMissingError({ targetPath: icon.targetPath });
     }
@@ -128,6 +134,7 @@ const applyDevelopmentIconOverrides = Effect.fn("applyDevelopmentIconOverrides")
     if (!(yield* fs.exists(sourcePath))) {
       return yield* new ServerCliDevelopmentIconSourceMissingError({ sourcePath });
     }
+
     if (!(yield* fs.exists(targetPath))) {
       return yield* new ServerCliDevelopmentIconTargetMissingError({ targetPath });
     }
@@ -207,6 +214,7 @@ const createVpPmPublishArgs = (config: PublishCommandConfig): ReadonlyArray<stri
   ];
 
   if (config.provenance) args.push("--provenance");
+
   if (config.dryRun) args.push("--dry-run");
 
   return args;
@@ -237,6 +245,7 @@ const publishCmd = Command.make(
         "dist/client/index.html",
       ]) {
         const abs = path.join(serverDir, relPath);
+
         if (!(yield* fs.exists(abs))) {
           return yield* new ServerCliBuildAssetMissingError({ assetPath: abs });
         }
@@ -249,6 +258,7 @@ const publishCmd = Command.make(
           const workspaceConfig = yield* readWorkspaceConfig();
           const workspaceCatalog = workspaceConfig.catalog ?? {};
           const workspaceOverrides = workspaceConfig.overrides ?? {};
+
           const pkg: PackageJson = {
             name: serverPackageJson.name,
             license: serverPackageJson.license,
@@ -281,9 +291,11 @@ const publishCmd = Command.make(
         (resource) =>
           Effect.gen(function* () {
             yield* fs.writeFileString(packageJsonPath, `${resource.packageJsonString}\n`);
+
             for (const icon of resource.icons) {
               yield* fs.writeFile(icon.targetPath, icon.publish);
             }
+
             yield* Effect.log("[cli] Applied package metadata and publish icon overrides");
 
             const args = createVpPmPublishArgs(config);
@@ -303,9 +315,11 @@ const publishCmd = Command.make(
         (resource) =>
           Effect.gen(function* () {
             yield* fs.writeFile(packageJsonPath, resource.originalPackageJson);
+
             for (const icon of resource.icons) {
               yield* fs.writeFile(icon.targetPath, icon.original);
             }
+
             if (config.verbose) yield* Effect.log("[cli] Restored original publish assets");
           }),
       );

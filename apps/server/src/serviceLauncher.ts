@@ -10,13 +10,39 @@ import * as NodeCrypto from "node:crypto";
 import * as NodeFS from "node:fs";
 import * as NodeFSP from "node:fs/promises";
 import * as NodePath from "node:path";
-import type { PendingServiceUpdate, ServiceLauncherChildMessage, ServiceLauncherContext, ServiceLauncherParentMessage, ServiceState, ServiceUpdateRecord } from "./cloud/serviceProtocol.ts";
-import { compareExactServiceVersions, decodeServiceLauncherChildMessage, isExactServiceVersion, SERVICE_LAUNCHER_CONTEXT_ENV, SERVICE_LAUNCHER_PROTOCOL, SERVICE_STATE_FILE } from "./cloud/serviceProtocol.ts";
+import type {
+  PendingServiceUpdate,
+  ServiceLauncherChildMessage,
+  ServiceLauncherContext,
+  ServiceLauncherParentMessage,
+  ServiceState,
+  ServiceUpdateRecord,
+} from "./cloud/serviceProtocol.ts";
+import {
+  compareExactServiceVersions,
+  decodeServiceLauncherChildMessage,
+  isExactServiceVersion,
+  SERVICE_LAUNCHER_CONTEXT_ENV,
+  SERVICE_LAUNCHER_PROTOCOL,
+  SERVICE_STATE_FILE,
+} from "./cloud/serviceProtocol.ts";
 import { isEntrypoint } from "./entrypoint.ts";
 import { readAliasedEnv } from "./cli/envAliases.ts";
 
-import { stopMarkerPath, runtimeExists, runtimePaths, runtimeNodePath, writeServiceState, readServiceState } from "./serviceLauncherState.ts";
-import { discardDatabaseBackup, databaseRestorePending, backupDatabaseOnce, restoreDatabaseBackup } from "./serviceLauncherDatabase.ts";
+import {
+  stopMarkerPath,
+  runtimeExists,
+  runtimePaths,
+  runtimeNodePath,
+  writeServiceState,
+  readServiceState,
+} from "./serviceLauncherState.ts";
+import {
+  discardDatabaseBackup,
+  databaseRestorePending,
+  backupDatabaseOnce,
+  restoreDatabaseBackup,
+} from "./serviceLauncherDatabase.ts";
 
 const HANDOFF_DELAY_MS = 2_000;
 
@@ -55,14 +81,17 @@ function sendMessage(
   return new Promise((resolve, reject) => {
     if (!child.connected || child.send === undefined) {
       reject(new Error("service child IPC is disconnected."));
+
       return;
     }
+
     child.send(message, (error) => (error === null ? resolve() : reject(error)));
   });
 }
 
 function waitForExit(child: NodeChildProcess.ChildProcess): Promise<void> {
   if (child.exitCode !== null || child.signalCode !== null) return Promise.resolve();
+
   return new Promise((resolve) => child.once("exit", () => resolve()));
 }
 
@@ -73,6 +102,7 @@ async function terminateChild(
   if (child.exitCode !== null || child.signalCode !== null) return;
   child.kill(signal);
   const force = setTimeout(() => child.kill("SIGKILL"), TERMINATE_GRACE_MS);
+
   try {
     await waitForExit(child);
   } finally {
@@ -103,6 +133,7 @@ export class Launcher {
     const onSigint = () => void this.stop("SIGINT");
     process.once("SIGTERM", onSigterm);
     process.once("SIGINT", onSigint);
+
     try {
       this.#enqueue(() => this.#recover());
       await this.#completion.promise;
@@ -127,6 +158,7 @@ export class Launcher {
     this.#clearTimer();
     const child = this.#child?.process;
     this.#child = null;
+
     if (child !== undefined) await terminateChild(child);
     this.#completion.reject(error);
   }
@@ -143,10 +175,13 @@ export class Launcher {
     } catch {
       // Err toward keeping the tunnel; the next link or unlink reconciles it.
     }
+
     if (this.#stopRequested || this.#stopping) {
       await this.#completion.promise.catch(() => undefined);
+
       return;
     }
+
     this.#stopRequested = true;
     this.#clearTimer();
     this.#enqueue(async () => {
@@ -156,6 +191,7 @@ export class Launcher {
       this.#stopping = true;
       const child = this.#child?.process;
       this.#child = null;
+
       if (child !== undefined) await terminateChild(child, signal);
       this.#done = true;
       this.#completion.resolve();
@@ -174,21 +210,29 @@ export class Launcher {
     // handoff release its tunnel.
     await NodeFSP.rm(stopMarkerPath(this.#baseDir), { force: true }).catch(() => undefined);
     const update = this.#state.update;
+
     if (update?.status !== "pending") {
       if (update !== undefined) {
         await discardDatabaseBackup(this.#baseDir, update.id).catch(() => undefined);
       }
+
       await this.#startChild(this.#state.activeVersion, "active", update);
+
       return;
     }
+
     if (await databaseRestorePending(this.#baseDir, update)) {
       await this.#returnToPrevious(update, "failed", "rollback-interrupted");
+
       return;
     }
+
     if (!(await runtimeExists(this.#baseDir, update.targetVersion))) {
       await this.#returnToPrevious(update, "failed", "target-runtime-missing");
+
       return;
     }
+
     await this.#startTrial(update);
   }
 
@@ -198,8 +242,10 @@ export class Launcher {
       await backupDatabaseOnce(this.#baseDir, pending);
     } catch {
       await this.#returnToPrevious(pending, "failed", "db-backup-failed");
+
       return;
     }
+
     try {
       await this.#startChild(pending.targetVersion, "trial", pending);
     } catch {
@@ -209,22 +255,29 @@ export class Launcher {
 
   async #startChild(version: string, role: ChildRole, update?: ServiceUpdateRecord): Promise<void> {
     if (this.#stopping) return;
+
     if (!(await runtimeExists(this.#baseDir, version))) {
       throw new Error(`Selected akeru-bot@${version} runtime is missing or incomplete.`);
     }
+
     if (this.#stopping) return;
     const paths = runtimePaths(this.#baseDir, version);
+
     const context: ServiceLauncherContext = {
       protocol: SERVICE_LAUNCHER_PROTOCOL,
       childVersion: version,
       ...(update === undefined ? {} : { update }),
     };
+
     const nodePath = await runtimeNodePath(paths.versionDir);
+
     if (this.#stopping) return;
+
     const child = NodeChildProcess.spawn(nodePath, [paths.entryPath, "serve"], {
       env: { ...process.env, [SERVICE_LAUNCHER_CONTEXT_ENV]: JSON.stringify(context) },
       stdio: ["inherit", "inherit", "inherit", "ipc"],
     });
+
     await new Promise<void>((resolve, reject) => {
       const onError = (error: Error) => reject(error);
       child.once("error", onError);
@@ -234,8 +287,10 @@ export class Launcher {
         resolve();
       });
     });
+
     if (this.#stopping) {
       await terminateChild(child);
+
       return;
     }
 
@@ -244,9 +299,11 @@ export class Launcher {
       role,
       process: child,
     };
+
     this.#child = managed;
     child.on("message", (value) => {
       const message = decodeServiceLauncherChildMessage(value);
+
       if (message !== undefined) this.#enqueue(() => this.#handleMessage(managed, message));
     });
     child.once("exit", (code, signal) =>
@@ -263,10 +320,13 @@ export class Launcher {
 
   async #handleMessage(child: ManagedChild, message: ServiceLauncherChildMessage): Promise<void> {
     if (this.#child !== child || this.#stopping) return;
+
     if (message.type === "request-update") {
       await this.#handleUpdateRequest(child, message);
+
       return;
     }
+
     await this.#handlePrepared(child, message.updateId);
   }
 
@@ -276,32 +336,46 @@ export class Launcher {
   ): Promise<void> {
     const reject = (reason: string) =>
       sendMessage(child.process, { type: "update-rejected", reason });
+
     if (child.role !== "active") {
       await reject("Only the active server can request an update.");
+
       return;
     }
+
     if (child.version !== this.#state.activeVersion) {
       await reject("The requesting server is not the selected active version.");
+
       return;
     }
+
     if (this.#state.update?.status === "pending") {
       await reject("Another server update is already pending.");
+
       return;
     }
+
     if (!isExactServiceVersion(message.targetVersion)) {
       await reject("The requested target is not an exact version.");
+
       return;
     }
+
     if (compareExactServiceVersions(message.targetVersion, child.version) <= 0) {
       await reject("Remote updates must select a newer server version.");
+
       return;
     }
+
     if (!NodePath.isAbsolute(message.dbPath)) {
       await reject("The requested database path is not absolute.");
+
       return;
     }
+
     if (!(await runtimeExists(this.#baseDir, message.targetVersion))) {
       await reject("The requested target runtime is missing or incomplete.");
+
       return;
     }
 
@@ -312,6 +386,7 @@ export class Launcher {
       dbPath: message.dbPath,
       status: "pending",
     };
+
     const next: ServiceState = { ...this.#state, update: pending };
     await writeServiceState(this.#statePath, next);
     this.#state = next;
@@ -321,9 +396,11 @@ export class Launcher {
 
   async #beginTrial(child: ManagedChild): Promise<void> {
     const pending = this.#state.update;
+
     if (this.#child !== child || child.role !== "active" || pending?.status !== "pending") {
       return;
     }
+
     this.#timer = undefined;
     this.#child = null;
     await terminateChild(child.process);
@@ -332,6 +409,7 @@ export class Launcher {
 
   async #handlePrepared(child: ManagedChild, updateId: string): Promise<void> {
     const pending = this.#state.update;
+
     if (
       child.role !== "trial" ||
       pending?.status !== "pending" ||
@@ -340,17 +418,22 @@ export class Launcher {
     ) {
       if (child.role === "trial" && pending?.status === "pending") {
         await this.#returnToPrevious(pending, "rolled-back", "invalid-prepared", child);
+
         return;
       }
+
       throw new Error("Trial child reported prepared for an unexpected update.");
     }
+
     this.#clearTimer();
     const committed = terminalUpdate({ pending, status: "committed" });
+
     const next: ServiceState = {
       ...this.#state,
       activeVersion: pending.targetVersion,
       update: committed,
     };
+
     await writeServiceState(this.#statePath, next);
     this.#state = next;
     child.role = "active";
@@ -360,9 +443,11 @@ export class Launcher {
 
   async #handlePreparedTimeout(child: ManagedChild): Promise<void> {
     const pending = this.#state.update;
+
     if (this.#child !== child || child.role !== "trial" || pending?.status !== "pending") {
       return;
     }
+
     this.#timer = undefined;
     await this.#returnToPrevious(pending, "rolled-back", "prepared-timeout", child);
   }
@@ -374,26 +459,33 @@ export class Launcher {
   ): Promise<void> {
     if (this.#child !== child || this.#stopping) return;
     this.#child = null;
+
     if (child.role === "trial") {
       this.#clearTimer();
       const pending = this.#state.update;
+
       if (pending?.status !== "pending") {
         throw new Error("Trial child exited without matching pending state.");
       }
+
       await this.#returnToPrevious(
         pending,
         "rolled-back",
         `candidate-exited:${String(code ?? signal ?? "unknown")}`,
       );
+
       return;
     }
 
     this.#clearTimer();
     const pending = this.#state.update;
+
     if (pending?.status === "pending") {
       await this.#startTrial(pending);
+
       return;
     }
+
     throw new Error(`Active child exited unexpectedly (${String(code ?? signal ?? "unknown")}).`);
   }
 
@@ -407,13 +499,16 @@ export class Launcher {
       this.#child = null;
       await terminateChild(child.process);
     }
+
     await restoreDatabaseBackup(this.#baseDir, pending);
     const outcome = terminalUpdate({ pending, status, reason });
+
     const next: ServiceState = {
       ...this.#state,
       activeVersion: pending.fromVersion,
       update: outcome,
     };
+
     await writeServiceState(this.#statePath, next);
     this.#state = next;
     await discardDatabaseBackup(this.#baseDir, pending.id).catch(() => undefined);
@@ -424,9 +519,11 @@ export class Launcher {
 async function main(): Promise<void> {
   // Units written by older installs set T3CODE_HOME; newer ones set AKERU_HOME.
   const baseDir = readAliasedEnv(process.env, "HOME");
+
   if (baseDir === undefined) {
     throw new Error("AKERU_HOME is required by the Akeru Bot service launcher.");
   }
+
   const statePath = NodePath.join(baseDir, "runtime", SERVICE_STATE_FILE);
   const state = await readServiceState(statePath);
   await new Launcher(baseDir, state).run();
@@ -447,4 +544,5 @@ if (
 }
 
 export { runtimeNodePath, readServiceState, writeServiceState } from "./serviceLauncherState.ts";
+
 export { syncDirectory } from "./serviceLauncherDatabase.ts";

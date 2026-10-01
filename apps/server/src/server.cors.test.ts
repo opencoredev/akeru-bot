@@ -8,11 +8,20 @@ import * as Effect from "effect/Effect";
 import { HttpBody, HttpClient } from "effect/unstable/http";
 
 import { buildAppUnderTest } from "./serverTestApp.ts";
-import { exchangeAccessToken, getWsServerUrl, withWsRpcClient, crossOriginClientOrigin, assertBrowserApiCorsResponseHeaders, getHttpServerUrl, fetchEffect, responseJsonEffect, assertBrowserApiCorsPreflightHeaders } from "./serverTestClients.ts";
+import {
+  exchangeAccessToken,
+  getWsServerUrl,
+  withWsRpcClient,
+  crossOriginClientOrigin,
+  assertBrowserApiCorsResponseHeaders,
+  getHttpServerUrl,
+  fetchEffect,
+  responseJsonEffect,
+  assertBrowserApiCorsPreflightHeaders,
+} from "./serverTestClients.ts";
 import { defaultDesktopBootstrapToken } from "./serverTestFixtures.ts";
 
 it.layer(NodeServices.layer)("server router seam", (it) => {
-
   it.effect("does not allow management-only access tokens to operate the environment", () =>
     Effect.gen(function* () {
       yield* buildAppUnderTest();
@@ -21,6 +30,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
         defaultDesktopBootstrapToken,
         { scope: "access:write" },
       );
+
       assert.equal(exchangeResponse.status, 200);
       assert.equal(tokenBody.scope, "access:write");
       assert.isDefined(tokenBody.access_token);
@@ -31,42 +41,49 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
         },
         body: yield* HttpBody.json({}),
       });
+
       const overbroadPairingBody = (yield* overbroadPairingResponse.json) as {
         readonly requiredScope: string;
       };
+
       const pairingResponse = yield* HttpClient.post("/api/auth/pairing-token", {
         headers: {
           authorization: `Bearer ${tokenBody.access_token ?? ""}`,
         },
         body: yield* HttpBody.json({ scopes: ["access:write"] }),
       });
+
       const wsTicketResponse = yield* HttpClient.post("/api/auth/websocket-ticket", {
         headers: {
           authorization: `Bearer ${tokenBody.access_token ?? ""}`,
         },
       });
+
       const wsTicketBody = (yield* wsTicketResponse.json) as { readonly ticket: string };
       assert.equal(overbroadPairingResponse.status, 403);
       assert.equal(overbroadPairingBody.requiredScope, "orchestration:read");
       assert.equal(pairingResponse.status, 200);
       assert.equal(wsTicketResponse.status, 200);
       const wsUrl = `${yield* getWsServerUrl("/ws", { authenticated: false })}?wsTicket=${encodeURIComponent(wsTicketBody.ticket)}`;
+
       const rpcError = yield* Effect.flip(
         Effect.scoped(withWsRpcClient(wsUrl, (client) => client[WS_METHODS.serverGetConfig]({}))),
       );
+
       assert.equal(rpcError._tag, "EnvironmentAuthorizationError");
+
       if (Predicate.isTagged(rpcError, "EnvironmentAuthorizationError")) {
         assert.equal(rpcError.requiredScope, "orchestration:read");
       }
     }).pipe(Effect.provide(NodeHttpServer.layerTest)),
   );
 
-
   it.effect("includes CORS headers on remote auth success responses", () =>
     Effect.gen(function* () {
       yield* buildAppUnderTest();
 
       const origin = crossOriginClientOrigin;
+
       const { response: tokenResponse, body: tokenBody } = yield* exchangeAccessToken(
         defaultDesktopBootstrapToken,
         {
@@ -80,12 +97,14 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
       assert.equal(typeof tokenBody.access_token, "string");
 
       const sessionUrl = yield* getHttpServerUrl("/api/auth/session");
+
       const sessionResponse = yield* fetchEffect(sessionUrl, {
         headers: {
           authorization: `Bearer ${tokenBody.access_token ?? ""}`,
           origin,
         },
       });
+
       const sessionBody = yield* responseJsonEffect<{
         readonly authenticated: boolean;
         readonly sessionMethod?: string;
@@ -97,6 +116,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
       assert.equal(sessionBody.sessionMethod, "bearer-access-token");
 
       const wsTicketUrl = yield* getHttpServerUrl("/api/auth/websocket-ticket");
+
       const wsTicketResponse = yield* fetchEffect(wsTicketUrl, {
         method: "POST",
         headers: {
@@ -104,6 +124,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
           origin,
         },
       });
+
       const wsTicketBody = yield* responseJsonEffect<{
         readonly ticket: string;
       }>(wsTicketResponse);
@@ -114,7 +135,6 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
     }).pipe(Effect.provide(NodeHttpServer.layerTest)),
   );
 
-
   it.effect(
     "responds to remote auth websocket-ticket preflight requests with authorization CORS headers",
     () =>
@@ -122,6 +142,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
         yield* buildAppUnderTest();
 
         const wsTicketUrl = yield* getHttpServerUrl("/api/auth/websocket-ticket");
+
         const response = yield* fetchEffect(wsTicketUrl, {
           method: "OPTIONS",
           headers: {
@@ -136,7 +157,6 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
       }).pipe(Effect.provide(NodeHttpServer.layerTest)),
   );
 
-
   it.effect("allows credentialed cloud link proof preflights from the configured dev UI", () =>
     Effect.gen(function* () {
       yield* buildAppUnderTest({
@@ -144,6 +164,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
       });
 
       const linkProofUrl = yield* getHttpServerUrl("/api/connect/link-proof");
+
       const response = yield* fetchEffect(linkProofUrl, {
         method: "OPTIONS",
         headers: {
@@ -161,7 +182,6 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
     }).pipe(Effect.provide(NodeHttpServer.layerTest)),
   );
 
-
   it.effect("allows configured development origins through ServerConfig", () =>
     Effect.gen(function* () {
       const tailnetOrigin = "https://host.example.ts.net";
@@ -173,6 +193,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
       });
 
       const sessionUrl = yield* getHttpServerUrl("/api/auth/session");
+
       const response = yield* fetchEffect(sessionUrl, {
         method: "OPTIONS",
         headers: {
@@ -190,7 +211,6 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
     }).pipe(Effect.provide(NodeHttpServer.layerTest)),
   );
 
-
   for (const desktopOrigin of ["akeru://app", "akeru-dev://app"]) {
     it.effect(`allows credentialed preflights from ${desktopOrigin} in development`, () =>
       Effect.gen(function* () {
@@ -199,6 +219,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
         });
 
         const sessionUrl = yield* getHttpServerUrl("/api/auth/session");
+
         const response = yield* fetchEffect(sessionUrl, {
           method: "OPTIONS",
           headers: {
@@ -217,18 +238,19 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
     );
   }
 
-
   it.effect("includes CORS headers on remote websocket-ticket auth failures", () =>
     Effect.gen(function* () {
       yield* buildAppUnderTest();
 
       const wsTicketUrl = yield* getHttpServerUrl("/api/auth/websocket-ticket");
+
       const response = yield* fetchEffect(wsTicketUrl, {
         method: "POST",
         headers: {
           origin: crossOriginClientOrigin,
         },
       });
+
       const body = yield* responseJsonEffect<{
         readonly _tag?: string;
         readonly code?: string;
@@ -243,4 +265,5 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
       assert.equal(body.reason, "missing_credential");
       assert.equal(typeof body.traceId, "string");
     }).pipe(Effect.provide(NodeHttpServer.layerTest)),
-  );});
+  );
+});

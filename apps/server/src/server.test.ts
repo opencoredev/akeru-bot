@@ -35,10 +35,12 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
           },
         },
       });
+
       const request = yield* HttpClient.get("/").pipe(
         Effect.tap(() => Deferred.succeed(completed, undefined)),
         Effect.forkChild,
       );
+
       yield* Deferred.await(entered);
       assert.isFalse(yield* Deferred.isDone(completed));
 
@@ -47,7 +49,6 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
       assert.isTrue(yield* Deferred.isDone(completed));
     }).pipe(Effect.provide(NodeHttpServer.layerTest)),
   );
-
 
   it.effect("serves static index content for GET / when staticDir is configured", () =>
     Effect.gen(function* () {
@@ -64,7 +65,6 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
       assert.include(yield* response.text, "router-static-ok");
     }).pipe(Effect.provide(NodeHttpServer.layerTest)),
   );
-
 
   it.effect("revalidates static files without sending unchanged bodies", () =>
     Effect.gen(function* () {
@@ -98,6 +98,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
       const dateOnly = yield* HttpClient.get("/", {
         headers: { "if-modified-since": initial.headers["last-modified"]! },
       });
+
       assert.equal(dateOnly.status, 200);
       assert.include(yield* dateOnly.text, "first build");
 
@@ -107,6 +108,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
           "if-modified-since": initial.headers["last-modified"]!,
         },
       });
+
       assert.equal(mismatched.status, 200);
       assert.include(yield* mismatched.text, "first build");
 
@@ -117,7 +119,6 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
       assert.include(yield* changed.text, "next build");
     }).pipe(Effect.provide(NodeHttpServer.layerTest)),
   );
-
 
   it.effect("changes mutable validators when equal-size content keeps its modification time", () =>
     Effect.gen(function* () {
@@ -140,15 +141,16 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
 
       yield* fileSystem.writeFileString(indexPath, replacement);
       yield* fileSystem.utimes(indexPath, originalMtime, originalMtime);
+
       const changed = yield* HttpClient.get("/", {
         headers: { "if-none-match": initialEtag! },
       });
+
       assert.equal(changed.status, 200);
       assert.notEqual(changed.headers.etag, initialEtag);
       assert.equal(yield* changed.text, replacement);
     }).pipe(Effect.provide(NodeHttpServer.layerTest)),
   );
-
 
   it.effect("caches hashed static assets without freezing mutable files or SPA fallbacks", () =>
     Effect.gen(function* () {
@@ -185,6 +187,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
       const head = yield* HttpClient.head("/assets/index-AbCd0123.js", {
         headers: { "accept-encoding": "identity" },
       });
+
       assert.equal(head.status, 200);
       assert.equal(head.headers.etag, asset.headers.etag);
       assert.equal(head.headers["content-length"], String("export const app = true;".length));
@@ -193,21 +196,26 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
       const compressed = yield* HttpClient.get("/assets/large-aBcD9876.js", {
         headers: { "accept-encoding": "gzip" },
       });
+
       assert.equal(compressed.headers["content-encoding"], "gzip");
       assert.equal(compressed.headers.vary, "Accept-Encoding");
       assert.equal(yield* compressed.text, largeAsset);
+
       const compressedHead = yield* HttpClient.head("/assets/large-aBcD9876.js", {
         headers: { "accept-encoding": "gzip" },
       });
+
       assert.equal(compressedHead.status, 200);
       assert.equal(compressedHead.headers["content-encoding"], "gzip");
       assert.equal(compressedHead.headers.vary, "Accept-Encoding");
       assert.equal(compressedHead.headers.etag, compressed.headers.etag);
       assert.equal(compressedHead.headers["content-length"], compressed.headers["content-length"]);
       assert.equal(yield* compressedHead.text, "");
+
       const unchanged = yield* HttpClient.get("/assets/large-aBcD9876.js", {
         headers: { "accept-encoding": "identity", "if-none-match": compressed.headers.etag! },
       });
+
       assert.equal(unchanged.status, 304);
       assert.equal(unchanged.headers.vary, "Accept-Encoding");
       assert.equal(yield* unchanged.text, "");
@@ -228,7 +236,6 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
     }).pipe(Effect.provide(NodeHttpServer.layerTest)),
   );
 
-
   for (const manifest of [
     { label: "missing", contents: null },
     { label: "nonmatching", contents: '{"other.js":{"file":"assets/other-AbCd0123.js"}}' },
@@ -238,10 +245,13 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
       Effect.gen(function* () {
         const fileSystem = yield* FileSystem.FileSystem;
         const path = yield* Path.Path;
+
         const staticDir = yield* fileSystem.makeTempDirectoryScoped({
           prefix: "t3-static-mutable-",
         });
+
         yield* fileSystem.makeDirectory(path.join(staticDir, "assets"));
+
         if (manifest.contents !== null) {
           yield* fileSystem.makeDirectory(path.join(staticDir, ".vite"));
           yield* fileSystem.writeFileString(
@@ -249,6 +259,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
             manifest.contents,
           );
         }
+
         const filePath = path.join(staticDir, "assets", "config-20260904.js");
         yield* fileSystem.writeFileString(filePath, "first config");
         yield* buildAppUnderTest({ config: { staticDir } });
@@ -258,9 +269,11 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
         assert.equal(yield* initial.text, "first config");
 
         yield* fileSystem.writeFileString(filePath, "replacement config");
+
         const changed = yield* HttpClient.get("/assets/config-20260904.js", {
           headers: { "if-none-match": initial.headers.etag! },
         });
+
         assert.equal(changed.status, 200);
         assert.equal(changed.headers["cache-control"], "no-cache");
         assert.notEqual(changed.headers.etag, initial.headers.etag);
@@ -268,7 +281,6 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
       }).pipe(Effect.provide(NodeHttpServer.layerTest)),
     );
   }
-
 
   it.effect("binds static metadata and bytes to one file across atomic replacement", () =>
     Effect.gen(function* () {
@@ -279,16 +291,20 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
       const afterOpenPath = path.join(staticDir, "after-open.txt");
       const original = "original bytes";
       const replacement = "replacement bytes with a different size";
+
       for (const filePath of [beforeOpenPath, afterOpenPath]) {
         yield* fileSystem.writeFileString(filePath, original);
         yield* fileSystem.writeFileString(`${filePath}.next`, replacement);
       }
+
       const replaced = new Set<string>();
+
       const replaceOnce = Effect.fnUntraced(function* (filePath: string) {
         if (replaced.has(filePath)) return;
         replaced.add(filePath);
         yield* fileSystem.rename(`${filePath}.next`, filePath);
       });
+
       const replacingFileSystem = FileSystem.FileSystem.of({
         ...fileSystem,
         stat: (filePath) =>
@@ -304,6 +320,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
               Effect.tap(() => (filePath === afterOpenPath ? replaceOnce(filePath) : Effect.void)),
             ),
       });
+
       yield* buildAppUnderTest({ config: { staticDir } }).pipe(
         Effect.provideService(FileSystem.FileSystem, replacingFileSystem),
       );
@@ -315,6 +332,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
         const response = yield* HttpClient.get(`/${name}`, {
           headers: { "accept-encoding": "identity" },
         });
+
         assert.equal(response.status, 200);
         assert.equal(response.headers["content-length"], String(expected.length));
         assert.isDefined(response.headers.etag);
@@ -324,7 +342,6 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
       }
     }).pipe(Effect.provide(NodeHttpServer.layerTest)),
   );
-
 
   it.effect("closes static file handles after GET, HEAD, 304, and request cancellation", () =>
     Effect.gen(function* () {
@@ -339,6 +356,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
       const active = new Set<FileSystem.File>();
       let blockAfterOpen = false;
       let bodyReads = 0;
+
       const trackedFileSystem = FileSystem.FileSystem.of({
         ...fileSystem,
         open: (candidate, options) =>
@@ -356,23 +374,29 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
             const file = yield* fileSystem.open(candidate, options);
             opened = file;
             active.add(file);
+
             if (blockAfterOpen) {
               yield* Deferred.succeed(blocked, undefined);
+
               return yield* Effect.never;
             }
+
             return new Proxy(file, {
               get(target, key) {
                 if (key === "readAlloc") {
                   return (size: FileSystem.SizeInput) => {
                     bodyReads += 1;
+
                     return target.readAlloc(size);
                   };
                 }
+
                 return Reflect.get(target, key, target);
               },
             });
           }),
       });
+
       yield* buildAppUnderTest({ config: { staticDir } }).pipe(
         Effect.provideService(FileSystem.FileSystem, trackedFileSystem),
       );
@@ -395,6 +419,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
       const unchanged = yield* HttpClient.get("/", {
         headers: { "if-none-match": get.headers.etag! },
       });
+
       assert.equal(unchanged.status, 304);
       yield* Queue.take(closed);
       assert.equal(active.size, 0);
@@ -410,7 +435,6 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
     }).pipe(Effect.provide(NodeHttpServer.layerTest)),
   );
 
-
   it.effect("redirects to dev URL when configured", () =>
     Effect.gen(function* () {
       yield* buildAppUnderTest({
@@ -423,4 +447,5 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
       assert.equal(response.status, 302);
       assert.equal(response.headers.location, "http://127.0.0.1:5173/foo/bar?token=test-token");
     }).pipe(Effect.provide(NodeHttpServer.layerTest)),
-  );});
+  );
+});

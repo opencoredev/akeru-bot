@@ -20,6 +20,7 @@ export const PersistedServerRuntimeState = Schema.Struct({
   devUrl: Schema.optional(Schema.String),
   startedAt: Schema.String,
 });
+
 export type PersistedServerRuntimeState = typeof PersistedServerRuntimeState.Type;
 
 export class ServerRuntimeStateError extends Schema.TaggedErrorClass<ServerRuntimeStateError>()(
@@ -45,6 +46,7 @@ const runtimeOriginForConfig = (
 ): PersistedServerRuntimeState["origin"] => {
   const hostname =
     config.host && !isWildcardHost(config.host) ? formatHostForUrl(config.host) : "127.0.0.1";
+
   return `http://${hostname}:${port}`;
 };
 
@@ -108,6 +110,7 @@ export const clearPersistedServerRuntimeState = (path: string) =>
 export const readPersistedServerRuntimeState = (path: string) =>
   Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;
+
     const raw = yield* fs.readFileString(path).pipe(
       Effect.matchEffect({
         onFailure: (cause) =>
@@ -123,11 +126,13 @@ export const readPersistedServerRuntimeState = (path: string) =>
         onSuccess: (contents) => Effect.succeed(Option.some(contents)),
       }),
     );
+
     if (Option.isNone(raw)) {
       return Option.none<PersistedServerRuntimeState>();
     }
 
     const trimmed = raw.value.trim();
+
     if (trimmed.length === 0) {
       return Option.none<PersistedServerRuntimeState>();
     }

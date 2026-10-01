@@ -28,13 +28,16 @@ export interface KeptProject {
   readonly threads: number;
 }
 
-export const pruneSnapshot = Effect.fn("pruneDevDbSnapshot")(function* (input: RunMigrateDevDbInput) {
+export const pruneSnapshot = Effect.fn("pruneDevDbSnapshot")(function* (
+  input: RunMigrateDevDbInput,
+) {
   const sql = yield* SqlClient.SqlClient;
 
   // The shared db can carry monitor_json from a branch build even though no
   // migration in this checkout creates it, so filter it only when present.
   const threadColumns = yield* sql<{ name: string }>`
     SELECT name FROM pragma_table_info('projection_threads')`;
+
   const monitorFilter = threadColumns.some((column) => column.name === "monitor_json")
     ? "AND t.monitor_json IS NULL"
     : "";
@@ -88,6 +91,7 @@ export const pruneSnapshot = Effect.fn("pruneDevDbSnapshot")(function* (input: R
         WHERE project_id NOT IN (SELECT project_id FROM kept_projects)`;
       yield* sql`DELETE FROM projection_threads
         WHERE thread_id NOT IN (SELECT thread_id FROM kept_threads)`;
+
       for (const table of [
         "projection_thread_messages",
         "projection_thread_activities",
@@ -101,6 +105,7 @@ export const pruneSnapshot = Effect.fn("pruneDevDbSnapshot")(function* (input: R
           `DELETE FROM ${table} WHERE thread_id NOT IN (SELECT thread_id FROM kept_threads)`,
         ).unprepared;
       }
+
       yield* sql`DELETE FROM orchestration_events
         WHERE (aggregate_kind = 'thread'
             AND stream_id NOT IN (SELECT thread_id FROM kept_threads))
@@ -119,6 +124,7 @@ export const pruneSnapshot = Effect.fn("pruneDevDbSnapshot")(function* (input: R
       (SELECT COUNT(*) FROM projection_threads t WHERE t.project_id = p.project_id) AS threads
     FROM projection_projects p
     ORDER BY p.updated_at DESC`;
+
   const [events] = yield* sql<{ count: number }>`
     SELECT COUNT(*) AS count FROM orchestration_events`;
 
@@ -133,11 +139,15 @@ export const pruneSnapshot = Effect.fn("pruneDevDbSnapshot")(function* (input: R
  * was skipped, not applied. */
 export const verifyMigrationSlots = Effect.fn("verifyMigrationSlots")(function* () {
   const sql = yield* SqlClient.SqlClient;
+
   const applied = yield* sql<{ migration_id: number; name: string }>`
     SELECT migration_id, name FROM effect_sql_migrations`;
+
   const appliedById = new Map(applied.map((row) => [Number(row.migration_id), row.name]));
+
   for (const [slot, codeName] of migrationManifest) {
     const appliedName = appliedById.get(slot);
+
     if (appliedName !== undefined && appliedName !== codeName) {
       return yield* new MigrateDevDbSlotCollisionError({ slot, codeName, appliedName });
     }

@@ -53,7 +53,11 @@ import { EntityMemoryRepositoryLive } from "./memory/Layers/EntityMemoryReposito
 
 import { MemoryRevisionWriteLockLive } from "./memory/Services/MemoryRevisionWriteLock.ts";
 
-import { EntityMemoryRepository, type EntityMemoryRepositoryShape, type EntityMemoryRepositoryError } from "./memory/Services/EntityMemoryRepository.ts";
+import {
+  EntityMemoryRepository,
+  type EntityMemoryRepositoryShape,
+  type EntityMemoryRepositoryError,
+} from "./memory/Services/EntityMemoryRepository.ts";
 
 import * as AgentController from "./provider/Services/AgentController.ts";
 
@@ -123,11 +127,15 @@ import { RoutineRepository, type RoutineRepositoryShape } from "./routines/Repos
 
 import { RoutineRuntime, type RoutineRuntimeShape } from "./routines/Runtime.ts";
 
-
-import { defaultDesktopBootstrapToken, TEST_EPOCH, makeDefaultOrchestrationReadModel, defaultThreadId, testEnvironmentDescriptor } from "./serverTestFixtures.ts";
+import {
+  defaultDesktopBootstrapToken,
+  TEST_EPOCH,
+  makeDefaultOrchestrationReadModel,
+  defaultThreadId,
+  testEnvironmentDescriptor,
+} from "./serverTestFixtures.ts";
 
 import { makeAuthTestLayer } from "./serverTestClients.ts";
-
 
 export const buildAppUnderTest = (options?: {
   durableMemory?: {
@@ -178,6 +186,7 @@ export const buildAppUnderTest = (options?: {
     const baseDir = options?.config?.baseDir ?? tempBaseDir;
     const devUrl = options?.config?.devUrl;
     const derivedPaths = yield* ServerConfig.deriveServerPaths(baseDir, devUrl);
+
     const config: ServerConfig.ServerConfig["Service"] = {
       logLevel: "Info",
       traceMinLevel: "Info",
@@ -208,7 +217,9 @@ export const buildAppUnderTest = (options?: {
       publicOrigin: undefined,
       ...options?.config,
     };
+
     const layerConfig = ServerConfig.layer(config);
+
     const defaultVcsDriver: VcsDriver.VcsDriver["Service"] = {
       capabilities: {
         kind: "git",
@@ -251,6 +262,7 @@ export const buildAppUnderTest = (options?: {
       initRepository: () => Effect.void,
       ...options?.layers?.vcsDriver,
     };
+
     const vcsDriverRegistryLayer = Layer.mock(VcsDriverRegistry.VcsDriverRegistry)({
       get: () => Effect.succeed(defaultVcsDriver),
       detect: (input) =>
@@ -304,13 +316,16 @@ export const buildAppUnderTest = (options?: {
         }),
       ...options?.layers?.vcsDriverRegistry,
     });
+
     const gitVcsDriverLayer = Layer.mock(GitVcsDriver.GitVcsDriver)({
       ...options?.layers?.gitVcsDriver,
     });
+
     const workspaceEntriesLayer = WorkspaceEntries.layer.pipe(
       Layer.provide(WorkspacePaths.layer),
       Layer.provideMerge(vcsDriverRegistryLayer),
     );
+
     const workspaceAndProjectServicesLayer = Layer.mergeAll(
       WorkspacePaths.layer,
       workspaceEntriesLayer,
@@ -319,10 +334,12 @@ export const buildAppUnderTest = (options?: {
         Layer.provide(workspaceEntriesLayer),
       ),
     );
+
     const gitWorkflowLayer = GitWorkflowService.layer.pipe(
       Layer.provideMerge(vcsDriverRegistryLayer),
       Layer.provideMerge(gitVcsDriverLayer),
     );
+
     const resourceTelemetryLayer = ResourceTelemetry.layer.pipe(
       Layer.provide(
         Layer.mergeAll(
@@ -332,6 +349,7 @@ export const buildAppUnderTest = (options?: {
         ),
       ),
     );
+
     const serviceLauncherClientLayer = ServiceLauncherClient.layer.pipe(
       Layer.provide(Layer.succeed(HostProcessEnvironment, {})),
     );
@@ -773,5 +791,6 @@ export const buildAppUnderTest = (options?: {
     );
 
     yield* Layer.build(Layer.fresh(appLayer));
+
     return config;
   });

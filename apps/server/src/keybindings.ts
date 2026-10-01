@@ -6,7 +6,15 @@
  *
  * @module Keybindings
  */
-import { KeybindingRule, KeybindingsConfigError, MAX_KEYBINDINGS_COUNT, ResolvedKeybindingsConfig, type ServerRemoveKeybindingInput, type ServerUpsertKeybindingInput, type ServerConfigIssue } from "@akeru/contracts";
+import {
+  KeybindingRule,
+  KeybindingsConfigError,
+  MAX_KEYBINDINGS_COUNT,
+  ResolvedKeybindingsConfig,
+  type ServerRemoveKeybindingInput,
+  type ServerUpsertKeybindingInput,
+  type ServerConfigIssue,
+} from "@akeru/contracts";
 import * as Array from "effect/Array";
 import * as Cache from "effect/Cache";
 import * as Cause from "effect/Cause";
@@ -28,10 +36,33 @@ import * as Stream from "effect/Stream";
 import * as Semaphore from "effect/Semaphore";
 import * as ServerConfig from "./config.ts";
 import { writeFileStringAtomically } from "./atomicWrite.ts";
-import { DEFAULT_KEYBINDINGS, compileResolvedKeybindingRule, compileResolvedKeybindingsConfig, parseKeybindingShortcut } from "@akeru/shared/keybindings";
+import {
+  DEFAULT_KEYBINDINGS,
+  compileResolvedKeybindingRule,
+  compileResolvedKeybindingsConfig,
+  parseKeybindingShortcut,
+} from "@akeru/shared/keybindings";
 
-import { type KeybindingsConfigState, type KeybindingsChangeEvent, RawKeybindingsEntries, decodeKeybindingRuleExit, decodeResolvedKeybindingFromConfigExit, decodeRawKeybindingsEntriesExit, malformedConfigIssue, invalidEntryIssue, encodeKeybindingsConfigPrettyJson, mergeWithDefaultKeybindings, RETIRED_DEFAULT_KEYBINDINGS } from "./keybindingConfig.ts";
-import { isSameKeybindingRule, hasSameShortcutContext, keybindingRuleFromUpsertInput, replaceTargetFromUpsertInput, keybindingRuleFromRemoveInput } from "./keybindingRules.ts";
+import {
+  type KeybindingsConfigState,
+  type KeybindingsChangeEvent,
+  RawKeybindingsEntries,
+  decodeKeybindingRuleExit,
+  decodeResolvedKeybindingFromConfigExit,
+  decodeRawKeybindingsEntriesExit,
+  malformedConfigIssue,
+  invalidEntryIssue,
+  encodeKeybindingsConfigPrettyJson,
+  mergeWithDefaultKeybindings,
+  RETIRED_DEFAULT_KEYBINDINGS,
+} from "./keybindingConfig.ts";
+import {
+  isSameKeybindingRule,
+  hasSameShortcutContext,
+  keybindingRuleFromUpsertInput,
+  replaceTargetFromUpsertInput,
+  keybindingRuleFromRemoveInput,
+} from "./keybindingRules.ts";
 
 export {
   DEFAULT_KEYBINDINGS,
@@ -113,6 +144,7 @@ const make = Effect.gen(function* () {
   const startedDeferred = yield* Deferred.make<void, KeybindingsConfigError>();
   const watcherScope = yield* Scope.make("sequential");
   yield* Effect.addFinalizer(() => Scope.close(watcherScope, Exit.void));
+
   const emitChange = (configState: KeybindingsConfigState) =>
     PubSub.publish(changesPubSub, configState).pipe(Effect.asVoid);
 
@@ -161,23 +193,29 @@ const make = Effect.gen(function* () {
     return yield* Effect.forEach(rawConfig, (entry) =>
       Effect.gen(function* () {
         const decodedRule = decodeKeybindingRuleExit(entry);
+
         if (Predicate.isTagged(decodedRule, "Failure")) {
           yield* Effect.logWarning("ignoring invalid keybinding entry", {
             path: keybindingsConfigPath,
             entry,
             error: Cause.pretty(decodedRule.cause),
           });
+
           return null;
         }
+
         const resolved = decodeResolvedKeybindingFromConfigExit(decodedRule.value);
+
         if (Predicate.isTagged(resolved, "Failure")) {
           yield* Effect.logWarning("ignoring invalid keybinding entry", {
             path: keybindingsConfigPath,
             entry,
             error: Cause.pretty(resolved.cause),
           });
+
           return null;
         }
+
         return decodedRule.value;
       }),
     ).pipe(Effect.map(Array.filter(Predicate.isNotNull)));
@@ -196,8 +234,10 @@ const make = Effect.gen(function* () {
 
     const rawConfig = yield* readRawConfig;
     const decodedEntries = decodeRawKeybindingsEntriesExit(rawConfig);
+
     if (Predicate.isTagged(decodedEntries, "Failure")) {
       const detail = `expected JSON array (${Cause.pretty(decodedEntries.cause)})`;
+
       return {
         keybindings: [],
         issues: [malformedConfigIssue(detail)],
@@ -206,8 +246,10 @@ const make = Effect.gen(function* () {
 
     const keybindings: KeybindingRule[] = [];
     const issues: ServerConfigIssue[] = [];
+
     for (const [index, entry] of decodedEntries.value.entries()) {
       const decodedRule = decodeKeybindingRuleExit(entry);
+
       if (Predicate.isTagged(decodedRule, "Failure")) {
         const detail = Cause.pretty(decodedRule.cause);
         issues.push(invalidEntryIssue(index, detail));
@@ -221,6 +263,7 @@ const make = Effect.gen(function* () {
       }
 
       const resolvedRule = decodeResolvedKeybindingFromConfigExit(decodedRule.value);
+
       if (Predicate.isTagged(resolvedRule, "Failure")) {
         const detail = Cause.pretty(resolvedRule.cause);
         issues.push(invalidEntryIssue(index, detail));
@@ -232,6 +275,7 @@ const make = Effect.gen(function* () {
         });
         continue;
       }
+
       keybindings.push(decodedRule.value);
     }
 
@@ -290,13 +334,16 @@ const make = Effect.gen(function* () {
   const syncDefaultKeybindingsOnStartup = upsertSemaphore.withPermits(1)(
     Effect.gen(function* () {
       const configExists = yield* readConfigExists;
+
       if (!configExists) {
         yield* writeConfigAtomically(DEFAULT_KEYBINDINGS);
         yield* Cache.invalidate(resolvedConfigCache, resolvedConfigCacheKey);
+
         return;
       }
 
       const runtimeConfig = yield* loadRuntimeCustomKeybindingsConfig();
+
       if (runtimeConfig.issues.length > 0) {
         yield* Effect.logWarning(
           "skipping startup keybindings default sync because config has issues",
@@ -306,29 +353,37 @@ const make = Effect.gen(function* () {
           },
         );
         yield* Cache.invalidate(resolvedConfigCache, resolvedConfigCacheKey);
+
         return;
       }
+
       const persistedConfig = runtimeConfig.keybindings;
+
       const customConfig = persistedConfig.filter(
         (entry) =>
           !RETIRED_DEFAULT_KEYBINDINGS.some((retired) => isSameKeybindingRule(entry, retired)),
       );
+
       const removedRetiredDefaults = customConfig.length !== persistedConfig.length;
       const existingCommands = new Set(customConfig.map((entry) => entry.command));
       const missingDefaults: KeybindingRule[] = [];
+
       const shortcutConflictWarnings: Array<{
         defaultCommand: KeybindingRule["command"];
         conflictingCommand: KeybindingRule["command"];
         key: string;
         when: string | null;
       }> = [];
+
       for (const defaultRule of DEFAULT_KEYBINDINGS) {
         if (existingCommands.has(defaultRule.command)) {
           continue;
         }
+
         const conflictingEntry = customConfig.find((entry) =>
           hasSameShortcutContext(entry, defaultRule),
         );
+
         if (conflictingEntry) {
           shortcutConflictWarnings.push({
             defaultCommand: defaultRule.command,
@@ -338,8 +393,10 @@ const make = Effect.gen(function* () {
           });
           continue;
         }
+
         missingDefaults.push(defaultRule);
       }
+
       for (const conflict of shortcutConflictWarnings) {
         yield* Effect.logWarning("skipping default keybinding due to shortcut conflict", {
           path: keybindingsConfigPath,
@@ -350,11 +407,14 @@ const make = Effect.gen(function* () {
           reason: "shortcut context already used by existing rule",
         });
       }
+
       if (missingDefaults.length === 0) {
         if (removedRetiredDefaults) {
           yield* writeConfigAtomically(customConfig);
         }
+
         yield* Cache.invalidate(resolvedConfigCache, resolvedConfigCacheKey);
+
         return;
       }
 
@@ -363,6 +423,7 @@ const make = Effect.gen(function* () {
           ? Result.succeed(defaultRule.command)
           : Result.failVoid,
       );
+
       if (matchingDefaults.length > 0) {
         yield* Effect.logWarning("default keybinding rule already defined in user config", {
           path: keybindingsConfigPath,
@@ -375,6 +436,7 @@ const make = Effect.gen(function* () {
       const availableSlots = Math.max(0, MAX_KEYBINDINGS_COUNT - customConfig.length);
       const defaultsToAppend = missingDefaults.slice(0, availableSlots);
       const skippedDefaults = missingDefaults.slice(availableSlots);
+
       if (skippedDefaults.length > 0) {
         yield* Effect.logWarning("skipping default keybinding backfill at max entries", {
           path: keybindingsConfigPath,
@@ -382,11 +444,14 @@ const make = Effect.gen(function* () {
           commands: skippedDefaults.map((rule) => rule.command),
         });
       }
+
       if (defaultsToAppend.length === 0) {
         if (removedRetiredDefaults) {
           yield* writeConfigAtomically(customConfig);
         }
+
         yield* Cache.invalidate(resolvedConfigCache, resolvedConfigCacheKey);
+
         return;
       }
 
@@ -436,11 +501,13 @@ const make = Effect.gen(function* () {
 
   const start = Effect.gen(function* () {
     const alreadyStarted = yield* Ref.get(startedRef);
+
     if (alreadyStarted) {
       return yield* Deferred.await(startedDeferred);
     }
 
     yield* Ref.set(startedRef, true);
+
     const startup = Effect.gen(function* () {
       yield* startWatcher;
       yield* syncDefaultKeybindingsOnStartup;
@@ -449,8 +516,10 @@ const make = Effect.gen(function* () {
     });
 
     const startupExit = yield* Effect.exit(startup);
+
     if (Predicate.isTagged(startupExit, "Failure")) {
       yield* Deferred.failCause(startedDeferred, startupExit.cause).pipe(Effect.orDie);
+
       return yield* Effect.failCause(startupExit.cause);
     }
 
@@ -472,6 +541,7 @@ const make = Effect.gen(function* () {
           const customConfig = yield* loadWritableCustomKeybindingsConfig();
           const rule = keybindingRuleFromUpsertInput(input);
           const replaceTarget = replaceTargetFromUpsertInput(input);
+
           const nextConfig = [
             ...customConfig.filter((entry) => {
               if (replaceTarget) {
@@ -479,24 +549,30 @@ const make = Effect.gen(function* () {
                   !isSameKeybindingRule(entry, replaceTarget) && !isSameKeybindingRule(entry, rule)
                 );
               }
+
               return !isSameKeybindingRule(entry, rule);
             }),
             rule,
           ];
+
           const cappedConfig =
             nextConfig.length > MAX_KEYBINDINGS_COUNT
               ? nextConfig.slice(-MAX_KEYBINDINGS_COUNT)
               : nextConfig;
+
           if (nextConfig.length > MAX_KEYBINDINGS_COUNT) {
             yield* Effect.logWarning("truncating keybindings config to max entries", {
               path: keybindingsConfigPath,
               maxEntries: MAX_KEYBINDINGS_COUNT,
             });
           }
+
           yield* writeConfigAtomically(cappedConfig);
+
           const nextResolved = mergeWithDefaultKeybindings(
             compileResolvedKeybindingsConfig(cappedConfig),
           );
+
           yield* Cache.set(resolvedConfigCache, resolvedConfigCacheKey, {
             keybindings: nextResolved,
             issues: [],
@@ -505,6 +581,7 @@ const make = Effect.gen(function* () {
             keybindings: nextResolved,
             issues: [],
           });
+
           return nextResolved;
         }),
       ),
@@ -515,9 +592,11 @@ const make = Effect.gen(function* () {
           const target = keybindingRuleFromRemoveInput(input);
           const nextConfig = customConfig.filter((entry) => !isSameKeybindingRule(entry, target));
           yield* writeConfigAtomically(nextConfig);
+
           const nextResolved = mergeWithDefaultKeybindings(
             compileResolvedKeybindingsConfig(nextConfig),
           );
+
           yield* Cache.set(resolvedConfigCache, resolvedConfigCacheKey, {
             keybindings: nextResolved,
             issues: [],
@@ -526,6 +605,7 @@ const make = Effect.gen(function* () {
             keybindings: nextResolved,
             issues: [],
           });
+
           return nextResolved;
         }),
       ),
@@ -535,4 +615,5 @@ const make = Effect.gen(function* () {
 export const layer = Layer.effect(Keybindings, make);
 
 export { ResolvedKeybindingFromConfig, ResolvedKeybindingsFromConfig } from "./keybindingRules.ts";
+
 export { type KeybindingsConfigState, type KeybindingsChangeEvent } from "./keybindingConfig.ts";

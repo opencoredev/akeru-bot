@@ -2,7 +2,13 @@
 import * as Predicate from "effect/Predicate";
 import * as NodeHttpServer from "@effect/platform-node/NodeHttpServer";
 import * as NodeServices from "@effect/platform-node/NodeServices";
-import { type ChannelBinding, ChannelConnectionId, CommandId, ORCHESTRATION_WS_METHODS, ProjectId } from "@akeru/contracts";
+import {
+  type ChannelBinding,
+  ChannelConnectionId,
+  CommandId,
+  ORCHESTRATION_WS_METHODS,
+  ProjectId,
+} from "@akeru/contracts";
 import { assert, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import { HttpBody, HttpClient } from "effect/unstable/http";
@@ -13,7 +19,6 @@ import { buildAppUnderTest } from "./serverTestApp.ts";
 import { exchangeAccessToken, getWsServerUrl, withWsRpcClient } from "./serverTestClients.ts";
 
 it.layer(NodeServices.layer)("server router seam", (it) => {
-
   it.effect("keeps channel management host-only and serves channel health over HTTP", () =>
     Effect.gen(function* () {
       const bot = makeChannelTestBot();
@@ -63,7 +68,9 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
       const { body: tokenBody } = yield* exchangeAccessToken(defaultDesktopBootstrapToken, {
         scope: "orchestration:read orchestration:operate terminal:operate review:write",
       });
+
       const authorization = `Bearer ${tokenBody.access_token ?? ""}`;
+
       const command = {
         type: "channel.disconnect" as const,
         commandId: CommandId.make("cmd-channel-standard"),
@@ -75,6 +82,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
         headers: { authorization },
         body: yield* HttpBody.json(command),
       });
+
       const httpDeniedBody = (yield* httpDenied.json) as { readonly requiredScope: string };
       assert.equal(httpDenied.status, 403);
       assert.equal(httpDeniedBody.requiredScope, "access:write");
@@ -82,8 +90,10 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
       const ticketResponse = yield* HttpClient.post("/api/auth/websocket-ticket", {
         headers: { authorization },
       });
+
       const ticketBody = (yield* ticketResponse.json) as { readonly ticket: string };
       const standardWsUrl = `${yield* getWsServerUrl("/ws", { authenticated: false })}?wsTicket=${encodeURIComponent(ticketBody.ticket)}`;
+
       const wsDenied = yield* Effect.flip(
         Effect.scoped(
           withWsRpcClient(standardWsUrl, (client) =>
@@ -91,6 +101,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
           ),
         ),
       );
+
       assert.equal(wsDenied._tag, "OrchestrationDispatchCommandError");
       assert.equal(wsDenied.message, "Only the environment host can manage external channels.");
 
@@ -99,9 +110,11 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
       const shellResponse = yield* HttpClient.get("/api/orchestration/shell", {
         headers: { authorization },
       });
+
       const shell = (yield* shellResponse.json) as {
         readonly bots: ReadonlyArray<{ readonly channelBindings: ReadonlyArray<ChannelBinding> }>;
       };
+
       assert.equal(shellResponse.status, 200);
       const [telegram, slack] = shell.bots[0]?.channelBindings ?? [];
       assert.deepInclude(telegram, {
@@ -117,7 +130,6 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
       assert.notProperty(slack, "failureCategory");
     }).pipe(Effect.provide(NodeHttpServer.layerTest)),
   );
-
 
   it.effect("sends a failed channel attach category over the WebSocket RPC", () =>
     Effect.gen(function* () {
@@ -145,6 +157,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
         projectId: ProjectId.make("missing-project"),
         provider: "telegram" as const,
       };
+
       const failure = yield* Effect.flip(
         Effect.scoped(
           withWsRpcClient(yield* getWsServerUrl("/ws"), (client) =>
@@ -152,10 +165,13 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
           ),
         ),
       );
+
       if (!Predicate.isTagged(failure, "OrchestrationDispatchCommandError")) {
         throw new Error(`Expected channel dispatch error, received ${failure._tag}`);
       }
+
       assert.equal(failure.message, "The selected project is unavailable. Choose another project.");
       assert.equal(failure.channelFailureCategory, "project");
     }).pipe(Effect.provide(NodeHttpServer.layerTest)),
-  );});
+  );
+});

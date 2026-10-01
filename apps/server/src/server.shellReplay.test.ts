@@ -1,7 +1,12 @@
 // @effect-diagnostics globalDate:off nodeBuiltinImport:off
 import * as NodeHttpServer from "@effect/platform-node/NodeHttpServer";
 import * as NodeServices from "@effect/platform-node/NodeServices";
-import { EventId, type OrchestrationEvent, ORCHESTRATION_WS_METHODS, ThreadId } from "@akeru/contracts";
+import {
+  EventId,
+  type OrchestrationEvent,
+  ORCHESTRATION_WS_METHODS,
+  ThreadId,
+} from "@akeru/contracts";
 import { assert, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
@@ -12,7 +17,6 @@ import { makeDefaultOrchestrationThreadShell } from "./serverTestFixtures.ts";
 import { getWsServerUrl, withWsRpcClient } from "./serverTestClients.ts";
 
 it.layer(NodeServices.layer)("server router seam", (it) => {
-
   it.effect("subscribeShell sends a fresh snapshot instead of replaying a large gap", () =>
     Effect.gen(function* () {
       let readEventsCalls = 0;
@@ -27,6 +31,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
             readEvents: () =>
               Stream.sync(() => {
                 readEventsCalls += 1;
+
                 return {
                   sequence: 1,
                   eventId: EventId.make("event-should-not-be-read"),
@@ -58,6 +63,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
       });
 
       const wsUrl = yield* getWsServerUrl("/ws");
+
       const items = yield* Effect.scoped(
         withWsRpcClient(wsUrl, (client) =>
           client[ORCHESTRATION_WS_METHODS.subscribeShell]({
@@ -70,14 +76,15 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
       const [first, second] = Array.from(items);
       // Large gap => fresh snapshot, and the unbounded replay is never started.
       assert.equal(first?.kind, "snapshot");
+
       if (first?.kind === "snapshot") {
         assert.equal(first.snapshot.threads[0]?.id, snapshotThreadId);
       }
+
       assert.equal(second?.kind, "synchronized");
       assert.equal(readEventsCalls, 0);
     }).pipe(Effect.provide(NodeHttpServer.layerTest)),
   );
-
 
   it.effect("subscribeShell replaces a cursor ahead of the authoritative head", () =>
     Effect.gen(function* () {
@@ -90,6 +97,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
             readEvents: () =>
               Stream.sync(() => {
                 readEventsCalls += 1;
+
                 return {} as OrchestrationEvent;
               }),
           },
@@ -109,6 +117,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
       });
 
       const wsUrl = yield* getWsServerUrl("/ws");
+
       const first = yield* Effect.scoped(
         withWsRpcClient(wsUrl, (client) =>
           client[ORCHESTRATION_WS_METHODS.subscribeShell]({ afterSequence: 10 }).pipe(
@@ -121,7 +130,6 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
       assert.equal(readEventsCalls, 0);
     }).pipe(Effect.provide(NodeHttpServer.layerTest)),
   );
-
 
   it.effect("subscribeShell coalesces a per-thread burst without stalling other threads", () =>
     Effect.gen(function* () {
@@ -168,6 +176,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
             // thread.created for a different thread, all within one batch.
             readEvents: (_afterSequence, limit) => {
               replayLimit = limit;
+
               return Stream.fromIterable([
                 ...Array.from({ length: 20 }, (_unused, index) => messageEvent(index + 1)),
                 createdEvent,
@@ -178,6 +187,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
             getThreadShellById: (threadId) =>
               Effect.sync(() => {
                 shellFetches.push(threadId);
+
                 return Option.some(makeDefaultOrchestrationThreadShell({ id: threadId }));
               }),
             getThreadRuntimeContext: () => Effect.die("unused"),
@@ -187,6 +197,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
       });
 
       const wsUrl = yield* getWsServerUrl("/ws");
+
       const items = yield* Effect.scoped(
         withWsRpcClient(wsUrl, (client) =>
           client[ORCHESTRATION_WS_METHODS.subscribeShell]({
@@ -197,9 +208,11 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
       );
 
       const collected = Array.from(items);
+
       const upsertedIds = collected.flatMap((item) =>
         item.kind === "thread-upserted" ? [item.thread.id] : [],
       );
+
       // Both threads surface, and the busy thread's 20-event burst collapses to
       // a single shell refetch (not 20). The new thread is not stuck behind it.
       assert.include(upsertedIds, busyThreadId);
@@ -208,4 +221,5 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
       assert.equal(shellFetches.filter((id) => id === busyThreadId).length, 1);
       assert.equal(replayLimit, 50);
     }).pipe(Effect.provide(NodeHttpServer.layerTest)),
-  );});
+  );
+});

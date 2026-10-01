@@ -19,6 +19,7 @@ import { Argument, Command, Flag } from "effect/unstable/cli";
 import * as NodeSqliteClient from "../src/persistence/NodeSqliteClient.ts";
 
 export const SqliteStateOperation = Schema.Literals(["query", "exec"]);
+
 export type SqliteStateOperation = typeof SqliteStateOperation.Type;
 
 export class SqliteStateMultipleSqlSourcesError extends Schema.TaggedErrorClass<SqliteStateMultipleSqlSourcesError>()(
@@ -99,23 +100,29 @@ const SqliteStateValue = Schema.Union([
   Schema.Number,
   Schema.Array(Schema.Number),
 ]);
+
 const SqliteStateRow = Schema.Record(Schema.String, SqliteStateValue);
+
 const SqliteStateQueryResult = Schema.Struct({
   operation: Schema.Literal("query"),
   database: Schema.String,
   rows: Schema.Array(SqliteStateRow),
 });
+
 const SqliteStateExecResult = Schema.Struct({
   operation: Schema.Literal("exec"),
   database: Schema.String,
   backup: Schema.String,
 });
+
 const SqliteStateResult = Schema.Union([SqliteStateQueryResult, SqliteStateExecResult]);
+
 const encodeSqliteStateResult = Schema.encodeEffect(fromJsonStringPretty(SqliteStateResult));
 
 export type SqliteStateResult = typeof SqliteStateResult.Type;
 
 type RawSqliteValue = null | string | number | bigint | Uint8Array;
+
 type RawSqliteRow = Readonly<Record<string, RawSqliteValue>>;
 
 export interface RunSqliteStateInput {
@@ -136,6 +143,7 @@ const resolveSqlSource = Effect.fn("resolveSqliteStateSqlSource")(function* (
   if (sql !== undefined && file !== undefined) {
     return yield* new SqliteStateMultipleSqlSourcesError();
   }
+
   if (sql === undefined && file === undefined) {
     return yield* new SqliteStateMissingSqlSourceError();
   }
@@ -143,6 +151,7 @@ const resolveSqlSource = Effect.fn("resolveSqliteStateSqlSource")(function* (
   const fs = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
   let source: string;
+
   if (sql !== undefined) {
     source = sql;
   } else if (file !== undefined) {
@@ -155,20 +164,25 @@ const resolveSqlSource = Effect.fn("resolveSqliteStateSqlSource")(function* (
   }
 
   const trimmed = source.trim();
+
   if (trimmed.length === 0) {
     return yield* new SqliteStateEmptySqlError();
   }
+
   return trimmed;
 });
 
 function normalizeSqliteValue(value: RawSqliteValue): typeof SqliteStateValue.Type {
   if (typeof value === "bigint") {
     const numericValue = Number(value);
+
     return Number.isSafeInteger(numericValue) ? numericValue : value.toString();
   }
+
   if (value instanceof Uint8Array) {
     return Array.from(value);
   }
+
   return value;
 }
 
@@ -185,10 +199,13 @@ export const guardSqliteStateHome = Effect.fn("guardSqliteStateHome")(function* 
   const fs = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
   const canonicalBase = yield* fs.realPath(baseDir);
+
   const canonicalShared = yield* fs
     .realPath(sharedHome)
     .pipe(Effect.orElseSucceed(() => path.resolve(sharedHome)));
+
   const relative = path.relative(canonicalShared, canonicalBase);
+
   if (
     relative === "" ||
     (!relative.startsWith(".." + path.sep) && relative !== ".." && !path.isAbsolute(relative))
@@ -203,11 +220,14 @@ export const backupSqliteState = Effect.fn("backupSqliteState")(function* (datab
   const timestamp = DateTime.formatIso(yield* DateTime.now).replaceAll(":", "-");
   let backupPath = `${databasePath}.backup-${timestamp}`;
   let suffix = 0;
+
   while (yield* fs.exists(backupPath)) {
     backupPath = `${databasePath}.backup-${timestamp}-${++suffix}`;
   }
+
   yield* sql`VACUUM INTO ${backupPath}`;
   yield* fs.chmod(backupPath, 0o600);
+
   return backupPath;
 });
 
@@ -218,15 +238,18 @@ export const runSqliteState = Effect.fn("runSqliteState")(function* (
   const fs = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
   const baseDir = path.resolve(input.baseDir);
+
   const sharedHome = path.resolve(
     options.sharedHome ?? path.join(NodeOS.homedir(), PRODUCT_HOME_DIRNAME),
   );
+
   const databasePath = path.join(baseDir, "userdata", "state.sqlite");
   const source = yield* resolveSqlSource(input.sql, input.file);
 
   if (!(yield* fs.exists(databasePath))) {
     return yield* new SqliteStateDatabaseMissingError({ databasePath });
   }
+
   if (input.operation === "exec") {
     yield* guardSqliteStateHome(baseDir, sharedHome);
   }
@@ -240,6 +263,7 @@ export const runSqliteState = Effect.fn("runSqliteState")(function* (
         Effect.provideService(SqlClient.SafeIntegers, true),
         Effect.map((rows) => rows.map(normalizeSqliteRow)),
       );
+
       return {
         operation: "query",
         database: databasePath,

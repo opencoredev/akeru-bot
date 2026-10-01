@@ -6,10 +6,17 @@ import * as Effect from "effect/Effect";
 import { HttpBody, HttpClient } from "effect/unstable/http";
 
 import { buildAppUnderTest } from "./serverTestApp.ts";
-import { getAuthenticatedSessionCookieHeader, bootstrapBrowserSession, getAuthenticatedBearerSessionToken, jsonRequestBody, getHttpServerUrl, fetchEffect, responseJsonEffect } from "./serverTestClients.ts";
+import {
+  getAuthenticatedSessionCookieHeader,
+  bootstrapBrowserSession,
+  getAuthenticatedBearerSessionToken,
+  jsonRequestBody,
+  getHttpServerUrl,
+  fetchEffect,
+  responseJsonEffect,
+} from "./serverTestClients.ts";
 
 it.layer(NodeServices.layer)("server router seam", (it) => {
-
   it.effect("issues authenticated one-time pairing credentials for additional clients", () =>
     Effect.gen(function* () {
       yield* buildAppUnderTest();
@@ -20,6 +27,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
         },
         body: yield* HttpBody.json({}),
       });
+
       const body = (yield* response.json) as {
         readonly credential: string;
         readonly expiresAt: string;
@@ -38,18 +46,19 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
     }).pipe(Effect.provide(NodeHttpServer.layerTest)),
   );
 
-
   it.effect("issues pairing credentials for bearer sessions with access management scope", () =>
     Effect.gen(function* () {
       yield* buildAppUnderTest();
 
       const bearerToken = yield* getAuthenticatedBearerSessionToken();
+
       const response = yield* HttpClient.post("/api/auth/pairing-token", {
         headers: {
           authorization: `Bearer ${bearerToken}`,
         },
         body: yield* HttpBody.json({ label: "Hosted web" }),
       });
+
       const body = (yield* response.json) as {
         readonly credential: string;
         readonly label?: string;
@@ -61,7 +70,6 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
     }).pipe(Effect.provide(NodeHttpServer.layerTest)),
   );
 
-
   it.effect("rejects pairing credentials with an empty scope grant", () =>
     Effect.gen(function* () {
       yield* buildAppUnderTest();
@@ -72,6 +80,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
         },
         body: yield* HttpBody.json({ scopes: [] }),
       });
+
       const body = (yield* response.json) as {
         readonly code: string;
         readonly reason: string;
@@ -83,7 +92,6 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
     }).pipe(Effect.provide(NodeHttpServer.layerTest)),
   );
 
-
   it.effect("rejects unauthenticated pairing credential requests", () =>
     Effect.gen(function* () {
       yield* buildAppUnderTest();
@@ -91,10 +99,10 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
       const response = yield* HttpClient.post("/api/auth/pairing-token", {
         body: yield* HttpBody.json({}),
       });
+
       assert.equal(response.status, 401);
     }).pipe(Effect.provide(NodeHttpServer.layerTest)),
   );
-
 
   it.effect("lists and revokes pairing links for access management sessions", () =>
     Effect.gen(function* () {
@@ -105,12 +113,14 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
       });
 
       const ownerCookie = yield* getAuthenticatedSessionCookieHeader();
+
       const createdResponse = yield* HttpClient.post("/api/auth/pairing-token", {
         headers: {
           cookie: ownerCookie,
         },
         body: yield* HttpBody.json({}),
       });
+
       const createdBody = (yield* createdResponse.json) as {
         readonly id: string;
         readonly credential: string;
@@ -121,6 +131,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
           cookie: ownerCookie,
         },
       });
+
       const listedLinks = (yield* listResponse.json) as ReadonlyArray<{
         readonly id: string;
         readonly credential: string;
@@ -133,6 +144,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
         },
         body: HttpBody.text(jsonRequestBody({ id: createdBody.id }), "application/json"),
       });
+
       const revokedBootstrap = yield* bootstrapBrowserSession(createdBody.credential);
 
       assert.equal(createdResponse.status, 200);
@@ -142,7 +154,6 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
       assert.equal(revokedBootstrap.response.status, 401);
     }).pipe(Effect.provide(NodeHttpServer.layerTest)),
   );
-
 
   it.effect("rejects pairing credential requests without access management scope", () =>
     Effect.gen(function* () {
@@ -158,18 +169,22 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
         },
         body: yield* HttpBody.json({}),
       });
+
       const ownerBody = (yield* ownerResponse.json) as {
         readonly credential: string;
       };
+
       assert.equal(ownerResponse.status, 200);
 
       const pairedSessionCookie = yield* getAuthenticatedSessionCookieHeader(ownerBody.credential);
+
       const pairedResponse = yield* HttpClient.post("/api/auth/pairing-token", {
         headers: {
           cookie: pairedSessionCookie,
         },
         body: yield* HttpBody.json({}),
       });
+
       const pairedBody = (yield* pairedResponse.json) as {
         readonly _tag: string;
         readonly code: string;
@@ -185,7 +200,6 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
     }).pipe(Effect.provide(NodeHttpServer.layerTest)),
   );
 
-
   it.effect("lists paired clients and revokes other sessions while keeping the administrator", () =>
     Effect.gen(function* () {
       yield* buildAppUnderTest({
@@ -196,6 +210,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
 
       const ownerCookie = yield* getAuthenticatedSessionCookieHeader();
       const pairingTokenUrl = yield* getHttpServerUrl("/api/auth/pairing-token");
+
       const ownerPairingResponse = yield* fetchEffect(pairingTokenUrl, {
         method: "POST",
         headers: {
@@ -206,26 +221,32 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
           label: "Julius iPhone",
         }),
       });
+
       const ownerPairingBody = yield* responseJsonEffect<{
         readonly credential: string;
         readonly label?: string;
       }>(ownerPairingResponse);
+
       assert.equal(ownerPairingResponse.status, 200);
+
       const pairedSessionBootstrap = yield* bootstrapBrowserSession(ownerPairingBody.credential, {
         headers: {
           "user-agent":
             "Mozilla/5.0 (iPhone; CPU iPhone OS 17_4 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Mobile/15E148 Safari/604.1",
         },
       });
+
       const pairedSessionCookie = pairedSessionBootstrap.cookie?.split(";")[0];
       assert.isDefined(pairedSessionCookie);
 
       const pairedSessionCookieHeader = pairedSessionCookie ?? "";
+
       const listBeforeResponse = yield* HttpClient.get("/api/auth/clients", {
         headers: {
           cookie: ownerCookie,
         },
       });
+
       const clientsBefore = (yield* listBeforeResponse.json) as ReadonlyArray<{
         readonly sessionId: string;
         readonly current: boolean;
@@ -237,6 +258,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
           readonly browser?: string;
         };
       }>;
+
       const pairedClientBefore = clientsBefore.find((entry) => !entry.current);
       const pairedSessionId = clientsBefore.find((entry) => !entry.current)?.sessionId;
 
@@ -245,6 +267,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
           cookie: ownerCookie,
         },
       });
+
       const revokeOthersBody = (yield* revokeOthersResponse.json) as {
         readonly revokedCount: number;
       };
@@ -254,6 +277,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
           cookie: ownerCookie,
         },
       });
+
       const clientsAfter = (yield* listAfterResponse.json) as ReadonlyArray<{
         readonly sessionId: string;
         readonly current: boolean;
@@ -265,6 +289,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
         },
         body: yield* HttpBody.json({}),
       });
+
       const pairedClientPairingBody = (yield* pairedClientPairingResponse.json) as {
         readonly _tag: string;
         readonly code: string;
@@ -297,7 +322,6 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
     }).pipe(Effect.provide(NodeHttpServer.layerTest)),
   );
 
-
   it.effect("separates access inventory reads from credential management writes", () =>
     Effect.gen(function* () {
       yield* buildAppUnderTest({
@@ -307,6 +331,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
       });
 
       const ownerCookie = yield* getAuthenticatedSessionCookieHeader();
+
       const issueScopedSession = Effect.fnUntraced(function* (
         scope: "access:read" | "access:write",
       ) {
@@ -316,35 +341,43 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
           },
           body: yield* HttpBody.json({ scopes: [scope] }),
         });
+
         assert.equal(pairingResponse.status, 200);
+
         const pairingBody = (yield* pairingResponse.json) as {
           readonly credential: string;
         };
+
         return yield* getAuthenticatedSessionCookieHeader(pairingBody.credential);
       });
 
       const readCookie = yield* issueScopedSession("access:read");
+
       const readListResponse = yield* HttpClient.get("/api/auth/clients", {
         headers: {
           cookie: readCookie,
         },
       });
+
       const readWriteResponse = yield* HttpClient.post("/api/auth/pairing-token", {
         headers: {
           cookie: readCookie,
         },
         body: yield* HttpBody.json({}),
       });
+
       const readWriteBody = (yield* readWriteResponse.json) as {
         readonly requiredScope: string;
       };
 
       const writeCookie = yield* issueScopedSession("access:write");
+
       const writeListResponse = yield* HttpClient.get("/api/auth/clients", {
         headers: {
           cookie: writeCookie,
         },
       });
+
       const writeListBody = (yield* writeListResponse.json) as {
         readonly requiredScope: string;
       };
@@ -357,7 +390,6 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
     }).pipe(Effect.provide(NodeHttpServer.layerTest)),
   );
 
-
   it.effect("revokes an individual paired client session", () =>
     Effect.gen(function* () {
       yield* buildAppUnderTest({
@@ -367,15 +399,18 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
       });
 
       const ownerCookie = yield* getAuthenticatedSessionCookieHeader();
+
       const pairingResponse = yield* HttpClient.post("/api/auth/pairing-token", {
         headers: {
           cookie: ownerCookie,
         },
         body: yield* HttpBody.json({}),
       });
+
       const pairingBody = (yield* pairingResponse.json) as {
         readonly credential: string;
       };
+
       const pairedSessionCookie = yield* getAuthenticatedSessionCookieHeader(
         pairingBody.credential,
       );
@@ -385,10 +420,12 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
           cookie: ownerCookie,
         },
       });
+
       const clients = (yield* clientsResponse.json) as ReadonlyArray<{
         readonly sessionId: string;
         readonly current: boolean;
       }>;
+
       const pairedSessionId = clients.find((entry) => !entry.current)?.sessionId;
       assert.isDefined(pairedSessionId);
 
@@ -399,6 +436,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
         },
         body: HttpBody.text(jsonRequestBody({ sessionId: pairedSessionId }), "application/json"),
       });
+
       const pairedClientPairingResponse = yield* HttpClient.post("/api/auth/pairing-token", {
         headers: {
           cookie: pairedSessionCookie,
@@ -409,4 +447,5 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
       assert.equal(revokeResponse.status, 200);
       assert.equal(pairedClientPairingResponse.status, 401);
     }).pipe(Effect.provide(NodeHttpServer.layerTest)),
-  );});
+  );
+});

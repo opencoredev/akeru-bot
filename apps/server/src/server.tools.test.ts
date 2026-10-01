@@ -17,20 +17,26 @@ import * as AgentController from "./provider/Services/AgentController.ts";
 import { ProviderAdapterRequestError } from "./provider/Errors.ts";
 
 import { buildAppUnderTest } from "./serverTestApp.ts";
-import { getWsServerUrl, withWsRpcClient, crossOriginClientOrigin, assertBrowserApiCorsResponseHeaders } from "./serverTestClients.ts";
+import {
+  getWsServerUrl,
+  withWsRpcClient,
+  crossOriginClientOrigin,
+  assertBrowserApiCorsResponseHeaders,
+} from "./serverTestClients.ts";
 import { testEnvironmentDescriptor } from "./serverTestFixtures.ts";
 
 it.layer(NodeServices.layer)("server router seam", (it) => {
-
   it.effect("uploads Codex thread feedback through websocket rpc", () =>
     Effect.gen(function* () {
       const input = {
         threadId: ThreadId.make("thread-feedback"),
         reason: "The agent stopped early.",
       };
+
       const uploadFeedback = vi.fn<AgentController.AgentController["Service"]["uploadFeedback"]>(
         () => Effect.succeed({ feedbackId: "codex-thread-feedback" }),
       );
+
       yield* buildAppUnderTest({
         layers: {
           agentController: { uploadFeedback },
@@ -38,6 +44,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
       });
 
       const wsUrl = yield* getWsServerUrl("/ws");
+
       const response = yield* Effect.scoped(
         withWsRpcClient(wsUrl, (client) => client[WS_METHODS.providerUploadFeedback](input)),
       );
@@ -46,7 +53,6 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
       assert.deepStrictEqual(uploadFeedback.mock.calls, [[input]]);
     }).pipe(Effect.provide(NodeHttpServer.layerTest)),
   );
-
 
   it.effect("uploads image bytes through a signed URL issued by websocket rpc", () =>
     Effect.gen(function* () {
@@ -63,15 +69,18 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
               mimeType: "image/png",
               sizeBytes: 6,
             });
+
             const rejected = yield* HttpClient.post(issued.relativeUrl, {
               body: HttpBody.uint8Array(new Uint8Array([1, 2, 3]), "image/png"),
             });
+
             assert.equal(rejected.status, 400);
 
             const response = yield* HttpClient.post(issued.relativeUrl, {
               headers: { origin: crossOriginClientOrigin },
               body: HttpBody.uint8Array(new Uint8Array([1, 2, 3, 4, 5, 6]), "image/png"),
             });
+
             assert.equal(response.status, 204);
             assertBrowserApiCorsResponseHeaders(response.headers);
 
@@ -86,9 +95,11 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
               mimeType: "image/png",
               sizeBytes: 6,
             });
+
             const streamedResponse = yield* HttpClient.post(streamed.relativeUrl, {
               body: HttpBody.stream(Stream.make(new Uint8Array([1, 2, 3, 4, 5, 6])), "image/png"),
             });
+
             assert.equal(streamedResponse.status, 204);
             yield* client[WS_METHODS.attachmentsDelete]({ attachmentId: streamed.attachmentId });
           }),
@@ -96,7 +107,6 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
       );
     }).pipe(Effect.provide(NodeHttpServer.layerTest)),
   );
-
 
   it.effect("keeps feedback errors structured across websocket rpc", () =>
     Effect.gen(function* () {
@@ -117,6 +127,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
       });
 
       const wsUrl = yield* getWsServerUrl("/ws");
+
       const error = yield* Effect.scoped(
         withWsRpcClient(wsUrl, (client) =>
           client[WS_METHODS.providerUploadFeedback]({ threadId }).pipe(Effect.flip),
@@ -124,6 +135,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
       );
 
       assert.strictEqual(error._tag, "ProviderUploadFeedbackError");
+
       if (Predicate.isTagged(error, "ProviderUploadFeedbackError")) {
         assert.strictEqual(error.threadId, threadId);
         assert.strictEqual(error.message, `Failed to upload feedback for thread ${threadId}.`);
@@ -131,7 +143,6 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
       }
     }).pipe(Effect.provide(NodeHttpServer.layerTest)),
   );
-
 
   it.effect("shares one preview automation broker across websocket sessions", () =>
     Effect.scoped(
@@ -141,6 +152,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
         const wsUrl = yield* getWsServerUrl("/ws");
         const firstConnected = yield* Deferred.make<string>();
         const firstClosed = yield* Deferred.make<void>();
+
         const host = {
           clientId: "shared-preview-host",
           environmentId: testEnvironmentDescriptor.environmentId,
@@ -159,9 +171,11 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
         ).pipe(Effect.forkScoped);
 
         const firstConnectionId = yield* Deferred.await(firstConnected);
+
         const replacementEvent = yield* withWsRpcClient(wsUrl, (client) =>
           client[WS_METHODS.previewAutomationConnect](host).pipe(Stream.runHead),
         ).pipe(Effect.map(Option.getOrThrow));
+
         const firstStreamClosed = yield* Deferred.await(firstClosed).pipe(
           Effect.timeoutOption("2 seconds"),
         );
@@ -172,7 +186,6 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
       }),
     ).pipe(Effect.provide(NodeHttpServer.layerTest)),
   );
-
 
   it.effect("rejects websocket rpc handshake when session authentication is missing", () =>
     Effect.gen(function* () {
@@ -187,6 +200,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
       yield* buildAppUnderTest();
 
       const wsUrl = yield* getWsServerUrl("/ws", { authenticated: false });
+
       const result = yield* Effect.scoped(
         withWsRpcClient(wsUrl, (client) =>
           client[WS_METHODS.projectsSearchEntries]({
@@ -207,4 +221,5 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
           failureMessage.includes("An error occurred during Open"),
       );
     }).pipe(Effect.provide(NodeHttpServer.layerTest)),
-  );});
+  );
+});

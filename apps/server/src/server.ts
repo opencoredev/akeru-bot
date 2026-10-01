@@ -7,7 +7,15 @@ import { FetchHttpClient, HttpRouter, HttpServer } from "effect/unstable/http";
 import * as HttpApiBuilder from "effect/unstable/httpapi/HttpApiBuilder";
 import { whatsAppWebhookRouteLayer } from "./channels/ChannelRuntime.ts";
 import * as ServerConfig from "./config.ts";
-import { otlpTracesProxyRouteLayer, assetRouteLayer, attachmentUploadRouteLayer, serverEnvironmentHttpApiLayer, staticAndDevRouteLayer, browserApiCorsLayer, httpCompressionLayer } from "./http.ts";
+import {
+  otlpTracesProxyRouteLayer,
+  assetRouteLayer,
+  attachmentUploadRouteLayer,
+  serverEnvironmentHttpApiLayer,
+  staticAndDevRouteLayer,
+  browserApiCorsLayer,
+  httpCompressionLayer,
+} from "./http.ts";
 import { guardHttpResponseWriteErrors } from "./httpResponseErrorGuard.ts";
 import { fixPath } from "./os-jank.ts";
 import { websocketRpcRouteLayer } from "./ws.ts";
@@ -20,12 +28,20 @@ import * as VcsProcess from "./vcs/VcsProcess.ts";
 import { authHttpApiLayer, environmentAuthenticatedAuthLayer } from "./auth/http.ts";
 import * as ServerSelfUpdate from "./cloud/selfUpdate.ts";
 import * as ServiceLauncherClient from "./cloud/serviceLauncherClient.ts";
-import { clearPersistedServerRuntimeState, makePersistedServerRuntimeState, persistServerRuntimeState } from "./serverRuntimeState.ts";
+import {
+  clearPersistedServerRuntimeState,
+  makePersistedServerRuntimeState,
+  persistServerRuntimeState,
+} from "./serverRuntimeState.ts";
 import { orchestrationHttpApiLayer } from "./orchestration/http.ts";
 import { disableTailscaleServe, ensureTailscaleServe } from "@akeru/tailscale";
 import { ServerActivation } from "./serverActivation.ts";
 
-import { McpSessionRegistryLayerLive, RuntimeDependenciesLive, ApplicationObservabilityLive } from "./serverLayers.ts";
+import {
+  McpSessionRegistryLayerLive,
+  RuntimeDependenciesLive,
+  ApplicationObservabilityLive,
+} from "./serverLayers.ts";
 
 // Effect's default preemptive shutdown waits 20s before finalizing request scopes.
 // T3's primary transport is long-lived WebSocket RPC, whose Effect scope finalizer
@@ -36,10 +52,12 @@ const HTTP_PREEMPTIVE_SHUTDOWN_GRACE_MS = 0;
 const HttpServerLive = Layer.unwrap(
   Effect.gen(function* () {
     const config = yield* ServerConfig.ServerConfig;
+
     if (typeof Bun !== "undefined") {
       const BunHttpServer = yield* Effect.promise(
         () => import("@effect/platform-bun/BunHttpServer"),
       );
+
       return BunHttpServer.layer({
         port: config.port,
         hostname: config.host ?? "127.0.0.1",
@@ -64,6 +82,7 @@ const HttpServerLive = Layer.unwrap(
         Effect.promise(() => import("@effect/platform-node/NodeHttpServer")),
         Effect.promise(() => import("node:http")),
       ]);
+
       return NodeHttpServer.layer(() => guardHttpResponseWriteErrors(NodeHttp.createServer()), {
         host: config.host ?? "127.0.0.1",
         port: config.port,
@@ -84,9 +103,11 @@ const PlatformServicesLive = Layer.unwrap(
   Effect.gen(function* () {
     if (typeof Bun !== "undefined") {
       const { layer } = yield* Effect.promise(() => import("@effect/platform-bun/BunServices"));
+
       return layer;
     } else {
       const { layer } = yield* Effect.promise(() => import("@effect/platform-node/NodeServices"));
+
       return layer;
     }
   }),
@@ -151,6 +172,7 @@ export const makeServerLayer = Layer.unwrap(
         yield* startup.markHttpListening;
       }),
     );
+
     const runtimeStateLayer = Layer.effectDiscard(
       Effect.acquireRelease(
         Effect.gen(function* () {
@@ -158,6 +180,7 @@ export const makeServerLayer = Layer.unwrap(
           yield* awaitActivation;
           const server = yield* HttpServer.HttpServer;
           const address = server.address;
+
           if (Predicate.isString(address) || !("port" in address)) {
             return;
           }
@@ -166,6 +189,7 @@ export const makeServerLayer = Layer.unwrap(
             config,
             port: address.port,
           });
+
           yield* persistServerRuntimeState({
             path: config.serverRuntimeStatePath,
             state,
@@ -183,6 +207,7 @@ export const makeServerLayer = Layer.unwrap(
           ),
       ),
     );
+
     const tailscaleServeLayer = config.tailscaleServeEnabled
       ? Layer.effectDiscard(
           Effect.acquireRelease(
@@ -191,11 +216,13 @@ export const makeServerLayer = Layer.unwrap(
               yield* awaitActivation;
               const server = yield* HttpServer.HttpServer;
               const address = server.address;
+
               if (Predicate.isString(address) || !("port" in address)) {
                 return null;
               }
 
               const localPort = address.port;
+
               return yield* ensureTailscaleServe({
                 localPort,
                 servePort: config.tailscaleServePort,
@@ -236,6 +263,7 @@ export const makeServerLayer = Layer.unwrap(
           ),
         )
       : Layer.empty;
+
     const runtimeServicesLive = ServerRuntimeStartup.layerWithOptions({
       activate: Deferred.succeed(activation, undefined).pipe(Effect.asVoid),
       abort: (error) => Deferred.die(activation, error).pipe(Effect.asVoid),
@@ -255,6 +283,7 @@ export const makeServerLayer = Layer.unwrap(
         disableLogger: !config.logWebSocketEvents,
       },
     ).pipe(Layer.tap(() => Deferred.succeed(routesReady, undefined).pipe(Effect.orDie)));
+
     const serverApplicationLayer = Layer.mergeAll(
       routesLayer,
       PreviewAutomationServerHost.layer,

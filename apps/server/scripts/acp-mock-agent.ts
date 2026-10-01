@@ -7,9 +7,27 @@ import * as NodeServices from "@effect/platform-node/NodeServices";
 import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
 import * as EffectAcpAgent from "effect-acp/agent";
 import * as AcpError from "effect-acp/errors";
-import { requestLogPath as configuredRequestLogPath, emitLateUpdateAfterCancel, failLoadSession, emitLoadReplay, hangLoadSessionAfterReplay, delayLoadSessionAfterReplay, loadSessionDelayMs, failSetConfigOption, exitOnSetConfigOption, sessionId, cancelledSessions, writeJsonRpcNotification, configOptions, availableModels, modeState, grokAcpModels, modelState, scenarioState } from "./acpMockConfig.ts";
+import {
+  requestLogPath as configuredRequestLogPath,
+  emitLateUpdateAfterCancel,
+  failLoadSession,
+  emitLoadReplay,
+  hangLoadSessionAfterReplay,
+  delayLoadSessionAfterReplay,
+  loadSessionDelayMs,
+  failSetConfigOption,
+  exitOnSetConfigOption,
+  sessionId,
+  cancelledSessions,
+  writeJsonRpcNotification,
+  configOptions,
+  availableModels,
+  modeState,
+  grokAcpModels,
+  modelState,
+  scenarioState,
+} from "./acpMockConfig.ts";
 import { createPromptScenario } from "./acpMockPromptScenarios.ts";
-
 
 const requestLogPath = configuredRequestLogPath;
 
@@ -20,6 +38,7 @@ const program = Effect.gen(function* () {
     Effect.sync(() => {
       scenarioState.parameterizedModelPicker =
         request.clientCapabilities?._meta?.parameterizedModelPicker === true;
+
       return {
         protocolVersion: 1,
         agentCapabilities: { loadSession: true },
@@ -66,9 +85,11 @@ const program = Effect.gen(function* () {
   yield* agent.handleLoadSession((request) =>
     Effect.gen(function* () {
       const requestedSessionId = String(request.sessionId ?? sessionId);
+
       if (failLoadSession) {
         return yield* AcpError.AcpRequestError.internalError("Mock load session failure");
       }
+
       if (hangLoadSessionAfterReplay || delayLoadSessionAfterReplay) {
         emitLoadReplayNotifications(requestedSessionId);
         yield* agent.client.sessionUpdate({
@@ -79,15 +100,18 @@ const program = Effect.gen(function* () {
           },
         });
         yield* Effect.sleep(loadSessionDelayMs);
+
         return {
           modes: modeState(),
           models: modelState(),
           configOptions: configOptions(),
         };
       }
+
       if (emitLoadReplay) {
         emitLoadReplayNotifications(requestedSessionId);
       }
+
       yield* agent.client.sessionUpdate({
         sessionId: requestedSessionId,
         update: {
@@ -95,6 +119,7 @@ const program = Effect.gen(function* () {
           content: { type: "text", text: "replay" },
         },
       });
+
       return {
         modes: modeState(),
         models: modelState(),
@@ -114,7 +139,9 @@ const program = Effect.gen(function* () {
           },
         );
       }
+
       scenarioState.currentModelId = request.modelId;
+
       return {};
     }),
   );
@@ -126,6 +153,7 @@ const program = Effect.gen(function* () {
           process.exit(7);
         });
       }
+
       if (failSetConfigOption) {
         return yield* AcpError.AcpRequestError.invalidParams(
           "Mock invalid params for session/set_config_option",
@@ -135,21 +163,27 @@ const program = Effect.gen(function* () {
           },
         );
       }
+
       if (request.configId === "mode" && Predicate.isString(request.value)) {
         scenarioState.currentModeId = request.value;
       }
+
       if (request.configId === "model" && Predicate.isString(request.value)) {
         scenarioState.currentModelId = request.value;
       }
+
       if (request.configId === "reasoning" && Predicate.isString(request.value)) {
         scenarioState.currentReasoning = request.value;
       }
+
       if (request.configId === "context" && Predicate.isString(request.value)) {
         scenarioState.currentContext = request.value;
       }
+
       if (request.configId === "fast") {
         scenarioState.currentFast = request.value === true || request.value === "true";
       }
+
       return {
         configOptions: configOptions(),
       };
@@ -160,6 +194,7 @@ const program = Effect.gen(function* () {
     Effect.gen(function* () {
       const cancelledSessionId = String(sessionId ?? "mock-session-1");
       cancelledSessions.add(cancelledSessionId);
+
       if (emitLateUpdateAfterCancel) {
         yield* Effect.sleep("50 millis");
         yield* Effect.sync(() => {
@@ -174,7 +209,7 @@ const program = Effect.gen(function* () {
       }
     }),
   );
-yield* agent.handlePrompt(createPromptScenario(scenarioState, agent));
+  yield* agent.handlePrompt(createPromptScenario(scenarioState, agent));
 
   yield* agent.handleUnknownExtRequest((method, params) => {
     if (method === "cursor/list_available_models") {
@@ -199,6 +234,7 @@ yield* agent.handlePrompt(createPromptScenario(scenarioState, agent));
             Predicate.isString(params.mode)
           ? params.mode
           : undefined;
+
     const requestedSessionId =
       Predicate.isObjectOrArray(params) &&
       params !== null &&
@@ -209,6 +245,7 @@ yield* agent.handlePrompt(createPromptScenario(scenarioState, agent));
 
     if (Predicate.isString(nextModeId) && nextModeId.trim()) {
       scenarioState.currentModeId = nextModeId.trim();
+
       return agent.client
         .sessionUpdate({
           sessionId: requestedSessionId,
@@ -234,10 +271,13 @@ yield* agent.handlePrompt(createPromptScenario(scenarioState, agent));
               if (event.direction !== "incoming" || event.stage !== "raw") {
                 return Effect.void;
               }
+
               if (!Predicate.isString(event.payload)) {
                 return Effect.void;
               }
+
               const payload = event.payload;
+
               return Effect.sync(() => {
                 NodeFS.appendFileSync(
                   requestLogPath,
@@ -253,6 +293,5 @@ yield* agent.handlePrompt(createPromptScenario(scenarioState, agent));
   Effect.scoped,
   Effect.provide(NodeServices.layer),
 );
-
 
 NodeRuntime.runMain(program);

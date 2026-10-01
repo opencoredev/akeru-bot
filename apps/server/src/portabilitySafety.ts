@@ -1,4 +1,11 @@
-import { DEFAULT_BOT_SANDBOX_BROWSER_SHARING, type PortabilityProjectData, type PortabilitySafeServerSettings, type OrchestrationReadModel, type ServerSettings, type ServerSettingsPatch } from "@akeru/contracts";
+import {
+  DEFAULT_BOT_SANDBOX_BROWSER_SHARING,
+  type PortabilityProjectData,
+  type PortabilitySafeServerSettings,
+  type OrchestrationReadModel,
+  type ServerSettings,
+  type ServerSettingsPatch,
+} from "@akeru/contracts";
 import * as Duration from "effect/Duration";
 
 const SECRET_ARGUMENT =
@@ -18,14 +25,17 @@ export function basename(value: string): string {
 
 export function safeMcpCommand(command: string): string {
   const executable = command.trim().split(/\s+/)[0] ?? command;
+
   if (SECRET_ARGUMENT.test(executable) || /^[A-Za-z_][A-Za-z0-9_]*=/.test(executable)) {
     return "mcp-server";
   }
+
   return hasAbsolutePath(executable) ? basename(executable) : executable;
 }
 
 export function safeText(value: string): string {
   if (/^diff --git /m.test(value)) return "[diff removed]";
+
   return value
     .replace(/-----BEGIN [A-Z0-9 ]+-----[\s\S]*?-----END [A-Z0-9 ]+-----/g, "[private key removed]")
     .replace(
@@ -78,6 +88,7 @@ export function portableProjectData(
         }).filter(([, value]) => value !== undefined),
       )
     : undefined;
+
   return {
     title: safeText(project.title),
     workspaceName: safeText(basename(project.workspaceRoot) || project.title),
@@ -92,33 +103,43 @@ export function portableProjectData(
 export function safeMcpArgs(args: readonly string[] | undefined): string[] | undefined {
   if (args === undefined) return undefined;
   const safe: string[] = [];
+
   for (let index = 0; index < args.length; index += 1) {
     const argument = args[index]!;
     const next = args[index + 1];
+
     if (argument.startsWith("-") && next && containsAbsolutePath(next)) {
       index += 1;
       continue;
     }
+
     if (
       containsAbsolutePath(argument) ||
       /^[A-Za-z_][A-Za-z0-9_]*=/.test(argument) ||
       safeText(argument) !== argument
     )
       continue;
+
     if (SECRET_ARGUMENT.test(argument)) {
       if (!argument.includes("=") && args[index + 1] && !args[index + 1]!.startsWith("-")) {
         index += 1;
       }
+
       continue;
     }
+
     safe.push(argument);
   }
+
   return safe.length > 0 ? safe : undefined;
 }
 
-export function safeMcpConfiguration(server: NonNullable<OrchestrationReadModel["mcpServers"]>[number]) {
+export function safeMcpConfiguration(
+  server: NonNullable<OrchestrationReadModel["mcpServers"]>[number],
+) {
   if (server.transport === "stdio") {
     const args = safeMcpArgs(server.args);
+
     return {
       name: safeText(server.name),
       transport: server.transport,
@@ -126,16 +147,19 @@ export function safeMcpConfiguration(server: NonNullable<OrchestrationReadModel[
       ...(args ? { args } : {}),
     } as const;
   }
+
   const url = new URL(server.url);
   url.username = "";
   url.password = "";
   url.search = "";
   url.hash = "";
+
   return { name: safeText(server.name), transport: server.transport, url: url.toString() } as const;
 }
 
 export function safeServerSettings(settings: ServerSettings): PortabilitySafeServerSettings {
   const overrides = settings.backgroundActivity.overrides;
+
   return {
     enableLegacyTokenStreaming: settings.enableLegacyTokenStreaming,
     enableProviderUpdateChecks: settings.enableProviderUpdateChecks,
@@ -205,8 +229,11 @@ export function safeServerSettings(settings: ServerSettings): PortabilitySafeSer
   };
 }
 
-export function settingsPatchFromPortable(settings: PortabilitySafeServerSettings): ServerSettingsPatch {
+export function settingsPatchFromPortable(
+  settings: PortabilitySafeServerSettings,
+): ServerSettingsPatch {
   const overrides = settings.backgroundActivity.overrides;
+
   return {
     enableLegacyTokenStreaming: settings.enableLegacyTokenStreaming,
     enableProviderUpdateChecks: settings.enableProviderUpdateChecks,

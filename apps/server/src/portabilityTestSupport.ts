@@ -1,41 +1,46 @@
-import { BotId, DEFAULT_SERVER_SETTINGS, EventId, GroupId, McpServerId, MessageId, ProjectId, ProviderDriverKind, ProviderInstanceId, ThreadId, type OrchestrationReadModel, type PortabilityArchiveRecord, type ServerSettings } from "@akeru/contracts";
+import {
+  BotId,
+  DEFAULT_SERVER_SETTINGS,
+  EventId,
+  GroupId,
+  McpServerId,
+  MessageId,
+  ProjectId,
+  ProviderDriverKind,
+  ProviderInstanceId,
+  ThreadId,
+  type OrchestrationReadModel,
+  type PortabilityArchiveRecord,
+  type ServerSettings,
+} from "@akeru/contracts";
 
 import { createEmptyReadModel } from "./orchestration/projector.ts";
 
 import { createPortabilityArchive, portabilityChecksum } from "./portability.ts";
 
-
 export const NOW = "2026-08-30T12:00:00.000Z";
-
 
 export const LATER = "2026-08-30T13:00:00.000Z";
 
-
 export const PROJECT_ID = ProjectId.make("project-portable");
-
 
 export const THREAD_ID = ThreadId.make("thread-portable");
 
-
 export const BOT_ID = BotId.make("bot-portable");
-
 
 export const SPECIALIST_BOT_ID = BotId.make("bot-portable-specialist");
 
-
 export const GROUP_ID = GroupId.make("group-portable");
-
 
 export const URL_MCP_ID = McpServerId.make("builtin-search");
 
-
 export const STDIO_MCP_ID = McpServerId.make("local-tool");
-
 
 export const AVAILABLE_PROVIDER_IDS = new Set(["codex", "private"]);
 
-
-export function makeSnapshot(overrides: Partial<OrchestrationReadModel> = {}): OrchestrationReadModel {
+export function makeSnapshot(
+  overrides: Partial<OrchestrationReadModel> = {},
+): OrchestrationReadModel {
   return {
     ...createEmptyReadModel(NOW),
     snapshotSequence: 7,
@@ -237,7 +242,6 @@ export function makeSnapshot(overrides: Partial<OrchestrationReadModel> = {}): O
   };
 }
 
-
 export function makePreflightSnapshot(): OrchestrationReadModel {
   const snapshot = makeSnapshot();
   const boss = snapshot.bots[0]!;
@@ -266,7 +270,6 @@ export function makePreflightSnapshot(): OrchestrationReadModel {
   };
 }
 
-
 export function makeSettings(): ServerSettings {
   return {
     ...DEFAULT_SERVER_SETTINGS,
@@ -291,18 +294,18 @@ export function makeSettings(): ServerSettings {
   };
 }
 
-
-
-
 export function resignArchive(
   archive: ReturnType<typeof createPortabilityArchive>,
   records: readonly PortabilityArchiveRecord[],
 ): ReturnType<typeof createPortabilityArchive> {
   const signedRecords = records.map((record) => {
     const { checksum: _checksum, ...core } = record;
+
     return { ...core, checksum: portabilityChecksum(core) };
   });
+
   const body = { ...archive, records: signedRecords };
   const { checksum: _checksum, ...unsigned } = body;
+
   return { ...unsigned, checksum: portabilityChecksum(unsigned) };
 }

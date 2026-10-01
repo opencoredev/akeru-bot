@@ -4,8 +4,6 @@ import * as NodeFSP from "node:fs/promises";
 import * as NodePath from "node:path";
 import type { PendingServiceUpdate } from "./cloud/serviceProtocol.ts";
 
-
-
 /** SQLite persists across the main file plus its WAL and shared-memory sidecars. */
 export const DB_FILE_SUFFIXES = ["", "-wal", "-shm"] as const;
 
@@ -20,6 +18,7 @@ export const databaseBackupFile = (backupDir: string, suffix: (typeof DB_FILE_SU
 export async function pathExists(target: string): Promise<boolean> {
   try {
     await NodeFSP.access(target);
+
     return true;
   } catch (cause) {
     if (cause instanceof Error && "code" in cause && cause.code === "ENOENT") return false;
@@ -29,6 +28,7 @@ export async function pathExists(target: string): Promise<boolean> {
 
 export async function syncFile(filePath: string): Promise<void> {
   const handle = await NodeFSP.open(filePath, "r");
+
   try {
     await handle.sync();
   } finally {
@@ -51,6 +51,7 @@ export async function syncDirectory(
 ): Promise<void> {
   try {
     const handle = await open(directory, "r");
+
     try {
       await handle.sync();
     } finally {
@@ -58,6 +59,7 @@ export async function syncDirectory(
     }
   } catch (error) {
     const code = error instanceof Error && "code" in error ? error.code : undefined;
+
     if (Predicate.isString(code) && UNSUPPORTED_DIRECTORY_SYNC.has(code)) return;
     throw error;
   }
@@ -68,21 +70,28 @@ export async function syncDirectory(
  * backup is never overwritten because a restarted launcher may be looking at
  * database writes from an earlier attempt by the same trial.
  */
-export async function backupDatabaseOnce(baseDir: string, pending: PendingServiceUpdate): Promise<void> {
+export async function backupDatabaseOnce(
+  baseDir: string,
+  pending: PendingServiceUpdate,
+): Promise<void> {
   const backupDir = databaseBackupDir(baseDir, pending.id);
+
   if (await pathExists(backupDir)) return;
 
   const stagingDir = `${backupDir}.staging`;
   await NodeFSP.rm(stagingDir, { recursive: true, force: true });
   await NodeFSP.mkdir(stagingDir, { recursive: true, mode: 0o700 });
+
   try {
     for (const suffix of DB_FILE_SUFFIXES) {
       const source = `${pending.dbPath}${suffix}`;
+
       if (suffix !== "" && !(await pathExists(source))) continue;
       const destination = databaseBackupFile(stagingDir, suffix);
       await NodeFSP.copyFile(source, destination);
       await syncFile(destination);
     }
+
     await NodeFSP.rename(stagingDir, backupDir);
     await syncDirectory(NodePath.dirname(backupDir));
   } catch (cause) {
@@ -100,13 +109,16 @@ export const databaseRestorePending = (baseDir: string, pending: PendingServiceU
 /** Mark rollback before changing live files so launcher recovery cannot boot a partial restore. */
 export async function markDatabaseRestorePending(backupDir: string): Promise<void> {
   const markerPath = NodePath.join(backupDir, RESTORE_MARKER);
+
   if (!(await pathExists(markerPath))) {
     const handle = await NodeFSP.open(markerPath, "wx", 0o600);
+
     try {
       await handle.sync();
     } finally {
       await handle.close();
     }
+
     await syncDirectory(backupDir);
   }
 }
@@ -117,12 +129,15 @@ export async function restoreDatabaseBackup(
   pending: PendingServiceUpdate,
 ): Promise<void> {
   const backupDir = databaseBackupDir(baseDir, pending.id);
+
   if (!(await pathExists(backupDir))) return;
 
   await markDatabaseRestorePending(backupDir);
+
   for (const suffix of DB_FILE_SUFFIXES) {
     const target = `${pending.dbPath}${suffix}`;
     const source = databaseBackupFile(backupDir, suffix);
+
     if (await pathExists(source)) {
       await NodeFSP.copyFile(source, target);
       await syncFile(target);
@@ -130,11 +145,13 @@ export async function restoreDatabaseBackup(
       await NodeFSP.rm(target, { force: true });
     }
   }
+
   await syncDirectory(NodePath.dirname(pending.dbPath));
 }
 
 export async function discardDatabaseBackup(baseDir: string, updateId: string): Promise<void> {
   const backupDir = databaseBackupDir(baseDir, updateId);
+
   if (!(await pathExists(backupDir))) return;
   await NodeFSP.rm(backupDir, { recursive: true, force: true });
   await syncDirectory(NodePath.dirname(backupDir));

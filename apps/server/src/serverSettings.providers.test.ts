@@ -1,5 +1,9 @@
 import * as NodeServices from "@effect/platform-node/NodeServices";
-import { ProviderDriverKind, ProviderInstanceId, resolveProviderInstanceEnabled } from "@akeru/contracts";
+import {
+  ProviderDriverKind,
+  ProviderInstanceId,
+  resolveProviderInstanceEnabled,
+} from "@akeru/contracts";
 import { assert, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
@@ -10,7 +14,6 @@ import * as ServerSettingsModule from "./serverSettings.ts";
 import { recordProviderUsage, makeServerSettingsLayer } from "./serverSettingsTestSupport.ts";
 
 it.layer(NodeServices.layer)("server settings", (it) => {
-
   it.effect("enables previously used providers from sparse settings files", () =>
     Effect.gen(function* () {
       const serverConfig = yield* ServerConfig.ServerConfig;
@@ -29,7 +32,6 @@ it.layer(NodeServices.layer)("server settings", (it) => {
       assert.equal(settings.providers.opencode.serverUrl, "http://127.0.0.1:4096");
     }).pipe(Effect.provide(makeServerSettingsLayer())),
   );
-
 
   it.effect("preserves existing provider instances without explicit enabled flags", () =>
     Effect.gen(function* () {
@@ -55,7 +57,6 @@ it.layer(NodeServices.layer)("server settings", (it) => {
     }).pipe(Effect.provide(makeServerSettingsLayer())),
   );
 
-
   it.effect("preserves explicit provider disables in existing settings files", () =>
     Effect.gen(function* () {
       const serverConfig = yield* ServerConfig.ServerConfig;
@@ -77,7 +78,6 @@ it.layer(NodeServices.layer)("server settings", (it) => {
     }).pipe(Effect.provide(makeServerSettingsLayer())),
   );
 
-
   it.effect("skips a disabled provider instance when picking the text generation fallback", () =>
     Effect.gen(function* () {
       const serverConfig = yield* ServerConfig.ServerConfig;
@@ -96,7 +96,6 @@ it.layer(NodeServices.layer)("server settings", (it) => {
     }).pipe(Effect.provide(makeServerSettingsLayer())),
   );
 
-
   it.effect("moves a saved Cursor text generation selection to a live provider", () =>
     Effect.gen(function* () {
       const serverConfig = yield* ServerConfig.ServerConfig;
@@ -112,7 +111,6 @@ it.layer(NodeServices.layer)("server settings", (it) => {
       assert.equal(settings.textGenerationModelSelection.instanceId, "codex");
     }).pipe(Effect.provide(makeServerSettingsLayer())),
   );
-
 
   it.effect("skips providers without text generation when leaving Cursor", () =>
     Effect.gen(function* () {
@@ -130,7 +128,6 @@ it.layer(NodeServices.layer)("server settings", (it) => {
     }).pipe(Effect.provide(makeServerSettingsLayer())),
   );
 
-
   it.effect("keeps unused providers disabled in existing sparse settings files", () =>
     Effect.gen(function* () {
       const serverConfig = yield* ServerConfig.ServerConfig;
@@ -145,7 +142,6 @@ it.layer(NodeServices.layer)("server settings", (it) => {
     }).pipe(Effect.provide(makeServerSettingsLayer())),
   );
 
-
   it.effect("preserves provider history when no settings file exists", () =>
     Effect.gen(function* () {
       const serverSettings = yield* ServerSettingsModule.ServerSettingsService;
@@ -157,7 +153,6 @@ it.layer(NodeServices.layer)("server settings", (it) => {
       assert.isFalse(settings.providers.opencode.enabled);
     }).pipe(Effect.provide(makeServerSettingsLayer())),
   );
-
 
   it.effect("preserves provider history when the settings file is invalid", () =>
     Effect.gen(function* () {
@@ -173,7 +168,6 @@ it.layer(NodeServices.layer)("server settings", (it) => {
       assert.isFalse(settings.providers.opencode.enabled);
     }).pipe(Effect.provide(makeServerSettingsLayer())),
   );
-
 
   it.effect("preserves valid provider flags when another settings field is invalid", () =>
     Effect.gen(function* () {
@@ -192,7 +186,6 @@ it.layer(NodeServices.layer)("server settings", (it) => {
       assert.isTrue(settings.providers.grok.enabled);
     }).pipe(Effect.provide(makeServerSettingsLayer())),
   );
-
 
   it.effect("restores providers from persisted runtime sessions", () =>
     Effect.gen(function* () {
@@ -224,7 +217,6 @@ it.layer(NodeServices.layer)("server settings", (it) => {
     }).pipe(Effect.provide(makeServerSettingsLayer())),
   );
 
-
   it.effect("persists explicit disables after a provider has been used", () =>
     Effect.gen(function* () {
       const serverConfig = yield* ServerConfig.ServerConfig;
@@ -237,6 +229,7 @@ it.layer(NodeServices.layer)("server settings", (it) => {
       const settings = yield* serverSettings.updateSettings({
         providers: { grok: { enabled: false } },
       });
+
       assert.isFalse(settings.providers.grok.enabled);
 
       const raw = yield* fileSystem.readFileString(serverConfig.settingsPath);
@@ -244,7 +237,6 @@ it.layer(NodeServices.layer)("server settings", (it) => {
       assert.isFalse(JSON.parse(raw).providers.grok.enabled);
     }).pipe(Effect.provide(makeServerSettingsLayer())),
   );
-
 
   it.effect("persists explicit provider enables before their first use", () =>
     Effect.gen(function* () {
@@ -267,7 +259,6 @@ it.layer(NodeServices.layer)("server settings", (it) => {
       assert.isTrue(persisted.providers.opencode.enabled);
     }).pipe(Effect.provide(makeServerSettingsLayer())),
   );
-
 
   it.effect("keeps optional providers disabled after a new installation writes settings", () =>
     Effect.gen(function* () {
@@ -304,7 +295,6 @@ it.layer(NodeServices.layer)("server settings", (it) => {
     }).pipe(Effect.provide(makeServerSettingsLayer())),
   );
 
-
   it.effect("keeps OpenCode Go disabled after settings reload", () =>
     Effect.gen(function* () {
       const serverConfig = yield* ServerConfig.ServerConfig;
@@ -320,7 +310,6 @@ it.layer(NodeServices.layer)("server settings", (it) => {
       assert.isFalse(settings.providers.opencodeGo.enabled);
     }).pipe(Effect.provide(makeServerSettingsLayer())),
   );
-
 
   it.effect("folds a legacy in-config enabled flag into the envelope on load", () =>
     Effect.gen(function* () {
@@ -358,7 +347,6 @@ it.layer(NodeServices.layer)("server settings", (it) => {
     }).pipe(Effect.provide(makeServerSettingsLayer())),
   );
 
-
   it.effect("folds in-config enabled flags arriving through updates", () =>
     Effect.gen(function* () {
       const serverSettings = yield* ServerSettingsModule.ServerSettingsService;
@@ -380,4 +368,5 @@ it.layer(NodeServices.layer)("server settings", (it) => {
         config: { binaryPath: "/opt/grok" },
       });
     }).pipe(Effect.provide(makeServerSettingsLayer())),
-  );});
+  );
+});

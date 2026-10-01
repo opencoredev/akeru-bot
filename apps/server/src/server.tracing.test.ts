@@ -6,18 +6,23 @@ import * as Effect from "effect/Effect";
 import { HttpBody, HttpClient } from "effect/unstable/http";
 
 import { buildAppUnderTest } from "./serverTestApp.ts";
-import { getAuthenticatedSessionCookieHeader, jsonRequestBody, splitHeaderTokens } from "./serverTestClients.ts";
+import {
+  getAuthenticatedSessionCookieHeader,
+  jsonRequestBody,
+  splitHeaderTokens,
+} from "./serverTestClients.ts";
 import { makeBrowserOtlpPayload } from "./serverTestTracing.ts";
 
 it.layer(NodeServices.layer)("server router seam", (it) => {
-
   it.effect("proxies browser OTLP trace exports through the server", () =>
     Effect.gen(function* () {
       const upstreamRequests: Array<{
         readonly body: string;
         readonly contentType: string | null;
       }> = [];
+
       const localTraceRecords: Array<unknown> = [];
+
       const payload = {
         resourceSpans: [
           {
@@ -101,8 +106,10 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
             server.on("error", reject);
             server.listen(0, "127.0.0.1", () => {
               const address = server.address();
+
               if (!address || typeof address === "string") {
                 reject(new Error("Expected TCP collector address"));
+
                 return;
               }
 
@@ -113,8 +120,10 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
                     server.close((error) => {
                       if (error) {
                         rejectClose(error);
+
                         return;
                       }
+
                       resolveClose();
                     });
                   }),
@@ -198,7 +207,6 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
     }).pipe(Effect.provide(NodeHttpServer.layerTest)),
   );
 
-
   it.effect("responds to browser OTLP trace preflight requests with CORS headers", () =>
     Effect.gen(function* () {
       yield* buildAppUnderTest();
@@ -227,7 +235,6 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
     }).pipe(Effect.provide(NodeHttpServer.layerTest)),
   );
 
-
   it.effect(
     "stores browser OTLP trace exports locally when no upstream collector is configured",
     () =>
@@ -241,6 +248,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
         assert.notEqual(resourceSpan, undefined);
         assert.notEqual(scopeSpan, undefined);
         assert.notEqual(span, undefined);
+
         if (!resourceSpan || !scopeSpan || !span) {
           return;
         }
@@ -267,6 +275,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
 
         assert.equal(response.status, 204);
         assert.equal(localTraceRecords.length, 1);
+
         const record = localTraceRecords[0] as {
           readonly type: string;
           readonly name: string;
@@ -299,4 +308,5 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
         assert.equal(record.resourceAttributes["service.name"], "t3-web");
         assert.equal(record.status?.code, String(span.status.code));
       }).pipe(Effect.provide(NodeHttpServer.layerTest)),
-  );});
+  );
+});

@@ -6,8 +6,6 @@ import * as Schema from "effect/Schema";
 import * as SqlClient from "effect/unstable/sql/SqlClient";
 import * as NodeSqliteClient from "../src/persistence/NodeSqliteClient.ts";
 
-
-
 export class MigrateDevDbServerRunningError extends Schema.TaggedErrorClass<MigrateDevDbServerRunningError>()(
   "MigrateDevDbServerRunningError",
   {
@@ -33,6 +31,7 @@ export class MigrateDevDbDestinationBusyError extends Schema.TaggedErrorClass<Mi
       this.reason === "write-locked"
         ? "the database is write-locked"
         : "another connection is holding its WAL";
+
     return `Dev database at '${this.databasePath}' looks in use (${detail}). Stop the dev server first; if none is running, delete the -wal/-shm files next to it.`;
   }
 }
@@ -45,6 +44,7 @@ export const decodeServerRuntimeState = Schema.decodeEffect(ServerRuntimeState);
 export const isProcessAlive = (pid: number): boolean => {
   try {
     process.kill(pid, 0);
+
     return true;
   } catch (error) {
     // EPERM means the process exists but belongs to someone else.
@@ -64,11 +64,13 @@ export const ensureNotInUse = Effect.fn("ensureDevDbNotInUse")(function* (databa
   const path = yield* Path.Path;
 
   const runtimeStatePath = path.join(path.dirname(databasePath), "server-runtime.json");
+
   const runtimeState = yield* fs.readFileString(runtimeStatePath).pipe(
     Effect.flatMap(decodeServerRuntimeState),
     // A missing or malformed descriptor is not a liveness signal.
     Effect.option,
   );
+
   if (Option.isSome(runtimeState) && isProcessAlive(runtimeState.value.pid)) {
     return yield* new MigrateDevDbServerRunningError({
       databasePath,
@@ -79,11 +81,13 @@ export const ensureNotInUse = Effect.fn("ensureDevDbNotInUse")(function* (databa
   if (!(yield* fs.exists(databasePath))) {
     return;
   }
+
   const checkpoint = yield* Effect.gen(function* () {
     const sql = yield* SqlClient.SqlClient;
     yield* sql.unsafe("PRAGMA busy_timeout = 0").unprepared;
     yield* sql.unsafe("BEGIN IMMEDIATE").unprepared;
     yield* sql.unsafe("ROLLBACK").unprepared;
+
     return yield* sql.unsafe<{ busy: number }>("PRAGMA wal_checkpoint(TRUNCATE)").unprepared;
   }).pipe(
     Effect.provide(NodeSqliteClient.layer({ filename: databasePath })),
@@ -96,6 +100,7 @@ export const ensureNotInUse = Effect.fn("ensureDevDbNotInUse")(function* (databa
         }),
     ),
   );
+
   if (checkpoint[0] !== undefined && Number(checkpoint[0].busy) !== 0) {
     return yield* new MigrateDevDbDestinationBusyError({
       databasePath,

@@ -2,7 +2,14 @@
 import * as Predicate from "effect/Predicate";
 import * as NodeHttpServer from "@effect/platform-node/NodeHttpServer";
 import * as NodeServices from "@effect/platform-node/NodeServices";
-import { CommandId, MessageId, type OrchestrationCommand, ORCHESTRATION_WS_METHODS, ThreadId, WS_METHODS } from "@akeru/contracts";
+import {
+  CommandId,
+  MessageId,
+  type OrchestrationCommand,
+  ORCHESTRATION_WS_METHODS,
+  ThreadId,
+  WS_METHODS,
+} from "@akeru/contracts";
 import { assert, it } from "@effect/vitest";
 import { assertTrue } from "@effect/vitest/utils";
 import * as Effect from "effect/Effect";
@@ -16,45 +23,58 @@ import * as GitVcsDriver from "./vcs/GitVcsDriver.ts";
 import { finishMaintenance, tryBeginMaintenance } from "./remote/updateGate.ts";
 
 import { buildAppUnderTest } from "./serverTestApp.ts";
-import { readyDefaultProvider, defaultModelSelection, defaultProjectId, readyWorktreeProvider, worktreeTestModelSelection } from "./serverTestFixtures.ts";
+import {
+  readyDefaultProvider,
+  defaultModelSelection,
+  defaultProjectId,
+  readyWorktreeProvider,
+  worktreeTestModelSelection,
+} from "./serverTestFixtures.ts";
 import { getWsServerUrl, withWsRpcClient } from "./serverTestClients.ts";
 
 it.layer(NodeServices.layer)("server router seam", (it) => {
-
   it.effect(
     "bootstraps first-send worktree turns on the server before dispatching turn start",
     () =>
       Effect.gen(function* () {
         const dispatchedCommands: Array<OrchestrationCommand> = [];
         const bootstrapGitOperations: string[] = [];
+
         const remoteExists = vi.fn(
           (_: Parameters<GitVcsDriver.GitVcsDriver["Service"]["remoteExists"]>[0]) =>
             Effect.sync(() => {
               bootstrapGitOperations.push("remote-exists");
+
               return true;
             }),
         );
+
         const fetchRemote = vi.fn(
           (_: Parameters<GitVcsDriver.GitVcsDriver["Service"]["fetchRemote"]>[0]) =>
             Effect.sync(() => {
               bootstrapGitOperations.push("fetch");
             }),
         );
+
         const fetchedOriginCommit = "0123456789abcdef0123456789abcdef01234567";
+
         const resolveRemoteTrackingCommit = vi.fn(
           (_: Parameters<GitVcsDriver.GitVcsDriver["Service"]["resolveRemoteTrackingCommit"]>[0]) =>
             Effect.sync(() => {
               bootstrapGitOperations.push("resolve-remote-commit");
+
               return {
                 commitSha: fetchedOriginCommit,
                 remoteRefName: "origin/main",
               };
             }),
         );
+
         const createWorktree = vi.fn(
           (_: Parameters<GitVcsDriver.GitVcsDriver["Service"]["createWorktree"]>[0]) =>
             Effect.sync(() => {
               bootstrapGitOperations.push("create-worktree");
+
               return {
                 worktree: {
                   refName: "t3code/bootstrap-refName",
@@ -77,6 +97,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
               dispatch: (command) =>
                 Effect.sync(() => {
                   dispatchedCommands.push(command);
+
                   return { sequence: dispatchedCommands.length };
                 }),
               readEvents: () => Stream.empty,
@@ -86,6 +107,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
 
         const createdAt = "2026-01-01T00:00:00.000Z";
         const wsUrl = yield* getWsServerUrl("/ws");
+
         const response = yield* Effect.scoped(
           withWsRpcClient(wsUrl, (client) =>
             client[ORCHESTRATION_WS_METHODS.dispatchCommand]({
@@ -154,23 +176,26 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
         ]);
         const finalCommand = dispatchedCommands[2];
         assertTrue(finalCommand?.type === "thread.turn.start");
+
         if (finalCommand?.type === "thread.turn.start") {
           assert.equal(finalCommand.bootstrap, undefined);
         }
       }).pipe(Effect.provide(NodeHttpServer.layerTest)),
   );
 
-
   it.effect("holds server updates from bootstrap setup through the final turn start", () =>
     Effect.gen(function* () {
       const dispatchedCommands: Array<OrchestrationCommand> = [];
       const finalDispatchAdmitted: Array<boolean> = [];
       let maintenanceStartedDuringBootstrap: boolean | undefined;
+
       const createWorktree = vi.fn(
         (_: Parameters<GitVcsDriver.GitVcsDriver["Service"]["createWorktree"]>[0]) =>
           Effect.sync(() => {
             maintenanceStartedDuringBootstrap = tryBeginMaintenance();
+
             if (maintenanceStartedDuringBootstrap) finishMaintenance();
+
             return {
               worktree: {
                 refName: "t3code/bootstrap-admitted",
@@ -188,9 +213,11 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
             dispatch: (command, options) =>
               Effect.sync(() => {
                 dispatchedCommands.push(command);
+
                 if (command.type === "thread.turn.start") {
                   finalDispatchAdmitted.push(options?.admission !== undefined);
                 }
+
                 return { sequence: dispatchedCommands.length };
               }),
             readEvents: () => Stream.empty,
@@ -200,6 +227,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
 
       const createdAt = "2026-01-01T00:00:00.000Z";
       const wsUrl = yield* getWsServerUrl("/ws");
+
       const bootstrapTurnStart = (suffix: string) => ({
         type: "thread.turn.start" as const,
         commandId: CommandId.make(`cmd-bootstrap-admitted-${suffix}`),
@@ -245,11 +273,13 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
       // An update already in progress blocks the bootstrap before any setup runs.
       try {
         dispatchedCommands.length = 0;
+
         const error = yield* Effect.scoped(
           withWsRpcClient(wsUrl, (client) =>
             client[ORCHESTRATION_WS_METHODS.dispatchCommand](bootstrapTurnStart("blocked")),
           ),
         ).pipe(Effect.flip);
+
         assert.include(String(error.message), "installing an update");
         assert.deepEqual(dispatchedCommands, []);
         assert.equal(createWorktree.mock.calls.length, 1);
@@ -259,19 +289,21 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
     }).pipe(Effect.provide(NodeHttpServer.layerTest)),
   );
 
-
   it.effect(
     "falls back to the local base branch when startFromOrigin is set but no origin remote exists",
     () =>
       Effect.gen(function* () {
         const dispatchedCommands: Array<OrchestrationCommand> = [];
+
         const remoteExists = vi.fn(
           (_: Parameters<GitVcsDriver.GitVcsDriver["Service"]["remoteExists"]>[0]) =>
             Effect.succeed(false),
         );
+
         const fetchRemote = vi.fn(
           (_: Parameters<GitVcsDriver.GitVcsDriver["Service"]["fetchRemote"]>[0]) => Effect.void,
         );
+
         const resolveRemoteTrackingCommit = vi.fn(
           (_: Parameters<GitVcsDriver.GitVcsDriver["Service"]["resolveRemoteTrackingCommit"]>[0]) =>
             Effect.succeed({
@@ -279,6 +311,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
               remoteRefName: "origin/main",
             }),
         );
+
         const createWorktree = vi.fn(
           (_: Parameters<GitVcsDriver.GitVcsDriver["Service"]["createWorktree"]>[0]) =>
             Effect.succeed({
@@ -302,6 +335,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
               dispatch: (command) =>
                 Effect.sync(() => {
                   dispatchedCommands.push(command);
+
                   return { sequence: dispatchedCommands.length };
                 }),
               readEvents: () => Stream.empty,
@@ -365,12 +399,12 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
       }).pipe(Effect.provide(NodeHttpServer.layerTest)),
   );
 
-
   it.effect("cleans up created bootstrap threads when worktree creation defects", () =>
     Effect.gen(function* () {
       const dispatchedCommands: Array<OrchestrationCommand> = [];
       const fileSystem = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
+
       const createWorktree = vi.fn(
         (_: Parameters<GitVcsDriver.GitVcsDriver["Service"]["createWorktree"]>[0]) =>
           Effect.die(new Error("worktree exploded")),
@@ -386,6 +420,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
             dispatch: (command) =>
               Effect.sync(() => {
                 dispatchedCommands.push(command);
+
                 return { sequence: dispatchedCommands.length };
               }),
             readEvents: () => Stream.empty,
@@ -396,6 +431,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
       const createdAt = "2026-01-01T00:00:00.000Z";
       const wsUrl = yield* getWsServerUrl("/ws");
       let pendingAttachmentId: string | undefined;
+
       const result = yield* Effect.scoped(
         withWsRpcClient(wsUrl, (client) =>
           Effect.gen(function* () {
@@ -404,10 +440,13 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
               mimeType: "image/png",
               sizeBytes: 6,
             });
+
             pendingAttachmentId = upload.attachmentId;
+
             const uploadResponse = yield* HttpClient.post(upload.relativeUrl, {
               body: HttpBody.uint8Array(new Uint8Array([1, 2, 3, 4, 5, 6]), "image/png"),
             });
+
             assert.equal(uploadResponse.status, 204);
 
             return yield* client[ORCHESTRATION_WS_METHODS.dispatchCommand]({
@@ -473,10 +512,10 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
     }).pipe(Effect.provide(NodeHttpServer.layerTest)),
   );
 
-
   it.effect("does not report a deleted bootstrap thread when cleanup fails", () =>
     Effect.gen(function* () {
       const dispatchedCommands: Array<OrchestrationCommand> = [];
+
       const createWorktree = vi.fn(
         (_: Parameters<GitVcsDriver.GitVcsDriver["Service"]["createWorktree"]>[0]) =>
           Effect.die(new Error("worktree exploded")),
@@ -491,6 +530,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
           orchestrationEngine: {
             dispatch: (command) => {
               dispatchedCommands.push(command);
+
               if (command.type === "thread.delete") {
                 return Effect.fail(
                   new OrchestrationListenerCallbackError({
@@ -499,6 +539,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
                   }),
                 );
               }
+
               return Effect.succeed({ sequence: dispatchedCommands.length });
             },
             readEvents: () => Stream.empty,
@@ -508,6 +549,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
 
       const createdAt = "2026-01-01T00:00:00.000Z";
       const wsUrl = yield* getWsServerUrl("/ws");
+
       const result = yield* Effect.scoped(
         withWsRpcClient(wsUrl, (client) =>
           client[ORCHESTRATION_WS_METHODS.dispatchCommand]({
@@ -555,4 +597,5 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
         ["thread.create", "thread.delete"],
       );
     }).pipe(Effect.provide(NodeHttpServer.layerTest)),
-  );});
+  );
+});

@@ -2,7 +2,12 @@
 import * as Predicate from "effect/Predicate";
 import * as NodeHttpServer from "@effect/platform-node/NodeHttpServer";
 import * as NodeServices from "@effect/platform-node/NodeServices";
-import { EventId, MessageId, type OrchestrationEvent, ORCHESTRATION_WS_METHODS } from "@akeru/contracts";
+import {
+  EventId,
+  MessageId,
+  type OrchestrationEvent,
+  ORCHESTRATION_WS_METHODS,
+} from "@akeru/contracts";
 import { assert, it } from "@effect/vitest";
 import { assertTrue } from "@effect/vitest/utils";
 import * as Effect from "effect/Effect";
@@ -14,12 +19,15 @@ import { SqlitePersistenceMemory } from "./persistence/Layers/Sqlite.ts";
 import { OrchestrationEventStoreLive } from "./persistence/Layers/OrchestrationEventStore.ts";
 import { OrchestrationEventStore } from "./persistence/Services/OrchestrationEventStore.ts";
 
-import { makeDefaultOrchestrationReadModel, defaultThreadId, makeLiveToolActivityEvent } from "./serverTestFixtures.ts";
+import {
+  makeDefaultOrchestrationReadModel,
+  defaultThreadId,
+  makeLiveToolActivityEvent,
+} from "./serverTestFixtures.ts";
 import { buildAppUnderTest } from "./serverTestApp.ts";
 import { getWsServerUrl, withWsRpcClient, jsonRequestBody } from "./serverTestClients.ts";
 
 it.layer(NodeServices.layer)("server router seam", (it) => {
-
   it.effect(
     "subscribeThread sends a fresh snapshot when its event count exceeds the replay limit",
     () =>
@@ -40,6 +48,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
               readThreadEvents: () =>
                 Stream.sync(() => {
                   readEventsCalls += 1;
+
                   return {} as OrchestrationEvent;
                 }),
             },
@@ -51,6 +60,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
         });
 
         const wsUrl = yield* getWsServerUrl("/ws");
+
         const items = yield* Effect.scoped(
           withWsRpcClient(wsUrl, (client) =>
             client[ORCHESTRATION_WS_METHODS.subscribeThread]({
@@ -64,15 +74,16 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
         const [first, second] = Array.from(items);
         // Never truncate a thread's replay at the event limit.
         assert.equal(first?.kind, "snapshot");
+
         if (first?.kind === "snapshot") {
           assert.equal(first.snapshot.thread.id, defaultThreadId);
           assert.equal(first.snapshot.snapshotSequence, 100_000);
         }
+
         assert.equal(second?.kind, "synchronized");
         assert.equal(readEventsCalls, 0);
       }).pipe(Effect.provide(NodeHttpServer.layerTest)),
   );
-
 
   it.effect("subscribeThread replaces a cursor ahead of the authoritative head", () =>
     Effect.gen(function* () {
@@ -88,6 +99,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
             readThreadEvents: () =>
               Stream.sync(() => {
                 readEventsCalls += 1;
+
                 return {} as OrchestrationEvent;
               }),
           },
@@ -99,6 +111,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
       });
 
       const wsUrl = yield* getWsServerUrl("/ws");
+
       const first = yield* Effect.scoped(
         withWsRpcClient(wsUrl, (client) =>
           client[ORCHESTRATION_WS_METHODS.subscribeThread]({
@@ -113,13 +126,13 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
     }).pipe(Effect.provide(NodeHttpServer.layerTest)),
   );
 
-
   it.effect("subscribeThread bounds catch-up replay to the captured head", () =>
     Effect.gen(function* () {
       let replayHead: number | undefined;
       let headSequence = 50;
       const liveEvents = yield* PubSub.unbounded<OrchestrationEvent>();
       const now = "2026-01-01T00:00:00.000Z";
+
       const messageEvent = {
         sequence: 3,
         eventId: EventId.make("event-replay-message"),
@@ -151,10 +164,12 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
             getThreadReplayStats: () =>
               Effect.sync(() => {
                 headSequence = 100;
+
                 return { eventCount: 1, payloadBytes: 100, hasCreateEvent: false };
               }),
             readThreadEvents: ({ toSequenceInclusive }) => {
               replayHead = toSequenceInclusive;
+
               return Stream.fromEffect(
                 PubSub.publish(liveEvents, {
                   ...messageEvent,
@@ -172,6 +187,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
       });
 
       const wsUrl = yield* getWsServerUrl("/ws");
+
       const items = yield* Effect.scoped(
         withWsRpcClient(wsUrl, (client) =>
           client[ORCHESTRATION_WS_METHODS.subscribeThread]({
@@ -192,7 +208,6 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
       assert.equal(replayHead, 50);
     }).pipe(Effect.provide(NodeHttpServer.layerTest)),
   );
-
 
   it.effect("subscribeThread replays a small thread range across a large global gap", () =>
     Effect.gen(function* () {
@@ -218,6 +233,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
         },
       });
       const wsUrl = yield* getWsServerUrl("/ws");
+
       const items = yield* Effect.scoped(
         withWsRpcClient(wsUrl, (client) =>
           client[ORCHESTRATION_WS_METHODS.subscribeThread]({
@@ -230,6 +246,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
           ),
         ),
       );
+
       assert.deepEqual(
         items.map((item) => (item.kind === "event" ? item.event.sequence : item.kind)),
         [99_999, "synchronized"],
@@ -240,13 +257,13 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
     }).pipe(Effect.provide(NodeHttpServer.layerTest)),
   );
 
-
   it.effect("subscribeThread resets cached history when its ID is created again", () =>
     Effect.gen(function* () {
       const thread = {
         ...makeDefaultOrchestrationReadModel().threads[0]!,
         title: "Recreated thread",
       };
+
       let requestedTurnLimit: number | undefined;
       yield* buildAppUnderTest({
         layers: {
@@ -263,12 +280,14 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
           projectionSnapshotQuery: {
             getThreadDetailSnapshot: (_threadId, options) => {
               requestedTurnLimit = options?.turnLimit;
+
               return Effect.succeed(Option.some({ snapshotSequence: 5, thread }));
             },
           },
         },
       });
       const wsUrl = yield* getWsServerUrl("/ws");
+
       const items = yield* Effect.scoped(
         withWsRpcClient(wsUrl, (client) =>
           client[ORCHESTRATION_WS_METHODS.subscribeThread]({
@@ -282,6 +301,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
           ),
         ),
       );
+
       const first = items[0];
       assertTrue(first?.kind === "snapshot");
       assert.equal(first.snapshot.thread.title, "Recreated thread");
@@ -290,7 +310,6 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
       assert.deepEqual(items[1], { kind: "synchronized" });
     }).pipe(Effect.provide(NodeHttpServer.layerTest)),
   );
-
 
   for (const { createBeforeDelete, oversized } of [
     { createBeforeDelete: false, oversized: false },
@@ -305,6 +324,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
         Effect.gen(function* () {
           const store = yield* OrchestrationEventStore;
           const base = makeLiveToolActivityEvent(0, "tool.completed");
+
           if (createBeforeDelete) {
             const thread = makeDefaultOrchestrationReadModel().threads[0]!;
             yield* store.append({
@@ -325,6 +345,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
               },
             });
           }
+
           if (oversized) {
             yield* Effect.forEach(
               Array.from({ length: 1_000 }, (_, index) => index + 1),
@@ -332,12 +353,14 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
               { discard: true },
             );
           }
+
           const deleted = yield* store.append({
             ...base,
             eventId: EventId.make(`deleted-replay-${createBeforeDelete}-${oversized}`),
             type: "thread.deleted",
             payload: { threadId: defaultThreadId, deletedAt: base.occurredAt },
           });
+
           yield* buildAppUnderTest({
             layers: {
               orchestrationEngine: {
@@ -374,6 +397,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
                   Stream.runCollect,
                   Effect.result,
                 );
+
                 if (oversized) {
                   assertTrue(Predicate.isTagged(threadResult, "Failure"));
                   assert.equal(threadResult.failure._tag, "OrchestrationGetSnapshotError");
@@ -381,10 +405,13 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
                     threadResult.failure.message,
                     `Chat ${defaultThreadId} was not found`,
                   );
+
                   return;
                 }
+
                 assertTrue(Predicate.isTagged(threadResult, "Success"));
                 assert.deepEqual(threadResult.success, [{ kind: "synchronized" }]);
+
                 const shellItems = yield* client[ORCHESTRATION_WS_METHODS.subscribeShell]({
                   afterSequence: 0,
                   requestCompletionMarker: true,
@@ -392,6 +419,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
                   Stream.takeUntil((item) => item.kind === "synchronized"),
                   Stream.runCollect,
                 );
+
                 assert.deepEqual(shellItems, [
                   { kind: "thread-removed", sequence: deleted.sequence, threadId: defaultThreadId },
                   { kind: "synchronized" },
@@ -408,4 +436,5 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
           ),
         ),
     );
-  }});
+  }
+});

@@ -1,11 +1,35 @@
 import * as NodeCrypto from "node:crypto";
-import { BotId, BALANCED_BOT_PERSONALITY_TONE, CommandId, GroupId, McpServerId, PortabilityArchive, ThreadId, isGroupBotMember, type PortabilityArchiveRecord, type PortabilityImportItem, type PortabilityProjectFolderMap, type OrchestrationCommand, type OrchestrationReadModel, type ServerSettings, type ServerSettingsPatch } from "@akeru/contracts";
+import {
+  BotId,
+  BALANCED_BOT_PERSONALITY_TONE,
+  CommandId,
+  GroupId,
+  McpServerId,
+  PortabilityArchive,
+  ThreadId,
+  isGroupBotMember,
+  type PortabilityArchiveRecord,
+  type PortabilityImportItem,
+  type PortabilityProjectFolderMap,
+  type OrchestrationCommand,
+  type OrchestrationReadModel,
+  type ServerSettings,
+  type ServerSettingsPatch,
+} from "@akeru/contracts";
 
-import { item, previewPortabilityImport, portableSettingsWithArchiveDefaults } from "./portabilityPreview.ts";
+import {
+  item,
+  previewPortabilityImport,
+  portableSettingsWithArchiveDefaults,
+} from "./portabilityPreview.ts";
 import { resolveProjectRestoreMatches } from "./portabilityProjectRestore.ts";
 import { portableRecords } from "./portabilityArchive.ts";
 import { canonicalJson } from "./portabilityChecksums.ts";
-import { safeServerSettings, settingsPatchFromPortable, safeMcpConfiguration } from "./portabilitySafety.ts";
+import {
+  safeServerSettings,
+  settingsPatchFromPortable,
+  safeMcpConfiguration,
+} from "./portabilitySafety.ts";
 
 export function nextCommandId(): CommandId {
   return CommandId.make(`portability-${NodeCrypto.randomUUID()}`);
@@ -16,11 +40,13 @@ export function mcpCommand(
   record: Extract<PortabilityArchiveRecord, { type: "mcp-server" }>,
 ): OrchestrationCommand {
   const config = record.data.configuration;
+
   const common = {
     commandId: nextCommandId(),
     mcpServerId: McpServerId.make(record.id),
     ...config,
   };
+
   return type === "mcp-server.create"
     ? { ...common, type, enabled: false, createdAt: record.updatedAt }
     : { ...common, type };
@@ -87,8 +113,11 @@ export function itemForCommand(
         return `thread:${command.threadId}`;
     }
   })();
+
   const record = records.find((entry) => `${entry.type}:${entry.id}` === key);
+
   if (!record) throw new Error(`Restore command '${command.type}' has no archive record.`);
+
   return item(record);
 }
 
@@ -106,20 +135,28 @@ export function summarizePortabilityApply(
     string,
     { item: PortabilityImportItem; succeeded: number; messages: string[] }
   >();
+
   for (const outcome of outcomes) {
     const key = `${outcome.item.recordType}:${outcome.item.id}`;
     const state = byRecord.get(key) ?? { item: outcome.item, succeeded: 0, messages: [] };
+
     if (outcome.succeeded) state.succeeded += 1;
     else state.messages.push(outcome.message ?? "Restore operation failed.");
     byRecord.set(key, state);
   }
+
   const failures = [...byRecord.values()].flatMap((state) =>
-    state.messages.length > 0 ? [{
-      ...state.item,
-      partial: state.succeeded > 0,
-      message: state.messages.join(" "),
-    }] : [],
+    state.messages.length > 0
+      ? [
+          {
+            ...state.item,
+            partial: state.succeeded > 0,
+            message: state.messages.join(" "),
+          },
+        ]
+      : [],
   );
+
   return {
     applied: [...byRecord.values()].filter((state) => state.messages.length === 0).length,
     skipped,
@@ -150,7 +187,9 @@ export function commandsForPortabilityImport(
     availableProviderIds,
     projectFolders,
   );
+
   const projectMatches = resolveProjectRestoreMatches(archive, snapshot, projectFolders);
+
   const projectSourceIdByTarget = new Map(
     [...projectMatches.entries()].flatMap(([sourceId, match]) =>
       match.kind === "matched" || match.kind === "created"
@@ -158,15 +197,18 @@ export function commandsForPortabilityImport(
         : [],
     ),
   );
+
   const conflictKeys = new Set(preview.conflicts.map((entry) => `${entry.recordType}:${entry.id}`));
   const mcpById = new Map((snapshot.mcpServers ?? []).map((server) => [server.id, server]));
   const projectsById = new Map(snapshot.projects.map((project) => [project.id, project]));
   const botsById = new Map(snapshot.bots.map((bot) => [bot.id, bot]));
   const groupsById = new Map(snapshot.groups.map((group) => [group.id, group]));
   const threadsById = new Map(snapshot.threads.map((thread) => [thread.id, thread]));
+
   const currentRecords = new Map(
     portableRecords(snapshot, settings).map((record) => [`${record.type}:${record.id}`, record]),
   );
+
   const referencedBotIds = new Set(
     archive.records.flatMap((record) =>
       record.type === "group"
@@ -176,10 +218,12 @@ export function commandsForPortabilityImport(
           : [],
     ),
   );
+
   const commands: OrchestrationCommand[] = [];
   const deferredBotArchiveCommands: OrchestrationCommand[] = [];
   let settingsPatch: ServerSettingsPatch | undefined;
   let applied = 0;
+
   const unmappedProjectRecordCount = archive.records.filter((record) => {
     const match =
       record.type === "project"
@@ -187,8 +231,10 @@ export function commandsForPortabilityImport(
         : record.type === "thread"
           ? projectMatches.get(record.data.projectId)
           : undefined;
+
     return match?.kind === "unsupported";
   }).length;
+
   let skipped =
     preview.conflicts.length +
     preview.unsupported.reduce((total, entry) => total + entry.count, 0) +
@@ -196,6 +242,7 @@ export function commandsForPortabilityImport(
 
   for (const record of archive.records) {
     if (conflictKeys.has(`${record.type}:${record.id}`)) continue;
+
     if (record.type === "server-settings") {
       if (
         canonicalJson(safeServerSettings(settings)) !==
@@ -204,13 +251,17 @@ export function commandsForPortabilityImport(
         settingsPatch = settingsPatchFromPortable(record.data);
         applied += 1;
       }
+
       continue;
     }
+
     if (record.type !== "mcp-server") continue;
     const existing = mcpById.get(McpServerId.make(record.id));
     const currentConfig = existing ? safeMcpConfiguration(existing) : undefined;
+
     const configurationChanged =
       canonicalJson(currentConfig) !== canonicalJson(record.data.configuration);
+
     if (existing?.enabled) {
       commands.push({
         type: "mcp-server.disable",
@@ -218,11 +269,14 @@ export function commandsForPortabilityImport(
         mcpServerId: McpServerId.make(record.id),
       });
     }
+
     if (!existing) commands.push(mcpCommand("mcp-server.create", record));
     else if (configurationChanged) {
       commands.push(mcpCommand("mcp-server.update", record));
     }
+
     const instructionsChanged = (existing?.instructions ?? "") !== (record.data.instructions ?? "");
+
     if (instructionsChanged) {
       commands.push({
         type: "mcp-server.instructions.set",
@@ -231,6 +285,7 @@ export function commandsForPortabilityImport(
         instructions: record.data.instructions ?? "",
       });
     }
+
     if (!existing || configurationChanged || instructionsChanged || existing.enabled) {
       applied += 1;
     }
@@ -239,6 +294,7 @@ export function commandsForPortabilityImport(
   for (const record of archive.records) {
     if (record.type !== "project" || conflictKeys.has(`project:${record.id}`)) continue;
     const match = projectMatches.get(record.id);
+
     if (match?.kind === "created") {
       commands.push({
         type: "project.create",
@@ -249,6 +305,7 @@ export function commandsForPortabilityImport(
         defaultModelSelection: record.data.defaultModelSelection,
         createdAt: record.updatedAt,
       });
+
       if (record.data.defaultThreadEnvMode) {
         commands.push({
           type: "project.meta.update",
@@ -257,13 +314,17 @@ export function commandsForPortabilityImport(
           defaultThreadEnvMode: record.data.defaultThreadEnvMode,
         });
       }
+
       applied += 1;
       continue;
     }
+
     if (match?.kind !== "matched") continue;
     const existing = projectsById.get(match.targetId);
+
     if (!existing) continue;
     const defaultThreadEnvMode = record.data.defaultThreadEnvMode ?? null;
+
     if (
       existing.title !== record.data.title ||
       canonicalJson(existing.defaultModelSelection) !==
@@ -285,6 +346,7 @@ export function commandsForPortabilityImport(
   for (const record of archive.records) {
     if (record.type !== "bot" || conflictKeys.has(`bot:${record.id}`)) continue;
     const existing = botsById.get(BotId.make(record.id));
+
     const fields = {
       name: record.data.name,
       title: record.data.title,
@@ -300,9 +362,11 @@ export function commandsForPortabilityImport(
       personalityTone: record.data.personalityTone ?? BALANCED_BOT_PERSONALITY_TONE,
       voiceEnabled: record.data.voiceEnabled,
     } as const;
+
     const changed =
       !existing ||
       canonicalJson(currentRecords.get(`bot:${record.id}`)?.data) !== canonicalJson(record.data);
+
     if (!existing) {
       commands.push({
         type: "bot.create",
@@ -320,7 +384,9 @@ export function commandsForPortabilityImport(
         ...fields,
       });
     }
+
     const archived = existing ? existing.archivedAt !== null : false;
+
     if (archived && (!record.data.archived || referencedBotIds.has(BotId.make(record.id)))) {
       commands.push({
         type: "bot.restore",
@@ -328,6 +394,7 @@ export function commandsForPortabilityImport(
         botId: BotId.make(record.id),
       });
     }
+
     if (record.data.archived && (!archived || referencedBotIds.has(BotId.make(record.id)))) {
       deferredBotArchiveCommands.push({
         type: "bot.archive",
@@ -335,12 +402,14 @@ export function commandsForPortabilityImport(
         botId: BotId.make(record.id),
       });
     }
+
     if (changed) applied += 1;
   }
 
   for (const record of archive.records) {
     if (record.type !== "group" || conflictKeys.has(`group:${record.id}`)) continue;
     const existing = groupsById.get(GroupId.make(record.id));
+
     if (!existing) {
       commands.push({
         type: "group.create",
@@ -356,6 +425,7 @@ export function commandsForPortabilityImport(
       applied += 1;
       continue;
     }
+
     if (existing.name !== record.data.name) {
       commands.push({
         type: "group.rename",
@@ -364,10 +434,13 @@ export function commandsForPortabilityImport(
         name: record.data.name,
       });
     }
+
     const desired = new Map(record.data.members.map((member) => [member.botId, member.role]));
+
     const predicted = new Map(
       existing.members.filter(isGroupBotMember).map((member) => [member.botId, member.role]),
     );
+
     if (record.data.bossBotId && existing.bossBotId !== record.data.bossBotId) {
       const unassignPreviousBoss = existing.bossBotId !== null && !desired.has(existing.bossBotId);
       commands.push({
@@ -377,12 +450,15 @@ export function commandsForPortabilityImport(
         bossBotId: record.data.bossBotId,
         unassignPreviousBoss,
       });
+
       if (existing.bossBotId !== null) {
         if (unassignPreviousBoss) predicted.delete(existing.bossBotId);
         else predicted.set(existing.bossBotId, "specialist");
       }
+
       predicted.set(record.data.bossBotId, "boss");
     }
+
     for (const [botId, role] of predicted) {
       if (role !== "boss" && desired.get(botId) !== role) {
         commands.push({
@@ -393,6 +469,7 @@ export function commandsForPortabilityImport(
         });
       }
     }
+
     for (const member of record.data.members) {
       if (member.role !== "boss" && predicted.get(member.botId) !== member.role) {
         commands.push({
@@ -404,6 +481,7 @@ export function commandsForPortabilityImport(
         });
       }
     }
+
     if (
       canonicalJson(currentRecords.get(`group:${record.id}`)?.data) !== canonicalJson(record.data)
     ) {
@@ -414,6 +492,7 @@ export function commandsForPortabilityImport(
   for (const record of archive.records) {
     const projectMatch =
       record.type === "thread" ? projectMatches.get(record.data.projectId) : undefined;
+
     if (
       record.type !== "thread" ||
       conflictKeys.has(`thread:${record.id}`) ||
@@ -421,8 +500,10 @@ export function commandsForPortabilityImport(
     ) {
       continue;
     }
+
     const existing = threadsById.get(ThreadId.make(record.id));
     const existingRecord = existing ? currentRecords.get(`thread:${record.id}`) : undefined;
+
     if (!existing) {
       commands.push({
         type: "thread.create",
@@ -452,6 +533,7 @@ export function commandsForPortabilityImport(
           modelSelection: record.data.modelSelection,
         });
       }
+
       if (existing.runtimeMode !== record.data.runtimeMode) {
         commands.push({
           type: "thread.runtime-mode.set",
@@ -461,6 +543,7 @@ export function commandsForPortabilityImport(
           createdAt: record.updatedAt,
         });
       }
+
       if (existing.interactionMode !== record.data.interactionMode) {
         commands.push({
           type: "thread.interaction-mode.set",
@@ -471,6 +554,7 @@ export function commandsForPortabilityImport(
         });
       }
     }
+
     const historyData = {
       messages: record.data.messages,
       proposedPlans: record.data.proposedPlans,
@@ -483,6 +567,7 @@ export function commandsForPortabilityImport(
       pinOrderKey: record.data.pinOrderKey ?? null,
       archivedAt: record.data.archivedAt,
     };
+
     const existingHistoryData =
       existingRecord?.type === "thread"
         ? {
@@ -498,6 +583,7 @@ export function commandsForPortabilityImport(
             archivedAt: existingRecord.data.archivedAt,
           }
         : undefined;
+
     const hasHistoryState =
       record.data.messages.length > 0 ||
       record.data.proposedPlans.length > 0 ||
@@ -506,11 +592,13 @@ export function commandsForPortabilityImport(
       record.data.snoozedUntil !== null ||
       record.data.pinnedAt != null ||
       record.data.archivedAt !== null;
+
     const restoreConversation =
       existing === undefined ||
       (existing.messages.length === 0 &&
         existing.proposedPlans.length === 0 &&
         existing.activities.every((activity) => activity.kind !== "approval.history"));
+
     if (
       (existingHistoryData === undefined && hasHistoryState) ||
       (existingHistoryData !== undefined &&
@@ -565,12 +653,15 @@ export function commandsForPortabilityImport(
         updatedAt: record.updatedAt,
       });
     }
+
     const importedData = { ...record.data, projectId: projectMatch.targetId };
+
     if (!existing || canonicalJson(existingRecord?.data) !== canonicalJson(importedData))
       applied += 1;
   }
 
   commands.push(...deferredBotArchiveCommands);
+
   return {
     commands,
     commandItems: commands.map((command) =>

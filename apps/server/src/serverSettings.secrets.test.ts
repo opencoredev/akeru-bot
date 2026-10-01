@@ -10,7 +10,10 @@ import * as ServerConfig from "./config.ts";
 import { SqlitePersistenceMemory } from "./persistence/Layers/Sqlite.ts";
 import * as ServerSettingsModule from "./serverSettings.ts";
 
-import { makeFailingSecretStoreLayer, makeServerSettingsLayer } from "./serverSettingsTestSupport.ts";
+import {
+  makeFailingSecretStoreLayer,
+  makeServerSettingsLayer,
+} from "./serverSettingsTestSupport.ts";
 
 it.layer(NodeServices.layer)("server settings", (it) => {
   it.effect("preserves context when reading a provider environment secret fails", () => {
@@ -21,15 +24,18 @@ it.layer(NodeServices.layer)("server settings", (it) => {
       pathOrDescriptor: "provider environment secret",
       description: "Secret backend unavailable.",
     });
+
     const cause = new ServerSecretStore.SecretStoreReadError({
       resource: "provider environment secret",
       cause: platformCause,
     });
+
     const configLayer = Layer.fresh(
       ServerConfig.layerTest(process.cwd(), {
         prefix: "t3code-server-settings-secret-failure-test-",
       }),
     );
+
     const settingsLayer = ServerSettingsModule.layer.pipe(
       Layer.provide(makeFailingSecretStoreLayer(cause)),
       Layer.provideMerge(Layer.fresh(SqlitePersistenceMemory)),
@@ -58,12 +64,12 @@ it.layer(NodeServices.layer)("server settings", (it) => {
     }).pipe(Effect.provide(settingsLayer));
   });
 
-
   it.effect("keeps the inline value on disk when secret migration fails", () => {
     const cause = new ServerSecretStore.SecretStorePersistError({
       resource: "provider environment secret",
       cause: new Error("Secret storage unavailable"),
     });
+
     const secretLayer = Layer.effect(
       ServerSecretStore.ServerSecretStore,
       Effect.map(ServerSecretStore.ServerSecretStore, (store) => ({
@@ -71,6 +77,7 @@ it.layer(NodeServices.layer)("server settings", (it) => {
         set: () => Effect.fail(cause),
       })),
     ).pipe(Layer.provide(ServerSecretStore.layer));
+
     const settingsLayer = ServerSettingsModule.layer.pipe(
       Layer.provide(secretLayer),
       Layer.provideMerge(Layer.fresh(SqlitePersistenceMemory)),
@@ -82,14 +89,18 @@ it.layer(NodeServices.layer)("server settings", (it) => {
         ),
       ),
     );
+
     return Effect.gen(function* () {
       const instanceId = ProviderInstanceId.make("codex_personal");
       const service = yield* ServerSettingsModule.ServerSettingsService;
       const config = yield* ServerConfig.ServerConfig;
       const fs = yield* FileSystem.FileSystem;
+
       const original =
         '{"providerInstances":{"codex_personal":{"driver":"codex","environment":[{"name":"API_TOKEN","value":"inline-test-token","sensitive":true}],"config":{}}}}';
+
       yield* fs.writeFileString(config.settingsPath, original);
+
       const error = yield* Effect.flip(
         service.updateSettings({
           providerInstances: {
@@ -101,6 +112,7 @@ it.layer(NodeServices.layer)("server settings", (it) => {
           },
         }),
       );
+
       assert.equal(error.operation, "write-secret");
       assert.strictEqual(error.cause, cause);
       assert.equal(yield* fs.readFileString(config.settingsPath), original);
@@ -111,7 +123,6 @@ it.layer(NodeServices.layer)("server settings", (it) => {
       );
     }).pipe(Effect.provide(settingsLayer));
   });
-
 
   for (const { label, variable, expected, duplicate } of [
     {
@@ -164,6 +175,7 @@ it.layer(NodeServices.layer)("server settings", (it) => {
             },
           },
         });
+
         assert.equal(next.providerInstances[instanceId]?.environment?.[0]?.value, expected);
         const raw = yield* fileSystem.readFileString(serverConfig.settingsPath);
         assert.notInclude(raw, "inline-test-token");
@@ -171,17 +183,18 @@ it.layer(NodeServices.layer)("server settings", (it) => {
 
         const reloaded = yield* Effect.gen(function* () {
           const fresh = yield* ServerSettingsModule.ServerSettingsService;
+
           return yield* fresh.getSettings;
         }).pipe(
           Effect.provide(
             Layer.fresh(ServerSettingsModule.layer).pipe(Layer.provide(ServerSecretStore.layer)),
           ),
         );
+
         assert.equal(reloaded.providerInstances[instanceId]?.environment?.[0]?.value, expected);
       }).pipe(Effect.provide(makeServerSettingsLayer())),
     );
   }
-
 
   it.effect("stores sensitive provider instance environment values outside settings.json", () =>
     Effect.gen(function* () {
@@ -247,33 +260,39 @@ it.layer(NodeServices.layer)("server settings", (it) => {
     }).pipe(Effect.provide(makeServerSettingsLayer())),
   );
 
-
   it.effect("reuses materialized secrets until settings or secrets change", () => {
     const secretReads = { count: 0 };
+
     const countingSecretStoreLayer = Layer.effect(
       ServerSecretStore.ServerSecretStore,
       Effect.gen(function* () {
         const store = yield* ServerSecretStore.ServerSecretStore;
+
         return ServerSecretStore.ServerSecretStore.of({
           ...store,
           get: (name) => {
             secretReads.count += 1;
+
             return store.get(name);
           },
         });
       }),
     ).pipe(Layer.provide(ServerSecretStore.layer));
+
     const configLayer = Layer.fresh(
       ServerConfig.layerTest(process.cwd(), {
         prefix: "t3code-server-settings-materialize-cache-test-",
       }),
     );
+
     const settingsLayer = ServerSettingsModule.layer.pipe(
       Layer.provide(countingSecretStoreLayer),
       Layer.provideMerge(Layer.fresh(SqlitePersistenceMemory)),
       Layer.provideMerge(configLayer),
     );
+
     const instanceId = ProviderInstanceId.make("codex_personal");
+
     const withSecret = (value: string) => ({
       providerInstances: {
         [instanceId]: {
@@ -305,19 +324,21 @@ it.layer(NodeServices.layer)("server settings", (it) => {
       // Concurrent misses after a change share one materialization.
       yield* serverSettings.updateSettings(withSecret("sk-third"));
       const readsBeforeBurst = secretReads.count;
+
       const burst = yield* Effect.all(
         Array.from({ length: 5 }, () => serverSettings.getSettings),
         {
           concurrency: "unbounded",
         },
       );
+
       for (const settings of burst) {
         assert.equal(settings.providerInstances[instanceId]?.environment?.[0]?.value, "sk-third");
       }
+
       assert.equal(secretReads.count - readsBeforeBurst, readsPerMaterialize);
     }).pipe(Effect.provide(settingsLayer));
   });
-
 
   it.effect("rejects plaintext sandbox secrets loaded from settings.json", () =>
     Effect.gen(function* () {
@@ -338,7 +359,6 @@ it.layer(NodeServices.layer)("server settings", (it) => {
     }).pipe(Effect.provide(makeServerSettingsLayer())),
   );
 
-
   it.effect("rejects plaintext sandbox secrets after a valid redacted marker", () =>
     Effect.gen(function* () {
       const serverConfig = yield* ServerConfig.ServerConfig;
@@ -358,10 +378,10 @@ it.layer(NodeServices.layer)("server settings", (it) => {
     }).pipe(Effect.provide(makeServerSettingsLayer())),
   );
 
-
   it.effect("rejects a sandbox secret marker without a stored secret", () =>
     Effect.gen(function* () {
       const serverSettings = yield* ServerSettingsModule.ServerSettingsService;
+
       const error = yield* Effect.flip(
         serverSettings.updateSettings({
           sandbox: {
@@ -375,6 +395,7 @@ it.layer(NodeServices.layer)("server settings", (it) => {
           },
         }),
       );
+
       assert.deepInclude(error, {
         operation: "validate-sandbox",
         providerInstanceId: "sandbox:e2b",
@@ -382,7 +403,6 @@ it.layer(NodeServices.layer)("server settings", (it) => {
       });
     }).pipe(Effect.provide(makeServerSettingsLayer())),
   );
-
 
   it.effect("stores sandbox secrets outside settings.json and redacts client settings", () =>
     Effect.gen(function* () {
@@ -440,13 +460,13 @@ it.layer(NodeServices.layer)("server settings", (it) => {
       const roundTripped = yield* serverSettings.updateSettings({
         sandbox: clientSettings.sandbox,
       });
+
       assert.equal(roundTripped.sandbox.providers.e2b.environment[0]?.value, "e2b-secret");
       assert.equal(roundTripped.sandbox.providers.railway.environment[0]?.value, "railway-secret");
       assert.equal(roundTripped.sandbox.providers.railway.environment[1]?.value, "environment-id");
       assert.equal(roundTripped.sandbox.providers.tenki.environment[0]?.value, "tenki-secret");
     }).pipe(Effect.provide(makeServerSettingsLayer())),
   );
-
 
   it.effect("stores and redacts the Browserbase API key outside settings.json", () =>
     Effect.gen(function* () {
@@ -480,7 +500,9 @@ it.layer(NodeServices.layer)("server settings", (it) => {
       const preserved = yield* serverSettings.updateSettings({
         browserProvider: { enabled: false },
       });
+
       assert.equal(preserved.browserProvider.browserbaseApiKey, "browserbase-secret");
       assert.isFalse(preserved.browserProvider.enabled);
     }).pipe(Effect.provide(makeServerSettingsLayer())),
-  );});
+  );
+});

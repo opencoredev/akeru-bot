@@ -19,6 +19,7 @@ describe("attachmentStore", () => {
   it("sanitizes thread ids when creating attachment ids", () => {
     const attachmentId = createAttachmentId("thread.folder/unsafe space");
     expect(attachmentId).toBeTruthy();
+
     if (!attachmentId) {
       return;
     }
@@ -42,9 +43,11 @@ describe("attachmentStore", () => {
   it("normalizes created thread segments to lowercase", () => {
     const attachmentId = createAttachmentId("Thread.Foo");
     expect(attachmentId).toBeTruthy();
+
     if (!attachmentId) {
       return;
     }
+
     expect(parseThreadSegmentFromAttachmentId(attachmentId)).toBe("thread-foo");
   });
 
@@ -62,6 +65,7 @@ describe("attachmentStore", () => {
     const attachmentsDir = NodeFS.mkdtempSync(
       NodePath.join(NodeOS.tmpdir(), "t3code-attachment-store-"),
     );
+
     try {
       const attachmentId = "thread-1-attachment";
       const pngPath = NodePath.join(attachmentsDir, `${attachmentId}.png`);
@@ -71,6 +75,7 @@ describe("attachmentStore", () => {
         attachmentsDir,
         attachmentId,
       });
+
       expect(resolved).toBe(pngPath);
     } finally {
       NodeFS.rmSync(attachmentsDir, { recursive: true, force: true });
@@ -81,11 +86,13 @@ describe("attachmentStore", () => {
     const attachmentsDir = NodeFS.mkdtempSync(
       NodePath.join(NodeOS.tmpdir(), "t3code-attachment-store-"),
     );
+
     try {
       const resolved = resolveAttachmentPathById({
         attachmentsDir,
         attachmentId: "thread-1-missing",
       });
+
       expect(resolved).toBeNull();
     } finally {
       NodeFS.rmSync(attachmentsDir, { recursive: true, force: true });
@@ -96,6 +103,7 @@ describe("attachmentStore", () => {
     const attachmentsDir = NodeFS.mkdtempSync(
       NodePath.join(NodeOS.tmpdir(), "t3code-attachment-claim-"),
     );
+
     try {
       const uuid = "00000000-0000-4000-8000-000000000001";
       const pendingPath = NodePath.join(attachmentsDir, `pending-${uuid}.png`);
@@ -106,13 +114,16 @@ describe("attachmentStore", () => {
         threadId: "thread-1",
         attachmentId: `pending-${uuid}`,
       });
+
       expect(claim).toMatchObject({
         ok: true,
         currentPath: pendingPath,
       });
+
       if (!claim.ok) {
         return;
       }
+
       expect(parseThreadSegmentFromAttachmentId(claim.finalId)).toBe("thread-1");
       expect(parseAttachmentUuid(claim.finalId)).not.toBe(uuid);
       expect(claim.finalPath).toBe(NodePath.join(attachmentsDir, `${claim.finalId}.png`));
@@ -125,6 +136,7 @@ describe("attachmentStore", () => {
     const attachmentsDir = NodeFS.mkdtempSync(
       NodePath.join(NodeOS.tmpdir(), "t3code-attachment-ownership-"),
     );
+
     try {
       const attachmentId = "a-b-00000000-0000-4000-8000-000000000003";
       NodeFS.writeFileSync(NodePath.join(attachmentsDir, `${attachmentId}.png`), "pixels");
@@ -142,6 +154,7 @@ describe("attachmentStore", () => {
     const attachmentsDir = NodeFS.mkdtempSync(
       NodePath.join(NodeOS.tmpdir(), "t3code-attachment-sweep-"),
     );
+
     try {
       const now = 1_800_000_000_000;
       const oldTimeSeconds = (now - 2 * 24 * 60 * 60 * 1000) / 1000;
@@ -149,6 +162,7 @@ describe("attachmentStore", () => {
       const pendingPath = NodePath.join(attachmentsDir, `pending-${uuid}.png`);
       const threadPath = NodePath.join(attachmentsDir, `thread-1-${uuid}.png`);
       const partialPath = NodePath.join(attachmentsDir, `${uuid}.part`);
+
       for (const filePath of [pendingPath, threadPath, partialPath]) {
         NodeFS.writeFileSync(filePath, Buffer.from("pixels"));
         NodeFS.utimesSync(filePath, oldTimeSeconds, oldTimeSeconds);

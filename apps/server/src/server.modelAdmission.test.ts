@@ -5,7 +5,16 @@ import * as NodePath from "node:path";
 import * as NodeOS from "node:os";
 import * as NodeHttpServer from "@effect/platform-node/NodeHttpServer";
 import * as NodeServices from "@effect/platform-node/NodeServices";
-import { BotId, CommandId, GroupId, MessageId, ORCHESTRATION_WS_METHODS, ProviderDriverKind, ProviderInstanceId, ThreadId } from "@akeru/contracts";
+import {
+  BotId,
+  CommandId,
+  GroupId,
+  MessageId,
+  ORCHESTRATION_WS_METHODS,
+  ProviderDriverKind,
+  ProviderInstanceId,
+  ThreadId,
+} from "@akeru/contracts";
 import { assert, it } from "@effect/vitest";
 import { assertTrue } from "@effect/vitest/utils";
 import * as Effect from "effect/Effect";
@@ -19,7 +28,10 @@ import * as ProjectionBots from "./persistence/Services/ProjectionBots.ts";
 
 import { buildAppUnderTest } from "./serverTestApp.ts";
 import { getWsServerUrl, withWsRpcClient, exchangeAccessToken } from "./serverTestClients.ts";
-import { defaultDesktopBootstrapToken, makeDefaultOrchestrationThreadShell } from "./serverTestFixtures.ts";
+import {
+  defaultDesktopBootstrapToken,
+  makeDefaultOrchestrationThreadShell,
+} from "./serverTestFixtures.ts";
 
 it.describe("ws bot engine model routing preflight", () => {
   const now = "2026-01-01T00:00:00.000Z";
@@ -30,12 +42,14 @@ it.describe("ws bot engine model routing preflight", () => {
     // model check instead of short-circuiting on a missing login.
     NodeFS.mkdirSync(secretsDir, { recursive: true });
     const credential = { type: "api-key", access: "test-key" };
+
     const data = Object.fromEntries(
       ["openai-codex", "anthropic", "xai", "kimi-for-coding", "opencode-go"].map((provider) => [
         provider,
         credential,
       ]),
     );
+
     NodeFS.writeFileSync(NodePath.join(secretsDir, "subscription-auth.json"), JSON.stringify(data));
   };
 
@@ -110,7 +124,6 @@ it.describe("ws bot engine model routing preflight", () => {
     ...overrides,
   });
 
-
   it.effect("rejects bot.create when the model is not in the provider snapshot", () =>
     Effect.gen(function* () {
       const baseDir = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "akeru-ws-preflight-"));
@@ -125,6 +138,7 @@ it.describe("ws bot engine model routing preflight", () => {
       });
 
       const wsUrl = yield* getWsServerUrl("/ws");
+
       const result = yield* Effect.scoped(
         withWsRpcClient(wsUrl, (client) =>
           client[ORCHESTRATION_WS_METHODS.dispatchCommand]({
@@ -144,6 +158,7 @@ it.describe("ws bot engine model routing preflight", () => {
       );
 
       assertTrue(Predicate.isTagged(result, "Failure"));
+
       if (Predicate.isTagged(result, "Failure")) {
         assert.equal(result.failure._tag, "OrchestrationDispatchCommandError");
         assert.include(result.failure.message, "not-a-model");
@@ -155,14 +170,15 @@ it.describe("ws bot engine model routing preflight", () => {
     }).pipe(Effect.provide(Layer.mergeAll(NodeHttpServer.layerTest, NodeServices.layer))),
   );
 
-
   it.effect("rejects an HTTP bot.create when the model is not in the provider snapshot", () =>
     Effect.gen(function* () {
       const baseDir = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "akeru-http-preflight-"));
       seedSubscriptionAuth(NodePath.join(baseDir, "userdata", "secrets"));
+
       const dispatch = vi.fn<OrchestrationEngine.OrchestrationEngineService["Service"]["dispatch"]>(
         () => Effect.succeed({ sequence: 1 }),
       );
+
       yield* buildAppUnderTest({
         config: { baseDir },
         layers: {
@@ -176,6 +192,7 @@ it.describe("ws bot engine model routing preflight", () => {
       const { body: tokenBody } = yield* exchangeAccessToken(defaultDesktopBootstrapToken, {
         scope: "orchestration:operate",
       });
+
       const response = yield* HttpClient.post("/api/orchestration/dispatch", {
         headers: { authorization: `Bearer ${tokenBody.access_token ?? ""}` },
         body: yield* HttpBody.json({
@@ -199,7 +216,6 @@ it.describe("ws bot engine model routing preflight", () => {
       assert.equal(dispatch.mock.calls.length, 0);
     }).pipe(Effect.provide(Layer.mergeAll(NodeHttpServer.layerTest, NodeServices.layer))),
   );
-
 
   it.effect("lets bot.update pass when the saved engine is unchanged", () =>
     Effect.gen(function* () {
@@ -225,6 +241,7 @@ it.describe("ws bot engine model routing preflight", () => {
       });
 
       const wsUrl = yield* getWsServerUrl("/ws");
+
       const result = yield* Effect.scoped(
         withWsRpcClient(wsUrl, (client) =>
           client[ORCHESTRATION_WS_METHODS.dispatchCommand]({
@@ -238,10 +255,10 @@ it.describe("ws bot engine model routing preflight", () => {
       );
 
       assertTrue(Predicate.isTagged(result, "Success"));
+
       if (Predicate.isTagged(result, "Success")) assert.equal(result.success.sequence, 1);
     }).pipe(Effect.provide(Layer.mergeAll(NodeHttpServer.layerTest, NodeServices.layer))),
   );
-
 
   it.effect("rejects a bot turn when the saved model dropped from the catalog", () =>
     Effect.gen(function* () {
@@ -273,6 +290,7 @@ it.describe("ws bot engine model routing preflight", () => {
       });
 
       const wsUrl = yield* getWsServerUrl("/ws");
+
       const result = yield* Effect.scoped(
         withWsRpcClient(wsUrl, (client) =>
           client[ORCHESTRATION_WS_METHODS.dispatchCommand](turnStartCommand(threadId)),
@@ -280,6 +298,7 @@ it.describe("ws bot engine model routing preflight", () => {
       );
 
       assertTrue(Predicate.isTagged(result, "Failure"));
+
       if (Predicate.isTagged(result, "Failure")) {
         assert.equal(result.failure._tag, "OrchestrationDispatchCommandError");
         assert.include(result.failure.message, "dropped-model");
@@ -290,7 +309,6 @@ it.describe("ws bot engine model routing preflight", () => {
       }
     }).pipe(Effect.provide(Layer.mergeAll(NodeHttpServer.layerTest, NodeServices.layer))),
   );
-
 
   it.effect("dispatches a bot turn when the catalog snapshot is unsettled", () =>
     Effect.gen(function* () {
@@ -330,6 +348,7 @@ it.describe("ws bot engine model routing preflight", () => {
       });
 
       const wsUrl = yield* getWsServerUrl("/ws");
+
       const result = yield* Effect.scoped(
         withWsRpcClient(wsUrl, (client) =>
           client[ORCHESTRATION_WS_METHODS.dispatchCommand](turnStartCommand(threadId)),
@@ -337,10 +356,10 @@ it.describe("ws bot engine model routing preflight", () => {
       );
 
       assertTrue(Predicate.isTagged(result, "Success"));
+
       if (Predicate.isTagged(result, "Success")) assert.equal(result.success.sequence, 1);
     }).pipe(Effect.provide(Layer.mergeAll(NodeHttpServer.layerTest, NodeServices.layer))),
   );
-
 
   it.effect(
     "dispatches a turn when the command selection is unlisted on an unsettled catalog",
@@ -374,6 +393,7 @@ it.describe("ws bot engine model routing preflight", () => {
         });
 
         const wsUrl = yield* getWsServerUrl("/ws");
+
         const result = yield* Effect.scoped(
           withWsRpcClient(wsUrl, (client) =>
             client[ORCHESTRATION_WS_METHODS.dispatchCommand](
@@ -388,10 +408,10 @@ it.describe("ws bot engine model routing preflight", () => {
         );
 
         assertTrue(Predicate.isTagged(result, "Success"));
+
         if (Predicate.isTagged(result, "Success")) assert.equal(result.success.sequence, 1);
       }).pipe(Effect.provide(Layer.mergeAll(NodeHttpServer.layerTest, NodeServices.layer))),
   );
-
 
   it.effect("lets a group turn through when the last responder's model went stale", () =>
     Effect.gen(function* () {
@@ -399,10 +419,12 @@ it.describe("ws bot engine model routing preflight", () => {
       const healthyBotId = BotId.make("bot-healthy-responder");
       const groupId = GroupId.make("group-preflight");
       const threadId = ThreadId.make("thread-group-preflight");
+
       const bots = new Map<string, ProjectionBots.ProjectionBot>([
         [String(staleBotId), bot(staleBotId, { provider: "codex", model: "dropped-model" })],
         [String(healthyBotId), bot(healthyBotId, { provider: "codex", model: "gpt-5.6-sol" })],
       ]);
+
       let sequence = 0;
       const baseDir = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "akeru-ws-preflight-"));
       seedSubscriptionAuth(NodePath.join(baseDir, "userdata", "secrets"));
@@ -436,6 +458,7 @@ it.describe("ws bot engine model routing preflight", () => {
       });
 
       const wsUrl = yield* getWsServerUrl("/ws");
+
       const result = yield* Effect.scoped(
         withWsRpcClient(wsUrl, (client) =>
           client[ORCHESTRATION_WS_METHODS.dispatchCommand](turnStartCommand(threadId)),
@@ -443,6 +466,8 @@ it.describe("ws bot engine model routing preflight", () => {
       );
 
       assertTrue(Predicate.isTagged(result, "Success"));
+
       if (Predicate.isTagged(result, "Success")) assert.equal(result.success.sequence, 1);
     }).pipe(Effect.provide(Layer.mergeAll(NodeHttpServer.layerTest, NodeServices.layer))),
-  );});
+  );
+});

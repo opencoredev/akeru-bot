@@ -1,4 +1,13 @@
-import { CommandId, DEFAULT_MODEL, DEFAULT_PROVIDER_INTERACTION_MODE, type ModelSelection, PLACEHOLDER_THREAD_TITLE, ProjectId, ProviderInstanceId, ThreadId } from "@akeru/contracts";
+import {
+  CommandId,
+  DEFAULT_MODEL,
+  DEFAULT_PROVIDER_INTERACTION_MODE,
+  type ModelSelection,
+  PLACEHOLDER_THREAD_TITLE,
+  ProjectId,
+  ProviderInstanceId,
+  ThreadId,
+} from "@akeru/contracts";
 import * as Crypto from "effect/Crypto";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
@@ -10,8 +19,6 @@ import * as OrchestrationEngine from "./orchestration/Services/OrchestrationEngi
 import * as ProjectionSnapshotQuery from "./orchestration/Services/ProjectionSnapshotQuery.ts";
 import * as EnvironmentAuth from "./auth/EnvironmentAuth.ts";
 import { formatHostForUrl, isWildcardHost } from "./startupAccess.ts";
-
-
 
 export const getAutoBootstrapDefaultModelSelection = (): ModelSelection => ({
   instanceId: ProviderInstanceId.make("codex"),
@@ -44,6 +51,7 @@ export const resolveAutoBootstrapWelcomeTargets = Effect.gen(function* () {
   // would dead-end at the add-project wall, so first run provisions a
   // workspace from the server cwd even without the explicit flag.
   let shouldBootstrap = serverConfig.autoBootstrapProjectFromCwd;
+
   if (!shouldBootstrap) {
     const readModel = yield* projectionReadModelQuery.getCommandReadModel();
     shouldBootstrap = !readModel.projects.some((project) => project.deletedAt === null);
@@ -54,6 +62,7 @@ export const resolveAutoBootstrapWelcomeTargets = Effect.gen(function* () {
       const existingProject = yield* projectionReadModelQuery.getActiveProjectByWorkspaceRoot(
         serverConfig.cwd,
       );
+
       let nextProjectId: ProjectId;
       let nextProjectDefaultModelSelection: ModelSelection;
 
@@ -79,6 +88,7 @@ export const resolveAutoBootstrapWelcomeTargets = Effect.gen(function* () {
 
       const existingThreadId =
         yield* projectionReadModelQuery.getFirstActiveThreadIdByProjectId(nextProjectId);
+
       if (Option.isNone(existingThreadId)) {
         const createdAt = DateTime.formatIso(yield* DateTime.now);
         const createdThreadId = ThreadId.make(yield* randomUUID);
@@ -114,11 +124,14 @@ export const resolveStartupBrowserTarget = Effect.gen(function* () {
   const serverConfig = yield* ServerConfig.ServerConfig;
   const serverAuth = yield* EnvironmentAuth.EnvironmentAuth;
   const localUrl = `http://localhost:${serverConfig.port}`;
+
   const bindUrl =
     serverConfig.host && !isWildcardHost(serverConfig.host)
       ? `http://${formatHostForUrl(serverConfig.host)}:${serverConfig.port}`
       : localUrl;
+
   const baseTarget = serverConfig.devUrl?.toString() ?? bindUrl;
+
   return yield* Effect.succeed(serverConfig.mode === "desktop" ? baseTarget : undefined).pipe(
     Effect.flatMap((target) =>
       target ? Effect.succeed(target) : serverAuth.issueStartupPairingUrl(baseTarget),
@@ -129,9 +142,11 @@ export const resolveStartupBrowserTarget = Effect.gen(function* () {
 export const maybeOpenBrowser = (target: string) =>
   Effect.gen(function* () {
     const serverConfig = yield* ServerConfig.ServerConfig;
+
     if (serverConfig.noBrowser) {
       return;
     }
+
     const externalLauncher = yield* ExternalLauncher.ExternalLauncher;
 
     yield* externalLauncher.launchBrowser(target).pipe(

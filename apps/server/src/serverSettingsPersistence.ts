@@ -4,8 +4,6 @@ import * as Equal from "effect/Equal";
 import * as Schema from "effect/Schema";
 import { fromLenientJson } from "@akeru/shared/schemaJson";
 
-
-
 export const ServerSettingsJson = fromLenientJson(ServerSettings);
 
 export const decodeServerSettingsJsonExit = Schema.decodeUnknownExit(ServerSettingsJson);
@@ -46,14 +44,15 @@ export const PERSISTED_SERVER_SETTINGS_DEFAULTS = {
   },
 };
 
-export function stripDefaultServerSettings(current: unknown, defaults: unknown): unknown | undefined {
+export function stripDefaultServerSettings(
+  current: unknown,
+  defaults: unknown,
+): unknown | undefined {
   if (Array.isArray(current) || Array.isArray(defaults)) {
     return Equal.equals(current, defaults) ? undefined : current;
   }
 
-  if (
-    Predicate.isObject(current) && Predicate.isObject(defaults)
-  ) {
+  if (Predicate.isObject(current) && Predicate.isObject(defaults)) {
     const currentRecord = current;
     const defaultsRecord = defaults;
     const next: typeof currentRecord = {};
@@ -65,6 +64,7 @@ export function stripDefaultServerSettings(current: unknown, defaults: unknown):
         }
       } else {
         const stripped = stripDefaultServerSettings(currentRecord[key], defaultsRecord[key]);
+
         if (stripped !== undefined) {
           next[key] = stripped;
         }

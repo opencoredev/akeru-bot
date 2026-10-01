@@ -2,7 +2,21 @@
 import * as Predicate from "effect/Predicate";
 import * as NodeHttpServer from "@effect/platform-node/NodeHttpServer";
 import * as NodeServices from "@effect/platform-node/NodeServices";
-import { AkeruMemoryEntityId, AkeruMemoryId, AkeruMemoryPartitionId, AkeruMemoryRootId, AkeruMemoryTenantId, AkeruMemoryUserId, type AkeruMemoryRevision, type AkeruMemoryThreadAccess, BotId, DEFAULT_SERVER_SETTINGS, ProjectId, ThreadId, WS_METHODS } from "@akeru/contracts";
+import {
+  AkeruMemoryEntityId,
+  AkeruMemoryId,
+  AkeruMemoryPartitionId,
+  AkeruMemoryRootId,
+  AkeruMemoryTenantId,
+  AkeruMemoryUserId,
+  type AkeruMemoryRevision,
+  type AkeruMemoryThreadAccess,
+  BotId,
+  DEFAULT_SERVER_SETTINGS,
+  ProjectId,
+  ThreadId,
+  WS_METHODS,
+} from "@akeru/contracts";
 import { assert, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
@@ -12,8 +26,6 @@ import { buildAppUnderTest } from "./serverTestApp.ts";
 import { getWsServerUrl, withWsRpcClient } from "./serverTestClients.ts";
 
 it.layer(NodeServices.layer)("server router seam", (it) => {
-
-
   it.effect("memory settings gate durable facts reads, writes, and bot-private scope", () =>
     Effect.gen(function* () {
       const projectId = ProjectId.make("project-facts-gated");
@@ -36,12 +48,14 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
         createdAt: now,
         updatedAt: now,
       };
+
       const thread = makeDefaultOrchestrationThreadShell({
         id: threadId,
         projectId,
         botId,
         respondingBotId: null,
       });
+
       const access: AkeruMemoryThreadAccess = {
         tenantId,
         userId,
@@ -54,6 +68,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
         respondingBotId: null,
         groupMemberBotIds: [],
       };
+
       const revision = (id: string, scope: "thread" | "bot"): AkeruMemoryRevision => ({
         id: AkeruMemoryId.make(id),
         rootId: AkeruMemoryRootId.make(id),
@@ -85,6 +100,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
         sensitive: false,
         affectedBotIds: [botId],
       });
+
       const threadFact = revision("gated-thread-fact", "thread");
       const botFact = revision("gated-bot-fact", "bot");
 
@@ -128,12 +144,14 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
         },
       });
       const wsUrl = yield* getWsServerUrl("/ws");
+
       const listFacts = (target: "thread" | "bot") =>
         Effect.scoped(
           withWsRpcClient(wsUrl, (client) =>
             client[WS_METHODS.memoryFactsList]({ threadId, target }),
           ),
         ).pipe(Effect.map((result) => result.facts.map((fact) => fact.rootId).sort()));
+
       const moveToBot = (memoryId: string, expectedRevision: number) =>
         Effect.flip(
           Effect.scoped(
@@ -179,8 +197,10 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
           }),
         ),
       );
+
       if (forgotten.kind !== "revision") return assert.fail("expected a revision result");
       assert.equal(forgotten.revision.deletionState, "tombstoned");
+
       const deleted = yield* Effect.scoped(
         withWsRpcClient(wsUrl, (client) =>
           client[WS_METHODS.memoryFactMutate]({
@@ -193,6 +213,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
           }),
         ),
       );
+
       assert.deepEqual(deleted, { kind: "deleted", memoryId: botFact.rootId });
       assert.deepEqual(yield* listFacts("bot"), []);
 
@@ -211,6 +232,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
           ),
         ),
       );
+
       assert.equal(privateDocError._tag, "AkeruMemoryOperationError");
       yield* Effect.scoped(
         withWsRpcClient(wsUrl, (client) =>
@@ -228,6 +250,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
       // still return existing facts.
       settingsRef.current = { ...DEFAULT_SERVER_SETTINGS.memory, enabled: false };
       assert.deepEqual(yield* listFacts("thread"), [threadFact.rootId]);
+
       const deniedEdit = yield* Effect.flip(
         Effect.scoped(
           withWsRpcClient(wsUrl, (client) =>
@@ -243,7 +266,9 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
           ),
         ),
       );
+
       assert.equal(deniedEdit._tag, "AkeruMemoryOperationError");
+
       const deniedUserDoc = yield* Effect.flip(
         Effect.scoped(
           withWsRpcClient(wsUrl, (client) =>
@@ -257,6 +282,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
           ),
         ),
       );
+
       assert.equal(deniedUserDoc._tag, "AkeruMemoryOperationError");
 
       // Archive imports can still be previewed, but applying one is rejected
@@ -270,6 +296,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
           }),
         ),
       );
+
       const deniedImport = yield* Effect.flip(
         Effect.scoped(
           withWsRpcClient(wsUrl, (client) =>
@@ -283,9 +310,11 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
           ),
         ),
       );
+
       if (!Predicate.isTagged(deniedImport, "AkeruMemoryOperationError")) {
         return assert.fail("expected a memory operation error");
       }
+
       assert.include(deniedImport.detail, "Memory is turned off.");
       assert.deepEqual(yield* listFacts("thread"), [threadFact.rootId]);
 
@@ -313,8 +342,10 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
           ),
         ),
       );
+
       if (!Predicate.isTagged(deniedDurableImport, "AkeruMemoryOperationError"))
         return assert.fail("expected a memory error");
       assert.equal(deniedDurableImport.detail, "Memory is turned off.");
     }).pipe(Effect.provide(NodeHttpServer.layerTest)),
-  );});
+  );
+});

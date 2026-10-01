@@ -11,6 +11,7 @@ it.effect(
   () =>
     Effect.gen(function* () {
       const lifecycleEvents = yield* ServerLifecycleEvents.ServerLifecycleEvents;
+
       const environment = {
         environmentId: EnvironmentId.make("environment-test"),
         label: "Test environment",
@@ -30,6 +31,7 @@ it.effect(
           },
         })
         .pipe(Effect.timeoutOption("50 millis"));
+
       assertTrue(Option.isSome(welcome));
       assert.equal(welcome.value.sequence, 1);
 
@@ -43,6 +45,7 @@ it.effect(
           },
         })
         .pipe(Effect.timeoutOption("50 millis"));
+
       assertTrue(Option.isSome(ready));
       assert.equal(ready.value.sequence, 2);
 

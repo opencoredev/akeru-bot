@@ -1,13 +1,28 @@
 import { DEFAULT_SERVER_SETTINGS, ProjectId } from "@akeru/contracts";
 import { describe, expect, it } from "vite-plus/test";
-import { commandsForPortabilityImport, createPortabilityArchive, isPortabilityPreviewCurrent, previewPortabilityImport } from "./portability.ts";
+import {
+  commandsForPortabilityImport,
+  createPortabilityArchive,
+  isPortabilityPreviewCurrent,
+  previewPortabilityImport,
+} from "./portability.ts";
 
-import { makeSnapshot, makeSettings, NOW, AVAILABLE_PROVIDER_IDS, THREAD_ID, LATER, PROJECT_ID, URL_MCP_ID, STDIO_MCP_ID } from "./portabilityTestSupport.ts";
+import {
+  makeSnapshot,
+  makeSettings,
+  NOW,
+  AVAILABLE_PROVIDER_IDS,
+  THREAD_ID,
+  LATER,
+  PROJECT_ID,
+  URL_MCP_ID,
+  STDIO_MCP_ID,
+} from "./portabilityTestSupport.ts";
 
 describe("portability import", () => {
-
   it("conflicts with different existing conversation history", () => {
     const source = makeSnapshot();
+
     const target = makeSnapshot({
       threads: [
         {
@@ -23,7 +38,9 @@ describe("portability import", () => {
         },
       ],
     });
+
     const archive = createPortabilityArchive(source, makeSettings(), NOW);
+
     const preview = previewPortabilityImport(
       archive,
       target,
@@ -40,7 +57,6 @@ describe("portability import", () => {
     ).not.toContainEqual(expect.objectContaining({ type: "thread.history.restore" }));
   });
 
-
   it("does not overwrite newer server settings", () => {
     const preview = previewPortabilityImport(
       createPortabilityArchive(makeSnapshot(), makeSettings(), NOW),
@@ -56,7 +72,6 @@ describe("portability import", () => {
     });
   });
 
-
   it("updates safe project fields only when the workspace reference matches", () => {
     const sourceProject = {
       ...makeSnapshot().projects[0]!,
@@ -64,15 +79,18 @@ describe("portability import", () => {
       defaultThreadEnvMode: "worktree" as const,
       updatedAt: LATER,
     };
+
     const source = makeSnapshot({ projects: [sourceProject], updatedAt: LATER });
     const archive = createPortabilityArchive(source, makeSettings(), LATER);
     const target = makeSnapshot();
+
     const preview = previewPortabilityImport(
       archive,
       target,
       makeSettings(),
       AVAILABLE_PROVIDER_IDS,
     );
+
     const plan = commandsForPortabilityImport(
       archive,
       target,
@@ -96,19 +114,21 @@ describe("portability import", () => {
     );
   });
 
-
   it("maps projects and threads to a different target project ID by repository identity", () => {
     const targetProjectId = ProjectId.make("project-target");
+
     const sourceProject = {
       ...makeSnapshot().projects[0]!,
       title: "Renamed portable project",
       updatedAt: LATER,
     };
+
     const archive = createPortabilityArchive(
       makeSnapshot({ projects: [sourceProject], updatedAt: LATER }),
       makeSettings(),
       LATER,
     );
+
     const target = makeSnapshot({
       projects: [
         {
@@ -127,6 +147,7 @@ describe("portability import", () => {
       makeSettings(),
       AVAILABLE_PROVIDER_IDS,
     );
+
     const plan = commandsForPortabilityImport(
       archive,
       target,
@@ -151,12 +172,13 @@ describe("portability import", () => {
     );
   });
 
-
   it("uses an unambiguous workspace name when repository identity is unavailable", () => {
     const targetProjectId = ProjectId.make("project-target");
+
     const source = makeSnapshot({
       projects: [{ ...makeSnapshot().projects[0]!, repositoryIdentity: null }],
     });
+
     const target = makeSnapshot({
       projects: [
         {
@@ -168,7 +190,9 @@ describe("portability import", () => {
       ],
       threads: [],
     });
+
     const archive = createPortabilityArchive(source, makeSettings(), NOW);
+
     const plan = commandsForPortabilityImport(
       archive,
       target,
@@ -181,10 +205,10 @@ describe("portability import", () => {
     );
   });
 
-
   it("reports ambiguous project matches as conflicts", () => {
     const source = makeSnapshot();
     const baseProject = source.projects[0]!;
+
     const target = makeSnapshot({
       projects: [
         {
@@ -200,13 +224,16 @@ describe("portability import", () => {
       ],
       threads: [],
     });
+
     const archive = createPortabilityArchive(source, makeSettings(), NOW);
+
     const preview = previewPortabilityImport(
       archive,
       target,
       makeSettings(),
       AVAILABLE_PROVIDER_IDS,
     );
+
     const plan = commandsForPortabilityImport(
       archive,
       target,
@@ -223,7 +250,6 @@ describe("portability import", () => {
     expect(plan.commands.some((command) => command.type.startsWith("project."))).toBe(false);
     expect(plan.commands.some((command) => command.type.startsWith("thread."))).toBe(false);
   });
-
 
   it("rejects a stale preview token when projection state changes", () => {
     const snapshot = makeSnapshot();
@@ -253,10 +279,10 @@ describe("portability import", () => {
     expect(isPortabilityPreviewCurrent(snapshot, settings, new Set(), preview)).toBe(false);
   });
 
-
   it("previews forced MCP disable as a change", () => {
     const snapshot = makeSnapshot();
     const settings = makeSettings();
+
     const preview = previewPortabilityImport(
       createPortabilityArchive(snapshot, settings, NOW),
       snapshot,
@@ -265,4 +291,5 @@ describe("portability import", () => {
     );
 
     expect(preview.changes.map((entry) => entry.id)).toEqual([URL_MCP_ID, STDIO_MCP_ID]);
-  });});
+  });
+});

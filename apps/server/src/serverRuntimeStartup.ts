@@ -20,13 +20,26 @@ import * as ProviderSessionReaper from "./provider/Services/ProviderSessionReape
 import { forkParked } from "./serverActivation.ts";
 import * as ServiceLauncherClient from "./cloud/serviceLauncherClient.ts";
 import { isRemoteInstall } from "./remote/remoteMode.ts";
-import { announceRemoteStartup, formatHeadlessServeOutput, issueHeadlessServeAccessInfo } from "./startupAccess.ts";
+import {
+  announceRemoteStartup,
+  formatHeadlessServeOutput,
+  issueHeadlessServeAccessInfo,
+} from "./startupAccess.ts";
 import { RoutineRuntime } from "./routines/Runtime.ts";
 
 import { type StartupOptions, restoreExternalChannels } from "./startupChannels.ts";
-import { makeCommandGate, ServerRuntimeStartupError, ServerRuntimeStartup } from "./startupCommandGate.ts";
+import {
+  makeCommandGate,
+  ServerRuntimeStartupError,
+  ServerRuntimeStartup,
+} from "./startupCommandGate.ts";
 import { reconcileDelegations, reconcileProviderSessions } from "./startupReconciliation.ts";
-import { resolveWelcomeBase, resolveAutoBootstrapWelcomeTargets, resolveStartupBrowserTarget, maybeOpenBrowser } from "./startupWelcome.ts";
+import {
+  resolveWelcomeBase,
+  resolveAutoBootstrapWelcomeTargets,
+  resolveStartupBrowserTarget,
+  maybeOpenBrowser,
+} from "./startupWelcome.ts";
 
 const runStartupPhase = <A, E, R>(phase: string, effect: Effect.Effect<A, E, R>) =>
   effect.pipe(
@@ -95,12 +108,15 @@ export const make = (options?: StartupOptions) =>
         Effect.gen(function* () {
           yield* orchestrationReactor.start().pipe(Scope.provide(reactorScope));
           yield* providerSessionReaper.start().pipe(Scope.provide(reactorScope));
+
           if (Option.isSome(channelRuntime)) {
             yield* forkParked(
               channelRuntime.value.stopArchivedBotChannels(orchestrationEngine.streamDomainEvents),
             ).pipe(Scope.provide(reactorScope));
           }
+
           const routineRuntime = yield* Effect.serviceOption(RoutineRuntime);
+
           if (Option.isSome(routineRuntime)) {
             yield* routineRuntime.value.start.pipe(Scope.provide(reactorScope));
           }
@@ -131,6 +147,7 @@ export const make = (options?: StartupOptions) =>
               const bootstrapTargets = yield* resolveAutoBootstrapWelcomeTargets.pipe(
                 Effect.provideService(Crypto.Crypto, crypto),
               );
+
               if (!bootstrapTargets.bootstrapProjectId && !bootstrapTargets.bootstrapThreadId) {
                 return;
               }
@@ -184,11 +201,13 @@ export const make = (options?: StartupOptions) =>
             );
           } else {
             const startupBrowserTarget = yield* resolveStartupBrowserTarget;
+
             if (serverConfig.mode !== "desktop") {
               yield* Effect.logInfo(
                 "Authentication required. Open Akeru Bot using the pairing URL.",
               ).pipe(Effect.annotateLogs({ pairingUrl: startupBrowserTarget }));
             }
+
             yield* runStartupPhase("browser.open", maybeOpenBrowser(startupBrowserTarget));
           }
         }),
@@ -242,12 +261,14 @@ export const make = (options?: StartupOptions) =>
       Effect.exit(startup).pipe(
         Effect.flatMap((startupExit) => {
           if (Exit.isSuccess(startupExit)) return Effect.void;
+
           const error = new ServerRuntimeStartupError({
             mode: serverConfig.mode,
             host: serverConfig.host ?? null,
             port: serverConfig.port,
             cause: startupExit.cause,
           });
+
           return Effect.logError("server runtime startup failed", {
             cause: startupExit.cause,
           }).pipe(
@@ -270,7 +291,22 @@ export const layerWithOptions = (options?: StartupOptions) =>
 
 export const layer = layerWithOptions();
 
-export { ServerRuntimeStartupError, ServerRuntimeStartup, makeCommandGate } from "./startupCommandGate.ts";
-export { getAutoBootstrapDefaultModelSelection, resolveWelcomeBase, resolveAutoBootstrapWelcomeTargets } from "./startupWelcome.ts";
-export { reconcileProviderSessions, DELEGATION_RESTART_FAILURE_MESSAGE, reconcileDelegations } from "./startupReconciliation.ts";
+export {
+  ServerRuntimeStartupError,
+  ServerRuntimeStartup,
+  makeCommandGate,
+} from "./startupCommandGate.ts";
+
+export {
+  getAutoBootstrapDefaultModelSelection,
+  resolveWelcomeBase,
+  resolveAutoBootstrapWelcomeTargets,
+} from "./startupWelcome.ts";
+
+export {
+  reconcileProviderSessions,
+  DELEGATION_RESTART_FAILURE_MESSAGE,
+  reconcileDelegations,
+} from "./startupReconciliation.ts";
+
 export { restoreExternalChannels } from "./startupChannels.ts";

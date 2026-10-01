@@ -9,6 +9,7 @@ import { syncDirectory } from "./serviceLauncherDatabase.ts";
 
 export const runtimePaths = (baseDir: string, version: string) => {
   const versionDir = NodePath.join(baseDir, "runtime", "versions", version);
+
   return {
     versionDir,
     entryPath: NodePath.join(versionDir, "node_modules", "akeru-bot", "dist", "bin.mjs"),
@@ -23,13 +24,16 @@ export const runtimePaths = (baseDir: string, version: string) => {
 export async function runtimeNodePath(versionDir: string): Promise<string> {
   const bundled = NodePath.join(versionDir, "node", "node.exe");
   const stat = await NodeFSP.stat(bundled).catch(() => undefined);
+
   return stat?.isFile() ? bundled : process.execPath;
 }
 
 export async function readServiceState(filePath: string): Promise<ServiceState> {
   const contents = await NodeFSP.readFile(filePath, "utf8");
   const state = parseServiceState(contents);
+
   if (state === undefined) throw new Error("Service state is invalid or unsupported.");
+
   return state;
 }
 
@@ -37,11 +41,14 @@ export async function readServiceState(filePath: string): Promise<ServiceState> 
 export async function writeServiceState(filePath: string, state: ServiceState): Promise<void> {
   const directory = NodePath.dirname(filePath);
   await NodeFSP.mkdir(directory, { recursive: true, mode: 0o700 });
+
   const tempPath = NodePath.join(
     directory,
     `.${NodePath.basename(filePath)}.${process.pid}.${NodeCrypto.randomUUID()}`,
   );
+
   let handle: NodeFSP.FileHandle | undefined;
+
   try {
     handle = await NodeFSP.open(tempPath, "wx", 0o600);
     await handle.writeFile(`${JSON.stringify(state, null, 2)}\n`, "utf8");
@@ -58,11 +65,13 @@ export async function writeServiceState(filePath: string, state: ServiceState): 
 
 export async function runtimeExists(baseDir: string, version: string): Promise<boolean> {
   const paths = runtimePaths(baseDir, version);
+
   try {
     const [entry, sentinel] = await Promise.all([
       NodeFSP.stat(paths.entryPath),
       NodeFSP.readFile(paths.sentinelPath, "utf8"),
     ]);
+
     return entry.isFile() && sentinel.trim() === version;
   } catch {
     return false;

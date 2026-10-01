@@ -8,8 +8,6 @@ import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
 import * as ServerConfig from "./config.ts";
 
-
-
 export class ServerRuntimeStartupError extends Schema.TaggedErrorClass<ServerRuntimeStartupError>()(
   "ServerRuntimeStartupError",
   {
@@ -50,7 +48,10 @@ export interface CommandGate {
   ) => Effect.Effect<A, E | ServerRuntimeStartupError>;
 }
 
-export const settleQueuedCommand = <A, E>(deferred: Deferred.Deferred<A, E>, exit: Exit.Exit<A, E>) =>
+export const settleQueuedCommand = <A, E>(
+  deferred: Deferred.Deferred<A, E>,
+  exit: Exit.Exit<A, E>,
+) =>
   Exit.isSuccess(exit)
     ? Deferred.succeed(deferred, exit.value)
     : Deferred.failCause(deferred, exit.cause);
@@ -63,6 +64,7 @@ export const makeCommandGate = Effect.gen(function* () {
   const commandWorker = Effect.forever(
     Queue.take(commandQueue).pipe(Effect.flatMap((command) => command.run)),
   );
+
   yield* Effect.forkScoped(commandWorker);
 
   return {
@@ -79,9 +81,11 @@ export const makeCommandGate = Effect.gen(function* () {
     enqueueCommand: <A, E>(effect: Effect.Effect<A, E>) =>
       Effect.gen(function* () {
         const readinessState = yield* Ref.get(commandReadinessState);
+
         if (readinessState === "ready") {
           return yield* effect;
         }
+
         if (readinessState !== "pending") {
           return yield* readinessState;
         }
@@ -94,6 +98,7 @@ export const makeCommandGate = Effect.gen(function* () {
             Effect.flatMap((exit) => settleQueuedCommand(result, exit)),
           ),
         });
+
         return yield* Deferred.await(result);
       }),
   } satisfies CommandGate;

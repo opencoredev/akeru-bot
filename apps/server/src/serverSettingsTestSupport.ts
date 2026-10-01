@@ -16,12 +16,9 @@ import { SqlitePersistenceMemory } from "./persistence/Layers/Sqlite.ts";
 
 import * as ServerSettingsModule from "./serverSettings.ts";
 
-
 export const decodeSettingsPatch = Schema.decodeUnknownEffect(ServerSettingsPatch);
 
-
 export const decodeServerSettings = Schema.decodeUnknownEffect(ServerSettings);
-
 
 export const makeServerSettingsLayer = () =>
   ServerSettingsModule.layer.pipe(
@@ -36,7 +33,6 @@ export const makeServerSettingsLayer = () =>
     ),
   );
 
-
 export const makeFailingSecretStoreLayer = (cause: ServerSecretStore.SecretStoreError) =>
   Layer.succeed(
     ServerSecretStore.ServerSecretStore,
@@ -48,9 +44,6 @@ export const makeFailingSecretStoreLayer = (cause: ServerSecretStore.SecretStore
       remove: () => Effect.void,
     }),
   );
-
-
-
 
 export const recordProviderUsage = (provider: string, instanceId: string | null = provider) =>
   Effect.gen(function* () {

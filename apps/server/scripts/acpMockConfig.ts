@@ -15,15 +15,16 @@ export interface AcpScenarioState {
 }
 
 export const scenarioState: AcpScenarioState = {
-currentModeId: "ask",
-currentModelId: "default",
-parameterizedModelPicker: false,
-currentReasoning: "medium",
-currentContext: "272k",
-currentFast: false,
-promptCount: 0,
-overlappingFirstPromptId: undefined
+  currentModeId: "ask",
+  currentModelId: "default",
+  parameterizedModelPicker: false,
+  currentReasoning: "medium",
+  currentContext: "272k",
+  currentFast: false,
+  promptCount: 0,
+  overlappingFirstPromptId: undefined,
 };
+
 export const requestLogPath = process.env.T3_ACP_REQUEST_LOG_PATH;
 
 export const exitLogPath = process.env.T3_ACP_EXIT_LOG_PATH;
@@ -33,13 +34,15 @@ export const emitToolCalls = process.env.T3_ACP_EMIT_TOOL_CALLS === "1";
 export const emitInterleavedAssistantToolCalls =
   process.env.T3_ACP_EMIT_INTERLEAVED_ASSISTANT_TOOL_CALLS === "1";
 
-export const emitGenericToolPlaceholders = process.env.T3_ACP_EMIT_GENERIC_TOOL_PLACEHOLDERS === "1";
+export const emitGenericToolPlaceholders =
+  process.env.T3_ACP_EMIT_GENERIC_TOOL_PLACEHOLDERS === "1";
 
 export const emitAskQuestion = process.env.T3_ACP_EMIT_ASK_QUESTION === "1";
 
 export const emitXAiAskUserQuestion = process.env.T3_ACP_EMIT_XAI_ASK_USER_QUESTION === "1";
 
-export const emitXAiPromptCompleteThenHang = process.env.T3_ACP_EMIT_XAI_PROMPT_COMPLETE_THEN_HANG === "1";
+export const emitXAiPromptCompleteThenHang =
+  process.env.T3_ACP_EMIT_XAI_PROMPT_COMPLETE_THEN_HANG === "1";
 
 export const emitForeignSessionUpdates = process.env.T3_ACP_EMIT_FOREIGN_SESSION_UPDATES === "1";
 
@@ -58,7 +61,8 @@ export const emitLoadReplay = process.env.T3_ACP_EMIT_LOAD_REPLAY === "1";
 
 export const hangLoadSessionAfterReplay = process.env.T3_ACP_HANG_LOAD_SESSION_AFTER_REPLAY === "1";
 
-export const delayLoadSessionAfterReplay = process.env.T3_ACP_DELAY_LOAD_SESSION_AFTER_REPLAY === "1";
+export const delayLoadSessionAfterReplay =
+  process.env.T3_ACP_DELAY_LOAD_SESSION_AFTER_REPLAY === "1";
 
 export const loadSessionDelayMs = Number(process.env.T3_ACP_LOAD_SESSION_DELAY_MS ?? "5000");
 
@@ -92,10 +96,13 @@ export function promptIdFromRequestMeta(
   request: Pick<AcpSchema.PromptRequest, "_meta">,
 ): string | undefined {
   const meta = request._meta;
+
   if (meta === null || !Predicate.isObjectOrArray(meta)) {
     return undefined;
   }
+
   const promptId = meta.promptId ?? meta.requestId;
+
   return Predicate.isString(promptId) && promptId.length > 0 ? promptId : undefined;
 }
 
@@ -103,6 +110,7 @@ export function logExit(reason: string): void {
   if (!exitLogPath) {
     return;
   }
+
   NodeFS.appendFileSync(exitLogPath, `${reason}\n`, "utf8");
 }
 
@@ -255,10 +263,14 @@ export function configOptions(): ReadonlyArray<AcpSchema.SessionConfigOption> {
   ];
 }
 
-export function modelConfigOptionsFor(modelId: string): ReadonlyArray<AcpSchema.SessionConfigOption> {
+export function modelConfigOptionsFor(
+  modelId: string,
+): ReadonlyArray<AcpSchema.SessionConfigOption> {
   const previousModelId = scenarioState.currentModelId;
+
   try {
     scenarioState.currentModelId = modelId;
+
     return configOptions().filter(
       (option) => option.category !== "mode" && option.category !== "model",
     );
@@ -320,6 +332,7 @@ export function modelState(): AcpSchema.SessionModelState {
   const modelId = grokAcpModels.some((model) => model.modelId === scenarioState.currentModelId)
     ? scenarioState.currentModelId
     : "grok-4.6";
+
   return {
     currentModelId: modelId,
     availableModels: grokAcpModels,

@@ -10,8 +10,6 @@ import * as ProjectionSnapshotQuery from "./orchestration/Services/ProjectionSna
 import * as AgentController from "./provider/Services/AgentController.ts";
 import * as ProviderSessionDirectory from "./provider/Services/ProviderSessionDirectory.ts";
 
-
-
 export const ORPHANED_PROVIDER_SESSION_ERROR =
   "Provider session did not survive a server restart. Send a new message to continue.";
 
@@ -25,7 +23,9 @@ export const reconcileProviderSessions = Effect.gen(function* () {
   const liveThreadIds = new Set(
     (yield* agentController.listSessions()).map((session) => session.threadId),
   );
+
   const { threads } = yield* query.getCommandReadModel();
+
   const orphanedThreads = threads.filter(
     (thread) =>
       thread.session !== null &&
@@ -37,11 +37,14 @@ export const reconcileProviderSessions = Effect.gen(function* () {
 
   for (const thread of orphanedThreads) {
     const session = thread.session;
+
     if (session === null) {
       continue;
     }
+
     yield* Effect.gen(function* () {
       const binding = yield* directory.getBinding(thread.id);
+
       if (Option.isSome(binding)) {
         yield* directory.upsert({
           ...binding.value,
@@ -109,17 +112,22 @@ export const reconcileDelegations = Effect.gen(function* () {
   const query = yield* ProjectionSnapshotQuery.ProjectionSnapshotQuery;
 
   const { delegations } = yield* query.getCommandReadModel();
+
   for (const delegation of delegations) {
     const phase = delegation.phase;
+
     if (!Predicate.isTagged(phase, "Queued") && !Predicate.isTagged(phase, "Running")) {
       continue;
     }
+
     yield* Effect.gen(function* () {
       const reconciledAt = DateTime.formatIso(yield* DateTime.now);
+
       const completedAt =
         Date.parse(reconciledAt) >= Date.parse(delegation.updatedAt)
           ? reconciledAt
           : delegation.updatedAt;
+
       const failed: AkeruDelegationRecord = {
         ...delegation,
         phase: {
@@ -133,6 +141,7 @@ export const reconcileDelegations = Effect.gen(function* () {
         },
         updatedAt: completedAt,
       };
+
       yield* orchestrationEngine.dispatch({
         type: "delegation.state.set",
         commandId: CommandId.make(yield* crypto.randomUUIDv4),

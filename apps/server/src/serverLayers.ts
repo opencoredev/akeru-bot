@@ -66,8 +66,6 @@ import * as ImageGenerationRuntime from "./image-generation/ImageGenerationRunti
 import { RoutineDraftDispatcherLive } from "./routines/RoutineDraftDispatcher.ts";
 import { MemoryApprovalsLive } from "./memory/MemoryApprovals.ts";
 
-
-
 export const ResourceAttributionLayerLive = ResourceAttribution.layer;
 
 export const ApplicationObservabilityLive = ObservabilityLive.pipe(
@@ -149,7 +147,9 @@ export const LegacyProviderLayerLive = LegacyProviderBridgeLive.pipe(
   Layer.provide(ProviderServiceLayerLive),
 );
 
-export const PersistenceLayerLive = Layer.empty.pipe(Layer.provideMerge(SqlitePersistenceLayerLive));
+export const PersistenceLayerLive = Layer.empty.pipe(
+  Layer.provideMerge(SqlitePersistenceLayerLive),
+);
 
 export const McpSessionRegistryLayerLive = McpSessionRegistry.layer;
 
@@ -205,7 +205,9 @@ export const PreviewLayerLive = Layer.empty.pipe(
   Layer.provideMerge(PortScannerLayerLive),
 );
 
-export const WorkspaceEntriesLayerLive = WorkspaceEntries.layer.pipe(Layer.provide(WorkspacePaths.layer));
+export const WorkspaceEntriesLayerLive = WorkspaceEntries.layer.pipe(
+  Layer.provide(WorkspacePaths.layer),
+);
 
 export const WorkspaceFileSystemLayerLive = WorkspaceFileSystem.layer.pipe(
   Layer.provide(WorkspacePaths.layer),

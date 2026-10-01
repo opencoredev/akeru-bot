@@ -1,7 +1,12 @@
 // @effect-diagnostics globalDate:off nodeBuiltinImport:off
 import * as NodeHttpServer from "@effect/platform-node/NodeHttpServer";
 import * as NodeServices from "@effect/platform-node/NodeServices";
-import { CommandId, type OrchestrationCommand, ORCHESTRATION_WS_METHODS, ThreadId } from "@akeru/contracts";
+import {
+  CommandId,
+  type OrchestrationCommand,
+  ORCHESTRATION_WS_METHODS,
+  ThreadId,
+} from "@akeru/contracts";
 import { assert, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
@@ -12,7 +17,6 @@ import { makeDefaultOrchestrationThreadShell } from "./serverTestFixtures.ts";
 import { getWsServerUrl, withWsRpcClient } from "./serverTestClients.ts";
 
 it.layer(NodeServices.layer)("server router seam", (it) => {
-
   it.effect("stops the provider session after archive", () =>
     Effect.gen(function* () {
       const threadId = ThreadId.make("thread-archive");
@@ -27,6 +31,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
               Effect.sync(() => {
                 dispatchedCommands.push(command);
                 effects.push(`dispatch:${command.type}`);
+
                 return { sequence: dispatchedCommands.length };
               }),
           },
@@ -56,6 +61,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
       });
 
       const wsUrl = yield* getWsServerUrl("/ws");
+
       const dispatchResult = yield* Effect.scoped(
         withWsRpcClient(wsUrl, (client) =>
           client[ORCHESTRATION_WS_METHODS.dispatchCommand]({
@@ -70,12 +76,12 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
       assert.deepEqual(effects, ["dispatch:thread.archive", "dispatch:thread.session.stop"]);
       const sessionStopCommand = dispatchedCommands[1];
       assert.equal(sessionStopCommand?.type, "thread.session.stop");
+
       if (sessionStopCommand?.type === "thread.session.stop") {
         assert.equal(sessionStopCommand.threadId, threadId);
       }
     }).pipe(Effect.provide(NodeHttpServer.layerTest)),
   );
-
 
   it.effect("checks session status before archiving removes the thread from active lookups", () =>
     Effect.gen(function* () {
@@ -92,9 +98,11 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
               Effect.sync(() => {
                 dispatchedCommands.push(command);
                 effects.push(`dispatch:${command.type}`);
+
                 if (command.type === "thread.archive") {
                   archived = true;
                 }
+
                 return { sequence: dispatchedCommands.length };
               }),
           },
@@ -102,6 +110,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
             getThreadShellById: () =>
               Effect.sync(() => {
                 effects.push(`query:thread-shell:${archived ? "archived" : "active"}`);
+
                 return archived
                   ? Option.none()
                   : Option.some(
@@ -127,6 +136,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
       });
 
       const wsUrl = yield* getWsServerUrl("/ws");
+
       const dispatchResult = yield* Effect.scoped(
         withWsRpcClient(wsUrl, (client) =>
           client[ORCHESTRATION_WS_METHODS.dispatchCommand]({
@@ -150,7 +160,6 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
     }).pipe(Effect.provide(NodeHttpServer.layerTest)),
   );
 
-
   it.effect("archives without dispatching session stop when the thread has no session", () =>
     Effect.gen(function* () {
       const threadId = ThreadId.make("thread-archive-no-session");
@@ -164,6 +173,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
               Effect.sync(() => {
                 dispatchedCommands.push(command);
                 effects.push(`dispatch:${command.type}`);
+
                 return { sequence: dispatchedCommands.length };
               }),
           },
@@ -179,6 +189,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
       });
 
       const wsUrl = yield* getWsServerUrl("/ws");
+
       const dispatchResult = yield* Effect.scoped(
         withWsRpcClient(wsUrl, (client) =>
           client[ORCHESTRATION_WS_METHODS.dispatchCommand]({
@@ -198,7 +209,6 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
     }).pipe(Effect.provide(NodeHttpServer.layerTest)),
   );
 
-
   it.effect(
     "archives without dispatching session stop when the thread session is already stopped",
     () =>
@@ -215,6 +225,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
                 Effect.sync(() => {
                   dispatchedCommands.push(command);
                   effects.push(`dispatch:${command.type}`);
+
                   return { sequence: dispatchedCommands.length };
                 }),
             },
@@ -244,6 +255,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
         });
 
         const wsUrl = yield* getWsServerUrl("/ws");
+
         const dispatchResult = yield* Effect.scoped(
           withWsRpcClient(wsUrl, (client) =>
             client[ORCHESTRATION_WS_METHODS.dispatchCommand]({
@@ -263,7 +275,6 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
       }).pipe(Effect.provide(NodeHttpServer.layerTest)),
   );
 
-
   it.effect("stops the provider session after settle", () =>
     Effect.gen(function* () {
       const threadId = ThreadId.make("thread-settle");
@@ -278,6 +289,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
               Effect.sync(() => {
                 dispatchedCommands.push(command);
                 effects.push(`dispatch:${command.type}`);
+
                 return { sequence: dispatchedCommands.length };
               }),
           },
@@ -307,6 +319,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
       });
 
       const wsUrl = yield* getWsServerUrl("/ws");
+
       const dispatchResult = yield* Effect.scoped(
         withWsRpcClient(wsUrl, (client) =>
           client[ORCHESTRATION_WS_METHODS.dispatchCommand]({
@@ -321,6 +334,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
       assert.deepEqual(effects, ["dispatch:thread.settle", "dispatch:thread.session.stop"]);
       const sessionStopCommand = dispatchedCommands[1];
       assert.equal(sessionStopCommand?.type, "thread.session.stop");
+
       if (sessionStopCommand?.type === "thread.session.stop") {
         assert.equal(sessionStopCommand.threadId, threadId);
         assert.equal(sessionStopCommand.commandId, "session-stop-for-settle:cmd-thread-settle");
@@ -328,7 +342,6 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
       }
     }).pipe(Effect.provide(NodeHttpServer.layerTest)),
   );
-
 
   it.effect("settles without dispatching session stop when the thread has no session", () =>
     Effect.gen(function* () {
@@ -343,6 +356,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
               Effect.sync(() => {
                 dispatchedCommands.push(command);
                 effects.push(`dispatch:${command.type}`);
+
                 return { sequence: dispatchedCommands.length };
               }),
           },
@@ -358,6 +372,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
       });
 
       const wsUrl = yield* getWsServerUrl("/ws");
+
       const dispatchResult = yield* Effect.scoped(
         withWsRpcClient(wsUrl, (client) =>
           client[ORCHESTRATION_WS_METHODS.dispatchCommand]({
@@ -377,7 +392,6 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
     }).pipe(Effect.provide(NodeHttpServer.layerTest)),
   );
 
-
   it.effect("archives even when session stop fails", () =>
     Effect.gen(function* () {
       const threadId = ThreadId.make("thread-archive-stop-failure");
@@ -391,6 +405,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
             dispatch: (command) => {
               dispatchedCommands.push(command);
               effects.push(`dispatch:${command.type}`);
+
               if (command.type === "thread.session.stop") {
                 return Effect.fail(
                   new OrchestrationListenerCallbackError({
@@ -399,6 +414,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
                   }),
                 );
               }
+
               return Effect.succeed({ sequence: dispatchedCommands.length });
             },
           },
@@ -428,6 +444,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
       });
 
       const wsUrl = yield* getWsServerUrl("/ws");
+
       const dispatchResult = yield* Effect.scoped(
         withWsRpcClient(wsUrl, (client) =>
           client[ORCHESTRATION_WS_METHODS.dispatchCommand]({
@@ -447,7 +464,6 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
     }).pipe(Effect.provide(NodeHttpServer.layerTest)),
   );
 
-
   it.effect("archives even when session stop defects", () =>
     Effect.gen(function* () {
       const threadId = ThreadId.make("thread-archive-stop-defect");
@@ -461,9 +477,11 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
             dispatch: (command) => {
               dispatchedCommands.push(command);
               effects.push(`dispatch:${command.type}`);
+
               if (command.type === "thread.session.stop") {
                 return Effect.die(new Error("simulated archive stop defect"));
               }
+
               return Effect.succeed({ sequence: dispatchedCommands.length });
             },
           },
@@ -493,6 +511,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
       });
 
       const wsUrl = yield* getWsServerUrl("/ws");
+
       const dispatchResult = yield* Effect.scoped(
         withWsRpcClient(wsUrl, (client) =>
           client[ORCHESTRATION_WS_METHODS.dispatchCommand]({
@@ -510,4 +529,5 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
         ["thread.archive", "thread.session.stop"],
       );
     }).pipe(Effect.provide(NodeHttpServer.layerTest)),
-  );});
+  );
+});

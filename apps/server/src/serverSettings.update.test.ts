@@ -23,4 +23,5 @@ it.layer(NodeServices.layer)("server settings", (it) => {
       assert.sameMembers([...image.fallbackOrder], ["chatgpt", "grok"]);
       assert.include(["chatgpt", "grok"], image.defaultProvider);
     }).pipe(Effect.provide(makeServerSettingsLayer())),
-  );});
+  );
+});

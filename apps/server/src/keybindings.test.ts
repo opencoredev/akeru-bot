@@ -5,7 +5,10 @@ import * as Cause from "effect/Cause";
 import * as Effect from "effect/Effect";
 import * as Keybindings from "./keybindings.ts";
 
-import { encodeResolvedKeybindingFromConfig, decodeResolvedKeybindingFromConfigExit } from "./keybindingsTestSupport.ts";
+import {
+  encodeResolvedKeybindingFromConfig,
+  decodeResolvedKeybindingFromConfigExit,
+} from "./keybindingsTestSupport.ts";
 
 it.layer(NodeServices.layer)("keybindings", (it) => {
   it.effect("parses shortcuts including plus key", () =>
@@ -28,7 +31,6 @@ it.layer(NodeServices.layer)("keybindings", (it) => {
       });
     }),
   );
-
 
   it.effect("compiles valid rule with parsed when AST", () =>
     Effect.sync(() => {
@@ -60,7 +62,6 @@ it.layer(NodeServices.layer)("keybindings", (it) => {
     }),
   );
 
-
   it.effect("encodes resolved plus-key shortcuts", () =>
     Effect.gen(function* () {
       const encoded = yield* encodeResolvedKeybindingFromConfig({
@@ -79,7 +80,6 @@ it.layer(NodeServices.layer)("keybindings", (it) => {
       assert.equal(encoded.command, "terminal.toggle");
     }),
   );
-
 
   it.effect("rejects invalid rules", () =>
     Effect.sync(() => {
@@ -108,7 +108,6 @@ it.layer(NodeServices.layer)("keybindings", (it) => {
     }),
   );
 
-
   it.effect("formats invalid resolved keybinding rules with the custom message", () =>
     Effect.sync(() => {
       const result = decodeResolvedKeybindingFromConfigExit({
@@ -126,7 +125,6 @@ it.layer(NodeServices.layer)("keybindings", (it) => {
     }),
   );
 
-
   it.effect("ships only defaults with a live handler", () =>
     Effect.sync(() => {
       const defaultsByCommand = new Map(
@@ -143,6 +141,7 @@ it.layer(NodeServices.layer)("keybindings", (it) => {
       assert.isFalse(defaultsByCommand.has("rightPanel.toggleMaximized"));
       assert.equal(defaultsByCommand.get("modelPicker.jump.1"), "mod+1");
       assert.equal(defaultsByCommand.get("modelPicker.jump.9"), "mod+9");
+
       for (const retiredCommand of [
         "terminal.toggle",
         "terminal.split",
@@ -168,6 +167,7 @@ it.layer(NodeServices.layer)("keybindings", (it) => {
       ] as const) {
         assert.isFalse(defaultsByCommand.has(retiredCommand), `unexpected ${retiredCommand}`);
       }
+
       // The terminal is gone, so no default may depend on its focus state.
       for (const binding of Keybindings.DEFAULT_KEYBINDINGS) {
         assert.isFalse(
@@ -176,4 +176,5 @@ it.layer(NodeServices.layer)("keybindings", (it) => {
         );
       }
     }),
-  );});
+  );
+});

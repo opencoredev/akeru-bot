@@ -24,25 +24,44 @@ import { createWsDiagnosticHandlers } from "./wsDiagnosticHandlers.ts";
 import { createWsMemoryHandlers } from "./wsMemoryHandlers.ts";
 import { createWsWorkspaceHandlers } from "./wsWorkspaceHandlers.ts";
 import { type ProviderSubscribeRefreshes, readClientConnectionOrigin } from "./wsSupport.ts";
-export { isThreadDetailEvent, resolveAvailableEditorsForConfig, resolveFileManagerRevealKindForConfig } from "./wsSupport.ts";
-const createWsRpcLayer = (currentSession: EnvironmentAuth.AuthenticatedSession,
-clientOrigin: OrchestrationClientOrigin,
-previewAutomationBroker: PreviewAutomationBroker.PreviewAutomationBroker["Service"],
-voiceCalls: VoiceCallManager.VoiceCallManager["Service"],
-providerRefreshes: ProviderSubscribeRefreshes) => WsRpcGroup.toLayer(Effect.gen(function* () {
-const connection = yield* createWsConnection(currentSession, clientOrigin, previewAutomationBroker, voiceCalls, providerRefreshes);
-return { ...createWsOrchestrationHandlers(connection),
-...createWsOrchestrationSubscriptions(connection),
-...createWsServerHandlers(connection),
-...createWsAuthHandlers(connection),
-...createWsPortabilityHandlers(connection),
-...createWsBotServicesHandlers(connection),
-...createWsToolHandlers(connection),
-...createWsDiagnosticHandlers(connection),
-...createWsMemoryHandlers(connection),
-...createWsWorkspaceHandlers(connection) };
-}));
 
+export {
+  isThreadDetailEvent,
+  resolveAvailableEditorsForConfig,
+  resolveFileManagerRevealKindForConfig,
+} from "./wsSupport.ts";
+
+const createWsRpcLayer = (
+  currentSession: EnvironmentAuth.AuthenticatedSession,
+  clientOrigin: OrchestrationClientOrigin,
+  previewAutomationBroker: PreviewAutomationBroker.PreviewAutomationBroker["Service"],
+  voiceCalls: VoiceCallManager.VoiceCallManager["Service"],
+  providerRefreshes: ProviderSubscribeRefreshes,
+) =>
+  WsRpcGroup.toLayer(
+    Effect.gen(function* () {
+      const connection = yield* createWsConnection(
+        currentSession,
+        clientOrigin,
+        previewAutomationBroker,
+        voiceCalls,
+        providerRefreshes,
+      );
+
+      return {
+        ...createWsOrchestrationHandlers(connection),
+        ...createWsOrchestrationSubscriptions(connection),
+        ...createWsServerHandlers(connection),
+        ...createWsAuthHandlers(connection),
+        ...createWsPortabilityHandlers(connection),
+        ...createWsBotServicesHandlers(connection),
+        ...createWsToolHandlers(connection),
+        ...createWsDiagnosticHandlers(connection),
+        ...createWsMemoryHandlers(connection),
+        ...createWsWorkspaceHandlers(connection),
+      };
+    }),
+  );
 
 export const websocketRpcRouteLayer = Layer.unwrap(
   Effect.gen(function* () {
@@ -54,10 +73,12 @@ export const websocketRpcRouteLayer = Layer.unwrap(
       VoiceCallManager.hangupDeletedBotCalls(voiceCalls, orchestrationEngine.streamDomainEvents),
     );
     const serverSelfUpdate = yield* ServerSelfUpdate.ServerSelfUpdate;
+
     const providerRefreshes: ProviderSubscribeRefreshes = {
       inFlight: new Set(),
       scope: yield* Effect.scope,
     };
+
     return HttpRouter.add(
       "GET",
       "/ws",
@@ -65,6 +86,7 @@ export const websocketRpcRouteLayer = Layer.unwrap(
         const request = yield* HttpServerRequest.HttpServerRequest;
         const serverAuth = yield* EnvironmentAuth.EnvironmentAuth;
         const sessions = yield* SessionStore.SessionStore;
+
         const session = yield* serverAuth.authenticateWebSocketUpgrade(request).pipe(
           Effect.catchIf(EnvironmentAuth.isServerAuthCredentialError, (error) =>
             failEnvironmentAuthInvalid(EnvironmentAuth.serverAuthCredentialReason(error)),
@@ -73,8 +95,10 @@ export const websocketRpcRouteLayer = Layer.unwrap(
             failEnvironmentInternal("internal_error", error),
           ),
         );
+
         const clientOrigin = readClientConnectionOrigin(request);
         yield* sessions.recordClientConnection(session.sessionId, clientOrigin);
+
         const rpcWebSocketHttpEffect = yield* RpcServer.toHttpEffectWebsocket(WsRpcGroup, {
           disableTracing: true,
         }).pipe(
@@ -92,6 +116,7 @@ export const websocketRpcRouteLayer = Layer.unwrap(
             ),
           ),
         );
+
         return yield* Effect.acquireUseRelease(
           sessions.markConnected(session.sessionId),
           () => rpcWebSocketHttpEffect,

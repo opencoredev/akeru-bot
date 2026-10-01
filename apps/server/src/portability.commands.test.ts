@@ -4,15 +4,30 @@ import { it as effectIt } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import { describe, expect, it } from "vite-plus/test";
 import { decideCommandSequence } from "./orchestration/decider.ts";
-import { commandsForPortabilityImport, createPortabilityArchive, summarizePortabilityApply } from "./portability.ts";
+import {
+  commandsForPortabilityImport,
+  createPortabilityArchive,
+  summarizePortabilityApply,
+} from "./portability.ts";
 
-import { makeSnapshot, makeSettings, NOW, URL_MCP_ID, AVAILABLE_PROVIDER_IDS, STDIO_MCP_ID, makePreflightSnapshot, BOT_ID, LATER, GROUP_ID } from "./portabilityTestSupport.ts";
+import {
+  makeSnapshot,
+  makeSettings,
+  NOW,
+  URL_MCP_ID,
+  AVAILABLE_PROVIDER_IDS,
+  STDIO_MCP_ID,
+  makePreflightSnapshot,
+  BOT_ID,
+  LATER,
+  GROUP_ID,
+} from "./portabilityTestSupport.ts";
 
 describe("portability import", () => {
-
   it("plans valid orchestration commands and keeps every restored MCP server disabled", () => {
     const source = makeSnapshot();
     const archive = createPortabilityArchive(source, makeSettings(), NOW);
+
     const target = makeSnapshot({
       bots: [],
       groups: [],
@@ -29,12 +44,14 @@ describe("portability import", () => {
       ],
       threads: [],
     });
+
     const first = commandsForPortabilityImport(
       archive,
       target,
       makeSettings(),
       AVAILABLE_PROVIDER_IDS,
     );
+
     const second = commandsForPortabilityImport(
       archive,
       target,
@@ -82,14 +99,15 @@ describe("portability import", () => {
     expect(first.applied).toBeGreaterThan(0);
   });
 
-
   it("exports MCP guidance and restores it after the server", () => {
     const base = makeSnapshot();
+
     const source = makeSnapshot({
       mcpServers: (base.mcpServers ?? []).map((server) =>
         server.id === URL_MCP_ID ? { ...server, instructions: "Use for web search." } : server,
       ),
     });
+
     const archive = createPortabilityArchive(source, makeSettings(), NOW);
     expect(
       archive.records.find((record) => record.type === "mcp-server" && record.id === URL_MCP_ID)
@@ -97,21 +115,25 @@ describe("portability import", () => {
     ).toMatchObject({ instructions: "Use for web search." });
 
     const target = makeSnapshot({ bots: [], groups: [], mcpServers: [], threads: [] });
+
     const { commands } = commandsForPortabilityImport(
       archive,
       target,
       makeSettings(),
       AVAILABLE_PROVIDER_IDS,
     );
+
     const createIndex = commands.findIndex(
       (command) => command.type === "mcp-server.create" && command.mcpServerId === URL_MCP_ID,
     );
+
     const instructionsIndex = commands.findIndex(
       (command) =>
         command.type === "mcp-server.instructions.set" &&
         command.mcpServerId === URL_MCP_ID &&
         command.instructions === "Use for web search.",
     );
+
     expect(createIndex).toBeGreaterThanOrEqual(0);
     expect(instructionsIndex).toBeGreaterThan(createIndex);
     expect(
@@ -122,16 +144,17 @@ describe("portability import", () => {
     ).toBe(false);
   });
 
-
   effectIt.effect("preflights the complete restore plan through the decider", () => {
     const source = makePreflightSnapshot();
     const target = makeSnapshot({ bots: [], groups: [], mcpServers: [], threads: [] });
+
     const commands = commandsForPortabilityImport(
       createPortabilityArchive(source, makeSettings(), NOW),
       target,
       makeSettings(),
       AVAILABLE_PROVIDER_IDS,
     ).commands;
+
     const historyCommand = commands.find((command) => command.type === "thread.history.restore");
 
     return decideCommandSequence({ commands, readModel: target }).pipe(
@@ -165,9 +188,9 @@ describe("portability import", () => {
     );
   });
 
-
   it("sets a replacement boss before changing the remaining membership", () => {
     const secondBotId = BotId.make("bot-second");
+
     const source = makeSnapshot({
       bots: [
         makeSnapshot().bots[0]!,
@@ -189,16 +212,19 @@ describe("portability import", () => {
         },
       ],
     });
+
     const target = makeSnapshot({
       bots: source.bots,
       groups: makeSnapshot().groups,
     });
+
     const commands = commandsForPortabilityImport(
       createPortabilityArchive(source, makeSettings(), NOW),
       target,
       makeSettings(),
       AVAILABLE_PROVIDER_IDS,
     ).commands;
+
     const bossIndex = commands.findIndex((command) => command.type === "group.boss.set");
     const memberIndex = commands.findIndex((command) => command.type.startsWith("group.member."));
 
@@ -206,21 +232,23 @@ describe("portability import", () => {
     expect(memberIndex === -1 || bossIndex < memberIndex).toBe(true);
   });
 
-
   it("temporarily restores an archived bot before restoring its thread", () => {
     const archivedBot = {
       ...makeSnapshot().bots[0]!,
       groupId: null,
       archivedAt: NOW,
     };
+
     const source = makeSnapshot({ bots: [archivedBot], groups: [] });
     const target = makeSnapshot({ bots: [archivedBot], groups: [], threads: [] });
+
     const commands = commandsForPortabilityImport(
       createPortabilityArchive(source, makeSettings(), NOW),
       target,
       makeSettings(),
       AVAILABLE_PROVIDER_IDS,
     ).commands;
+
     const restoreIndex = commands.findIndex((command) => command.type === "bot.restore");
     const threadIndex = commands.findIndex((command) => command.type === "thread.create");
     const archiveIndex = commands.findIndex((command) => command.type === "bot.archive");
@@ -230,21 +258,23 @@ describe("portability import", () => {
     expect(archiveIndex).toBeGreaterThan(threadIndex);
   });
 
-
   it("restores conversation history and lifecycle without starting a provider turn", () => {
     const archivedThread = { ...makeSnapshot().threads[0]!, archivedAt: NOW, pinnedAt: NOW };
     const source = makeSnapshot({ threads: [archivedThread] });
+
     const target = makeSnapshot({
       threads: [
         { ...archivedThread, pinnedAt: null, messages: [], proposedPlans: [], activities: [] },
       ],
     });
+
     const commands = commandsForPortabilityImport(
       createPortabilityArchive(source, makeSettings(), NOW),
       target,
       makeSettings(),
       AVAILABLE_PROVIDER_IDS,
     ).commands;
+
     const restore = commands.find((command) => command.type === "thread.history.restore");
 
     expect(restore).toMatchObject({
@@ -260,7 +290,6 @@ describe("portability import", () => {
     ]);
     expect(commands).not.toContainEqual(expect.objectContaining({ type: "thread.turn.start" }));
   });
-
 
   it("reports failed and partly applied records separately", () => {
     const botItem = { recordType: "bot" as const, id: BOT_ID, title: "Akeru" };
@@ -285,4 +314,5 @@ describe("portability import", () => {
         { ...groupItem, partial: false, message: "Group restore failed." },
       ],
     });
-  });});
+  });
+});

@@ -6,7 +6,13 @@
  *
  * @module Keybindings
  */
-import { KeybindingRule, KeybindingsConfig, MAX_KEYBINDINGS_COUNT, ResolvedKeybindingsConfig, type ServerConfigIssue } from "@akeru/contracts";
+import {
+  KeybindingRule,
+  KeybindingsConfig,
+  MAX_KEYBINDINGS_COUNT,
+  ResolvedKeybindingsConfig,
+  type ServerConfigIssue,
+} from "@akeru/contracts";
 import * as Schema from "effect/Schema";
 import { fromJsonStringPretty, fromLenientJson } from "@akeru/shared/schemaJson";
 import { DEFAULT_RESOLVED_KEYBINDINGS } from "@akeru/shared/keybindings";
@@ -52,7 +58,9 @@ export const KeybindingsConfigPrettyJson = fromJsonStringPretty(KeybindingsConfi
 
 export const decodeKeybindingRuleExit = Schema.decodeUnknownExit(KeybindingRule);
 
-export const decodeResolvedKeybindingFromConfigExit = Schema.decodeExit(ResolvedKeybindingFromConfig);
+export const decodeResolvedKeybindingFromConfigExit = Schema.decodeExit(
+  ResolvedKeybindingFromConfig,
+);
 
 export const decodeRawKeybindingsEntriesExit = Schema.decodeUnknownExit(RawKeybindingsEntries);
 
@@ -70,6 +78,7 @@ export interface KeybindingsChangeEvent {
 
 export function trimIssueMessage(message: string): string {
   const trimmed = message.trim();
+
   return trimmed.length > 0 ? trimmed : "Invalid keybindings configuration.";
 }
 
@@ -88,15 +97,19 @@ export function invalidEntryIssue(index: number, detail: string): ServerConfigIs
   };
 }
 
-export function mergeWithDefaultKeybindings(custom: ResolvedKeybindingsConfig): ResolvedKeybindingsConfig {
+export function mergeWithDefaultKeybindings(
+  custom: ResolvedKeybindingsConfig,
+): ResolvedKeybindingsConfig {
   if (custom.length === 0) {
     return [...DEFAULT_RESOLVED_KEYBINDINGS];
   }
 
   const overriddenCommands = new Set(custom.map((binding) => binding.command));
+
   const retainedDefaults = DEFAULT_RESOLVED_KEYBINDINGS.filter(
     (binding) => !overriddenCommands.has(binding.command),
   );
+
   const merged = [...retainedDefaults, ...custom];
 
   if (merged.length <= MAX_KEYBINDINGS_COUNT) {

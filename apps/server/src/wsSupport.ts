@@ -6,7 +6,28 @@ import * as Option from "effect/Option";
 import * as Path from "effect/Path";
 import * as Schema from "effect/Schema";
 import * as Scope from "effect/Scope";
-import { AkeruMemoryOperationError, type AuthAccessStreamEvent, AuthSessionId, ClientSurface, type FileManagerRevealKind, type OrchestrationClientOrigin, type OrchestrationReadModel, OrchestrationDispatchCommandError, type OrchestrationEvent, type OrchestrationShellStreamEvent, PortabilityArchiveError, type PortabilityArchive, type PortabilityProjectFolderMap, type ProjectEntriesFailure, type ProjectFileFailure, type ProjectFileOperation, type ServerProvider, SubscriptionProviderId, McpServerAuthenticationError, ThreadId } from "@akeru/contracts";
+import {
+  AkeruMemoryOperationError,
+  type AuthAccessStreamEvent,
+  AuthSessionId,
+  ClientSurface,
+  type FileManagerRevealKind,
+  type OrchestrationClientOrigin,
+  type OrchestrationReadModel,
+  OrchestrationDispatchCommandError,
+  type OrchestrationEvent,
+  type OrchestrationShellStreamEvent,
+  PortabilityArchiveError,
+  type PortabilityArchive,
+  type PortabilityProjectFolderMap,
+  type ProjectEntriesFailure,
+  type ProjectFileFailure,
+  type ProjectFileOperation,
+  type ServerProvider,
+  SubscriptionProviderId,
+  McpServerAuthenticationError,
+  ThreadId,
+} from "@akeru/contracts";
 import { HttpServerRequest } from "effect/unstable/http";
 import * as WorkspaceEntries from "./workspace/WorkspaceEntries.ts";
 import * as WorkspaceFileSystem from "./workspace/WorkspaceFileSystem.ts";
@@ -65,35 +86,40 @@ export const availablePortabilityProviderIds = (providers: ReadonlyArray<ServerP
     ),
   );
 
-export const validatePortabilityProjectFolders = Effect.fn("validatePortabilityProjectFolders")(function* (
-  archive: PortabilityArchive,
-  snapshot: OrchestrationReadModel,
-  projectFolders: PortabilityProjectFolderMap,
-  operation: "preview" | "apply",
-) {
-  const workspacePaths = yield* WorkspacePaths.WorkspacePaths;
-  const path = yield* Path.Path;
-  for (const [projectId, destination] of Object.entries(projectFolders)) {
-    if (!path.isAbsolute(destination) || path.dirname(destination) === destination) {
-      return yield* portabilityError(
-        operation,
-        new Error(`Project '${projectId}' destination must be an absolute non-root path.`),
-      );
+export const validatePortabilityProjectFolders = Effect.fn("validatePortabilityProjectFolders")(
+  function* (
+    archive: PortabilityArchive,
+    snapshot: OrchestrationReadModel,
+    projectFolders: PortabilityProjectFolderMap,
+    operation: "preview" | "apply",
+  ) {
+    const workspacePaths = yield* WorkspacePaths.WorkspacePaths;
+    const path = yield* Path.Path;
+
+    for (const [projectId, destination] of Object.entries(projectFolders)) {
+      if (!path.isAbsolute(destination) || path.dirname(destination) === destination) {
+        return yield* portabilityError(
+          operation,
+          new Error(`Project '${projectId}' destination must be an absolute non-root path.`),
+        );
+      }
     }
-  }
-  const normalized = Portability.normalizePortabilityProjectFolders(
-    archive,
-    snapshot,
-    projectFolders,
-  );
-  return Object.fromEntries(
-    yield* Effect.forEach(Object.entries(normalized), ([projectId, workspaceRoot]) =>
-      workspacePaths
-        .normalizeWorkspaceRoot(workspaceRoot)
-        .pipe(Effect.map((normalizedRoot) => [projectId, normalizedRoot] as const)),
-    ),
-  );
-});
+
+    const normalized = Portability.normalizePortabilityProjectFolders(
+      archive,
+      snapshot,
+      projectFolders,
+    );
+
+    return Object.fromEntries(
+      yield* Effect.forEach(Object.entries(normalized), ([projectId, workspaceRoot]) =>
+        workspacePaths
+          .normalizeWorkspaceRoot(workspaceRoot)
+          .pipe(Effect.map((normalizedRoot) => [projectId, normalizedRoot] as const)),
+      ),
+    );
+  },
+);
 
 export const resolveDiscoveryForConfig = <A, E, R>(
   discovery: Effect.Effect<A, E, R>,
@@ -104,13 +130,9 @@ export const resolveDiscoveryForConfig = <A, E, R>(
     Effect.map(Option.getOrElse(onTimeout)),
   );
 
-
-
 export const resolveAvailableEditorsForConfig = <A, E, R>(
   discovery: Effect.Effect<ReadonlyArray<A>, E, R>,
 ) => resolveDiscoveryForConfig(discovery, () => []);
-
-
 
 export const resolveFileManagerRevealKindForConfig = <E, R>(
   discovery: Effect.Effect<FileManagerRevealKind | undefined, E, R>,
@@ -207,8 +229,6 @@ export function projectFileFailureContext(
   }
 }
 
-
-
 export function isThreadDetailEvent(event: OrchestrationEvent): event is Extract<
   OrchestrationEvent,
   {
@@ -282,7 +302,9 @@ export const toShellSourceEvent = (event: OrchestrationEvent): ShellSourceEvent 
   if (event.aggregateKind !== "thread" || THREAD_SHELL_PAYLOAD_EVENT_TYPES.has(event.type)) {
     return event;
   }
+
   const threadId = ThreadId.make(event.aggregateId);
+
   return {
     type: THREAD_SHELL_REFETCH,
     aggregateKind: "thread",
@@ -300,7 +322,10 @@ export interface SentThreadShells {
   lastSentSequence: number;
 }
 
-export const createSentThreadShells = (): SentThreadShells => ({ threads: new Map(), lastSentSequence: 0 });
+export const createSentThreadShells = (): SentThreadShells => ({
+  threads: new Map(),
+  lastSentSequence: 0,
+});
 
 /**
  * Record a shell item for one subscription and report whether it repeats the
@@ -318,16 +343,20 @@ export const isUnchangedThreadShell = (
     item.sequence - sent.lastSentSequence < SHELL_CURSOR_REFRESH_GAP
   ) {
     const serialized = JSON.stringify(item.thread);
+
     if (sent.threads.get(item.thread.id) === serialized) {
       return true;
     }
+
     sent.threads.set(item.thread.id, serialized);
   } else if (item.kind === "thread-upserted") {
     sent.threads.set(item.thread.id, JSON.stringify(item.thread));
   } else if (item.kind === "thread-removed") {
     sent.threads.delete(item.threadId);
   }
+
   sent.lastSentSequence = Math.max(sent.lastSentSequence, item.sequence);
+
   return false;
 };
 
@@ -402,11 +431,14 @@ export function readClientConnectionOrigin(
   request: HttpServerRequest.HttpServerRequest,
 ): OrchestrationClientOrigin {
   const url = HttpServerRequest.toURL(request);
+
   if (Option.isNone(url)) {
     return {};
   }
+
   const surface = url.value.searchParams.get("clientSurface");
   const appVersion = url.value.searchParams.get("clientAppVersion")?.trim() ?? "";
+
   return {
     ...(isClientSurface(surface) ? { surface } : {}),
     ...(appVersion !== "" && appVersion.length <= MAX_CLIENT_APP_VERSION_LENGTH

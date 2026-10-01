@@ -2,9 +2,38 @@ import * as Predicate from "effect/Predicate";
 import * as Effect from "effect/Effect";
 import * as AcpError from "effect-acp/errors";
 import type * as AcpSchema from "effect-acp/schema";
-import { emitToolCalls, emitInterleavedAssistantToolCalls, emitGenericToolPlaceholders, emitAskQuestion, emitXAiAskUserQuestion, emitXAiPromptCompleteThenHang, emitForeignSessionUpdates, hangPromptForever, hangFirstPromptForever, omitXAiPromptCompleteStopReason, emitStaleXAiPromptCompleteBeforeSecondHang, emitOverlappingXAiPromptCompleteOutOfOrder, failPrompt, promptResponseText, promptDelayMs, permissionOptionIds, sessionId, cancelledSessions, promptIdFromRequestMeta, writeJsonRpcNotification } from "./acpMockConfig.ts";
+import {
+  emitToolCalls,
+  emitInterleavedAssistantToolCalls,
+  emitGenericToolPlaceholders,
+  emitAskQuestion,
+  emitXAiAskUserQuestion,
+  emitXAiPromptCompleteThenHang,
+  emitForeignSessionUpdates,
+  hangPromptForever,
+  hangFirstPromptForever,
+  omitXAiPromptCompleteStopReason,
+  emitStaleXAiPromptCompleteBeforeSecondHang,
+  emitOverlappingXAiPromptCompleteOutOfOrder,
+  failPrompt,
+  promptResponseText,
+  promptDelayMs,
+  permissionOptionIds,
+  sessionId,
+  cancelledSessions,
+  promptIdFromRequestMeta,
+  writeJsonRpcNotification,
+} from "./acpMockConfig.ts";
 import type { scenarioState as ScenarioState } from "./acpMockConfig.ts";
-export const createPromptScenario = (scenarioState: typeof ScenarioState, agent: import("effect-acp/agent").AcpAgent["Service"]) => (request: AcpSchema.PromptRequest): import("effect/Effect").Effect<AcpSchema.PromptResponse, import("effect-acp/errors").AcpError> =>
+
+export const createPromptScenario =
+  (scenarioState: typeof ScenarioState, agent: import("effect-acp/agent").AcpAgent["Service"]) =>
+  (
+    request: AcpSchema.PromptRequest,
+  ): import("effect/Effect").Effect<
+    AcpSchema.PromptResponse,
+    import("effect-acp/errors").AcpError
+  > =>
     Effect.gen(function* () {
       const requestedSessionId = String(request.sessionId ?? sessionId);
       scenarioState.promptCount += 1;
@@ -48,11 +77,13 @@ export const createPromptScenario = (scenarioState: typeof ScenarioState, agent:
 
       if (emitOverlappingXAiPromptCompleteOutOfOrder && scenarioState.promptCount === 1) {
         scenarioState.overlappingFirstPromptId = promptIdFromRequestMeta(request);
+
         return yield* Effect.never;
       }
 
       if (emitOverlappingXAiPromptCompleteOutOfOrder && scenarioState.promptCount === 2) {
         const secondPromptId = promptIdFromRequestMeta(request);
+
         if (scenarioState.overlappingFirstPromptId !== undefined && secondPromptId !== undefined) {
           writeJsonRpcNotification("_x.ai/session/prompt_complete", {
             sessionId: requestedSessionId,
@@ -67,6 +98,7 @@ export const createPromptScenario = (scenarioState: typeof ScenarioState, agent:
             agentResult: null,
           });
         }
+
         return yield* Effect.never;
       }
 
@@ -344,12 +376,15 @@ export const createPromptScenario = (scenarioState: typeof ScenarioState, agent:
             mode: "default",
           },
         });
+
         if (!Predicate.isObjectOrArray(result) || result === null || !("outcome" in result)) {
           throw new Error("Expected _x.ai/ask_user_question response outcome.");
         }
+
         if (result.outcome === "cancelled") {
           return { stopReason: "end_turn" };
         }
+
         if (
           result.outcome !== "accepted" ||
           !("answers" in result) ||
@@ -395,6 +430,7 @@ export const createPromptScenario = (scenarioState: typeof ScenarioState, agent:
             content: { type: "text", text: " root after child" },
           },
         });
+
         return { stopReason: "end_turn" };
       }
 

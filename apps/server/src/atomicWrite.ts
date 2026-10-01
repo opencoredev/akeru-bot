@@ -19,10 +19,12 @@ export const writeFileStringAtomically = <E = never>(input: {
       const targetDirectory = path.dirname(input.filePath);
 
       yield* fs.makeDirectory(targetDirectory, { recursive: true });
+
       const tempDirectory = yield* fs.makeTempDirectoryScoped({
         directory: targetDirectory,
         prefix: `${path.basename(input.filePath)}.`,
       });
+
       const tempPath = path.join(tempDirectory, "contents.tmp");
 
       yield* fs.writeFileString(
@@ -30,6 +32,7 @@ export const writeFileStringAtomically = <E = never>(input: {
         input.contents,
         input.mode === undefined ? undefined : { mode: input.mode },
       );
+
       if (input.durable) {
         yield* Effect.scoped(
           Effect.gen(function* () {
@@ -39,8 +42,10 @@ export const writeFileStringAtomically = <E = never>(input: {
           }),
         );
       }
+
       if (input.beforeReplace) yield* input.beforeReplace;
       yield* fs.rename(tempPath, input.filePath);
+
       if (input.durable && (yield* HostProcessPlatform) !== "win32") {
         yield* Effect.scoped(
           Effect.gen(function* () {
@@ -50,10 +55,12 @@ export const writeFileStringAtomically = <E = never>(input: {
         ).pipe(
           Effect.catch((error) => {
             const cause = "cause" in error.reason ? error.reason.cause : undefined;
+
             const code =
               Predicate.isObjectOrArray(cause) && cause !== null && "code" in cause
                 ? cause.code
                 : undefined;
+
             return code === "EINVAL" || code === "ENOTSUP" || code === "EOPNOTSUPP"
               ? Effect.void
               : Effect.fail(error);

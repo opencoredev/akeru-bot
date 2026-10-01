@@ -21,12 +21,15 @@ export const isEntrypoint = (input: {
   if (input.runtimeMain !== undefined) {
     return input.runtimeMain;
   }
+
   if (input.entryPath === undefined || input.entryPath === "") {
     return false;
   }
+
   if (input.moduleUrl === NodeURL.pathToFileURL(input.entryPath).href) {
     return true;
   }
+
   // npm and npx install the CLI as a symlink. Without `--preserve-symlinks` the
   // module URL is the resolved real path while `process.argv[1]` keeps the link
   // path, so the comparison above misses.

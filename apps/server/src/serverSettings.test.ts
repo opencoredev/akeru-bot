@@ -15,10 +15,13 @@ import * as ServerConfig from "./config.ts";
 import { SqlitePersistenceMemory } from "./persistence/Layers/Sqlite.ts";
 import * as ServerSettingsModule from "./serverSettings.ts";
 
-import { makeServerSettingsLayer, decodeSettingsPatch, decodeServerSettings } from "./serverSettingsTestSupport.ts";
+import {
+  makeServerSettingsLayer,
+  decodeSettingsPatch,
+  decodeServerSettings,
+} from "./serverSettingsTestSupport.ts";
 
 it.layer(NodeServices.layer)("server settings", (it) => {
-
   it.effect("identifies provider history query failures", () =>
     Effect.gen(function* () {
       const serverConfig = yield* ServerConfig.ServerConfig;
@@ -36,22 +39,26 @@ it.layer(NodeServices.layer)("server settings", (it) => {
     }).pipe(Effect.provide(makeServerSettingsLayer())),
   );
 
-
   it.effect("reports an analytics opt-out deletion failure", () =>
     Effect.gen(function* () {
       const fileSystem = yield* FileSystem.FileSystem;
+
       const baseDir = yield* fileSystem.makeTempDirectoryScoped({
         prefix: "t3code-server-settings-analytics-opt-out-",
       });
+
       const configLayer = ServerConfig.layerTest(process.cwd(), baseDir);
       const config = yield* ServerConfig.ServerConfig.pipe(Effect.provide(configLayer));
+
       const cause = PlatformError.systemError({
         _tag: "PermissionDenied",
         module: "FileSystem",
         method: "remove",
         pathOrDescriptor: config.analyticsStatePath,
       });
+
       let failAnalyticsStateRemoval = true;
+
       const failingFileSystem = FileSystem.FileSystem.of({
         ...fileSystem,
         remove: (path, options) =>
@@ -59,23 +66,28 @@ it.layer(NodeServices.layer)("server settings", (it) => {
             ? Effect.fail(cause)
             : fileSystem.remove(path, options),
       });
+
       const settingsLayer = ServerSettingsModule.layer.pipe(
         Layer.provide(ServerSecretStore.layer),
         Layer.provideMerge(Layer.fresh(SqlitePersistenceMemory)),
         Layer.provideMerge(configLayer),
         Layer.provide(Layer.succeed(FileSystem.FileSystem, failingFileSystem)),
       );
+
       yield* fileSystem.writeFileString(config.analyticsStatePath, "queued analytics");
       yield* fileSystem.writeFileString(config.anonymousIdPath, "legacy identity");
 
       const { error, stateRemained, analyticsEnabled } = yield* Effect.gen(function* () {
         const serverSettings = yield* ServerSettingsModule.ServerSettingsService;
+
         const error = yield* Effect.flip(
           serverSettings.updateSettings({ analyticsEnabled: false }),
         );
+
         const stateRemained = yield* fileSystem.exists(config.analyticsStatePath);
         failAnalyticsStateRemoval = false;
         const settings = yield* serverSettings.updateSettings({ analyticsEnabled: false });
+
         return { error, stateRemained, analyticsEnabled: settings.analyticsEnabled };
       }).pipe(Effect.provide(settingsLayer));
 
@@ -91,7 +103,6 @@ it.layer(NodeServices.layer)("server settings", (it) => {
       assert.isFalse(yield* fileSystem.exists(config.anonymousIdPath));
     }),
   );
-
 
   it.effect("decodes nested settings patches", () =>
     Effect.gen(function* () {
@@ -117,7 +128,6 @@ it.layer(NodeServices.layer)("server settings", (it) => {
     }),
   );
 
-
   it.effect(
     "decodes legacy object-shaped textGenerationModelSelection.options from settings.json",
     () =>
@@ -137,7 +147,6 @@ it.layer(NodeServices.layer)("server settings", (it) => {
         });
       }),
   );
-
 
   it.effect("deep merges nested settings updates without dropping siblings", () =>
     Effect.gen(function* () {
@@ -209,7 +218,6 @@ it.layer(NodeServices.layer)("server settings", (it) => {
     }).pipe(Effect.provide(makeServerSettingsLayer())),
   );
 
-
   it.effect("buffers changes after a subscription is acquired but before it is consumed", () =>
     Effect.scoped(
       Effect.gen(function* () {
@@ -232,7 +240,6 @@ it.layer(NodeServices.layer)("server settings", (it) => {
       }),
     ).pipe(Effect.provide(makeServerSettingsLayer())),
   );
-
 
   it.effect("preserves model when switching providers via textGenerationModelSelection", () =>
     Effect.gen(function* () {
@@ -272,7 +279,6 @@ it.layer(NodeServices.layer)("server settings", (it) => {
     }).pipe(Effect.provide(makeServerSettingsLayer())),
   );
 
-
   it.effect("preserves custom provider instance text generation selections", () =>
     Effect.gen(function* () {
       const serverSettings = yield* ServerSettingsModule.ServerSettingsService;
@@ -297,7 +303,6 @@ it.layer(NodeServices.layer)("server settings", (it) => {
       });
     }).pipe(Effect.provide(makeServerSettingsLayer())),
   );
-
 
   it.effect(
     "uses explicit provider instance enabled state over legacy provider enabled state",
@@ -332,7 +337,6 @@ it.layer(NodeServices.layer)("server settings", (it) => {
       }).pipe(Effect.provide(makeServerSettingsLayer())),
   );
 
-
   it.effect("preserves enabled text generation selections for non-built-in drivers", () =>
     Effect.gen(function* () {
       const serverSettings = yield* ServerSettingsModule.ServerSettingsService;
@@ -359,7 +363,6 @@ it.layer(NodeServices.layer)("server settings", (it) => {
     }).pipe(Effect.provide(makeServerSettingsLayer())),
   );
 
-
   it.effect(
     "preserves the source control writer selection when its provider instance is disabled",
     () =>
@@ -368,6 +371,7 @@ it.layer(NodeServices.layer)("server settings", (it) => {
         const serverConfig = yield* ServerConfig.ServerConfig;
         const fileSystem = yield* FileSystem.FileSystem;
         const instanceId = ProviderInstanceId.make("codex_writer");
+
         const sourceControlWriterModelSelection = {
           instanceId,
           model: "gpt-5.4-mini",
@@ -416,13 +420,13 @@ it.layer(NodeServices.layer)("server settings", (it) => {
             },
           },
         });
+
         assert.deepEqual(
           restored.sourceControlWriterModelSelection,
           sourceControlWriterModelSelection,
         );
       }).pipe(Effect.provide(makeServerSettingsLayer())),
   );
-
 
   it.effect("drops stale text generation options when resetting model selection", () =>
     Effect.gen(function* () {
@@ -456,7 +460,6 @@ it.layer(NodeServices.layer)("server settings", (it) => {
       });
     }).pipe(Effect.provide(makeServerSettingsLayer())),
   );
-
 
   it.effect("replaces provider instance maps when clearing optional fields", () =>
     Effect.gen(function* () {
@@ -494,7 +497,6 @@ it.layer(NodeServices.layer)("server settings", (it) => {
       });
     }).pipe(Effect.provide(makeServerSettingsLayer())),
   );
-
 
   it.effect("trims provider path settings when updates are applied", () =>
     Effect.gen(function* () {
@@ -544,7 +546,6 @@ it.layer(NodeServices.layer)("server settings", (it) => {
     }).pipe(Effect.provide(makeServerSettingsLayer())),
   );
 
-
   it.effect("trims observability settings when updates are applied", () =>
     Effect.gen(function* () {
       const serverSettings = yield* ServerSettingsModule.ServerSettingsService;
@@ -564,7 +565,6 @@ it.layer(NodeServices.layer)("server settings", (it) => {
       });
     }).pipe(Effect.provide(makeServerSettingsLayer())),
   );
-
 
   it.effect("defaults blank binary paths to provider executables", () =>
     Effect.gen(function* () {
@@ -586,7 +586,6 @@ it.layer(NodeServices.layer)("server settings", (it) => {
     }).pipe(Effect.provide(makeServerSettingsLayer())),
   );
 
-
   it.effect("persists shared bot sandbox and browser sharing", () =>
     Effect.gen(function* () {
       const serverSettings = yield* ServerSettingsModule.ServerSettingsService;
@@ -604,12 +603,12 @@ it.layer(NodeServices.layer)("server settings", (it) => {
     }).pipe(Effect.provide(makeServerSettingsLayer())),
   );
 
-
   it.effect("writes non-default settings and explicit optional provider defaults to disk", () =>
     Effect.gen(function* () {
       const serverSettings = yield* ServerSettingsModule.ServerSettingsService;
       const serverConfig = yield* ServerConfig.ServerConfig;
       const fileSystem = yield* FileSystem.FileSystem;
+
       const next = yield* serverSettings.updateSettings({
         addProjectBaseDirectory: "~/Development",
         observability: {
@@ -664,10 +663,10 @@ it.layer(NodeServices.layer)("server settings", (it) => {
     }).pipe(Effect.provide(makeServerSettingsLayer())),
   );
 
-
   it.effect("rejects incomplete sandbox connections", () =>
     Effect.gen(function* () {
       const serverSettings = yield* ServerSettingsModule.ServerSettingsService;
+
       const error = yield* Effect.flip(
         serverSettings.updateSettings({
           sandbox: {
@@ -682,10 +681,12 @@ it.layer(NodeServices.layer)("server settings", (it) => {
           },
         }),
       );
+
       assert.deepInclude(error, {
         operation: "validate-sandbox",
         providerInstanceId: "sandbox:vercel",
         environmentVariable: "VERCEL_PROJECT_ID",
       });
     }).pipe(Effect.provide(makeServerSettingsLayer())),
-  );});
+  );
+});

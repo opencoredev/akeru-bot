@@ -4,14 +4,28 @@ import { it as effectIt } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import { describe, expect, it } from "vite-plus/test";
 import { decideCommandSequence } from "./orchestration/decider.ts";
-import { commandsForPortabilityImport, createPortabilityArchive, isPortabilityPreviewCurrent, normalizePortabilityProjectFolders, previewPortabilityImport } from "./portability.ts";
+import {
+  commandsForPortabilityImport,
+  createPortabilityArchive,
+  isPortabilityPreviewCurrent,
+  normalizePortabilityProjectFolders,
+  previewPortabilityImport,
+} from "./portability.ts";
 
-import { makeSnapshot, makeSettings, NOW, AVAILABLE_PROVIDER_IDS, PROJECT_ID, THREAD_ID, makePreflightSnapshot } from "./portabilityTestSupport.ts";
+import {
+  makeSnapshot,
+  makeSettings,
+  NOW,
+  AVAILABLE_PROVIDER_IDS,
+  PROJECT_ID,
+  THREAD_ID,
+  makePreflightSnapshot,
+} from "./portabilityTestSupport.ts";
 
 describe("portability import", () => {
-
   it("skips unmapped project records while applying independent records", () => {
     const archive = createPortabilityArchive(makeSnapshot(), makeSettings(), NOW);
+
     const target = makeSnapshot({
       projects: [],
       bots: [],
@@ -19,18 +33,21 @@ describe("portability import", () => {
       mcpServers: [],
       threads: [],
     });
+
     const preview = previewPortabilityImport(
       archive,
       target,
       makeSettings(),
       AVAILABLE_PROVIDER_IDS,
     );
+
     const plan = commandsForPortabilityImport(
       archive,
       target,
       makeSettings(),
       AVAILABLE_PROVIDER_IDS,
     );
+
     expect(
       preview.unsupported.some((item) => item.kind === "project" || item.kind === "thread"),
     ).toBe(false);
@@ -50,14 +67,15 @@ describe("portability import", () => {
     expect(plan.skipped).toBe(2);
   });
 
-
   it("creates projects and restores their threads into reviewed folders", () => {
     const source = makeSnapshot({
       projects: [{ ...makeSnapshot().projects[0]!, defaultThreadEnvMode: "worktree" }],
     });
+
     const archive = createPortabilityArchive(source, makeSettings(), NOW);
     const target = makeSnapshot({ projects: [], threads: [] });
     const projectFolders = { [PROJECT_ID]: "/tmp/restored-portable-project" };
+
     const preview = previewPortabilityImport(
       archive,
       target,
@@ -65,6 +83,7 @@ describe("portability import", () => {
       AVAILABLE_PROVIDER_IDS,
       projectFolders,
     );
+
     const plan = commandsForPortabilityImport(
       archive,
       target,
@@ -123,9 +142,9 @@ describe("portability import", () => {
     ).toBe(false);
   });
 
-
   it("skips threads when a mapped project needs a missing provider", () => {
     const sourceProject = makeSnapshot().projects[0]!;
+
     const source = makeSnapshot({
       projects: [
         {
@@ -137,9 +156,11 @@ describe("portability import", () => {
         },
       ],
     });
+
     const archive = createPortabilityArchive(source, makeSettings(), NOW);
     const target = makeSnapshot({ projects: [], threads: [] });
     const projectFolders = { [PROJECT_ID]: "/tmp/restored-portable-project" };
+
     const preview = previewPortabilityImport(
       archive,
       target,
@@ -147,6 +168,7 @@ describe("portability import", () => {
       AVAILABLE_PROVIDER_IDS,
       projectFolders,
     );
+
     const plan = commandsForPortabilityImport(
       archive,
       target,
@@ -165,10 +187,10 @@ describe("portability import", () => {
     expect(plan.commands.some((command) => command.type.startsWith("thread."))).toBe(false);
   });
 
-
   it("matches an already restored project by its imported ID", () => {
     const source = makeSnapshot();
     const archive = createPortabilityArchive(source, makeSettings(), NOW);
+
     const target = makeSnapshot({
       projects: [
         {
@@ -179,12 +201,14 @@ describe("portability import", () => {
       ],
       threads: [],
     });
+
     const preview = previewPortabilityImport(
       archive,
       target,
       makeSettings(),
       AVAILABLE_PROVIDER_IDS,
     );
+
     const plan = commandsForPortabilityImport(
       archive,
       target,
@@ -199,13 +223,13 @@ describe("portability import", () => {
     );
   });
 
-
   it("restores a deleted same-ID project under a fresh ID", () => {
     const source = makeSnapshot();
     const archive = createPortabilityArchive(source, makeSettings(), NOW);
     const deletedProject = { ...source.projects[0]!, deletedAt: NOW };
     const target = makeSnapshot({ projects: [deletedProject], threads: [] });
     const projectFolders = { [PROJECT_ID]: "/tmp/restored-after-delete" };
+
     const preview = previewPortabilityImport(
       archive,
       target,
@@ -213,6 +237,7 @@ describe("portability import", () => {
       AVAILABLE_PROVIDER_IDS,
       projectFolders,
     );
+
     const plan = commandsForPortabilityImport(
       archive,
       target,
@@ -220,6 +245,7 @@ describe("portability import", () => {
       AVAILABLE_PROVIDER_IDS,
       projectFolders,
     );
+
     const createProject = plan.commands.find((command) => command.type === "project.create");
 
     expect(preview.additions).toContainEqual(
@@ -237,9 +263,9 @@ describe("portability import", () => {
     );
   });
 
-
   effectIt.effect("preflights new project restores through the decider", () => {
     const source = makePreflightSnapshot();
+
     const target = makeSnapshot({
       projects: [],
       bots: [],
@@ -247,6 +273,7 @@ describe("portability import", () => {
       mcpServers: [],
       threads: [],
     });
+
     const commands = commandsForPortabilityImport(
       createPortabilityArchive(source, makeSettings(), NOW),
       target,
@@ -270,10 +297,10 @@ describe("portability import", () => {
     );
   });
 
-
   it("rejects unsafe project folder maps", () => {
     const firstProject = makeSnapshot().projects[0]!;
     const secondProjectId = ProjectId.make("project-second");
+
     const source = makeSnapshot({
       projects: [
         firstProject,
@@ -286,6 +313,7 @@ describe("portability import", () => {
         },
       ],
     });
+
     const archive = createPortabilityArchive(source, makeSettings(), NOW);
     const target = makeSnapshot({ projects: [], threads: [] });
 
@@ -300,4 +328,5 @@ describe("portability import", () => {
         [secondProjectId]: "/tmp/restored/",
       }),
     ).toThrow("same destination");
-  });});
+  });
+});
