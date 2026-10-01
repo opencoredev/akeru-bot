@@ -2,7 +2,7 @@
 import type { ChartValue } from "./chartValue";
 import { Predicate } from "effect";
 import { scaleBand, scaleLinear, scalePoint } from "d3-scale";
-import { stack as d3Stack, stackOffsetExpand } from "d3-shape";
+import { stack as d3Stack, stackOffsetExpand, stackOffsetNone } from "d3-shape";
 
 export type StackType = "default" | "stacked" | "percent";
 

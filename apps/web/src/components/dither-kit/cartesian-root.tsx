@@ -58,6 +58,8 @@ export type CartesianChartProps<TData extends Row> = {
 function layerOf(node: ReactNode): "back" | "dom" | "svg" {
   if (!isValidElement(node) || Predicate.isString(node.type)) return "svg";
 
+  if (!(Predicate.isObject(node.type) || Predicate.isFunction(node.type))) return "svg";
+
   return "chartLayer" in node.type &&
     (node.type.chartLayer === "back" || node.type.chartLayer === "dom")
     ? node.type.chartLayer

@@ -72,7 +72,7 @@ function InputGroupAddon({
       onMouseDown={(e) => {
         const target = e.target;
 
-        if (!(target instanceof HTMLElement)) return;
+        if (!(target instanceof Element)) return;
 
         const isInteractive = target.closest(
           "button, a, input, select, textarea, [role='button'], [role='combobox'], [role='listbox'], [data-slot='select-trigger']",
