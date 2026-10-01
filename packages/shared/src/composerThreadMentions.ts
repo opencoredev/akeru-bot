@@ -118,7 +118,11 @@ export function buildThreadMentionExcerpt(source: ThreadMentionSource): string {
   const lines: string[] = [];
   let remaining = THREAD_MENTION_MAX_CHARS;
 
-  for (const message of source.messages.toReversed()) {
+  for (let index = source.messages.length - 1; index >= 0; index--) {
+    const message = source.messages[index];
+
+    if (message === undefined) continue;
+
     if (message.role === "system") continue;
     const body = message.text.trim();
 
@@ -135,8 +139,18 @@ export function buildThreadMentionExcerpt(source: ThreadMentionSource): string {
     remaining -= line.length + 1;
   }
 
+  const chronologicalLines: string[] = [];
+
+  for (let index = lines.length - 1; index >= 0; index--) {
+    const line = lines[index];
+
+    if (line !== undefined) chronologicalLines.push(line);
+  }
+
   const body =
-    lines.length > 0 ? lines.toReversed().join("\n") : "(This chat has no messages yet.)";
+    chronologicalLines.length > 0
+      ? chronologicalLines.join("\n")
+      : "(This chat has no messages yet.)";
 
   return `<chat_context id="${escapeAttribute(source.id)}" title="${escapeAttribute(source.title)}">\n${body}\n</chat_context>`;
 }

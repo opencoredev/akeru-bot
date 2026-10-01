@@ -109,8 +109,24 @@ describe("buildThreadMentionExcerpt", () => {
     const excerpt = buildThreadMentionExcerpt({ id: "t1", title: "Plan", messages });
     const body = excerpt.split("\n").slice(1, -1).join("\n");
     expect(body.length).toBeLessThanOrEqual(THREAD_MENTION_MAX_CHARS);
+    expect(excerpt).toContain("message 28");
     expect(excerpt).toContain("message 29");
     expect(excerpt).not.toContain("message 0 ");
+    expect(body.indexOf("message 28")).toBeLessThan(body.indexOf("message 29"));
+  });
+
+  it("uses the empty-chat fallback when no messages have visible text", () => {
+    for (const messages of [
+      [],
+      [
+        { role: "system" as const, text: "hidden" },
+        { role: "user" as const, text: "  " },
+      ],
+    ]) {
+      expect(buildThreadMentionExcerpt({ id: "t1", title: "Plan", messages })).toBe(
+        '<chat_context id="t1" title="Plan">\n(This chat has no messages yet.)\n</chat_context>',
+      );
+    }
   });
 
   it("skips system messages, labels speakers, and escapes the title", () => {
