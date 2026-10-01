@@ -96,6 +96,11 @@
   --color-update: var(--update);
   --color-update-surface: var(--update-surface);
   --color-success-foreground: var(--success-foreground);
+  --color-success-indicator-foreground: var(--success-indicator-foreground);
+  --color-success-bright-foreground: var(--success-bright-foreground);
+  --color-warning-bright-foreground: var(--warning-bright-foreground);
+  --color-favorite-foreground: var(--favorite-foreground);
+  --color-favorite-hover-foreground: var(--favorite-hover-foreground);
   --color-success: var(--success);
   --color-info-foreground: var(--info-foreground);
   --color-info: var(--info);

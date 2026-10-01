@@ -30,11 +30,15 @@ export function BotZeroState() {
   const handleCreate = async ({ name, avatar }: { name: string; avatar: BotAvatar }) => {
     // A second submit before the first resolves would create a second bot.
     if (creating) return;
+
     if (environmentId === null) {
       toastManager.add({ type: "error", title: t("Connect an environment first") });
+
       return;
     }
+
     setCreating(true);
+
     const result = await createBot({
       environmentId,
       input: {
@@ -51,11 +55,15 @@ export function BotZeroState() {
         groupId: null,
       },
     });
+
     setCreating(false);
+
     if (result._tag === "Failure") {
       toastManager.add({ type: "error", title: t("Could not create bot") });
+
       return;
     }
+
     // The roster route watches for the new bot and opens its chat.
     setOpen(false);
   };

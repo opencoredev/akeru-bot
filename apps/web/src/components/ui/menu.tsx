@@ -40,6 +40,7 @@ function MenuPopup({
     typeof className === "string" &&
     className.split(/\s+/).some((classToken) => {
       const utility = classToken.split(":").at(-1) ?? classToken;
+
       return /^(?:min-|max-)?w-/.test(utility);
     });
 

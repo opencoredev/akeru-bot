@@ -19,6 +19,7 @@ const mocks = vi.hoisted(() => ({
 // Hooks run outside a renderer so the element tree exposes each button handler.
 vi.mock("react", async (importOriginal) => {
   const actual = await importOriginal<typeof import("react")>();
+
   return {
     ...actual,
     useMemo: <T,>(factory: () => T) => factory(),
@@ -28,16 +29,22 @@ vi.mock("react", async (importOriginal) => {
     ],
   };
 });
+
 vi.mock("@effect/atom-react", () => ({
   useAtomValue: () => [{ id: "bot-grace", name: "Grace" }],
 }));
+
 vi.mock("../../i18n", async () => {
   const { createTranslator } = await import("@akeru/client-runtime/i18n");
   const translator = createTranslator("en");
+
   return { useI18n: () => ({ ...translator, t: translator.translate }) };
 });
+
 vi.mock("../../state/bots", () => ({ environmentBotsAtom: () => Symbol("bots") }));
+
 vi.mock("../../state/memory", () => ({ memoryEnvironment: { mutateFact: Symbol("mutate") } }));
+
 vi.mock("../../state/use-atom-command", () => ({ useAtomCommand: () => mocks.mutateFact }));
 
 import { Button } from "../ui/button";
@@ -57,15 +64,21 @@ type TextareaElement = ReactElement<{
 
 function textarea(node: ReactNode): TextareaElement | undefined {
   if (Array.isArray(node)) return node.map(textarea).find(Boolean);
+
   if (!isValidElement<{ children?: ReactNode }>(node)) return undefined;
+
   if (node.type === Textarea) return node as TextareaElement;
+
   return textarea(node.props.children);
 }
 
 function buttons(node: ReactNode): ButtonElement[] {
   if (Array.isArray(node)) return node.flatMap(buttons);
+
   if (!isValidElement<{ children?: ReactNode }>(node)) return [];
+
   if (node.type === Button) return [node as ButtonElement];
+
   return buttons(node.props.children);
 }
 
@@ -103,6 +116,7 @@ describe("MemoryApprovalPrompt", () => {
         currentBotId="bot-ada"
       />,
     );
+
     expect(markup).toContain('data-testid="memory-approval-prompt"');
     expect(markup).toContain("Save to project memory?");
     expect(markup).toContain("Sensitive, always needs approval");
@@ -123,6 +137,7 @@ describe("MemoryApprovalPrompt", () => {
           currentBotId="bot-ada"
         />,
       );
+
     expect(render("bot-grace")).toContain("Grace wants to save this");
     expect(render("bot-missing")).toContain("A bot wants to save this");
     expect(render(null)).toContain("A bot wants to save this");
@@ -146,6 +161,7 @@ describe("MemoryApprovalPrompt", () => {
       approvals: [approval("candidate-1")],
       currentBotId: "bot-ada",
     });
+
     const target = buttons(tree).find((item) => item.props.children === label);
     expect(target).toBeDefined();
     target?.props.onClick();
@@ -163,18 +179,22 @@ describe("MemoryApprovalPrompt", () => {
     const escape = (isComposing: boolean) => {
       mocks.states = [{ candidateId: "candidate-1", fact: "Deploys happen on Mondays." }];
       mocks.setState.mockClear();
+
       const tree = MemoryApprovalPrompt({
         threadRef,
         approvals: [approval("candidate-1")],
         currentBotId: "bot-ada",
       });
+
       const event = {
         key: "Escape",
         nativeEvent: { isComposing },
         preventDefault: vi.fn(),
         stopPropagation: vi.fn(),
       };
+
       textarea(tree)?.props.onKeyDown(event);
+
       return event;
     };
 

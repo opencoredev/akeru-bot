@@ -20,6 +20,7 @@ describe("resolveSelectedThemeCardId", () => {
       lightOwner: null,
       darkOwner: "akeru-paper",
     };
+
     expect(resolveSelectedThemeCardId({ ...input, appearanceMode: "dark" })).toBe("akeru-paper");
     expect(resolveSelectedThemeCardId({ ...input, appearanceMode: "system" })).toBe("akeru-paper");
   });

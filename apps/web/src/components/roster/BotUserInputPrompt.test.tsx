@@ -9,6 +9,7 @@ import { BotUserInputPrompt } from "./BotUserInputPrompt";
 vi.mock("../../i18n", async () => {
   const { createTranslator } = await import("@akeru/client-runtime/i18n");
   const translator = createTranslator("en");
+
   return { useI18n: () => ({ ...translator, t: translator.translate }) };
 });
 
@@ -53,6 +54,7 @@ describe("BotUserInputPrompt", () => {
   it("uses one callback for single-select answers", () => {
     const onToggleOption = vi.fn();
     const onSelectSingleOption = vi.fn();
+
     const element = BotUserInputPrompt({
       pendingUserInputs: [prompt],
       respondingRequestIds: [],
@@ -62,12 +64,15 @@ describe("BotUserInputPrompt", () => {
       onSelectSingleOption,
       onAdvance: vi.fn(),
     });
+
     if (!element) throw new TypeError("Expected an unanswered prompt.");
+
     const panel = (
       element.props.children as ReactElement<{
         onSelectSingleOption?: (questionId: string, optionLabel: string) => void;
       }>[]
     )[0];
+
     if (!panel) throw new TypeError("Expected a question panel.");
 
     expect(panel.props.onSelectSingleOption).toBe(onSelectSingleOption);

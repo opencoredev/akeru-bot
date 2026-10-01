@@ -47,12 +47,12 @@ export function BotSideSheet({
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetPopup side="right" forceBackdrop className={cn("max-w-lg", className)}>
-        <SheetHeader className="gap-1 border-b px-6 pt-5 pb-4 pe-12">
-          <SheetTitle className="text-base leading-6">{title}</SheetTitle>
+        <SheetHeader variant="compact">
+          <SheetTitle variant="compact">{title}</SheetTitle>
           <SheetDescription>{description}</SheetDescription>
           {toolbar ? <div className="mt-3">{toolbar}</div> : null}
         </SheetHeader>
-        <SheetPanel className="px-6 pb-6">
+        <SheetPanel variant="compact">
           <div className="space-y-6 pt-4">{children}</div>
         </SheetPanel>
         {footer ? <SheetFooter>{footer}</SheetFooter> : null}
@@ -109,7 +109,9 @@ export function BotSideSheetEmpty({
         <EmptyMedia variant="icon" className="mb-4">
           <Icon />
         </EmptyMedia>
-        <EmptyTitle className="font-sans text-sm font-medium">{title}</EmptyTitle>
+        <EmptyTitle variant="body" className="text-sm">
+          {title}
+        </EmptyTitle>
         <EmptyDescription>{description}</EmptyDescription>
       </EmptyHeader>
       {action ? <EmptyContent>{action}</EmptyContent> : null}

@@ -51,9 +51,12 @@ export const PLAN_PROVIDER_ORDER: readonly LiveSubscriptionProviderId[] = [
 function formatReset(resetsAt: string | null): string {
   if (resetsAt === null) return "Reset time unknown";
   const deltaMs = Date.parse(resetsAt) - Date.now();
+
   if (Number.isNaN(deltaMs) || deltaMs <= 0) return "Resets soon";
   const hours = Math.round(deltaMs / (60 * 60 * 1000));
+
   if (hours < 48) return `Resets in ${hours}h`;
+
   return `Resets in ${Math.round(hours / 24)}d`;
 }
 
@@ -64,17 +67,21 @@ function remainingPercent(window: UsagePlanWindow): number {
 function ProviderMark({ icon }: { readonly icon: Icon | string }) {
   if (typeof icon !== "string") {
     const Mark = icon;
+
     return <Mark className="size-4 shrink-0" />;
   }
+
   return <img src={icon} alt="" className="size-4 shrink-0 brightness-0 dark:invert" />;
 }
 
 export function UsagePlanMeters(props: { readonly limits: UsageProviderPlanLimits }) {
   const presentation = PLAN_PROVIDER_PRESENTATION[props.limits.provider];
+
   const title =
     props.limits.plan === null
       ? presentation.label
       : `${presentation.label} · ${props.limits.plan}`;
+
   return (
     <section className="flex min-w-0 flex-col gap-3">
       <h2 className="flex items-center gap-2 px-1 text-sm font-medium text-foreground">
@@ -89,6 +96,7 @@ export function UsagePlanMeters(props: { readonly limits: UsageProviderPlanLimit
         <div className="divide-y divide-border/60 overflow-hidden rounded-xl border border-border/70">
           {props.limits.windows.map((window) => {
             const left = remainingPercent(window);
+
             return (
               <div
                 key={`${window.kind}:${window.label}`}
@@ -108,10 +116,12 @@ export function UsagePlanMeters(props: { readonly limits: UsageProviderPlanLimit
                 >
                   <div
                     className="absolute inset-y-0 start-0 rounded-md opacity-75"
+                    /* oxlint-disable shadcn/no-inline-styles -- Remaining-share width and provider palette color are runtime data. */
                     style={{
                       width: `${left}%`,
                       backgroundColor: `var(--color-${presentation.color}-500, var(--foreground))`,
                     }}
+                    /* oxlint-enable shadcn/no-inline-styles */
                   />
                   <div className="absolute inset-0 bg-[repeating-linear-gradient(135deg,transparent_0,transparent_4px,var(--border)_4px,var(--border)_5px)] opacity-30" />
                 </div>
@@ -148,14 +158,18 @@ export function UsageActivityChart(props: {
   const active = providersWithUsage(props.providers);
   const days = enumerateDays(props.sinceDay, props.untilDay);
   const byDay = new Map(props.daily.map((entry) => [entry.day, entry]));
+
   const data = days.map((day) => {
     const totals = byDay.get(day);
     const row: Record<string, string | number> = { label: formatDayShort(day) };
+
     for (const provider of PROVIDER_ORDER) {
       row[provider] = totals?.byProvider.get(provider)?.totalTokens ?? 0;
     }
+
     return row;
   });
+
   const config = Object.fromEntries(
     active.map((provider) => [
       provider,

@@ -14,21 +14,27 @@ const controls = vi.hoisted(() => ({
 
 vi.mock("../ui/button", async () => {
   const React = await import("react");
+
   return {
     Button: ({ children, onClick, ...props }: React.ComponentProps<"button">) => {
       const label = React.Children.toArray(children)
         .filter((child): child is string => typeof child === "string")
         .join("")
         .trim();
+
       controls.buttons.push({ label, ...(onClick ? { onClick: () => onClick({} as never) } : {}) });
+
       return React.createElement("button", { ...props, onClick }, children);
     },
   };
 });
+
 vi.mock("../ui/sheet", async () => {
   const React = await import("react");
+
   const Wrapper = ({ children }: { readonly children?: React.ReactNode }) =>
     React.createElement("div", null, children);
+
   return {
     Sheet: Wrapper,
     SheetDescription: Wrapper,
@@ -39,6 +45,7 @@ vi.mock("../ui/sheet", async () => {
     SheetTitle: Wrapper,
   };
 });
+
 vi.mock("../../state/memory", () => ({
   memoryEnvironment: {
     inspectDocuments: controls.inspect,
@@ -48,8 +55,11 @@ vi.mock("../../state/memory", () => ({
     clearObservations: "clear-observations",
   },
 }));
+
 vi.mock("../../state/query", () => ({ useEnvironmentQuery: controls.query }));
+
 vi.mock("../../state/use-atom-command", () => ({ useAtomCommand: () => controls.mutate }));
+
 vi.mock("../ui/toast", () => ({ toastManager: { add: controls.toast } }));
 
 import { BotMemorySheet } from "./BotMemorySheet";
@@ -71,6 +81,7 @@ describe("BotMemorySheet", () => {
       if (input === "list-facts") {
         return { data: { facts: [] }, error: null, isPending: false, refresh: vi.fn() };
       }
+
       return {
         data: {
           botId: "bot-1",
@@ -127,6 +138,7 @@ describe("BotMemorySheet", () => {
         },
       }),
     );
+
     expect(markup).toContain("Thread observation");
     expect(markup).toContain("Condensed 2 times to stay short.");
     expect(markup).toContain("About you");

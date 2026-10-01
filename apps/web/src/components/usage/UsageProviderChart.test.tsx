@@ -18,6 +18,7 @@ describe("UsageProviderChart", () => {
         timeZone="UTC"
       />,
     );
+
     expect(markup).toContain("No activity in this window.");
     expect(markup).not.toContain("<svg");
   });

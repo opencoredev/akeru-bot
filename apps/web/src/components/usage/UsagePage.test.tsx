@@ -9,15 +9,19 @@ const testState = vi.hoisted(() => ({
 }));
 
 vi.mock("../../state/usage", () => ({ useUsage: testState.useUsage }));
+
 vi.mock("../ui/button", () => ({ Button: "button" }));
+
 vi.mock("../ui/dialog", () => ({
   DialogHeader: "header",
   DialogPanel: "div",
   DialogTitle: "h1",
   DialogClose: (props: { children?: ReactNode }) => <button type="button">{props.children}</button>,
 }));
+
 vi.mock("./UsageCharts", async (importOriginal) => {
   const actual = await importOriginal<typeof import("./UsageCharts")>();
+
   return {
     ...actual,
     UsagePlanMeters: (props: {
@@ -233,6 +237,7 @@ describe("UsagePage", () => {
 
   it("does not show machine-wide transcript costs when no provider is connected", () => {
     saveUsagePagePreferences({ metric: "cost", windowDays: 30 });
+
     const summary = {
       contractVersion: USAGE_CONTRACT_VERSION,
       readAt: "2026-09-13T00:00:00.000Z",
@@ -280,6 +285,7 @@ describe("UsagePage", () => {
       pricing: { status: "fresh" as const, source: "litellm", fetchedAt: null, knownModels: 1 },
       scanDurationMs: 1,
     };
+
     testState.useUsage.mockReturnValue({
       merged: mergeUsage(
         [{ environmentId: EnvironmentId.make("env-1"), label: "This Mac", summary }],
@@ -307,6 +313,7 @@ describe("UsagePage", () => {
 
   it("explains stale environment coverage before suggesting a provider connection", () => {
     saveUsagePagePreferences({ metric: "cost", windowDays: 30 });
+
     const staleSummary = {
       contractVersion: USAGE_CONTRACT_VERSION - 1,
       readAt: "2026-09-13T00:00:00.000Z",
@@ -320,6 +327,7 @@ describe("UsagePage", () => {
       pricing: { status: "fresh" as const, source: "litellm", fetchedAt: null, knownModels: 1 },
       scanDurationMs: 1,
     };
+
     testState.useUsage.mockReturnValue({
       merged: mergeUsage(
         [

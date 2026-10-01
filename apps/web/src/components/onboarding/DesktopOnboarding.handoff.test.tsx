@@ -14,6 +14,7 @@ import {
 } from "./desktopOnboarding.logic";
 
 const BOT_ID = "bot-ada";
+
 const HANDOFF = JSON.stringify({ environmentId: "onboarding-environment", botId: BOT_ID });
 
 const mocks = vi.hoisted(() => ({
@@ -31,40 +32,55 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("../../env", () => ({ isElectron: true }));
+
 vi.mock("@tanstack/react-router", () => ({ useNavigate: () => mocks.navigate }));
+
 vi.mock("@effect/atom-react", () => ({
   useAtomValue: (atom: string) => {
     if (atom === "shell") return { status: "live" };
+
     if (atom === "rosterLoaded") return mocks.rosterLoaded;
+
     if (atom === "bots") return mocks.serverBots;
+
     return [];
   },
 }));
+
 vi.mock("../../state/bots", () => ({
   botEnvironment: { create: "create" },
   environmentBotsAtom: () => "bots",
   environmentRosterLoadedAtom: () => "rosterLoaded",
 }));
+
 vi.mock("../ui/toast", () => ({ toastManager: { add: mocks.toast } }));
+
 vi.mock("../../state/environments", () => ({
   usePrimaryEnvironmentId: () => mocks.environmentId,
 }));
+
 vi.mock("../../state/shell", () => ({
   environmentShell: { stateValueAtom: () => "shell" },
 }));
+
 vi.mock("../../state/server", () => ({
   serverEnvironment: { providersValueAtom: () => "providers" },
 }));
+
 vi.mock("../../state/query", () => ({ useEnvironmentQuery: () => ({}) }));
+
 vi.mock("../../state/use-atom-command", () => ({ useAtomCommand: () => vi.fn() }));
+
 vi.mock("../roster/rosterStore", () => {
   const state = { bots: [{ id: "bot-ada", engine: null }] };
+
   return {
     useRosterStore: Object.assign((select: (value: typeof state) => unknown) => select(state), {
       getState: () => ({ selectBot: mocks.selectBot }),
     }),
   };
 });
+
 vi.mock("motion/react", () => {
   const Div = forwardRef<HTMLDivElement, Record<string, unknown>>(
     ({ initial: _i, animate: _a, exit: _e, transition: _t, children, ...rest }, ref) => (
@@ -73,33 +89,43 @@ vi.mock("motion/react", () => {
       </div>
     ),
   );
+
   return {
     AnimatePresence: ({ children }: { children?: ReactNode }) => children,
     motion: { div: Div },
     useReducedMotion: () => false,
   };
 });
+
 vi.mock("react-dom", async (importOriginal) => ({
   ...(await importOriginal<typeof import("react-dom")>()),
   createPortal: (node: ReactNode) => node,
 }));
+
 vi.mock("./OnboardingPreview", () => ({
   OnboardingPreview: (props: ComponentProps<typeof OnboardingPreview>) => {
     mocks.preview = props;
     useEffect(() => {
       mocks.previewMounted = true;
+
       return () => {
         mocks.previewMounted = false;
       };
     }, []);
+
     return null;
   },
 }));
+
 vi.mock("./OnboardingGoalStep", () => ({ OnboardingGoalStep: () => null }));
+
 vi.mock("../settings/ProvidersPanel", () => ({ ProviderApiKeyForm: () => null }));
+
 vi.mock("../ui/button", () => ({ Button: () => null }));
+
 vi.mock("../ui/alert-dialog", () => {
   const Empty = () => null;
+
   return {
     AlertDialog: Empty,
     AlertDialogClose: Empty,
@@ -135,16 +161,19 @@ class TestNode {
   appendChild(child: TestNode) {
     child.parentNode = this;
     this.childNodes.push(child);
+
     return child;
   }
   removeChild(child: TestNode) {
     this.childNodes.splice(this.childNodes.indexOf(child), 1);
     child.parentNode = null;
+
     return child;
   }
   insertBefore(child: TestNode, before: TestNode) {
     child.parentNode = this;
     this.childNodes.splice(this.childNodes.indexOf(before), 0, child);
+
     return child;
   }
   createElement(name: string) {
@@ -166,11 +195,13 @@ class TestNode {
 }
 
 let root: Root;
+
 let storage: Map<string, string>;
 
 function mount() {
   const document = window.document as unknown as TestNode;
   root = createRoot(document.createElement("div") as unknown as Element);
+
   return act(async () => root.render(<DesktopOnboarding />));
 }
 

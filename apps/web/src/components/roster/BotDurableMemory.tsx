@@ -46,16 +46,20 @@ interface BotDurableMemoryProps {
  */
 export function BotDurableMemory(props: BotDurableMemoryProps) {
   const primaryEnvironmentId = usePrimaryEnvironmentId();
+
   if (props.threadRef.environmentId !== primaryEnvironmentId) {
     return <RemoteBotDurableMemory {...props} />;
   }
+
   // The desktop app owns its primary server outright.
   if (isElectron) return <DurableFactsSection {...props} access="granted" />;
+
   return <PrimaryBotDurableMemory {...props} />;
 }
 
 function PrimaryBotDurableMemory(props: BotDurableMemoryProps) {
   const session = usePrimarySessionState();
+
   const access = resolvePrimaryOperateAccess({
     isPrimary: true,
     hasDesktopBridge: false,
@@ -63,16 +67,19 @@ function PrimaryBotDurableMemory(props: BotDurableMemoryProps) {
     isPending: session.isPending,
     hasError: session.error !== null,
   });
+
   return <DurableFactsSection {...props} access={access} />;
 }
 
 function RemoteBotDurableMemory(props: BotDurableMemoryProps) {
   const session = useEnvironmentSessionState(props.threadRef.environmentId);
+
   const access = resolveRemoteOperateAccess({
     session: session.data,
     isPending: session.isPending,
     hasError: session.hasError,
   });
+
   return <DurableFactsSection {...props} access={access} />;
 }
 
@@ -83,6 +90,7 @@ function DurableFactsSection({
 }: BotDurableMemoryProps & { readonly access: OperateAccess }) {
   const { t } = useI18n();
   const memory = useEnvironmentSettings(threadRef.environmentId, (settings) => settings.memory);
+
   const policy = useMemo(
     () => ({
       canOperate: access === "granted",
@@ -91,11 +99,14 @@ function DurableFactsSection({
     }),
     [access, memory.enabled, memory.privateBotMemory],
   );
+
   // Pending access hides actions without a reason; they appear once it resolves.
   const readOnlyReason =
     access === "pending" && memory.enabled ? null : durableFactReadOnlyReason(policy);
+
   const threadShells = useThreadShells();
   const bots = useAtomValue(environmentBotsAtom(threadRef.environmentId));
+
   const threadTitles = useMemo(
     () =>
       new Map(
@@ -105,15 +116,19 @@ function DurableFactsSection({
       ),
     [threadShells, threadRef.environmentId],
   );
+
   const botNames = useMemo(() => new Map(bots.map((bot) => [bot.id as string, bot.name])), [bots]);
   const [scope, setScope] = useState<DurableMemoryExportScope>("bot");
   const [busyRootId, setBusyRootId] = useState<string | null>(null);
   const [editing, setEditing] = useState<DurableFactEditing | null>(null);
   const [confirmingDeleteRootId, setConfirmingDeleteRootId] = useState<string | null>(null);
+
   const [failure, setFailure] = useState<ReturnType<typeof describeDurableFactFailure> | null>(
     null,
   );
+
   const mutateFact = useAtomCommand(memoryEnvironment.mutateFact, { reportFailure: false });
+
   const query = useEnvironmentQuery(
     memoryEnvironment.listFacts({
       environmentId: threadRef.environmentId,
@@ -125,21 +140,27 @@ function DurableFactsSection({
     setEditing(null);
     setConfirmingDeleteRootId(null);
   };
+
   const runIntent = async (fact: DurableMemoryFact, intent: DurableFactIntent) => {
     setBusyRootId(fact.rootId);
     setFailure(null);
+
     try {
       const result = await mutateFact({
         environmentId: threadRef.environmentId,
         input: { threadId: threadRef.threadId, mutation: durableFactMutation(fact, intent) },
       });
+
       if (result._tag === "Failure") {
         const described = describeDurableFactFailure(squashAtomCommandFailure(result));
         setFailure(described);
+
         // A stale edit would overwrite the newer text, so drop it with the old revision.
         if (described.conflict) resetDrafts();
+
         return;
       }
+
       resetDrafts();
     } finally {
       setBusyRootId(null);

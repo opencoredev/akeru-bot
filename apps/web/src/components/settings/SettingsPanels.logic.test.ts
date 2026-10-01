@@ -209,6 +209,7 @@ describe("formatDiagnosticsDescription", () => {
 describe("buildProviderInstanceUpdatePatch", () => {
   it("promotes an edited default provider into providerInstances and resets the legacy provider", () => {
     const instanceId = ProviderInstanceId.make("codex");
+
     const nextInstance = {
       driver: ProviderDriverKind.make("codex"),
       enabled: true,
@@ -240,6 +241,7 @@ describe("buildProviderInstanceUpdatePatch", () => {
 
   it("updates custom instances without touching legacy provider settings", () => {
     const instanceId = ProviderInstanceId.make("codex_personal");
+
     const nextInstance = {
       driver: ProviderDriverKind.make("codex"),
       enabled: true,

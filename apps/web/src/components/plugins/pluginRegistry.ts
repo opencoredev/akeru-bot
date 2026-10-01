@@ -16,6 +16,7 @@ export function findPluginServer(
   servers: readonly McpServer[],
 ): McpServer | undefined {
   const id = pluginMcpServerId(plugin);
+
   return servers.find((server) => server.id === id);
 }
 
@@ -23,6 +24,7 @@ export function pluginMcpConfiguration(plugin: PluginDefinition): McpServerConfi
   if (plugin.kind === "mcp-url") {
     return { name: plugin.title, transport: "url", url: plugin.url };
   }
+
   return {
     name: plugin.title,
     transport: "stdio",
@@ -45,9 +47,11 @@ export function planPluginToggle(
   enabled: boolean,
 ): PluginTogglePlan {
   const mcpServerId = pluginMcpServerId(plugin);
+
   if (!findPluginServer(plugin, servers)) {
     return { action: "create", mcpServerId, configuration: pluginMcpConfiguration(plugin) };
   }
+
   return enabled
     ? {
         action: "refresh-and-enable",

@@ -10,6 +10,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock("../ui/button", () => ({
   Button: (props: { children: ReactNode; onClick?: () => void }) => {
     if (typeof props.children === "string") mocks.buttons.set(props.children, props);
+
     return null;
   },
 }));
@@ -66,6 +67,7 @@ describe("ProviderModelsSection bulk visibility control", () => {
         onModelOrderChange: vi.fn(),
       }),
     );
+
     return { onHiddenModelsChange };
   }
 

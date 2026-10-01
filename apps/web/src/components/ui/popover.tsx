@@ -8,9 +8,35 @@ const PopoverCreateHandle = PopoverPrimitive.createHandle;
 
 const Popover = PopoverPrimitive.Root;
 
-function PopoverTrigger({ className, children, ...props }: PopoverPrimitive.Trigger.Props) {
+const POPOVER_POPUP_VARIANT_CLASSES = {
+  default: undefined,
+  // Edge-to-edge picker surface: no viewport padding, so the picker owns its layout.
+  "color-picker":
+    "rounded-2xl border border-border/70 p-0 shadow-2xl [--viewport-inline-padding:0px] [&_[data-slot=popover-viewport]]:p-0",
+  "accent-picker":
+    "rounded-md p-0 [--viewport-inline-padding:0px] [&_[data-slot=popover-viewport]]:p-0",
+} as const;
+
+function PopoverTrigger({
+  className,
+  children,
+  variant,
+  revealOnHover = false,
+  ...props
+}: PopoverPrimitive.Trigger.Props & { variant?: "keybinding-condition"; revealOnHover?: boolean }) {
   return (
-    <PopoverPrimitive.Trigger className={className} data-slot="popover-trigger" {...props}>
+    <PopoverPrimitive.Trigger
+      className={cn(
+        variant === "keybinding-condition" &&
+          "inline-flex h-6 max-w-full min-w-0 items-center gap-1 rounded-md px-1.5 text-left text-[12px] text-muted-foreground outline-none transition-colors hover:bg-accent/60 hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/24 data-[popup-open]:bg-accent/60 data-[popup-open]:text-foreground",
+        variant === "keybinding-condition" &&
+          revealOnHover &&
+          "opacity-0 group-hover/row:opacity-100 focus-visible:opacity-100 data-[popup-open]:opacity-100",
+        className,
+      )}
+      data-slot="popover-trigger"
+      {...props}
+    >
       {children}
     </PopoverPrimitive.Trigger>
   );
@@ -20,21 +46,26 @@ function PopoverPopup({
   children,
   className,
   viewportClassName,
+  viewportPadding = "default",
   side = "bottom",
   align = "center",
   sideOffset = 4,
   alignOffset = 0,
   tooltipStyle = false,
   anchor,
+  variant = "default",
   ...props
 }: PopoverPrimitive.Popup.Props & {
   viewportClassName?: string;
+  /** `none` lets edge-to-edge content, such as a color picker, fill the popup. */
+  viewportPadding?: "default" | "none";
   side?: PopoverPrimitive.Positioner.Props["side"];
   align?: PopoverPrimitive.Positioner.Props["align"];
   sideOffset?: PopoverPrimitive.Positioner.Props["sideOffset"];
   alignOffset?: PopoverPrimitive.Positioner.Props["alignOffset"];
   tooltipStyle?: boolean;
   anchor?: PopoverPrimitive.Positioner.Props["anchor"];
+  variant?: keyof typeof POPOVER_POPUP_VARIANT_CLASSES;
 }) {
   return (
     <PopoverPrimitive.Portal>
@@ -54,6 +85,7 @@ function PopoverPopup({
               "w-fit text-balance rounded-md text-xs shadow-md/5 before:rounded-[calc(var(--radius-md)-1px)]",
             !tooltipStyle &&
               "shadow-[0_16px_40px_-18px_rgb(0_0_0/55%)] dark:shadow-[0_18px_44px_-18px_rgb(0_0_0/80%)]",
+            POPOVER_POPUP_VARIANT_CLASSES[variant],
             className,
           )}
           data-slot="popover-popup"
@@ -65,6 +97,7 @@ function PopoverPopup({
               tooltipStyle
                 ? "py-1 [--viewport-inline-padding:--spacing(2)]"
                 : "not-data-transitioning:overflow-y-auto",
+              viewportPadding === "none" && "p-0 [--viewport-inline-padding:0px]",
               viewportClassName,
             )}
             data-slot="popover-viewport"

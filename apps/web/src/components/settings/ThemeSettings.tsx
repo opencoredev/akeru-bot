@@ -1,15 +1,5 @@
-import {
-  CheckIcon,
-  CopyIcon,
-  MoonIcon,
-  PaintbrushIcon,
-  PenLineIcon,
-  PlusIcon,
-  SunIcon,
-  Trash2Icon,
-  UploadIcon,
-} from "lucide-react";
-import { useCallback, useEffect, useState, type ReactElement } from "react";
+import { CheckIcon, PaintbrushIcon, PlusIcon } from "lucide-react";
+import { useCallback, useState } from "react";
 import { cn } from "../../lib/utils";
 import {
   BUILT_IN_THEMES,
@@ -32,56 +22,36 @@ import {
 } from "../ui/alert-dialog";
 import { Button } from "../ui/button";
 import { stackedThreadToast, toastManager } from "../ui/toast";
-import { Tooltip, TooltipPopup, TooltipProvider, TooltipTrigger } from "../ui/tooltip";
+import { TooltipProvider } from "../ui/tooltip";
 import { SettingsSection } from "./settingsLayout";
 import { searchableSetting } from "./settingsSearch";
 import { ThemeImportDialog } from "./ThemeImportDialog";
 import { useThemeEditorStore } from "./themeEditorStore";
 import {
+  groupCustomThemeCollections,
+  resolveSelectedThemeCardId,
+  standardThemePreference,
+} from "./themeLibrary.logic";
+import { CustomThemeCollectionCard, ThemeLibraryCard } from "./ThemeLibraryCards";
+import {
   STANDARD_THEME_CARDS,
   getThemeCardDefinition,
   previewColorsOf,
-  ThemePreviewCircles,
   ThemePreviewCircle,
   type ThemeCardDefinition,
   type ThemeMode,
 } from "./ThemePreviewCircles";
 import { ThemeWireframe } from "./ThemeWireframe";
 
+export { resolveSelectedThemeCardId, standardThemePreference } from "./themeLibrary.logic";
+
 const MAINTAINER_THEMES: ReadonlyArray<ThemeDefinition> = BUILT_IN_THEMES;
 
-export function resolveSelectedThemeCardId(input: {
-  readonly appearanceMode: ThemeMode;
-  readonly initialAppearance: ThemeAppearance;
-  readonly lightOwner: string | null;
-  readonly darkOwner: string | null;
-}): string | null {
-  if (input.appearanceMode === "dark") return input.darkOwner;
-  if (input.appearanceMode === "light") return input.lightOwner;
-  return input.initialAppearance === "dark" ? input.darkOwner : input.lightOwner;
-}
-
-export function standardThemePreference(
-  appearanceMode: ThemeMode,
-  initialAppearance: ThemeAppearance,
-): ThemeMode {
-  return appearanceMode === "system" ? initialAppearance : appearanceMode;
-}
-
-function collectionVariantLabels(themes: ReadonlyArray<ThemeDefinition>): ReadonlyArray<string> {
-  if (themes.length === 0) return [];
-  const words = themes.map((theme) => theme.label.trim().split(/\s+/));
-  const firstWords = words[0]!;
-  const sharedWordCount = firstWords.findIndex((word, index) =>
-    words.some((labelWords) => labelWords[index]?.toLocaleLowerCase() !== word.toLocaleLowerCase()),
-  );
-  const prefixLength = sharedWordCount === -1 ? firstWords.length - 1 : sharedWordCount;
-
-  return themes.map((theme, index) => {
-    const shortLabel = words[index]?.slice(Math.max(0, prefixLength)).join(" ").trim();
-    return shortLabel || theme.label;
-  });
-}
+const THEME_MODE_LABELS: Record<ThemeMode, string> = {
+  system: "System",
+  light: "Light",
+  dark: "Dark",
+};
 
 function downloadThemeFile(filename: string, contents: string): void {
   const url = URL.createObjectURL(new Blob([contents], { type: "application/json" }));
@@ -92,419 +62,6 @@ function downloadThemeFile(filename: string, contents: string): void {
   // Revoking synchronously can abort the download in some browsers; give the
   // browser time to open the stream first.
   setTimeout(() => URL.revokeObjectURL(url), 30_000);
-}
-
-function ThemeVariantTooltip({ label, children }: { label: string; children: ReactElement }) {
-  return (
-    <Tooltip>
-      <TooltipTrigger render={children} />
-      <TooltipPopup>{label}</TooltipPopup>
-    </Tooltip>
-  );
-}
-
-function ThemeLibraryCard({
-  theme,
-  isActive,
-  onUse,
-  onUseMode,
-  activeModes,
-  onEdit,
-  onDuplicate,
-  onDownload,
-  onRemove,
-  variantNavigation,
-}: {
-  theme: ThemeCardDefinition;
-  isActive: boolean;
-  onUse: () => void;
-  onUseMode: (mode: ThemeMode) => void;
-  activeModes: ReadonlyArray<ThemeMode>;
-  onEdit?: () => void;
-  onDuplicate?: () => void;
-  onDownload?: () => void;
-  onRemove?: () => void;
-  variantNavigation?: {
-    collectionLabel: string;
-    options: ReadonlyArray<{
-      themeIndex: number;
-      label: string;
-      activeModes: ReadonlyArray<ThemeMode>;
-      preview: ThemeCardDefinition["previews"][number];
-    }>;
-    onSelectAndUse: (themeIndex: number, mode: ThemeAppearance) => void;
-  };
-}) {
-  // A one-appearance theme can only take its own side of the mix, so the card
-  // tooltip promises exactly what clicking it does.
-  const cardModes = theme.previews.map((preview) => preview.mode);
-  const [radialModeOpen, setRadialModeOpen] = useState<ThemeAppearance | null>(null);
-  const radialModeGroups = (["light", "dark"] as const).map((mode) => {
-    const options =
-      variantNavigation?.options.flatMap((option) => {
-        const preview = option.preview;
-        return preview.mode === mode ? [{ option, preview }] : [];
-      }) ?? [];
-    return {
-      mode,
-      options,
-      selected: options.find(({ option }) => option.activeModes.includes(mode)) ?? options[0],
-    };
-  });
-  return (
-    // The card surface stays a plain div (buttons cannot nest inside a button
-    // role); the title button and mode circles carry the accessible actions,
-    // while the card click is a pointer-only convenience.
-    <Tooltip>
-      <TooltipTrigger
-        render={
-          <div
-            className={cn(
-              "cursor-pointer overflow-hidden rounded-xl border bg-settings-surface transition-colors",
-              isActive ? "border-transparent" : "border-border/70 hover:border-foreground/15",
-            )}
-            data-theme-library-card={theme.id}
-            onClick={onUse}
-            style={isActive ? { boxShadow: "inset 0 0 0 1px var(--ring)" } : undefined}
-          >
-            <div className="relative">
-              {variantNavigation ? (
-                <div
-                  aria-label="Light and dark theme variants"
-                  className="relative h-20"
-                  role="group"
-                  onBlurCapture={(event) => {
-                    const nextTarget = event.relatedTarget;
-                    if (
-                      !(nextTarget instanceof Node) ||
-                      !event.currentTarget.contains(nextTarget)
-                    ) {
-                      setRadialModeOpen(null);
-                    }
-                  }}
-                  onKeyDown={(event) => {
-                    if (event.key === "Escape") setRadialModeOpen(null);
-                  }}
-                  onMouseLeave={() => setRadialModeOpen(null)}
-                >
-                  {radialModeGroups.map(({ mode, options, selected }) => {
-                    if (!selected) return null;
-                    const rootOffsetX = mode === "light" ? -52 : 52;
-                    const isOpen = radialModeOpen === mode;
-                    const isActive = selected.option.activeModes.includes(mode);
-                    const modeLabel = mode === "light" ? "Light" : "Dark";
-                    return (
-                      <div className="contents" key={mode}>
-                        <ThemeVariantTooltip label={`${modeLabel}: ${selected.option.label}`}>
-                          <button
-                            aria-label={
-                              options.length > 1
-                                ? `Choose ${mode} variant, ${options.length} options, currently ${selected.option.label}`
-                                : `Use ${mode} variant, currently ${selected.option.label}`
-                            }
-                            aria-pressed={isActive}
-                            className="absolute left-1/2 top-2 z-20 flex size-14 items-center justify-center rounded-full outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                            style={{
-                              transform: `translateX(calc(-50% + ${rootOffsetX}px))`,
-                            }}
-                            type="button"
-                            onClick={(event) => {
-                              event.stopPropagation();
-                              variantNavigation.onSelectAndUse(selected.option.themeIndex, mode);
-                            }}
-                            onFocus={() => setRadialModeOpen(mode)}
-                            onMouseEnter={() => setRadialModeOpen(mode)}
-                          >
-                            <ThemePreviewCircle
-                              colors={selected.preview.colors}
-                              mode={selected.preview.mode}
-                            />
-                            {isActive ? (
-                              <span
-                                aria-hidden
-                                className="pointer-events-none absolute inset-0 rounded-full ring-2 ring-ring"
-                              />
-                            ) : null}
-                            {isActive ? (
-                              <span className="pointer-events-none absolute -bottom-0.5 -right-0.5 flex size-4 items-center justify-center rounded-full border border-border/70 bg-card text-foreground shadow-sm">
-                                {mode === "light" ? (
-                                  <SunIcon className="size-2.5" />
-                                ) : (
-                                  <MoonIcon className="size-2.5" />
-                                )}
-                              </span>
-                            ) : null}
-                          </button>
-                        </ThemeVariantTooltip>
-                        <span
-                          className="pointer-events-none absolute bottom-0 left-1/2 inline-flex max-w-24 -translate-x-1/2 items-center gap-1 text-[11px] font-medium text-foreground"
-                          style={{ marginLeft: rootOffsetX }}
-                        >
-                          <span className="truncate">{selected.option.label}</span>
-                          {options.length > 1 ? (
-                            <span className="shrink-0 rounded-full bg-settings-control px-1 text-[9px] text-muted-foreground">
-                              +{options.length - 1}
-                            </span>
-                          ) : null}
-                        </span>
-                        {options.length > 1
-                          ? options.map(({ option, preview }, optionIndex) => {
-                              const progress = optionIndex / (options.length - 1) - 0.5;
-                              const childOffsetX = rootOffsetX + progress * 68;
-                              const childOffsetY = Math.abs(progress) * 10;
-                              const optionIsActive = option.activeModes.includes(mode);
-                              return (
-                                <ThemeVariantTooltip
-                                  key={option.label}
-                                  label={`Use ${option.label} for ${mode} mode`}
-                                >
-                                  <button
-                                    aria-label={`Use ${option.label} for ${mode} mode${optionIsActive ? ", currently active" : ""}`}
-                                    aria-pressed={optionIsActive}
-                                    className={cn(
-                                      "absolute left-1/2 top-1 z-30 flex size-7 items-center justify-center rounded-full bg-card shadow-sm outline-none transition-[transform,opacity] duration-200 ease-out motion-reduce:transition-none focus-visible:ring-2 focus-visible:ring-ring",
-                                      optionIsActive ? "ring-2 ring-ring" : "ring-1 ring-border/70",
-                                    )}
-                                    style={{
-                                      opacity: isOpen ? 1 : 0,
-                                      pointerEvents: isOpen ? "auto" : "none",
-                                      transform: `translate(calc(-50% + ${isOpen ? childOffsetX : rootOffsetX}px), ${isOpen ? childOffsetY : 28}px) scale(${isOpen ? 1 : 0.55})`,
-                                      transitionDelay: isOpen ? `${optionIndex * 35}ms` : "0ms",
-                                    }}
-                                    type="button"
-                                    onClick={(event) => {
-                                      event.stopPropagation();
-                                      variantNavigation.onSelectAndUse(option.themeIndex, mode);
-                                    }}
-                                    onFocus={() => setRadialModeOpen(mode)}
-                                    onMouseEnter={() => setRadialModeOpen(mode)}
-                                  >
-                                    <span className="pointer-events-none scale-[0.43]">
-                                      <ThemePreviewCircle
-                                        colors={preview.colors}
-                                        mode={preview.mode}
-                                      />
-                                    </span>
-                                  </button>
-                                </ThemeVariantTooltip>
-                              );
-                            })
-                          : null}
-                      </div>
-                    );
-                  })}
-                </div>
-              ) : (
-                <ThemePreviewCircles
-                  label={theme.label}
-                  activeModes={activeModes}
-                  onSelectMode={onUseMode}
-                  previews={theme.previews}
-                />
-              )}
-            </div>
-            <div className="flex items-center gap-2 px-3 pb-3 pt-2">
-              <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-1.5">
-                  <button
-                    aria-label={`Use ${variantNavigation ? `${variantNavigation.collectionLabel}, ${theme.label} variant` : `${theme.label} theme`}${isActive ? ", currently active" : ""}`}
-                    aria-pressed={isActive}
-                    className="min-w-0 cursor-pointer truncate rounded-sm text-left text-sm font-medium text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card"
-                    type="button"
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      onUse();
-                    }}
-                  >
-                    {variantNavigation?.collectionLabel ?? theme.label}
-                  </button>
-                </div>
-              </div>
-              {onEdit || onDuplicate || onDownload || onRemove ? (
-                <div className="flex shrink-0 items-center gap-1">
-                  {onDuplicate ? (
-                    <Tooltip>
-                      <TooltipTrigger
-                        render={
-                          <Button
-                            aria-label={`Duplicate ${theme.label}`}
-                            size="icon-xs"
-                            variant="ghost"
-                            onClick={(event) => {
-                              event.stopPropagation();
-                              onDuplicate();
-                            }}
-                          >
-                            <CopyIcon />
-                          </Button>
-                        }
-                      />
-                      <TooltipPopup>Duplicate theme</TooltipPopup>
-                    </Tooltip>
-                  ) : null}
-                  {onEdit ? (
-                    <Tooltip>
-                      <TooltipTrigger
-                        render={
-                          <Button
-                            aria-label={`Edit ${theme.label}`}
-                            size="icon-xs"
-                            variant="ghost"
-                            onClick={(event) => {
-                              event.stopPropagation();
-                              onEdit();
-                            }}
-                          >
-                            <PenLineIcon />
-                          </Button>
-                        }
-                      />
-                      <TooltipPopup>Edit theme</TooltipPopup>
-                    </Tooltip>
-                  ) : null}
-                  {onDownload ? (
-                    <Tooltip>
-                      <TooltipTrigger
-                        render={
-                          <Button
-                            aria-label={`Export ${theme.label}`}
-                            size="icon-xs"
-                            variant="ghost"
-                            onClick={(event) => {
-                              event.stopPropagation();
-                              onDownload();
-                            }}
-                          >
-                            <UploadIcon />
-                          </Button>
-                        }
-                      />
-                      <TooltipPopup>Export theme file</TooltipPopup>
-                    </Tooltip>
-                  ) : null}
-                  {onRemove ? (
-                    <Tooltip>
-                      <TooltipTrigger
-                        render={
-                          <Button
-                            aria-label={
-                              variantNavigation
-                                ? `Remove themes from ${variantNavigation.collectionLabel}`
-                                : `Remove ${theme.label}`
-                            }
-                            size="icon-xs"
-                            variant="ghost"
-                            className="text-muted-foreground hover:text-destructive"
-                            onClick={(event) => {
-                              event.stopPropagation();
-                              onRemove();
-                            }}
-                          >
-                            <Trash2Icon />
-                          </Button>
-                        }
-                      />
-                      <TooltipPopup>
-                        {variantNavigation ? "Remove themes" : "Remove theme"}
-                      </TooltipPopup>
-                    </Tooltip>
-                  ) : null}
-                </div>
-              ) : null}
-            </div>
-          </div>
-        }
-      />
-      <TooltipPopup>
-        {variantNavigation
-          ? "Use the first variants for light and dark"
-          : cardModes.length > 1
-            ? "Use for both light and dark"
-            : `Use for ${cardModes[0]} mode only`}
-      </TooltipPopup>
-    </Tooltip>
-  );
-}
-
-function CustomThemeCollectionCard({
-  themes,
-  activeModesFor,
-  onUse,
-  onUseMode,
-  onDuplicate,
-  onEdit,
-  onDownload,
-  onRemove,
-}: {
-  themes: ReadonlyArray<ThemeDefinition>;
-  activeModesFor: (themeId: string) => ReadonlyArray<ThemeMode>;
-  onUse: (theme: ThemeDefinition) => void;
-  onUseMode: (theme: ThemeDefinition, mode: ThemeMode) => void;
-  onDuplicate: (theme: ThemeDefinition) => void;
-  onEdit: (theme: ThemeDefinition) => void;
-  onDownload: (theme: ThemeDefinition) => void;
-  onRemove: (theme: ThemeDefinition) => void;
-}) {
-  const [variantIndex, setVariantIndex] = useState(() => {
-    const activeIndex = themes.findIndex((theme) => activeModesFor(theme.id).length > 0);
-    return activeIndex < 0 ? 0 : activeIndex;
-  });
-  const safeIndex = Math.min(variantIndex, themes.length - 1);
-  const theme = themes[safeIndex];
-
-  useEffect(() => {
-    if (variantIndex !== safeIndex) setVariantIndex(safeIndex);
-  }, [safeIndex, variantIndex]);
-
-  if (!theme) return null;
-  const collectionLabel = theme.collection?.label ?? theme.label;
-  const variantLabels = collectionVariantLabels(themes);
-  const defaultLightTheme = themes.find((candidate) => getThemeModes(candidate).includes("light"));
-  const defaultDarkTheme = themes.find((candidate) => getThemeModes(candidate).includes("dark"));
-  const selectCollectionDefaults = () => {
-    if (themes.length === 1) {
-      onUse(theme);
-      return;
-    }
-    if (defaultLightTheme) onUseMode(defaultLightTheme, "light");
-    if (defaultDarkTheme) onUseMode(defaultDarkTheme, "dark");
-    setVariantIndex(0);
-  };
-
-  return (
-    <ThemeLibraryCard
-      activeModes={activeModesFor(theme.id)}
-      isActive={false}
-      onDownload={() => onDownload(theme)}
-      onDuplicate={() => onDuplicate(theme)}
-      onEdit={() => onEdit(theme)}
-      onRemove={() => onRemove(theme)}
-      onUse={selectCollectionDefaults}
-      onUseMode={(mode) => onUseMode(theme, mode)}
-      theme={getThemeCardDefinition(theme)}
-      {...(themes.length > 1
-        ? {
-            variantNavigation: {
-              collectionLabel,
-              options: themes.flatMap((variant, themeIndex) =>
-                getThemeCardDefinition(variant).previews.map((preview) => ({
-                  themeIndex,
-                  label: variantLabels[themeIndex] ?? variant.label,
-                  activeModes: activeModesFor(variant.id),
-                  preview,
-                })),
-              ),
-              onSelectAndUse: (themeIndex, mode) => {
-                const selectedTheme = themes[themeIndex];
-                if (!selectedTheme) return;
-                setVariantIndex(themeIndex);
-                onUseMode(selectedTheme, mode);
-              },
-            },
-          }
-        : {})}
-    />
-  );
 }
 
 export function ThemeLibrary({
@@ -533,10 +90,12 @@ export function ThemeLibrary({
   setThemeHalf: (appearance: ThemeAppearance, themeId: string | null) => boolean;
 }) {
   const openThemeEditor = useThemeEditorStore((store) => store.openThemeEditor);
+
   const [themeRemovalTarget, setThemeRemovalTarget] = useState<{
     theme: ThemeDefinition;
     collectionThemes: ReadonlyArray<ThemeDefinition>;
   } | null>(null);
+
   // Keep the target after closing so the dialog text remains populated during
   // its exit animation. The next trash action replaces it before reopening.
   const [isThemeRemovalOpen, setIsThemeRemovalOpen] = useState(false);
@@ -545,6 +104,7 @@ export function ThemeLibrary({
   const removeDialogTheme = themeRemovalTarget?.theme;
   const removeDialogCollectionThemes = themeRemovalTarget?.collectionThemes ?? [];
   const canRemoveCollection = removeDialogCollectionThemes.length > 1;
+
   const removeDialogCollectionLabel =
     removeDialogTheme?.collection?.label ?? removeDialogTheme?.label;
 
@@ -571,7 +131,9 @@ export function ThemeLibrary({
   const persistTheme = useCallback(
     (nextTheme: string) => {
       const didSave = setTheme(nextTheme);
+
       if (!didSave) notifyThemeSaveFailure();
+
       return didSave;
     },
     [notifyThemeSaveFailure, setTheme],
@@ -589,30 +151,39 @@ export function ThemeLibrary({
   const handleConfirmRemoveTheme = useCallback(() => {
     if (!themeRemovalTarget) return;
     const removedIds = new Set(themeIdsToRemove);
+
     if (removedIds.size === 0) return;
     const removesBase = removedIds.has(getThemeDefinition(theme)?.id ?? "");
+
     // Keep the themes installed if we cannot move the selection off one of
     // them; the dialog stays open so the user can retry or cancel.
     if (removesBase && !persistTheme(appearanceMode === "system" ? "system" : appearanceMode)) {
       return;
     }
+
     for (const appearance of ["light", "dark"] as const) {
       const half = themeHalves?.[appearance];
+
       if (half === undefined) continue;
       // Writing a base preference clears the whole mix, so halves that name
       // a surviving theme are written back; removed halves fall back to base.
       const next = half && removedIds.has(half) ? null : removesBase ? half : undefined;
+
       if (next !== undefined && !setThemeHalf(appearance, next)) {
         notifyThemeRemovalFailure();
+
         return;
       }
     }
+
     try {
       removeCustomThemes([...removedIds]);
     } catch {
       notifyThemeRemovalFailure();
+
       return;
     }
+
     setIsThemeRemovalOpen(false);
   }, [
     appearanceMode,
@@ -635,20 +206,25 @@ export function ThemeLibrary({
   const assignHalf = useCallback(
     (appearance: ThemeAppearance, cardId: string | null) => {
       const otherAppearance = appearance === "light" ? "dark" : "light";
+
       // Picking the default over a themed base cannot be stored as a half:
       // the base would still own that appearance. Convert the base into an
       // explicit half on the other side so this side falls back to default.
       if (cardId === null && baseCardId !== null) {
         const otherOwner = themeHalves?.[otherAppearance] ?? baseCardId;
+
         if (!persistTheme(appearanceMode === "system" ? "system" : appearanceMode)) return;
+
         if (!setThemeHalf(otherAppearance, otherOwner)) {
           // Best-effort rollback: restore the whole-theme selection rather
           // than leaving the user with no theme at all.
           setTheme(theme);
           notifyThemeSaveFailure();
         }
+
         return;
       }
+
       if (!setThemeHalf(appearance, cardId)) {
         notifyThemeSaveFailure();
       }
@@ -673,11 +249,13 @@ export function ThemeLibrary({
   const cardDefById = (id: string | null): ThemeCardDefinition => {
     if (id === null) return STANDARD_THEME_CARDS[0]!;
     const definition = getThemeDefinition(id);
+
     return definition ? getThemeCardDefinition(definition) : STANDARD_THEME_CARDS[0]!;
   };
 
   const pickColors = (id: string | null, appearance: ThemeAppearance) => {
     const card = cardDefById(id);
+
     return previewColorsOf(card, appearance) ?? card.previews[0]!.colors;
   };
 
@@ -696,8 +274,11 @@ export function ThemeLibrary({
   // shows Akeru Bot selected instead of nothing.
   const pickedModesFor = (cardId: string | null): ThemeMode[] => {
     const rings: ThemeMode[] = [];
+
     if (lightOwner === cardId) rings.push("light");
+
     if (darkOwner === cardId) rings.push("dark");
+
     return rings;
   };
 
@@ -713,7 +294,7 @@ export function ThemeLibrary({
 
   const renderWireframe = (mode: ThemeMode) => (
     <ThemeWireframe
-      className="h-[8.75rem]"
+      className="h-35"
       panes={
         mode === "system"
           ? [
@@ -729,16 +310,18 @@ export function ThemeLibrary({
     <div aria-label="Appearance mode" className="grid w-full grid-cols-3 gap-3" role="group">
       {(["system", "light", "dark"] as const).map((mode) => {
         const isActive = appearanceMode === mode;
+
         return (
           <button
             aria-label={mode === "system" ? "Follow the system appearance" : `Use ${mode} mode`}
             aria-pressed={isActive}
             className={cn(
               "flex cursor-pointer flex-col items-stretch gap-2 rounded-xl border bg-settings-surface p-2 pb-2.5 outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring",
-              isActive ? "border-transparent" : "border-border/70 hover:border-foreground/15",
+              isActive
+                ? "border-transparent inset-ring inset-ring-ring"
+                : "border-border/70 hover:border-foreground/15",
             )}
             key={mode}
-            style={isActive ? { boxShadow: "inset 0 0 0 1px var(--ring)" } : undefined}
             onClick={() => setMode(mode)}
             type="button"
           >
@@ -749,7 +332,7 @@ export function ThemeLibrary({
                 isActive ? "text-foreground" : "text-muted-foreground",
               )}
             >
-              {mode === "system" ? "System" : mode === "light" ? "Light" : "Dark"}
+              {THEME_MODE_LABELS[mode]}
             </span>
           </button>
         );
@@ -757,30 +340,15 @@ export function ThemeLibrary({
     </div>
   );
 
-  const customThemeCollections = [
-    ...customThemes
-      .reduce((groups, customTheme) => {
-        const groupId = customTheme.collection
-          ? `collection:${customTheme.collection.id}`
-          : `theme:${customTheme.id}`;
-        const group = groups.get(groupId);
-        if (group) group.push(customTheme);
-        else groups.set(groupId, [customTheme]);
-        return groups;
-      }, new Map<string, ThemeDefinition[]>())
-      .entries(),
-  ];
+  const customThemeCollections = groupCustomThemeCollections(customThemes);
 
   const renderPairGrid = () => (
     // One shared provider so every tooltip in the grid hands off instantly to
     // the next hovered trigger instead of stacking on top of it. The card
     // tooltip briefly showing while crossing between a card's two circles is
-    // accepted — scoping the group tighter makes the handoffs feel sluggish.
+    // accepted: scoping the group tighter makes the handoffs feel sluggish.
     <TooltipProvider>
-      <div
-        className="grid w-full gap-3"
-        style={{ gridTemplateColumns: "repeat(auto-fill, minmax(min(100%, 15rem), 1fr))" }}
-      >
+      <div className="grid w-full grid-cols-[repeat(auto-fill,minmax(min(100%,15rem),1fr))] gap-3">
         {STANDARD_THEME_CARDS.map((standardTheme) => (
           <ThemeLibraryCard
             activeModes={pickedModesFor(null)}
@@ -801,6 +369,7 @@ export function ThemeLibrary({
         ))}
         {MAINTAINER_THEMES.map((maintainerTheme) => {
           const card = getThemeCardDefinition(maintainerTheme);
+
           return (
             <ThemeLibraryCard
               activeModes={pickedModesFor(maintainerTheme.id)}
@@ -846,6 +415,7 @@ export function ThemeLibrary({
             onRemove={(customTheme) => handleRemoveTheme(customTheme, themes)}
             onUse={(customTheme) => {
               const modes = getThemeModes(customTheme);
+
               if (modes.length === 1) assignHalf(modes[0]!, customTheme.id);
               else persistTheme(customTheme.id);
             }}
@@ -911,6 +481,7 @@ export function ThemeLibrary({
           // Same rule as clicking the card: a one-appearance theme takes its
           // side of the mix instead of becoming the base for both.
           const modes = getThemeModes(importedTheme);
+
           if (modes.length === 1) {
             assignHalf(modes[0]!, importedTheme.id);
             toastManager.add(
@@ -920,8 +491,10 @@ export function ThemeLibrary({
                 description: `It’s now your ${modes[0]!} theme.`,
               }),
             );
+
             return true;
           }
+
           if (!persistTheme(importedTheme.id)) return false;
           toastManager.add(
             stackedThreadToast({
@@ -930,6 +503,7 @@ export function ThemeLibrary({
               description: "It’s now active.",
             }),
           );
+
           return true;
         }}
         onOpenChange={onImportOpenChange}
@@ -955,6 +529,7 @@ export function ThemeLibrary({
                 const checked = themeIdsToRemoveSet.has(customTheme.id);
                 const card = getThemeCardDefinition(customTheme);
                 const checkboxId = `remove-theme-${customTheme.id}`;
+
                 return (
                   <label
                     className="group relative flex min-h-28 cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border border-border/70 bg-muted/25 p-3 has-checked:border-ring has-checked:bg-accent/20 hover:bg-muted/40"

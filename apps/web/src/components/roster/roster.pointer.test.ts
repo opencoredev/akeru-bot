@@ -8,7 +8,9 @@ class TestDocument extends EventTarget {
 }
 
 let document: TestDocument;
+
 let window: EventTarget;
+
 const sensors: RosterPointerSensor[] = [];
 
 function pointer(type: string, values: Partial<PointerEvent> = {}) {
@@ -30,15 +32,19 @@ function gesture() {
     onAbort: vi.fn(),
     onPending: vi.fn(),
   };
+
   const onFinish = vi.fn();
+
   const props = {
     active: "bot:akeru",
     event: pointer("pointerdown"),
     options: { distance: 6, onAttach: vi.fn(), onFinish },
     ...callbacks,
   } as unknown as SensorProps<ConstructorParameters<typeof RosterPointerSensor>[0]["options"]>;
+
   const sensor = new RosterPointerSensor(props);
   sensors.push(sensor);
+
   return { sensor, onFinish, ...callbacks };
 }
 
@@ -50,6 +56,7 @@ beforeEach(() => {
   vi.stubGlobal("document", document);
   vi.stubGlobal("window", window);
 });
+
 afterEach(() => {
   for (const sensor of sensors.splice(0)) sensor.cancel();
   vi.runAllTimers();
@@ -88,9 +95,11 @@ describe("roster pointer lifecycle", () => {
     "missed release": () =>
       document.dispatchEvent(pointer("pointermove", { buttons: 0, clientY: 100 })),
   };
+
   for (const [name, interrupt] of Object.entries(interruptions)) {
     it.each([false, true])(`cancels on ${name}, started=%s, and ignores late events`, (started) => {
       const drag = gesture();
+
       if (started) document.dispatchEvent(pointer("pointermove", { clientY: 20 }));
       interrupt();
       document.dispatchEvent(pointer("pointermove", { clientY: 100 }));
@@ -161,6 +170,7 @@ describe("roster pointer lifecycle", () => {
 
   it.each([false, true])("cancels when the list unmounts, started=%s", (started) => {
     const drag = gesture();
+
     if (started) document.dispatchEvent(pointer("pointermove", { clientY: 20 }));
     drag.sensor.cancel();
     document.dispatchEvent(pointer("pointermove", { clientY: 100 }));

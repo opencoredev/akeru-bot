@@ -32,7 +32,9 @@ interface PluginDetailsContentProps {
 
 function transportLabel(plugin: PluginDirectoryDefinition): string {
   if (plugin.kind === "mcp-url") return "Remote URL";
+
   if (plugin.kind === "mcp-stdio") return "Local command";
+
   return "Unavailable";
 }
 
@@ -51,6 +53,7 @@ export function PluginDetailsContent({
   const action = pluginPrimaryAction(plugin, server, accessStatus);
   const blocker = pluginBlocker(plugin);
   const brokerName = pluginBrokerName(plugin);
+
   const connectionDetails = brokerName
     ? [
         ["Provider", brokerName],
@@ -72,6 +75,7 @@ export function PluginDetailsContent({
         ["Platforms", plugin.platforms.join(", ")],
         ["License", plugin.license],
       ];
+
   return (
     <DialogPanel className="px-6 pt-6! pb-6 sm:px-8">
       <div className="mx-auto max-w-3xl space-y-6">
@@ -85,11 +89,7 @@ export function PluginDetailsContent({
                   {plugin.category}
                 </span>
                 {brokerName ? (
-                  <Badge
-                    className="border-border/60 bg-background/60 text-muted-foreground"
-                    size="sm"
-                    variant="outline"
-                  >
+                  <Badge size="sm" variant="quiet">
                     {brokerName}
                   </Badge>
                 ) : null}
@@ -103,8 +103,7 @@ export function PluginDetailsContent({
               {server ? (
                 <Button
                   aria-label={`Remove ${plugin.title}`}
-                  className="h-8 rounded-full px-3 text-xs"
-                  size="sm"
+                  size="pill-dense"
                   variant="ghost-muted"
                   disabled={pending}
                   onClick={onRemove}
@@ -114,8 +113,8 @@ export function PluginDetailsContent({
               ) : null}
               <Button
                 aria-label={`${action.label} ${plugin.title}`}
-                className="h-8 min-w-16 rounded-full px-3 text-xs"
-                size="sm"
+                className="min-w-16"
+                size="pill-dense"
                 variant={action.enable === false ? "secondary" : "default"}
                 disabled={pending || action.enable === null}
                 title={action.blocker}
@@ -299,7 +298,7 @@ export function PluginDetails({
           </div>
         </WorkspacePageHeader>
       ) : (
-        <DialogHeader className="border-b px-5 py-4">
+        <DialogHeader variant="divided" className="px-5 py-4">
           <div className="flex items-center gap-2 pe-8">
             <Button aria-label="Back to plugins" size="icon-sm" variant="ghost" onClick={onBack}>
               <AppIcon icon={ArrowLeft01Icon} className="size-4" />

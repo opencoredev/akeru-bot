@@ -74,6 +74,7 @@ export function RemoteHealthSection({ environmentId }: { readonly environmentId:
   if (doctor.data !== null && !doctor.data.applicable) {
     return null;
   }
+
   if (doctor.data === null && doctor.error === null) {
     // The first run takes a few seconds. Stay hidden rather than flash a section that local
     // environments would immediately drop.
@@ -86,6 +87,7 @@ export function RemoteHealthSection({ environmentId }: { readonly environmentId:
     setRepairingCheckId(check.id);
     const result = await repair({ environmentId, input: { checkIds: [check.id] } });
     setRepairingCheckId(null);
+
     if (result._tag === "Failure" && !isAtomCommandInterrupted(result)) {
       const error = squashAtomCommandFailure(result);
       toastManager.add({
@@ -93,8 +95,10 @@ export function RemoteHealthSection({ environmentId }: { readonly environmentId:
         title: "Could not repair",
         description: error instanceof Error ? error.message : "The repair failed.",
       });
+
       return;
     }
+
     doctor.refresh();
   };
 

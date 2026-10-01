@@ -66,6 +66,7 @@ describe("onboarding handoff", () => {
         displayName={"A".repeat(80)}
       />,
     );
+
     expect(html).toContain(`Waking ${"A".repeat(80)} up`);
     expect(html).not.toContain("whitespace-nowrap");
     expect(html.match(/\btruncate\b/g)).toHaveLength(2);

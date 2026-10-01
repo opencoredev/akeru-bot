@@ -41,6 +41,7 @@ export function BotPromptCommandMenu({
   const showSkillsInSlashMenu = usePrimarySettings((settings) => settings.showSkillsInSlashMenu);
   const { resolvedTheme } = useTheme();
   const { kind, query } = trigger;
+
   const items = useMemo(
     () =>
       buildComposerProviderMenuItems({
@@ -51,17 +52,21 @@ export function BotPromptCommandMenu({
       }),
     [catalog, kind, query, showSkillsInSlashMenu, t],
   );
+
   const searchKey = `${trigger.kind}:${trigger.query.trim().toLowerCase()}`;
+
   const [highlight, setHighlight] = useState<{ itemId: string | null; searchKey: string | null }>({
     itemId: null,
     searchKey: null,
   });
+
   const activeItemId = resolveComposerMenuActiveItemId({
     items,
     highlightedItemId: highlight.itemId,
     currentSearchKey: searchKey,
     highlightedSearchKey: highlight.searchKey,
   });
+
   const select = (item: ComposerCommandItem) => {
     if (item.type === "skill" || item.type === "provider-slash-command") {
       onSelect(composerProviderMenuItemText(item));
@@ -71,23 +76,32 @@ export function BotPromptCommandMenu({
   useImperativeHandle(ref, () => ({
     handleKeyDown: (event) => {
       if (event.nativeEvent.isComposing) return false;
+
       if (event.key === "Escape") {
         onClose();
+
         return true;
       }
+
       if (items.length === 0) return false;
+
       if (event.key === "ArrowDown" || event.key === "ArrowUp") {
         const index = items.findIndex((item) => item.id === activeItemId);
         const step = event.key === "ArrowDown" ? 1 : -1;
         const next = items[(index + step + items.length) % items.length];
         setHighlight({ itemId: next?.id ?? null, searchKey });
+
         return true;
       }
+
       if ((event.key === "Enter" && !event.shiftKey) || (event.key === "Tab" && !event.shiftKey)) {
         const item = items.find((candidate) => candidate.id === activeItemId) ?? items[0];
+
         if (item) select(item);
+
         return true;
       }
+
       return false;
     },
   }));
@@ -123,6 +137,7 @@ export function botPromptCommandMenuEmptyText(
       ? t("Connect a provider to use skills.")
       : t("Connect a provider to use its commands.");
   }
+
   return kind === "skill"
     ? t("No skills found. Try / to browse provider commands.")
     : t("No matching command.");

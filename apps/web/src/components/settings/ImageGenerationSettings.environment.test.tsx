@@ -35,11 +35,13 @@ const settingsState = vi.hoisted(() => ({
 }));
 
 const navigation = vi.hoisted(() => ({ openSettings: vi.fn() }));
+
 const confirm = vi.hoisted(() => ({ request: vi.fn() }));
 
 vi.mock("react", async (importOriginal) => {
   const actual = await importOriginal<typeof import("react")>();
   const { reactHookHarness } = await import("../../test/reactHookHarness");
+
   return {
     ...actual,
     useCallback: reactHookHarness.useCallback,
@@ -51,6 +53,7 @@ vi.mock("react", async (importOriginal) => {
 
 vi.mock("react/compiler-runtime", async () => {
   const { reactHookHarness } = await import("../../test/reactHookHarness");
+
   return { c: reactHookHarness.useMemoCache };
 });
 
@@ -65,6 +68,7 @@ vi.mock("../../state/server", () => ({
 vi.mock("../../state/query", () => ({
   useEnvironmentQuery: (atom: unknown) => {
     query.lastAtom = atom;
+
     return {
       data: query.providers ? { providers: query.providers } : null,
       error: query.error,
@@ -123,6 +127,7 @@ function providerStatus(
 
 function renderContent(): ReactElement<Record<string, unknown>> {
   hooks.beginRender();
+
   return ImageGenerationSettingsContent({ environmentId }) as ReactElement<Record<string, unknown>>;
 }
 
@@ -131,7 +136,9 @@ function findRow(tree: unknown, provider: ImageProviderStatus["provider"]) {
     tree,
     (element) => element.type === ImageProviderRow && element.props.provider === provider,
   );
+
   expect(row).not.toBeNull();
+
   return row!.props as {
     readonly status: ImageProviderStatus | undefined;
     readonly loadFailed: boolean;
@@ -185,6 +192,7 @@ describe("ImageGenerationSettingsContent environment wiring", () => {
       renderContent(),
       (element) => element.type === ImageGenerationRoutingSection,
     );
+
     (routing?.props.onChange as (patch: object) => void)({ defaultProvider: "grok" });
     expect(settingsState.updateSettings).toHaveBeenCalledWith({
       imageGeneration: { defaultProvider: "grok" },
@@ -261,10 +269,12 @@ describe("ImageGenerationSettingsContent environment wiring", () => {
     query.error = "Connection lost";
     const tree = renderContent();
     expect(findRow(tree, "grok").loadFailed).toBe(true);
+
     const retry = visitElements(
       tree,
       (element) => element.props["aria-label"] === "Retry loading image providers",
     );
+
     expect(retry).not.toBeNull();
     (retry?.props.onClick as () => void)();
     expect(query.refresh).toHaveBeenCalledTimes(1);

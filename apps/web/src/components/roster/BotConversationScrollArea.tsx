@@ -48,9 +48,11 @@ export function BotConversationScrollArea({
   useEffect(() => {
     const viewport = viewportRef.current;
     const content = contentRef.current;
+
     if (!viewport || !content) return;
 
     let lastMetrics = readMetrics(viewport);
+
     const updateScrollState = () => {
       const metrics = readMetrics(viewport);
       const nextIsAtEnd = isConversationAtEnd(metrics);
@@ -69,6 +71,7 @@ export function BotConversationScrollArea({
       if (followStateRef.current.followingEnd) {
         viewport.scrollTop = viewport.scrollHeight;
       }
+
       updateScrollState();
     };
 
@@ -87,6 +90,7 @@ export function BotConversationScrollArea({
 
   useEffect(() => {
     const viewport = viewportRef.current;
+
     if (!followKey || !viewport) return;
     dispatch({ type: "scroll-to-end" });
     viewport.scrollTop = viewport.scrollHeight;
@@ -94,6 +98,7 @@ export function BotConversationScrollArea({
 
   const scrollToEnd = () => {
     const viewport = viewportRef.current;
+
     if (!viewport) return;
     dispatch({ type: "scroll-to-end" });
     viewport.scrollTo({ top: viewport.scrollHeight, behavior: "smooth" });
@@ -121,10 +126,9 @@ export function BotConversationScrollArea({
         {!isAtEnd ? (
           <Button
             type="button"
-            variant="outline"
+            variant="outline-pill-muted"
             size="icon-sm"
             aria-label={t("Scroll to latest message")}
-            className="rounded-full text-muted-foreground shadow-xs hover:text-foreground"
             onClick={scrollToEnd}
           >
             <ArrowDownIcon className="size-4" />

@@ -22,6 +22,7 @@ export function resolveRoutedBot(
   }
 
   const bot = bots.find((candidate) => candidate.id === botId && candidate.archivedAt === null);
+
   return bot ? { status: "available", bot } : { status: "missing" };
 }
 
@@ -35,6 +36,7 @@ export function resolveRosterListState(
   bots: readonly Pick<Bot, "archivedAt">[],
 ): "loading" | "empty" | "bots" {
   if (!isRosterReady(environmentId, rosterEnvironmentId)) return "loading";
+
   return bots.every((bot) => bot.archivedAt !== null) ? "empty" : "bots";
 }
 
@@ -50,7 +52,9 @@ export type RosterLoadState =
   | { readonly kind: "failed"; readonly message: string };
 
 const ROSTER_LOADING: RosterLoadState = { kind: "loading" };
+
 const ROSTER_UNREACHABLE_MESSAGE = "The environment is not reachable.";
+
 const ROSTER_DISCONNECTED_MESSAGE = "The environment is not connected.";
 
 /**
@@ -66,11 +70,14 @@ export function resolveRosterLoadState(input: {
 }): RosterLoadState {
   if (input.shellError !== null) return { kind: "failed", message: input.shellError };
   const connection = input.connection;
+
   if (connection === null) return ROSTER_LOADING;
+
   const failed = (): RosterLoadState => ({
     kind: "failed",
     message: connection.lastFailure?.message ?? ROSTER_UNREACHABLE_MESSAGE,
   });
+
   switch (connection.phase) {
     case "blocked":
     case "offline":

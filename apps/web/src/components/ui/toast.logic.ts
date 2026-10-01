@@ -9,10 +9,13 @@ export function hasVisibleToastAction(actionProps: unknown): boolean {
   if (actionProps == null || typeof actionProps !== "object") {
     return false;
   }
+
   if (!("children" in actionProps)) {
     return false;
   }
+
   const children = actionProps.children;
+
   return children != null && children !== false && children !== "";
 }
 
@@ -23,6 +26,7 @@ export function shouldHideCollapsedToastContent(
   // Keep the front-most toast readable even if Base UI marks it as "behind"
   // due to toasts hidden by thread filtering.
   if (visibleToastCount <= 1) return false;
+
   return visibleToastIndex > 0;
 }
 
@@ -72,8 +76,10 @@ export function buildVisibleToastLayout<TToast extends object>(
           visibleIndex: fullIndex,
           offsetY: fullOffsetY,
         };
+
         fullOffsetY += height;
         fullIndex += 1;
+
         return item;
       }
 
@@ -87,6 +93,7 @@ export function buildVisibleToastLayout<TToast extends object>(
       fullIndex += 1;
       liveOffsetY += height;
       liveIndex += 1;
+
       return item;
     },
   );
@@ -123,6 +130,7 @@ export function shouldRenderThreadScopedToast(
   }
 
   const toastThreadId = data?.threadId;
+
   if (!toastThreadId) {
     return true;
   }

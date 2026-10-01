@@ -5,6 +5,7 @@ import { describe, expect, it } from "vite-plus/test";
 describe("bot roster shortcuts", () => {
   it("passes every documented live UI flag to shortcut resolution", () => {
     const source = NodeFS.readFileSync(new URL("./BotRosterSidebar.tsx", import.meta.url), "utf8");
+
     const shortcutContext = source.slice(
       source.indexOf("const command = resolveShortcutCommand"),
       source.indexOf("const bot = resolveRosterShortcutBot"),

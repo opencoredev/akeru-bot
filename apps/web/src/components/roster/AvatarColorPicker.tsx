@@ -16,7 +16,9 @@ function ColorThumb({ color, left, top }: { color: string; left: string; top: st
   return (
     <span
       aria-hidden
+      // oxlint-disable-next-line shadcn/no-arbitrary-values -- Dark ring keeps the thumb visible over any picked color.
       className="pointer-events-none absolute size-3 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white shadow-[0_0_0_1px_rgb(0_0_0/60%)]"
+      // oxlint-disable-next-line shadcn/no-inline-styles -- Thumb color and position follow the picked color.
       style={{ backgroundColor: color, left, top }}
     />
   );
@@ -24,6 +26,7 @@ function ColorThumb({ color, left, top }: { color: string; left: string; top: st
 
 function pointerFraction(event: PointerEvent<HTMLDivElement>) {
   const bounds = event.currentTarget.getBoundingClientRect();
+
   return {
     x: clampColorFraction((event.clientX - bounds.left) / bounds.width),
     y: clampColorFraction((event.clientY - bounds.top) / bounds.height),
@@ -43,6 +46,7 @@ function ColorPickerPanel({
 
   useEffect(() => {
     const next = hexToHsv(value);
+
     if (!next) return;
     setHsv((current) => (next.s === 0 || next.v === 0 ? { ...next, h: current.h } : next));
     setDraft(null);
@@ -56,6 +60,7 @@ function ColorPickerPanel({
 
   const commitHex = (candidate: string) => {
     const next = hexToHsv(candidate);
+
     if (next) commitHsv(next);
     else setDraft(null);
   };
@@ -74,6 +79,7 @@ function ColorPickerPanel({
   const handleFieldKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
     const step = event.shiftKey ? 0.1 : 0.02;
     const next = { ...hsv };
+
     if (event.key === "ArrowLeft") next.s = clampColorFraction(hsv.s - step);
     else if (event.key === "ArrowRight") next.s = clampColorFraction(hsv.s + step);
     else if (event.key === "ArrowUp") next.v = clampColorFraction(hsv.v + step);
@@ -85,6 +91,7 @@ function ColorPickerPanel({
 
   const handleHueKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
     const direction = event.key === "ArrowLeft" ? -1 : event.key === "ArrowRight" ? 1 : 0;
+
     if (direction === 0) return;
     event.preventDefault();
     const step = event.shiftKey ? 30 : 4;
@@ -105,11 +112,13 @@ function ColorPickerPanel({
         aria-valuenow={Math.round(hsv.v * 100)}
         aria-valuetext={formatColorFieldValueText(hsv, color, t)}
         className="relative h-36 cursor-crosshair touch-none rounded-md outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        /* oxlint-disable shadcn/no-inline-styles -- Saturation/value field painted over the picked hue. */
         style={{
           backgroundColor: hueColor,
           backgroundImage:
             "linear-gradient(to top, #000, transparent), linear-gradient(to right, #fff, transparent)",
         }}
+        /* oxlint-enable shadcn/no-inline-styles */
         onKeyDown={handleFieldKeyDown}
         onPointerDown={updateField}
         onPointerMove={(event) => {
@@ -127,9 +136,11 @@ function ColorPickerPanel({
         aria-valuemax={360}
         aria-valuenow={Math.round(hsv.h)}
         className="relative mt-3 h-3 cursor-ew-resize touch-none rounded-full outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        /* oxlint-disable shadcn/no-inline-styles -- Fixed hue spectrum, not a theme surface. */
         style={{
           background: "linear-gradient(to right, #f00, #ff0, #0f0, #0ff, #00f, #f0f, #f00)",
         }}
+        /* oxlint-enable shadcn/no-inline-styles */
         onKeyDown={handleHueKeyDown}
         onPointerDown={updateHue}
         onPointerMove={(event) => {
@@ -194,6 +205,7 @@ export function AvatarColorPicker({
           aria-label={t("Use {color}", { color: preset })}
           aria-pressed={color === preset}
           onClick={() => onChange(preset)}
+          // oxlint-disable-next-line shadcn/no-inline-styles -- Swatch shows the preset avatar color itself.
           style={{ backgroundColor: preset }}
           className={cn(
             "size-8 cursor-pointer rounded-full border border-foreground/10 outline-none focus-visible:ring-2 focus-visible:ring-ring",
@@ -213,19 +225,16 @@ export function AvatarColorPicker({
                 "size-8 cursor-pointer rounded-full border border-foreground/15 outline-none focus-visible:ring-2 focus-visible:ring-ring",
                 !presetSelected && "ring-2 ring-foreground/30 ring-offset-2 ring-offset-background",
               )}
+              /* oxlint-disable shadcn/no-inline-styles -- Rainbow swatch marks the custom color picker. */
               style={{
                 background:
                   "conic-gradient(from 90deg, #ff3b30, #ffcc00, #34c759, #00c7be, #0a84ff, #bf5af2, #ff375f, #ff3b30)",
               }}
+              /* oxlint-enable shadcn/no-inline-styles */
             />
           }
         />
-        <PopoverPopup
-          align="end"
-          sideOffset={8}
-          className="overflow-hidden"
-          viewportClassName="p-0 [--viewport-inline-padding:0px]"
-        >
+        <PopoverPopup align="end" sideOffset={8} className="overflow-hidden" viewportPadding="none">
           <ColorPickerPanel value={color} onChange={onChange} />
         </PopoverPopup>
       </Popover>

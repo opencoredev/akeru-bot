@@ -12,6 +12,20 @@ export const channelProviderLabel = sharedChannelProviderLabel;
  */
 export const CONVERSATION_MEASURE_CLASS_NAME = "mx-auto w-full max-w-[46rem]";
 
+/** The prompt box fill. Panels docked onto the composer reuse it so the joint reads as one surface. */
+export const BOT_COMPOSER_SURFACE_CLASS_NAME =
+  "border-white/10 bg-foreground/[0.12] dark:bg-white/[0.16]";
+
+/** The quieter card fill for the prompt box and the decision panels docked onto it. */
+export const BOT_COMPOSER_QUIET_SURFACE_CLASS_NAME = "border-border/70 bg-card";
+
+/**
+ * Shape of a panel docked on top of the composer: its rounded top continues the prompt box
+ * and its open bottom edge meets the box's squared top. Put it after a surface class.
+ */
+export const BOT_COMPOSER_DOCKED_PANEL_CLASS_NAME =
+  "mb-1 w-full rounded-t-[1.65rem] rounded-b-md border border-b-transparent px-3.5 pt-3 pb-2.5";
+
 export function isBotConversationWorking(input: {
   sending: boolean;
   respondingToUserInput: boolean;
@@ -22,6 +36,7 @@ export function isBotConversationWorking(input: {
   waitingForUserInput?: boolean;
 }): boolean {
   if (input.waitingForUserInput && !input.respondingToUserInput) return false;
+
   return (
     input.sending ||
     input.respondingToUserInput ||
@@ -31,7 +46,9 @@ export function isBotConversationWorking(input: {
 }
 
 const SESSION_GAP_MS = 4 * 60 * 60 * 1000;
+
 const WEEKDAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"] as const;
+
 const MONTH_NAMES = [
   "Jan",
   "Feb",
@@ -51,6 +68,7 @@ function clockLabel(date: Date): string {
   const hours = date.getHours();
   const suffix = hours < 12 ? "AM" : "PM";
   const hour12 = hours % 12 === 0 ? 12 : hours % 12;
+
   return `${hour12}:${String(date.getMinutes()).padStart(2, "0")} ${suffix}`;
 }
 
@@ -59,6 +77,7 @@ const SEPARATOR_DAY_OPTIONS: Intl.DateTimeFormatOptions = {
   month: "short",
   day: "numeric",
 };
+
 const SEPARATOR_TIME_OPTIONS: Intl.DateTimeFormatOptions = { hour: "numeric", minute: "2-digit" };
 
 function isEnglish(locale: string): boolean {
@@ -88,25 +107,32 @@ export function conversationSeparatorLabel(
   locale = "en",
 ): string | null {
   const current = new Date(createdAt);
+
   if (Number.isNaN(current.getTime())) return null;
 
   if (previousCreatedAt !== null) {
     const previous = new Date(previousCreatedAt);
+
     const settled =
       !Number.isNaN(previous.getTime()) &&
       isSameDay(previous, current) &&
       current.getTime() - previous.getTime() < SESSION_GAP_MS;
+
     if (settled) return null;
   }
 
   const today = isSameDay(current, now);
+
   if (!isEnglish(locale)) {
     const day = today ? todayLabel : formatDate(locale, current, SEPARATOR_DAY_OPTIONS);
+
     return `${day} ${formatDate(locale, current, SEPARATOR_TIME_OPTIONS)}`;
   }
+
   const day = today
     ? todayLabel
     : `${WEEKDAY_NAMES[current.getDay()]}, ${MONTH_NAMES[current.getMonth()]} ${current.getDate()}`;
+
   return `${day} ${clockLabel(current)}`;
 }
 
@@ -130,6 +156,7 @@ export function buildBotConversationEntries(
 ): ReadonlyArray<BotConversationEntry> {
   return messages.map((message, index) => {
     const previous = index === 0 ? null : messages[index - 1];
+
     const separator = conversationSeparatorLabel(
       message.createdAt,
       previous?.createdAt ?? null,
@@ -137,12 +164,14 @@ export function buildBotConversationEntries(
       todayLabel,
       locale,
     );
+
     const sameAuthor =
       previous !== null &&
       previous !== undefined &&
       previous.role === message.role &&
       (previous.respondingBotId ?? null) === (message.respondingBotId ?? null) &&
       (previous.authorPersonId ?? null) === (message.authorPersonId ?? null);
+
     return { message, separator, startsGroup: separator !== null || !sameAuthor };
   });
 }
@@ -162,24 +191,33 @@ export function visibleBotChatMessages(
 
   messages.forEach((message, index) => {
     if (message.role === "user" && String(message.id).startsWith("routine:")) return;
+
     if (message.role === "user") {
       precedingUserId = message.id;
       lastUserIndex = index;
+
       return;
     }
+
     if (message.role !== "assistant" || message.streaming) return;
     latestAssistantIndexByResponse.set(message.turnId ?? precedingUserId, index);
   });
 
   precedingUserId = "before-first-user";
+
   return messages.filter((message, index) => {
     if (message.role === "user" && String(message.id).startsWith("routine:")) return false;
+
     if (message.role === "user") {
       precedingUserId = message.id;
+
       return true;
     }
+
     if (message.role !== "assistant" || message.streaming) return false;
+
     if (working && index > lastUserIndex) return false;
+
     return latestAssistantIndexByResponse.get(message.turnId ?? precedingUserId) === index;
   });
 }

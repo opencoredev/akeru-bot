@@ -20,6 +20,7 @@ let attachmentSequence = 0;
 export function createBotPromptAttachments(files: readonly File[]): BotPromptAttachment[] {
   return files.map((file) => {
     attachmentSequence += 1;
+
     return {
       id: `bot-prompt-attachment-${attachmentSequence}`,
       file,
@@ -69,6 +70,7 @@ export function BotPromptAttachments({
   className?: string;
 }) {
   const { t } = useI18n();
+
   if (attachments.length === 0) return null;
 
   return (
@@ -77,7 +79,7 @@ export function BotPromptAttachments({
         <div
           key={attachment.id}
           data-testid="bot-prompt-attachment"
-          className="relative size-16 shrink-0 overflow-hidden rounded-lg border border-white/10 bg-background/65"
+          className="relative size-16 shrink-0 overflow-hidden rounded-lg border border-border bg-background/65"
         >
           {attachment.previewUrl !== null ? (
             <button

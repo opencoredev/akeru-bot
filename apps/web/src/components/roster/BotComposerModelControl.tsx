@@ -52,10 +52,12 @@ export function BotComposerModelControl({
       ),
     [providers, settings],
   );
+
   const defaultSelection = useMemo(
     () => resolveAppModelSelectionState(settings, providers),
     [providers, settings],
   );
+
   const selection = useMemo(
     () =>
       resolveStickyBotEngine({
@@ -67,6 +69,7 @@ export function BotComposerModelControl({
       }),
     [bot?.engine, defaultSelection, instanceEntries, providers, settings],
   );
+
   const modelOptionsByInstance = useMemo(
     () =>
       getCustomModelOptionsByInstance(
@@ -81,22 +84,28 @@ export function BotComposerModelControl({
   const selectable = selection !== null && !disabled;
   useEffect(() => {
     if (!selectable) return;
+
     return registerComposerModelPicker({ openModelPicker: () => setPickerOpen(true) });
   }, [selectable]);
 
   useEffect(() => {
     if (!selectable) return;
+
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.defaultPrevented || event.repeat) return;
+
       const command = resolveShortcutCommand(event, keybindings, {
         context: { modelPickerOpen: pickerOpen },
       });
+
       if (command !== "modelPicker.toggle") return;
       event.preventDefault();
       event.stopPropagation();
       setPickerOpen((open) => !open);
     };
+
     window.addEventListener("keydown", onKeyDown);
+
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [keybindings, pickerOpen, selectable]);
 
@@ -104,10 +113,12 @@ export function BotComposerModelControl({
 
   const changeModel = async (instanceId: ProviderInstanceId, model: string) => {
     if (environmentId === null || !bot) return;
+
     const options =
       defaultSelection.instanceId === instanceId && defaultSelection.model === model
         ? defaultSelection.options
         : undefined;
+
     const result = await updateBot({
       environmentId,
       input: {
@@ -115,6 +126,7 @@ export function BotComposerModelControl({
         engine: { provider: instanceId, model, ...(options ? { options } : {}) },
       },
     });
+
     if (result._tag === "Failure") {
       toastManager.add({ type: "error", title: t("Could not change the model") });
     }

@@ -13,7 +13,6 @@ import { defaultProjectIdForBot } from "@akeru/shared/channelProject";
 import { ExternalLinkIcon } from "lucide-react";
 import { useRef, useState } from "react";
 import { useAtomValue } from "@effect/atom-react";
-
 import { channelFailureCategoryOf, isChannelIdentityConflict } from "../../channelAccess";
 import { useI18n } from "../../i18n";
 import { cn } from "../../lib/utils";
@@ -29,111 +28,15 @@ import { toastManager } from "../ui/toast";
 import { parsePhotonHostedCredentials } from "./BotChannelsSettings";
 import { ChannelProjectSelect } from "./ChannelProjectSelect";
 import { channelProviderMeta, discordInviteUrl, slackPasteTarget } from "./channelProviderMeta";
+import {
+  CONNECT_LATER,
+  ChannelReplacement,
+  PhotonModeSelect,
+  newConnectionId,
+  buildChannelConnectionSaveInput,
+} from "./channelSetup.logic";
 
 const STEPS = ["Set up", "Credentials", "Connect"] as const;
-const CONNECT_LATER = "connect-later";
-const PHOTON_MODE_LABELS = {
-  hosted: "Photon hosted",
-  "self-hosted": "Photon self-hosted",
-} as const;
-
-/**
- * An assigned connection whose credentials the dialog replaces. The dialog saves the new
- * credentials as a new connection and only removes the old one after the bot connects, so a bad
- * token never takes a working channel down.
- */
-export interface ChannelReplacement {
-  readonly connectionId: ChannelConnectionId;
-  readonly name: string;
-  readonly botId: BotId;
-  readonly projectId: ProjectId | undefined;
-  /** The old binding was disconnected; restoring it after a failure keeps it disconnected. */
-  readonly disconnected?: boolean;
-}
-
-/** The Photon connection type picker. The trigger shows the option label, not the raw mode. */
-export function PhotonModeSelect({
-  mode,
-  onChange,
-}: {
-  readonly mode: keyof typeof PHOTON_MODE_LABELS;
-  readonly onChange: (mode: keyof typeof PHOTON_MODE_LABELS) => void;
-}) {
-  return (
-    <Select value={mode} onValueChange={(next) => next && onChange(next)}>
-      <SelectTrigger aria-label="Photon connection type">
-        <SelectValue>{PHOTON_MODE_LABELS[mode]}</SelectValue>
-      </SelectTrigger>
-      <SelectPopup>
-        <SelectItem value="hosted">{PHOTON_MODE_LABELS.hosted}</SelectItem>
-        <SelectItem value="self-hosted">{PHOTON_MODE_LABELS["self-hosted"]}</SelectItem>
-      </SelectPopup>
-    </Select>
-  );
-}
-
-const newConnectionId = () =>
-  ChannelConnectionId.make(`channel-${[...crypto.getRandomValues(new Uint32Array(4))].join("-")}`);
-
-export function buildChannelConnectionSaveInput(input: {
-  readonly connectionId: ChannelConnectionId;
-  readonly name: string;
-  readonly provider: ChannelProvider;
-  readonly mode: "hosted" | "self-hosted";
-  readonly values: Record<string, string>;
-}) {
-  const { connectionId, name, provider, mode, values } = input;
-  const value = (key: string) => (values[key] ?? "").trim();
-  if (provider === "telegram") return { connectionId, name, provider, token: value("token") };
-  if (provider === "whatsapp") {
-    return {
-      connectionId,
-      name,
-      provider,
-      accessToken: value("accessToken"),
-      appSecret: value("appSecret"),
-      phoneNumberId: value("phoneNumberId"),
-      verifyToken: value("verifyToken"),
-    };
-  }
-  if (provider === "slack") {
-    return {
-      connectionId,
-      name,
-      provider,
-      botToken: value("botToken"),
-      appToken: value("appToken"),
-    };
-  }
-  if (provider === "discord") {
-    return {
-      connectionId,
-      name,
-      provider,
-      applicationId: value("applicationId"),
-      publicKey: value("publicKey"),
-      botToken: value("botToken"),
-    };
-  }
-  return mode === "hosted"
-    ? {
-        connectionId,
-        name,
-        provider,
-        mode,
-        projectId: value("projectId"),
-        projectSecret: value("projectSecret"),
-      }
-    : {
-        connectionId,
-        name,
-        provider,
-        mode,
-        serverUrl: value("serverUrl"),
-        apiKey: value("apiKey"),
-        ...(value("phone") ? { phone: value("phone") } : {}),
-      };
-}
 
 export function ChannelSetupDialog({
   environmentId,
@@ -154,22 +57,29 @@ export function ChannelSetupDialog({
 }) {
   const { t } = useI18n();
   const meta = channelProviderMeta(provider);
+
   const saveConnection = useAtomCommand(botEnvironment.channels.saveConnection, {
     reportFailure: false,
   });
+
   const attach = useAtomCommand(botEnvironment.channels.attach, { reportFailure: false });
   const disconnect = useAtomCommand(botEnvironment.channels.disconnect, { reportFailure: false });
   const detach = useAtomCommand(botEnvironment.channels.detach, { reportFailure: false });
+
   const deleteConnection = useAtomCommand(botEnvironment.channels.deleteConnection, {
     reportFailure: false,
   });
+
   const snapshot = useAtomValue(environmentSnapshotAtom(environmentId));
   const initialBotId = replacing?.botId ?? bots[0]?.id ?? CONNECT_LATER;
   const [botId, setBotId] = useState<string>(initialBotId);
+
   const [pickedProjectId, setPickedProjectId] = useState<ProjectId | null>(
     replacing?.projectId ?? null,
   );
+
   const liveProjects = snapshot?.projects ?? [];
+
   const projectId = channelPickerProjectId({
     selected: pickedProjectId,
     binding: undefined,
@@ -178,6 +88,7 @@ export function ChannelSetupDialog({
       : null,
     liveProjects,
   });
+
   const projectMissing = botId !== CONNECT_LATER && projectId === null;
   const [step, setStep] = useState(0);
   const [mode, setMode] = useState<"hosted" | "self-hosted">("hosted");
@@ -191,13 +102,16 @@ export function ChannelSetupDialog({
   // Closing the dialog keeps it, since a snapshot that has not synced yet can still show the old
   // assignment after the detach removed it.
   const [unconfirmed, setUnconfirmed] = useState<ChannelConnectionId | null>(null);
+
   const savedConnection = useRef<{
     connectionId: ChannelConnectionId;
     name: string;
     mode: typeof mode;
     values: typeof values;
   } | null>(null);
+
   const value = (key: string) => values[key] ?? "";
+
   const setValue = (key: string, next: string) =>
     setValues((current) => ({ ...current, [key]: next }));
 
@@ -212,6 +126,7 @@ export function ChannelSetupDialog({
       ?.find((bot) => bot.id === replacing.botId)
       ?.channelBindings?.find((binding) => binding.provider === provider)?.connectionId ===
       replacing.connectionId;
+
   const unassigned = unconfirmed !== null && !oldStillAssigned;
 
   const reset = () => {
@@ -229,11 +144,14 @@ export function ChannelSetupDialog({
   };
 
   const botName = bots.find((bot) => bot.id === botId)?.name ?? t("the bot");
+
   const conflictCopy = t(
     "Another bot already uses this account. Unassign it there, then connect again.",
   );
+
   const failureReason = (result: Parameters<typeof channelFailureCategoryOf>[0]) => {
     const category = channelFailureCategoryOf(result);
+
     return category ? channelFailureReason(category, provider, t) : null;
   };
 
@@ -251,11 +169,14 @@ export function ChannelSetupDialog({
     // It stays kept until it attaches or the old connection is restored, so a failed retry
     // still reconnects instead of detaching a binding that is already gone.
     const reconnecting = unassigned ? unconfirmed : null;
+
     if (unconfirmed !== null && !reconnecting) {
       await deleteConnection({ environmentId, input: { connectionId: unconfirmed } });
       setUnconfirmed(null);
     }
+
     const connectionId = reconnecting ?? newConnectionId();
+
     const saved = await saveConnection({
       environmentId,
       input: buildChannelConnectionSaveInput({
@@ -266,31 +187,39 @@ export function ChannelSetupDialog({
         values,
       }),
     });
+
     if (saved._tag === "Failure") {
       setBusy(false);
       toastManager.add({ type: "error", title: "Could not save channel" });
+
       return;
     }
+
     const discardNew = () =>
       deleteConnection({ environmentId, input: { connectionId } }).then(() => undefined);
+
     const detached = reconnecting
       ? null
       : await detach({
           environmentId,
           input: { botId: current.botId, provider },
         });
+
     if (detached?._tag === "Failure") {
       // The detach can fail after it removed the old connection, when the old listener does not
       // stop. Keep the new connection until the assignment shows which happened.
       setBusy(false);
       setUnconfirmed(connectionId);
       onSaved(connectionId);
+
       return;
     }
+
     const attached = await attach({
       environmentId,
       input: { botId: current.botId, connectionId, provider, projectId },
     });
+
     if (attached._tag === "Failure") {
       const restored = await attach({
         environmentId,
@@ -301,17 +230,20 @@ export function ChannelSetupDialog({
           projectId: current.projectId ?? projectId,
         },
       });
+
       if (restored._tag === "Failure") {
         // The failed attach may still have persisted a binding to the new connection.
         onSaved(connectionId);
       } else {
         await discardNew();
         setUnconfirmed(null);
+
         // Attaching starts the channel, so put a disconnected channel back the way it was.
         if (current.disconnected) {
           await disconnect({ environmentId, input: { botId: current.botId, provider } });
         }
       }
+
       setBusy(false);
       const reason = failureReason(attached);
       setConnectError(
@@ -333,12 +265,15 @@ export function ChannelSetupDialog({
                 .filter(Boolean)
                 .join(" "),
       );
+
       return;
     }
+
     const removedOld = await deleteConnection({
       environmentId,
       input: { connectionId: current.connectionId },
     });
+
     if (removedOld._tag === "Failure") {
       toastManager.add({
         type: "warning",
@@ -346,21 +281,26 @@ export function ChannelSetupDialog({
         description: t("The old connection could not be removed. Delete it from the channel list."),
       });
     }
+
     finish(connectionId);
   };
 
   const save = async () => {
     if (busy || !name.trim() || !credentialsComplete || projectMissing) return;
+
     if (replacing) {
       setBusy(true);
       setConnectError(null);
       await replace(replacing);
+
       return;
     }
+
     setBusy(true);
     setConnectError(null);
     const saved = savedConnection.current;
     const connectionId = saved?.connectionId ?? newConnectionId();
+
     if (!saved || saved.name !== name.trim() || saved.mode !== mode || saved.values !== values) {
       const result = await saveConnection({
         environmentId,
@@ -372,18 +312,23 @@ export function ChannelSetupDialog({
           values,
         }),
       });
+
       if (result._tag === "Failure") {
         setBusy(false);
         toastManager.add({ type: "error", title: "Could not save channel" });
+
         return;
       }
+
       savedConnection.current = { connectionId, name: name.trim(), mode, values };
     }
+
     if (botId !== CONNECT_LATER && projectId !== null) {
       const attached = await attach({
         environmentId,
         input: { botId: BotId.make(botId), connectionId, provider, projectId },
       });
+
       if (attached._tag === "Failure") {
         setBusy(false);
         onSaved(connectionId);
@@ -401,9 +346,11 @@ export function ChannelSetupDialog({
                   { name: name.trim() },
                 ),
         );
+
         return;
       }
     }
+
     finish(connectionId);
   };
 
@@ -413,6 +360,7 @@ export function ChannelSetupDialog({
       onOpenChange={(next) => {
         if (busy) return;
         onOpenChange(next);
+
         if (!next) reset();
       }}
     >
@@ -470,7 +418,7 @@ export function ChannelSetupDialog({
               {provider === "imessage" && mode === "hosted" ? (
                 <Textarea
                   aria-label="Photon hosted credentials"
-                  className="min-h-20 font-mono text-xs"
+                  presentation="credentials"
                   placeholder={"SPECTRUM_PROJECT_ID=...\nSPECTRUM_PROJECT_SECRET=..."}
                   rows={2}
                   spellCheck={false}
@@ -499,6 +447,7 @@ export function ChannelSetupDialog({
                       provider === "slack"
                         ? (event) => {
                             const target = slackPasteTarget(event.clipboardData.getData("text"));
+
                             if (target && target !== field.key) {
                               event.preventDefault();
                               setValue(target, event.clipboardData.getData("text").trim());
@@ -622,3 +571,9 @@ export function ChannelSetupDialog({
     </Dialog>
   );
 }
+
+export {
+  ChannelReplacement,
+  PhotonModeSelect,
+  buildChannelConnectionSaveInput,
+} from "./channelSetup.logic";

@@ -37,6 +37,7 @@ const BLINK: ReadonlyArray<readonly [number, number]> = [
   [190, 1.08],
   [320, 1],
 ];
+
 const DOUBLE_BLINK: ReadonlyArray<readonly [number, number]> = [
   ...BLINK.slice(0, -1),
   [360, 1],
@@ -49,18 +50,23 @@ const DOUBLE_BLINK: ReadonlyArray<readonly [number, number]> = [
 function sampleKeyframes(frames: ReadonlyArray<readonly [number, number]>, ms: number) {
   for (let index = 1; index < frames.length; index++) {
     const [endMs, endValue] = frames[index]!;
+
     if (ms <= endMs) {
       const [startMs, startValue] = frames[index - 1]!;
       const t = (ms - startMs) / (endMs - startMs);
       const eased = t * t * (3 - 2 * t);
+
       return startValue + (endValue - startValue) * eased;
     }
   }
+
   return frames[frames.length - 1]![1];
 }
 
 const SQUINT_MS = 320;
+
 const SPIN_EVERY_MS: readonly [number, number] = [6000, 9000];
+
 const WORK_BOB_HZ = 1.6;
 
 export interface MotionFrame {
@@ -136,6 +142,7 @@ export class BotMotion {
   beat(lengthMs: number) {
     this.beatUntil = this.clock + lengthMs / 1000;
     const pick = Math.random();
+
     if (pick < 0.4) this.startBlink();
     else if (pick < 0.7) this.startSquint();
     else this.saccade = { x: rand(-1, 1) * 5, y: rand(-1, 0.4) * 3 };
@@ -186,6 +193,7 @@ export class BotMotion {
         this.saccadeAt = now + rand(2.5, 5.5);
       }
     }
+
     if (!lively) this.saccade = { x: 0, y: 0 };
     const following = lively && input.hovered && input.pointer !== null;
     const followTargetX = following ? input.pointer!.x * 9 : 0;
@@ -209,17 +217,23 @@ export class BotMotion {
 
     // Blinks and the one-eye squint.
     if (lively && now >= this.blinkAt && !this.blink) this.startBlink();
+
     if (lively && !input.working && now >= this.squintAt && !this.squint) this.startSquint();
     let blinkHeight = 1;
+
     if (this.blink) {
       const ms = (now - this.blink.start) * 1000;
       const frames = this.blink.frames;
+
       if (ms >= frames[frames.length - 1]![0]) this.blink = null;
       else blinkHeight = sampleKeyframes(frames, ms);
     }
+
     const eyeHeight: [number, number] = [blinkHeight, blinkHeight];
+
     if (this.squint) {
       const progress = ((now - this.squint.start) * 1000) / SQUINT_MS;
+
       if (progress >= 1) this.squint = null;
       else {
         const dip = progress < 0.42 ? progress / 0.42 : 1 - (progress - 0.42) / 0.58;
@@ -236,6 +250,7 @@ export class BotMotion {
 
     const substeps = Math.max(1, Math.ceil(dt * 120));
     const h = dt / substeps;
+
     for (let index = 0; index < substeps; index++) {
       step(this.roll, 5, 0.9, h);
       step(this.offsetX, 3.5, 1, h);
@@ -246,11 +261,15 @@ export class BotMotion {
       step(this.pull, 9, 1, h);
       step(this.eyeWidth, 9, 0.85, h);
       step(this.eyeHeight, 9, 0.85, h);
+
       if (this.spin) step(this.spin, 6.2, 1, h);
     }
+
     let spin = 0;
+
     if (this.spin) {
       spin = this.spin.x * this.spinDirection;
+
       if (settled(this.spin, 0.004)) {
         this.spin = null;
         spin = 0;
@@ -286,7 +305,9 @@ export class BotMotion {
       !this.spin &&
       !this.blink &&
       !this.squint;
+
     if (!lively && resting) this.scheduleIdle();
+
     return { frame, active: lively || !resting };
   }
 
@@ -295,14 +316,17 @@ export class BotMotion {
     for (const s of [this.roll, this.offsetX, this.offsetY, this.lookX, this.lookY, this.pull]) {
       s.x = s.t = s.v = 0;
     }
+
     for (const s of [this.squash, this.eyeWidth, this.eyeHeight]) {
       s.x = s.t = 1;
       s.v = 0;
     }
+
     this.followX = this.followY = 0;
     this.saccade = { x: 0, y: 0 };
     this.blink = this.squint = this.spin = null;
     this.beatUntil = -1;
+
     return REST_FRAME;
   }
 
@@ -351,6 +375,8 @@ export function wrapOnBelt(x: number, center: number, radius: number, angle: num
   const u = Math.max(-0.999, Math.min(0.999, (x - center) / radius));
   const a = Math.asin(u);
   const cos = Math.cos(a + angle);
+
   if (cos < 0.02) return null;
+
   return { x: center + radius * Math.sin(a + angle), width: cos / Math.cos(a) };
 }

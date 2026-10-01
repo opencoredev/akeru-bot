@@ -10,7 +10,9 @@ import { describe, expect, it } from "vite-plus/test";
 import { deriveBotActivity } from "./botActivityStatus.logic";
 
 const TURN = TurnId.make("turn-1");
+
 const STARTED_AT = "2026-09-27T10:00:00.000Z";
+
 const runningTurn: OrchestrationLatestTurn = {
   turnId: TURN,
   state: "running",
@@ -21,6 +23,7 @@ const runningTurn: OrchestrationLatestTurn = {
 };
 
 let nextId = 0;
+
 function activity(
   kind: string,
   summary: string,
@@ -44,6 +47,7 @@ const started = (name: string, id: string, payload: Record<string, unknown> = {}
     toolCallId: id,
     ...payload,
   });
+
 const completed = (name: string, id: string) =>
   activity("tool.completed", name, { itemType: "dynamic_tool_call", toolCallId: id });
 

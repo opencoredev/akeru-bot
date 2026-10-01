@@ -14,7 +14,9 @@ const message: OrchestrationMessage = {
   createdAt: "2026-09-26T00:00:00.000Z",
   updatedAt: "2026-09-26T00:00:00.000Z",
 };
+
 const engine = { provider: "codex", model: "gpt" } as const;
+
 const result = { kind: "plugin-search-results" } as unknown as NonNullable<
   RowProps["pluginResults"]
 >[number]["result"];
@@ -41,11 +43,13 @@ function props(overrides: Partial<RowProps> = {}): RowProps {
 describe("assistant row memoization", () => {
   it("skips re-rendering when per-turn data is rebuilt with the same content", () => {
     const previous = props();
+
     const next = {
       ...previous,
       stepMeter: { ...previous.stepMeter!, engine: { ...engine } },
       pluginResults: previous.pluginResults!.map((entry) => ({ ...entry })),
     };
+
     expect(assistantRowPropsEqual(previous, next)).toBe(true);
   });
 

@@ -6,12 +6,15 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vite-plus/test";
 
 vi.mock("../preview/usePreviewSession", () => ({ usePreviewSession: vi.fn() }));
+
 vi.mock("../preview/PreviewPanel", () => ({
   PreviewPanel: () => <div data-testid="native-preview-panel" />,
 }));
+
 vi.mock("../../browser/BrowserSurfaceSlot", () => ({
   BrowserSurfaceSlot: () => <div data-testid="native-browser-surface" />,
 }));
+
 vi.mock("../../previewStateStore", () => ({
   isPreviewSupportedInRuntime: () => false,
   useThreadPreviewState: () => ({

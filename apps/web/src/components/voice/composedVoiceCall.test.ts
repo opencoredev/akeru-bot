@@ -12,6 +12,7 @@ import { describe, expect, it, vi } from "vite-plus/test";
 import { composedVoiceAdapters, type ComposedVoiceTurnState } from "./composedVoiceCall";
 
 const fakeAudio = { audioBase64: "AAAA", mimeType: "audio/webm" } as const;
+
 const fakeSpeech = { audioBase64: "BBBB", mimeType: "audio/mpeg" } as const;
 
 function completedTurn(requestMessageId: string, reply: string): ComposedVoiceTurnState {
@@ -24,6 +25,7 @@ function completedTurn(requestMessageId: string, reply: string): ComposedVoiceTu
     requestMessageId: MessageId.make(requestMessageId),
     assistantMessageId: MessageId.make("assistant-1"),
   };
+
   const message: OrchestrationMessage = {
     id: MessageId.make("assistant-1"),
     role: "assistant",
@@ -34,6 +36,7 @@ function completedTurn(requestMessageId: string, reply: string): ComposedVoiceTu
     updatedAt: "2026-09-25T00:00:01.000Z",
     attachments: [],
   };
+
   return { latestTurn, messages: [message] };
 }
 
@@ -41,14 +44,17 @@ function completedTurn(requestMessageId: string, reply: string): ComposedVoiceTu
 function fakeChat() {
   let state: ComposedVoiceTurnState = { latestTurn: null, messages: [] };
   const listeners = new Set<() => void>();
+
   return {
     readTurn: () => state,
     subscribeTurn: (changed: () => void) => {
       listeners.add(changed);
+
       return () => listeners.delete(changed);
     },
     publish(next: ComposedVoiceTurnState) {
       state = next;
+
       for (const changed of [...listeners]) changed();
     },
     listenerCount: () => listeners.size,
@@ -65,18 +71,23 @@ describe("composed voice call adapters", () => {
     const sent: string[] = [];
     let captures = 0;
     let markListeningAgain = () => {};
+
     const listeningAgain = new Promise<void>((resolve) => {
       markListeningAgain = resolve;
     });
+
     const played: string[] = [];
+
     const adapters = composedVoiceAdapters({
       callId: "call-1",
       newOperationId: () => `op-${++operation}`,
       capture: async (signal) => {
         captures += 1;
+
         if (captures === 1) return fakeAudio;
         // The second listen waits until hangup, like a silent microphone.
         markListeningAgain();
+
         return new Promise((_, reject) =>
           signal.addEventListener("abort", () => reject(signal.reason), { once: true }),
         );
@@ -90,6 +101,7 @@ describe("composed voice call adapters", () => {
       sendMessage: async (text) => {
         sent.push(text);
         queueMicrotask(() => chat.publish(completedTurn("request-1", "Hi there")));
+
         return "request-1";
       },
       readTurn: chat.readTurn,
@@ -130,6 +142,7 @@ describe("composed voice call adapters", () => {
       readTurn: () => ({ latestTurn: null, messages: [] }),
       subscribeTurn: () => () => {},
     });
+
     await expect(adapters.transcribe(fakeAudio, new AbortController().signal)).rejects.toThrow(
       "ElevenLabs is out of credits or rate limited.",
     );
@@ -139,6 +152,7 @@ describe("composed voice call adapters", () => {
     const controller = new AbortController();
     const cancel = vi.fn(async () => ({ cancelled: true }));
     let release: (() => void) | undefined;
+
     const adapters = composedVoiceAdapters({
       callId: "call-1",
       newOperationId: () => "op-slow",
@@ -154,6 +168,7 @@ describe("composed voice call adapters", () => {
       readTurn: () => ({ latestTurn: null, messages: [] }),
       subscribeTurn: () => () => {},
     });
+
     const speaking = adapters.synthesize("Long reply", controller.signal);
     controller.abort();
     release?.();
@@ -163,6 +178,7 @@ describe("composed voice call adapters", () => {
 
   it("stops when the chat refuses the utterance or the bot turn fails", async () => {
     const chat = fakeChat();
+
     const refused = composedVoiceAdapters({
       callId: "call-1",
       capture: async () => fakeAudio,
@@ -174,6 +190,7 @@ describe("composed voice call adapters", () => {
       readTurn: chat.readTurn,
       subscribeTurn: chat.subscribeTurn,
     });
+
     await expect(refused.sendAndWait("hello", new AbortController().signal)).rejects.toThrow(
       "The chat did not accept the message. Continue in chat.",
     );
@@ -189,6 +206,7 @@ describe("composed voice call adapters", () => {
       readTurn: chat.readTurn,
       subscribeTurn: chat.subscribeTurn,
     });
+
     const waiting = failing.sendAndWait("hello", new AbortController().signal);
     const failed = completedTurn("request-1", "");
     chat.publish({ ...failed, latestTurn: { ...failed.latestTurn!, state: "error" } });
@@ -199,9 +217,11 @@ describe("composed voice call adapters", () => {
   it("speaks the finished voice reply after a newer chat turn replaces it", async () => {
     const chat = fakeChat();
     let markSubscribed!: () => void;
+
     const subscribed = new Promise<void>((resolve) => {
       markSubscribed = resolve;
     });
+
     const adapters = composedVoiceAdapters({
       callId: "call-1",
       capture: async () => fakeAudio,
@@ -213,12 +233,15 @@ describe("composed voice call adapters", () => {
       readTurn: chat.readTurn,
       subscribeTurn: (changed) => {
         markSubscribed();
+
         return chat.subscribeTurn(changed);
       },
     });
+
     const waiting = adapters.sendAndWait("hello", new AbortController().signal);
     const voiceTurn = completedTurn("request-1", "Done.");
     const reply = voiceTurn.messages[0]!;
+
     const request: OrchestrationMessage = {
       ...reply,
       id: MessageId.make("request-1"),
@@ -227,6 +250,7 @@ describe("composed voice call adapters", () => {
       turnId: null,
       createdAt: "2026-09-25T00:00:00.000Z",
     };
+
     const newerTurn: OrchestrationLatestTurn = {
       ...voiceTurn.latestTurn!,
       turnId: TurnId.make("turn-2"),
@@ -235,6 +259,7 @@ describe("composed voice call adapters", () => {
       state: "running",
       completedAt: null,
     };
+
     await subscribed;
     chat.publish({
       latestTurn: { ...voiceTurn.latestTurn!, state: "running", completedAt: null },

@@ -19,11 +19,13 @@ export function buildBotStepMeters(
 ): ReadonlyMap<string, BotStepMeterData> {
   const meters = new Map<string, BotStepMeterData>();
   const cappedTurns = new Set<string>();
+
   for (const activity of activities) {
     if (activity.kind === "bot.usage-cap.hit" && activity.turnId !== null) {
       cappedTurns.add(activity.turnId);
       continue;
     }
+
     if (
       activity.kind !== "bot.step-usage.updated" ||
       activity.turnId === null ||
@@ -31,6 +33,7 @@ export function buildBotStepMeters(
     ) {
       continue;
     }
+
     meters.set(activity.turnId, {
       engine: activity.payload.engine,
       tokens: activity.payload.tokens,
@@ -41,10 +44,13 @@ export function buildBotStepMeters(
       hardStopReached: false,
     });
   }
+
   for (const turnId of cappedTurns) {
     const meter = meters.get(turnId);
+
     if (meter) meters.set(turnId, { ...meter, hardStopReached: true });
   }
+
   return meters;
 }
 

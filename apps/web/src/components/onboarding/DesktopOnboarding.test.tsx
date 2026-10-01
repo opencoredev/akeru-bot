@@ -3,6 +3,7 @@ import * as Cause from "effect/Cause";
 import { AsyncResult } from "effect/unstable/reactivity";
 import { act, type ComponentProps } from "react";
 import { createRoot, type Root } from "react-dom/client";
+import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 import type { ProviderApiKeyForm } from "../settings/ProvidersPanel";
 import {
@@ -30,29 +31,38 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("@tanstack/react-router", () => ({ useNavigate: () => mocks.navigate }));
+
 vi.mock("@effect/atom-react", () => ({
   useAtomValue: (atom: string) => {
     if (atom === "shell") return { status: "live" };
+
     if (atom === "rosterLoaded") return mocks.rosterLoaded;
+
     if (atom === "bots") return mocks.bots;
+
     return [];
   },
 }));
+
 vi.mock("../../state/bots", () => ({
   botEnvironment: { create: "create" },
   environmentBotsAtom: () => "bots",
   environmentRosterLoadedAtom: () => "rosterLoaded",
 }));
+
 vi.mock("../../state/environments", () => ({
   usePrimaryEnvironmentId: () => "onboarding-environment",
 }));
+
 vi.mock("../../state/shell", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../../state/shell")>();
+
   return {
     ...actual,
     environmentShell: { ...actual.environmentShell, stateValueAtom: () => "shell" },
   };
 });
+
 vi.mock("../../state/server", () => ({
   serverEnvironment: {
     subscriptionAuth: () => ({}),
@@ -63,36 +73,46 @@ vi.mock("../../state/server", () => ({
     providersValueAtom: () => "providers",
   },
 }));
+
 vi.mock("../../state/query", () => ({
   useEnvironmentQuery: () => ({
     data: { providers: [{ provider: "openai-codex", connected: mocks.connected }] },
     refresh: mocks.refresh,
   }),
 }));
+
 vi.mock("../../state/use-atom-command", () => ({
   useAtomCommand: (command: "start" | "complete" | "cancel" | "poll") => mocks[command],
 }));
+
 vi.mock("../settings/ProvidersPanel", () => ({
   ProviderApiKeyForm: (props: ComponentProps<typeof ProviderApiKeyForm>) => {
     mocks.form = props;
+
     return null;
   },
 }));
+
 vi.mock("../ui/button", () => ({
   Button: (props: { children?: unknown; onClick?: () => void; disabled?: boolean }) => {
     const label = (Array.isArray(props.children) ? props.children : [props.children])
       .filter((child) => typeof child === "string")
       .join("");
+
     mocks.buttons.set(label, props);
+
     return null;
   },
 }));
+
 vi.mock("../ui/input", () => ({
   Input: (props: NonNullable<typeof mocks.input>) => {
     mocks.input = props;
+
     return null;
   },
 }));
+
 vi.mock("../ui/toast", () => ({ toastManager: { add: mocks.toast } }));
 
 import { DesktopOnboarding, SubscriptionStep } from "./DesktopOnboarding";
@@ -119,16 +139,19 @@ class TestNode {
   appendChild(child: TestNode) {
     child.parentNode = this;
     this.childNodes.push(child);
+
     return child;
   }
   removeChild(child: TestNode) {
     this.childNodes.splice(this.childNodes.indexOf(child), 1);
     child.parentNode = null;
+
     return child;
   }
   insertBefore(child: TestNode, before: TestNode) {
     child.parentNode = this;
     this.childNodes.splice(this.childNodes.indexOf(before), 0, child);
+
     return child;
   }
   createElement(name: string) {
@@ -147,7 +170,9 @@ class TestNode {
 }
 
 let root: Root;
+
 const environmentId = EnvironmentId.make("onboarding-environment");
+
 const success = <T,>(value: T) => ({ _tag: "Success" as const, value });
 
 async function render(providerId: SubscriptionProviderId = "openai-codex", captureMode = false) {
@@ -259,11 +284,13 @@ describe("onboarding API-key connections", () => {
 
   it("keeps the form busy and does not continue until the key is saved", async () => {
     let finish!: (value: ReturnType<typeof success<{ status: "connected" }>>) => void;
+
     const completion = new Promise<ReturnType<typeof success<{ status: "connected" }>>>(
       (resolve) => {
         finish = resolve;
       },
     );
+
     mocks.complete.mockReturnValue(completion);
     await render();
     await click("Use an API key");
@@ -366,6 +393,17 @@ describe("onboarding API-key connections", () => {
   it("lets an already connected API-only user continue without OAuth", async () => {
     mocks.connected = true;
     await render();
+    expect(
+      renderToStaticMarkup(
+        <SubscriptionStep
+          environmentId={environmentId}
+          draft={{ ...DEFAULT_DESKTOP_ONBOARDING_DRAFT, providerId: "openai-codex" }}
+          captureMode={false}
+          onChange={vi.fn()}
+          onContinue={mocks.next}
+        />,
+      ),
+    ).toContain("text-success-indicator-foreground");
     await click("Continue");
     expect(mocks.next).toHaveBeenCalledOnce();
     expect(mocks.start).not.toHaveBeenCalled();
@@ -374,8 +412,10 @@ describe("onboarding API-key connections", () => {
   it("keeps capture mode stable after the router normalizes the URL", async () => {
     const CaptureSurface = ({ captureMode }: { captureMode: boolean }) => {
       mocks.captureModes.push(captureMode);
+
       return null;
     };
+
     window.location.search = "?akeru-onboarding-capture=1";
     await act(async () => root.render(<DesktopOnboarding Surface={CaptureSurface} />));
     expect(mocks.captureModes.at(-1)).toBe(true);

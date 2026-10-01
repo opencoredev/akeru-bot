@@ -15,6 +15,7 @@ import { GhosttyTerminalSurface } from "~/terminal/ghostty/surface";
 // exactly what the app renders.
 
 const EMPTY_TERMINAL_CONTEXTS: ReadonlyArray<never> = [];
+
 const EMPTY_SKILLS: ReadonlyArray<never> = [];
 
 // Serialized the way the composer stores inline tokens: the $skill and the
@@ -30,10 +31,12 @@ export function PromptFontPreview() {
   const editorRef = useRef<ComposerPromptEditorHandle>(null);
   const [prompt, setPrompt] = useState(PROMPT_PREVIEW_TEXT);
   const [cursor, setCursor] = useState(PROMPT_PREVIEW_TEXT.length);
+
   const onChange = useCallback((nextValue: string, nextCursor: number) => {
     setPrompt(nextValue);
     setCursor(nextCursor);
   }, []);
+
   return (
     <div className="mt-1 mb-2 rounded-lg border border-border bg-card px-3 py-2">
       <ComposerPromptEditor
@@ -75,6 +78,7 @@ const diffPreviewHtmlByTheme = new Map<DiffThemeName, Promise<readonly string[]>
 
 function loadDiffPreviewHtml(theme: DiffThemeName): Promise<readonly string[]> {
   let promise = diffPreviewHtmlByTheme.get(theme);
+
   if (promise === undefined) {
     promise = preloadPatchFile({
       patch: DIFF_PREVIEW_PATCH,
@@ -82,6 +86,7 @@ function loadDiffPreviewHtml(theme: DiffThemeName): Promise<readonly string[]> {
     }).then((results) => results.map((result) => result.prerenderedHTML));
     diffPreviewHtmlByTheme.set(theme, promise);
   }
+
   return promise;
 }
 
@@ -109,6 +114,7 @@ function StaticDiffHtml({ html }: { html: string }) {
   const hostRef = useRef<HTMLDivElement | null>(null);
   useEffect(() => {
     const host = hostRef.current;
+
     if (host === null) return;
     const shadow = host.shadowRoot ?? host.attachShadow({ mode: "open" });
     shadow.innerHTML = html;
@@ -116,6 +122,7 @@ function StaticDiffHtml({ html }: { html: string }) {
     bridge.textContent = DIFF_PREVIEW_THEME_BRIDGE;
     shadow.append(bridge);
   }, [html]);
+
   return <div ref={hostRef} />;
 }
 
@@ -129,11 +136,14 @@ export function CodeFontPreview() {
     void loadDiffPreviewHtml(themeName).then((html) => {
       if (!cancelled) setHtmlByFile(html);
     });
+
     return () => {
       cancelled = true;
     };
   }, [themeName]);
+
   if (htmlByFile === null) return null;
+
   return (
     <div className="mt-1 mb-2 space-y-2">
       {htmlByFile.map((html) => (
@@ -147,6 +157,7 @@ export function CodeFontPreview() {
 // yellow dirty marker. It doubles as the echo loop's fresh-line prompt.
 const TERMINAL_PROMPT =
   "\x1b[1;32m→\x1b[0m \x1b[1;36makeru\x1b[0m \x1b[1;34mgit:(\x1b[1;31mmain\x1b[1;34m)\x1b[0m \x1b[1;33m✗\x1b[0m ";
+
 // A dev-server startup: brand line, addresses, a test summary, and a READY
 // badge. Together the lines cover bold, dim, underline, the six accent
 // colors, and a background cell, so a font choice shows every SGR the
@@ -168,6 +179,7 @@ const TERMINAL_PREVIEW_TRANSCRIPT =
 /** The surface treats an omitted family or size as "use the built-in default". */
 function previewTerminalFont(family: string, size: number): { family?: string; size: number } {
   const trimmed = family.trim();
+
   return trimmed.length > 0 ? { family: trimmed, size } : { size };
 }
 
@@ -185,6 +197,7 @@ export function TerminalFontPreview({ family, size }: { family: string; size: nu
 
   useEffect(() => {
     const current = fontRef.current;
+
     if (current.family === family && current.size === size) return;
     fontRef.current = { family, size };
     void surfaceRef.current?.setFont(previewTerminalFont(family, size));
@@ -195,12 +208,14 @@ export function TerminalFontPreview({ family, size }: { family: string; size: nu
   useEffect(() => {
     const mount = mountRef.current;
     const surface = surfaceRef.current;
+
     if (!mount || !surface) return;
     surface.setTheme(terminalThemeFromApp(mount));
   }, [theme, resolvedTheme]);
 
   useEffect(() => {
     const mount = mountRef.current;
+
     if (!mount) return;
     let cancelled = false;
     // Column of the caret on the current input line, so Backspace stops at
@@ -209,24 +224,32 @@ export function TerminalFontPreview({ family, size }: { family: string; size: nu
 
     const echo = (data: string) => {
       const surface = surfaceRef.current;
+
       if (!surface) return;
+
       if (data === "\r") {
         surface.write(`\r\n${TERMINAL_PROMPT}`);
         lineLength = 0;
+
         return;
       }
+
       if (data === "\x7f" || data === "\b") {
         if (lineLength > 0) {
           surface.write("\b \b");
           lineLength -= 1;
         }
+
         return;
       }
+
       // Arrow keys and other escape reports have no cursor to move here.
       if (data.startsWith("\x1b")) return;
+
       const printable = [...data]
         .filter((character) => character >= " " && character !== "\x7f")
         .join("");
+
       if (printable.length === 0) return;
       surface.write(printable);
       lineLength += printable.length;
@@ -244,8 +267,10 @@ export function TerminalFontPreview({ family, size }: { family: string; size: nu
     }).then((surface) => {
       if (cancelled) {
         surface.dispose();
+
         return;
       }
+
       surfaceRef.current = surface;
       // The theme and font may both have changed while the WASM surface loaded.
       surface.setTheme(terminalThemeFromApp(mount));

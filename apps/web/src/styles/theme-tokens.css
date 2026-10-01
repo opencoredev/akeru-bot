@@ -43,6 +43,15 @@
   --info-foreground: var(--color-blue-700);
   --success: var(--color-emerald-500);
   --success-foreground: var(--color-emerald-700);
+  /* Small confirmation marks, such as a connected-provider check. */
+  --success-indicator-foreground: var(--color-emerald-600);
+  /* Bright status text for dark surfaces, used through `dark:` modifiers.
+     The same value applies in both modes. */
+  --success-bright-foreground: var(--color-emerald-300);
+  --warning-bright-foreground: var(--color-amber-300);
+  /* Favorite star on model rows. Same value in both modes. */
+  --favorite-foreground: var(--color-yellow-500);
+  --favorite-hover-foreground: var(--color-yellow-600);
   /* Selected and disabled were previously spelled inline at each call site,
      so "selected" drifted between accent, muted, and a raw zinc. Name them
      once; themes override them through the roles they alias. */
@@ -98,6 +107,7 @@
     --input: --alpha(var(--color-white) / 8%);
     --info-foreground: var(--color-blue-400);
     --success-foreground: var(--color-emerald-400);
+    --success-indicator-foreground: var(--color-emerald-400);
     --warning-foreground: var(--color-amber-400);
     --warning-surface: color-mix(in srgb, var(--warning) 16%, transparent);
     --update-foreground: var(--color-blue-400);

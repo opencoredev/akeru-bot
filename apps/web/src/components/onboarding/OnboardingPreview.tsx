@@ -22,8 +22,11 @@ const EASE = [0.23, 1, 0.32, 1] as const;
 /** Caption under the assembling bot. Names what the user just did. */
 function previewCaption(draft: DesktopOnboardingDraft, t: OnboardingTranslate): string {
   if (draft.step === "subscription") return t("Pick the subscription that powers your bot");
+
   if (draft.step === "goal") return t("Say what you want help with");
+
   if (draft.step === "identity") return t("Give it a name and a look");
+
   return t("Send the first message");
 }
 
@@ -33,8 +36,10 @@ function ProviderChip({
   readonly providerId: DesktopOnboardingDraft["providerId"];
 }) {
   const provider = SUBSCRIPTION_PROVIDERS.find((candidate) => candidate.id === providerId);
+
   if (!provider) return null;
   const ProviderIcon = typeof provider.icon === "string" ? null : provider.icon;
+
   return (
     <span className="inline-flex items-center gap-1.5 rounded-full border border-border/60 bg-background/70 py-1 pe-2.5 ps-2 text-xs text-muted-foreground">
       {ProviderIcon ? (
@@ -83,6 +88,7 @@ function FirstMessageComposer({
   const runtime = useBotThreadRuntime(botId, modelSelection);
   const { t } = useI18n();
   const [error, setError] = useState<string | null>(null);
+
   const destinationReady =
     submittedMessage !== null &&
     desktopOnboardingDestinationReady({
@@ -105,14 +111,20 @@ function FirstMessageComposer({
         onSubmit={async (prompt, files) => {
           if (captureMode) {
             onComplete(prompt);
+
             return true;
           }
+
           const sent = await runtime.send(prompt, files);
+
           if (!sent) {
             setError(runtime.error ?? t("Could not send the message."));
+
             return false;
           }
+
           onComplete(prompt);
+
           return true;
         }}
       />
@@ -151,8 +163,10 @@ export function OnboardingPreview({
   const { t } = useI18n();
   const messageStep = draft.step === "message";
   const displayName = draft.name.trim() || t("Your bot");
+
   const focusLabel =
     draft.step === "subscription" ? null : resolveDesktopOnboardingFocusLabel(draft.goal);
+
   const named = draft.name.trim().length > 0;
   const headerState = handoff ? desktopOnboardingHandoffAvatarState(handoff) : "idle";
 
@@ -224,9 +238,8 @@ export function OnboardingPreview({
           )}
         </div>
         <motion.div
-          className="shrink-0"
+          className={handoff ? "pointer-events-none shrink-0" : "shrink-0"}
           animate={handoff ? { opacity: 0, y: 8 } : { opacity: 1, y: 0 }}
-          style={{ pointerEvents: handoff ? "none" : "auto" }}
           transition={{ duration: reducedMotion ? 0 : 0.25, ease: EASE }}
         >
           {messageStep && draft.botId && createdBotReady ? (

@@ -16,8 +16,11 @@ import {
 import { buildPluginSections } from "./pluginPresentation";
 
 const zhCNCatalog = await catalogRegistry["zh-CN"]!();
+
 const catalog = loadDirectoryCatalog();
+
 const noop = () => undefined;
+
 const rawServer: McpServer = {
   id: McpServerId.make("raw-filesystem"),
   name: "Raw filesystem",
@@ -48,6 +51,7 @@ describe("plugins in Simplified Chinese", () => {
         onOpen={noop}
       />,
     );
+
     expect(html).toContain('aria-label="精选"');
     expect(html).toContain(`连接 ${catalog[0]!.title}`);
     expect(html).not.toContain('aria-label="Featured"');
@@ -64,6 +68,7 @@ describe("plugins in Simplified Chinese", () => {
         nothingInstalled
       />,
     );
+
     expect(html).toContain("还没有连接插件");
   });
 
@@ -81,6 +86,7 @@ describe("plugins in Simplified Chinese", () => {
         />
       </>,
     );
+
     for (const text of [
       "插件",
       "自定义 MCP 服务器",
@@ -90,6 +96,7 @@ describe("plugins in Simplified Chinese", () => {
     ]) {
       expect(html).toContain(text);
     }
+
     expect(html).not.toContain("Custom MCP servers");
   });
 

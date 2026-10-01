@@ -1,28 +1,11 @@
-import type {
-  AkeruPluginSearchResult,
-  BotId,
-  ChannelMessageOrigin,
-  EnvironmentId,
-  MessageId,
-  OrchestrationMessage,
-  ScopedThreadRef,
-  ServerProviderSkill,
-  ThreadId,
-} from "@akeru/contracts";
-import type { ReplyPlaybackSession } from "@akeru/client-runtime/reply-playback";
+import type { EnvironmentId, OrchestrationMessage, ServerProviderSkill } from "@akeru/contracts";
 import { SmilePlusIcon } from "lucide-react";
-import { memo, useCallback, useState } from "react";
+import { memo } from "react";
 
 import { useI18n } from "~/i18n";
-import {
-  channelDeliveryLabel,
-  channelOriginLabel,
-} from "@akeru/client-runtime/channel-origin-presentation";
+import { channelOriginLabel } from "@akeru/client-runtime/channel-origin-presentation";
 import { replyPlaybackControlProps } from "~/lib/replyPlaybackThread";
 import { cn } from "~/lib/utils";
-import { botEnvironment } from "../../state/bots";
-import { threadEnvironment } from "../../state/threads";
-import { useAtomCommand } from "../../state/use-atom-command";
 import ChatMarkdown from "../ChatMarkdown";
 import {
   MessageControls,
@@ -34,78 +17,39 @@ import { MessageReactions } from "../chat/MessageReactions";
 import { PluginSearchResultCard } from "../chat/PluginSearchResultCard";
 import { SentMessageText } from "../chat/SentMessageText";
 import { Button } from "../ui/button";
-import { toastManager } from "../ui/toast";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { BotAvatarView } from "./BotAvatarView";
 import { BotMessageAttachments } from "./BotMessageAttachments";
 import { BotStepMeter } from "./BotStepMeter";
-import type { BotStepMeterData } from "./botStepMeter.logic";
-import { channelProviderLabel } from "./botConversationPresentation";
-import type { Bot } from "./types";
+import {
+  type AssistantMessageRowProps,
+  assistantRowPropsEqual,
+  type MessageReplyHandler,
+} from "./botMessageRowEquality";
+import { ChannelSendApproval } from "./ChannelSendApproval";
+import type { MessageReactionHandler } from "./useMessageReactionUpdater";
+
+export {
+  assistantRowPropsEqual,
+  type MessageReplyHandler,
+  type PluginResultEntry,
+} from "./botMessageRowEquality";
+
+export { type ChannelApprovalTarget, ChannelSendApproval } from "./ChannelSendApproval";
+
+export {
+  type MessageReactionHandler,
+  useMessageReactionUpdater,
+} from "./useMessageReactionUpdater";
 
 const NO_ENVIRONMENT = "" as EnvironmentId;
+
 // Held open while a control's menu is, so the controls never slip out from under the pointer.
 const HOVER_CONTROLS_CLASS =
   "opacity-0 transition-opacity pointer-coarse:opacity-100 focus-within:opacity-100 group-hover/message:opacity-100 has-[[aria-expanded=true]]:opacity-100 has-[[data-popup-open]]:opacity-100 max-md:opacity-100";
+
 // Offscreen rows skip layout and paint; the intrinsic size keeps the scrollbar steady.
 const ROW_VISIBILITY_CLASS = "[content-visibility:auto] [contain-intrinsic-size:auto_96px]";
-
-export type MessageReplyHandler = (messageId: MessageId, label: string, text: string) => void;
-export type MessageReactionHandler = (
-  messageId: MessageId,
-  current: MessageReactionOption | null,
-  next: MessageReactionOption | null,
-) => void;
-
-export interface PluginResultEntry {
-  readonly id: string;
-  readonly result: AkeruPluginSearchResult;
-}
-
-export interface ChannelApprovalTarget {
-  readonly environmentId: EnvironmentId;
-  readonly botId: BotId;
-  readonly threadId: ThreadId;
-  /** Null when the inbound channel message is not loaded yet. */
-  readonly origin: ChannelMessageOrigin | null;
-  readonly sent: boolean;
-  /** Only channel admins with a live binding may trigger a send. */
-  readonly canSend: boolean;
-}
-
-/** A stable reaction updater for memoized rows; it only changes with the linked thread. */
-export function useMessageReactionUpdater(threadRef: ScopedThreadRef | null) {
-  const { t } = useI18n();
-  const setMessageReaction = useAtomCommand(threadEnvironment.setMessageReaction, {
-    reportFailure: false,
-  });
-  return useCallback<MessageReactionHandler>(
-    (messageId, current, next) => {
-      if (!threadRef) return;
-      const dispatch = (emoji: MessageReactionOption, present: boolean) =>
-        setMessageReaction({
-          environmentId: threadRef.environmentId,
-          input: { threadId: threadRef.threadId, messageId, emoji, present },
-        });
-      void (async () => {
-        if (current && current !== next) {
-          const removed = await dispatch(current, false);
-          if (removed._tag === "Failure") {
-            toastManager.add({ type: "error", title: t("Could not update reaction") });
-            return;
-          }
-        }
-        if (next) {
-          const added = await dispatch(next, true);
-          if (added._tag === "Failure") {
-            toastManager.add({ type: "error", title: t("Could not update reaction") });
-          }
-        }
-      })();
-    },
-    [setMessageReaction, t, threadRef],
-  );
-}
 
 function UnavailableReactionControl({
   selectedReaction,
@@ -114,6 +58,7 @@ function UnavailableReactionControl({
 }) {
   const { t } = useI18n();
   const unavailableReason = t("Reactions are unavailable until this chat is ready");
+
   return (
     <Tooltip>
       <TooltipTrigger
@@ -150,6 +95,7 @@ function reactionProps(
   onReactionChange: MessageReactionHandler | null,
 ) {
   if (!onReactionChange) return { controls: {}, chips: {} };
+
   return {
     controls: {
       onReactionChange: (next: MessageReactionOption | null) =>
@@ -158,6 +104,7 @@ function reactionProps(
     chips: {
       onToggle: (emoji: string) => {
         const option = reactionOptionFromEmoji(emoji);
+
         if (!option) return;
         onReactionChange(message.id, selectedReaction, selectedReaction === option ? null : option);
       },
@@ -171,109 +118,6 @@ function userMessageCopyText(message: OrchestrationMessage) {
     message.attachments?.map((attachment) => attachment.name).join(", ") ||
     "Attachment"
   );
-}
-
-export function ChannelSendApproval({
-  environmentId,
-  botId,
-  origin,
-  threadId,
-  messageId,
-  delivery,
-  sent,
-  canSend,
-}: {
-  readonly environmentId: EnvironmentId;
-  readonly botId: BotId;
-  readonly origin: ChannelMessageOrigin | null;
-  readonly threadId: ThreadId;
-  readonly messageId: MessageId;
-  readonly delivery: OrchestrationMessage["channelDelivery"];
-  readonly sent: boolean;
-  readonly canSend: boolean;
-}) {
-  const { t } = useI18n();
-  const send = useAtomCommand(botEnvironment.channels.send, { reportFailure: false });
-  const [busy, setBusy] = useState(false);
-  const [submitted, setSubmitted] = useState(false);
-  const delivered = sent || submitted || delivery === "sent";
-  const label = origin ? channelProviderLabel(origin.provider) : null;
-  const deliveryLabel =
-    delivery && (!delivered || label === null)
-      ? channelDeliveryLabel(delivery, origin?.provider)
-      : null;
-  return (
-    <div className="mt-2 flex items-center gap-2 rounded-lg border border-border bg-muted/30 px-3 py-2 text-xs">
-      <span
-        className={cn(
-          "min-w-0 flex-1",
-          deliveryLabel?.tone === "error"
-            ? "text-destructive"
-            : deliveryLabel?.tone === "warning"
-              ? "text-amber-700 dark:text-amber-400"
-              : "text-muted-foreground",
-        )}
-      >
-        {delivered && label !== null
-          ? t("Sent to {channel}", { channel: label })
-          : (deliveryLabel?.message ??
-            (canSend && label !== null
-              ? t("Send this reply to {channel}?", { channel: label })
-              : null))}
-      </span>
-      {canSend &&
-      label !== null &&
-      !delivered &&
-      delivery !== "pending" &&
-      delivery !== "unknown" ? (
-        <Button
-          size="xs"
-          disabled={busy}
-          onClick={() => {
-            setBusy(true);
-            void send({
-              environmentId,
-              input: { botId, threadId, messageId },
-            }).then((result) => {
-              setBusy(false);
-              if (result._tag === "Failure") {
-                toastManager.add({
-                  type: "error",
-                  title: t("Could not send to {channel}", { channel: label }),
-                });
-              } else {
-                setSubmitted(true);
-              }
-            });
-          }}
-        >
-          {busy ? t("Sending…") : t("Send")}
-        </Button>
-      ) : null}
-    </div>
-  );
-}
-
-interface AssistantMessageRowProps {
-  readonly message: OrchestrationMessage;
-  /** The replying bot, or null when it is no longer available. */
-  readonly author: Pick<Bot, "avatar" | "name"> | null;
-  readonly testId: string;
-  readonly arrived?: boolean;
-  /** First reply in a run from the same author: shows the avatar and name. */
-  readonly startsGroup: boolean;
-  readonly cwd: string | undefined;
-  readonly threadRef: ScopedThreadRef | undefined;
-  readonly stepMeter: BotStepMeterData | undefined;
-  readonly pluginResults: ReadonlyArray<PluginResultEntry> | undefined;
-  readonly currentPersonId: string | null | undefined;
-  readonly playback: ReplyPlaybackSession | null;
-  /** Changes when the playback context changes, so the read-aloud action is recomputed. */
-  readonly playbackKey: string | null | undefined;
-  readonly channelApproval: ChannelApprovalTarget | null;
-  readonly onReply: MessageReplyHandler;
-  /** Null while the chat has no linked thread to react in. */
-  readonly onReactionChange: MessageReactionHandler | null;
 }
 
 /**
@@ -300,9 +144,11 @@ export const AssistantMessageRow = memo(function AssistantMessageRow({
   const readAloud = replyPlaybackControlProps(playback, message);
   const copyText = message.text || "Attachment";
   const label = author?.name ?? t("Unavailable bot");
+
   const markdown = (
     <ChatMarkdown className="mt-1" cwd={cwd} text={message.text} threadRef={threadRef} />
   );
+
   if (!author) {
     return (
       <div
@@ -327,8 +173,10 @@ export const AssistantMessageRow = memo(function AssistantMessageRow({
       </div>
     );
   }
+
   const selectedReaction = selectedReactionForPerson(message.reactions, currentPersonId);
   const reactions = reactionProps(message, selectedReaction, onReactionChange);
+
   return (
     <div
       id={`chat-message-${message.id}`}
@@ -392,53 +240,6 @@ export const AssistantMessageRow = memo(function AssistantMessageRow({
   );
 }, assistantRowPropsEqual);
 
-function shallowEqual<T extends object>(a: T | null | undefined, b: T | null | undefined) {
-  if (a === b) return true;
-  if (!a || !b) return false;
-  const keys = Object.keys(a) as (keyof T)[];
-  return keys.length === Object.keys(b).length && keys.every((key) => Object.is(a[key], b[key]));
-}
-
-function stepMetersEqual(a: BotStepMeterData | undefined, b: BotStepMeterData | undefined) {
-  if (a === b) return true;
-  if (!a || !b) return false;
-  return (
-    a.tokens === b.tokens &&
-    a.costUsd === b.costUsd &&
-    a.hardStopReached === b.hardStopReached &&
-    shallowEqual(a.engine, b.engine)
-  );
-}
-
-function pluginResultsEqual(
-  a: ReadonlyArray<PluginResultEntry> | undefined,
-  b: ReadonlyArray<PluginResultEntry> | undefined,
-) {
-  if (a === b) return true;
-  if (!a || !b || a.length !== b.length) return false;
-  return a.every((entry, index) => entry.id === b[index]?.id && entry.result === b[index]?.result);
-}
-
-export function assistantRowPropsEqual(
-  previous: AssistantMessageRowProps,
-  next: AssistantMessageRowProps,
-) {
-  const keys = Object.keys(next) as (keyof AssistantMessageRowProps)[];
-  if (keys.length !== Object.keys(previous).length) return false;
-  return keys.every((key) => {
-    switch (key) {
-      case "stepMeter":
-        return stepMetersEqual(previous.stepMeter, next.stepMeter);
-      case "pluginResults":
-        return pluginResultsEqual(previous.pluginResults, next.pluginResults);
-      case "channelApproval":
-        return shallowEqual(previous.channelApproval, next.channelApproval);
-      default:
-        return Object.is(previous[key], next[key]);
-    }
-  });
-}
-
 /** One message from a person. `replyLabel` names the author in reply previews. */
 export const UserMessageRow = memo(function UserMessageRow({
   message,
@@ -472,6 +273,7 @@ export const UserMessageRow = memo(function UserMessageRow({
   const copyText = userMessageCopyText(message);
   const selectedReaction = selectedReactionForPerson(message.reactions, currentPersonId);
   const reactions = reactionProps(message, selectedReaction, onReactionChange);
+
   return (
     <div
       id={`chat-message-${message.id}`}

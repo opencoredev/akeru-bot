@@ -15,20 +15,36 @@ const badgeVariants = cva(
     },
     variants: {
       size: {
+        "telemetry-health":
+          "shrink justify-start gap-1.5 whitespace-normal rounded-full px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.08em]",
         default:
           "h-5.5 min-w-5.5 px-[calc(--spacing(1)-1px)] text-sm sm:h-4.5 sm:min-w-4.5 sm:text-xs",
         lg: "h-6.5 min-w-6.5 px-[calc(--spacing(1.5)-1px)] text-base sm:h-5.5 sm:min-w-5.5 sm:text-sm",
         sm: "h-5 min-w-5 rounded-[.25rem] px-[calc(--spacing(1)-1px)] text-xs sm:h-4 sm:min-w-4 sm:text-[.625rem]",
       },
       variant: {
+        "keybinding-default":
+          "bg-secondary text-foreground [button&,a&]:hover:bg-accent/80 font-normal text-muted-foreground/70",
+        "keybinding-custom":
+          "bg-secondary text-foreground [button&,a&]:hover:bg-accent/80 font-normal text-muted-foreground",
+        "telemetry-neutral": "border-border/70 bg-muted/45 text-muted-foreground",
+        "telemetry-healthy":
+          "border-success/25 bg-success/10 text-success-foreground dark:text-success-bright-foreground",
+        "telemetry-warning":
+          "border-warning/30 bg-warning/10 text-warning-foreground dark:text-warning-bright-foreground",
+        "telemetry-danger": "border-destructive/30 bg-destructive/10 text-destructive",
         default: "bg-primary text-primary-foreground [button&,a&]:hover:bg-primary/90",
         destructive: "bg-destructive text-white [button&,a&]:hover:bg-destructive/90",
         error: "bg-destructive/8 text-destructive-foreground dark:bg-destructive/16",
         info: "bg-info/8 text-info-foreground dark:bg-info/16",
         outline: "bg-secondary text-foreground [button&,a&]:hover:bg-accent/80",
+        quiet: "border-border/60 bg-background/60 text-muted-foreground",
         secondary: "bg-secondary text-secondary-foreground [button&,a&]:hover:bg-secondary/90",
         success: "bg-success/8 text-success-foreground dark:bg-success/16",
         warning: "bg-warning/8 text-warning-foreground dark:bg-warning/16",
+      },
+      presentation: {
+        "connection-kind": "h-4 px-1.5 text-[10px]",
       },
     },
   },
@@ -36,12 +52,13 @@ const badgeVariants = cva(
 
 interface BadgeProps extends useRender.ComponentProps<"span"> {
   variant?: VariantProps<typeof badgeVariants>["variant"];
+  presentation?: VariantProps<typeof badgeVariants>["presentation"];
   size?: VariantProps<typeof badgeVariants>["size"];
 }
 
-function Badge({ className, variant, size, render, ...props }: BadgeProps) {
+function Badge({ className, variant, size, presentation, render, ...props }: BadgeProps) {
   const defaultProps = {
-    className: cn(badgeVariants({ className, size, variant })),
+    className: cn(badgeVariants({ className, size, variant, presentation })),
     "data-slot": "badge",
   };
 

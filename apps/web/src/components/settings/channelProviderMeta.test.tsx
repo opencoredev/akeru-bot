@@ -26,6 +26,7 @@ describe("channel provider metadata", () => {
       "slack",
       "discord",
     ]);
+
     for (const meta of CHANNEL_PROVIDER_META) {
       expect(meta.icon).toBeTypeOf("function");
       expect(meta.steps.length).toBeGreaterThanOrEqual(2);
@@ -126,6 +127,7 @@ describe("buildChannelConnectionSaveInput", () => {
       projectId: "p",
       projectSecret: "s",
     });
+
     const selfHosted = buildChannelConnectionSaveInput({
       connectionId,
       name: "Line",
@@ -133,6 +135,7 @@ describe("buildChannelConnectionSaveInput", () => {
       mode: "self-hosted",
       values: { serverUrl: "https://x", apiKey: "k", phone: "  " },
     });
+
     expect(selfHosted).toEqual({
       connectionId,
       name: "Line",

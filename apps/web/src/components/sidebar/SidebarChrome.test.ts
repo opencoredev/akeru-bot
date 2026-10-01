@@ -225,20 +225,20 @@ describe("sidebar footer", () => {
   });
 
   it("keeps the roster scrollable from touch gestures that start on a bot row", () => {
-    const source = NodeFS.readFileSync(
-      new URL("../roster/BotRosterSidebar.tsx", import.meta.url),
-      "utf8",
-    );
+    // The roster sidebar composes its rows and drag wiring from sibling modules.
+    const source = ["BotRosterSidebar.tsx", "RosterRows.tsx", "RosterDrag.tsx"]
+      .map((file) => NodeFS.readFileSync(new URL(`../roster/${file}`, import.meta.url), "utf8"))
+      .join("\n");
 
     expect(source).toContain("touch-pan-y");
     expect(source).not.toContain("touch-none");
   });
 
   it("keeps group membership out of roster drag and treats pins as a drop target", () => {
-    const source = NodeFS.readFileSync(
-      new URL("../roster/BotRosterSidebar.tsx", import.meta.url),
-      "utf8",
-    );
+    // The roster sidebar composes its rows and drag wiring from sibling modules.
+    const source = ["BotRosterSidebar.tsx", "RosterRows.tsx", "RosterDrag.tsx"]
+      .map((file) => NodeFS.readFileSync(new URL(`../roster/${file}`, import.meta.url), "utf8"))
+      .join("\n");
 
     expect(source).not.toContain("botEnvironment.groups.assignMember");
     expect(source).toContain("roster-pinned-header");

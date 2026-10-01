@@ -45,6 +45,7 @@ describe("botSandbox", () => {
   it("uses the local setting only for local workspaces", () => {
     expect(resolveBotRuntimeMode(null, "approval-required")).toBe("approval-required");
     expect(resolveBotRuntimeMode("local", "full-access")).toBe("full-access");
+
     for (const { value: sandbox } of BOT_SANDBOX_OPTIONS.slice(1)) {
       expect(resolveBotRuntimeMode(sandbox, "approval-required")).toBe("full-access");
     }

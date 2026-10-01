@@ -3,6 +3,8 @@ import * as NodeFS from "node:fs";
 
 import { describe, expect, it } from "vite-plus/test";
 
+import { buttonVariants } from "../ui/button";
+
 describe("NewBotDialog", () => {
   const source = NodeFS.readFileSync(new URL("./NewBotDialog.tsx", import.meta.url), "utf8");
 
@@ -13,9 +15,11 @@ describe("NewBotDialog", () => {
   });
 
   it("makes the disabled create action visibly distinct", () => {
-    expect(source).toContain("disabled:bg-muted");
-    expect(source).toContain("disabled:text-muted-foreground");
-    expect(source).toContain("disabled:opacity-100");
+    expect(source).toContain('variant="default-muted-disabled"');
+    const classes = buttonVariants({ variant: "default-muted-disabled" });
+    expect(classes).toContain("disabled:bg-muted");
+    expect(classes).toContain("disabled:text-muted-foreground");
+    expect(classes).toContain("disabled:opacity-100");
   });
 
   it("warns when no provider can run the new bot's default model", () => {

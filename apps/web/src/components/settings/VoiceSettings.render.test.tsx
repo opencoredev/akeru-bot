@@ -3,14 +3,20 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vite-plus/test";
 
 vi.mock("../../state/server", () => ({ serverEnvironment: {} }));
+
 vi.mock("../../state/query", () => ({ useEnvironmentQuery: () => ({}) }));
+
 vi.mock("../../state/use-atom-command", () => ({ useAtomCommand: () => vi.fn() }));
+
 vi.mock("~/state/environments", () => ({ usePrimaryEnvironment: () => null }));
+
 vi.mock("~/hooks/useSettings", () => ({
   usePrimarySettings: vi.fn(),
   useUpdatePrimarySettings: () => vi.fn(),
 }));
+
 vi.mock("../../confirmDialog", () => ({ requestConfirmDialog: vi.fn() }));
+
 vi.mock("../chat/ReplyPlaybackProvider", () => ({ useOptionalReplyPlayback: () => null }));
 
 import type { EnvironmentId } from "@akeru/contracts";
@@ -74,6 +80,7 @@ describe("voice mode rows", () => {
       { provider: "composed", transcriptionProvider: "openai", synthesisProvider: "fish" },
       ["openai"],
     );
+
     expect(html).toContain("cannot be interrupted");
     expect(html).toContain("Transcription provider");
     expect(html).toContain("Speech provider");
@@ -108,6 +115,7 @@ describe("voice API provider row", () => {
       tone: "error",
       text: "Could not reach the voice provider. Check the network and try again.",
     });
+
     expect(html).toContain('role="alert"');
     expect(html).toContain("Could not reach the voice provider");
     expect(html).toContain("Key saved");
@@ -125,6 +133,7 @@ describe("voice API provider row", () => {
       },
       true,
     );
+
     expect(html).toContain("Key rejected");
     expect(html).toContain("text-destructive-foreground");
     expect(html).not.toContain("Key saved");

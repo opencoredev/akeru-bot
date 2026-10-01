@@ -12,8 +12,11 @@ import {
 import { PROVIDER_ORDER, PROVIDER_PRESENTATION } from "./usageProviders";
 
 const VIEW_WIDTH = 960;
+
 const VIEW_HEIGHT = 260;
+
 const TICK_COUNT = 4;
+
 const PLOT_TOP = 8;
 
 export type UsageChartMetric = "tokens" | "cost";
@@ -50,7 +53,9 @@ function valueFor(
   metric: UsageChartMetric,
 ): number {
   const entry = totals?.byProvider.get(provider);
+
   if (entry === undefined) return 0;
+
   return metric === "tokens" ? entry.totalTokens : entry.costUsd;
 }
 
@@ -61,10 +66,12 @@ function buildPeriodColumns(
 ): readonly DayColumn[] {
   return periods.map((period) => {
     const entry = byPeriod.get(period);
+
     const bands = PROVIDER_ORDER.map((provider) => ({
       provider,
       value: valueFor(entry, provider, metric),
     }));
+
     return { bands, total: bands.reduce((sum, band) => sum + band.value, 0) };
   });
 }
@@ -72,9 +79,11 @@ function buildPeriodColumns(
 /** Shape-preserving cubic tangents that cannot overshoot spiky usage data. */
 function monotoneTangents(points: readonly Point[]): readonly number[] {
   const count = points.length;
+
   if (count < 2) return [0];
 
   const slopes: number[] = [];
+
   for (let index = 0; index < count - 1; index += 1) {
     const dx = (points[index + 1]?.x ?? 0) - (points[index]?.x ?? 0);
     const dy = (points[index + 1]?.y ?? 0) - (points[index]?.y ?? 0);
@@ -84,6 +93,7 @@ function monotoneTangents(points: readonly Point[]): readonly number[] {
   const tangents: number[] = Array.from({ length: count }, () => 0);
   tangents[0] = slopes[0] ?? 0;
   tangents[count - 1] = slopes[count - 2] ?? 0;
+
   for (let index = 1; index < count - 1; index += 1) {
     const previous = slopes[index - 1] ?? 0;
     const next = slopes[index] ?? 0;
@@ -92,14 +102,17 @@ function monotoneTangents(points: readonly Point[]): readonly number[] {
 
   for (let index = 0; index < count - 1; index += 1) {
     const slope = slopes[index] ?? 0;
+
     if (slope === 0) {
       tangents[index] = 0;
       tangents[index + 1] = 0;
       continue;
     }
+
     const a = (tangents[index] ?? 0) / slope;
     const b = (tangents[index + 1] ?? 0) / slope;
     const magnitude = a * a + b * b;
+
     if (magnitude > 9) {
       const scale = 3 / Math.sqrt(magnitude);
       tangents[index] = scale * a * slope;
@@ -125,6 +138,7 @@ function smoothCurve(points: readonly Point[]): readonly CurveSegment[] {
   for (let index = 0; index < points.length - 1; index += 1) {
     const from = points[index];
     const to = points[index + 1];
+
     if (from === undefined || to === undefined) continue;
     const dx = to.x - from.x;
     segments.push({
@@ -134,16 +148,20 @@ function smoothCurve(points: readonly Point[]): readonly CurveSegment[] {
       to,
     });
   }
+
   return segments;
 }
 
 function curvePath(segments: readonly CurveSegment[]): string {
   const first = segments[0];
+
   if (first === undefined) return "";
   let path = `M${first.from.x.toFixed(2)},${first.from.y.toFixed(2)}`;
+
   for (const segment of segments) {
     path += ` C${segment.c1.x.toFixed(2)},${segment.c1.y.toFixed(2)} ${segment.c2.x.toFixed(2)},${segment.c2.y.toFixed(2)} ${segment.to.x.toFixed(2)},${segment.to.y.toFixed(2)}`;
   }
+
   return path;
 }
 
@@ -165,7 +183,9 @@ export function niceScale(peak: number, count: number): { max: number; ticks: re
 
   const max = Math.ceil(peak / step) * step;
   const ticks: number[] = [];
+
   for (let value = 0; value <= max + step * 1e-6; value += step) ticks.push(value);
+
   return { max, ticks };
 }
 
@@ -199,6 +219,7 @@ export function UsageProviderChart({
   timeZone,
 }: UsageProviderChartProps) {
   const periods = resolution === "hour" ? hours : days;
+
   const byPeriod = useMemo(
     () =>
       resolution === "hour"
@@ -206,6 +227,7 @@ export function UsageProviderChart({
         : new Map(daily.map((entry) => [entry.day, entry])),
     [daily, hourly, resolution],
   );
+
   const [hoverIndex, setHoverIndex] = useState<number | null>(null);
   const plotRef = useRef<HTMLDivElement | null>(null);
   const tooltipRef = useRef<HTMLDivElement | null>(null);
@@ -223,6 +245,7 @@ export function UsageProviderChart({
     }
 
     const columns = buildPeriodColumns(periods, byPeriod, metric);
+
     // The scale tops out at the largest single provider-period, not the sum:
     // layered series each measure from zero, so a combined peak would leave
     // the plot permanently half empty.
@@ -230,8 +253,10 @@ export function UsageProviderChart({
       (max, column) => column.bands.reduce((inner, band) => Math.max(inner, band.value), max),
       0,
     );
+
     const { max, ticks: tickValues } = niceScale(peak, TICK_COUNT);
     const step = periods.length === 1 ? 0 : VIEW_WIDTH / (periods.length - 1);
+
     // Leave room above the top gridline so the constant-width stroke is not
     // clipped when a series reaches the peak.
     const toY = (value: number) =>
@@ -239,6 +264,7 @@ export function UsageProviderChart({
 
     const built = providers.map((provider) => {
       const providerIndex = PROVIDER_ORDER.indexOf(provider);
+
       const line = curvePath(
         smoothCurve(
           columns.map((column, periodIndex) => ({
@@ -247,6 +273,7 @@ export function UsageProviderChart({
           })),
         ),
       );
+
       return {
         provider,
         total: columns.reduce((sum, column) => sum + (column.bands[providerIndex]?.value ?? 0), 0),
@@ -271,6 +298,7 @@ export function UsageProviderChart({
     const plot = plotRef.current;
     const tooltip = tooltipRef.current;
     const hoverPosition = hoverPositionRef.current;
+
     if (plot === null || tooltip === null || hoverPosition === null) return;
 
     const gap = 12;
@@ -278,14 +306,17 @@ export function UsageProviderChart({
     const tooltipHeight = tooltip.offsetHeight;
     const plotWidth = plot.clientWidth;
     const plotHeight = plot.clientHeight;
+
     const preferredLeft =
       hoverPosition.x + gap + tooltipWidth <= plotWidth
         ? hoverPosition.x + gap
         : hoverPosition.x - gap - tooltipWidth;
+
     const preferredTop =
       hoverPosition.y + gap + tooltipHeight <= plotHeight
         ? hoverPosition.y + gap
         : hoverPosition.y - gap - tooltipHeight;
+
     const left = Math.min(Math.max(0, preferredLeft), Math.max(0, plotWidth - tooltipWidth));
     const top = Math.min(Math.max(0, preferredTop), Math.max(0, plotHeight - tooltipHeight));
     plot.style.setProperty("--usage-tooltip-left", `${left}px`);
@@ -298,19 +329,23 @@ export function UsageProviderChart({
 
     const plot = plotRef.current;
     const tooltip = tooltipRef.current;
+
     if (plot === null || tooltip === null || typeof ResizeObserver === "undefined") return;
 
     const observer = new ResizeObserver(positionTooltip);
     observer.observe(plot);
     observer.observe(tooltip);
+
     return () => observer.disconnect();
   }, [hoverIndex, positionTooltip]);
 
   const handleMove = useCallback(
     (event: React.MouseEvent<HTMLDivElement>) => {
       const plot = plotRef.current;
+
       if (plot === null || periods.length === 0) return;
       const bounds = plot.getBoundingClientRect();
+
       if (bounds.width === 0) return;
       const localX = Math.min(bounds.width, Math.max(0, event.clientX - bounds.left));
       const localY = Math.min(bounds.height, Math.max(0, event.clientY - bounds.top));
@@ -325,8 +360,10 @@ export function UsageProviderChart({
 
   const hoveredPeriod = hoverIndex === null ? undefined : periods[hoverIndex];
   const hoveredColumn = hoverIndex === null ? undefined : series[hoverIndex];
+
   const formatPeriod = (period: string) =>
     resolution === "hour" ? formatHourShort(period, timeZone) : formatDayShort(period);
+
   const formatTooltipPeriod = (period: string) =>
     resolution === "hour" && referenceTime !== undefined
       ? formatRelativeHourShort(period, referenceTime, timeZone)
@@ -350,6 +387,7 @@ export function UsageProviderChart({
             <span
               key={tick}
               className="absolute right-0 -translate-y-1/2 text-[10px] text-muted-foreground tabular-nums"
+              // oxlint-disable-next-line shadcn/no-inline-styles -- Axis tick position computed from the chart scale.
               style={{ top: `${(toY(tick) / VIEW_HEIGHT) * 100}%` }}
             >
               {tick === 0 ? "0" : format(tick)}
@@ -375,6 +413,7 @@ export function UsageProviderChart({
           >
             {ticks.map((tick) => {
               const y = toY(tick);
+
               return (
                 <line
                   key={tick}
@@ -427,15 +466,12 @@ export function UsageProviderChart({
           {hoveredPeriod === undefined ? null : (
             <div
               ref={tooltipRef}
-              className="surface-glass pointer-events-none absolute z-10 min-w-36 max-w-full rounded-xl border border-border/50 px-2.5 py-2 text-xs shadow-lg"
-              style={{
-                left: "var(--usage-tooltip-left, 0px)",
-                top: "var(--usage-tooltip-top, 0px)",
-              }}
+              className="surface-glass pointer-events-none absolute top-(--usage-tooltip-top,0px) left-(--usage-tooltip-left,0px) z-10 min-w-36 max-w-full rounded-xl border border-border/50 px-2.5 py-2 text-xs shadow-lg"
             >
               <div className="mb-1 text-muted-foreground">{formatTooltipPeriod(hoveredPeriod)}</div>
               {providers.map((provider) => {
                 const { label, mark: Mark } = PROVIDER_PRESENTATION[provider];
+
                 return (
                   <div key={provider} className="flex items-center justify-between gap-3">
                     <span className="flex items-center gap-1.5 text-muted-foreground">

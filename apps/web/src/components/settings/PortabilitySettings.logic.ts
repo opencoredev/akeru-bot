@@ -12,7 +12,9 @@ export function portabilityProjectPickerTarget(
   target: ConnectionTarget | null,
 ): string | null | undefined {
   if (target === null) return undefined;
+
   if (target._tag === "PrimaryConnectionTarget") return null;
+
   return desktopLocalBackendId(target) ?? undefined;
 }
 
@@ -24,7 +26,9 @@ export function updatePortabilityProjectFolderMap(
   const next = Object.fromEntries(
     Object.entries(current).filter(([candidateId]) => candidateId !== projectId),
   ) as PortabilityProjectFolderMap;
+
   const normalizedDestination = destination.trim();
+
   return normalizedDestination ? { ...next, [projectId]: normalizedDestination } : next;
 }
 

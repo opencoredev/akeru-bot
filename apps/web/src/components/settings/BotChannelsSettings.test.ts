@@ -125,10 +125,12 @@ describe("bot channel settings", () => {
 
   it("shows a connecting channel in the overview", () => {
     const connectionId = ChannelConnectionId.make("telegram-pending");
+
     const connection = {
       id: connectionId,
       provider: "telegram",
     } as Parameters<typeof channelState>[1][number];
+
     const bot = {
       id: botId,
       name: "Scout",
@@ -155,6 +157,7 @@ describe("bot channel settings", () => {
 
   it("finds saved connections assigned to archived bots", () => {
     const connectionId = ChannelConnectionId.make("photon-work");
+
     const bots = [
       {
         id: botId,

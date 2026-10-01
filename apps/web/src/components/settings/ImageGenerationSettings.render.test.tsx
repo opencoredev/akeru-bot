@@ -7,16 +7,21 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vite-plus/test";
 
 vi.mock("../../state/server", () => ({ serverEnvironment: {} }));
+
 vi.mock("../../state/query", () => ({ useEnvironmentQuery: () => ({}) }));
+
 vi.mock("../../state/use-atom-command", () => ({ useAtomCommand: () => vi.fn() }));
+
 vi.mock("../../hooks/useSettings", () => ({
   useEnvironmentSettings: vi.fn(),
   useUpdateEnvironmentSettings: () => vi.fn(),
 }));
+
 vi.mock("../../settingsDialogStore", () => ({
   openSettings: vi.fn(),
   useSettingsEnvironmentId: () => "environment-1",
 }));
+
 vi.mock("../../confirmDialog", () => ({ requestConfirmDialog: vi.fn() }));
 
 import { ImageGenerationRoutingSection, ImageProviderRow } from "./ImageGenerationSettings";
@@ -76,6 +81,7 @@ describe("image provider row", () => {
         healthTest: { status: "passed", checkedAt: "2026-09-01T00:00:00.000Z" },
       }),
     );
+
     expect(markup).toContain("Healthy");
     expect(markup).toContain("Health test passed");
   });
@@ -87,6 +93,7 @@ describe("image provider row", () => {
         repairAction: "Reconnect Grok subscription",
       }),
     );
+
     expect(markup).toContain("Revoked");
     expect(markup).toContain("Token was revoked");
     expect(markup).toContain("Reconnect Grok subscription");
@@ -125,6 +132,7 @@ describe("image provider row", () => {
         healthTest: { status: "failed", checkedAt: "2026-09-01T00:00:00.000Z" },
       }),
     );
+
     expect(markup).toContain("Health test failed");
   });
 
@@ -145,6 +153,7 @@ describe("image routing section", () => {
     const markup = renderToStaticMarkup(
       <ImageGenerationRoutingSection settings={both} onChange={() => {}} />,
     );
+
     expect(markup).toContain("Default provider");
     expect(markup).toContain("Fallback order");
     expect(markup).toContain("Grok, then ChatGPT");
@@ -157,13 +166,16 @@ describe("image routing section", () => {
         onChange={() => {}}
       />,
     );
+
     expect(one).not.toContain("Fallback order");
+
     const none = renderToStaticMarkup(
       <ImageGenerationRoutingSection
         settings={{ ...both, chatgptEnabled: false, grokEnabled: false }}
         onChange={() => {}}
       />,
     );
+
     expect(none).toContain("None enabled");
     expect(none).toContain("Turn on a provider above");
   });

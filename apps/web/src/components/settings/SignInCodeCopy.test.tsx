@@ -9,6 +9,7 @@ const clipboard = vi.hoisted(() => ({ writeTextToClipboard: vi.fn() }));
 vi.mock("react", async (importOriginal) => {
   const actual = await importOriginal<typeof import("react")>();
   const { reactHookHarness } = await import("../../test/reactHookHarness");
+
   return {
     ...actual,
     useCallback: reactHookHarness.useCallback,
@@ -20,6 +21,7 @@ vi.mock("react", async (importOriginal) => {
 
 vi.mock("react/compiler-runtime", async () => {
   const { reactHookHarness } = await import("../../test/reactHookHarness");
+
   return { c: reactHookHarness.useMemoCache };
 });
 
@@ -33,15 +35,19 @@ import { SignInCodeCopy } from "./SignInCodeCopy";
 
 function render(code = "ABCD-1234"): ReactElement<Record<string, unknown>> {
   hooks.beginRender();
+
   return SignInCodeCopy({ code }) as ReactElement<Record<string, unknown>>;
 }
 
 function text(node: unknown): string {
   if (typeof node === "string") return node;
+
   if (Array.isArray(node)) return node.map(text).join("");
+
   if (node && typeof node === "object" && "props" in node) {
     return text((node as { props: { children?: unknown } }).props.children);
   }
+
   return "";
 }
 

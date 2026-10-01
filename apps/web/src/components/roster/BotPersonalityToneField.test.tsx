@@ -58,6 +58,7 @@ describe("BotPersonalityToneField", () => {
         onToneChange={() => {}}
       />,
     );
+
     expect(markup).toContain('aria-checked="true"');
     expect(markup).toContain(asRendered(resolveBotPersonalityToneBand(50).sample));
   });

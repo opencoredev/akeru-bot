@@ -48,10 +48,13 @@ export function useServerRosterSync(): void {
  */
 export function useRosterLoadState(): RosterLoadState {
   const environmentId = usePrimaryEnvironmentId();
+
   const shellError = useAtomValue(
     environmentShell.stateValueAtom(environmentId ?? NO_ENVIRONMENT),
   ).error;
+
   const connection = useEnvironmentConnectionState(environmentId).data;
+
   return useMemo(
     () => resolveRosterLoadState({ shellError: Option.getOrNull(shellError), connection }),
     [connection, shellError],
@@ -61,6 +64,7 @@ export function useRosterLoadState(): RosterLoadState {
 export function useSaveBotAvatar(): (botId: string, avatar: BotAvatar) => Promise<boolean> {
   const environmentId = usePrimaryEnvironmentId();
   const bots = useAtomValue(environmentBotsAtom(environmentId ?? NO_ENVIRONMENT));
+
   const updateBot = useAtomCommand(botEnvironment.update, {
     reportFailure: false,
   });
@@ -68,14 +72,18 @@ export function useSaveBotAvatar(): (botId: string, avatar: BotAvatar) => Promis
   return useCallback(
     async (botId: string, avatar: BotAvatar) => {
       const serverBot = bots.find((candidate) => candidate.id === botId);
+
       if (environmentId !== null && serverBot !== undefined) {
         const result = await updateBot({
           environmentId,
           input: { botId: serverBot.id, avatar },
         });
+
         return result._tag === "Success";
       }
+
       useRosterStore.getState().setBotAvatar(botId, avatar);
+
       return true;
     },
     [bots, environmentId, updateBot],
@@ -89,6 +97,7 @@ export function useSaveBotAvatar(): (botId: string, avatar: BotAvatar) => Promis
 export function useEnableBotAutoReview(): (botId: string) => Promise<boolean> {
   const environmentId = usePrimaryEnvironmentId();
   const bots = useAtomValue(environmentBotsAtom(environmentId ?? NO_ENVIRONMENT));
+
   const updateBot = useAtomCommand(botEnvironment.update, {
     reportFailure: false,
   });
@@ -96,12 +105,16 @@ export function useEnableBotAutoReview(): (botId: string) => Promise<boolean> {
   return useCallback(
     async (botId: string) => {
       const serverBot = bots.find((candidate) => candidate.id === botId);
+
       if (environmentId === null || serverBot === undefined) return false;
+
       if (serverBot.runtimeMode === "auto") return true;
+
       const result = await updateBot({
         environmentId,
         input: { botId: serverBot.id, runtimeMode: "auto" },
       });
+
       return result._tag === "Success";
     },
     [bots, environmentId, updateBot],

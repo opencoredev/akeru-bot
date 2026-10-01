@@ -22,13 +22,17 @@ describe("applyWslEnableSelection", () => {
     const calls: Array<string> = [];
     let persistedWslOnly = true;
     let persistedDistro: string | null = "Ubuntu";
+
     const setWslDistro = vi.fn(async (distro: string | null) => {
       calls.push(`setWslDistro:${distro ?? "default"}`);
       persistedDistro = distro;
+
       return { ...baseWslState, distro, wslOnly: persistedWslOnly };
     });
+
     const setWslBackendEnabled = vi.fn(async (enabled: boolean) => {
       calls.push(`setWslBackendEnabled:${enabled}`);
+
       return {
         ...baseWslState,
         enabled,
@@ -36,9 +40,11 @@ describe("applyWslEnableSelection", () => {
         wslOnly: persistedWslOnly,
       };
     });
+
     const setWslOnly = vi.fn(async (enabled: boolean) => {
       calls.push(`setWslOnly:${enabled}`);
       persistedWslOnly = enabled;
+
       return { ...baseWslState, distro: persistedDistro, wslOnly: enabled };
     });
 
@@ -57,13 +63,17 @@ describe("applyWslEnableSelection", () => {
     const calls: Array<string> = [];
     let persistedWslOnly = false;
     const setWslDistro = vi.fn(async () => baseWslState);
+
     const setWslOnly = vi.fn(async (enabled: boolean) => {
       calls.push(`setWslOnly:${enabled}`);
       persistedWslOnly = enabled;
+
       return { ...baseWslState, wslOnly: enabled };
     });
+
     const setWslBackendEnabled = vi.fn(async (enabled: boolean) => {
       calls.push(`setWslBackendEnabled:${enabled}`);
+
       return { ...baseWslState, enabled, wslOnly: persistedWslOnly };
     });
 

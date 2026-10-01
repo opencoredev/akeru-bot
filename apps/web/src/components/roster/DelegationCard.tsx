@@ -42,9 +42,11 @@ export function delegationUsageTokens(
   childActivities: ReadonlyArray<OrchestrationThreadActivity>,
 ): number | null {
   const childTurnId = delegation.phase._tag === "Queued" ? null : delegation.phase.childTurnId;
+
   if (!childTurnId) return null;
   const activities = childActivities.filter((activity) => activity.turnId === childTurnId);
   const usage = deriveLatestContextWindowSnapshot(activities);
+
   return usage?.totalProcessedTokens ?? usage?.usedTokens ?? null;
 }
 
@@ -57,11 +59,13 @@ function DelegationElapsed({
 }) {
   const now = useDelegationClock(live);
   const elapsed = delegationElapsedMs(delegation, now);
+
   return elapsed === null ? null : <span className="tabular-nums">{formatDuration(elapsed)}</span>;
 }
 
 function commandFailureMessage(result: Parameters<typeof squashAtomCommandFailure>[0]) {
   const error = squashAtomCommandFailure(result);
+
   return error instanceof Error ? error.message : undefined;
 }
 
@@ -84,22 +88,28 @@ function DelegationActions({
   const { t } = useI18n();
   const environmentId = usePrimaryEnvironmentId();
   const [pending, setPending] = useState<DelegationAction | null>(null);
+
   const cancelDelegation = useAtomCommand(orchestrationEnvironment.cancelDelegation, {
     reportFailure: false,
   });
+
   const retryDelegation = useAtomCommand(orchestrationEnvironment.retryDelegation, {
     reportFailure: false,
   });
+
   const actions = delegationActions(delegation, delegations);
+
   if (environmentId === null || actions.length === 0) return null;
 
   const run = (action: DelegationAction) => {
     const { delegationId } = delegation;
     setPending(action);
+
     const request =
       action === "retry"
         ? retryDelegation({ environmentId, input: { delegationId } })
         : cancelDelegation({ environmentId, input: { delegationId, keep: action === "keep" } });
+
     return request
       .then((result) => {
         if (result._tag !== "Failure") return;
@@ -115,6 +125,7 @@ function DelegationActions({
 
   return actions.map((action) => {
     const copy = actionCopy(action, t, childName);
+
     return (
       <Button
         key={action}
@@ -187,6 +198,7 @@ export function DelegationCard({
   const environmentId = usePrimaryEnvironmentId();
   const [detailOpen, setDetailOpen] = useState(false);
   const presentation = presentDelegation(delegation);
+
   const childThreadRef = useMemo(
     () =>
       environmentId && presentation.childThreadId
@@ -194,6 +206,7 @@ export function DelegationCard({
         : null,
     [presentation.childThreadId, environmentId],
   );
+
   const childThread = useThreadShell(childThreadRef);
   const childActivities = useThreadActivities(childThreadRef);
   const activeChildBot = childBot?.archivedAt === null ? childBot : null;
@@ -201,6 +214,7 @@ export function DelegationCard({
   const childName = activeChildBot?.name ?? t("Unknown bot");
   const parentName = parentBot?.name ?? t("Unknown bot");
   const usageTokens = childThread ? delegationUsageTokens(delegation, childActivities) : null;
+
   const outcome = presentation.outcome
     ? presentation.outcome.text ||
       (presentation.outcome.kind === "failure"

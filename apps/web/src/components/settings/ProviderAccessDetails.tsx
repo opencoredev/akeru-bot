@@ -24,6 +24,7 @@ export function ProviderAccessDetails({
 }) {
   const { t } = useI18n();
   const guide = providerAccessGuide(provider, status, { models, t });
+
   if (!guide) return null;
 
   const rows: ReadonlyArray<readonly [string, string]> = [

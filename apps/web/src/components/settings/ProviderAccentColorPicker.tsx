@@ -1,7 +1,15 @@
 "use client";
 
 import { PipetteIcon, XIcon } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+  type PointerEvent,
+} from "react";
 
 import { ColorSelector } from "../color-selector";
 import { Button } from "../ui/button";
@@ -20,6 +28,12 @@ const PROVIDER_ACCENT_SWATCHES = [
 
 const FALLBACK_ACCENT_COLOR = PROVIDER_ACCENT_SWATCHES[0];
 
+/* oxlint-disable shadcn/no-inline-styles -- full hue spectrum track, not app chrome */
+const HUE_TRACK_STYLE: CSSProperties = {
+  background: "linear-gradient(to right, #f00, #ff0, #0f0, #0ff, #00f, #f0f, #f00)",
+};
+/* oxlint-enable shadcn/no-inline-styles */
+
 function clamp(value: number, min = 0, max = 1) {
   return Math.min(max, Math.max(min, value));
 }
@@ -35,6 +49,7 @@ function hexToHsv(hex: string) {
   const delta = max - min;
 
   let hue = 0;
+
   if (delta !== 0) {
     if (max === red) {
       hue = ((green - blue) / delta) % 6;
@@ -43,7 +58,9 @@ function hexToHsv(hex: string) {
     } else {
       hue = (red - green) / delta + 4;
     }
+
     hue *= 60;
+
     if (hue < 0) hue += 360;
   }
 
@@ -58,6 +75,7 @@ function hsvToHex(hue: number, saturation: number, value: number) {
   const chroma = value * saturation;
   const x = chroma * (1 - Math.abs(((hue / 60) % 2) - 1));
   const match = value - chroma;
+
   const [red, green, blue] =
     hue < 60
       ? [chroma, x, 0]
@@ -88,6 +106,14 @@ function ProviderCustomColorPanel(props: {
   const initialHsv = useMemo(() => hexToHsv(props.value), [props.value]);
   const [hsv, setHsv] = useState(initialHsv);
   const currentColor = hsvToHex(hsv.h, hsv.s, hsv.v);
+
+  /* oxlint-disable shadcn/no-inline-styles -- HSV plane painted for the current hue */
+  const planeStyle: CSSProperties = {
+    backgroundColor: `hsl(${hsv.h} 100% 50%)`,
+    backgroundImage:
+      "linear-gradient(to top, #000, transparent), linear-gradient(to right, #fff, transparent)",
+  };
+  /* oxlint-enable shadcn/no-inline-styles */
 
   const commitHsv = useCallback(
     (nextHsv: typeof hsv) => {
@@ -126,11 +152,7 @@ function ProviderCustomColorPanel(props: {
     <div className="w-56 bg-popover">
       <div
         className="relative h-36 cursor-crosshair touch-none"
-        style={{
-          backgroundColor: `hsl(${hsv.h} 100% 50%)`,
-          backgroundImage:
-            "linear-gradient(to top, #000, transparent), linear-gradient(to right, #fff, transparent)",
-        }}
+        style={planeStyle}
         onPointerDown={handlePointerDown(updateFromPlane)}
         onPointerMove={(event) => {
           if (event.currentTarget.hasPointerCapture(event.pointerId)) {
@@ -139,16 +161,15 @@ function ProviderCustomColorPanel(props: {
         }}
       >
         <span
-          className="pointer-events-none absolute size-3 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white shadow-[0_0_0_1px_rgb(0_0_0/0.35)]"
+          className="pointer-events-none absolute size-3 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white ring-1 ring-black/35"
+          // oxlint-disable-next-line shadcn/no-inline-styles -- thumb position follows the picked saturation and brightness
           style={{ left: `${hsv.s * 100}%`, top: `${(1 - hsv.v) * 100}%` }}
         />
       </div>
       <div className="grid gap-3 p-3">
         <div
           className="relative h-3 cursor-pointer touch-none rounded-full"
-          style={{
-            background: "linear-gradient(to right, #f00, #ff0, #0f0, #0ff, #00f, #f0f, #f00)",
-          }}
+          style={HUE_TRACK_STYLE}
           onPointerDown={handlePointerDown(updateFromHue)}
           onPointerMove={(event) => {
             if (event.currentTarget.hasPointerCapture(event.pointerId)) {
@@ -157,7 +178,8 @@ function ProviderCustomColorPanel(props: {
           }}
         >
           <span
-            className="pointer-events-none absolute top-1/2 size-4 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white shadow-[0_0_0_1px_rgb(0_0_0/0.35)]"
+            className="pointer-events-none absolute top-1/2 size-4 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white ring-1 ring-black/35"
+            // oxlint-disable-next-line shadcn/no-inline-styles -- thumb position and fill follow the picked color
             style={{ left: `${(hsv.h / 360) * 100}%`, backgroundColor: currentColor }}
           />
         </div>
@@ -165,6 +187,7 @@ function ProviderCustomColorPanel(props: {
           value={currentColor}
           onChange={(event) => {
             const nextColor = event.currentTarget.value;
+
             if (!/^#[\da-f]{6}$/i.test(nextColor)) return;
             setHsv(hexToHsv(nextColor));
             props.onCommit(nextColor);
@@ -186,6 +209,16 @@ function ProviderCustomColorPicker(props: {
 }) {
   const normalized = normalizeProviderAccentColor(props.value) ?? FALLBACK_ACCENT_COLOR;
 
+  // The trigger wears the user's custom accent; selected adds a ring in that color.
+  /* oxlint-disable shadcn/no-inline-styles -- user-chosen accent color */
+  const triggerStyle: CSSProperties = {
+    backgroundColor: normalized,
+    ...(props.selected
+      ? { boxShadow: `inset 0 0 0 2px var(--card), 0 0 0 2px ${normalized}` }
+      : {}),
+  };
+  /* oxlint-enable shadcn/no-inline-styles */
+
   return (
     <Popover>
       <PopoverTrigger
@@ -196,14 +229,7 @@ function ProviderCustomColorPicker(props: {
               "flex size-6 cursor-pointer items-center justify-center rounded-full text-white transition-transform duration-200 active:scale-90",
               "hover:scale-105",
             )}
-            style={{
-              backgroundColor: normalized,
-              ...(props.selected
-                ? {
-                    boxShadow: `inset 0 0 0 2px var(--card), 0 0 0 2px ${normalized}`,
-                  }
-                : {}),
-            }}
+            style={triggerStyle}
             aria-label={`Choose custom accent color for ${props.displayName}`}
           >
             <PipetteIcon className="size-3 text-foreground/25" aria-hidden />
@@ -214,7 +240,8 @@ function ProviderCustomColorPicker(props: {
         side="bottom"
         align="start"
         sideOffset={6}
-        className="overflow-hidden rounded-md p-0 [--viewport-inline-padding:0px] [&_[data-slot=popover-viewport]]:p-0"
+        className="overflow-hidden"
+        variant="accent-picker"
       >
         <ProviderCustomColorPanel value={normalized} onCommit={props.onCommit} />
       </PopoverPopup>
@@ -249,7 +276,9 @@ export function ProviderAccentColorPicker(props: {
       if (commitTimeoutRef.current !== null) {
         clearTimeout(commitTimeoutRef.current);
       }
+
       const pendingCommit = pendingCommitRef.current;
+
       if (pendingCommit !== null) {
         onCommitRef.current(pendingCommit);
       }
@@ -263,22 +292,28 @@ export function ProviderAccentColorPicker(props: {
 
       if (commitDelayMs <= 0) {
         pendingCommitRef.current = null;
+
         if (commitTimeoutRef.current !== null) {
           clearTimeout(commitTimeoutRef.current);
           commitTimeoutRef.current = null;
         }
+
         onCommit(normalizedValue);
+
         return;
       }
 
       pendingCommitRef.current = normalizedValue;
+
       if (commitTimeoutRef.current !== null) {
         clearTimeout(commitTimeoutRef.current);
       }
+
       commitTimeoutRef.current = setTimeout(() => {
         commitTimeoutRef.current = null;
         const pendingCommit = pendingCommitRef.current;
         pendingCommitRef.current = null;
+
         if (pendingCommit !== null) {
           onCommitRef.current(pendingCommit);
         }
@@ -288,11 +323,12 @@ export function ProviderAccentColorPicker(props: {
   );
 
   const normalized = normalizeProviderAccentColor(optimisticValue);
+
   const selectedValue =
-    normalized &&
-    PROVIDER_ACCENT_SWATCHES.includes(normalized as (typeof PROVIDER_ACCENT_SWATCHES)[number])
+    normalized && PROVIDER_ACCENT_SWATCHES.some((swatch) => swatch === normalized)
       ? normalized
       : "";
+
   const customSelected = Boolean(normalized && selectedValue === "");
 
   return (
@@ -316,11 +352,8 @@ export function ProviderAccentColorPicker(props: {
         <Button
           type="button"
           size="icon"
-          variant="ghost"
-          className={cn(
-            "size-7 shrink-0 text-muted-foreground transition-opacity",
-            normalized ? "opacity-100" : "pointer-events-none opacity-0",
-          )}
+          variant="ghost-fade"
+          className="size-7 shrink-0"
           onClick={() => commitAccentColor("")}
           aria-label={`Clear accent color for ${displayName}`}
           aria-hidden={!normalized}

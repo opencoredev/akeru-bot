@@ -22,17 +22,22 @@ const THEME_PREVIEW_ROLES = [
   "messageSurface",
   "messageAction",
 ] as const;
+
 type ThemePreviewRole = (typeof THEME_PREVIEW_ROLES)[number];
+
 type ThemeCardPreview = {
   mode: ThemeAppearance;
   colors: Readonly<Record<ThemePreviewRole, string>>;
 };
+
 export type ThemeCardDefinition = {
   id: string;
   label: string;
   previews: ReadonlyArray<ThemeCardPreview>;
 };
+
 export type ThemeMode = ThemeAppearance | "system";
+
 export type ThemeCardPreviewColors = ThemeCardPreview["colors"];
 
 const STANDARD_THEME_PREVIEW_COLORS: Record<
@@ -79,6 +84,7 @@ export function getThemeCardDefinition(theme: ThemeDefinition): ThemeCardDefinit
     label: theme.label,
     previews: getThemeModes(theme).map((mode) => {
       const colors = getThemeColorsForMode(theme, mode) ?? theme.colors;
+
       return {
         mode,
         colors: {
@@ -109,7 +115,10 @@ function getThemePreviewStyle(
   const modeBase = `color-mix(in oklab, ${colors.canvas} ${spec.baseWeight * 100}%, ${spec.baseTarget})`;
   const accentPosition = `${spec.accent.center[0] * 100}% ${spec.accent.center[1] * 100}%`;
   const actionPosition = `${spec.action.center[0] * 100}% ${spec.action.center[1] * 100}%`;
+
   return {
+    filter: `blur(${spec.blurAt56Px}px)`,
+    transform: `scale(${spec.scale})`,
     backgroundColor: modeBase,
     backgroundImage: [
       `radial-gradient(circle at ${accentPosition} in oklab, ${colors.accent} 0%, color-mix(in oklab, ${colors.accent} ${spec.accent.middleOpacity * 100}%, transparent) ${spec.accent.middleOffset * 100}%, transparent ${spec.accent.endOffset * 100}%)`,
@@ -121,12 +130,12 @@ function getThemePreviewStyle(
 }
 
 // The gradient halves of each ball can match the card surface, so every ball
-// carries a faint mode-appropriate inner ring to keep its silhouette legible.
-function themePreviewEdgeShadow(mode: ThemeAppearance): string {
-  return mode === "dark"
-    ? "inset 0 0 0 1px rgb(255 255 255 / 0.14), 0 1px 2px rgb(0 0 0 / 0.18)"
-    : "inset 0 0 0 1px rgb(0 0 0 / 0.10), 0 1px 2px rgb(0 0 0 / 0.08)";
-}
+// carries a faint inner ring for the previewed mode (not the app's) to keep its
+// silhouette legible.
+const THEME_PREVIEW_EDGE_CLASS_NAMES: Record<ThemeAppearance, string> = {
+  dark: "inset-ring inset-ring-white/14 shadow-xs/18",
+  light: "inset-ring inset-ring-black/10 shadow-xs/8",
+};
 
 export function ThemePreviewCircle({
   colors,
@@ -138,16 +147,15 @@ export function ThemePreviewCircle({
   return (
     <span
       aria-hidden
-      className="relative block size-14 shrink-0 overflow-hidden rounded-full border-2 border-background"
-      style={{ boxShadow: themePreviewEdgeShadow(mode) }}
+      className={cn(
+        "relative block size-14 shrink-0 overflow-hidden rounded-full border-2 border-background",
+        THEME_PREVIEW_EDGE_CLASS_NAMES[mode],
+      )}
     >
       <span
         className="absolute inset-0 rounded-full"
-        style={{
-          ...getThemePreviewStyle(colors, mode),
-          filter: `blur(${THEME_PREVIEW_RENDER_SPECS[mode].blurAt56Px}px)`,
-          transform: `scale(${THEME_PREVIEW_RENDER_SPECS[mode].scale})`,
-        }}
+        // oxlint-disable-next-line shadcn/no-inline-styles -- paints the previewed theme's own colors
+        style={getThemePreviewStyle(colors, mode)}
       />
     </span>
   );
@@ -174,6 +182,7 @@ export function ThemePreviewCircles({
       {previews.map((preview) => {
         const mode = preview.mode;
         const isPicked = activeModes.includes(mode);
+
         return (
           <Tooltip key={mode}>
             <TooltipTrigger
@@ -182,7 +191,7 @@ export function ThemePreviewCircles({
                   aria-label={`Use ${label} ${mode} mode`}
                   aria-pressed={isPicked}
                   className={cn(
-                    "relative flex size-[68px] shrink-0 transform-gpu cursor-pointer items-center justify-center rounded-full p-1 outline-none transition-transform hover:scale-105 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card",
+                    "relative flex size-17 shrink-0 transform-gpu cursor-pointer items-center justify-center rounded-full p-1 outline-none transition-transform hover:scale-105 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card",
                     isPicked && "hover:scale-100",
                   )}
                   onClick={(event) => {
@@ -196,8 +205,7 @@ export function ThemePreviewCircles({
                     <>
                       <span
                         aria-hidden
-                        className="pointer-events-none absolute inset-0 rounded-full"
-                        style={{ boxShadow: "inset 0 0 0 2px var(--ring)" }}
+                        className="pointer-events-none absolute inset-0 rounded-full inset-ring-2 inset-ring-ring"
                       />
                       <span
                         aria-hidden

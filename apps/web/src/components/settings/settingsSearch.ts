@@ -382,6 +382,7 @@ export function searchableSetting(
   readonly title: string;
 } {
   const { id: anchorId, title } = SEARCH_ITEMS_BY_ID[id];
+
   return { id: anchorId, title: translate(title) };
 }
 
@@ -400,6 +401,7 @@ export function searchSettings(
   translateTitle: (title: string) => string = (title) => title,
 ): ReadonlyArray<SettingsSearchItem> {
   const normalizedQuery = normalizeSearchText(query);
+
   if (normalizedQuery.length === 0) return [];
 
   return items.filter(
