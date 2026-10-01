@@ -1,3 +1,5 @@
+import * as Schema from "effect/Schema";
+import * as Predicate from "effect/Predicate";
 import { RuntimeTaskId } from "@akeru/contracts";
 import { ProviderDriverKind } from "@akeru/contracts";
 import { afterEach, describe, expect, it } from "vite-plus/test";
@@ -97,13 +99,15 @@ describe("ProviderRuntimeIngestion", () => {
     );
 
     const progressPayload =
-      progress?.payload && typeof progress.payload === "object"
-        ? (progress.payload as Record<string, unknown>)
+      progress?.payload &&
+      (progress.payload === null || Predicate.isObjectOrArray(progress.payload))
+        ? (progress.payload as Record<string, Schema.Json>)
         : undefined;
 
     const completedPayload =
-      completed?.payload && typeof completed.payload === "object"
-        ? (completed.payload as Record<string, unknown>)
+      completed?.payload &&
+      (completed.payload === null || Predicate.isObjectOrArray(completed.payload))
+        ? (completed.payload as Record<string, Schema.Json>)
         : undefined;
 
     expect(started?.kind).toBe("task.started");
@@ -184,13 +188,15 @@ describe("ProviderRuntimeIngestion", () => {
     );
 
     const progressPayload =
-      progress?.payload && typeof progress.payload === "object"
-        ? (progress.payload as Record<string, unknown>)
+      progress?.payload &&
+      (progress.payload === null || Predicate.isObjectOrArray(progress.payload))
+        ? (progress.payload as Record<string, Schema.Json>)
         : undefined;
 
     const completedPayload =
-      completed?.payload && typeof completed.payload === "object"
-        ? (completed.payload as Record<string, unknown>)
+      completed?.payload &&
+      (completed.payload === null || Predicate.isObjectOrArray(completed.payload))
+        ? (completed.payload as Record<string, Schema.Json>)
         : undefined;
 
     expect(progress?.summary).toBe("Typecheck mobile app");
@@ -243,8 +249,9 @@ describe("ProviderRuntimeIngestion", () => {
     );
 
     const completedPayload =
-      completed?.payload && typeof completed.payload === "object"
-        ? (completed.payload as Record<string, unknown>)
+      completed?.payload &&
+      (completed.payload === null || Predicate.isObjectOrArray(completed.payload))
+        ? (completed.payload as Record<string, Schema.Json>)
         : undefined;
 
     expect(completedPayload?.title).toBe("wait for codex review to finish");
@@ -311,8 +318,9 @@ describe("ProviderRuntimeIngestion", () => {
     );
 
     const completedPayload =
-      completed?.payload && typeof completed.payload === "object"
-        ? (completed.payload as Record<string, unknown>)
+      completed?.payload &&
+      (completed.payload === null || Predicate.isObjectOrArray(completed.payload))
+        ? (completed.payload as Record<string, Schema.Json>)
         : undefined;
 
     expect(completedPayload?.title).toBe("Watch round-3 CI and bots");

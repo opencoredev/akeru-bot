@@ -1,3 +1,5 @@
+import * as Schema from "effect/Schema";
+import * as Predicate from "effect/Predicate";
 import { ProviderDriverKind } from "@akeru/contracts";
 import { ThreadId } from "@akeru/contracts";
 import * as Effect from "effect/Effect";
@@ -55,18 +57,19 @@ describe("ProviderRuntimeIngestion", () => {
     );
 
     const payload =
-      activity?.payload && typeof activity.payload === "object"
-        ? (activity.payload as Record<string, unknown>)
+      activity?.payload &&
+      (activity.payload === null || Predicate.isObjectOrArray(activity.payload))
+        ? (activity.payload as Record<string, Schema.Json>)
         : undefined;
 
     const data =
-      payload?.data && typeof payload.data === "object"
-        ? (payload.data as Record<string, unknown>)
+      payload?.data && (payload.data === null || Predicate.isObjectOrArray(payload.data))
+        ? (payload.data as Record<string, Schema.Json>)
         : undefined;
 
     const rawOutput =
-      data?.rawOutput && typeof data.rawOutput === "object"
-        ? (data.rawOutput as Record<string, unknown>)
+      data?.rawOutput && (data.rawOutput === null || Predicate.isObjectOrArray(data.rawOutput))
+        ? (data.rawOutput as Record<string, Schema.Json>)
         : undefined;
 
     expect(activity?.kind).toBe("tool.completed");
@@ -114,8 +117,9 @@ describe("ProviderRuntimeIngestion", () => {
     );
 
     const payload =
-      activity?.payload && typeof activity.payload === "object"
-        ? (activity.payload as Record<string, unknown>)
+      activity?.payload &&
+      (activity.payload === null || Predicate.isObjectOrArray(activity.payload))
+        ? (activity.payload as Record<string, Schema.Json>)
         : undefined;
 
     expect(activity?.summary).toBe("Ran command");
@@ -158,8 +162,9 @@ describe("ProviderRuntimeIngestion", () => {
     );
 
     const payload =
-      activity?.payload && typeof activity.payload === "object"
-        ? (activity.payload as Record<string, unknown>)
+      activity?.payload &&
+      (activity.payload === null || Predicate.isObjectOrArray(activity.payload))
+        ? (activity.payload as Record<string, Schema.Json>)
         : undefined;
 
     expect(activity?.summary).toBe("Read file");
@@ -266,8 +271,9 @@ describe("ProviderRuntimeIngestion", () => {
     );
 
     const planPayload =
-      planActivity?.payload && typeof planActivity.payload === "object"
-        ? (planActivity.payload as Record<string, unknown>)
+      planActivity?.payload &&
+      (planActivity.payload === null || Predicate.isObjectOrArray(planActivity.payload))
+        ? (planActivity.payload as Record<string, Schema.Json>)
         : undefined;
 
     expect(planActivity?.kind).toBe("turn.plan.updated");
@@ -278,8 +284,9 @@ describe("ProviderRuntimeIngestion", () => {
     );
 
     const toolUpdatePayload =
-      toolUpdate?.payload && typeof toolUpdate.payload === "object"
-        ? (toolUpdate.payload as Record<string, unknown>)
+      toolUpdate?.payload &&
+      (toolUpdate.payload === null || Predicate.isObjectOrArray(toolUpdate.payload))
+        ? (toolUpdate.payload as Record<string, Schema.Json>)
         : undefined;
 
     expect(toolUpdate?.kind).toBe("tool.updated");
@@ -292,8 +299,8 @@ describe("ProviderRuntimeIngestion", () => {
     );
 
     const warningPayload =
-      warning?.payload && typeof warning.payload === "object"
-        ? (warning.payload as Record<string, unknown>)
+      warning?.payload && (warning.payload === null || Predicate.isObjectOrArray(warning.payload))
+        ? (warning.payload as Record<string, Schema.Json>)
         : undefined;
 
     expect(warning?.kind).toBe("runtime.warning");

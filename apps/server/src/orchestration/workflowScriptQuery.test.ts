@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 // @effect-diagnostics nodeBuiltinImport:off
 import * as NodeFS from "node:fs";
 import * as NodeOS from "node:os";
@@ -80,7 +81,7 @@ describe("readWorkflowScript containment", () => {
 
       assert.equal(sneaky._tag, "Success");
 
-      if (sneaky._tag === "Success") {
+      if (Predicate.isTagged(sneaky, "Success")) {
         assert.equal(sneaky.value, "outside-root");
       }
     }),

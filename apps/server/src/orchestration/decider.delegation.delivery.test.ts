@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import {
   acknowledgeAkeruDelegation,
@@ -59,13 +60,12 @@ it.layer(NodeServices.layer)("delegation decider", (it) => {
           commandId: CommandId.make("command-ack-rewrite"),
           delegation: {
             ...acknowledged,
-            phase:
-              acknowledged.phase._tag === "Completed"
-                ? {
-                    ...acknowledged.phase,
-                    result: { ...acknowledged.phase.result, summary: "Rewritten." },
-                  }
-                : acknowledged.phase,
+            phase: Predicate.isTagged(acknowledged.phase, "Completed")
+              ? {
+                  ...acknowledged.phase,
+                  result: { ...acknowledged.phase.result, summary: "Rewritten." },
+                }
+              : acknowledged.phase,
           },
         },
       }).pipe(Effect.flip);
@@ -118,10 +118,9 @@ it.layer(NodeServices.layer)("delegation decider", (it) => {
           commandId: CommandId.make("command-release-rewrite"),
           delegation: {
             ...released,
-            phase:
-              released.phase._tag === "Completed"
-                ? { ...released.phase, result: { ...released.phase.result, summary: "Rewritten." } }
-                : released.phase,
+            phase: Predicate.isTagged(released.phase, "Completed")
+              ? { ...released.phase, result: { ...released.phase.result, summary: "Rewritten." } }
+              : released.phase,
           },
         },
       }).pipe(Effect.flip);

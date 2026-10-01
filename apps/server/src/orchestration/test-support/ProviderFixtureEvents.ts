@@ -1,3 +1,4 @@
+import * as Match from "effect/Match";
 import { ProviderRuntimeEvent } from "@akeru/contracts";
 import * as Schema from "effect/Schema";
 
@@ -63,19 +64,19 @@ const decodeRuntimeEvent = Schema.decodeUnknownSync(ProviderRuntimeEvent, {
 });
 
 function requestType(kind: "command" | "file-change" | "unknown") {
-  return kind === "command"
-    ? "command_execution_approval"
-    : kind === "file-change"
-      ? "file_change_approval"
-      : "unknown";
+  return Match.value(kind).pipe(
+    Match.when("command", () => "command_execution_approval"),
+    Match.when("file-change", () => "file_change_approval"),
+    Match.orElse(() => "unknown"),
+  );
 }
 
 function itemType(kind: "command" | "file-change" | "unknown") {
-  return kind === "command"
-    ? "command_execution"
-    : kind === "file-change"
-      ? "file_change"
-      : "unknown";
+  return Match.value(kind).pipe(
+    Match.when("command", () => "command_execution"),
+    Match.when("file-change", () => "file_change"),
+    Match.orElse(() => "unknown"),
+  );
 }
 
 export function normalizeFixtureEvent(event: FixtureProviderRuntimeEvent): ProviderRuntimeEvent {

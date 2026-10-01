@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import {
   CommandId,
   DelegationId,
@@ -284,7 +285,7 @@ it.layer(NodeServices.layer)("bot delete decider", (it) => {
         }),
       }).pipe(Effect.flip);
 
-      if (error._tag !== "OrchestrationCommandInvariantError") {
+      if (!Predicate.isTagged(error, "OrchestrationCommandInvariantError")) {
         throw new Error("Expected boss delete invariant error");
       }
 
@@ -306,7 +307,7 @@ it.layer(NodeServices.layer)("bot delete decider", (it) => {
         }),
       }).pipe(Effect.flip);
 
-      if (error._tag !== "OrchestrationCommandInvariantError") {
+      if (!Predicate.isTagged(error, "OrchestrationCommandInvariantError")) {
         throw new Error("Expected minimum group size invariant error");
       }
 

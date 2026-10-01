@@ -1,3 +1,4 @@
+import * as Schema from "effect/Schema";
 import {
   CommandId,
   EventId,
@@ -230,7 +231,7 @@ it.layer(NodeServices.layer)("settled thread decider", (it) => {
       const activity = (
         kind: string,
         requestId: string,
-        payload: Record<string, unknown>,
+        payload: Record<string, Schema.Json>,
       ): OrchestrationThread["activities"][number] =>
         ({
           id: EventId.make(`activity-${requestId}-${kind}`),

@@ -1,3 +1,5 @@
+import type { ActivityRecord } from "../../ActivityPayloadBounds.ts";
+import * as Match from "effect/Match";
 import { createObservationHistory } from "../../test-support/Observations.ts";
 import {
   normalizeFixtureEvent,
@@ -132,7 +134,7 @@ export function createAgentControllerHarness() {
     Effect.runSync(PubSub.publish(runtimeEventPubSub, normalizeFixtureEvent(event)));
   };
 
-  const emitUnsafe = (event: object) => {
+  const emitUnsafe = (event: ActivityRecord) => {
     // SAFETY: Only malformed-event tests use this boundary to exercise handler isolation.
     Effect.runSync(PubSub.publish(runtimeEventPubSub, event as ProviderRuntimeEvent));
   };
@@ -410,16 +412,30 @@ export function createRuntimeIngestionHarness() {
             commandId: CommandId.make("cmd-channel-connect"),
             botId: BotId.make("bot-akeru"),
             targetProjectId: asProjectId("project-1"),
-            ...(channelProvider === "telegram"
-              ? ({ provider: "telegram", token: "test-token" } as const)
-              : channelProvider === "slack"
-                ? ({ provider: "slack", botToken: "test-token", appToken: "app-token" } as const)
-                : ({
+            ...Match.value(channelProvider).pipe(
+              Match.when(
+                "telegram",
+                () => ({ provider: "telegram", token: "test-token" }) as const,
+              ),
+              Match.when(
+                "slack",
+                () =>
+                  ({
+                    provider: "slack",
+                    botToken: "test-token",
+                    appToken: "app-token",
+                  }) as const,
+              ),
+              Match.orElse(
+                () =>
+                  ({
                     provider: "discord",
                     botToken: "test-token",
                     applicationId: "test-app",
                     publicKey: "test-key",
-                  } as const)),
+                  }) as const,
+              ),
+            ),
           }),
         );
 

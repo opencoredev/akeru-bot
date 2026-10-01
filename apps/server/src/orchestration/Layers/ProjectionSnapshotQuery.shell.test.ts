@@ -1,3 +1,5 @@
+import * as Schema from "effect/Schema";
+import * as Predicate from "effect/Predicate";
 import { projectionSnapshotLayer } from "./test-support/ProjectionSnapshotHarness.ts";
 import { ThreadId } from "@akeru/contracts";
 import { assert } from "@effect/vitest";
@@ -82,7 +84,7 @@ projectionSnapshotLayer("ProjectionSnapshotQuery", (it) => {
       const snapshotQuery = yield* ProjectionSnapshotQuery;
       const sql = yield* SqlClient.SqlClient;
 
-      const makeRecord = (index: number, overrides: Record<string, unknown>) => ({
+      const makeRecord = (index: number, overrides: Record<string, Schema.Json>) => ({
         delegationId: `delegation-${String(index).padStart(3, "0")}`,
         parentDelegationId: null,
         parentBotId: "bot-parent",
@@ -163,7 +165,10 @@ projectionSnapshotLayer("ProjectionSnapshotQuery", (it) => {
         (delegation) => delegation.delegationId === "delegation-050",
       );
 
-      const failure = failed?.phase._tag === "Failed" ? failed.phase.failure : undefined;
+      const failure = Predicate.isTagged(failed?.phase, "Failed")
+        ? failed.phase.failure
+        : undefined;
+
       assert.equal(failure?.message.length, SHELL_DELEGATION_TEXT_MAX_CHARS);
       assert.isTrue(failure?.message.endsWith("…"));
 
@@ -172,7 +177,9 @@ projectionSnapshotLayer("ProjectionSnapshotQuery", (it) => {
       );
 
       assert.equal(
-        completed?.phase._tag === "Completed" ? completed.phase.result.summary : undefined,
+        Predicate.isTagged(completed?.phase, "Completed")
+          ? completed.phase.result.summary
+          : undefined,
         "Done 25",
       );
       yield* sql`DELETE FROM projection_delegations`;
@@ -245,7 +252,7 @@ projectionSnapshotLayer("ProjectionSnapshotQuery", (it) => {
       const detail = yield* snapshotQuery.getThreadDetailById(ThreadId.make("thread-1"));
       assert.equal(detail._tag, "Some");
 
-      if (detail._tag === "Some") {
+      if (Predicate.isTagged(detail, "Some")) {
         const byId = new Map(detail.value.messages.map((message) => [message.id, message]));
         assert.equal(byId.get(asMessageId("message-unknown"))?.channelDelivery, "unknown");
         assert.equal(byId.get(asMessageId("message-failed"))?.channelDelivery, "failed");

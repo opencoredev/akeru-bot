@@ -14,6 +14,8 @@ import {
   makeSilenceWatchdogHarness,
 } from "./test-support/SilenceWatchdogHarness.ts";
 
+const decodeSilentRunPayload = Schema.decodeUnknownSync(ThreadSilentRunActivityPayload);
+
 describe("ProviderRuntimeIngestion silence watchdog", () => {
   const testScope = makeSilenceWatchdogHarness();
   const { createHarness, silentKinds, silenceIncidents } = testScope;
@@ -41,9 +43,7 @@ describe("ProviderRuntimeIngestion silence watchdog", () => {
       const watchdog = await harness.watchdogActivities();
       expect(silentKinds(watchdog)).toEqual([THREAD_SILENT_RUN_ACTIVITY_KIND]);
       expect(watchdog[0]?.turnId).toBe(turnId);
-      expect(
-        Schema.decodeUnknownSync(ThreadSilentRunActivityPayload)(watchdog[0]?.payload),
-      ).toEqual({
+      expect(decodeSilentRunPayload(watchdog[0]?.payload)).toEqual({
         provider: driver,
         lastActivityAt: "1970-01-01T00:00:00.000Z",
       });

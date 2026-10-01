@@ -1,3 +1,5 @@
+import * as Schema from "effect/Schema";
+import * as Predicate from "effect/Predicate";
 import { ProviderDriverKind } from "@akeru/contracts";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 import {
@@ -67,8 +69,9 @@ describe("ProviderRuntimeIngestion", () => {
     );
 
     const activityPayload =
-      activity?.payload && typeof activity.payload === "object"
-        ? (activity.payload as Record<string, unknown>)
+      activity?.payload &&
+      (activity.payload === null || Predicate.isObjectOrArray(activity.payload))
+        ? (activity.payload as Record<string, Schema.Json>)
         : undefined;
 
     expect(activity?.kind).toBe("runtime.error");
@@ -201,7 +204,7 @@ describe("ProviderRuntimeIngestion", () => {
       (entry: ProviderRuntimeTestActivity) => entry.kind === "tool.started",
     );
 
-    const payload = activity?.payload as Record<string, unknown> | undefined;
+    const payload = activity?.payload as Record<string, Schema.Json> | undefined;
     expect(payload).toMatchObject({
       itemType: "command_execution",
       toolCallId: "tool-call-9",

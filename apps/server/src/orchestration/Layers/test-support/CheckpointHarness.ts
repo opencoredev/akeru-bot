@@ -1,3 +1,4 @@
+import type { ActivityRecord } from "../../ActivityPayloadBounds.ts";
 import { type OrchestrationReadModel, type OrchestrationEvent } from "@akeru/contracts";
 import { createObservationHistory } from "../../test-support/Observations.ts";
 
@@ -144,7 +145,7 @@ export function createAgentControllerHarness(
     Effect.runSync(PubSub.publish(runtimeEventPubSub, normalizeFixtureEvent(event)));
   };
 
-  const emitUnsafe = (event: object) => {
+  const emitUnsafe = (event: ActivityRecord) => {
     // SAFETY: This boundary deliberately publishes an obsolete event to test rejection.
     Effect.runSync(PubSub.publish(runtimeEventPubSub, event as ProviderRuntimeEvent));
   };

@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import { projectionSnapshotLayer } from "./test-support/ProjectionSnapshotHarness.ts";
 import { ThreadId } from "@akeru/contracts";
 import { assert } from "@effect/vitest";
@@ -175,7 +176,7 @@ projectionSnapshotLayer("ProjectionSnapshotQuery", (it) => {
         const project = yield* snapshotQuery.getActiveProjectByWorkspaceRoot("/tmp/workspace");
         assert.equal(project._tag, "Some");
 
-        if (project._tag === "Some") {
+        if (Predicate.isTagged(project, "Some")) {
           assert.equal(project.value.id, asProjectId("project-active"));
         }
 
@@ -184,7 +185,7 @@ projectionSnapshotLayer("ProjectionSnapshotQuery", (it) => {
 
         assert.equal(originalProjectId._tag, "Some");
 
-        if (originalProjectId._tag === "Some") {
+        if (Predicate.isTagged(originalProjectId, "Some")) {
           assert.equal(originalProjectId.value, asProjectId("project-deleted"));
         }
 
@@ -202,7 +203,7 @@ projectionSnapshotLayer("ProjectionSnapshotQuery", (it) => {
 
         assert.equal(firstThreadId._tag, "Some");
 
-        if (firstThreadId._tag === "Some") {
+        if (Predicate.isTagged(firstThreadId, "Some")) {
           assert.equal(firstThreadId.value, ThreadId.make("thread-first"));
         }
       }),

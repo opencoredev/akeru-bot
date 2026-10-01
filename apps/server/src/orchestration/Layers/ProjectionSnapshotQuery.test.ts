@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import { AuthSessionId, MessageId, ThreadId, ProviderInstanceId } from "@akeru/contracts";
 import { assert } from "@effect/vitest";
 import * as Effect from "effect/Effect";
@@ -486,7 +487,7 @@ projectionSnapshotLayer("ProjectionSnapshotQuery", (it) => {
       const threadDetail = yield* snapshotQuery.getThreadDetailById(ThreadId.make("thread-1"));
       assert.equal(threadDetail._tag, "Some");
 
-      if (threadDetail._tag === "Some") {
+      if (Predicate.isTagged(threadDetail, "Some")) {
         assert.deepEqual(threadDetail.value, snapshot.threads[0]);
       }
 
@@ -497,7 +498,7 @@ projectionSnapshotLayer("ProjectionSnapshotQuery", (it) => {
 
       assert.equal(turnStart._tag, "Some");
 
-      if (turnStart._tag === "Some") {
+      if (Predicate.isTagged(turnStart, "Some")) {
         assert.equal(turnStart.value.message.role, "assistant");
         assert.equal(turnStart.value.message.text, "hello from projection");
         assert.equal(turnStart.value.hasOtherUserMessages, false);

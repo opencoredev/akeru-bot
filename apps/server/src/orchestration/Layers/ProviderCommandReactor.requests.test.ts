@@ -1,3 +1,5 @@
+import * as Schema from "effect/Schema";
+import * as Predicate from "effect/Predicate";
 import { ProviderDriverKind } from "@akeru/contracts";
 import { CommandId, EventId, MessageId, ThreadId } from "@akeru/contracts";
 import * as Effect from "effect/Effect";
@@ -189,9 +191,9 @@ describe("ProviderCommandReactor", () => {
     const resolvedActivity = thread?.activities.find(
       (activity) =>
         activity.kind === "approval.resolved" &&
-        typeof activity.payload === "object" &&
+        (activity.payload === null || Predicate.isObjectOrArray(activity.payload)) &&
         activity.payload !== null &&
-        (activity.payload as Record<string, unknown>).requestId === "approval-request-1",
+        (activity.payload as Record<string, Schema.Json>).requestId === "approval-request-1",
     );
 
     expect(resolvedActivity).toBeUndefined();
@@ -303,9 +305,9 @@ describe("ProviderCommandReactor", () => {
     const resolvedActivity = thread?.activities.find(
       (activity) =>
         activity.kind === "user-input.resolved" &&
-        typeof activity.payload === "object" &&
+        (activity.payload === null || Predicate.isObjectOrArray(activity.payload)) &&
         activity.payload !== null &&
-        (activity.payload as Record<string, unknown>).requestId === "user-input-request-1",
+        (activity.payload as Record<string, Schema.Json>).requestId === "user-input-request-1",
     );
 
     expect(resolvedActivity).toBeUndefined();

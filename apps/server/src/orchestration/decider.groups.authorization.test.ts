@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import {
   AuthSessionId,
   CommandId,
@@ -245,7 +246,7 @@ it.layer(NodeServices.layer)("group membership decider", (it) => {
       );
 
       for (const error of errors) {
-        if (error._tag !== "OrchestrationCommandInvariantError") {
+        if (!Predicate.isTagged(error, "OrchestrationCommandInvariantError")) {
           throw new Error("Expected group thread authorization error");
         }
 
@@ -438,7 +439,7 @@ it.layer(NodeServices.layer)("group membership decider", (it) => {
         }),
       }).pipe(Effect.flip);
 
-      if (error._tag !== "OrchestrationCommandInvariantError") {
+      if (!Predicate.isTagged(error, "OrchestrationCommandInvariantError")) {
         throw new Error("Expected sender membership invariant error");
       }
 
@@ -506,7 +507,7 @@ it.layer(NodeServices.layer)("group membership decider", (it) => {
         }),
       }).pipe(Effect.flip);
 
-      if (error._tag !== "OrchestrationCommandInvariantError") {
+      if (!Predicate.isTagged(error, "OrchestrationCommandInvariantError")) {
         throw new Error("Expected sender membership invariant error");
       }
 
@@ -525,7 +526,7 @@ it.layer(NodeServices.layer)("group membership decider", (it) => {
         }),
       }).pipe(Effect.flip);
 
-      if (error._tag !== "OrchestrationCommandInvariantError") {
+      if (!Predicate.isTagged(error, "OrchestrationCommandInvariantError")) {
         throw new Error("Expected missing sender invariant error");
       }
 

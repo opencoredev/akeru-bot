@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import {
   BotId,
   CommandId,
@@ -152,8 +153,8 @@ it.layer(NodeServices.layer)("group membership decider", (it) => {
       }).pipe(Effect.flip);
 
       if (
-        outsiderError._tag !== "OrchestrationCommandInvariantError" ||
-        archivedError._tag !== "OrchestrationCommandInvariantError"
+        !Predicate.isTagged(outsiderError, "OrchestrationCommandInvariantError") ||
+        !Predicate.isTagged(archivedError, "OrchestrationCommandInvariantError")
       ) {
         throw new Error("Expected mention routing invariant errors");
       }

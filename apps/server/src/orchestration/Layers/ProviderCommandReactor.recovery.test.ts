@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import { ProviderDriverKind, ProviderInstanceId } from "@akeru/contracts";
 import { CommandId, DEFAULT_PROVIDER_INTERACTION_MODE, ThreadId } from "@akeru/contracts";
 import * as Effect from "effect/Effect";
@@ -137,7 +138,7 @@ describe("ProviderCommandReactor", () => {
               ? Deferred.succeed(approvalReachedAdapter, undefined).pipe(Effect.asVoid)
               : Effect.void,
           interruptTurnEffect: (request) =>
-            typeof request === "object" &&
+            (request === null || Predicate.isObjectOrArray(request)) &&
             request !== null &&
             "threadId" in request &&
             request.threadId === threadB

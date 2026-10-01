@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
@@ -27,7 +28,7 @@ export const exists = (filePath: string) =>
     const fileSystem = yield* FileSystem.FileSystem;
     const fileInfo = yield* Effect.result(fileSystem.stat(filePath));
 
-    return fileInfo._tag === "Success";
+    return Predicate.isTagged(fileInfo, "Success");
   });
 
 export const BaseTestLayer = makeProjectionPipelinePrefixedTestLayer(

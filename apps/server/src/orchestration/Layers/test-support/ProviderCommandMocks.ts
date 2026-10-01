@@ -40,7 +40,7 @@ export type ProviderCommandHarnessOptions = {
   readonly failStartupReplay?: boolean;
   readonly pendingRequestBeforeReactor?: "approval" | "user-input";
   readonly interruptTurnEffect?: (
-    input?: unknown,
+    input?: Parameters<AgentControllerShape["interruptTurn"]>[0],
   ) => Effect.Effect<void, ProviderAdapterRequestError>;
   readonly interruptTurnRemovesSession?: boolean;
   readonly respondToRequestEffect?: (
@@ -76,11 +76,11 @@ export function createProviderCommandMocks(
   const observations = createObservationHistory<void>();
   const notify = () => Effect.runSync(observations.publish(undefined));
 
-  function observeMock<Fn extends (...args: never[]) => unknown>(mock: Mock<Fn>) {
+  function observeMock<Args extends Array<unknown>, Result>(mock: Mock<(...args: Args) => Result>) {
     return new Proxy(mock, {
-      apply(target, receiver, args) {
+      apply(target, receiver, args: Args) {
         try {
-          return Reflect.apply(target, receiver, args);
+          return target.apply(receiver, args);
         } finally {
           notify();
         }
@@ -102,79 +102,50 @@ export function createProviderCommandMocks(
   const startSessionEffect = input?.startSessionEffect;
 
   const startSession = observeMock(
-    vi.fn((_: unknown, input: unknown) => {
-      notify();
-      const sessionIndex = nextSessionIndex++;
+    vi.fn(
+      (
+        _: Parameters<AgentControllerShape["startSession"]>[0],
+        input: Parameters<AgentControllerShape["startSession"]>[1],
+      ) => {
+        notify();
+        const sessionIndex = nextSessionIndex++;
+        const resumeCursor = input.resumeCursor;
+        const threadId = input.threadId ?? ThreadId.make(`thread-${sessionIndex}`);
+        const inputModelSelection = input.modelSelection;
+        const providerInstanceId = input.providerInstanceId ?? inputModelSelection?.instanceId;
 
-      const resumeCursor =
-        typeof input === "object" && input !== null && "resumeCursor" in input
-          ? input.resumeCursor
-          : undefined;
+        const provider =
+          input.provider ??
+          ProviderDriverKind.make(inputModelSelection?.instanceId ?? modelSelection.instanceId);
 
-      const threadId =
-        typeof input === "object" &&
-        input !== null &&
-        "threadId" in input &&
-        typeof input.threadId === "string"
-          ? ThreadId.make(input.threadId)
-          : ThreadId.make(`thread-${sessionIndex}`);
+        const session: ProviderSession = {
+          provider,
+          ...(providerInstanceId ? { providerInstanceId } : {}),
+          status: "ready",
+          runtimeMode: input.runtimeMode ?? "full-access",
+          ...(input.cwd ? { cwd: input.cwd } : {}),
+          ...((inputModelSelection?.model ?? modelSelection.model)
+            ? { model: inputModelSelection?.model ?? modelSelection.model }
+            : {}),
+          threadId,
+          resumeCursor: resumeCursor ?? { opaque: `resume-${sessionIndex}` },
+          createdAt: now,
+          updatedAt: now,
+        };
 
-      const inputModelSelection =
-        typeof input === "object" && input !== null && "modelSelection" in input
-          ? (input.modelSelection as ModelSelection | undefined)
-          : undefined;
-
-      const providerInstanceId =
-        typeof input === "object" && input !== null && "providerInstanceId" in input
-          ? (input.providerInstanceId as ProviderInstanceId | undefined)
-          : inputModelSelection?.instanceId;
-
-      const provider =
-        typeof input === "object" &&
-        input !== null &&
-        "provider" in input &&
-        typeof input.provider === "string"
-          ? (input.provider as ProviderSession["provider"])
-          : ProviderDriverKind.make(inputModelSelection?.instanceId ?? modelSelection.instanceId);
-
-      const session: ProviderSession = {
-        provider,
-        ...(providerInstanceId ? { providerInstanceId } : {}),
-        status: "ready" as const,
-        runtimeMode:
-          typeof input === "object" &&
-          input !== null &&
-          "runtimeMode" in input &&
-          (input.runtimeMode === "approval-required" || input.runtimeMode === "full-access")
-            ? input.runtimeMode
-            : "full-access",
-        ...(typeof input === "object" &&
-        input !== null &&
-        "cwd" in input &&
-        typeof input.cwd === "string"
-          ? { cwd: input.cwd }
-          : {}),
-        ...((inputModelSelection?.model ?? modelSelection.model)
-          ? { model: inputModelSelection?.model ?? modelSelection.model }
-          : {}),
-        threadId,
-        resumeCursor: resumeCursor ?? { opaque: `resume-${sessionIndex}` },
-        createdAt: now,
-        updatedAt: now,
-      };
-
-      return (startSessionEffect?.(session) ?? Effect.succeed(session)).pipe(
-        Effect.tap((startedSession) =>
-          Effect.sync(() => {
-            runtimeSessions.push(startedSession);
-          }),
-        ),
-      );
-    }),
+        return (startSessionEffect?.(session) ?? Effect.succeed(session)).pipe(
+          Effect.tap((startedSession) =>
+            Effect.sync(() => {
+              runtimeSessions.push(startedSession);
+            }),
+          ),
+        );
+      },
+    ),
   );
 
   const sendTurn = observeMock(
-    vi.fn((_: unknown) => {
+    vi.fn((_: Parameters<AgentControllerShape["sendTurn"]>[0]) => {
       notify();
 
       return input?.sendTurnEffect
@@ -187,7 +158,7 @@ export function createProviderCommandMocks(
   );
 
   const interruptTurn = observeMock(
-    vi.fn((interruptInput: unknown) => {
+    vi.fn((interruptInput: Parameters<AgentControllerShape["interruptTurn"]>[0]) => {
       notify();
 
       return (input?.interruptTurnEffect?.(interruptInput) ?? Effect.void).pipe(
@@ -197,12 +168,7 @@ export function createProviderCommandMocks(
               return;
             }
 
-            const threadId =
-              typeof interruptInput === "object" &&
-              interruptInput !== null &&
-              "threadId" in interruptInput
-                ? (interruptInput as { threadId?: ThreadId }).threadId
-                : undefined;
+            const threadId = interruptInput.threadId;
 
             if (!threadId) {
               return;
@@ -236,16 +202,13 @@ export function createProviderCommandMocks(
   );
 
   const stopSession = observeMock(
-    vi.fn((stopInput: unknown) => {
+    vi.fn((stopInput: Parameters<AgentControllerShape["stopSession"]>[0]) => {
       notify();
 
       return (input?.stopSessionEffect?.() ?? Effect.void).pipe(
         Effect.tap(() =>
           Effect.sync(() => {
-            const threadId =
-              typeof stopInput === "object" && stopInput !== null && "threadId" in stopInput
-                ? (stopInput as { threadId?: ThreadId }).threadId
-                : undefined;
+            const threadId = stopInput.threadId;
 
             if (!threadId) {
               return;
@@ -263,17 +226,11 @@ export function createProviderCommandMocks(
   );
 
   const renameBranch = observeMock(
-    vi.fn((input: unknown) => {
+    vi.fn((input: { readonly newBranch: string }) => {
       notify();
 
       return Effect.succeed({
-        branch:
-          typeof input === "object" &&
-          input !== null &&
-          "newBranch" in input &&
-          typeof input.newBranch === "string"
-            ? input.newBranch
-            : "renamed-branch",
+        branch: input.newBranch,
       });
     }),
   );
@@ -404,12 +361,12 @@ export function createProviderCommandMocks(
     authenticateMcpServer: () => Effect.die("unused"),
     resolveEngine,
     inspectEngine,
-    startSession: startSession as AgentControllerShape["startSession"],
-    sendTurn: sendTurn as AgentControllerShape["sendTurn"],
-    interruptTurn: interruptTurn as AgentControllerShape["interruptTurn"],
-    respondToRequest: respondToRequest as AgentControllerShape["respondToRequest"],
-    respondToUserInput: respondToUserInput as AgentControllerShape["respondToUserInput"],
-    stopSession: stopSession as AgentControllerShape["stopSession"],
+    startSession: startSession,
+    sendTurn: sendTurn,
+    interruptTurn: interruptTurn,
+    respondToRequest: respondToRequest,
+    respondToUserInput: respondToUserInput,
+    stopSession: stopSession,
     listSessions: () => Effect.succeed(runtimeSessions),
     ...(input?.dispatchDelegation ? { dispatchDelegation: input.dispatchDelegation } : {}),
     failDelegation,

@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import {
   BotId,
@@ -319,7 +320,9 @@ it.effect("delivers a finished child result to exactly one parent turn across a 
       const before = yield* snapshots.getCommandReadModel();
       assert.deepEqual(
         before.delegations.map((record) =>
-          record.phase._tag === "Completed" ? record.phase.acknowledgedAt : "not-completed",
+          Predicate.isTagged(record.phase, "Completed")
+            ? record.phase.acknowledgedAt
+            : "not-completed",
         ),
         [null],
       );
@@ -327,7 +330,7 @@ it.effect("delivers a finished child result to exactly one parent turn across a 
       const after = yield* snapshots.getCommandReadModel();
       const phase = after.delegations[0]?.phase;
       assert.equal(
-        phase?._tag === "Completed" ? phase.acknowledgedAt : null,
+        Predicate.isTagged(phase, "Completed") ? phase.acknowledgedAt : null,
         "2026-08-31T12:02:30.000Z",
       );
 
@@ -356,7 +359,9 @@ it.effect("keeps an unacknowledged result pending until a parent turn starts", (
     assert.equal(pending.length, 1);
     assert.equal(pending[0]?.phase._tag, "Completed");
     assert.equal(
-      pending[0]?.phase._tag === "Completed" ? pending[0].phase.acknowledgedAt : "missing",
+      Predicate.isTagged(pending[0]?.phase, "Completed")
+        ? pending[0].phase.acknowledgedAt
+        : "missing",
       null,
     );
   }).pipe(Effect.provide(persistenceLayer("t3-delegation-pending-test-"))),

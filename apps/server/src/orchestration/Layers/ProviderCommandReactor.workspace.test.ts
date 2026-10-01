@@ -26,18 +26,11 @@ describe("ProviderCommandReactor", () => {
       }),
     );
 
-    harness.generateBranchName.mockImplementation((input: unknown) =>
+    harness.generateBranchName.mockImplementation((input) =>
       Effect.succeed({
-        branch:
-          typeof input === "object" &&
-          input !== null &&
-          "modelSelection" in input &&
-          typeof input.modelSelection === "object" &&
-          input.modelSelection !== null &&
-          "model" in input.modelSelection &&
-          typeof input.modelSelection.model === "string"
-            ? `feature/${input.modelSelection.model}`
-            : "feature/generated",
+        branch: input.modelSelection.model
+          ? `feature/${input.modelSelection.model}`
+          : "feature/generated",
       }),
     );
 
