@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import {
   type AkeruDelegationRecord,
   RoutineRunId,
@@ -171,7 +172,9 @@ const make = Effect.gen(function* () {
     const phase = delegation.phase;
     if (
       delegation.trigger !== "scheduled" ||
-      (phase._tag !== "Completed" && phase._tag !== "Failed" && phase._tag !== "Canceled") ||
+      (!Predicate.isTagged(phase, "Completed") &&
+        !Predicate.isTagged(phase, "Failed") &&
+        !Predicate.isTagged(phase, "Canceled")) ||
       phase.childThreadId === null
     )
       return false;
@@ -186,7 +189,7 @@ const make = Effect.gen(function* () {
     const routine = yield* repository.getById(run.routineId);
     if (routine === null || routine.lifecycle === "deleted") return false;
     const completedAt = phase.completedAt;
-    if (phase._tag === "Completed") {
+    if (Predicate.isTagged(phase, "Completed")) {
       const nextRunAt = routine.enabled
         ? nextScheduledFor(routine.schedule, routine.timezone, Date.parse(completedAt))
         : null;
@@ -194,7 +197,7 @@ const make = Effect.gen(function* () {
       yield* repository.markSettled(run.id, "completed", completedAt);
       return true;
     }
-    if (phase._tag === "Canceled") {
+    if (Predicate.isTagged(phase, "Canceled")) {
       yield* adapter.recordCanceled(run, completedAt);
       yield* repository.markSettled(run.id, "canceled", completedAt);
       return true;

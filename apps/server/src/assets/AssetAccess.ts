@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import type { AssetResource } from "@akeru/contracts";
 import {
   AssetAttachmentNotFoundError,
@@ -109,7 +110,9 @@ const optionOnNotFound = <A, R>(
     Effect.map(Option.some),
     Effect.catchTags({
       PlatformError: (error) =>
-        error.reason._tag === "NotFound" ? Effect.succeed(Option.none<A>()) : Effect.fail(error),
+        Predicate.isTagged(error.reason, "NotFound")
+          ? Effect.succeed(Option.none<A>())
+          : Effect.fail(error),
     }),
   );
 

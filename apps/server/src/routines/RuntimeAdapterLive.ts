@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import {
   AkeruUsageReservationId,
   type BotId,
@@ -315,7 +316,7 @@ const make = Effect.gen(function* () {
         (candidate) =>
           candidate.trigger === "scheduled" &&
           !isAkeruDelegationTerminal(candidate.phase) &&
-          candidate.phase._tag !== "Queued" &&
+          Predicate.hasProperty(candidate.phase, "childThreadId") &&
           candidate.phase.childThreadId === run.threadRef,
       );
       if (delegation === undefined) return;
@@ -331,7 +332,7 @@ const make = Effect.gen(function* () {
           (readModel.delegations ?? []).find(
             (candidate) =>
               candidate.trigger === "scheduled" &&
-              candidate.phase._tag !== "Queued" &&
+              Predicate.hasProperty(candidate.phase, "childThreadId") &&
               candidate.phase.childThreadId === threadRef,
           ) ?? null,
       ),
@@ -372,10 +373,10 @@ const make = Effect.gen(function* () {
         threadRef,
         startedAt: DateTime.formatIso(yield* DateTime.now),
       }).pipe(Effect.result);
-      if (started._tag === "Success") return "started" as const;
+      if (Predicate.isTagged(started, "Success")) return "started" as const;
       if (
-        started.failure._tag === "OrchestrationCommandInvariantError" ||
-        started.failure._tag === "OrchestrationCommandPreviouslyRejectedError"
+        Predicate.isTagged(started.failure, "OrchestrationCommandInvariantError") ||
+        Predicate.isTagged(started.failure, "OrchestrationCommandPreviouslyRejectedError")
       ) {
         return "ended" as const;
       }
@@ -425,7 +426,7 @@ const make = Effect.gen(function* () {
           runtimeMode: routine.approvalPolicy,
         })
         .pipe(Effect.result);
-      if (handle._tag === "Failure") {
+      if (Predicate.isTagged(handle, "Failure")) {
         return {
           failure: {
             kind: "execution",

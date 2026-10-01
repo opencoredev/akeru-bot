@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import * as NodeV8 from "node:v8";
 
 import {
@@ -145,7 +146,7 @@ layer("OrchestrationEventStore", (it) => {
         Stream.runCollect(eventStore.readFromSequence(0, 10)),
       );
       assert.equal(replayResult._tag, "Failure");
-      if (replayResult._tag === "Failure") {
+      if (Predicate.isTagged(replayResult, "Failure")) {
         assert.ok(isPersistenceDecodeError(replayResult.failure));
         assert.ok(
           replayResult.failure.operation.includes(
@@ -162,7 +163,7 @@ layer("OrchestrationEventStore", (it) => {
         })
         .pipe(Stream.runCollect, Effect.result);
       assert.equal(scopedResult._tag, "Failure");
-      if (scopedResult._tag === "Failure") {
+      if (Predicate.isTagged(scopedResult, "Failure")) {
         assert.ok(isPersistenceDecodeError(scopedResult.failure));
         assert.ok(
           scopedResult.failure.operation.includes(

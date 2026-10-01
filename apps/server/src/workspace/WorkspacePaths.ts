@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 /**
  * WorkspacePaths - Effect service contract for workspace path handling.
  *
@@ -143,7 +144,7 @@ export const make = Effect.gen(function* () {
     return yield* fileSystem.stat(normalizedWorkspaceRoot).pipe(
       Effect.matchEffect({
         onFailure: (cause) =>
-          cause.reason._tag === "NotFound"
+          Predicate.isTagged(cause.reason, "NotFound")
             ? Effect.succeed(null)
             : Effect.fail(
                 new WorkspaceRootStatFailedError({

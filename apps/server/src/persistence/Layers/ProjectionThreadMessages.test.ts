@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import { BotId, MessageId, ThreadId, TurnId } from "@akeru/contracts";
 import { assert, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
@@ -60,7 +61,7 @@ layer("ProjectionThreadMessageRepository", (it) => {
 
       const result = yield* repository.getByMessageId({ messageId });
       assert.equal(result._tag, "Some");
-      if (result._tag === "Some") {
+      if (Predicate.isTagged(result, "Some")) {
         assert.equal(result.value.text, "one two three");
         assert.isFalse(result.value.isStreaming);
         assert.equal(result.value.updatedAt, "2026-09-01T17:00:03.000Z");
@@ -98,7 +99,7 @@ layer("ProjectionThreadMessageRepository", (it) => {
 
       const result = yield* repository.getByMessageId({ messageId });
       assert.equal(result._tag, "Some");
-      if (result._tag === "Some") {
+      if (Predicate.isTagged(result, "Some")) {
         assert.equal(result.value.text, "");
       }
     }),
@@ -141,7 +142,7 @@ layer("ProjectionThreadMessageRepository", (it) => {
 
       const initial = yield* repository.getByMessageId({ messageId });
       assert.equal(initial._tag, "Some");
-      if (initial._tag === "Some") {
+      if (Predicate.isTagged(initial, "Some")) {
         yield* repository.upsert({
           ...initial.value,
           reactions: [{ botId: respondingBotId, emoji: "eyes" }],
@@ -161,7 +162,7 @@ layer("ProjectionThreadMessageRepository", (it) => {
 
       const result = yield* repository.getByMessageId({ messageId });
       assert.equal(result._tag, "Some");
-      if (result._tag === "Some") {
+      if (Predicate.isTagged(result, "Some")) {
         assert.equal(result.value.text, "hello world");
         assert.equal(result.value.respondingBotId, respondingBotId);
         assert.deepEqual(result.value.channelOrigin, channelOrigin);
@@ -228,7 +229,7 @@ layer("ProjectionThreadMessageRepository", (it) => {
 
       const rowById = yield* repository.getByMessageId({ messageId });
       assert.equal(rowById._tag, "Some");
-      if (rowById._tag === "Some") {
+      if (Predicate.isTagged(rowById, "Some")) {
         assert.equal(rowById.value.text, "updated");
         assert.deepEqual(rowById.value.attachments, persistedAttachments);
         assert.deepEqual(rowById.value.channelOrigin, channelOrigin);

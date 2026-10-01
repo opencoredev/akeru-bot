@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import type { RepositoryIdentity } from "@akeru/contracts";
 import {
   detectSourceControlProviderFromGitRemoteUrl,
@@ -102,7 +103,7 @@ const resolveRepositoryIdentityCacheKey = Effect.fn("RepositoryIdentityResolver.
         timeoutBehavior: "timedOutResult",
       })
       .pipe(Effect.option);
-    if (topLevelResult._tag === "None" || topLevelResult.value.code !== 0) {
+    if (Predicate.isTagged(topLevelResult, "None") || topLevelResult.value.code !== 0) {
       return null;
     }
 
@@ -124,7 +125,7 @@ const resolveRepositoryIdentityFromCacheKey = Effect.fn(
       timeoutBehavior: "timedOutResult",
     })
     .pipe(Effect.option);
-  if (remoteResult._tag === "None" || remoteResult.value.code !== 0) {
+  if (Predicate.isTagged(remoteResult, "None") || remoteResult.value.code !== 0) {
     return null;
   }
 

@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import type {
   ServerTraceDiagnosticsErrorKind,
   ServerTraceDiagnosticsFailureSummary,
@@ -165,7 +166,7 @@ function makeEmptyDiagnostics(input: {
 }
 
 function isNotFoundError(error: PlatformError.PlatformError): boolean {
-  return error.reason._tag === "NotFound";
+  return Predicate.isTagged(error.reason, "NotFound");
 }
 
 function insertBoundedSlowestSpan(
@@ -439,7 +440,7 @@ export const make = Effect.gen(function* () {
         },
       );
       const files = results.flatMap((result) =>
-        Result.isSuccess(result) && result.success._tag === "Loaded"
+        Result.isSuccess(result) && Predicate.isTagged(result.success, "Loaded")
           ? [{ path: result.success.path, text: result.success.text }]
           : [],
       );

@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import { EnvironmentId, type ExecutionEnvironmentDescriptor } from "@akeru/contracts";
 import { HostProcessArchitecture, HostProcessPlatform } from "@akeru/shared/hostProcess";
 import * as Context from "effect/Context";
@@ -123,7 +124,7 @@ const makeIdentity = Effect.gen(function* () {
         .link(tempPath, destinationPath)
         .pipe(
           Effect.catch((cause) =>
-            cause.reason._tag === "AlreadyExists" ? Effect.void : Effect.fail(cause),
+            Predicate.isTagged(cause.reason, "AlreadyExists") ? Effect.void : Effect.fail(cause),
           ),
         );
       if (mode === "recover") {
