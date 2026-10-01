@@ -24,7 +24,9 @@ import { defaultProviderContinuationIdentity } from "../ProviderDriver.ts";
 import { makeManualOnlyProviderMaintenanceCapabilities } from "../providerMaintenance.ts";
 
 const DRIVER_KIND = ProviderDriverKind.make("kimi");
+
 const decodeSettings = Schema.decodeSync(KimiSettings);
+
 const BUILT_IN_MODELS = ["k3", "k3-256k", "kimi-for-coding", "kimi-for-coding-highspeed"] as const;
 
 function models(customModels: readonly string[]): ServerProviderModel[] {
@@ -50,19 +52,24 @@ export const KimiDriver: ProviderDriver<KimiSettings, KimiDriverEnv> = {
     Effect.gen(function* () {
       const serverConfig = yield* ServerConfig;
       const auth = yield* SubscriptionAuthService.forSecretsDir(serverConfig.secretsDir);
+
       const changes = yield* Effect.acquireRelease(
         PubSub.unbounded<ServerProvider>(),
         PubSub.shutdown,
       );
+
       const effectiveEnabled = enabled && config.enabled;
       const processEnv = mergeSubscriptionInstanceEnvironment(environment);
+
       const continuationIdentity = defaultProviderContinuationIdentity({
         driverKind: DRIVER_KIND,
         instanceId,
       });
+
       const readSnapshot = Effect.gen(function* () {
         yield* auth.reload();
         const connected = auth.isConnected("kimi-for-coding", instanceId);
+
         return {
           instanceId,
           driver: DRIVER_KIND,
@@ -88,9 +95,11 @@ export const KimiDriver: ProviderDriver<KimiSettings, KimiDriverEnv> = {
           skills: [],
         } satisfies ServerProvider;
       });
+
       const refresh = readSnapshot.pipe(
         Effect.tap((snapshot) => PubSub.publish(changes, snapshot)),
       );
+
       return {
         instanceId,
         driverKind: DRIVER_KIND,

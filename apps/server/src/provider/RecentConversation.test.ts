@@ -47,6 +47,7 @@ describe("selectRecentConversation", () => {
     // Each message occupies exactly 4,000 estimated tokens, including its content envelope.
     const envelopeLength = JSON.stringify(message("size", "user", "").content).length;
     const text = "x".repeat(16_000 - envelopeLength);
+
     const history = Array.from({ length: 9 }, (_, index) => [
       message(`user-${index}`, "user", text),
       message(`assistant-${index}`, "assistant", text),
@@ -80,6 +81,7 @@ describe("selectRecentConversation", () => {
       message(`user-${index}`, "user", "x".repeat(200)),
       message(`assistant-${index}`, "assistant", "x".repeat(200)),
     ]).flat();
+
     const required = new Set(["assistant-1"]);
 
     const selected = selectRecentConversation(history, {
@@ -87,6 +89,7 @@ describe("selectRecentConversation", () => {
       turnLimit: 2,
       tokenLimit: 300,
     });
+
     expect(selected.map((entry) => entry.id)).toEqual([
       "user-1",
       "assistant-1",

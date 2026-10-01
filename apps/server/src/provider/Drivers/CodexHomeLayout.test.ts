@@ -13,6 +13,7 @@ import {
   materializeCodexShadowHome,
   resolveCodexHomeLayout,
 } from "./CodexHomeLayout.ts";
+
 const decodeCodexSettingsValue = Schema.decodeSync(CodexSettings);
 
 const decodeCodexSettings = (input: {
@@ -25,6 +26,7 @@ const decodeCodexSettings = (input: {
 
 const makeTempDir = Effect.fn("CodexHomeLayout.test.makeTempDir")(function* (prefix: string) {
   const fileSystem = yield* FileSystem.FileSystem;
+
   return yield* fileSystem.makeTempDirectoryScoped({ prefix });
 });
 
@@ -114,15 +116,19 @@ it.layer(NodeServices.layer)("CodexHomeLayout", (it) => {
 
         const sessionsTarget = yield* fileSystem.readLink(path.join(shadowHome, "sessions"));
         const configTarget = yield* fileSystem.readLink(path.join(shadowHome, "config.toml"));
+
         const mcpOauthLocksTarget = yield* fileSystem.readLink(
           path.join(shadowHome, "mcp-oauth-locks"),
         );
+
         const modelsCacheExists = yield* fileSystem.exists(
           path.join(shadowHome, "models_cache.json"),
         );
+
         const authLinkResult = yield* fileSystem
           .readLink(path.join(shadowHome, "auth.json"))
           .pipe(Effect.result);
+
         const authContents = yield* fileSystem.readFileString(path.join(shadowHome, "auth.json"));
 
         expect(sessionsTarget).toBe(path.join(sharedHome, "sessions"));
@@ -157,6 +163,7 @@ it.layer(NodeServices.layer)("CodexHomeLayout", (it) => {
         yield* materializeCodexShadowHome(layout);
 
         const locksTarget = yield* fileSystem.readLink(shadowLocks);
+
         const sharedLockExists = yield* fileSystem.exists(
           path.join(sharedLocks, "file-store.lock"),
         );
@@ -193,12 +200,15 @@ it.layer(NodeServices.layer)("CodexHomeLayout", (it) => {
         yield* materializeCodexShadowHome(layout);
 
         const configTarget = yield* fileSystem.readLink(path.join(shadowHome, "config.toml"));
+
         const logLinkResult = yield* fileSystem
           .readLink(path.join(shadowHome, "log"))
           .pipe(Effect.result);
+
         const memoriesLinkResult = yield* fileSystem
           .readLink(path.join(shadowHome, "memories"))
           .pipe(Effect.result);
+
         const tmpLinkResult = yield* fileSystem
           .readLink(path.join(shadowHome, "tmp"))
           .pipe(Effect.result);
@@ -213,6 +223,7 @@ it.layer(NodeServices.layer)("CodexHomeLayout", (it) => {
     it.effect("rejects shadow homes that point at the shared home", () =>
       Effect.gen(function* () {
         const sharedHome = yield* makeTempDir("t3code-codex-shared-");
+
         const layout = yield* resolveCodexHomeLayout(
           decodeCodexSettings({
             homePath: sharedHome,
@@ -284,9 +295,11 @@ it.layer(NodeServices.layer)("CodexHomeLayout", (it) => {
         const error = yield* materializeCodexShadowHome(layout).pipe(Effect.flip);
 
         expect(error._tag).toBe("CodexShadowHomeFileSystemError");
+
         if (error._tag !== "CodexShadowHomeFileSystemError") {
           return expect.fail("Expected CodexShadowHomeFileSystemError");
         }
+
         expect(error).toMatchObject({
           operation: "makeDirectory",
           sharedHomePath: sharedHome,

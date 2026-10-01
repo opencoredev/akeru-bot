@@ -116,6 +116,7 @@ const writeFakeGrokCli = (input: {
         ],
       }),
     );
+
     const inspectCase =
       input.inspect === "fail"
         ? "  inspect) exit 1;;"
@@ -126,6 +127,7 @@ const writeFakeGrokCli = (input: {
             "    fi",
             `    cat ${shellQuote(machineSkillsPath)}; exit 0;;`,
           ].join("\n");
+
     yield* fs.writeFileString(
       grokPath,
       [
@@ -141,6 +143,7 @@ const writeFakeGrokCli = (input: {
       ].join("\n"),
     );
     yield* fs.chmod(grokPath, 0o755);
+
     return grokPath;
   });
 
@@ -159,9 +162,11 @@ it.layer(grokDriverTestLayer)("GrokDriver.snapshotForCwd", (it) => {
       Effect.scoped(
         Effect.gen(function* () {
           const fs = yield* FileSystem.FileSystem;
+
           const workspaceCwd = yield* fs.makeTempDirectoryScoped({
             prefix: "akeru-grok-disabled-workspace-",
           });
+
           const grokPath = yield* writeFakeGrokCli({ workspaceCwd, inspect: "fail" });
           const instance = yield* createGrokInstance({ enabled: false, binaryPath: grokPath });
           expect(instance.snapshotForCwd).toBeTypeOf("function");
@@ -179,9 +184,11 @@ it.layer(grokDriverTestLayer)("GrokDriver.snapshotForCwd", (it) => {
       Effect.scoped(
         Effect.gen(function* () {
           const fs = yield* FileSystem.FileSystem;
+
           const workspaceCwd = yield* fs.makeTempDirectoryScoped({
             prefix: "akeru-grok-workspace-",
           });
+
           const grokPath = yield* writeFakeGrokCli({ workspaceCwd, inspect: "skills" });
           const instance = yield* createGrokInstance({ enabled: true, binaryPath: grokPath });
           const machine = yield* instance.snapshot.refresh;
@@ -204,9 +211,11 @@ it.layer(grokDriverTestLayer)("GrokDriver.snapshotForCwd", (it) => {
       Effect.scoped(
         Effect.gen(function* () {
           const fs = yield* FileSystem.FileSystem;
+
           const workspaceCwd = yield* fs.makeTempDirectoryScoped({
             prefix: "akeru-grok-failed-workspace-",
           });
+
           const grokPath = yield* writeFakeGrokCli({ workspaceCwd, inspect: "fail" });
           const instance = yield* createGrokInstance({ enabled: true, binaryPath: grokPath });
 

@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import type {
   ProviderDriverKind,
   ModelCapabilities,
@@ -20,6 +21,7 @@ import { createProviderVersionAdvisory } from "./providerMaintenance.ts";
 import { collectUint8StreamText } from "../stream/collectUint8StreamText.ts";
 
 export const DEFAULT_TIMEOUT_MS = 4_000;
+
 // Auth status checks involve disk/network lookups and can be slow on first run (especially Windows)
 export const AUTH_PROBE_TIMEOUT_MS = 10_000;
 
@@ -59,6 +61,7 @@ export function providerUnavailabilityFromDetail(
   detail: string,
 ): ServerProviderUnavailability {
   const text = detail.toLowerCase();
+
   const mappings: Record<string, ReadonlyArray<readonly [RegExp, ServerProviderUnavailability]>> = {
     codex: [
       [/refresh token|token expired|login expired/, "expired-login"],
@@ -108,6 +111,7 @@ export function providerUnavailabilityFromDetail(
       [/rate limit|too many requests|capacity/, "limit-reached"],
     ],
   };
+
   return mappings[driver]?.find(([pattern]) => pattern.test(text))?.[1] ?? "temporary-failure";
 }
 
@@ -123,18 +127,23 @@ export type ServerProviderDraft = Omit<ServerProvider, "instanceId" | "driver">;
 export function nonEmptyTrimmed(value: string | undefined): string | undefined {
   if (!value) return undefined;
   const trimmed = value.trim();
+
   return trimmed.length > 0 ? trimmed : undefined;
 }
 
 export function isCommandMissingCause(error: unknown): boolean {
   if (isProviderCommandNotFoundError(error)) return true;
-  return error instanceof PlatformError.PlatformError && error.reason._tag === "NotFound";
+
+  return (
+    error instanceof PlatformError.PlatformError && Predicate.isTagged(error.reason, "NotFound")
+  );
 }
 
 export const spawnAndCollect = (binaryPath: string, command: ChildProcess.Command) =>
   Effect.gen(function* () {
     const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
     const child = yield* spawner.spawn(command);
+
     const [stdout, stderr, exitCode] = yield* Effect.all(
       [
         collectStreamAsString(child.stdout),
@@ -145,6 +154,7 @@ export const spawnAndCollect = (binaryPath: string, command: ChildProcess.Comman
     );
 
     const result: CommandResult = { stdout, stderr, code: exitCode };
+
     if (yield* isWindowsCommandNotFound(exitCode, stderr)) {
       return yield* new ProviderCommandNotFoundError({
         binaryPath,
@@ -153,33 +163,13 @@ export const spawnAndCollect = (binaryPath: string, command: ChildProcess.Comman
         stderrLength: stderr.length,
       });
     }
+
     return result;
   }).pipe(Effect.scoped);
 
-export function extractAuthBoolean(value: unknown): boolean | undefined {
-  if (globalThis.Array.isArray(value)) {
-    for (const entry of value) {
-      const nested = extractAuthBoolean(entry);
-      if (nested !== undefined) return nested;
-    }
-    return undefined;
-  }
-
-  if (!value || typeof value !== "object") return undefined;
-
-  const record = value as Record<string, unknown>;
-  for (const key of ["authenticated", "isAuthenticated", "loggedIn", "isLoggedIn"] as const) {
-    if (typeof record[key] === "boolean") return record[key];
-  }
-  for (const key of ["auth", "status", "session", "account"] as const) {
-    const nested = extractAuthBoolean(record[key]);
-    if (nested !== undefined) return nested;
-  }
-  return undefined;
-}
-
 export function parseGenericCliVersion(output: string): string | null {
   const match = output.match(/\b(\d+\.\d+\.\d+)\b/);
+
   return match?.[1] ?? null;
 }
 
@@ -194,9 +184,11 @@ export function providerModelsFromSettings(
 
   for (const candidate of customModels) {
     const normalized = normalizeCustomModelSlug(candidate);
+
     if (!normalized || seen.has(normalized)) {
       continue;
     }
+
     seen.add(normalized);
     customEntries.push({
       slug: normalized,
@@ -229,7 +221,9 @@ export function buildSelectOptionDescriptor(input: {
     ...(option.description ? { description: option.description } : {}),
     ...(option.isDefault ? { isDefault: true } : {}),
   }));
+
   const currentValue = options.find((option) => option.isDefault)?.id;
+
   return {
     id: input.id,
     label: input.label,
@@ -265,8 +259,10 @@ export function buildBooleanOptionDescriptor(input: {
 function probeUnavailability(driver: string, probe: ProviderProbeResult) {
   if (probe.message && probe.status !== "ready") {
     const category = providerUnavailabilityFromDetail(driver, probe.message);
+
     if (probe.status === "error" || category !== "temporary-failure") return category;
   }
+
   return probe.auth.status === "unauthenticated" ? ("missing-login" as const) : undefined;
 }
 
@@ -287,7 +283,9 @@ export function buildServerProvider(input: {
         checkedAt: input.checkedAt,
       })
     : undefined;
+
   const unavailability = probeUnavailability(input.driver ?? "unknown", input.probe);
+
   return {
     displayName: input.presentation.displayName,
     ...(input.presentation.badgeLabel ? { badgeLabel: input.presentation.badgeLabel } : {}),

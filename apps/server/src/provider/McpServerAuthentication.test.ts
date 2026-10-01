@@ -29,20 +29,25 @@ function status(overrides: Partial<McpServerStatus> = {}): McpServerStatus {
 describe("MCP server authentication", () => {
   it("opens OAuth, waits for connection, and reconnects other live managers", async () => {
     const authorizationUrl = "https://hoplite.ai/oauth/authorize";
+
     const first = {
       reconnectServer: vi.fn(async () => status()),
       authenticateServer: vi.fn(async (_name, options) => {
         options?.onAuthorizationUrl?.(authorizationUrl);
+
         return status({ connected: true, needsAuth: false, toolCount: 4 });
       }),
     } as unknown as McpManager;
+
     const second = {
       reconnectServer: vi.fn(async () =>
         status({ connected: true, needsAuth: false, toolCount: 4 }),
       ),
     } as unknown as McpManager;
+
     const onAuthorizationUrl = vi.fn();
     const recordSuccess = vi.fn();
+
     const result = await authenticateMcpServer({
       server,
       managers: [first, second],
@@ -63,6 +68,7 @@ describe("MCP server authentication", () => {
       reconnectServer: vi.fn(async () => status()),
       authenticateServer: vi.fn(async () => status({ error: "Authentication cancelled." })),
     } as unknown as McpManager;
+
     const recordFailure = vi.fn();
     await expect(
       authenticateMcpServer({
@@ -85,6 +91,7 @@ describe("MCP server authentication", () => {
       ),
       disconnect: vi.fn(async () => undefined),
     } as unknown as McpManager;
+
     const createManager = vi.fn(() => manager);
 
     await authenticateMcpServer({
@@ -104,6 +111,7 @@ describe("MCP server authentication", () => {
   it("cancels a pending manager authentication when the request stops", async () => {
     const controller = new AbortController();
     let finishAuthentication!: (value: McpServerStatus) => void;
+
     const manager = {
       reconnectServer: vi.fn(async () => status()),
       authenticateServer: vi.fn(
@@ -126,6 +134,7 @@ describe("MCP server authentication", () => {
       recordSuccess: vi.fn(),
       recordFailure: vi.fn(),
     });
+
     await vi.waitFor(() => expect(manager.authenticateServer).toHaveBeenCalledOnce());
     controller.abort();
 
@@ -140,9 +149,11 @@ describe("MCP server authentication", () => {
         status({ connected: true, needsAuth: false, toolCount: 4 }),
       ),
     } as unknown as McpManager;
+
     const secondary = {
       reconnectServer: vi.fn(async () => status({ error: "Secondary session failed." })),
     } as unknown as McpManager;
+
     const recordSuccess = vi.fn();
     const recordFailure = vi.fn();
     const recordRecoveryFailure = vi.fn();

@@ -36,6 +36,7 @@ export function makeProviderSnapshotSettingsSource<Settings>(
 } {
   const mapSettings = (settings: ServerSettings) =>
     makeProviderSnapshotSettings(provider, settings);
+
   return {
     getSettings: serverSettings.getSettings.pipe(Effect.map(mapSettings)),
     streamSettings: serverSettings.streamChanges.pipe(Stream.map(mapSettings)),

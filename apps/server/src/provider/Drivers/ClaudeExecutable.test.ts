@@ -6,8 +6,11 @@ import * as Effect from "effect/Effect";
 import { ClaudeExecutableFileCheck, resolveClaudeSdkExecutablePath } from "./ClaudeExecutable.ts";
 
 const NPM_DIR = "C:\\Users\\dev\\AppData\\Roaming\\npm";
+
 const NPM_SHIM = `${NPM_DIR}\\claude.cmd`;
+
 const NPM_PACKAGE_EXE = `${NPM_DIR}\\node_modules\\@anthropic-ai\\claude-code\\bin\\claude.exe`;
+
 const NPM_PACKAGE_CLI = `${NPM_DIR}\\node_modules\\@anthropic-ai\\claude-code\\cli.js`;
 
 function withWindowsResolution(input: {
@@ -15,6 +18,7 @@ function withWindowsResolution(input: {
   readonly existingFiles?: ReadonlyArray<string>;
 }) {
   const existing = new Set(input.existingFiles ?? []);
+
   return <A, E, R>(effect: Effect.Effect<A, E, R>) =>
     effect.pipe(
       Effect.provideService(HostProcessPlatform, "win32"),

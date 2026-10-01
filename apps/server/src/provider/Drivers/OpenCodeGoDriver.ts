@@ -24,6 +24,7 @@ import { defaultProviderContinuationIdentity } from "../ProviderDriver.ts";
 import { makeManualOnlyProviderMaintenanceCapabilities } from "../providerMaintenance.ts";
 
 const DRIVER_KIND = ProviderDriverKind.make("opencodeGo");
+
 const decodeSettings = Schema.decodeSync(OpenCodeGoSettings);
 
 export const OPEN_CODE_GO_MODELS = [
@@ -65,6 +66,7 @@ export const OPEN_CODE_GO_MODELS = [
 
 function models(customModels: readonly string[]): ServerProviderModel[] {
   const modelIds = [...OPEN_CODE_GO_MODELS, ...customModels.map((model) => model.trim())];
+
   return [...new Set(modelIds)]
     .filter((model) => model.length > 0)
     .map((model, index) => ({
@@ -87,19 +89,24 @@ export const OpenCodeGoDriver: ProviderDriver<OpenCodeGoSettings, OpenCodeGoDriv
     Effect.gen(function* () {
       const serverConfig = yield* ServerConfig;
       const auth = yield* SubscriptionAuthService.forSecretsDir(serverConfig.secretsDir);
+
       const changes = yield* Effect.acquireRelease(
         PubSub.unbounded<ServerProvider>(),
         PubSub.shutdown,
       );
+
       const effectiveEnabled = enabled && config.enabled;
       const processEnv = mergeSubscriptionInstanceEnvironment(environment);
+
       const continuationIdentity = defaultProviderContinuationIdentity({
         driverKind: DRIVER_KIND,
         instanceId,
       });
+
       const readSnapshot = Effect.gen(function* () {
         yield* auth.reload();
         const connected = auth.isConnected("opencode-go", instanceId);
+
         return {
           instanceId,
           driver: DRIVER_KIND,
@@ -121,9 +128,11 @@ export const OpenCodeGoDriver: ProviderDriver<OpenCodeGoSettings, OpenCodeGoDriv
           skills: [],
         } satisfies ServerProvider;
       });
+
       const refresh = readSnapshot.pipe(
         Effect.tap((snapshot) => PubSub.publish(changes, snapshot)),
       );
+
       return {
         instanceId,
         driverKind: DRIVER_KIND,

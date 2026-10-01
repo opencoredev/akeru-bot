@@ -12,14 +12,17 @@ import { WorkspaceComputer } from "./workspaceComputer.ts";
 
 function latch() {
   let resolve!: () => void;
+
   const promise = new Promise<void>((done) => {
     resolve = done;
   });
+
   return { promise, resolve };
 }
 
 function computer(workspaceId = "workspace-a", clock?: Clock.Clock) {
   const actions: string[] = [];
+
   const instance = new WorkspaceComputer(
     workspaceId,
     {
@@ -38,6 +41,7 @@ function computer(workspaceId = "workspace-a", clock?: Clock.Clock) {
     async () => "running",
     clock,
   );
+
   return { instance, actions };
 }
 
@@ -156,6 +160,7 @@ describe("ComputerRegistry", () => {
       const opening = latch();
       const finishOpening = latch();
       const calls: string[] = [];
+
       const instance = new WorkspaceComputer(
         "workspace-stream",
         {
@@ -167,6 +172,7 @@ describe("ComputerRegistry", () => {
           input: async () => undefined,
           capture: async () => {
             calls.push("capture");
+
             return { mimeType: "image/jpeg", data: "Zg==", width: 2, height: 2 };
           },
         },
@@ -176,11 +182,14 @@ describe("ComputerRegistry", () => {
         async () => ({ url: "http://127.0.0.1:9222", requestHeaders: {} }),
         async () => "running",
       );
+
       registry.register("thread-stream-init", instance, null);
       const thread = ThreadId.make("thread-stream-init");
+
       const collected = yield* Stream.runCollect(registry.events(thread, "viewer")).pipe(
         Effect.forkChild,
       );
+
       yield* Effect.promise(() => opening.promise);
       yield* TestClock.adjust("2 seconds");
       // No capture may run while desktop.open is still pending.
@@ -199,6 +208,7 @@ describe("ComputerRegistry", () => {
       const registry = new ComputerRegistry();
       let captured = 0;
       const calls: string[] = [];
+
       const instance = new WorkspaceComputer(
         "workspace-dc",
         {
@@ -209,6 +219,7 @@ describe("ComputerRegistry", () => {
           capture: async () => {
             captured++;
             calls.push("capture");
+
             return { mimeType: "image/jpeg", data: "Zg==", width: 2, height: 2 };
           },
         },
@@ -218,12 +229,15 @@ describe("ComputerRegistry", () => {
         async () => ({ url: "http://127.0.0.1:9222", requestHeaders: {} }),
         async () => "running",
       );
+
       registry.register("thread-dc", instance, null);
       const thread = ThreadId.make("thread-dc");
       yield* Effect.promise(() => registry.open(thread));
+
       const collected = yield* Stream.runCollect(registry.events(thread, "owner")).pipe(
         Effect.forkChild,
       );
+
       const session = yield* Effect.promise(() => registry.acquire(thread, "owner"));
       yield* Effect.yieldNow;
       yield* TestClock.adjust("2 seconds");
@@ -257,9 +271,11 @@ describe("ComputerRegistry", () => {
       registry.register("thread-expiry", instance, null);
       const thread = ThreadId.make("thread-expiry");
       yield* Effect.promise(() => registry.open(thread));
+
       const collected = yield* Stream.runCollect(registry.events(thread, "owner")).pipe(
         Effect.forkChild,
       );
+
       yield* Effect.promise(() => registry.acquire(thread, "owner"));
       expect(registry.state(thread).status).toBe("human");
       yield* TestClock.adjust("60 seconds");
@@ -267,6 +283,7 @@ describe("ComputerRegistry", () => {
       const values = yield* Fiber.join(collected).pipe(Effect.timeout("1 second"), Effect.orDie);
       const last = values.at(-1);
       expect(last?._tag).toBe("state");
+
       if (last?._tag === "state") expect(last.state.status).toBe("stopped");
     }).pipe(Effect.provide(TestClock.layer())),
   );
@@ -276,6 +293,7 @@ describe("ComputerRegistry", () => {
       const registry = new ComputerRegistry();
       let pending: ReturnType<typeof latch> | null = null;
       let started = latch();
+
       const instance = new WorkspaceComputer(
         "workspace-handoff",
         {
@@ -284,7 +302,9 @@ describe("ComputerRegistry", () => {
           capture: async () => {
             const gate = pending;
             started.resolve();
+
             if (gate) await gate.promise;
+
             return { mimeType: "image/jpeg", data: "Zg==", width: 2, height: 2 };
           },
         },
@@ -292,9 +312,11 @@ describe("ComputerRegistry", () => {
         async () => ({ url: "http://127.0.0.1:9222", requestHeaders: {} }),
         async () => "running",
       );
+
       registry.register("thread-handoff", instance, null);
       const thread = ThreadId.make("thread-handoff");
       yield* Effect.promise(() => registry.open(thread));
+
       const collected = yield* Stream.runCollect(registry.events(thread, "owner")).pipe(
         Effect.forkChild,
       );

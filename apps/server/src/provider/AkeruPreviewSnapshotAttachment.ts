@@ -8,6 +8,7 @@ import { createAttachmentId } from "../attachmentStore.ts";
 import { takePreviewSnapshot } from "../mcp/PreviewSnapshotCaptureBuffer.ts";
 
 const PNG_SIGNATURE = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
+
 const MCP_CALL_TOOL_CONTENT = Symbol.for("mastra.mcp.callToolContent");
 
 function record(value: unknown): Readonly<Record<string, unknown>> | null {
@@ -21,30 +22,39 @@ function imageBytes(value: unknown): Buffer | null {
     const encoded = value.startsWith("data:image/png;base64,")
       ? value.slice("data:image/png;base64,".length)
       : value;
+
     return Buffer.from(encoded, "base64");
   }
+
   return value instanceof Uint8Array ? Buffer.from(value) : null;
 }
 
 function findPngImage(result: unknown): Buffer | null {
   const root = record(result);
+
   if (!root) return null;
 
   const hiddenContent = Reflect.get(root, MCP_CALL_TOOL_CONTENT) as unknown;
+
   const content = Array.isArray(root.content)
     ? root.content
     : Array.isArray(hiddenContent)
       ? hiddenContent
       : [];
+
   for (const block of content) {
     const image = record(block);
+
     if (!image || image.type !== "image" || image.mimeType !== "image/png") continue;
     const bytes = imageBytes(image.data);
+
     if (bytes) return bytes;
   }
 
   const screenshot = record(root.screenshot);
+
   if (screenshot?.mimeType !== "image/png") return null;
+
   return imageBytes(screenshot.data);
 }
 
@@ -68,9 +78,11 @@ export function persistAkeruPreviewSnapshot(input: {
 }): PersistedPreviewSnapshot {
   const bytes = takePreviewSnapshot(input.threadId) ?? findPngImage(input.result);
   const root = record(input.result);
+
   const structuredResult =
     record(root?.structuredContent) ??
     (root && Array.isArray(Reflect.get(root, MCP_CALL_TOOL_CONTENT)) ? root : {});
+
   if (!bytes || !validPng(bytes)) {
     return {
       attachment: null,
@@ -82,16 +94,19 @@ export function persistAkeruPreviewSnapshot(input: {
   }
 
   const attachmentId = createAttachmentId(input.threadId);
+
   if (!attachmentId) {
     return {
       attachment: null,
       activityResult: { screenshot: { status: "not-persisted" } },
     };
   }
+
   try {
     NodeFS.mkdirSync(input.attachmentsDir, { recursive: true });
     const finalPath = NodePath.join(input.attachmentsDir, `${attachmentId}.png`);
     const temporaryPath = `${finalPath}.part`;
+
     try {
       NodeFS.writeFileSync(temporaryPath, bytes, { flag: "wx" });
       NodeFS.renameSync(temporaryPath, finalPath);
@@ -116,6 +131,7 @@ export function persistAkeruPreviewSnapshot(input: {
     mimeType: "image/png",
     sizeBytes: bytes.byteLength,
   } as const satisfies ChatImageAttachment;
+
   return {
     attachment,
     activityResult: {

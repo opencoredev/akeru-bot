@@ -218,6 +218,7 @@ describe("parseAgentListCliOutput", () => {
       },
       { permission: "read", pattern: "*.env", action: "ask" },
     ];
+
     const stdout = ["build (primary)", "  " + JSON.stringify(permissions)].join("\n");
 
     const result = parseAgentListCliOutput(stdout);

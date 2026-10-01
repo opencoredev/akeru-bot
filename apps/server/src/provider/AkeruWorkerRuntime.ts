@@ -1,13 +1,12 @@
-// @effect-diagnostics nodeBuiltinImport:off
+import * as Predicate from "effect/Predicate";
+// @effect-diagnostics globalFetch:off nodeBuiltinImport:off
 import * as NodeCrypto from "node:crypto";
-
 import {
   AKERU_WORKER_MAX_CONCURRENCY,
   AKERU_WORKER_MAX_DEPTH,
   AKERU_WORKER_TIMEOUT_MS,
   AkeruWorkerId,
   type AkeruDelegationAccessGrant,
-  type AkeruToolId,
   type AkeruToolInputSchemas,
   type AkeruWorkerPhase,
   type AkeruWorkerStatus,
@@ -22,149 +21,21 @@ import * as Fiber from "effect/Fiber";
 import * as Option from "effect/Option";
 import * as Queue from "effect/Queue";
 import * as Ref from "effect/Ref";
-import * as Schema from "effect/Schema";
 import type * as Scope from "effect/Scope";
 import * as Semaphore from "effect/Semaphore";
-
-export class AkeruWorkerError extends Schema.TaggedErrorClass<AkeruWorkerError>()(
-  "AkeruWorkerError",
-  {
-    reason: Schema.Literals([
-      "depth_limit",
-      "concurrency_limit",
-      "not_found",
-      "not_running",
-      "start_failed",
-    ]),
-    detail: Schema.String,
-  },
-) {
-  override get message(): string {
-    return this.detail;
-  }
-}
-
-/** The bot turn that calls Task. Worker threads report depth 1. */
-export interface AkeruWorkerParent {
-  readonly threadId: ThreadId;
-  readonly turnId: TurnId;
-  readonly depth: number;
-  readonly access: AkeruDelegationAccessGrant;
-}
-
-export interface AkeruWorkerChildSpec {
-  readonly parentThreadId: ThreadId;
-  readonly workerId: AkeruWorkerId;
-  readonly title: string;
-}
-
-export interface AkeruWorkerChildOutcome {
-  readonly state: "completed" | "failed";
-  readonly summary?: string;
-  readonly error?: string;
-}
-
-/**
- * Orchestration side effects. `createChild` only creates the hidden thread; the
- * runtime registers it before `messageChild` starts a turn, so the child
- * session always starts with the worker grant. `discardChild` removes a child
- * whose first turn never started, so no orphaned hidden thread remains.
- */
-export interface AkeruWorkerPort {
-  readonly createChild: (spec: AkeruWorkerChildSpec) => Effect.Effect<ThreadId, AkeruWorkerError>;
-  readonly messageChild: (
-    childThreadId: ThreadId,
-    text: string,
-  ) => Effect.Effect<void, AkeruWorkerError>;
-  readonly interruptChild: (childThreadId: ThreadId) => Effect.Effect<void>;
-  readonly discardChild: (childThreadId: ThreadId) => Effect.Effect<void>;
-}
-
-export interface AkeruWorkerRuntimeOptions {
-  readonly maxDepth?: number;
-  readonly maxConcurrency?: number;
-  readonly timeout?: Duration.Duration;
-  readonly makeId?: () => string;
-}
-
-/**
- * Tools a worker never receives. Workers do bounded work for one turn, so they
- * cannot start workers, delegate to bots, reach the user, or change bot and
- * channel state.
- */
-export const AKERU_WORKER_EXCLUDED_TOOL_IDS: ReadonlySet<AkeruToolId> = new Set([
-  "Task",
-  "CheckSubagent",
-  "MessageSubagent",
-  "StopSubagent",
-  "CreateAgent",
-  "CheckAgent",
-  "MessageAgent",
-  "StopAgent",
-  "SendToAgent",
-  "CreateChannel",
-  "UpdateChannel",
-  "SendToUser",
-  "request_box_help",
-  "ReactToMessage",
-  "UpdateBotProfile",
-]);
-
-/**
- * A worker runs in a hidden thread where nobody can answer an approval prompt.
- * The `none` ceiling makes approval-gated tools fail fast instead of waiting,
- * and without the user's computer the ExternalShell tools drop out.
- * The worker keeps the parent's sandbox. Callers pass a top-level bot's local
- * workspace as an explicit `local` sandbox, because a null sandbox on a
- * delegated grant means no workspace at all.
- */
-/** Worker chats use this id prefix, so they stay recognizable after a server restart. */
-export const WORKER_THREAD_ID_PREFIX = "worker-thread-";
-
-export const isWorkerThreadId = (threadId: ThreadId): boolean =>
-  String(threadId).startsWith(WORKER_THREAD_ID_PREFIX);
-
-export function workerAccess(parent: AkeruDelegationAccessGrant): AkeruDelegationAccessGrant {
-  return {
-    ...parent,
-    allowedToolIds: parent.allowedToolIds.filter(
-      (toolId) => !AKERU_WORKER_EXCLUDED_TOOL_IDS.has(toolId),
-    ),
-    memoryScopes: [],
-    hasUserComputer: false,
-    approvalCeiling: "none",
-  };
-}
-
-function workerInstructions(input: (typeof AkeruToolInputSchemas.Task)["Type"]): string {
-  return [
-    "You are a temporary worker started by a bot for one bounded subtask.",
-    `Task: ${input.task}`,
-    ...(input.expectedResult ? [`Expected result: ${input.expectedResult}`] : []),
-    "Do only this task. End with a concise final result, or a concrete blocker.",
-  ].join("\n");
-}
-
-function workerTitle(task: string): string {
-  const firstLine = task.split("\n", 1)[0]!.trim();
-  return `Worker: ${firstLine.length > 60 ? `${firstLine.slice(0, 57)}...` : firstLine}`;
-}
-
-interface WorkerEntry {
-  readonly workerId: AkeruWorkerId;
-  readonly parentThreadId: ThreadId;
-  readonly parentTurnId: TurnId;
-  readonly task: string;
-  readonly phase: Ref.Ref<AkeruWorkerPhase>;
-  readonly done: Deferred.Deferred<AkeruWorkerStatus>;
-  readonly outcomes: Queue.Queue<AkeruWorkerChildOutcome>;
-  /** Child turns dispatched but not yet finished: the first task plus each follow-up. */
-  readonly openTurns: Ref.Ref<number>;
-  readonly access: AkeruDelegationAccessGrant;
-  fiber: Fiber.Fiber<void> | undefined;
-}
-
-const childThreadOf = (phase: AkeruWorkerPhase): ThreadId | null => phase.childThreadId;
+import {
+  type AkeruWorkerPort,
+  type AkeruWorkerRuntimeOptions,
+  type WorkerEntry,
+  childThreadOf,
+  workerTitle,
+  workerInstructions,
+  AkeruWorkerError,
+  type AkeruWorkerParent,
+  type AkeruWorkerChildOutcome,
+  workerAccess,
+  isWorkerThreadId,
+} from "./workers/AkeruWorkerPolicy.ts";
 
 export const makeAkeruWorkerRuntime = Effect.fn("makeAkeruWorkerRuntime")(function* (
   port: AkeruWorkerPort,
@@ -200,11 +71,14 @@ export const makeAkeruWorkerRuntime = Effect.fn("makeAkeruWorkerRuntime")(functi
   ) =>
     Effect.gen(function* () {
       const current = yield* Ref.get(entry.phase);
-      if (current._tag !== "Running") return false;
+
+      if (!Predicate.isTagged(current, "Running")) return false;
       const next = terminal(current, yield* nowIso);
+
       if (!next) return false;
       yield* Ref.set(entry.phase, next);
       yield* Deferred.succeed(entry.done, yield* statusOf(entry));
+
       return true;
     });
 
@@ -219,17 +93,20 @@ export const makeAkeruWorkerRuntime = Effect.fn("makeAkeruWorkerRuntime")(functi
           canceledBy,
         })),
       );
+
       // Interrupting outside the lock lets the fiber finish its own cleanup. A
       // child still being created cannot be interrupted yet, so stop does not
       // wait there; the fiber discards that child once creation returns.
       if (canceled && entry.fiber) {
         const interrupt = Fiber.interrupt(entry.fiber);
+
         if (childThreadOf(yield* Ref.get(entry.phase)) === null) {
           yield* Effect.forkIn(interrupt, scope);
         } else {
           yield* interrupt;
         }
       }
+
       return yield* statusOf(entry);
     });
 
@@ -254,13 +131,16 @@ export const makeAkeruWorkerRuntime = Effect.fn("makeAkeruWorkerRuntime")(functi
     Effect.gen(function* () {
       while (true) {
         const outcome = yield* Queue.take(entry.outcomes);
+
         const finished = yield* locked(
           Effect.gen(function* () {
             const open = yield* Ref.updateAndGet(entry.openTurns, (count) =>
               Math.max(0, count - 1),
             );
+
             // A queued follow-up can still answer, so only the last open turn decides.
             if (open > 0) return false;
+
             if (outcome.state === "failed") {
               return yield* settleUnlocked(entry, (running, completedAt) => ({
                 _tag: "Failed",
@@ -271,6 +151,7 @@ export const makeAkeruWorkerRuntime = Effect.fn("makeAkeruWorkerRuntime")(functi
                 message: outcome.error?.trim() || "The worker turn failed.",
               }));
             }
+
             return yield* settleUnlocked(entry, (running, completedAt) =>
               running.childThreadId === null
                 ? undefined
@@ -284,6 +165,7 @@ export const makeAkeruWorkerRuntime = Effect.fn("makeAkeruWorkerRuntime")(functi
             );
           }),
         );
+
         if (finished || (yield* Deferred.isDone(entry.done))) return;
       }
     });
@@ -298,19 +180,25 @@ export const makeAkeruWorkerRuntime = Effect.fn("makeAkeruWorkerRuntime")(functi
           workerId: entry.workerId,
           title: workerTitle(input.task),
         });
+
         const attached = yield* locked(
           Effect.gen(function* () {
             const phase = yield* Ref.get(entry.phase);
-            if (phase._tag !== "Running") return false;
+
+            if (!Predicate.isTagged(phase, "Running")) return false;
             yield* Ref.set(entry.phase, { ...phase, childThreadId });
             byChildThread.set(childThreadId, entry);
             childAccess.set(childThreadId, entry.access);
+
             return true;
           }),
         );
+
         if (!attached) yield* port.discardChild(childThreadId);
+
         return { childThreadId, attached };
       }).pipe(Effect.uninterruptible);
+
       // Stopped while the child was being created: no turn ever starts there.
       if (!attached) return;
       yield* port.messageChild(childThreadId, workerInstructions(input)).pipe(
@@ -340,6 +228,7 @@ export const makeAkeruWorkerRuntime = Effect.fn("makeAkeruWorkerRuntime")(functi
 
   const ownedWorker = (parentThreadId: ThreadId, workerId: AkeruWorkerId) => {
     const entry = workers.get(workerId);
+
     return entry && entry.parentThreadId === parentThreadId
       ? Effect.succeed(entry)
       : Effect.fail(
@@ -353,10 +242,13 @@ export const makeAkeruWorkerRuntime = Effect.fn("makeAkeruWorkerRuntime")(functi
   const runningCount = (parentThreadId: ThreadId) =>
     Effect.gen(function* () {
       let count = 0;
+
       for (const entry of workers.values()) {
         if (entry.parentThreadId !== parentThreadId) continue;
-        if ((yield* Ref.get(entry.phase))._tag === "Running") count += 1;
+
+        if (Predicate.isTagged(yield* Ref.get(entry.phase), "Running")) count += 1;
       }
+
       return count;
     });
 
@@ -370,10 +262,13 @@ export const makeAkeruWorkerRuntime = Effect.fn("makeAkeruWorkerRuntime")(functi
         if (entry.parentThreadId !== parent.threadId || entry.parentTurnId === parent.turnId) {
           continue;
         }
+
         const phase = yield* Ref.get(entry.phase);
-        if (phase._tag === "Running") continue;
+
+        if (Predicate.isTagged(phase, "Running")) continue;
         workers.delete(workerId);
         const childThreadId = childThreadOf(phase);
+
         if (childThreadId !== null) byChildThread.delete(childThreadId);
       }
     });
@@ -388,15 +283,18 @@ export const makeAkeruWorkerRuntime = Effect.fn("makeAkeruWorkerRuntime")(functi
         detail: "Temporary workers cannot start other workers.",
       });
     }
+
     const entry = yield* locked(
       Effect.gen(function* () {
         yield* pruneEarlierTurns(parent);
+
         if ((yield* runningCount(parent.threadId)) >= maxConcurrency) {
           return yield* new AkeruWorkerError({
             reason: "concurrency_limit",
             detail: `This turn already has ${maxConcurrency} running workers. Check or stop one before starting another.`,
           });
         }
+
         const entry: WorkerEntry = {
           workerId: AkeruWorkerId.make(`worker-${makeId()}`),
           parentThreadId: parent.threadId,
@@ -413,12 +311,15 @@ export const makeAkeruWorkerRuntime = Effect.fn("makeAkeruWorkerRuntime")(functi
           access: workerAccess(parent.access),
           fiber: undefined,
         };
+
         workers.set(entry.workerId, entry);
         // Forked under the lock so stop always sees the fiber.
         entry.fiber = yield* Effect.forkIn(runWorker(entry, input), scope);
+
         return entry;
       }),
     );
+
     return input.background ? yield* statusOf(entry) : yield* Deferred.await(entry.done);
   });
 
@@ -427,6 +328,7 @@ export const makeAkeruWorkerRuntime = Effect.fn("makeAkeruWorkerRuntime")(functi
     input: (typeof AkeruToolInputSchemas.CheckSubagent)["Type"],
   ) {
     const entry = yield* ownedWorker(parent.threadId, input.workerId);
+
     return input.wait ? yield* Deferred.await(entry.done) : yield* statusOf(entry);
   });
 
@@ -439,21 +341,23 @@ export const makeAkeruWorkerRuntime = Effect.fn("makeAkeruWorkerRuntime")(functi
       Effect.gen(function* () {
         const phase = yield* Ref.get(entry.phase);
         const childThreadId = childThreadOf(phase);
-        if (phase._tag !== "Running" || childThreadId === null) {
+
+        if (!Predicate.isTagged(phase, "Running") || childThreadId === null) {
           return yield* new AkeruWorkerError({
             reason: "not_running",
-            detail:
-              phase._tag === "Running"
-                ? `Worker '${entry.workerId}' is still starting. Try again shortly.`
-                : `Worker '${entry.workerId}' is ${phase._tag} and cannot take follow-ups.`,
+            detail: Predicate.isTagged(phase, "Running")
+              ? `Worker '${entry.workerId}' is still starting. Try again shortly.`
+              : `Worker '${entry.workerId}' is ${phase._tag} and cannot take follow-ups.`,
           });
         }
+
         yield* Ref.update(entry.openTurns, (count) => count + 1);
         yield* port
           .messageChild(childThreadId, input.message)
           .pipe(Effect.tapError(() => Ref.update(entry.openTurns, (count) => count - 1)));
       }),
     );
+
     return yield* statusOf(entry);
   });
 
@@ -468,6 +372,7 @@ export const makeAkeruWorkerRuntime = Effect.fn("makeAkeruWorkerRuntime")(functi
   const childTurnFinished = (childThreadId: ThreadId, outcome: AkeruWorkerChildOutcome) =>
     Effect.suspend(() => {
       const entry = byChildThread.get(childThreadId);
+
       return entry ? Effect.asVoid(Queue.offer(entry.outcomes, outcome)) : Effect.void;
     });
 
@@ -495,10 +400,12 @@ export const makeAkeruWorkerRuntime = Effect.fn("makeAkeruWorkerRuntime")(functi
   const releaseThread = (parentThreadId: ThreadId) =>
     Effect.gen(function* () {
       yield* parentTurnEnded(parentThreadId);
+
       for (const [workerId, entry] of workers) {
         if (entry.parentThreadId !== parentThreadId) continue;
         workers.delete(workerId);
         const childThreadId = childThreadOf(yield* Ref.get(entry.phase));
+
         if (childThreadId !== null) byChildThread.delete(childThreadId);
       }
     });
@@ -521,3 +428,16 @@ export const makeAkeruWorkerRuntime = Effect.fn("makeAkeruWorkerRuntime")(functi
 });
 
 export type AkeruWorkerRuntime = Effect.Success<ReturnType<typeof makeAkeruWorkerRuntime>>;
+
+export {
+  AkeruWorkerError,
+  type AkeruWorkerParent,
+  type AkeruWorkerChildSpec,
+  type AkeruWorkerChildOutcome,
+  type AkeruWorkerPort,
+  type AkeruWorkerRuntimeOptions,
+  AKERU_WORKER_EXCLUDED_TOOL_IDS,
+  WORKER_THREAD_ID_PREFIX,
+  isWorkerThreadId,
+  workerAccess,
+} from "./workers/AkeruWorkerPolicy.ts";

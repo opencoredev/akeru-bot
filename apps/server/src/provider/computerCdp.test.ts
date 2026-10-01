@@ -21,9 +21,11 @@ async function browserThatDropsHandshakes() {
       JSON.stringify([{ type: "page", webSocketDebuggerUrl: "ws://ignored/devtools/page/1" }]),
     );
   });
+
   server.on("upgrade", (_request, socket) => socket.destroy());
   servers.push(server);
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+
   return `http://127.0.0.1:${(server.address() as NodeNet.AddressInfo).port}`;
 }
 

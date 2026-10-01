@@ -17,7 +17,9 @@ import {
 } from "./ModelManifest.ts";
 
 const CODEX = ProviderDriverKind.make("codex");
+
 const CLAUDE = ProviderDriverKind.make("claudeAgent");
+
 const CURSOR = ProviderDriverKind.make("cursor");
 
 it("refreshes the manifest from the Akeru repository", () => {
@@ -93,6 +95,7 @@ describe("classifyModels", () => {
       // Custom models are user-defined and never reclassified.
       model({ slug: "my-own-model", isCustom: true }),
     ];
+
     assert.deepStrictEqual(
       classifyModels(models, BUNDLED_MODEL_MANIFEST, CODEX).map((entry) => [
         entry.slug,
@@ -175,14 +178,17 @@ describe("ModelManifest service", () => {
   it.live("does not fetch when provider update checks are disabled", () =>
     Effect.gen(function* () {
       let fetchCount = 0;
+
       const service = yield* make.pipe(
         Effect.provide(
           httpClientLayer(() => {
             fetchCount += 1;
+
             return Response.json(REMOTE_MANIFEST);
           }),
         ),
       );
+
       assert.deepStrictEqual(yield* service.refresh, BUNDLED_MODEL_MANIFEST);
       assert.strictEqual(fetchCount, 0);
     }).pipe(

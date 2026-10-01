@@ -20,6 +20,7 @@ export function createAkeruPersonalityInstructions(
 ): string {
   const chill = 100 - tone;
   const professional = tone;
+
   const baseline =
     tone <= 20
       ? "Default to short, relaxed messages. Lowercase is natural in chat. Sound like a person texting, not a brand account."
@@ -46,6 +47,7 @@ export function createAkeruAgentInstructions(context: AkeruInstructionContext = 
   const name = botName(context.name);
   const date = currentDate(context.now ?? DateTime.nowUnsafe());
   const personalityTone = context.personalityTone ?? BALANCED_BOT_PERSONALITY_TONE;
+
   return [
     `You are ${name}, a sharp, curious general assistant. Today is ${date}.`,
     "Treat each request on its own terms. Coding is not the default.",
