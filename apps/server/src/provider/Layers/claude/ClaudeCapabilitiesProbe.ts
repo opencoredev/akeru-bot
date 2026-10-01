@@ -10,6 +10,7 @@ import {
   type SettingSource,
 } from "@anthropic-ai/claude-agent-sdk";
 import { resolveClaudeSdkExecutablePath } from "../../Drivers/ClaudeExecutable.ts";
+// oxlint-disable-next-line anti-slop-effect/no-service-constructor-imports -- Provider composition root constructs an environment from this instance configuration.
 import { makeClaudeEnvironment } from "../../Drivers/ClaudeHome.ts";
 
 // ── SDK capability probe ────────────────────────────────────────────
@@ -203,14 +204,7 @@ export const probeClaudeCapabilities = (
 
       const init = await q.initializationResult();
 
-      const account = init.account as
-        | {
-            readonly email?: string;
-            readonly subscriptionType?: string;
-            readonly tokenSource?: string;
-            readonly apiProvider?: string;
-          }
-        | undefined;
+      const account = init.account;
 
       return {
         email: account?.email,

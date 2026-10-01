@@ -1,3 +1,5 @@
+import { isProtocolRecord } from "../ProtocolJson.ts";
+import * as Predicate from "effect/Predicate";
 // @effect-diagnostics globalDate:off globalConsole:off globalRandom:off nodeBuiltinImport:off globalTimers:off globalFetch:off
 /**
  * ClaudeAdapterLive - Scoped live implementation for the Claude Agent provider adapter.
@@ -288,8 +290,7 @@ export function createClaudeTextStreams(deps: {
     // narration into the chat (live-test finding). Their results reach the
     // UI via the task.* lifecycle; their tool blocks are attributed and
     // re-homed by the quiet-timeline filter.
-    const streamParentToolUseId = (message as { parent_tool_use_id?: string | null })
-      .parent_tool_use_id;
+    const streamParentToolUseId = message.parent_tool_use_id;
 
     if (streamParentToolUseId !== null && streamParentToolUseId !== undefined) {
       // Drop only the subagent's narration (text/thinking); tool_use blocks
@@ -337,7 +338,7 @@ export function createClaudeTextStreams(deps: {
         const deltaText =
           event.delta.type === "text_delta"
             ? event.delta.text
-            : typeof event.delta.thinking === "string"
+            : Predicate.isString(event.delta.thinking)
               ? event.delta.thinking
               : "";
 
@@ -353,9 +354,7 @@ export function createClaudeTextStreams(deps: {
             : context.turnState.assistantTextBlocks.get(event.index)
               ? {
                   blockIndex: event.index,
-                  block: context.turnState.assistantTextBlocks.get(
-                    event.index,
-                  ) as AssistantTextBlockState,
+                  block: context.turnState.assistantTextBlocks.get(event.index),
                 }
               : undefined;
 
@@ -394,7 +393,7 @@ export function createClaudeTextStreams(deps: {
       if (event.delta.type === "input_json_delta") {
         const tool = context.inFlightTools.get(event.index);
 
-        if (!tool || typeof event.delta.partial_json !== "string") {
+        if (!tool || !Predicate.isString(event.delta.partial_json)) {
           return;
         }
 
@@ -516,10 +515,7 @@ export function createClaudeTextStreams(deps: {
       const toolName = block.name;
       const itemType = classifyToolItemType(toolName);
 
-      const toolInput =
-        typeof block.input === "object" && block.input !== null
-          ? (block.input as Record<string, unknown>)
-          : {};
+      const toolInput = isProtocolRecord(block.input) && block.input !== null ? block.input : {};
 
       const itemId = block.id;
       const detail = summarizeToolRequest(toolName, toolInput);
@@ -531,8 +527,7 @@ export function createClaudeTextStreams(deps: {
       // clients can re-home them out of the main timeline (quiet-timeline
       // guarantee): the SDK forwards subagent tool_use blocks tagged with the
       // spawning Task tool's id as parent_tool_use_id.
-      const parentToolUseId =
-        (message as { parent_tool_use_id?: string | null }).parent_tool_use_id ?? undefined;
+      const parentToolUseId = message.parent_tool_use_id ?? undefined;
 
       const owningAgentId = agentIdForParentToolUse(context.taskAgents, parentToolUseId);
 

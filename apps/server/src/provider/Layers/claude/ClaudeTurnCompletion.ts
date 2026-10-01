@@ -1,3 +1,5 @@
+import { isProtocolRecord } from "../ProtocolJson.ts";
+import * as Predicate from "effect/Predicate";
 // @effect-diagnostics globalDate:off globalConsole:off globalRandom:off nodeBuiltinImport:off globalTimers:off globalFetch:off
 /**
  * ClaudeAdapterLive - Scoped live implementation for the Claude Agent provider adapter.
@@ -207,8 +209,8 @@ export function createClaudeTurnCompletion(deps: {
 
     // Avoid getContextUsage because its token-count fallback can make extra model requests.
     const resultUsageRecord =
-      result?.usage && typeof result.usage === "object" && !Array.isArray(result.usage)
-        ? (result.usage as Record<string, unknown>)
+      result?.usage && isProtocolRecord(result.usage) && !Array.isArray(result.usage)
+        ? result.usage
         : undefined;
 
     const hasResultUsageIteration =
@@ -247,10 +249,10 @@ export function createClaudeTurnCompletion(deps: {
         : resultTotalOnly && lastGoodUsage
           ? {
               ...lastGoodUsage,
-              ...(typeof maxTokens === "number" && Number.isFinite(maxTokens) && maxTokens > 0
+              ...(Predicate.isNumber(maxTokens) && Number.isFinite(maxTokens) && maxTokens > 0
                 ? { maxTokens }
                 : {}),
-              ...(typeof accumulatedTotalProcessedTokens === "number" &&
+              ...(Predicate.isNumber(accumulatedTotalProcessedTokens) &&
               Number.isFinite(accumulatedTotalProcessedTokens) &&
               accumulatedTotalProcessedTokens > lastGoodUsage.usedTokens
                 ? {
@@ -262,10 +264,10 @@ export function createClaudeTurnCompletion(deps: {
       (lastGoodUsage
         ? {
             ...lastGoodUsage,
-            ...(typeof maxTokens === "number" && Number.isFinite(maxTokens) && maxTokens > 0
+            ...(Predicate.isNumber(maxTokens) && Number.isFinite(maxTokens) && maxTokens > 0
               ? { maxTokens }
               : {}),
-            ...(typeof accumulatedTotalProcessedTokens === "number" &&
+            ...(Predicate.isNumber(accumulatedTotalProcessedTokens) &&
             Number.isFinite(accumulatedTotalProcessedTokens) &&
             accumulatedTotalProcessedTokens > lastGoodUsage.usedTokens
               ? {
@@ -372,7 +374,7 @@ export function createClaudeTurnCompletion(deps: {
         ...(result?.stop_reason !== undefined ? { stopReason: result.stop_reason } : {}),
         ...(result?.usage ? { usage: result.usage } : {}),
         ...(result?.modelUsage ? { modelUsage: result.modelUsage } : {}),
-        ...(typeof result?.total_cost_usd === "number"
+        ...(Predicate.isNumber(result?.total_cost_usd)
           ? { totalCostUsd: result.total_cost_usd }
           : {}),
         ...(errorMessage ? { errorMessage } : {}),

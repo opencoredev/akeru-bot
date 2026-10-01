@@ -1,3 +1,7 @@
+import { readProtocolRecord } from "../ProtocolJson.ts";
+import { isProtocolRecord } from "../ProtocolJson.ts";
+import * as Schema from "effect/Schema";
+import * as Predicate from "effect/Predicate";
 // @effect-diagnostics globalDate:off globalConsole:off globalRandom:off nodeBuiltinImport:off globalTimers:off globalFetch:off
 /**
  * ClaudeAdapterLive - Scoped live implementation for the Claude Agent provider adapter.
@@ -204,7 +208,7 @@ export function createClaudeSessionLifecycle(deps: {
        */
       const handleAskUserQuestion = Effect.fn("handleAskUserQuestion")(function* (
         context: ClaudeSessionContext,
-        toolInput: Record<string, unknown>,
+        toolInput: Schema.JsonObject,
         callbackOptions: {
           readonly signal: AbortSignal;
           readonly toolUseID?: string;
@@ -220,17 +224,17 @@ export function createClaudeSessionLifecycle(deps: {
         const rawQuestions = Array.isArray(toolInput.questions) ? toolInput.questions : [];
 
         const questions: Array<UserInputQuestion> = rawQuestions.map(
-          (q: Record<string, unknown>, idx: number) => ({
-            id: typeof q.question === "string" && q.question.length > 0 ? q.question : `q-${idx}`,
-            header: typeof q.header === "string" ? q.header : `Question ${idx + 1}`,
-            question: typeof q.question === "string" ? q.question : "",
+          (q: Schema.JsonObject, idx: number) => ({
+            id: Predicate.isString(q.question) && q.question.length > 0 ? q.question : `q-${idx}`,
+            header: Predicate.isString(q.header) ? q.header : `Question ${idx + 1}`,
+            question: Predicate.isString(q.question) ? q.question : "",
             options: Array.isArray(q.options)
-              ? q.options.map((opt: Record<string, unknown>) => ({
-                  label: typeof opt.label === "string" ? opt.label : "",
-                  description: typeof opt.description === "string" ? opt.description : "",
+              ? q.options.map((opt: Schema.JsonObject) => ({
+                  label: Predicate.isString(opt.label) ? opt.label : "",
+                  description: Predicate.isString(opt.description) ? opt.description : "",
                 }))
               : [],
-            multiSelect: typeof q.multiSelect === "boolean" ? q.multiSelect : false,
+            multiSelect: Predicate.isBoolean(q.multiSelect) ? q.multiSelect : false,
           }),
         );
 
@@ -245,9 +249,7 @@ export function createClaudeSessionLifecycle(deps: {
           aborted = true;
           pendingUserInputs.delete(requestId);
 
-          return Deferred.succeed(answersDeferred, {} as ProviderUserInputAnswers).pipe(
-            Effect.ignore,
-          );
+          return Deferred.succeed(answersDeferred, {}).pipe(Effect.ignore);
         });
 
         const pendingInput: PendingUserInput = {
@@ -409,8 +411,8 @@ export function createClaudeSessionLifecycle(deps: {
         const answers = result.updatedInput.answers;
 
         const selection =
-          answers && typeof answers === "object" && !Array.isArray(answers)
-            ? (answers as Record<string, unknown>)[question]
+          answers && isProtocolRecord(answers) && !Array.isArray(answers)
+            ? answers[question]
             : undefined;
 
         const action =
@@ -441,7 +443,11 @@ export function createClaudeSessionLifecycle(deps: {
         // user via the user-input runtime event channel, regardless of
         // runtime mode (plan mode relies on this heavily).
         if (toolName === "AskUserQuestion") {
-          return yield* handleAskUserQuestion(context, toolInput, callbackOptions);
+          return yield* handleAskUserQuestion(
+            context,
+            readProtocolRecord(toolInput) ?? {},
+            callbackOptions,
+          );
         }
 
         if (toolName === "ExitPlanMode") {
@@ -478,7 +484,7 @@ export function createClaudeSessionLifecycle(deps: {
 
         const requestId = ApprovalRequestId.make(yield* deps.randomUUIDv4);
         const requestType = classifyRequestType(toolName);
-        const detail = summarizeToolRequest(toolName, toolInput);
+        const detail = summarizeToolRequest(toolName, readProtocolRecord(toolInput) ?? {});
         const decisionDeferred = yield* Deferred.make<ProviderApprovalDecision>();
 
         const pendingApproval: PendingApproval = {
@@ -629,16 +635,22 @@ export function createClaudeSessionLifecycle(deps: {
       const ultracode = isClaudeUltracodeEffort(effort);
       const effectiveEffort = getEffectiveClaudeAgentEffort(effort, modelSelection?.model);
 
-      const runtimeModeToPermission: Record<string, PermissionMode> = {
+      const runtimeModeToPermission = {
         "auto-accept-edits": "acceptEdits",
         auto: "auto",
         "full-access": "bypassPermissions",
-      };
+      } satisfies Record<
+        Exclude<ProviderSession["runtimeMode"], "approval-required">,
+        PermissionMode
+      >;
 
-      const permissionMode = runtimeModeToPermission[input.runtimeMode];
+      const permissionMode =
+        input.runtimeMode === "approval-required"
+          ? undefined
+          : runtimeModeToPermission[input.runtimeMode];
 
       const settings = {
-        ...(typeof thinking === "boolean" ? { alwaysThinkingEnabled: thinking } : {}),
+        ...(Predicate.isBoolean(thinking) ? { alwaysThinkingEnabled: thinking } : {}),
         ...(fastMode ? { fastMode: true } : {}),
         ...(ultracode ? { ultracode: true } : {}),
         ...(deps.claudeSettings.autoCompactWindow
@@ -691,7 +703,7 @@ export function createClaudeSessionLifecycle(deps: {
         // normalized to `xhigh` above and paired with `settings.ultracode`.
         ...(effectiveEffort
           ? {
-              effort: effectiveEffort as unknown as NonNullable<ClaudeQueryOptions["effort"]>,
+              effort: effectiveEffort,
             }
           : {}),
         ...(permissionMode ? { permissionMode } : {}),

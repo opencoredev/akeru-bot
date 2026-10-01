@@ -47,7 +47,7 @@ export function buildPromptText(
 }
 
 export function buildUserMessage(input: {
-  readonly sdkContent: Array<Record<string, unknown>>;
+  readonly sdkContent: Exclude<SDKUserMessage["message"]["content"], string>;
 }): SDKUserMessage {
   return {
     type: "user",
@@ -55,15 +55,15 @@ export function buildUserMessage(input: {
     parent_tool_use_id: null,
     message: {
       role: "user",
-      content: input.sdkContent as unknown as SDKUserMessage["message"]["content"],
+      content: input.sdkContent,
     },
-  } as SDKUserMessage;
+  };
 }
 
 export function buildClaudeImageContentBlock(input: {
-  readonly mimeType: string;
+  readonly mimeType: "image/gif" | "image/jpeg" | "image/png" | "image/webp";
   readonly bytes: Uint8Array;
-}): Record<string, unknown> {
+}): Exclude<SDKUserMessage["message"]["content"], string>[number] {
   return {
     type: "image",
     source: {
@@ -84,7 +84,7 @@ export const buildUserMessageEffect = Effect.fn("buildUserMessageEffect")(functi
   },
 ) {
   const text = buildPromptText(input, dependencies.boundInstanceId);
-  const sdkContent: Array<Record<string, unknown>> = [];
+  const sdkContent: Exclude<SDKUserMessage["message"]["content"], string> = [];
 
   // Claude Code expands a skill only from the last text block, and only when
   // `/name` is its first character. Split a `$skill` mention into leading text
@@ -96,7 +96,14 @@ export const buildUserMessageEffect = Effect.fn("buildUserMessageEffect")(functi
       continue;
     }
 
-    if (!SUPPORTED_CLAUDE_IMAGE_MIME_TYPES.has(attachment.mimeType)) {
+    const imageMimeType = attachment.mimeType;
+
+    if (
+      imageMimeType !== "image/gif" &&
+      imageMimeType !== "image/jpeg" &&
+      imageMimeType !== "image/png" &&
+      imageMimeType !== "image/webp"
+    ) {
       return yield* new ProviderAdapterRequestError({
         provider: PROVIDER,
         method: "turn/start",
@@ -131,7 +138,7 @@ export const buildUserMessageEffect = Effect.fn("buildUserMessageEffect")(functi
 
     sdkContent.push(
       buildClaudeImageContentBlock({
-        mimeType: attachment.mimeType,
+        mimeType: imageMimeType,
         bytes,
       }),
     );
