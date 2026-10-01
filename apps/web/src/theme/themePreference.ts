@@ -1,3 +1,5 @@
+import * as Option from "effect/Option";
+import { decodeThemeJson } from "./themeTypes";
 import * as Predicate from "effect/Predicate";
 import { type ThemeAppearance } from "@akeru/shared/themePalettes";
 import { type ThemePreference, type ThemePreferenceMode, isRecord } from "./themeTypes";
@@ -92,10 +94,13 @@ export function parseThemeHalves(raw: string | null): ThemeHalves | null {
   if (!raw) return null;
 
   try {
-    const value: unknown = JSON.parse(raw);
+    const decoded = decodeThemeJson(JSON.parse(raw));
+
+    if (Option.isNone(decoded)) return null;
+    const value = decoded.value;
 
     if (!isRecord(value)) return null;
-    const halves: { light?: string; dark?: string } = {};
+    const halves: { -readonly [Key in keyof ThemeHalves]: ThemeHalves[Key] } = {};
 
     for (const appearance of ["light", "dark"] as const) {
       const themeId = value[appearance];

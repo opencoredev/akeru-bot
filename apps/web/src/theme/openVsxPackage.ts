@@ -1,3 +1,4 @@
+import * as Schema from "effect/Schema";
 import * as Predicate from "effect/Predicate";
 import JSZip from "jszip";
 import {
@@ -69,7 +70,7 @@ const USED_WORKBENCH_COLORS = new Set([
   "textLink.foreground",
 ]);
 
-function sanitizeThemeObject(value: Record<string, unknown>): Record<string, unknown> {
+function sanitizeThemeObject(value: Schema.JsonObject): Schema.JsonObject {
   const colors: Record<string, string> = {};
 
   if (isRecord(value.colors)) {
@@ -121,7 +122,7 @@ export function normalizePackagePath(path: string, relativeTo = "extension/"): s
   return segments.join("/");
 }
 
-export function contributionType(uiTheme: unknown): string | null {
+export function contributionType(uiTheme: Schema.Json | undefined): string | null {
   if (uiTheme === "vs") return "light";
 
   if (uiTheme === "vs-dark") return "dark";
@@ -222,7 +223,7 @@ export function inspectZipDirectory(bytes: Uint8Array): Uint8Array {
 }
 
 export function inspectZip(zip: JSZip): void {
-  const entries = Object.values(zip.files) as InspectableZipObject[];
+  const entries: InspectableZipObject[] = Object.values(zip.files);
 
   if (entries.length > MAX_ZIP_ENTRIES)
     throw new Error("That extension package has too many files.");
@@ -239,7 +240,7 @@ export async function readZipText(
   signal?: AbortSignal,
 ): Promise<string> {
   signal?.throwIfAborted();
-  const file = zip.file(path) as InspectableZipObject | null;
+  const file: InspectableZipObject | null = zip.file(path);
 
   if (!file) throw new Error(`${description} is missing from the extension package.`);
 
@@ -310,11 +311,11 @@ export async function readZipText(
 export async function loadThemeObject(
   zip: JSZip,
   path: string,
-  cache: Map<string, Record<string, unknown>>,
+  cache: Map<string, Schema.JsonObject>,
   budget: { files: number },
   ancestors: ReadonlySet<string> = new Set(),
   signal?: AbortSignal,
-): Promise<Record<string, unknown>> {
+): Promise<Schema.JsonObject> {
   signal?.throwIfAborted();
 
   if (ancestors.size >= MAX_INCLUDE_DEPTH) throw new Error("Theme includes are nested too deeply.");

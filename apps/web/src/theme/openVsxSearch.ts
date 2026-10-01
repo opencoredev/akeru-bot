@@ -1,5 +1,7 @@
+import * as Schema from "effect/Schema";
 import * as Predicate from "effect/Predicate";
 import {
+  decodeJson,
   MAX_VSIX_BYTES,
   MAX_MANIFEST_BYTES,
   isRecord,
@@ -61,7 +63,7 @@ function openVsxCollectionId(extensionId: string): string {
     : `open-vsx:${shortHash(extensionId)}`;
 }
 
-function trustedOpenVsxUrl(value: unknown): string | null {
+function trustedOpenVsxUrl(value: Schema.Json | undefined): string | null {
   if (!Predicate.isString(value)) return null;
 
   try {
@@ -75,7 +77,7 @@ function trustedOpenVsxUrl(value: unknown): string | null {
   }
 }
 
-function publicSourceUrl(value: unknown): string | null {
+function publicSourceUrl(value: Schema.Json | undefined): string | null {
   const rawValue = Predicate.isString(value)
     ? value
     : isRecord(value) && Predicate.isString(value.url)
@@ -93,7 +95,7 @@ function publicSourceUrl(value: unknown): string | null {
   }
 }
 
-function extensionFromDetail(value: unknown): OpenVsxThemeExtension | null {
+function extensionFromDetail(value: Schema.Json | undefined): OpenVsxThemeExtension | null {
   if (!isRecord(value) || !isRecord(value.files)) {
     throw new Error("Open VSX returned malformed theme details.");
   }
@@ -193,7 +195,7 @@ export async function searchOpenVsxThemes(
     );
 
     try {
-      return JSON.parse(new TextDecoder().decode(searchBytes)) as unknown;
+      return decodeJson(JSON.parse(new TextDecoder().decode(searchBytes)));
     } catch {
       throw new Error("Open VSX returned an unreadable response.");
     }
@@ -226,7 +228,9 @@ export async function searchOpenVsxThemes(
         );
 
         try {
-          const extension = extensionFromDetail(JSON.parse(new TextDecoder().decode(detailBytes)));
+          const extension = extensionFromDetail(
+            decodeJson(JSON.parse(new TextDecoder().decode(detailBytes))),
+          );
 
           if (!extension) return null;
 

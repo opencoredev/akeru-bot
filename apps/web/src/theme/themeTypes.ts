@@ -94,10 +94,8 @@ export const RESERVED_THEME_IDS = new Set([
   "t3-iris",
 ]);
 
-export function isRecord(value: unknown): value is Record<string, unknown> {
-  return (
-    (value === null || Predicate.isObjectOrArray(value)) && value !== null && !Array.isArray(value)
-  );
+export function isRecord(value: Schema.Json | undefined): value is Schema.JsonObject {
+  return Predicate.isObject(value);
 }
 
 export function isThemeAppearance(value: unknown): value is ThemeAppearance {
@@ -112,11 +110,17 @@ export function isThemeLabel(value: unknown): value is string {
   return Predicate.isString(value) && value.trim().length > 0 && value.trim().length <= 48;
 }
 
-export function parseThemeCollection(value: unknown): ThemeCollection | undefined {
+export function parseThemeCollection(value: Schema.Json | undefined): ThemeCollection | undefined {
   return isRecord(value) &&
     Predicate.isString(value.id) &&
     /^[a-z0-9][a-z0-9.:-]{0,127}$/i.test(value.id) &&
     isThemeLabel(value.label)
     ? { id: value.id, label: value.label.trim() }
     : undefined;
+}
+
+export const decodeThemeJson = Schema.decodeUnknownOption(Schema.Json);
+
+export function isThemeColorRole(value: string): value is ThemeColorRole {
+  return THEME_COLOR_ROLE_SET.has(value);
 }

@@ -1,6 +1,12 @@
+import * as Option from "effect/Option";
+import * as Schema from "effect/Schema";
 import * as Predicate from "effect/Predicate";
 import { sha256 } from "@noble/hashes/sha2";
 import { parse, type ParseError } from "jsonc-parser";
+
+export const decodeJson = Schema.decodeUnknownSync(Schema.Json);
+
+const decodeJsonOption = Schema.decodeUnknownOption(Schema.Json);
 
 export const MAX_VSIX_BYTES = 20 * 1024 * 1024;
 
@@ -8,12 +14,10 @@ export const MAX_MANIFEST_BYTES = 256 * 1024;
 
 export const MAX_THEMES_PER_EXTENSION = 40;
 
-type ThemeContribution = { label?: unknown; uiTheme?: unknown; path?: unknown };
+type ThemeContribution = Schema.JsonObject;
 
-export function isRecord(value: unknown): value is Record<string, unknown> {
-  return (
-    (value === null || Predicate.isObjectOrArray(value)) && value !== null && !Array.isArray(value)
-  );
+export function isRecord(value: Schema.Json | undefined): value is Schema.JsonObject {
+  return Predicate.isObject(value);
 }
 
 export function shortHash(value: string): string {
@@ -27,31 +31,28 @@ export function openVsxThemeId(extensionId: string, source: string): string {
   return `ovx-theme-${shortHash(`${extensionId}:${source}`)}`;
 }
 
-export function themeContributions(manifest: Record<string, unknown>): ThemeContribution[] {
+export function themeContributions(manifest: Schema.JsonObject): ThemeContribution[] {
   const contributes = isRecord(manifest.contributes) ? manifest.contributes : null;
 
-  return Array.isArray(contributes?.themes)
-    ? (contributes.themes.filter(isRecord) as ThemeContribution[])
-    : [];
+  return Array.isArray(contributes?.themes) ? contributes.themes.filter(isRecord) : [];
 }
 
-export function manifestLicenseMatches(
-  manifest: Record<string, unknown>,
-  license: string,
-): boolean {
+export function manifestLicenseMatches(manifest: Schema.JsonObject, license: string): boolean {
   return (
     Predicate.isString(manifest.license) &&
     manifest.license.trim().toLowerCase() === license.toLowerCase()
   );
 }
 
-export function parseJsoncObject(source: string, description: string): Record<string, unknown> {
+export function parseJsoncObject(source: string, description: string): Schema.JsonObject {
   const errors: ParseError[] = [];
-  const value: unknown = parse(source, errors, { allowTrailingComma: true });
+  const decoded = decodeJsonOption(parse(source, errors, { allowTrailingComma: true }));
 
-  if (errors.length > 0 || !isRecord(value)) throw new Error(`${description} is not valid JSON.`);
+  if (errors.length > 0 || Option.isNone(decoded) || !isRecord(decoded.value)) {
+    throw new Error(`${description} is not valid JSON.`);
+  }
 
-  return value;
+  return decoded.value;
 }
 
 export async function readCappedResponse(

@@ -1,6 +1,7 @@
+import type * as Schema from "effect/Schema";
+import { asRecord, readWorkLogPayload } from "./workLogPayload";
 import * as Predicate from "effect/Predicate";
 import {
-  asRecord,
   extractToolCommand,
   stripTrailingExitCode,
   extractWorkLogItemType,
@@ -47,10 +48,7 @@ const derivedWorkLogEntryByActivity = new WeakMap<
  */
 /** Agent (non-background) task.started rows seed spawn CTA batches. */
 function isAgentTaskStartedActivity(activity: OrchestrationThreadActivity): boolean {
-  const payload =
-    activity.payload && (activity.payload === null || Predicate.isObjectOrArray(activity.payload))
-      ? (activity.payload as Record<string, unknown>)
-      : null;
+  const payload = readWorkLogPayload(activity);
 
   if (!payload || !Predicate.isString(payload.taskId)) {
     return false;
@@ -60,10 +58,7 @@ function isAgentTaskStartedActivity(activity: OrchestrationThreadActivity): bool
 }
 
 function isAgentInternalActivity(activity: OrchestrationThreadActivity): boolean {
-  const payload =
-    activity.payload && (activity.payload === null || Predicate.isObjectOrArray(activity.payload))
-      ? (activity.payload as Record<string, unknown>)
-      : null;
+  const payload = readWorkLogPayload(activity);
 
   if (!payload) {
     return false;
@@ -146,16 +141,13 @@ function isPlanBoundaryToolActivity(activity: OrchestrationThreadActivity): bool
     return false;
   }
 
-  const payload =
-    activity.payload && (activity.payload === null || Predicate.isObjectOrArray(activity.payload))
-      ? (activity.payload as Record<string, unknown>)
-      : null;
+  const payload = readWorkLogPayload(activity);
 
   return Predicate.isString(payload?.detail) && payload.detail.startsWith("ExitPlanMode:");
 }
 
 function extractWorkLogToolLifecycleStatus(
-  payload: Record<string, unknown> | null,
+  payload: Schema.JsonObject | null,
 ): WorkLogToolLifecycleStatus | undefined {
   if (!payload) {
     return undefined;
@@ -183,10 +175,7 @@ function toDerivedWorkLogEntry(activity: OrchestrationThreadActivity): DerivedWo
     return cachedEntry;
   }
 
-  const payload =
-    activity.payload && (activity.payload === null || Predicate.isObjectOrArray(activity.payload))
-      ? (activity.payload as Record<string, unknown>)
-      : null;
+  const payload = readWorkLogPayload(activity);
 
   const commandPreview = extractToolCommand(payload);
   const changedFiles = extractChangedFiles(payload);

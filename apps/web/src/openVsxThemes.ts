@@ -1,3 +1,4 @@
+import * as Schema from "effect/Schema";
 import * as Predicate from "effect/Predicate";
 import { sha256 } from "@noble/hashes/sha2";
 import JSZip from "jszip";
@@ -129,7 +130,7 @@ export async function importOpenVsxThemeExtension(
 
   const parsed: Array<{ theme: ThemeDefinition; sourceName: string; sourcePath: string }> = [];
   const failures: string[] = [];
-  const themeCache = new Map<string, Record<string, unknown>>();
+  const themeCache = new Map<string, Schema.JsonObject>();
   const themeBudget = { files: 0 };
 
   for (const contribution of contributions) {

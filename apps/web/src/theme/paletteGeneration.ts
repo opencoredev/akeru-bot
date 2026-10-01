@@ -53,14 +53,7 @@ const STANDARD_STATUS_COLORS = {
  * (the unthemed app uses 8% in light and 16% in dark), so alerts still sit on
  * the palette while the signal color stays standard.
  */
-function standardStatusColors(canvas: ThemeRgbColor): {
-  error: string;
-  errorForeground: string;
-  errorSurface: string;
-  warning: string;
-  warningForeground: string;
-  warningSurface: string;
-} {
+function standardStatusColors(canvas: ThemeRgbColor) {
   // Keyed off the canvas rather than the appearance slot: a dark canvas saved
   // as a light theme still needs the dark pair, or the alert foreground lands
   // on a dark surface unreadable.

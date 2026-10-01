@@ -1,3 +1,4 @@
+import type * as Schema from "effect/Schema";
 import * as Predicate from "effect/Predicate";
 import {
   classifyTaskAgentKind,
@@ -14,7 +15,7 @@ export function makeActivity(overrides: {
   kind?: string;
   summary?: string;
   tone?: OrchestrationThreadActivity["tone"];
-  payload?: Record<string, unknown>;
+  payload?: Schema.JsonObject;
   turnId?: string;
   sequence?: number;
 }): OrchestrationThreadActivity {

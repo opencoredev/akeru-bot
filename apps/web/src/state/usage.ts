@@ -1,3 +1,4 @@
+import * as Schema from "effect/Schema";
 import { hasTag } from "~/lib/taggedUnion";
 import {
   aggregateUsage,
@@ -13,7 +14,7 @@ import {
  * @module state/usage
  */
 import { useAtomValue } from "@effect/atom-react";
-import { type UsageSummaryInput } from "@akeru/contracts";
+import { UsageSummaryInput } from "@akeru/contracts";
 import * as Option from "effect/Option";
 import { AsyncResult, Atom } from "effect/unstable/reactivity";
 import { useCallback, useMemo } from "react";
@@ -26,6 +27,8 @@ import { serverEnvironment } from "./server";
 
 export const USAGE_LOOKBACK_DAYS = 30;
 
+const decodeUsageWindow = Schema.decodeUnknownSync(UsageSummaryInput);
+
 /**
  * Reads every environment's summary for one window.
  *
@@ -35,7 +38,7 @@ export const USAGE_LOOKBACK_DAYS = 30;
  */
 const usageByWindowAtom = Atom.family((windowKey: string) =>
   Atom.make((get): readonly EnvironmentUsageStatus[] => {
-    const input = JSON.parse(windowKey) as UsageSummaryInput;
+    const input = decodeUsageWindow(JSON.parse(windowKey));
     const presentations = get(environmentPresentations.presentationsAtom);
 
     const statuses: EnvironmentUsageStatus[] = [];
@@ -89,7 +92,7 @@ export function useUsage(input: UsageSummaryInput = makeWindow(USAGE_LOOKBACK_DA
   // queries within their stale window and change nothing. Refresh each
   // environment's query so the button always rescans.
   const refresh = useCallback(() => {
-    const input = JSON.parse(windowKey) as UsageSummaryInput;
+    const input = decodeUsageWindow(JSON.parse(windowKey));
 
     for (const environment of environments) {
       appAtomRegistry.refresh(

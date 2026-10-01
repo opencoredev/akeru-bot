@@ -1,3 +1,6 @@
+import * as Schema from "effect/Schema";
+import * as Option from "effect/Option";
+import { storedField } from "./persistedSchema";
 import * as Predicate from "effect/Predicate";
 
 /**
@@ -25,9 +28,12 @@ const ENVIRONMENT_ASSIGNMENT = /^[A-Za-z_][A-Za-z0-9_]*=/;
 
 const COMMAND_PREFIXES = new Set(["sudo", "command", "exec", "nohup", "time", "env", "xargs"]);
 
-function readString(args: Record<string, unknown>, keys: ReadonlyArray<string>): string | null {
+function readString(
+  args: CommandApprovalArguments | null,
+  keys: ReadonlyArray<keyof CommandApprovalArguments>,
+): string | null {
   for (const key of keys) {
-    const value = args[key];
+    const value = args?.[key];
 
     if (Predicate.isString(value) && value.trim().length > 0) return value.trim();
   }
@@ -91,11 +97,26 @@ function signalsOf(command: string): ReadonlyArray<string> {
   return signals;
 }
 
+const optionalArgument = storedField(Schema.NullOr(Schema.String), null);
+
+const CommandApprovalArguments = Schema.Struct({
+  cwd: optionalArgument,
+  workdir: optionalArgument,
+  working_directory: optionalArgument,
+  workingDirectory: optionalArgument,
+  justification: optionalArgument,
+  reason: optionalArgument,
+  explanation: optionalArgument,
+  purpose: optionalArgument,
+});
+
+type CommandApprovalArguments = typeof CommandApprovalArguments.Type;
+
+const decodeApprovalArguments = Schema.decodeUnknownOption(CommandApprovalArguments);
+
+// oxlint-disable-next-line anti-slop/no-unknown-parameters -- Tool arguments are decoded at this public boundary before their command metadata is read.
 export function describeCommandApproval(command: string, args: unknown): CommandApprovalDetails {
-  const record =
-    args && (args === null || Predicate.isObjectOrArray(args))
-      ? (args as Record<string, unknown>)
-      : {};
+  const record = Option.getOrNull(decodeApprovalArguments(args));
 
   const workingDirectory = readString(record, [
     "cwd",

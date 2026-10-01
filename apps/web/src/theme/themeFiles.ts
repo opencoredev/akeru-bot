@@ -1,16 +1,18 @@
+import * as Schema from "effect/Schema";
+import * as Option from "effect/Option";
 import {
   THEME_COLOR_ROLES,
   type ThemeAppearance,
   type ThemeColorRole,
   type ThemeColors,
   type ThemeDefinition,
-  type ThemeVariants,
 } from "@akeru/shared/themePalettes";
 import { toCanonicalThemeColor } from "./colorMath";
 import {
   type ThemeColorOverrides,
   isRecord,
-  THEME_COLOR_ROLE_SET,
+  decodeThemeJson,
+  isThemeColorRole,
   THEME_FILE_VERSION,
   isThemeLabel,
   isThemeAppearance,
@@ -23,19 +25,21 @@ import { themeIdFromName } from "./themeDefinitions";
 import { getDefaultThemeColors } from "./paletteGeneration";
 
 export function decodeThemeColors(colors: ThemeColors): ThemeColors {
-  return Object.fromEntries(
-    THEME_COLOR_ROLES.map((role) => {
-      const color = toCanonicalThemeColor(colors[role]);
+  const normalized = { ...colors };
 
-      if (!color) {
-        throw new Error(
-          `The color for "${role}" must be a literal CSS color such as oklch(0.62 0.2 280).`,
-        );
-      }
+  for (const role of THEME_COLOR_ROLES) {
+    const color = toCanonicalThemeColor(colors[role]);
 
-      return [role, color];
-    }),
-  ) as Record<ThemeColorRole, string>;
+    if (!color) {
+      throw new Error(
+        `The color for "${role}" must be a literal CSS color such as oklch(0.62 0.2 280).`,
+      );
+    }
+
+    normalized[role] = color;
+  }
+
+  return normalized;
 }
 
 export function canonicalizeThemeDefinition(theme: ThemeDefinition): ThemeDefinition {
@@ -49,19 +53,19 @@ export function canonicalizeThemeDefinition(theme: ThemeDefinition): ThemeDefini
               appearance,
               decodeThemeColors(colors),
             ]),
-          ) as ThemeVariants,
+          ),
         }
       : {}),
   };
 }
 
-function parseThemeColorOverrides(value: unknown): ThemeColorOverrides {
+function parseThemeColorOverrides(value: Schema.Json | undefined): ThemeColorOverrides {
   if (!isRecord(value)) throw new Error("Theme colors must be objects.");
 
   const overrides: Partial<Record<ThemeColorRole, string>> = {};
 
   for (const [role, color] of Object.entries(value)) {
-    if (!THEME_COLOR_ROLE_SET.has(role)) {
+    if (!isThemeColorRole(role)) {
       throw new Error(`"${role}" is not a supported theme color role.`);
     }
 
@@ -73,7 +77,7 @@ function parseThemeColorOverrides(value: unknown): ThemeColorOverrides {
       );
     }
 
-    overrides[role as ThemeColorRole] = normalized;
+    overrides[role] = normalized;
   }
 
   if (Object.keys(overrides).length === 0) {
@@ -83,7 +87,11 @@ function parseThemeColorOverrides(value: unknown): ThemeColorOverrides {
   return overrides;
 }
 
-export function parseThemeFile(value: unknown): ThemeDefinition {
+// oxlint-disable-next-line anti-slop/no-unknown-parameters -- This public import boundary decodes external JSON before interpreting theme fields.
+export function parseThemeFile(input: unknown): ThemeDefinition {
+  const decoded = decodeThemeJson(input);
+  const value = Option.isSome(decoded) ? decoded.value : null;
+
   if (!isRecord(value)) {
     throw new Error("Theme files must contain a JSON object.");
   }

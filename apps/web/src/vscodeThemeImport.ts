@@ -1,3 +1,6 @@
+import * as Schema from "effect/Schema";
+import * as Option from "effect/Option";
+import { isRecord, decodeThemeJson } from "./theme/themeTypes";
 import * as Predicate from "effect/Predicate";
 import {
   createVividThemeColors,
@@ -24,12 +27,6 @@ import {
 type VsCodeRgba = { r: number; g: number; b: number; a: number };
 
 type VsCodeRgb = { r: number; g: number; b: number };
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return (
-    (value === null || Predicate.isObjectOrArray(value)) && value !== null && !Array.isArray(value)
-  );
-}
 
 /** sRGB transfer function, and its inverse, shared by the wide-gamut path. */
 function decodeGamma(value: number): number {
@@ -71,31 +68,31 @@ function parseColorFunction(value: string): VsCodeRgba | null {
 
   if (!Number.isFinite(alpha)) return null;
 
-  const [red, green, blue] = channels as [number, number, number];
+  const red = channels[0]!;
+  const green = channels[1]!;
+  const blue = channels[2]!;
 
   if (space === "srgb") {
     return { r: red * 255, g: green * 255, b: blue * 255, a: Math.max(0, Math.min(1, alpha)) };
   }
 
-  const [linearRed, linearGreen, linearBlue] = [red, green, blue].map(decodeGamma) as [
-    number,
-    number,
-    number,
-  ];
+  const linearRed = decodeGamma(red);
+  const linearGreen = decodeGamma(green);
+  const linearBlue = decodeGamma(blue);
 
   // Display P3 linear -> sRGB linear.
   const srgb = [
     1.2249401762805 * linearRed - 0.2249401762805 * linearGreen,
     -0.042056961239 * linearRed + 1.042056961239 * linearGreen,
     -0.0196375547643 * linearRed - 0.0786360655012 * linearGreen + 1.0982736202656 * linearBlue,
-  ].map((channel) => encodeGamma(channel) * 255) as [number, number, number];
+  ].map((channel) => encodeGamma(channel) * 255);
 
-  return { r: srgb[0], g: srgb[1], b: srgb[2], a: Math.max(0, Math.min(1, alpha)) };
+  return { r: srgb[0]!, g: srgb[1]!, b: srgb[2]!, a: Math.max(0, Math.min(1, alpha)) };
 }
 
 /** VS Code accepts #RGB, #RGBA, #RRGGBB, and #RRGGBBAA; some themes also use
  *  CSS color() notation for wide-gamut palettes. */
-function parseVsCodeColor(value: unknown): VsCodeRgba | null {
+function parseVsCodeColor(value: Schema.Json | undefined): VsCodeRgba | null {
   if (!Predicate.isString(value)) return null;
   const trimmed = value.trim();
 
@@ -170,7 +167,11 @@ function hexToRgb(value: string): VsCodeRgb {
  * A VS Code theme is recognised by its workbench colors: the keys are dotted
  * paths (`editor.background`), which our own files never use.
  */
-export function isVsCodeThemeFile(value: unknown): boolean {
+// oxlint-disable-next-line anti-slop/no-unknown-parameters -- File detection decodes arbitrary imported JSON before reading VS Code metadata.
+export function isVsCodeThemeFile(input: unknown): boolean {
+  const decoded = decodeThemeJson(input);
+  const value = Option.isSome(decoded) ? decoded.value : null;
+
   if (!isRecord(value)) return false;
 
   if (value.version === THEME_FILE_VERSION) return false;
@@ -181,7 +182,7 @@ export function isVsCodeThemeFile(value: unknown): boolean {
   return hasWorkbenchColors || Array.isArray(value.tokenColors);
 }
 
-function resolveAppearance(value: Record<string, unknown>, canvas: VsCodeRgb): ThemeAppearance {
+function resolveAppearance(value: Schema.JsonObject, canvas: VsCodeRgb): ThemeAppearance {
   const type = Predicate.isString(value.type) ? value.type.toLowerCase() : null;
 
   if (type === "light" || type === "hc-light") return "light";
@@ -205,7 +206,7 @@ export function humanizeThemeName(raw: string): string {
     .join(" ");
 }
 
-function resolveName(value: Record<string, unknown>): string {
+function resolveName(value: Schema.JsonObject): string {
   // Judge candidates by their humanized form: a displayName of "---"
   // humanizes to nothing and must fall through to the name.
   for (const candidate of [value.displayName, value.name]) {
@@ -218,7 +219,11 @@ function resolveName(value: Record<string, unknown>): string {
   return "VS Code theme";
 }
 
-export function parseVsCodeThemeFile(value: unknown): ThemeDefinition {
+// oxlint-disable-next-line anti-slop/no-unknown-parameters -- This public import boundary decodes external JSON before converting VS Code color roles.
+export function parseVsCodeThemeFile(input: unknown): ThemeDefinition {
+  const decoded = decodeThemeJson(input);
+  const value = Option.isSome(decoded) ? decoded.value : null;
+
   if (!isRecord(value)) throw new Error("Theme files must contain a JSON object.");
   const colors = isRecord(value.colors) ? value.colors : {};
 
