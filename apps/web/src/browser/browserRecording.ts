@@ -4,108 +4,26 @@ import type {
   ScopedThreadRef,
 } from "@akeru/contracts";
 import { useAtomValue } from "@effect/atom-react";
-import * as Schema from "effect/Schema";
 import { Atom } from "effect/unstable/reactivity";
-
 import { previewBridge } from "~/components/preview/previewBridge";
 import { appAtomRegistry } from "~/rpc/atomRegistry";
 import { useBrowserSurfaceStore } from "./browserSurfaceStore";
-
-export class BrowserRecordingUnavailableError extends Schema.TaggedErrorClass<BrowserRecordingUnavailableError>()(
-  "BrowserRecordingUnavailableError",
-  {
-    tabId: Schema.String,
-  },
-) {
-  override get message(): string {
-    return `Browser recording is unavailable for tab ${this.tabId}.`;
-  }
-}
-
-export class BrowserRecordingConflictError extends Schema.TaggedErrorClass<BrowserRecordingConflictError>()(
-  "BrowserRecordingConflictError",
-  {
-    requestedTabId: Schema.String,
-    activeTabId: Schema.String,
-  },
-) {
-  override get message(): string {
-    return `Cannot record tab ${this.requestedTabId} while tab ${this.activeTabId} is already being recorded.`;
-  }
-}
-
-export class BrowserRecordingCanvasUnavailableError extends Schema.TaggedErrorClass<BrowserRecordingCanvasUnavailableError>()(
-  "BrowserRecordingCanvasUnavailableError",
-  {
-    tabId: Schema.String,
-    width: Schema.Number,
-    height: Schema.Number,
-  },
-) {
-  override get message(): string {
-    return `Browser recording canvas ${this.width}x${this.height} is unavailable for tab ${this.tabId}.`;
-  }
-}
-
-export class BrowserRecordingOperationError extends Schema.TaggedErrorClass<BrowserRecordingOperationError>()(
-  "BrowserRecordingOperationError",
-  {
-    operation: Schema.Literals([
-      "initialize-media-recorder",
-      "subscribe-frames",
-      "start-media-recorder",
-      "start-screencast",
-      "stop-screencast",
-      "wait-first-frame",
-      "wait-startup",
-      "stop-media-recorder",
-      "save-artifact",
-      "cleanup",
-    ]),
-    tabId: Schema.String,
-    cause: Schema.Defect(),
-  },
-) {
-  override get message(): string {
-    return `Browser recording operation ${this.operation} failed for tab ${this.tabId}.`;
-  }
-}
-
-const isBrowserRecordingOperationError = Schema.is(BrowserRecordingOperationError);
-
-type BrowserRecordingLifecycle =
-  | { readonly phase: "starting" }
-  | { readonly phase: "recording" }
-  | {
-      readonly phase: "stopping";
-      readonly stopPromise: Promise<DesktopPreviewRecordingArtifact | null>;
-    };
-
-interface ActiveRecording {
-  /** Desktop-scoped identity used by capture and surface stores. */
-  readonly tabId: string;
-  /** Server-local identity returned by preview automation tools. */
-  readonly serverTabId: string;
-  readonly threadRef: ScopedThreadRef | null;
-  readonly canvas: HTMLCanvasElement;
-  readonly context: CanvasRenderingContext2D;
-  readonly chunks: Blob[];
-  readonly startedAt: string;
-  readonly startupSettled: Promise<void>;
-  readonly firstFrameSize: Promise<"frame" | "cancelled">;
-  readonly settleFirstFrameSize: (outcome: "frame" | "cancelled") => void;
-  recorder: MediaRecorder | null;
-  mimeType: string | null;
-  frameSizeEstablished: boolean;
-  frameSequence: number;
-  lastDrawnFrameSequence: number;
-  lifecycle: BrowserRecordingLifecycle;
-}
-
-export interface ActiveBrowserRecordingTarget {
-  readonly runtimeTabId: string;
-  readonly serverTabId: string;
-}
+import {
+  BrowserRecordingUnavailableError,
+  BrowserRecordingConflictError,
+  BrowserRecordingCanvasUnavailableError,
+  BrowserRecordingOperationError,
+  type ActiveRecording,
+  type ActiveBrowserRecordingTarget,
+} from "./recordingTypes";
+import {
+  preferredMimeType,
+  drawRecordingFrame,
+  stopMediaRecorder,
+  waitForFirstFrameSize,
+  waitForRecordingStartupToSettle,
+  isStartupWaitTimeout,
+} from "./recordingMedia";
 
 interface ActiveBrowserRecordingIndex {
   readonly tabIds: ReadonlySet<string>;
@@ -128,10 +46,6 @@ const publishActiveRecordingTabIds = (): void => {
     tabIds: new Set(activeRecordings.keys()),
   });
 };
-
-export const BROWSER_RECORDING_STARTUP_SETTLE_TIMEOUT_MS = 5_000;
-
-export const BROWSER_RECORDING_FIRST_FRAME_SIZE_TIMEOUT_MS = 5_000;
 
 export function readActiveBrowserRecordingTabIds(threadRef?: ScopedThreadRef): ReadonlySet<string> {
   const tabIds = new Set<string>();
@@ -171,72 +85,10 @@ export function findActiveBrowserRecordingRuntimeTabId(
   );
 }
 
-const preferredMimeType = (): string => {
-  const candidates = ["video/mp4;codecs=avc1.42E01E", "video/webm;codecs=vp9", "video/webm"];
-
-  return candidates.find((candidate) => MediaRecorder.isTypeSupported(candidate)) ?? "video/webm";
-};
-
 const drawFrame = (frame: DesktopPreviewRecordingFrame): void => {
   const recording = activeRecordings.get(frame.tabId);
-
   if (!recording) return;
-
-  if (
-    !Number.isFinite(frame.width) ||
-    !Number.isFinite(frame.height) ||
-    frame.width <= 0 ||
-    frame.height <= 0
-  ) {
-    return;
-  }
-
-  const width = Math.max(1, Math.round(frame.width));
-  const height = Math.max(1, Math.round(frame.height));
-
-  if (!recording.frameSizeEstablished) {
-    recording.canvas.width = width;
-    recording.canvas.height = height;
-    recording.frameSizeEstablished = true;
-    recording.settleFirstFrameSize("frame");
-  }
-
-  const frameSequence = ++recording.frameSequence;
-  const image = new Image();
-  image.addEventListener(
-    "load",
-    () => {
-      if (
-        activeRecordings.get(frame.tabId) !== recording ||
-        frameSequence <= recording.lastDrawnFrameSequence
-      ) {
-        return;
-      }
-
-      recording.lastDrawnFrameSequence = frameSequence;
-      const scale = Math.min(recording.canvas.width / width, recording.canvas.height / height);
-      const targetWidth = width * scale;
-      const targetHeight = height * scale;
-      const targetX = (recording.canvas.width - targetWidth) / 2;
-      const targetY = (recording.canvas.height - targetHeight) / 2;
-      recording.context.fillStyle = "#000000";
-      recording.context.fillRect(0, 0, recording.canvas.width, recording.canvas.height);
-      recording.context.drawImage(image, targetX, targetY, targetWidth, targetHeight);
-    },
-    { once: true },
-  );
-  image.src = `data:image/jpeg;base64,${frame.data}`;
-};
-
-const stopMediaRecorder = async (recorder: MediaRecorder | null): Promise<void> => {
-  if (!recorder || recorder.state === "inactive") return;
-
-  const stopped = new Promise<void>((resolve) =>
-    recorder.addEventListener("stop", () => resolve(), { once: true }),
-  );
-
-  recorder.stop();
-  await stopped;
+  drawRecordingFrame(recording, frame, () => activeRecordings.get(frame.tabId) === recording);
 };
 
 const clearActiveRecording = (recording: ActiveRecording): void => {
@@ -295,48 +147,6 @@ const recordingStartupCancelledError = (
 
 const isRecordingStarting = (recording: ActiveRecording): boolean =>
   activeRecordings.get(recording.tabId) === recording && recording.lifecycle.phase === "starting";
-
-const waitForFirstFrameSize = async (recording: ActiveRecording): Promise<boolean> => {
-  if (recording.frameSizeEstablished) return true;
-  let timeout: ReturnType<typeof setTimeout> | null = null;
-
-  const outcome = await Promise.race([
-    recording.firstFrameSize,
-    new Promise<"timeout">((resolve) => {
-      timeout = setTimeout(() => resolve("timeout"), BROWSER_RECORDING_FIRST_FRAME_SIZE_TIMEOUT_MS);
-    }),
-  ]);
-
-  if (timeout !== null) clearTimeout(timeout);
-
-  return outcome === "frame";
-};
-
-const waitForRecordingStartupToSettle = async (recording: ActiveRecording): Promise<void> => {
-  let timeout: ReturnType<typeof setTimeout> | null = null;
-
-  try {
-    await Promise.race([
-      recording.startupSettled,
-      new Promise<void>((_, reject) => {
-        timeout = setTimeout(() => {
-          reject(new Error(`Browser recording startup did not settle for tab ${recording.tabId}.`));
-        }, BROWSER_RECORDING_STARTUP_SETTLE_TIMEOUT_MS);
-      }),
-    ]);
-  } catch (cause) {
-    throw new BrowserRecordingOperationError({
-      operation: "wait-startup",
-      tabId: recording.tabId,
-      cause,
-    });
-  } finally {
-    if (timeout !== null) clearTimeout(timeout);
-  }
-};
-
-const isStartupWaitTimeout = (error: unknown): error is BrowserRecordingOperationError =>
-  isBrowserRecordingOperationError(error) && error.operation === "wait-startup";
 
 export async function startBrowserRecording(
   tabId: string,
@@ -694,3 +504,15 @@ export function stopBrowserRecording(
 
   return stopPromise;
 }
+export {
+  BrowserRecordingUnavailableError,
+  BrowserRecordingConflictError,
+  BrowserRecordingCanvasUnavailableError,
+  BrowserRecordingOperationError,
+  type ActiveBrowserRecordingTarget,
+} from "./recordingTypes";
+
+export {
+  BROWSER_RECORDING_STARTUP_SETTLE_TIMEOUT_MS,
+  BROWSER_RECORDING_FIRST_FRAME_SIZE_TIMEOUT_MS,
+} from "./recordingMedia";
