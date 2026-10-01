@@ -15,6 +15,7 @@ export function parsePluginManifest(input: unknown, source = "plugin manifest"):
 export function parsePluginManifestJson(input: string, source = "plugin manifest"): PluginManifest {
   try {
     const value: unknown = JSON.parse(input);
+
     return validateManifest(decodePluginManifest(value));
   } catch (error) {
     throw new TypeError(`${source} is invalid: ${String(error)}`, { cause: error });
