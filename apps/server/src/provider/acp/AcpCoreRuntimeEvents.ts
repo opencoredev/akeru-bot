@@ -12,7 +12,7 @@ import {
   type TurnId,
 } from "@akeru/contracts";
 
-import type { AcpPermissionRequest, AcpPlanUpdate, AcpToolCallState } from "./AcpRuntimeModel.ts";
+import type { AcpPermissionRequest, AcpPlanUpdate, AcpToolCallState } from "./AcpRuntimeTypes.ts";
 
 type AcpAdapterRawSource = Extract<
   RuntimeEventRawSource,

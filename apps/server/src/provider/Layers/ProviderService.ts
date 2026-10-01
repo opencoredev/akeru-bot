@@ -1,3 +1,6 @@
+import { createProviderSessionBindings } from "./providerService/ProviderSessionBindings.ts";
+import { createProviderMcpSessions } from "./providerService/ProviderMcpSessions.ts";
+import { createProviderSessionRecovery } from "./providerService/ProviderSessionRecovery.ts";
 /**
  * ProviderServiceLive - Cross-provider orchestration layer.
  *
@@ -10,8 +13,6 @@
  * @module ProviderServiceLive
  */
 import {
-  ModelSelection,
-  NonNegativeInt,
   ThreadId,
   ProviderInterruptTurnInput,
   ProviderRespondToRequestInput,
@@ -21,7 +22,6 @@ import {
   ProviderStopSessionInput,
   ProviderUploadFeedbackInput,
   type ProviderInstanceId,
-  type ProviderDriverKind,
   type ProviderRuntimeEvent,
   type ProviderSession,
 } from "@akeru/contracts";
@@ -32,39 +32,38 @@ import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as PubSub from "effect/PubSub";
 import * as Ref from "effect/Ref";
-import * as Schema from "effect/Schema";
-import * as SchemaIssue from "effect/SchemaIssue";
 import * as Stream from "effect/Stream";
-
 import { resolveAttachmentPath } from "../../attachmentStore.ts";
 import * as ServerConfig from "../../config.ts";
 import {
-  increment,
   providerMetricAttributes,
-  providerRuntimeEventsTotal,
   providerSessionsTotal,
   providerTurnDuration,
   providerTurnsTotal,
   providerTurnMetricAttributes,
   withMetrics,
 } from "../../observability/Metrics.ts";
-import {
-  type ProviderAdapterError,
-  ProviderUnsupportedError,
-  ProviderValidationError,
-} from "../Errors.ts";
+import { type ProviderAdapterError, ProviderUnsupportedError } from "../Errors.ts";
 import type { ProviderAdapterShape } from "../Services/ProviderAdapter.ts";
 import * as ProviderAdapterRegistry from "../Services/ProviderAdapterRegistry.ts";
 import * as ProviderService from "../Services/ProviderService.ts";
 import * as ProviderSessionDirectory from "../Services/ProviderSessionDirectory.ts";
-import { type EventNdjsonLogger } from "./EventNdjsonLogger.ts";
+import { type EventNdjsonLogger } from "./logging/EventLogTypes.ts";
 import * as ProviderEventLoggers from "./ProviderEventLoggers.ts";
 import * as McpProviderSession from "../../mcp/McpProviderSession.ts";
 import * as McpSessionRegistry from "../../mcp/McpSessionRegistry.ts";
-import type { McpCapability } from "../../mcp/McpInvocationContext.ts";
+
 import { cancelActiveImageGenerations } from "../../image-generation/ImageGenerationRuntime.ts";
 import * as ServerSettings from "../../serverSettings.ts";
-const isModelSelection = Schema.is(ModelSelection);
+
+import {
+  type ProviderServiceMethod,
+  ProviderRollbackConversationInput,
+  toValidationError,
+  decodeInputOrValidationError,
+  readPersistedCwd,
+  dieOnMissingBindingInstanceId,
+} from "./providerService/ProviderSessionMapping.ts";
 
 /**
  * Hook for tests that want to override the canonical event logger pulled
@@ -83,139 +82,6 @@ export interface ProviderServiceLiveOptions {
   /** Same seam as `issueMcpCredential`, for observing the deny path's revoke. */
   readonly revokeMcpCredential?: typeof McpSessionRegistry.revokeActiveMcpThread;
 }
-
-type ProviderServiceMethod<Name extends keyof ProviderService.ProviderService["Service"]> =
-  ProviderService.ProviderService["Service"][Name];
-
-const ProviderRollbackConversationInput = Schema.Struct({
-  threadId: ThreadId,
-  numTurns: NonNegativeInt,
-});
-
-function toValidationError(
-  operation: string,
-  issue: string,
-  cause?: unknown,
-): ProviderValidationError {
-  return new ProviderValidationError({
-    operation,
-    issue,
-    ...(cause !== undefined ? { cause } : {}),
-  });
-}
-
-const decodeInputOrValidationError = <S extends Schema.Top>(input: {
-  readonly operation: string;
-  readonly schema: S;
-  readonly payload: unknown;
-}) => {
-  const decodeProviderRequestInput = Schema.decodeUnknownEffect(input.schema);
-  return decodeProviderRequestInput(input.payload).pipe(
-    Effect.mapError(
-      (schemaError) =>
-        new ProviderValidationError({
-          operation: input.operation,
-          issue: SchemaIssue.makeFormatterDefault()(schemaError.issue),
-          cause: schemaError,
-        }),
-    ),
-  );
-};
-
-function toRuntimeStatus(session: ProviderSession): "starting" | "running" | "stopped" | "error" {
-  switch (session.status) {
-    case "connecting":
-      return "starting";
-    case "error":
-      return "error";
-    case "closed":
-      return "stopped";
-    case "ready":
-    case "running":
-    default:
-      return "running";
-  }
-}
-
-function toRuntimePayloadFromSession(
-  session: ProviderSession,
-  extra?: {
-    readonly modelSelection?: unknown;
-    readonly lastRuntimeEvent?: string;
-    readonly lastRuntimeEventAt?: string;
-  },
-): Record<string, unknown> {
-  return {
-    cwd: session.cwd ?? null,
-    model: session.model ?? null,
-    activeTurnId: session.activeTurnId ?? null,
-    lastError: session.lastError ?? null,
-    ...(extra?.modelSelection !== undefined ? { modelSelection: extra.modelSelection } : {}),
-    ...(extra?.lastRuntimeEvent !== undefined ? { lastRuntimeEvent: extra.lastRuntimeEvent } : {}),
-    ...(extra?.lastRuntimeEventAt !== undefined
-      ? { lastRuntimeEventAt: extra.lastRuntimeEventAt }
-      : {}),
-  };
-}
-
-function readPersistedModelSelection(
-  runtimePayload: ProviderSessionDirectory.ProviderRuntimeBinding["runtimePayload"],
-): ModelSelection | undefined {
-  if (!runtimePayload || typeof runtimePayload !== "object" || Array.isArray(runtimePayload)) {
-    return undefined;
-  }
-  const raw = "modelSelection" in runtimePayload ? runtimePayload.modelSelection : undefined;
-  return isModelSelection(raw) ? raw : undefined;
-}
-
-function readPersistedCwd(
-  runtimePayload: ProviderSessionDirectory.ProviderRuntimeBinding["runtimePayload"],
-): string | undefined {
-  if (!runtimePayload || typeof runtimePayload !== "object" || Array.isArray(runtimePayload)) {
-    return undefined;
-  }
-  const rawCwd = "cwd" in runtimePayload ? runtimePayload.cwd : undefined;
-  if (typeof rawCwd !== "string") return undefined;
-  const trimmed = rawCwd.trim();
-  return trimmed.length > 0 ? trimmed : undefined;
-}
-
-const dieOnMissingBindingInstanceId = (
-  operation: string,
-  payload: {
-    readonly providerInstanceId?: ProviderInstanceId | undefined;
-    readonly provider?: ProviderDriverKind | undefined;
-  },
-): ProviderInstanceId => {
-  if (payload.providerInstanceId !== undefined) {
-    return payload.providerInstanceId;
-  }
-  throw new Error(
-    payload.provider
-      ? `${operation}: provider instance id is required for provider '${payload.provider}'.`
-      : `${operation}: provider instance id is required.`,
-  );
-};
-
-const correlateRuntimeEventWithInstance = (
-  source: {
-    readonly instanceId: ProviderInstanceId;
-    readonly provider: ProviderDriverKind;
-  },
-  event: ProviderRuntimeEvent,
-): ProviderRuntimeEvent => {
-  if (event.provider !== source.provider) {
-    throw new Error(
-      `ProviderService.streamEvents: provider instance '${source.instanceId}' is backed by driver '${source.provider}' but emitted driver '${event.provider}'.`,
-    );
-  }
-  if (event.providerInstanceId !== undefined && event.providerInstanceId !== source.instanceId) {
-    throw new Error(
-      `ProviderService.streamEvents: provider instance '${source.instanceId}' emitted event for instance '${event.providerInstanceId}'.`,
-    );
-  }
-  return { ...event, providerInstanceId: source.instanceId };
-};
 
 const makeProviderService = Effect.fn("makeProviderService")(function* (
   options?: ProviderServiceLiveOptions,
@@ -257,47 +123,11 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
    * "off" silently becoming "on" would violate the user's stated choice,
    * whereas the reverse costs an agent one toolset and is visible immediately.
    */
-  const mcpCapabilities = serverSettings.getSettings.pipe(
-    Effect.map((settings) => {
-      const capabilities = new Set<McpCapability>();
-      if (settings.enableAgentBrowserAccess) capabilities.add("preview");
-      if (settings.imageGeneration.chatgptEnabled || settings.imageGeneration.grokEnabled) {
-        capabilities.add("image");
-      }
-      return capabilities;
-    }),
-    Effect.catch((cause) =>
-      Effect.logWarning(
-        "Could not read server settings; withholding agent browser access and image generation for this session.",
-        { cause },
-      ).pipe(Effect.as(new Set<McpCapability>())),
-    ),
-  );
-
-  const prepareMcpSession = (threadId: ThreadId, providerInstanceId: ProviderInstanceId) =>
-    Effect.gen(function* () {
-      const capabilities = yield* mcpCapabilities;
-      if (capabilities.size === 0) {
-        // Revoke as well as clear. Every other prepare path reaches
-        // `issueActiveMcpCredential`, which revokes the thread first, so
-        // skipping it here would leave a previously issued bearer token valid
-        // against `/mcp` for the rest of its liveness window — and later turns
-        // would keep refreshing it. A session restart (runtime mode, cwd,
-        // model) re-prepares without stopping, so it relies on this.
-        yield* revokeMcpCredential(threadId);
-        yield* Effect.sync(() => McpProviderSession.clearMcpProviderSession(threadId));
-        return undefined;
-      }
-      const credential = yield* issueMcpCredential({ threadId, providerInstanceId, capabilities });
-      if (credential) {
-        yield* Effect.sync(() => McpProviderSession.setMcpProviderSession(credential.config));
-      }
-      return credential;
-    });
-  const clearMcpSession = (threadId: ThreadId) =>
-    McpSessionRegistry.revokeActiveMcpThread(threadId).pipe(
-      Effect.tap(() => Effect.sync(() => McpProviderSession.clearMcpProviderSession(threadId))),
-    );
+  const { prepareMcpSession, clearMcpSession } = createProviderMcpSessions({
+    serverSettings,
+    revokeMcpCredential,
+    issueMcpCredential,
+  });
 
   const publishRuntimeEvent = (event: ProviderRuntimeEvent): Effect.Effect<void> =>
     Effect.succeed(event).pipe(
@@ -310,64 +140,15 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
       Effect.asVoid,
     );
 
-  const requireBindingInstanceId = (
-    operation: string,
-    payload: {
-      readonly providerInstanceId?: ProviderInstanceId | undefined;
-      readonly provider?: ProviderDriverKind | undefined;
-    },
-  ): Effect.Effect<ProviderInstanceId, ProviderValidationError> =>
-    payload.providerInstanceId !== undefined
-      ? Effect.succeed(payload.providerInstanceId)
-      : Effect.fail(
-          toValidationError(
-            operation,
-            payload.provider
-              ? `Provider instance id is required for provider '${payload.provider}'.`
-              : "Provider instance id is required.",
-          ),
-        );
-
-  const upsertSessionBinding = (
-    session: ProviderSession,
-    threadId: ThreadId,
-    extra?: {
-      readonly modelSelection?: unknown;
-      readonly lastRuntimeEvent?: string;
-      readonly lastRuntimeEventAt?: string;
-    },
-  ) =>
-    Effect.gen(function* () {
-      const providerInstanceId = yield* requireBindingInstanceId(
-        "ProviderService.upsertSessionBinding",
-        session,
-      );
-      yield* directory.upsert({
-        threadId,
-        provider: session.provider,
-        providerInstanceId,
-        runtimeMode: session.runtimeMode,
-        status: toRuntimeStatus(session),
-        ...(session.resumeCursor !== undefined ? { resumeCursor: session.resumeCursor } : {}),
-        runtimePayload: toRuntimePayloadFromSession(session, extra),
-      });
+  const { requireBindingInstanceId, upsertSessionBinding, processRuntimeEvent } =
+    createProviderSessionBindings({
+      get directory() {
+        return directory;
+      },
+      get publishRuntimeEvent() {
+        return publishRuntimeEvent;
+      },
     });
-
-  const processRuntimeEvent = (
-    source: {
-      readonly instanceId: ProviderInstanceId;
-      readonly provider: ProviderDriverKind;
-    },
-    event: ProviderRuntimeEvent,
-  ): Effect.Effect<void> =>
-    Effect.sync(() => correlateRuntimeEventWithInstance(source, event)).pipe(
-      Effect.flatMap((canonicalEvent) =>
-        increment(providerRuntimeEventsTotal, {
-          provider: canonicalEvent.provider,
-          eventType: canonicalEvent.type,
-        }).pipe(Effect.andThen(publishRuntimeEvent(canonicalEvent))),
-      ),
-    );
 
   // `subscribedAdapters` is our source-of-truth for "which instance adapters
   // are currently wired into the runtime event bus". It both tracks the set
@@ -432,156 +213,14 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
     () => reconcileInstanceSubscriptions,
   ).pipe(Effect.forkScoped);
 
-  const recoverSessionForThread = Effect.fn("recoverSessionForThread")(function* (input: {
-    readonly binding: ProviderSessionDirectory.ProviderRuntimeBinding;
-    readonly operation: string;
-  }) {
-    const bindingInstanceId = yield* requireBindingInstanceId(input.operation, input.binding);
-    yield* Effect.annotateCurrentSpan({
-      "provider.operation": "recover-session",
-      "provider.kind": input.binding.provider,
-      "provider.instance_id": bindingInstanceId,
-      "provider.thread_id": input.binding.threadId,
-    });
-    return yield* Effect.gen(function* () {
-      const adapter = yield* registry.getByInstance(bindingInstanceId);
-      const hasResumeCursor =
-        input.binding.resumeCursor !== null && input.binding.resumeCursor !== undefined;
-      const hasActiveSession = yield* adapter.hasSession(input.binding.threadId);
-      if (hasActiveSession) {
-        const activeSessions = yield* adapter.listSessions();
-        const existing = activeSessions.find(
-          (session) => session.threadId === input.binding.threadId,
-        );
-        if (existing) {
-          yield* upsertSessionBinding(
-            { ...existing, providerInstanceId: bindingInstanceId },
-            input.binding.threadId,
-          );
-          return { adapter, session: existing } as const;
-        }
-      }
-
-      if (!hasResumeCursor) {
-        return yield* toValidationError(
-          input.operation,
-          `Cannot recover thread '${input.binding.threadId}' because no provider resume state is persisted.`,
-        );
-      }
-
-      const persistedCwd = readPersistedCwd(input.binding.runtimePayload);
-      const persistedModelSelection = readPersistedModelSelection(input.binding.runtimePayload);
-
-      yield* prepareMcpSession(input.binding.threadId, bindingInstanceId);
-      const resumed = yield* adapter
-        .startSession({
-          threadId: input.binding.threadId,
-          provider: input.binding.provider,
-          providerInstanceId: bindingInstanceId,
-          ...(persistedCwd ? { cwd: persistedCwd } : {}),
-          ...(persistedModelSelection ? { modelSelection: persistedModelSelection } : {}),
-          ...(hasResumeCursor ? { resumeCursor: input.binding.resumeCursor } : {}),
-          runtimeMode: input.binding.runtimeMode ?? "full-access",
-        })
-        .pipe(Effect.onError(() => clearMcpSession(input.binding.threadId)));
-      if (resumed.provider !== adapter.provider) {
-        yield* clearMcpSession(input.binding.threadId);
-        return yield* toValidationError(
-          input.operation,
-          `Adapter/provider mismatch while recovering thread '${input.binding.threadId}'. Expected '${adapter.provider}', received '${resumed.provider}'.`,
-        );
-      }
-
-      yield* upsertSessionBinding(
-        { ...resumed, providerInstanceId: bindingInstanceId },
-        input.binding.threadId,
-      );
-      return { adapter, session: resumed } as const;
-    }).pipe(
-      withMetrics({
-        counter: providerSessionsTotal,
-        attributes: providerMetricAttributes(input.binding.provider, {
-          operation: "recover",
-        }),
-      }),
-    );
-  });
-
-  const resolveRoutableSession = Effect.fn("resolveRoutableSession")(function* (input: {
-    readonly threadId: ThreadId;
-    readonly operation: string;
-    readonly allowRecovery: boolean;
-  }) {
-    const bindingOption = yield* directory.getBinding(input.threadId);
-    const binding = Option.getOrUndefined(bindingOption);
-    if (!binding) {
-      return yield* toValidationError(
-        input.operation,
-        `Cannot route thread '${input.threadId}' because no persisted provider binding exists.`,
-      );
-    }
-    const instanceId = yield* requireBindingInstanceId(input.operation, binding);
-    const adapter = yield* registry.getByInstance(instanceId);
-
-    const hasRequestedSession = yield* adapter.hasSession(input.threadId);
-    if (hasRequestedSession) {
-      return {
-        adapter,
-        instanceId,
-        threadId: input.threadId,
-        isActive: true,
-      } as const;
-    }
-
-    if (!input.allowRecovery) {
-      return {
-        adapter,
-        instanceId,
-        threadId: input.threadId,
-        isActive: false,
-      } as const;
-    }
-
-    const recovered = yield* recoverSessionForThread({
-      binding,
-      operation: input.operation,
-    });
-    return {
-      adapter: recovered.adapter,
-      instanceId,
-      threadId: input.threadId,
-      isActive: true,
-    } as const;
-  });
-
-  const stopStaleSessionsForThread = Effect.fn("stopStaleSessionsForThread")(function* (input: {
-    readonly threadId: ThreadId;
-    readonly currentInstanceId: ProviderInstanceId;
-  }) {
-    const currentAdapters = yield* getAdapterEntries;
-    yield* Effect.forEach(
-      currentAdapters,
-      ([instanceId, adapter]) =>
-        instanceId === input.currentInstanceId
-          ? Effect.void
-          : Effect.gen(function* () {
-              const hasSession = yield* adapter.hasSession(input.threadId);
-              if (!hasSession) {
-                return;
-              }
-
-              yield* adapter.stopSession(input.threadId).pipe(
-                Effect.catchCause((cause) =>
-                  Effect.logWarning("provider.session.stop-stale-failed", {
-                    threadId: input.threadId,
-                    provider: adapter.provider,
-                    cause,
-                  }),
-                ),
-              );
-            }),
-      { discard: true },
-    );
+  const { resolveRoutableSession, stopStaleSessionsForThread } = createProviderSessionRecovery({
+    requireBindingInstanceId,
+    registry,
+    upsertSessionBinding,
+    prepareMcpSession,
+    clearMcpSession,
+    directory,
+    getAdapterEntries,
   });
 
   const startSession: ProviderServiceMethod<"startSession"> = Effect.fn("startSession")(

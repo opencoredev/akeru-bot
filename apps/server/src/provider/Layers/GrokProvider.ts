@@ -31,7 +31,7 @@ import {
   enrichProviderSnapshotWithVersionAdvisory,
   type ProviderMaintenanceCapabilities,
 } from "../providerMaintenance.ts";
-import { sessionModelStateFromInitialize } from "../acp/AcpRuntimeModel.ts";
+import { sessionModelStateFromInitialize } from "../acp/AcpSessionModel.ts";
 import { discoverGrokSkills } from "../Drivers/GrokSkills.ts";
 import {
   GROK_DEFAULT_MODEL_SLUG,
