@@ -220,7 +220,7 @@ export const make = Effect.gen(function* ServerPreviewBrowserMake() {
       return await status(tab);
     } catch (cause) {
       tab.loading = false;
-      throw new Error(errorMessage(cause));
+      throw new Error(errorMessage(cause), { cause: cause });
     }
   };
 
