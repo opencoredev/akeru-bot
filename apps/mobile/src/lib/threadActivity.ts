@@ -535,7 +535,8 @@ export function threadFeedEntriesEqual(previous: ThreadFeedEntry, next: ThreadFe
       return (
         next.type === "turn-fold" &&
         previous.turnId === next.turnId &&
-        previous.label === next.label &&
+        previous.elapsedMs === next.elapsedMs &&
+        previous.interrupted === next.interrupted &&
         previous.expanded === next.expanded
       );
   }

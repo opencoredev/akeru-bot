@@ -124,7 +124,8 @@ export type ThreadFeedEntry =
       readonly id: string;
       readonly createdAt: string;
       readonly turnId: TurnId;
-      readonly label: string;
+      readonly elapsedMs: number | null;
+      readonly interrupted: boolean;
       readonly expanded: boolean;
     };
 
