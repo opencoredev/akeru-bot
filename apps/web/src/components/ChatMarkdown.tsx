@@ -60,7 +60,7 @@ import {
 import {
   findTaskListMarkerOffset,
   MarkdownList,
-  orderedListGutterStyle,
+  orderedListGutter,
 } from "./markdown/MarkdownLists";
 import { ChatMarkdownRendererContext } from "./markdown/MarkdownRendererContext";
 import { MarkdownDetails, MarkdownTable } from "./markdown/MarkdownTable";
@@ -150,17 +150,19 @@ const CHAT_MARKDOWN_COMPONENTS: Components = {
       </MarkdownList>
     );
   },
-  ol: function MarkdownOrderedList({ node, start, style, ...props }) {
+  ol: function MarkdownOrderedList({ node, start, ...props }) {
     const itemCount =
       node?.children?.filter((child) => child.type === "element" && child.tagName === "li")
         .length ?? 0;
 
-    const gutterStyle = orderedListGutterStyle(itemCount, start);
-
+    // The sanitizer strips style attributes, so the gutter var is the list's only style.
     return (
       <MarkdownList node={node}>
-        {/* oxlint-disable-next-line shadcn/no-inline-styles -- forwards the markdown element's own style alongside the measured gutter var */}
-        <ol {...props} start={start} style={gutterStyle ? { ...style, ...gutterStyle } : style} />
+        <ol
+          {...props}
+          start={start}
+          style={{ "--list-gutter": orderedListGutter(itemCount, start) }}
+        />
       </MarkdownList>
     );
   },
@@ -484,7 +486,7 @@ function ChatMarkdown({
 
 export default memo(ChatMarkdown);
 
-export { orderedListGutterStyle, taskListProgress } from "./markdown/MarkdownLists";
+export { orderedListGutter, taskListProgress } from "./markdown/MarkdownLists";
 
 export {
   canUseMarkdownFileShellActions,
