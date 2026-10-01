@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import { ProviderDriverKind, ProviderInstanceId } from "@akeru/contracts";
 import { describe, expect, it } from "vite-plus/test";
 import {
@@ -196,7 +197,7 @@ describe("getDefaultProviderInstanceModel", () => {
       ProviderInstanceId.make("claudeAgent"),
     );
 
-    expect(typeof resolved).toBe("string");
+    expect(Predicate.isString(resolved)).toBe(true);
     expect(resolved?.length).toBeGreaterThan(0);
   });
 

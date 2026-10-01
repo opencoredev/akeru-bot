@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import { scopeProjectRef } from "@akeru/client-runtime/environment";
 import { EnvironmentId, ProjectId, ThreadId } from "@akeru/contracts";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
@@ -270,7 +271,7 @@ describe("browser favicon store", () => {
       "env-1:project-1 http://localhost:3000": { dataUrl: PNG, capturedAt: 2 },
     });
     expect(merged.pendingByThreadKey).toEqual(current.pendingByThreadKey);
-    expect(typeof merged.recordFavicon).toBe("function");
+    expect(Predicate.isFunction(merged.recordFavicon)).toBe(true);
   });
 
   it("falls back to memory when localStorage access throws", () => {

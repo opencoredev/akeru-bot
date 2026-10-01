@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import type { UserInputQuestion } from "@akeru/contracts";
 
 export interface PendingUserInputDraftAnswer {
@@ -20,7 +21,7 @@ export interface PendingUserInputProgress {
 }
 
 function normalizeDraftAnswer(value: string | undefined): string | null {
-  if (typeof value !== "string") {
+  if (!Predicate.isString(value)) {
     return null;
   }
 
@@ -37,7 +38,7 @@ function normalizeSelectedOptionLabels(value: string[] | undefined): string[] {
   const normalized: string[] = [];
 
   for (const entry of value) {
-    if (typeof entry !== "string") continue;
+    if (!Predicate.isString(entry)) continue;
     const trimmed = entry.trim();
 
     if (trimmed.length > 0) {

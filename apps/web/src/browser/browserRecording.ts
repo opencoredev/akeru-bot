@@ -1,3 +1,5 @@
+import * as Result from "effect/Result";
+import { hasTag } from "~/lib/taggedUnion";
 import type {
   DesktopPreviewRecordingArtifact,
   DesktopPreviewRecordingFrame,
@@ -108,7 +110,7 @@ const clearActiveRecording = (recording: ActiveRecording): void => {
 const cleanupFailedRecordingStart = async (
   bridge: NonNullable<typeof previewBridge>,
   recording: ActiveRecording,
-): Promise<unknown | undefined> => {
+) => {
   const errors: unknown[] = [];
 
   try {
@@ -364,12 +366,7 @@ const finalizeBrowserRecording = async (
 ): Promise<DesktopPreviewRecordingArtifact | null> => {
   const { tabId } = recording;
 
-  let result:
-    | {
-        readonly _tag: "Success";
-        readonly artifact: DesktopPreviewRecordingArtifact | null;
-      }
-    | { readonly _tag: "Failure"; readonly error: unknown };
+  let result: Result.Result<DesktopPreviewRecordingArtifact | null, unknown>;
 
   try {
     await waitForRecordingStartupToSettle(recording);
@@ -385,7 +382,7 @@ const finalizeBrowserRecording = async (
     }
 
     if (!recording.recorder || !recording.mimeType) {
-      result = { _tag: "Success", artifact: null };
+      result = Result.succeed(null);
     } else {
       try {
         await stopMediaRecorder(recording.recorder);
@@ -406,7 +403,7 @@ const finalizeBrowserRecording = async (
           new Uint8Array(await blob.arrayBuffer()),
         );
 
-        result = { _tag: "Success", artifact };
+        result = Result.succeed(artifact);
       } catch (cause) {
         throw new BrowserRecordingOperationError({
           operation: "save-artifact",
@@ -416,15 +413,15 @@ const finalizeBrowserRecording = async (
       }
     }
   } catch (error) {
-    result = { _tag: "Failure", error };
+    result = Result.fail(error);
   }
 
-  if (result._tag === "Failure" && isStartupWaitTimeout(result.error)) {
+  if (hasTag(result, "Failure") && isStartupWaitTimeout(result.failure)) {
     // Do not clear `active` yet. The renderer-side start promise can still
     // resolve later, and its cancellation path will call `stopScreencast`.
     // Keeping the slot reserved prevents a newer recording for this tab from
     // being started and then accidentally stopped by the older late cleanup.
-    throw result.error;
+    throw result.failure;
   }
 
   let cleanupError: BrowserRecordingOperationError | undefined;
@@ -441,25 +438,25 @@ const finalizeBrowserRecording = async (
     clearActiveRecording(recording);
   }
 
-  if (result._tag === "Failure") {
+  if (hasTag(result, "Failure")) {
     if (cleanupError) {
       throw new BrowserRecordingOperationError({
         operation: "cleanup",
         tabId,
         cause: new AggregateError(
-          [result.error, cleanupError],
+          [result.failure, cleanupError],
           `Browser recording stop and cleanup failed for tab ${tabId}.`,
-          { cause: result.error },
+          { cause: result.failure },
         ),
       });
     }
 
-    throw result.error;
+    throw result.failure;
   }
 
   if (cleanupError) throw cleanupError;
 
-  return result.artifact;
+  return result.success;
 };
 
 const discardBrowserRecording = async (

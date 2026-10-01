@@ -1,8 +1,10 @@
+import type * as Schema from "effect/Schema";
+import * as Predicate from "effect/Predicate";
 import "culori/css";
 import { converter, parse } from "culori/fn";
 
 export function isThemeColor(value: unknown): value is string {
-  return typeof value === "string" && toCanonicalThemeColor(value) !== null;
+  return Predicate.isString(value) && toCanonicalThemeColor(value) !== null;
 }
 
 export type ThemeRgbColor = {
@@ -31,8 +33,8 @@ export const THEME_BLACK_FOREGROUND: ThemeRgbColor = { r: 0, g: 0, b: 0 };
 
 const convertToOklch = converter("oklch");
 
-export function parseThemeColor(value: unknown): ParsedThemeColor | null {
-  if (typeof value !== "string") return null;
+export function parseThemeColor(value: Schema.Json | undefined): ParsedThemeColor | null {
+  if (!Predicate.isString(value)) return null;
   const input = value.trim();
   const parsed = parse(input);
 
@@ -74,7 +76,7 @@ export function formatOklchThemeColor(color: ThemeOklch, alpha = 1): string {
  * Decode a literal CSS color into the runtime's canonical OKLCH form. Stored
  * values use this path in memory without mutating localStorage.
  */
-export function toCanonicalThemeColor(value: unknown): string | null {
+export function toCanonicalThemeColor(value: Schema.Json | undefined): string | null {
   const parsed = parseThemeColor(value);
 
   return parsed ? formatOklchThemeColor(parsed.color, parsed.alpha) : null;
@@ -213,7 +215,7 @@ export function themeRgbToOklch(color: ThemeRgbColor): ThemeOklch {
   return { L, C: Math.hypot(a, bb), h: (Math.atan2(bb, a) * 180) / Math.PI };
 }
 
-function oklchToRgbUnclamped({ L, C, h }: ThemeOklch): { r: number; g: number; b: number } {
+function oklchToRgbUnclamped({ L, C, h }: ThemeOklch) {
   const hr = (h * Math.PI) / 180;
   const a = C * Math.cos(hr);
   const bb = C * Math.sin(hr);

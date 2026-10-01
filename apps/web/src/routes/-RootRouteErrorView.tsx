@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import { createTranslator, type TranslationParams } from "@akeru/client-runtime/i18n";
 import type { ErrorComponentProps } from "@tanstack/react-router";
 
@@ -85,29 +86,29 @@ export function RootRouteErrorView({
   );
 }
 
-export function errorMessage(error: unknown): string {
-  if (error instanceof Error && error.message.trim().length > 0) {
-    return error.message;
+export function errorMessage(cause: unknown): string {
+  if (cause instanceof Error && cause.message.trim().length > 0) {
+    return cause.message;
   }
 
-  if (typeof error === "string" && error.trim().length > 0) {
-    return error;
+  if (Predicate.isString(cause) && cause.trim().length > 0) {
+    return cause;
   }
 
   return "An unexpected error stopped this view from loading.";
 }
 
-export function errorDetails(error: unknown, t: Translate = english): string {
-  if (error instanceof Error) {
-    return error.stack ?? error.message;
+export function errorDetails(cause: unknown, t: Translate = english): string {
+  if (cause instanceof Error) {
+    return cause.stack ?? cause.message;
   }
 
-  if (typeof error === "string") {
-    return error;
+  if (Predicate.isString(cause)) {
+    return cause;
   }
 
   try {
-    return JSON.stringify(error, null, 2);
+    return JSON.stringify(cause, null, 2);
   } catch {
     return t("No additional error details are available.");
   }

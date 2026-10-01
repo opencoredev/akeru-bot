@@ -6,8 +6,8 @@ const action = (id: string) => ({ id, title: id, searchTerms: [], run: () => {} 
 
 describe("chat actions registry", () => {
   it("publishes the live owner's actions and ignores a stale owner's cleanup", () => {
-    const first = {};
-    const second = {};
+    const first = Symbol("first");
+    const second = Symbol("second");
     const clearFirst = registerChatPaletteActions(first, [action("new")]);
     const clearSecond = registerChatPaletteActions(second, [action("rename")]);
     clearFirst();

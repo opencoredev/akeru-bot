@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import { useCallback, useSyncExternalStore } from "react";
 
 const BREAKPOINTS = {
@@ -12,22 +13,26 @@ const BREAKPOINTS = {
 
 type Breakpoint = keyof typeof BREAKPOINTS;
 
+function isBreakpoint(value: string): value is Breakpoint {
+  return Object.hasOwn(BREAKPOINTS, value);
+}
+
 type BreakpointQuery = Breakpoint | `max-${Breakpoint}` | `${Breakpoint}:max-${Breakpoint}`;
 
 function resolveMin(value: Breakpoint | number): string {
-  const px = typeof value === "number" ? value : BREAKPOINTS[value];
+  const px = Predicate.isNumber(value) ? value : BREAKPOINTS[value];
 
   return `(min-width: ${px}px)`;
 }
 
 function resolveMax(value: Breakpoint | number): string {
-  const px = typeof value === "number" ? value : BREAKPOINTS[value];
+  const px = Predicate.isNumber(value) ? value : BREAKPOINTS[value];
 
   return `(max-width: ${px - 1}px)`;
 }
 
 function parseQuery(query: BreakpointQuery | MediaQueryInput | (string & {})): string {
-  if (typeof query !== "string") {
+  if (!Predicate.isString(query)) {
     const parts: string[] = [];
 
     if (query.min != null) parts.push(resolveMin(query.min));
@@ -51,9 +56,9 @@ function parseQuery(query: BreakpointQuery | MediaQueryInput | (string & {})): s
     if (segment.startsWith("max-")) {
       const bp = segment.slice(4);
 
-      if (bp in BREAKPOINTS) parts.push(resolveMax(bp as Breakpoint));
-    } else if (segment in BREAKPOINTS) {
-      parts.push(resolveMin(segment as Breakpoint));
+      if (isBreakpoint(bp)) parts.push(resolveMax(bp));
+    } else if (isBreakpoint(segment)) {
+      parts.push(resolveMin(segment));
     }
   }
 

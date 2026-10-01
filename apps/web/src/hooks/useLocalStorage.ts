@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import * as Schema from "effect/Schema";
 import * as Record from "effect/Record";
 import { useCallback, useMemo, useSyncExternalStore } from "react";
@@ -71,7 +72,7 @@ export const getLocalStorageItem = <T, E>(key: string, schema: Schema.Codec<T, E
 export const getFirstLocalStorageItem = <T, E>(
   keys: ReadonlyArray<string>,
   schema: Schema.Codec<T, E>,
-  onError: (error: unknown) => void,
+  onError: (cause: unknown) => void,
 ): T | null => {
   for (const key of keys) {
     try {
@@ -105,6 +106,12 @@ export const removeLocalStorageItem = (key: string) => {
 };
 
 const LOCAL_STORAGE_CHANGE_EVENT = "akeru:local_storage_change";
+
+declare global {
+  interface WindowEventMap {
+    "akeru:local_storage_change": CustomEvent<LocalStorageChangeDetail>;
+  }
+}
 
 interface LocalStorageChangeDetail {
   key: string;
@@ -154,11 +161,11 @@ export function useLocalStorage<T, E>(
       };
 
       window.addEventListener("storage", handleStorageChange);
-      window.addEventListener(LOCAL_STORAGE_CHANGE_EVENT, handleLocalChange as EventListener);
+      window.addEventListener(LOCAL_STORAGE_CHANGE_EVENT, handleLocalChange);
 
       return () => {
         window.removeEventListener("storage", handleStorageChange);
-        window.removeEventListener(LOCAL_STORAGE_CHANGE_EVENT, handleLocalChange as EventListener);
+        window.removeEventListener(LOCAL_STORAGE_CHANGE_EVENT, handleLocalChange);
       };
     },
     [key],
@@ -186,8 +193,9 @@ export function useLocalStorage<T, E>(
         const currentValue = getLocalStorageItem(key, schema) ?? initialValue;
         let valueToStore: T;
 
-        if (typeof value === "function") {
+        if (Predicate.isFunction(value)) {
           try {
+            // SAFETY: Function values are updater callbacks under this hook’s contract, rather than stored callable data.
             valueToStore = (value as (val: T) => T)(currentValue);
           } catch (cause) {
             throw new LocalStorageOperationError({

@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import {
   type KeybindingCommand,
   type KeybindingShortcut,
@@ -42,7 +43,7 @@ interface ResolvedShortcutLabelOptions extends ShortcutMatchOptions {
   platform?: string;
 }
 
-const EVENT_CODE_KEY_ALIASES: Readonly<Record<string, readonly string[]>> = {
+const EVENT_CODE_KEY_ALIASES = {
   BracketLeft: ["["],
   BracketRight: ["]"],
   Digit0: ["0"],
@@ -56,6 +57,8 @@ const EVENT_CODE_KEY_ALIASES: Readonly<Record<string, readonly string[]>> = {
   Digit8: ["8"],
   Digit9: ["9"],
 };
+
+const EVENT_CODE_KEY_ALIASES_LOOKUP = new Map(Object.entries(EVENT_CODE_KEY_ALIASES));
 
 function normalizeEventKey(key: string): string {
   const normalized = key.toLowerCase();
@@ -79,7 +82,7 @@ function resolveEventKeys(event: ShortcutEventLike): Set<string> {
     keys.add(letterCode.toLowerCase());
   }
 
-  const aliases = event.code ? EVENT_CODE_KEY_ALIASES[event.code] : undefined;
+  const aliases = event.code ? EVENT_CODE_KEY_ALIASES_LOOKUP.get(event.code) : undefined;
 
   if (!aliases) return keys;
 
@@ -276,10 +279,9 @@ export function shortcutLabelForCommand(
   command: KeybindingCommand,
   options?: string | ResolvedShortcutLabelOptions,
 ): string | null {
-  const resolvedOptions =
-    typeof options === "string"
-      ? ({ platform: options } satisfies ResolvedShortcutLabelOptions)
-      : options;
+  const resolvedOptions = Predicate.isString(options)
+    ? ({ platform: options } satisfies ResolvedShortcutLabelOptions)
+    : options;
 
   const platform = resolvePlatform(resolvedOptions);
   const shortcut = findEffectiveShortcutForCommand(keybindings, command, resolvedOptions);
@@ -292,7 +294,7 @@ export function threadJumpCommandForIndex(index: number): ThreadJumpKeybindingCo
 }
 
 export function threadJumpIndexFromCommand(command: string): number | null {
-  const index = THREAD_JUMP_KEYBINDING_COMMANDS.indexOf(command as ThreadJumpKeybindingCommand);
+  const index = THREAD_JUMP_KEYBINDING_COMMANDS.findIndex((candidate) => candidate === command);
 
   return index === -1 ? null : index;
 }
@@ -332,8 +334,8 @@ export function modelPickerJumpCommandForIndex(
 }
 
 export function modelPickerJumpIndexFromCommand(command: string): number | null {
-  const index = MODEL_PICKER_JUMP_KEYBINDING_COMMANDS.indexOf(
-    command as ModelPickerJumpKeybindingCommand,
+  const index = MODEL_PICKER_JUMP_KEYBINDING_COMMANDS.findIndex(
+    (candidate) => candidate === command,
   );
 
   return index === -1 ? null : index;

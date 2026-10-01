@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import type { StoreApi } from "zustand";
 import { type PreviewAnnotationPayload } from "@akeru/contracts";
 import {
@@ -124,7 +125,7 @@ export function createDraftContentActions(
         return;
       }
 
-      get().addImages(typeof threadRef === "string" ? DraftId.make(threadKey) : threadRef, [image]);
+      get().addImages(Predicate.isString(threadRef) ? DraftId.make(threadKey) : threadRef, [image]);
     },
 
     addImages: (threadRef, images) => {
@@ -285,7 +286,7 @@ export function createDraftContentActions(
       }
 
       get().addTerminalContexts(
-        typeof threadRef === "string" ? DraftId.make(threadKey) : threadRef,
+        Predicate.isString(threadRef) ? DraftId.make(threadKey) : threadRef,
         [context],
       );
     },

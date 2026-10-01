@@ -1,10 +1,8 @@
-import {
-  type EnvironmentId,
-  ModelSelection,
-  ProviderInstanceId,
-  type PreviewAnnotationPayload,
-  ThreadId,
-} from "@akeru/contracts";
+import * as Schema from "effect/Schema";
+import * as Option from "effect/Option";
+import { StoredComposerMigration } from "./draftMigrationSchemas";
+import * as Predicate from "effect/Predicate";
+import { EnvironmentId, ModelSelection, ProviderInstanceId, ThreadId } from "@akeru/contracts";
 import { scopeProjectRef, scopeThreadRef } from "@akeru/client-runtime/environment";
 import { DeepMutable } from "effect/Types";
 import { getLocalStorageItem } from "../hooks/useLocalStorage";
@@ -13,7 +11,6 @@ import { createMigratingStorage } from "../lib/storageKeyMigration";
 import {
   type PersistedComposerDraftStoreState,
   EMPTY_PERSISTED_DRAFT_STORE_STATE,
-  type LegacyPersistedComposerDraftStoreState,
   type PersistedComposerThreadDraftState,
   PersistedComposerDraftStoreStorage,
   type PersistedComposerImageAttachment,
@@ -60,14 +57,19 @@ export const composerDebouncedStorage = createDebouncedStorage(
   COMPOSER_PERSIST_DEBOUNCE_MS,
 );
 
+const decodeStoredComposerMigration = Schema.decodeUnknownOption(StoredComposerMigration);
+
 export function migratePersistedComposerDraftStoreState(
+  // oxlint-disable-next-line anti-slop/no-unknown-parameters -- This storage migration decodes the legacy draft schema before reading persisted fields.
   persistedState: unknown,
 ): PersistedComposerDraftStoreState {
-  if (!persistedState || typeof persistedState !== "object") {
+  const decoded = decodeStoredComposerMigration(persistedState);
+
+  if (Option.isNone(decoded)) {
     return EMPTY_PERSISTED_DRAFT_STORE_STATE;
   }
 
-  const candidate = persistedState as LegacyPersistedComposerDraftStoreState;
+  const candidate = decoded.value;
   const rawDraftMap = candidate.draftsByThreadKey ?? candidate.draftsByThreadId;
 
   const rawDraftThreadsByThreadId =
@@ -150,7 +152,7 @@ export function partializeComposerDraftStoreState(
   > = {};
 
   for (const [threadKey, draft] of Object.entries(state.draftsByThreadKey)) {
-    if (typeof threadKey !== "string" || threadKey.length === 0) {
+    if (!Predicate.isString(threadKey) || threadKey.length === 0) {
       continue;
     }
 
@@ -211,9 +213,22 @@ export function partializeComposerDraftStoreState(
         : {}),
       ...(draft.previewAnnotations.length > 0
         ? {
-            previewAnnotations: draft.previewAnnotations.map(
-              (annotation) => ({ ...annotation }) as DeepMutable<PreviewAnnotationPayload>,
-            ),
+            previewAnnotations: draft.previewAnnotations.map((annotation) => ({
+              ...annotation,
+              elements: annotation.elements.map((target) => ({
+                ...target,
+                element: {
+                  ...target.element,
+                  stack: target.element.stack.map((frame) => ({ ...frame })),
+                },
+              })),
+              regions: annotation.regions.map((region) => ({ ...region })),
+              strokes: annotation.strokes.map((stroke) => ({
+                ...stroke,
+                points: stroke.points.map((point) => ({ ...point })),
+              })),
+              styleChanges: annotation.styleChanges.map((change) => ({ ...change })),
+            })),
           }
         : {}),
       ...(hasModelData
@@ -256,13 +271,16 @@ export function partializeComposerDraftStoreState(
 }
 
 export function normalizeCurrentPersistedComposerDraftStoreState(
+  // oxlint-disable-next-line anti-slop/no-unknown-parameters -- This storage migration decodes the legacy draft schema before reading persisted fields.
   persistedState: unknown,
 ): PersistedComposerDraftStoreState {
-  if (!persistedState || typeof persistedState !== "object") {
+  const decoded = decodeStoredComposerMigration(persistedState);
+
+  if (Option.isNone(decoded)) {
     return EMPTY_PERSISTED_DRAFT_STORE_STATE;
   }
 
-  const normalizedPersistedState = persistedState as LegacyPersistedComposerDraftStoreState;
+  const normalizedPersistedState = decoded.value;
 
   const { draftThreadsByThreadKey, logicalProjectDraftThreadKeyByLogicalProjectKey } =
     normalizePersistedDraftThreads(
@@ -280,12 +298,10 @@ export function normalizeCurrentPersistedComposerDraftStoreState(
 
   if (
     normalizedPersistedState.stickyModelSelectionByProvider &&
-    typeof normalizedPersistedState.stickyModelSelectionByProvider === "object"
+    (normalizedPersistedState.stickyModelSelectionByProvider === null ||
+      Predicate.isObjectOrArray(normalizedPersistedState.stickyModelSelectionByProvider))
   ) {
-    stickyModelSelectionByProvider =
-      normalizedPersistedState.stickyModelSelectionByProvider as Partial<
-        Record<ProviderInstanceId, ModelSelection>
-      >;
+    stickyModelSelectionByProvider = normalizedPersistedState.stickyModelSelectionByProvider;
     stickyActiveProvider = normalizeProviderInstanceId(
       normalizedPersistedState.stickyActiveProvider,
     );
@@ -515,13 +531,13 @@ export function toHydratedDraftThreadState(
 ): DraftThreadState {
   return {
     threadId: persistedDraftThread.threadId,
-    environmentId: persistedDraftThread.environmentId as EnvironmentId,
+    environmentId: EnvironmentId.make(persistedDraftThread.environmentId),
     projectId: persistedDraftThread.projectId,
     logicalProjectKey:
       persistedDraftThread.logicalProjectKey ??
       projectDraftKey(
         scopeProjectRef(
-          persistedDraftThread.environmentId as EnvironmentId,
+          EnvironmentId.make(persistedDraftThread.environmentId),
           persistedDraftThread.projectId,
         ),
       ),
@@ -534,8 +550,8 @@ export function toHydratedDraftThreadState(
     startFromOrigin: persistedDraftThread.startFromOrigin,
     promotedTo: persistedDraftThread.promotedTo
       ? scopeThreadRef(
-          persistedDraftThread.promotedTo.environmentId as EnvironmentId,
-          persistedDraftThread.promotedTo.threadId as ThreadId,
+          EnvironmentId.make(persistedDraftThread.promotedTo.environmentId),
+          ThreadId.make(persistedDraftThread.promotedTo.threadId),
         )
       : null,
   };

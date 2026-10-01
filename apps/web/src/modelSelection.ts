@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import {
   DEFAULT_TEXT_GENERATION_MODEL,
   DEFAULT_TEXT_GENERATION_MODEL_BY_PROVIDER,
@@ -61,11 +62,11 @@ function readInstanceCustomModels(
   const instance = settings.providerInstances?.[instanceId];
   const config = instance?.config;
 
-  if (config !== null && typeof config === "object") {
-    const value = (config as Record<string, unknown>).customModels;
+  if (Predicate.hasProperty(config, "customModels")) {
+    const value = config.customModels;
 
     if (Array.isArray(value)) {
-      return value.filter((entry): entry is string => typeof entry === "string");
+      return value.filter((entry): entry is string => Predicate.isString(entry));
     }
   }
 
@@ -75,12 +76,9 @@ function readInstanceCustomModels(
     return [];
   }
 
-  const legacyProviders = settings.providers as Record<
-    string,
-    { readonly customModels: ReadonlyArray<string> } | undefined
-  >;
-
-  return legacyProviders[driverKind]?.customModels ?? [];
+  return (
+    Object.entries(settings.providers).find(([kind]) => kind === driverKind)?.[1].customModels ?? []
+  );
 }
 
 export interface AppModelOption {

@@ -1,5 +1,9 @@
 "use client";
 
+import { ViewportSetting } from "./browserViewportSetting";
+
+import { hasTag } from "~/lib/taggedUnion";
+
 import {
   PREVIEW_VIEWPORT_MAX_AREA,
   PREVIEW_VIEWPORT_MAX_DIMENSION,
@@ -63,7 +67,7 @@ export function BrowserDeviceToolbar({
   };
 
   const selectedValue =
-    setting._tag === "preset" &&
+    hasTag(setting, "preset") &&
     PREVIEW_VIEWPORT_PRESETS.some((preset) => preset.id === setting.presetId)
       ? setting.presetId
       : RESPONSIVE_VALUE;
@@ -98,7 +102,7 @@ export function BrowserDeviceToolbar({
       return;
     }
 
-    apply({ _tag: "freeform", width: customWidth, height: customHeight });
+    apply(ViewportSetting.freeform({ width: customWidth, height: customHeight }));
   };
 
   const updateCustomDimension = (axis: "width" | "height", value: string) => {
@@ -137,8 +141,8 @@ export function BrowserDeviceToolbar({
     if (!value) return;
 
     if (value === RESPONSIVE_VALUE) {
-      if (setting._tag === "freeform") return;
-      apply({ _tag: "freeform", width: setting.width, height: setting.height });
+      if (hasTag(setting, "freeform")) return;
+      apply(ViewportSetting.freeform({ width: setting.width, height: setting.height }));
 
       return;
     }
@@ -157,7 +161,7 @@ export function BrowserDeviceToolbar({
       customValid && (customWidth !== setting.width || customHeight !== setting.height);
 
     const source = hasCustomSize
-      ? ({ _tag: "freeform", width: customWidth, height: customHeight } as const)
+      ? ViewportSetting.freeform({ width: customWidth, height: customHeight })
       : setting;
 
     apply(
@@ -343,7 +347,7 @@ export function BrowserDeviceToolbar({
         className="sticky right-0 ml-auto"
         disabled={pending}
         onClick={() => {
-          apply({ _tag: "fill" }, null);
+          apply(ViewportSetting.fill(), null);
         }}
       >
         <X />

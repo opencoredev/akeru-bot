@@ -1,3 +1,6 @@
+import * as Schema from "effect/Schema";
+import * as Option from "effect/Option";
+import { storedField } from "./lib/persistedSchema";
 /**
  * Thread-scoped right-panel surface state.
  *
@@ -34,15 +37,6 @@ const LEGACY_RIGHT_PANEL_STORAGE_KEY = "t3code:right-panel-state:v2";
 // v12 drops the retired diff and pull-request surfaces.
 // v13 drops the retired terminal, file explorer, and file surfaces.
 const RIGHT_PANEL_STORAGE_VERSION = 13;
-
-const RETIRED_SURFACE_KINDS = new Set([
-  "plan",
-  "diff",
-  "pull-request",
-  "terminal",
-  "files",
-  "file",
-]);
 
 /** Panels keyed to the retired pull-request list page. */
 const isPullRequestsPanelKey = (threadKey: string) => threadKey.endsWith(":pull-requests-panel");
@@ -99,7 +93,7 @@ const updateThread = (
   byThreadKey: Record<string, ThreadRightPanelState>,
   threadKey: string,
   updater: (current: ThreadRightPanelState) => ThreadRightPanelState,
-): Record<string, ThreadRightPanelState> => {
+): RightPanelStoreState["byThreadKey"] => {
   const current = byThreadKey[threadKey] ?? EMPTY_THREAD_STATE;
   const next = updater(current);
 
@@ -115,63 +109,62 @@ const updateThread = (
   return { ...byThreadKey, [threadKey]: next };
 };
 
-export function migratePersistedRightPanelState(persistedState: unknown): {
-  byThreadKey: Record<string, ThreadRightPanelState>;
-} {
-  if (!persistedState || typeof persistedState !== "object") {
-    return { byThreadKey: {} };
-  }
+const StoredSurface = Schema.Union([
+  Schema.Struct({ id: Schema.Literal("agents"), kind: Schema.Literal("agents") }),
+  Schema.Struct({
+    id: Schema.Literal("browser:new"),
+    kind: Schema.Literal("preview"),
+    resourceId: Schema.Null,
+  }),
+  Schema.Struct({
+    id: Schema.TemplateLiteral(["browser:", Schema.String]),
+    kind: Schema.Literal("preview"),
+    resourceId: Schema.String,
+  }),
+]);
 
-  const byThreadKey =
-    "byThreadKey" in persistedState &&
-    persistedState.byThreadKey &&
-    typeof persistedState.byThreadKey === "object"
-      ? Object.fromEntries(
-          Object.entries(persistedState.byThreadKey as Record<string, ThreadRightPanelState>)
-            .filter(([threadKey]) => !isPullRequestsPanelKey(threadKey))
-            .map(([threadKey, threadState]) => {
-              const validThreadState =
-                threadState && typeof threadState === "object" ? threadState : null;
+const StoredThreadPanel = Schema.Struct({
+  isOpen: storedField(Schema.NullOr(Schema.Boolean), null),
+  activeSurfaceId: storedField(Schema.NullOr(Schema.String), null),
+  surfaces: storedField(Schema.Array(storedField(Schema.NullOr(StoredSurface), null)), []),
+});
 
-              const surfaces = Array.isArray(validThreadState?.surfaces)
-                ? validThreadState.surfaces.flatMap<RightPanelSurface>((surface) => {
-                    // Retired surface kinds: plans render inline in the transcript (v9);
-                    // diff review and pull requests were removed (v12); the
-                    // terminal and file browser were removed (v13).
-                    if (RETIRED_SURFACE_KINDS.has((surface as { kind?: string }).kind ?? "")) {
-                      return [];
-                    }
+const decodeStoredPanel = Schema.decodeUnknownOption(
+  Schema.Struct({
+    byThreadKey: storedField(
+      Schema.Record(Schema.String, storedField(Schema.NullOr(StoredThreadPanel), null)),
+      {},
+    ),
+  }),
+);
 
-                    return [surface];
-                  })
-                : [];
+// oxlint-disable-next-line anti-slop/no-unknown-parameters -- Persisted panel versions are untrusted and decoded by the migration schema here.
+export function migratePersistedRightPanelState(persistedState: unknown) {
+  const decoded = Option.getOrNull(decodeStoredPanel(persistedState));
 
-              const rawActiveSurfaceId = validThreadState?.activeSurfaceId;
+  const byThreadKey = Object.fromEntries(
+    Object.entries(decoded?.byThreadKey ?? {})
+      .filter(([key]) => !isPullRequestsPanelKey(key))
+      .map(([key, panel]) => {
+        const surfaces: RightPanelSurface[] =
+          panel?.surfaces.filter((surface) => surface !== null) ?? [];
 
-              const persistedActiveSurfaceId = surfaces.some(
-                (surface) => surface.id === rawActiveSurfaceId,
-              )
-                ? (rawActiveSurfaceId ?? null)
-                : null;
+        const rawActiveSurfaceId = panel?.activeSurfaceId;
 
-              // A migration that dropped every surface (e.g. plan-only panels
-              // in v9) must not reopen an empty panel.
-              const isOpen =
-                surfaces.length > 0 &&
-                (typeof validThreadState?.isOpen === "boolean"
-                  ? validThreadState.isOpen
-                  : persistedActiveSurfaceId !== null);
-
-              // An open panel needs an active surface: if migration dropped
-              // the persisted one (e.g. plan was active), fall back to the
-              // first survivor instead of rendering an open empty panel.
-              const activeSurfaceId =
-                persistedActiveSurfaceId ?? (isOpen ? (surfaces[0]?.id ?? null) : null);
-
-              return [threadKey, { isOpen, surfaces, activeSurfaceId }];
-            }),
+        const persistedActiveSurfaceId = surfaces.some(
+          (surface) => surface.id === rawActiveSurfaceId,
         )
-      : {};
+          ? (rawActiveSurfaceId ?? null)
+          : null;
+
+        const isOpen = surfaces.length > 0 && (panel?.isOpen ?? persistedActiveSurfaceId !== null);
+
+        const activeSurfaceId =
+          persistedActiveSurfaceId ?? (isOpen ? (surfaces[0]?.id ?? null) : null);
+
+        return [key, { isOpen, surfaces, activeSurfaceId }];
+      }),
+  );
 
   return { byThreadKey };
 }

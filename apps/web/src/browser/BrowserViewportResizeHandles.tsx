@@ -1,5 +1,7 @@
 "use client";
 
+import * as Match from "effect/Match";
+
 import type { KeyboardEvent as ReactKeyboardEvent, PointerEvent as ReactPointerEvent } from "react";
 
 import { cn } from "~/lib/utils";
@@ -82,24 +84,28 @@ function ResizeHandle(props: {
           active && "text-foreground",
         )}
       >
-        {kind === "vertical" ? (
-          <span className="flex gap-px" aria-hidden="true">
-            <span className="h-6 w-px rounded-full bg-current" />
-            <span className="h-6 w-px rounded-full bg-current" />
-          </span>
-        ) : kind === "horizontal" ? (
-          <span className="flex flex-col gap-px" aria-hidden="true">
-            <span className="h-px w-6 rounded-full bg-current" />
-            <span className="h-px w-6 rounded-full bg-current" />
-          </span>
-        ) : (
-          <span
-            className={cn("relative block size-3", mirrorCorner && "-scale-x-100")}
-            aria-hidden="true"
-          >
-            <span className="absolute bottom-0.75 left-0 h-px w-3 -rotate-45 rounded-full bg-current" />
-            <span className="absolute bottom-0 left-1.25 h-px w-2 -rotate-45 rounded-full bg-current" />
-          </span>
+        {Match.value(kind).pipe(
+          Match.when("vertical", () => (
+            <span className="flex gap-px" aria-hidden="true">
+              <span className="h-6 w-px rounded-full bg-current" />
+              <span className="h-6 w-px rounded-full bg-current" />
+            </span>
+          )),
+          Match.when("horizontal", () => (
+            <span className="flex flex-col gap-px" aria-hidden="true">
+              <span className="h-px w-6 rounded-full bg-current" />
+              <span className="h-px w-6 rounded-full bg-current" />
+            </span>
+          )),
+          Match.orElse(() => (
+            <span
+              className={cn("relative block size-3", mirrorCorner && "-scale-x-100")}
+              aria-hidden="true"
+            >
+              <span className="absolute bottom-0.75 left-0 h-px w-3 -rotate-45 rounded-full bg-current" />
+              <span className="absolute bottom-0 left-1.25 h-px w-2 -rotate-45 rounded-full bg-current" />
+            </span>
+          )),
         )}
       </span>
     </button>

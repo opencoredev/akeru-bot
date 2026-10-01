@@ -1,3 +1,7 @@
+function isElement(node: Node): node is Element {
+  return node.nodeType === Node.ELEMENT_NODE;
+}
+
 /**
  * Converts a DOM selection inside rendered chat markdown back into markdown
  * source so highlight-and-copy keeps formatting (links, emphasis, lists,
@@ -53,7 +57,7 @@ function isBlockCodeElement(element: Element, content: string): boolean {
   if (content.includes("\n")) return true;
 
   for (const child of element.childNodes) {
-    if (child.nodeType === Node.ELEMENT_NODE && (child as Element).classList.contains("line")) {
+    if (isElement(child) && child.classList.contains("line")) {
       return true;
     }
   }
@@ -104,6 +108,7 @@ function serializeTableCell(cell: Element): string {
 
 function tableSeparatorFor(headerCells: Element[]): string {
   const markers = headerCells.map((cell) => {
+    // SAFETY: Cells are HTML th/td elements selected by serializeTable, both of which expose HTMLElement.style.
     const align = (cell as HTMLElement).style?.textAlign ?? cell.getAttribute("align") ?? "";
 
     if (align === "center") return ":---:";
@@ -141,8 +146,8 @@ function serializeTable(table: Element): string {
 }
 
 function serializeListItem(item: Element, ordered: boolean, index: number): string {
-  const checkbox = item.querySelector('input[type="checkbox"]');
-  const task = checkbox ? `[${(checkbox as HTMLInputElement).checked ? "x" : " "}] ` : "";
+  const checkbox = item.querySelector<HTMLInputElement>('input[type="checkbox"]');
+  const task = checkbox ? `[${checkbox.checked ? "x" : " "}] ` : "";
   const marker = ordered ? `${index}. ${task}` : `- ${task}`;
 
   let content = serializeChildren(item)
@@ -237,8 +242,8 @@ function serializeNode(node: Node): string {
     return text;
   }
 
-  if (node.nodeType !== Node.ELEMENT_NODE) return "";
-  const element = node as Element;
+  if (!isElement(node)) return "";
+  const element = node;
 
   if (element.hasAttribute("data-markdown-details")) {
     return serializeDetails(element);
@@ -384,8 +389,7 @@ export function chatMarkdownClipboardPayload(
     container.appendChild(range.cloneContents());
     const ancestor = range.commonAncestorContainer;
 
-    const ancestorElement =
-      ancestor.nodeType === Node.ELEMENT_NODE ? (ancestor as Element) : ancestor.parentElement;
+    const ancestorElement = isElement(ancestor) ? ancestor : ancestor.parentElement;
 
     if (ancestorElement?.closest("pre")) {
       const text = range.toString();

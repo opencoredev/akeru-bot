@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import * as Cause from "effect/Cause";
 import * as Schema from "effect/Schema";
 
@@ -47,9 +48,11 @@ export function isChannelIdentityConflict(result: {
   const error = Cause.squash(result.cause);
 
   const message =
-    typeof error === "object" && error !== null && "message" in error ? error.message : error;
+    (error === null || Predicate.isObjectOrArray(error)) && error !== null && "message" in error
+      ? error.message
+      : error;
 
-  return typeof message === "string" && CHANNEL_IDENTITY_CONFLICT.test(message);
+  return Predicate.isString(message) && CHANNEL_IDENTITY_CONFLICT.test(message);
 }
 
 const isChannelFailureCategory = Schema.is(ChannelFailureCategory);
@@ -62,7 +65,9 @@ export function channelFailureCategoryOf(result: {
   const error = Cause.squash(result.cause);
 
   const category =
-    typeof error === "object" && error !== null && "channelFailureCategory" in error
+    (error === null || Predicate.isObjectOrArray(error)) &&
+    error !== null &&
+    "channelFailureCategory" in error
       ? error.channelFailureCategory
       : undefined;
 

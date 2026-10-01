@@ -1,5 +1,7 @@
+import type * as Schema from "effect/Schema";
+import { asRecord, readWorkLogPayload } from "./workLogPayload";
+import * as Predicate from "effect/Predicate";
 import {
-  asRecord,
   extractToolCommand,
   stripTrailingExitCode,
   extractWorkLogItemType,
@@ -46,12 +48,9 @@ const derivedWorkLogEntryByActivity = new WeakMap<
  */
 /** Agent (non-background) task.started rows seed spawn CTA batches. */
 function isAgentTaskStartedActivity(activity: OrchestrationThreadActivity): boolean {
-  const payload =
-    activity.payload && typeof activity.payload === "object"
-      ? (activity.payload as Record<string, unknown>)
-      : null;
+  const payload = readWorkLogPayload(activity);
 
-  if (!payload || typeof payload.taskId !== "string") {
+  if (!payload || !Predicate.isString(payload.taskId)) {
     return false;
   }
 
@@ -59,10 +58,7 @@ function isAgentTaskStartedActivity(activity: OrchestrationThreadActivity): bool
 }
 
 function isAgentInternalActivity(activity: OrchestrationThreadActivity): boolean {
-  const payload =
-    activity.payload && typeof activity.payload === "object"
-      ? (activity.payload as Record<string, unknown>)
-      : null;
+  const payload = readWorkLogPayload(activity);
 
   if (!payload) {
     return false;
@@ -83,12 +79,12 @@ function isAgentInternalActivity(activity: OrchestrationThreadActivity): boolean
   // Codex children (whose rows are ALL bypassed) get an anchor at the
   // spawn point.
   if (isTaskRow) {
-    const ownedByAgent = typeof payload.agentId === "string" && payload.agentId.trim().length > 0;
+    const ownedByAgent = Predicate.isString(payload.agentId) && payload.agentId.trim().length > 0;
 
     if (ownedByAgent || payload.timelineBypass === true) {
       const isAgentTaskRow =
         activity.kind !== "task.updated" &&
-        typeof payload.taskId === "string" &&
+        Predicate.isString(payload.taskId) &&
         !isBackgroundTaskActivity(payload);
 
       return !isAgentTaskRow;
@@ -102,7 +98,7 @@ function isAgentInternalActivity(activity: OrchestrationThreadActivity): boolean
   }
 
   // Non-task rows (attributed tool activity) owned by an agent are internal.
-  return typeof payload.agentId === "string" && payload.agentId.trim().length > 0;
+  return Predicate.isString(payload.agentId) && payload.agentId.trim().length > 0;
 }
 
 export function deriveWorkLogEntries(
@@ -145,16 +141,13 @@ function isPlanBoundaryToolActivity(activity: OrchestrationThreadActivity): bool
     return false;
   }
 
-  const payload =
-    activity.payload && typeof activity.payload === "object"
-      ? (activity.payload as Record<string, unknown>)
-      : null;
+  const payload = readWorkLogPayload(activity);
 
-  return typeof payload?.detail === "string" && payload.detail.startsWith("ExitPlanMode:");
+  return Predicate.isString(payload?.detail) && payload.detail.startsWith("ExitPlanMode:");
 }
 
 function extractWorkLogToolLifecycleStatus(
-  payload: Record<string, unknown> | null,
+  payload: Schema.JsonObject | null,
 ): WorkLogToolLifecycleStatus | undefined {
   if (!payload) {
     return undefined;
@@ -182,10 +175,7 @@ function toDerivedWorkLogEntry(activity: OrchestrationThreadActivity): DerivedWo
     return cachedEntry;
   }
 
-  const payload =
-    activity.payload && typeof activity.payload === "object"
-      ? (activity.payload as Record<string, unknown>)
-      : null;
+  const payload = readWorkLogPayload(activity);
 
   const commandPreview = extractToolCommand(payload);
   const changedFiles = extractChangedFiles(payload);
@@ -197,14 +187,14 @@ function toDerivedWorkLogEntry(activity: OrchestrationThreadActivity): DerivedWo
     activity.kind === "task.completed";
 
   const taskSummary =
-    isTaskActivity && typeof payload?.summary === "string" && payload.summary.length > 0
+    isTaskActivity && Predicate.isString(payload?.summary) && payload.summary.length > 0
       ? payload.summary
       : null;
 
   const taskDetailAsLabel =
     isTaskActivity &&
     !taskSummary &&
-    typeof payload?.detail === "string" &&
+    Predicate.isString(payload?.detail) &&
     payload.detail.length > 0
       ? payload.detail
       : null;
@@ -214,7 +204,7 @@ function toDerivedWorkLogEntry(activity: OrchestrationThreadActivity): DerivedWo
   const detail = isTaskActivity
     ? !taskDetailAsLabel &&
       payload &&
-      typeof payload.detail === "string" &&
+      Predicate.isString(payload.detail) &&
       payload.detail.length > 0
       ? stripTrailingExitCode(payload.detail).output
       : null
@@ -295,18 +285,18 @@ function toDerivedWorkLogEntry(activity: OrchestrationThreadActivity): DerivedWo
     entry.toolLifecycleStatus = toolLifecycleStatus;
   }
 
-  if (isTaskActivity && typeof payload?.taskId === "string" && payload.taskId.length > 0) {
+  if (isTaskActivity && Predicate.isString(payload?.taskId) && payload.taskId.length > 0) {
     entry.taskId = payload.taskId;
   }
 
-  if (isTaskActivity && typeof payload?.role === "string" && payload.role.length > 0) {
+  if (isTaskActivity && Predicate.isString(payload?.role) && payload.role.length > 0) {
     entry.agentRole = payload.role;
   }
 
   if (
     isTaskActivity &&
     (payload?.taskType === "local_workflow" ||
-      (typeof payload?.workflowName === "string" && payload.workflowName.length > 0))
+      (Predicate.isString(payload?.workflowName) && payload.workflowName.length > 0))
   ) {
     entry.isWorkflowCoordinator = true;
   }

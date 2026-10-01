@@ -1,3 +1,7 @@
+import * as Schema from "effect/Schema";
+import * as Option from "effect/Option";
+import { storedField } from "./lib/persistedSchema";
+import * as Predicate from "effect/Predicate";
 import { Debouncer } from "@tanstack/react-pacer";
 import { create } from "zustand";
 import { normalizeProjectPathForComparison } from "./lib/projectPaths";
@@ -68,32 +72,32 @@ export function legacyProjectCwdPreferenceKey(cwd: string): string {
   return `${LEGACY_PROJECT_CWD_PREFERENCE_PREFIX}${normalizeProjectPathForComparison(cwd)}`;
 }
 
-function sanitizeStringArray(value: unknown): string[] {
+function sanitizeStringArray(value: Schema.Json | undefined): string[] {
   if (!Array.isArray(value)) {
     return [];
   }
 
   return [
     ...new Set(
-      value.filter((entry): entry is string => typeof entry === "string" && entry.length > 0),
+      value.filter((entry): entry is string => Predicate.isString(entry) && entry.length > 0),
     ),
   ];
 }
 
-function sanitizeBooleanRecord(value: unknown): Record<string, boolean> {
-  if (!value || typeof value !== "object") {
+function sanitizeBooleanRecord(value: Schema.Json | undefined): Record<string, boolean> {
+  if (!Predicate.isObjectOrArray(value)) {
     return {};
   }
 
   return Object.fromEntries(
     Object.entries(value).filter(
-      (entry): entry is [string, boolean] => entry[0].length > 0 && typeof entry[1] === "boolean",
+      (entry): entry is [string, boolean] => entry[0].length > 0 && Predicate.isBoolean(entry[1]),
     ),
   );
 }
 
-function sanitizeTimestampRecord(value: unknown): Record<string, string> {
-  if (!value || typeof value !== "object") {
+function sanitizeTimestampRecord(value: Schema.Json | undefined): Record<string, string> {
+  if (!Predicate.isObjectOrArray(value)) {
     return {};
   }
 
@@ -101,14 +105,36 @@ function sanitizeTimestampRecord(value: unknown): Record<string, string> {
     Object.entries(value).filter(
       (entry): entry is [string, string] =>
         entry[0].length > 0 &&
-        typeof entry[1] === "string" &&
+        Predicate.isString(entry[1]) &&
         entry[1].length > 0 &&
         Number.isFinite(Date.parse(entry[1])),
     ),
   );
 }
 
-export function parsePersistedState(parsed: PersistedUiState): UiState {
+const persistedUiField = storedField(Schema.Union([Schema.Json, Schema.Undefined]), undefined);
+
+const PersistedUiInput = Schema.Struct({
+  projectExpandedById: persistedUiField,
+  projectOrder: persistedUiField,
+  threadLastVisitedAtById: persistedUiField,
+  collapsedProjectCwds: persistedUiField,
+  expandedProjectCwds: persistedUiField,
+  projectOrderCwds: persistedUiField,
+  defaultAdvertisedEndpointKey: persistedUiField,
+  threadChangedFilesExpansionVersion: persistedUiField,
+  threadChangedFilesExpandedById: persistedUiField,
+});
+
+const decodePersistedUi = Schema.decodeUnknownOption(PersistedUiInput);
+
+// oxlint-disable-next-line anti-slop/no-unknown-parameters -- This persistence boundary decodes stored UI fields before migrating legacy preferences.
+export function parsePersistedState(input: unknown): UiState {
+  const decoded = decodePersistedUi(input);
+
+  if (Option.isNone(decoded)) return initialState;
+  const parsed = decoded.value;
+
   const projectExpandedById =
     parsed.projectExpandedById === undefined
       ? (() => {
@@ -146,7 +172,7 @@ export function parsePersistedState(parsed: PersistedUiState): UiState {
         ? sanitizePersistedThreadChangedFilesExpanded(parsed.threadChangedFilesExpandedById)
         : {},
     defaultAdvertisedEndpointKey:
-      typeof parsed.defaultAdvertisedEndpointKey === "string" &&
+      Predicate.isString(parsed.defaultAdvertisedEndpointKey) &&
       parsed.defaultAdvertisedEndpointKey.length > 0
         ? parsed.defaultAdvertisedEndpointKey
         : null,
@@ -171,36 +197,36 @@ function readPersistedState(): UiState {
           continue;
         }
 
-        return parsePersistedState(JSON.parse(legacyRaw) as PersistedUiState);
+        return parsePersistedState(JSON.parse(legacyRaw));
       }
 
       return initialState;
     }
 
-    return parsePersistedState(JSON.parse(raw) as PersistedUiState);
+    return parsePersistedState(JSON.parse(raw));
   } catch {
     return initialState;
   }
 }
 
 function sanitizePersistedThreadChangedFilesExpanded(
-  value: PersistedUiState["threadChangedFilesExpandedById"],
-): Record<string, Record<string, boolean>> {
-  if (!value || typeof value !== "object") {
+  value: Schema.Json | undefined,
+): UiThreadState["threadChangedFilesExpandedById"] {
+  if (!Predicate.isObjectOrArray(value)) {
     return {};
   }
 
   const nextState: Record<string, Record<string, boolean>> = {};
 
   for (const [threadId, turns] of Object.entries(value)) {
-    if (!threadId || !turns || typeof turns !== "object") {
+    if (!threadId || !Predicate.isObjectOrArray(turns)) {
       continue;
     }
 
     const nextTurns: Record<string, boolean> = {};
 
     for (const [turnId, expanded] of Object.entries(turns)) {
-      if (turnId && typeof expanded === "boolean") {
+      if (turnId && Predicate.isBoolean(expanded)) {
         nextTurns[turnId] = expanded;
       }
     }
@@ -366,7 +392,7 @@ export function setProjectExpanded(
   projectIds: string | readonly string[],
   expanded: boolean,
 ): UiState {
-  const ids = typeof projectIds === "string" ? [projectIds] : projectIds;
+  const ids = Predicate.isString(projectIds) ? [projectIds] : projectIds;
   const nextEntries = ids.filter((projectId) => state.projectExpandedById[projectId] !== expanded);
 
   if (nextEntries.length === 0) {
@@ -469,7 +495,7 @@ export const useUiStateStore = create<UiStateStore>((set) => ({
 
 useUiStateStore.subscribe((state) => debouncedPersistState.maybeExecute(state));
 
-if (typeof window !== "undefined" && typeof window.addEventListener === "function") {
+if (typeof window !== "undefined" && Predicate.isFunction(window.addEventListener)) {
   window.addEventListener("beforeunload", () => {
     debouncedPersistState.flush();
   });

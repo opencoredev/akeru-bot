@@ -13,7 +13,7 @@ import {
 // Earlier builds shipped every maintainer theme under a t3- prefix; only the
 // genuinely T3-branded palette keeps it. Stored preferences and mixes with the
 // old ids stay readable through this alias table.
-const LEGACY_THEME_ID_ALIASES: Readonly<Record<string, string>> = {
+const LEGACY_THEME_ID_ALIASES = {
   [LEGACY_T3_CHAT_DARK_THEME_ID]: T3_CHAT_THEME_ID,
   [LEGACY_T3_CHAT_THEME_ID]: T3_CHAT_THEME_ID,
   "t3-grove": GROVE_THEME_ID,
@@ -22,8 +22,10 @@ const LEGACY_THEME_ID_ALIASES: Readonly<Record<string, string>> = {
   "t3-iris": IRIS_THEME_ID,
 };
 
+const LEGACY_THEME_ID_ALIASES_LOOKUP = new Map(Object.entries(LEGACY_THEME_ID_ALIASES));
+
 function normalizeThemeId(themeId: string): string {
-  return LEGACY_THEME_ID_ALIASES[themeId] ?? themeId;
+  return LEGACY_THEME_ID_ALIASES_LOOKUP.get(themeId) ?? themeId;
 }
 
 /**

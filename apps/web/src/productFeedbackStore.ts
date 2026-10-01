@@ -69,6 +69,7 @@ export function openProductFeedbackWithPrefill(feedback: string): void {
 }
 
 export function productFeedbackDraftFromToolArgs(
+  // oxlint-disable-next-line anti-slop/no-unknown-parameters -- Tool arguments are untrusted and decoded by ProductFeedbackToolDraft here.
   args: unknown,
 ): Partial<ProductFeedbackDraft> | null {
   const decoded = decodeProductFeedbackToolDraft(args);
@@ -89,6 +90,7 @@ function appendBounded(current: string, proposed: string, maxLength: number): st
   return `${left}\n\n${right}`.slice(0, maxLength);
 }
 
+// oxlint-disable-next-line anti-slop/no-unknown-parameters -- Tool entry point forwards untrusted arguments to the draft decoder.
 export function openProductFeedbackFromToolArgs(args: unknown): boolean {
   const proposed = productFeedbackDraftFromToolArgs(args);
 

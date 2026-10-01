@@ -49,11 +49,12 @@ function installTestBrowser(url: string) {
   });
 }
 
-function captureThrown(run: () => unknown): unknown {
+function captureThrown(run: () => void): Error {
   try {
     run();
-  } catch (error) {
-    return error;
+  } catch (cause) {
+    if (cause instanceof Error) return cause;
+    throw cause;
   }
 
   throw new Error("Expected the operation to throw.");

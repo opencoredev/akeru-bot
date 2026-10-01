@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 import { EnvironmentId, ThreadId } from "@akeru/contracts";
@@ -455,7 +456,7 @@ describe("mergeBrowserHistoryState", () => {
     expect(merged.byProjectKey).toEqual({
       b: [{ url: "http://ok.test/", lastVisitedAt: 5 }],
     });
-    expect(typeof merged.recordVisit).toBe("function");
+    expect(Predicate.isFunction(merged.recordVisit)).toBe(true);
     expect(merged.projectKeyByThreadKey).toEqual({ good: "b" });
     expect(merged.pendingVisitsByThreadKey).toEqual({});
     expect(merged.pendingTitlesByThreadKey).toEqual({});

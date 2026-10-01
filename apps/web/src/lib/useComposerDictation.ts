@@ -54,6 +54,7 @@ export function useComposerDictation(input: ComposerDictationBinding): Dictation
   const session = useMemo(() => {
     const dependencies: Omit<DictationDependencies, "capture"> = {
       schedule: (callback, milliseconds) => globalThis.setTimeout(callback, milliseconds),
+      // SAFETY: This handle was created by the matching setTimeout scheduler and returned unchanged by the controller.
       cancelSchedule: (timer) => globalThis.clearTimeout(timer as ReturnType<typeof setTimeout>),
       transcribe: (request) => {
         const operation = transcribe.current;
@@ -106,18 +107,18 @@ export function useComposerDictation(input: ComposerDictationBinding): Dictation
   };
 }
 
-function describeDictationFailure(error: unknown): string | null {
-  if (error == null) return null;
+function describeDictationFailure(cause: unknown): string | null {
+  if (cause == null) return null;
 
   if (typeof window !== "undefined" && window.isSecureContext === false) {
     return "This page is not HTTPS, so the browser will not open the microphone.";
   }
 
-  if (error instanceof DOMException && error.name === "NotAllowedError") {
+  if (cause instanceof DOMException && cause.name === "NotAllowedError") {
     return "Microphone permission was denied. Allow it in the browser's site settings.";
   }
 
-  if (error instanceof Error && error.message.trim()) return error.message;
+  if (cause instanceof Error && cause.message.trim()) return cause.message;
 
   return "Dictation failed.";
 }
@@ -132,6 +133,7 @@ export function createUnavailableDictationSession() {
     },
     updateDraft: () => undefined,
     schedule: (callback, milliseconds) => globalThis.setTimeout(callback, milliseconds),
+    // SAFETY: This handle was created by the matching setTimeout scheduler and returned unchanged by the controller.
     cancelSchedule: (timer) => globalThis.clearTimeout(timer as ReturnType<typeof setTimeout>),
   });
 }

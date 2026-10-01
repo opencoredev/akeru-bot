@@ -1,3 +1,4 @@
+import { hasTag } from "~/lib/taggedUnion";
 import type { ResourceTelemetryHistoryInput, ResourceTelemetrySnapshot } from "@akeru/contracts";
 import * as Cause from "effect/Cause";
 import { useCallback } from "react";
@@ -36,7 +37,7 @@ export function useResourceTelemetry(): ResourceTelemetryState {
 
     const result = await retryCommand({ environmentId, input: {} });
 
-    if (result._tag === "Failure") {
+    if (hasTag(result, "Failure")) {
       throw Cause.squash(result.cause);
     }
 

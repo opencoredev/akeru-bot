@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import type { DesktopBridge } from "@akeru/contracts";
 import { safeErrorLogAttributes } from "@akeru/client-runtime/errors";
 import * as Schema from "effect/Schema";
@@ -47,7 +48,7 @@ export function syncDesktopTheme(
   const halves = readStoredThemeHalves();
   const desktopTheme = resolveDesktopTheme(theme, followSystem, appearanceMode, halves);
 
-  if (!bridge || typeof bridge.setTheme !== "function" || lastDesktopTheme === desktopTheme) {
+  if (!bridge || !Predicate.isFunction(bridge.setTheme) || lastDesktopTheme === desktopTheme) {
     return;
   }
 

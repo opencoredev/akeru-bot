@@ -29,7 +29,10 @@ const TARGET: DesktopSshEnvironmentTarget = {
 function makeBridge(
   calls: string[],
   options?: { readonly failDescriptor?: boolean },
-): DesktopBridge {
+): Pick<
+  DesktopBridge,
+  "ensureSshEnvironment" | "fetchSshEnvironmentDescriptor" | "bootstrapSshBearerSession"
+> {
   return {
     ensureSshEnvironment: async (target: DesktopSshEnvironmentTarget) => {
       calls.push("ensure");
@@ -72,7 +75,7 @@ function makeBridge(
         scope: AuthStandardClientScopes.join(" "),
       };
     },
-  } as unknown as DesktopBridge;
+  };
 }
 
 describe("desktop SSH pairing", () => {

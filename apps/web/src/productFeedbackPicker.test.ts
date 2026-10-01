@@ -61,6 +61,7 @@ class TestElement {
   }
 
   closest(selector: string): TestElement | null {
+    // oxlint-disable-next-line typescript/no-this-alias -- DOM closest searches this element and its ancestors; starting at the parent would omit the target.
     let current: TestElement | null = this;
 
     while (current) {
@@ -133,7 +134,16 @@ class TestDocument {
     this.listeners.get(type)?.delete(listener);
   }
 
-  emit(type: string, event: Record<string, unknown>) {
+  emit(
+    type: string,
+    event: {
+      target?: TestElement;
+      key?: string;
+      preventDefault?: () => void;
+      stopPropagation?: () => void;
+      stopImmediatePropagation?: () => void;
+    },
+  ) {
     for (const listener of this.listeners.get(type) ?? []) listener(event as never);
   }
 
@@ -219,17 +229,17 @@ describe("product feedback element picker", () => {
 
   it("never captures form values, private UI, tokens, or paths", () => {
     const input = testDocument.createElement("input");
-    expect(productFeedbackElementDescriptor(input as unknown as Element)).toBeNull();
+    expect(productFeedbackElementDescriptor(input)).toBeNull();
 
     const privateNode = testDocument.createElement("button");
     privateNode.dataset.feedbackPrivate = "true";
     privateNode.textContent = "Private";
-    expect(productFeedbackElementDescriptor(privateNode as unknown as Element)).toBeNull();
+    expect(productFeedbackElementDescriptor(privateNode)).toBeNull();
 
     const button = testDocument.createElement("button");
     button.textContent =
       "Open sk_abcdefghijklmnopqrstuvwxyz /Users/alice/private/file.ts https://private.example/path";
-    const descriptor = productFeedbackElementDescriptor(button as unknown as Element);
+    const descriptor = productFeedbackElementDescriptor(button);
     expect(descriptor?.label).toContain("[redacted]");
     expect(descriptor?.label).toContain("[path]");
     expect(descriptor?.label).toContain("[url]");

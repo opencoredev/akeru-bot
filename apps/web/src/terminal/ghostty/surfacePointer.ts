@@ -1,3 +1,4 @@
+import * as Match from "effect/Match";
 import { GhosttyTerminalCore, type GhosttySnapshot } from "./core";
 import { type GhosttyCellMetrics } from "./renderer";
 
@@ -170,12 +171,11 @@ export class SurfacePointerController {
     const clickCount = this.selectionClickSequence.count;
     this.selectionMode = clickCount >= 3 ? "line" : clickCount === 2 ? "word" : "cell";
 
-    const range =
-      this.selectionMode === "line"
-        ? this.host.core.selectLine(cell.x, cell.y)
-        : this.selectionMode === "word"
-          ? this.host.core.selectWord(cell.x, cell.y)
-          : null;
+    const range = Match.value(this.selectionMode).pipe(
+      Match.when("line", () => this.host.core.selectLine(cell.x, cell.y)),
+      Match.when("word", () => this.host.core.selectWord(cell.x, cell.y)),
+      Match.orElse(() => null),
+    );
 
     if (range) {
       this.selectionBase = range.screen;
@@ -253,12 +253,11 @@ export class SurfacePointerController {
     this.selectionMoved = true;
     this.selectionEnd = cell;
 
-    const range =
-      this.selectionMode === "line"
-        ? this.host.core.selectLine(cell.x, cell.y)
-        : this.selectionMode === "word"
-          ? this.host.core.selectWord(cell.x, cell.y)
-          : null;
+    const range = Match.value(this.selectionMode).pipe(
+      Match.when("line", () => this.host.core.selectLine(cell.x, cell.y)),
+      Match.when("word", () => this.host.core.selectWord(cell.x, cell.y)),
+      Match.orElse(() => null),
+    );
 
     const cellScreen = this.host.core.viewportPointToScreen(cell.x, cell.y);
 
@@ -463,7 +462,7 @@ export class SurfacePointerController {
     this.host.options.onContextMenu?.(event);
   };
 
-  private cellAt(clientX: number, clientY: number): { x: number; y: number } {
+  private cellAt(clientX: number, clientY: number) {
     const bounds = this.host.canvas.getBoundingClientRect();
 
     return {

@@ -170,10 +170,10 @@ export interface ComposerDraftStoreState {
     draftId: DraftId,
     options?: {
       threadId?: ThreadId;
-      branch?: string | null;
-      worktreePath?: string | null;
+      branch?: string | null | undefined;
+      worktreePath?: string | null | undefined;
       createdAt?: string;
-      envMode?: DraftThreadEnvMode;
+      envMode?: DraftThreadEnvMode | undefined;
       startFromOrigin?: boolean;
       runtimeMode?: RuntimeMode;
       interactionMode?: ProviderInteractionMode;
@@ -185,10 +185,10 @@ export interface ComposerDraftStoreState {
     draftId: DraftId,
     options?: {
       threadId?: ThreadId;
-      branch?: string | null;
-      worktreePath?: string | null;
+      branch?: string | null | undefined;
+      worktreePath?: string | null | undefined;
       createdAt?: string;
-      envMode?: DraftThreadEnvMode;
+      envMode?: DraftThreadEnvMode | undefined;
       startFromOrigin?: boolean;
       runtimeMode?: RuntimeMode;
       interactionMode?: ProviderInteractionMode;
@@ -198,11 +198,11 @@ export interface ComposerDraftStoreState {
   setDraftThreadContext: (
     threadRef: ComposerThreadTarget,
     options: {
-      branch?: string | null;
-      worktreePath?: string | null;
+      branch?: string | null | undefined;
+      worktreePath?: string | null | undefined;
       projectRef?: ScopedProjectRef;
       createdAt?: string;
-      envMode?: DraftThreadEnvMode;
+      envMode?: DraftThreadEnvMode | undefined;
       startFromOrigin?: boolean;
       runtimeMode?: RuntimeMode;
       interactionMode?: ProviderInteractionMode;

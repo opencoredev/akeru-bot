@@ -1,5 +1,9 @@
 "use client";
 
+import { ViewportSetting } from "./browserViewportSetting";
+
+import { hasTag } from "~/lib/taggedUnion";
+
 import type { PreviewViewportSetting, PreviewViewportSize } from "@akeru/contracts";
 import {
   useCallback,
@@ -48,11 +52,10 @@ export function useBrowserViewportResize(options: {
   const activeDrag = dragViewport?.sourceKey === sourceViewportKey ? dragViewport : null;
 
   const effectiveViewport = activeDrag
-    ? ({
-        _tag: "freeform",
+    ? (ViewportSetting.freeform({
         width: activeDrag.width,
         height: activeDrag.height,
-      } as const satisfies PreviewViewportSetting)
+      }) satisfies PreviewViewportSetting)
     : viewport;
 
   const normalizedZoomFactor = Number.isFinite(zoomFactor) && zoomFactor > 0 ? zoomFactor : 1;
@@ -62,7 +65,7 @@ export function useBrowserViewportResize(options: {
     : containerSize;
 
   const layout =
-    deviceToolbarVisible && effectiveViewport._tag !== "fill"
+    deviceToolbarVisible && !hasTag(effectiveViewport, "fill")
       ? resolveBrowserDeviceViewportLayout(containerSize, effectiveViewport, zoomFactor)
       : resolveBrowserViewportLayout(containerSize, effectiveViewport, zoomFactor);
 
@@ -128,7 +131,7 @@ export function useBrowserViewportResize(options: {
     direction: BrowserViewportResizeDirection,
     event: ReactKeyboardEvent<HTMLButtonElement>,
   ) => {
-    if (effectiveViewport._tag === "fill") return;
+    if (hasTag(effectiveViewport, "fill")) return;
     const controlsWidth = direction.includes("east") || direction.includes("west");
     const controlsHeight = direction.includes("north") || direction.includes("south");
     const step = (event.shiftKey ? 50 : 10) * normalizedZoomFactor;
@@ -173,7 +176,7 @@ export function useBrowserViewportResize(options: {
 
       if (!latest || latest.sourceKey !== sourceViewportKeyRef.current) return;
       keyboardViewportRef.current = null;
-      commitDrag({ _tag: "freeform", width: latest.width, height: latest.height });
+      commitDrag(ViewportSetting.freeform({ width: latest.width, height: latest.height }));
     }, KEYBOARD_RESIZE_COMMIT_DELAY_MS);
   };
 
@@ -181,7 +184,7 @@ export function useBrowserViewportResize(options: {
     direction: BrowserViewportResizeDirection,
     event: ReactPointerEvent<HTMLButtonElement>,
   ) => {
-    if (effectiveViewport._tag === "fill") return;
+    if (hasTag(effectiveViewport, "fill")) return;
     event.preventDefault();
     event.stopPropagation();
 
@@ -268,11 +271,7 @@ export function useBrowserViewportResize(options: {
         return;
       }
 
-      commitDrag({
-        _tag: "freeform",
-        width: latest.width,
-        height: latest.height,
-      });
+      commitDrag(ViewportSetting.freeform({ width: latest.width, height: latest.height }));
     }
 
     function cancel(cancelEvent: PointerEvent) {

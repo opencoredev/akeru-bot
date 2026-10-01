@@ -1,9 +1,10 @@
+import * as Predicate from "effect/Predicate";
 import type { ContextMenuItem } from "@akeru/contracts";
 
 const SVG_NS = "http://www.w3.org/2000/svg";
 
 // Inline Lucide-style icon paths (stroke-based, viewBox 0 0 24 24, strokeWidth 2).
-const ICON_PATHS: Record<string, ReadonlyArray<{ tag: string; attrs: Record<string, string> }>> = {
+const ICON_PATHS = {
   archive: [
     { tag: "rect", attrs: { width: "20", height: "5", x: "2", y: "3", rx: "1" } },
     { tag: "path", attrs: { d: "M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8" } },
@@ -121,10 +122,12 @@ const ICON_PATHS: Record<string, ReadonlyArray<{ tag: string; attrs: Record<stri
   ],
 };
 
-function createIconElement(name: string, tone: "neutral" | "destructive"): SVGSVGElement | null {
-  const paths = ICON_PATHS[name];
+const ICON_PATHS_LOOKUP = new Map(Object.entries(ICON_PATHS));
 
-  if (!paths || typeof document.createElementNS !== "function") {
+function createIconElement(name: string, tone: "neutral" | "destructive"): SVGSVGElement | null {
+  const paths = ICON_PATHS_LOOKUP.get(name);
+
+  if (!paths || !Predicate.isFunction(document.createElementNS)) {
     return null;
   }
 
@@ -178,18 +181,18 @@ function isNodeWithinMenuStack(target: EventTarget | null, menuStack: readonly H
     return menuStack.some((menu) => menu.contains(target));
   }
 
-  if (!target || typeof target !== "object") {
+  if (!Predicate.isObjectOrArray(target)) {
     return false;
   }
 
   let current: unknown = target;
 
-  while (current && typeof current === "object") {
-    if (menuStack.includes(current as HTMLDivElement)) {
+  while (Predicate.isObjectOrArray(current)) {
+    if (menuStack.some((menu) => menu === current)) {
       return true;
     }
 
-    current = (current as { parent?: unknown }).parent;
+    current = Predicate.hasProperty(current, "parent") ? current.parent : undefined;
   }
 
   return false;
@@ -333,7 +336,7 @@ export function showContextMenuFallback<T extends string>(
         const hasChildren = Array.isArray(item.children) && item.children.length > 0;
 
         const isLeafDestructive =
-          !hasChildren && (item.destructive === true || item.id === ("delete" as T));
+          !hasChildren && (item.destructive === true || item.id === "delete");
 
         const button = document.createElement("button");
         button.type = "button";
@@ -361,7 +364,7 @@ export function showContextMenuFallback<T extends string>(
           button.style.pointerEvents = "none";
         }
 
-        if (typeof item.icon === "string") {
+        if (Predicate.isString(item.icon)) {
           const icon = createIconElement(item.icon, isLeafDestructive ? "destructive" : "neutral");
 
           if (icon) {

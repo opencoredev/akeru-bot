@@ -8,7 +8,7 @@ import {
 } from "../settingsDialogStore";
 
 function isSettingsSection(value: string): value is SettingsSection {
-  return (SETTINGS_SECTIONS as readonly string[]).includes(value);
+  return SETTINGS_SECTIONS.some((section) => section === value);
 }
 
 export const Route = createFileRoute("/settings/$section")({
@@ -20,11 +20,14 @@ export const Route = createFileRoute("/settings/$section")({
       throw redirect({ to: "/plugins", replace: true });
     }
 
-    const legacy = LEGACY_SETTINGS_SECTIONS[params.section];
+    const legacy = Object.entries(LEGACY_SETTINGS_SECTIONS).find(
+      ([key]) => key === params.section,
+    )?.[1];
+
     throw redirect({
       to: "/settings/$section",
       params: { section: legacy?.section ?? "general" },
-      ...(legacy?.targetId ? { hash: legacy.targetId } : {}),
+      ...(legacy && "targetId" in legacy ? { hash: legacy.targetId } : {}),
       replace: true,
     });
   },

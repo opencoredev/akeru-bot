@@ -1,3 +1,5 @@
+import * as Schema from "effect/Schema";
+import * as Predicate from "effect/Predicate";
 import JSZip from "jszip";
 import {
   MAX_VSIX_BYTES,
@@ -68,14 +70,14 @@ const USED_WORKBENCH_COLORS = new Set([
   "textLink.foreground",
 ]);
 
-function sanitizeThemeObject(value: Record<string, unknown>): Record<string, unknown> {
+function sanitizeThemeObject(value: Schema.JsonObject): Schema.JsonObject {
   const colors: Record<string, string> = {};
 
   if (isRecord(value.colors)) {
     for (const [key, color] of Object.entries(value.colors)) {
       if (
         USED_WORKBENCH_COLORS.has(key) &&
-        typeof color === "string" &&
+        Predicate.isString(color) &&
         color.length <= MAX_COLOR_VALUE_LENGTH
       ) {
         colors[key] = color;
@@ -84,7 +86,7 @@ function sanitizeThemeObject(value: Record<string, unknown>): Record<string, unk
   }
 
   return {
-    ...(typeof value.include === "string" ? { include: value.include } : {}),
+    ...(Predicate.isString(value.include) ? { include: value.include } : {}),
     colors,
   };
 }
@@ -120,7 +122,7 @@ export function normalizePackagePath(path: string, relativeTo = "extension/"): s
   return segments.join("/");
 }
 
-export function contributionType(uiTheme: unknown): string | null {
+export function contributionType(uiTheme: Schema.Json | undefined): string | null {
   if (uiTheme === "vs") return "light";
 
   if (uiTheme === "vs-dark") return "dark";
@@ -221,7 +223,7 @@ export function inspectZipDirectory(bytes: Uint8Array): Uint8Array {
 }
 
 export function inspectZip(zip: JSZip): void {
-  const entries = Object.values(zip.files) as InspectableZipObject[];
+  const entries: InspectableZipObject[] = Object.values(zip.files);
 
   if (entries.length > MAX_ZIP_ENTRIES)
     throw new Error("That extension package has too many files.");
@@ -238,11 +240,11 @@ export async function readZipText(
   signal?: AbortSignal,
 ): Promise<string> {
   signal?.throwIfAborted();
-  const file = zip.file(path) as InspectableZipObject | null;
+  const file: InspectableZipObject | null = zip.file(path);
 
   if (!file) throw new Error(`${description} is missing from the extension package.`);
 
-  if (typeof file._data?.uncompressedSize !== "number" || !file.internalStream) {
+  if (!Predicate.isNumber(file._data?.uncompressedSize) || !file.internalStream) {
     throw new Error(`${description} has unreadable size metadata.`);
   }
 
@@ -309,11 +311,11 @@ export async function readZipText(
 export async function loadThemeObject(
   zip: JSZip,
   path: string,
-  cache: Map<string, Record<string, unknown>>,
+  cache: Map<string, Schema.JsonObject>,
   budget: { files: number },
   ancestors: ReadonlySet<string> = new Set(),
   signal?: AbortSignal,
-): Promise<Record<string, unknown>> {
+): Promise<Schema.JsonObject> {
   signal?.throwIfAborted();
 
   if (ancestors.size >= MAX_INCLUDE_DEPTH) throw new Error("Theme includes are nested too deeply.");
@@ -332,7 +334,7 @@ export async function loadThemeObject(
     parseJsoncObject(await readZipText(zip, path, path, signal), path),
   );
 
-  if (typeof value.include !== "string") {
+  if (!Predicate.isString(value.include)) {
     cache.set(path, value);
 
     return value;

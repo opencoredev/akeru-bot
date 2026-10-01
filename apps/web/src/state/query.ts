@@ -1,3 +1,4 @@
+import { hasTag } from "~/lib/taggedUnion";
 import { useAtomRefresh, useAtomValue } from "@effect/atom-react";
 import * as Cause from "effect/Cause";
 import * as Option from "effect/Option";
@@ -31,7 +32,7 @@ export function useEnvironmentQuery<A, E>(
 
   return {
     data: Option.getOrNull(AsyncResult.value(result)),
-    error: result._tag === "Failure" ? formatEnvironmentQueryError(result.cause) : null,
+    error: hasTag(result, "Failure") ? formatEnvironmentQueryError(result.cause) : null,
     isPending: atom !== null && result.waiting,
     refresh,
   };

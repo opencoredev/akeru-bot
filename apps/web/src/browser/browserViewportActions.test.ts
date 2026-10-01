@@ -1,3 +1,4 @@
+import { hasTag } from "~/lib/taggedUnion";
 import type { PreviewViewportSetting } from "@akeru/contracts";
 import { describe, expect, it, vi } from "vite-plus/test";
 
@@ -49,7 +50,7 @@ describe("browserViewportActions", () => {
     const calls: Array<number> = [];
 
     const unsubscribe = subscribeBrowserViewportChange("tab-serial", async (setting) => {
-      if (setting._tag === "fill") return;
+      if (hasTag(setting, "fill")) return;
       calls.push(setting.width);
 
       if (setting.width === 800) {

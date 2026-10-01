@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import * as React from "react";
 import * as Schema from "effect/Schema";
 
@@ -51,7 +52,7 @@ export class ClipboardReadError extends Schema.TaggedErrorClass<ClipboardReadErr
 function writeTextWithExecCommand(value: string): boolean {
   if (
     typeof document === "undefined" ||
-    typeof document.execCommand !== "function" ||
+    !Predicate.isFunction(document.execCommand) ||
     document.body == null
   ) {
     return false;
@@ -80,9 +81,12 @@ function writeTextWithExecCommand(value: string): boolean {
     return false;
   } finally {
     textarea.remove();
-    const restoreFocus = (previouslyFocused as { focus?: unknown } | null)?.focus;
 
-    if (typeof restoreFocus === "function") {
+    const restoreFocus = Predicate.hasProperty(previouslyFocused, "focus")
+      ? previouslyFocused.focus
+      : undefined;
+
+    if (Predicate.isFunction(restoreFocus)) {
       restoreFocus.call(previouslyFocused);
     }
   }
@@ -147,7 +151,7 @@ export function useCopyToClipboard<TContext = void>({
   target?: string;
   onCopy?: (ctx: TContext) => void;
   onError?: (error: Error, ctx: TContext) => void;
-} = {}): { copyToClipboard: (value: string, ctx: TContext) => void; isCopied: boolean } {
+} = {}) {
   const [isCopied, setIsCopied] = React.useState(false);
   const timeoutIdRef = React.useRef<NodeJS.Timeout | null>(null);
   const onCopyRef = React.useRef(onCopy);

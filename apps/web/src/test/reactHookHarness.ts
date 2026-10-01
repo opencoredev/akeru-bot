@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import type { Dispatch, SetStateAction } from "react";
 
 /**
@@ -79,14 +80,16 @@ export function createReactHookHarness() {
       const index = nextIndex();
 
       if (index >= slots.length) {
-        slots[index] =
-          typeof initialValue === "function" ? (initialValue as () => T)() : initialValue;
+        slots[index] = Predicate.isFunction(initialValue)
+          ? (initialValue as () => T)()
+          : initialValue;
       }
 
       const setValue: Dispatch<SetStateAction<T>> = (nextValue) => {
         const previous = slots[index] as T;
-        slots[index] =
-          typeof nextValue === "function" ? (nextValue as (value: T) => T)(previous) : nextValue;
+        slots[index] = Predicate.isFunction(nextValue)
+          ? (nextValue as (value: T) => T)(previous)
+          : nextValue;
       };
 
       return [slots[index] as T, setValue];

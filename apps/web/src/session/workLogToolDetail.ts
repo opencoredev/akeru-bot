@@ -1,5 +1,7 @@
+import type * as Schema from "effect/Schema";
+import { asRecord } from "./workLogPayload";
+import * as Predicate from "effect/Predicate";
 import {
-  asRecord,
   asTrimmedString,
   extractToolCommand,
   stripTrailingExitCode,
@@ -10,15 +12,15 @@ export function normalizeCompactToolLabel(value: string): string {
   return value.replace(/\s+(?:complete|completed)\s*$/i, "").trim();
 }
 
-function asNumber(value: unknown): number | null {
-  return typeof value === "number" && Number.isFinite(value) ? value : null;
+function asNumber(value: Schema.Json | undefined): number | null {
+  return Predicate.isNumber(value) && Number.isFinite(value) ? value : null;
 }
 
-export function extractToolTitle(payload: Record<string, unknown> | null): string | null {
+export function extractToolTitle(payload: Schema.JsonObject | null): string | null {
   return asTrimmedString(payload?.title);
 }
 
-export function extractToolCallId(payload: Record<string, unknown> | null): string | null {
+export function extractToolCallId(payload: Schema.JsonObject | null): string | null {
   const data = asRecord(payload?.data);
 
   return asTrimmedString(payload?.toolCallId) ?? asTrimmedString(data?.toolCallId);
@@ -70,7 +72,7 @@ function summarizeToolTextOutput(value: string): string | null {
   return null;
 }
 
-function summarizeToolRawOutput(payload: Record<string, unknown> | null): string | null {
+function summarizeToolRawOutput(payload: Schema.JsonObject | null): string | null {
   const data = asRecord(payload?.data);
   const rawOutput = asRecord(data?.rawOutput);
 
@@ -101,7 +103,7 @@ function summarizeToolRawOutput(payload: Record<string, unknown> | null): string
   return null;
 }
 
-function extractAcpTextContent(value: unknown): string | null {
+function extractAcpTextContent(value: Schema.Json | undefined): string | null {
   if (!Array.isArray(value)) {
     return null;
   }
@@ -131,7 +133,7 @@ function extractAcpTextContent(value: unknown): string | null {
   return chunks.length > 0 ? chunks.join("\n") : null;
 }
 
-function extractToolOutput(payload: Record<string, unknown> | null): string | null {
+function extractToolOutput(payload: Schema.JsonObject | null): string | null {
   const data = asRecord(payload?.data);
   const item = asRecord(data?.item);
   const itemResult = asRecord(item?.result);
@@ -149,7 +151,7 @@ function extractToolOutput(payload: Record<string, unknown> | null): string | nu
     outputStreams.push(stderr);
   }
 
-  const candidates: unknown[] = [
+  const candidates: Array<Schema.Json | undefined> = [
     item?.aggregatedOutput,
     itemResult?.content,
     data?.rawOutput,
@@ -176,7 +178,7 @@ function extractToolOutput(payload: Record<string, unknown> | null): string | nu
   return null;
 }
 
-function isCommandToolDetail(payload: Record<string, unknown> | null, heading: string): boolean {
+function isCommandToolDetail(payload: Schema.JsonObject | null, heading: string): boolean {
   const data = asRecord(payload?.data);
   const kind = asTrimmedString(data?.kind)?.toLowerCase();
   const title = asTrimmedString(payload?.title ?? heading)?.toLowerCase();
@@ -190,7 +192,7 @@ function isCommandToolDetail(payload: Record<string, unknown> | null, heading: s
 }
 
 export function extractToolDetail(
-  payload: Record<string, unknown> | null,
+  payload: Schema.JsonObject | null,
   heading: string,
 ): string | null {
   const rawDetail = asTrimmedString(payload?.detail);

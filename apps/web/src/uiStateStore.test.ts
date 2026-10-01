@@ -152,7 +152,7 @@ describe("parsePersistedState", () => {
     const parsed = parsePersistedState({
       projectExpandedById: {
         logical: false,
-        invalid: "no" as unknown as boolean,
+        invalid: "no",
       },
       projectOrder: ["physical-b", "", "physical-a", "physical-b"],
       threadLastVisitedAtById: {

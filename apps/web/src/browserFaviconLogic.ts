@@ -1,3 +1,8 @@
+import * as Schema from "effect/Schema";
+import * as Option from "effect/Option";
+import type { PersistOptions } from "zustand/middleware";
+import { storedField } from "./lib/persistedSchema";
+import * as Predicate from "effect/Predicate";
 import { FAVICON_CAPTURED_AT_MAX, FAVICON_DATA_URL_MAX_LENGTH } from "@akeru/contracts";
 
 import { isLocalLoopbackHost, normalizeHostname } from "./browser/browserTargetResolver";
@@ -38,7 +43,7 @@ export function canCanonicalizeFaviconWithoutEnvironment(url: string): boolean {
 
 export function isValidFaviconCapturedAt(value: unknown): value is number {
   return (
-    typeof value === "number" &&
+    Predicate.isNumber(value) &&
     Number.isFinite(value) &&
     value >= 0 &&
     value <= FAVICON_CAPTURED_AT_MAX &&
@@ -76,8 +81,8 @@ function migratePersistedFaviconKey(key: string): string | null {
   }
 }
 
-function persistedFaviconAlias(value: unknown): string | null {
-  if (typeof value !== "string" || value.length > BROWSER_FAVICON_MAX_ALIAS_LENGTH) return null;
+function persistedFaviconAlias(value: string | null): string | null {
+  if (!Predicate.isString(value) || value.length > BROWSER_FAVICON_MAX_ALIAS_LENGTH) return null;
   const normalized = normalizeHostname(value);
 
   if (!normalized || normalized !== value) return null;
@@ -157,7 +162,7 @@ export function faviconStorageLocation(
 
 export function isStorableFaviconDataUrl(value: unknown): value is string {
   if (
-    typeof value !== "string" ||
+    !Predicate.isString(value) ||
     !value.startsWith("data:image/png;base64,") ||
     value.length > FAVICON_DATA_URL_MAX_LENGTH
   ) {
@@ -185,38 +190,46 @@ export function evictExcessFavicons(
     keys
       .toSorted((left, right) => (byKey[right]?.capturedAt ?? 0) - (byKey[left]?.capturedAt ?? 0))
       .slice(0, BROWSER_FAVICON_MAX_ENTRIES)
-      .map((key) => [key, byKey[key] as BrowserFaviconEntry]),
+      .flatMap((key) => {
+        const entry = byKey[key];
+
+        return entry ? [[key, entry]] : [];
+      }),
   );
 }
 
-export function migratePersistedBrowserFaviconState(persistedState: unknown): {
-  byKey: Record<string, BrowserFaviconEntry>;
-} {
-  if (!persistedState || typeof persistedState !== "object") return { byKey: {} };
-  const raw = "byKey" in persistedState ? (persistedState as { byKey?: unknown }).byKey : null;
+type PersistedBrowserFavicons = { byKey: Record<string, BrowserFaviconEntry> };
 
-  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return { byKey: {} };
-  const byKey: Record<string, BrowserFaviconEntry> = {};
+const StoredFavicon = Schema.Struct({
+  dataUrl: Schema.String.check(Schema.makeFilter(isStorableFaviconDataUrl)),
+  capturedAt: Schema.Number.check(Schema.makeFilter(isValidFaviconCapturedAt)),
+  aliases: storedField(Schema.Array(storedField(Schema.NullOr(Schema.String), null)), []),
+});
 
-  for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {
+const StoredFavicons = Schema.Struct({
+  byKey: storedField(
+    Schema.Record(Schema.String, storedField(Schema.NullOr(StoredFavicon), null)),
+    {},
+  ),
+});
+
+const decodeStoredFavicons = Schema.decodeUnknownOption(StoredFavicons);
+
+export const migratePersistedBrowserFaviconState = ((persistedState) => {
+  const decoded = decodeStoredFavicons(persistedState);
+  const byKey: PersistedBrowserFavicons["byKey"] = {};
+
+  if (Option.isNone(decoded)) return { byKey };
+
+  for (const [key, value] of Object.entries(decoded.value.byKey)) {
     const migratedKey = migratePersistedFaviconKey(key);
 
-    if (!migratedKey) continue;
+    if (!migratedKey || value === null) continue;
+    const { dataUrl, capturedAt } = value;
 
-    if (!value || typeof value !== "object") continue;
-    const { dataUrl, capturedAt } = value as Record<string, unknown>;
-
-    if (!isStorableFaviconDataUrl(dataUrl)) continue;
-
-    if (!isValidFaviconCapturedAt(capturedAt)) continue;
-    const rawAliases = (value as Record<string, unknown>).aliases;
-
-    const aliases = Array.isArray(rawAliases)
-      ? [...new Set(rawAliases.map(persistedFaviconAlias).filter((alias) => alias !== null))].slice(
-          0,
-          BROWSER_FAVICON_MAX_ALIASES_PER_ENTRY,
-        )
-      : [];
+    const aliases = [
+      ...new Set(value.aliases.map(persistedFaviconAlias).filter((alias) => alias !== null)),
+    ].slice(0, BROWSER_FAVICON_MAX_ALIASES_PER_ENTRY);
 
     const existing = byKey[migratedKey];
     const newest = !existing || capturedAt > existing.capturedAt;
@@ -236,4 +249,4 @@ export function migratePersistedBrowserFaviconState(persistedState: unknown): {
   }
 
   return { byKey: evictExcessFavicons(byKey) };
-}
+}) satisfies NonNullable<PersistOptions<PersistedBrowserFavicons>["migrate"]>;

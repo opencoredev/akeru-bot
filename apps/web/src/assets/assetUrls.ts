@@ -1,3 +1,5 @@
+import * as Data from "effect/Data";
+import { hasTag } from "~/lib/taggedUnion";
 import { useAtomValue } from "@effect/atom-react";
 import { resolveAssetUrl } from "@akeru/client-runtime/state/assets";
 import type { AssetImageDimensions, AssetResource, EnvironmentId } from "@akeru/contracts";
@@ -19,6 +21,8 @@ export type AssetUrlState =
       readonly imageDimensions?: AssetImageDimensions;
     };
 
+const AssetUrlState = Data.taggedEnum<AssetUrlState>();
+
 export function useAssetUrlState(
   environmentId: EnvironmentId,
   resource: AssetResource,
@@ -32,32 +36,31 @@ export function useAssetUrlState(
     }),
   );
 
-  if (result._tag === "Failure") {
-    return { _tag: "Failure" };
+  if (hasTag(result, "Failure")) {
+    return AssetUrlState.Failure();
   }
 
-  if (preparedConnection._tag === "None" || result._tag !== "Success") {
-    return { _tag: "Loading" };
+  if (hasTag(preparedConnection, "None") || !hasTag(result, "Success")) {
+    return AssetUrlState.Loading();
   }
 
   const url = resolveAssetUrl(preparedConnection.value.httpBaseUrl, result.value.relativeUrl);
 
   return url === null
-    ? { _tag: "Failure" }
-    : {
-        _tag: "Success",
+    ? AssetUrlState.Failure()
+    : AssetUrlState.Success({
         url,
         ...(result.value.sourcePath !== undefined ? { sourcePath: result.value.sourcePath } : {}),
         ...(result.value.imageDimensions !== undefined
           ? { imageDimensions: result.value.imageDimensions }
           : {}),
-      };
+      });
 }
 
 export function useAssetUrl(environmentId: EnvironmentId, resource: AssetResource): string | null {
   const result = useAssetUrlState(environmentId, resource);
 
-  if (result._tag !== "Success") {
+  if (!hasTag(result, "Success")) {
     return null;
   }
 
@@ -79,7 +82,7 @@ export function useAssetUrls(
 
   return useMemo(
     () =>
-      preparedConnection._tag === "None"
+      hasTag(preparedConnection, "None")
         ? resources.map(() => null)
         : results.map((result) =>
             AsyncResult.isSuccess(result)

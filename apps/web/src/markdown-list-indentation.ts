@@ -1,14 +1,16 @@
+import * as Predicate from "effect/Predicate";
+
 interface MarkdownPosition {
   readonly start?: {
     readonly line?: number;
-    readonly offset?: number;
+    readonly offset?: number | undefined;
   };
 }
 
 interface MarkdownAstNode {
   readonly type: string;
   readonly value?: unknown;
-  readonly position?: MarkdownPosition;
+  readonly position?: MarkdownPosition | undefined;
   children?: MarkdownAstNode[];
 }
 
@@ -17,7 +19,7 @@ interface MarkdownFile {
 }
 
 interface MarkdownParser {
-  parse(markdown: string): unknown;
+  parse(markdown: string): MarkdownAstNode;
 }
 
 interface RecoveredMarkdown {
@@ -35,7 +37,7 @@ function isSameLineOverIndentedCode(
   if (
     node.type !== "code" ||
     parent?.type !== "listItem" ||
-    typeof node.value !== "string" ||
+    !Predicate.isString(node.value) ||
     !/^[\t ]/.test(node.value)
   ) {
     return false;
@@ -64,7 +66,7 @@ function parseRecoveredMarkdown(value: string, parser: MarkdownParser): Recovere
   // Later root children are kept as blocks so blank-line-separated content is
   // never discarded.
   const source = `${INLINE_PARSE_PREFIX}${value}`;
-  const document = parser.parse(source) as MarkdownAstNode;
+  const document = parser.parse(source);
   const blocks = document.children;
   const paragraph = blocks?.[0];
   const children = paragraph?.type === "paragraph" ? paragraph.children : undefined;
@@ -74,7 +76,7 @@ function parseRecoveredMarkdown(value: string, parser: MarkdownParser): Recovere
     !blocks ||
     !children ||
     first?.type !== "text" ||
-    typeof first.value !== "string" ||
+    !Predicate.isString(first.value) ||
     !first.value.startsWith(INLINE_PARSE_PREFIX)
   ) {
     return { blocks: [{ type: "text", value }], source };
@@ -96,7 +98,7 @@ function parseRecoveredMarkdown(value: string, parser: MarkdownParser): Recovere
 }
 
 function blocksFromIndentedCode(node: MarkdownAstNode, parser: MarkdownParser): RecoveredMarkdown {
-  const value = typeof node.value === "string" ? node.value.trim() : "";
+  const value = Predicate.isString(node.value) ? node.value.trim() : "";
   const recovered = parseRecoveredMarkdown(value, parser);
   const first = recovered.blocks[0];
 
@@ -119,7 +121,7 @@ function blocksFromIndentedCode(node: MarkdownAstNode, parser: MarkdownParser): 
  */
 function attachListItemIndentationNormalizer(this: MarkdownParser) {
   return (tree: MarkdownAstNode, file: MarkdownFile) => {
-    if (typeof file.value !== "string") {
+    if (!Predicate.isString(file.value)) {
       return;
     }
 

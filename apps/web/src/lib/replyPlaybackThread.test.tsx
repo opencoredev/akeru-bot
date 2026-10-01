@@ -3,11 +3,19 @@ import { createRoot, type Root } from "react-dom/client";
 import type { ReplyPlaybackSession } from "@akeru/client-runtime/reply-playback";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
-const mocks = vi.hoisted(() => ({
-  primaryEnvironmentId: "primary" as string | null,
-  voice: {} as Record<string, unknown>,
-  session: null as ReplyPlaybackSession | null,
-  audio: [] as Array<{ play: () => Promise<void>; pause: () => void; dispose: () => void }>,
+interface PlaybackMocks {
+  primaryEnvironmentId: string | null;
+  voice: { enabled?: boolean; provider?: string };
+  session: ReplyPlaybackSession | null;
+  audio: Array<{ play: () => Promise<void>; pause: () => void; dispose: () => void }>;
+  command: () => Promise<{ _tag: string }>;
+}
+
+const mocks = vi.hoisted<PlaybackMocks>(() => ({
+  primaryEnvironmentId: "primary",
+  voice: {},
+  session: null,
+  audio: [],
   command: () => Promise.resolve({ _tag: "Success" }),
 }));
 

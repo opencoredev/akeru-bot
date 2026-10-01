@@ -1,10 +1,11 @@
+import { hasTag } from "~/lib/taggedUnion";
 import { Atom } from "effect/unstable/reactivity";
 
 import { environmentCatalog } from "../connection/catalog";
 
 export const primaryEnvironmentIdAtom = Atom.make((get) => {
   for (const [environmentId, entry] of get(environmentCatalog.catalogValueAtom).entries) {
-    if (entry.target._tag === "PrimaryConnectionTarget") {
+    if (hasTag(entry.target, "PrimaryConnectionTarget")) {
       return environmentId;
     }
   }

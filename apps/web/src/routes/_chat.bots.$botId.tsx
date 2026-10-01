@@ -1,3 +1,4 @@
+import { hasTag } from "~/lib/taggedUnion";
 import { useAtomValue } from "@effect/atom-react";
 import {
   BotId,
@@ -35,6 +36,7 @@ import { primaryServerProvidersAtom } from "../state/server";
 import { environmentSnapshotAtom } from "../state/shell";
 import { useAtomCommand } from "../state/use-atom-command";
 
+// SAFETY: This sentinel is used only while the environment query is disabled and is never sent to a server.
 const NO_ENVIRONMENT = "" as EnvironmentId;
 
 function BotThreadRouteView() {
@@ -105,7 +107,7 @@ function BotThreadRouteView() {
   const routines = routinesView.kind === "ready" ? routinesView.routines : [];
 
   const requireSuccess = (result: { readonly _tag: string }, message: string) => {
-    if (result._tag === "Success") return;
+    if (hasTag(result, "Success")) return;
     toastManager.add({ type: "error", title: message });
     throw new Error(message);
   };

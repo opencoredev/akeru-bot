@@ -1,3 +1,5 @@
+import * as Data from "effect/Data";
+import { hasTag } from "~/lib/taggedUnion";
 import type { ConnectionTarget } from "@akeru/client-runtime/connection";
 import {
   PRIMARY_LOCAL_ENVIRONMENT_ID,
@@ -27,7 +29,7 @@ export function isDesktopLocalConnectionTarget(
   target: ConnectionTarget,
 ): target is Extract<ConnectionTarget, { readonly _tag: "BearerConnectionTarget" }> {
   return (
-    target._tag === "BearerConnectionTarget" &&
+    hasTag(target, "BearerConnectionTarget") &&
     target.connectionId.startsWith(DESKTOP_LOCAL_CONNECTION_ID_PREFIX)
   );
 }
@@ -47,6 +49,8 @@ export type DesktopSecondaryBootstrapsRead =
       readonly _tag: "Failure";
       readonly cause: unknown;
     };
+
+const DesktopSecondaryBootstrapsRead = Data.taggedEnum<DesktopSecondaryBootstrapsRead>();
 
 export interface DesktopSecondaryBootstrapsReader {
   readonly readResult: () => DesktopSecondaryBootstrapsRead;
@@ -70,7 +74,7 @@ export function createDesktopSecondaryBootstrapsReader(
     if (bridge === undefined) {
       snapshot = [];
 
-      return { _tag: "Success", bootstraps: snapshot };
+      return DesktopSecondaryBootstrapsRead.Success({ bootstraps: snapshot });
     }
 
     try {
@@ -78,9 +82,9 @@ export function createDesktopSecondaryBootstrapsReader(
         .getLocalEnvironmentBootstraps()
         .filter((entry) => entry.id !== PRIMARY_LOCAL_ENVIRONMENT_ID);
 
-      return { _tag: "Success", bootstraps: snapshot };
+      return DesktopSecondaryBootstrapsRead.Success({ bootstraps: snapshot });
     } catch (cause) {
-      return { _tag: "Failure", cause };
+      return DesktopSecondaryBootstrapsRead.Failure({ cause });
     }
   };
 
@@ -89,7 +93,7 @@ export function createDesktopSecondaryBootstrapsReader(
     readSnapshot: () => {
       const result = readResult();
 
-      return result._tag === "Success" ? result.bootstraps : snapshot;
+      return hasTag(result, "Success") ? result.bootstraps : snapshot;
     },
   };
 }

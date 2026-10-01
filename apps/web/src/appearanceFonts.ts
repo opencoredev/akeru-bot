@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 /**
  * Font preferences from Settings → Appearance, applied as CSS custom
  * properties. The default stacks mirror the `--font-sans` / `--font-mono`
@@ -421,13 +422,14 @@ let installedFamiliesCache: InstalledFontFamiliesResult | null = null;
 export async function queryInstalledFontFamilies(): Promise<InstalledFontFamiliesResult> {
   if (installedFamiliesCache !== null) return installedFamiliesCache;
 
+  // SAFETY: Chromium’s optional Local Font Access API is missing from DOM typings; unsupported browsers are handled below.
   const query = (
     window as Window & {
       queryLocalFonts?: () => Promise<ReadonlyArray<{ readonly family: string }>>;
     }
   ).queryLocalFonts;
 
-  if (typeof query !== "function") {
+  if (!Predicate.isFunction(query)) {
     installedFamiliesCache = { families: [], status: "unsupported" };
 
     return installedFamiliesCache;

@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 /**
  * Downscale + re-encode for image attachments that are too big for where
  * they're headed. Two consumers share the same pipeline:
@@ -226,8 +227,8 @@ function fileNameForMimeType(name: string, mimeType: string): string {
 
 function canRecompress(): boolean {
   return (
-    typeof createImageBitmap === "function" &&
-    (typeof OffscreenCanvas === "function" || typeof document !== "undefined")
+    Predicate.isFunction(globalThis.createImageBitmap) &&
+    (Predicate.isFunction(globalThis.OffscreenCanvas) || typeof document !== "undefined")
   );
 }
 
@@ -237,7 +238,7 @@ interface Canvas2D {
 }
 
 function createCanvas(width: number, height: number): Canvas2D | null {
-  if (typeof OffscreenCanvas === "function") {
+  if (Predicate.isFunction(globalThis.OffscreenCanvas)) {
     const canvas = new OffscreenCanvas(width, height);
     const context = canvas.getContext("2d");
 
@@ -269,7 +270,7 @@ async function encodeCanvas(
   mimeType: string,
   budgetChars: number,
 ): Promise<{ dataUrl: string | null; mimeType: string } | null> {
-  if (typeof HTMLCanvasElement !== "undefined" && canvas instanceof HTMLCanvasElement) {
+  if ("toDataURL" in canvas) {
     const dataUrl = canvas.toDataURL(mimeType, quality);
 
     // toDataURL silently returns a PNG when the requested type is unsupported.
@@ -278,7 +279,7 @@ async function encodeCanvas(
     return { dataUrl: dataUrl.length <= budgetChars ? dataUrl : null, mimeType };
   }
 
-  const blob = await (canvas as OffscreenCanvas).convertToBlob({ type: mimeType, quality });
+  const blob = await canvas.convertToBlob({ type: mimeType, quality });
 
   if (blob.type && blob.type !== mimeType) return null;
   const dataUrlLength = `data:${mimeType};base64,`.length + 4 * Math.ceil(blob.size / 3);

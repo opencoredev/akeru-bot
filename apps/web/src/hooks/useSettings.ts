@@ -192,25 +192,18 @@ function persistClientSettings(settings: ClientSettings): void {
 
 const SERVER_SETTINGS_KEYS = new Set<string>(Struct.keys(ServerSettings.fields));
 
-function splitPatch(patch: UnifiedSettingsPatch): {
-  serverPatch: ServerSettingsPatch;
-  clientPatch: ClientSettingsPatch;
-} {
-  const serverPatch: Record<string, unknown> = {};
-  const clientPatch: Record<string, unknown> = {};
+function splitPatch(patch: UnifiedSettingsPatch) {
+  const entries = Object.entries(patch);
 
-  for (const [key, value] of Object.entries(patch)) {
-    if (SERVER_SETTINGS_KEYS.has(key)) {
-      serverPatch[key] = value;
-    } else {
-      clientPatch[key] = value;
-    }
-  }
+  const serverPatch: ServerSettingsPatch = Object.fromEntries(
+    entries.filter(([key]) => SERVER_SETTINGS_KEYS.has(key)),
+  );
 
-  return {
-    serverPatch: serverPatch as ServerSettingsPatch,
-    clientPatch: clientPatch as ClientSettingsPatch,
-  };
+  const clientPatch: ClientSettingsPatch = Object.fromEntries(
+    entries.filter(([key]) => !SERVER_SETTINGS_KEYS.has(key)),
+  );
+
+  return { serverPatch, clientPatch };
 }
 
 // ── Hooks ────────────────────────────────────────────────────────────
@@ -261,7 +254,7 @@ export function mergeEnvironmentSettings(
 function useMergedSettings<T>(
   serverSettings: ServerSettings,
   selector: ((settings: UnifiedSettings) => T) | undefined,
-): T {
+): T | UnifiedSettings {
   const clientSettings = useClientSettingsValue();
 
   const merged = useMemo<UnifiedSettings>(
@@ -269,15 +262,17 @@ function useMergedSettings<T>(
     [clientSettings, serverSettings],
   );
 
-  return useMemo(() => (selector ? selector(merged) : (merged as T)), [merged, selector]);
+  return useMemo(() => (selector ? selector(merged) : merged), [merged, selector]);
 }
 
-export function useClientSettings<T = ClientSettings>(
+export function useClientSettings(): ClientSettings;
+export function useClientSettings<T>(selector: (settings: ClientSettings) => T): T;
+export function useClientSettings<T>(
   selector?: (settings: ClientSettings) => T,
-): T {
+): T | ClientSettings {
   const settings = useClientSettingsValue();
 
-  return useMemo(() => (selector ? selector(settings) : (settings as T)), [selector, settings]);
+  return useMemo(() => (selector ? selector(settings) : settings), [selector, settings]);
 }
 
 export function resolveEnvironmentIdentificationMode(input: {
@@ -319,19 +314,26 @@ export function useEnvironmentIdentificationMode(): EnvironmentIdentificationMod
 }
 
 /** Read current settings for one environment, merged with client-local preferences. */
-export function useEnvironmentSettings<T = UnifiedSettings>(
+export function useEnvironmentSettings(environmentId: EnvironmentId): UnifiedSettings;
+export function useEnvironmentSettings<T>(
+  environmentId: EnvironmentId,
+  selector: (settings: UnifiedSettings) => T,
+): T;
+export function useEnvironmentSettings<T>(
   environmentId: EnvironmentId,
   selector?: (settings: UnifiedSettings) => T,
-): T {
+): T | UnifiedSettings {
   const serverSettings = useAtomValue(serverEnvironment.settingsValueAtom(environmentId));
 
   return useMergedSettings(serverSettings ?? DEFAULT_SERVER_SETTINGS, selector);
 }
 
 /** Primary-only settings access for the settings UI and other explicitly global surfaces. */
-export function usePrimarySettings<T = UnifiedSettings>(
+export function usePrimarySettings(): UnifiedSettings;
+export function usePrimarySettings<T>(selector: (settings: UnifiedSettings) => T): T;
+export function usePrimarySettings<T>(
   selector?: (settings: UnifiedSettings) => T,
-): T {
+): T | UnifiedSettings {
   return useMergedSettings(useAtomValue(primaryServerSettingsAtom), selector);
 }
 

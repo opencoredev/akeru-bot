@@ -2,6 +2,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test"
 
 import { dismissContextMenu, showContextMenuFallback } from "./contextMenuFallback";
 
+let testDocument: FakeDocument;
+
+type FakeEventInit = { key?: string; button?: number; relatedTarget?: FakeElement | null };
+
 type FakeListener = (event: FakeDomEvent) => void;
 
 class FakeDomEvent {
@@ -9,7 +13,7 @@ class FakeDomEvent {
 
   constructor(
     readonly type: string,
-    init: Record<string, unknown> = {},
+    init: FakeEventInit = {},
   ) {
     Object.assign(this, init);
   }
@@ -35,7 +39,9 @@ class FakeElement {
   constructor(readonly tagName: string) {}
 
   get isConnected() {
-    let current: FakeElement | null = this;
+    let current: FakeElement | null = this.parent;
+
+    if (!current) return this.tagName === "body";
 
     while (current?.parent) {
       current = current.parent;
@@ -84,7 +90,7 @@ class FakeElement {
   }
 
   focus() {
-    const fakeDocument = document as unknown as FakeDocument;
+    const fakeDocument = testDocument;
 
     if (fakeDocument.activeElement === this) {
       return;
@@ -97,7 +103,7 @@ class FakeElement {
   }
 
   blur() {
-    const fakeDocument = document as unknown as FakeDocument;
+    const fakeDocument = testDocument;
 
     if (fakeDocument.activeElement === this) {
       fakeDocument.activeElement = null;
@@ -198,13 +204,14 @@ class FakeDocument {
 }
 
 function findButton(label: string): FakeElement | undefined {
-  return (document as unknown as FakeDocument)
+  return testDocument
     .querySelectorAll("button")
     .find((button) => button.textContent.includes(label));
 }
 
 beforeEach(() => {
-  vi.stubGlobal("document", new FakeDocument());
+  testDocument = new FakeDocument();
+  vi.stubGlobal("document", testDocument);
   vi.stubGlobal("HTMLElement", FakeElement);
   vi.stubGlobal("window", {
     innerWidth: 1280,
@@ -218,7 +225,7 @@ beforeEach(() => {
   vi.stubGlobal(
     "MouseEvent",
     class extends FakeDomEvent {
-      constructor(type: string, init: Record<string, unknown> = {}) {
+      constructor(type: string, init: FakeEventInit = {}) {
         super(type, init);
       }
     },
@@ -226,7 +233,7 @@ beforeEach(() => {
   vi.stubGlobal(
     "KeyboardEvent",
     class extends FakeDomEvent {
-      constructor(type: string, init: Record<string, unknown> = {}) {
+      constructor(type: string, init: FakeEventInit = {}) {
         super(type, init);
       }
     },
@@ -244,7 +251,7 @@ describe("showContextMenuFallback", () => {
       { id: "archive", label: "Archive", separatorBefore: true },
     ]);
 
-    const separators = (document as unknown as FakeDocument)
+    const separators = testDocument
       .querySelectorAll("div")
       .filter((element) => element.dataset.contextMenuSeparator === "true");
 
@@ -309,8 +316,8 @@ describe("showContextMenuFallback", () => {
   });
 
   it("opens and focuses nested submenus when the parent is activated", async () => {
-    const invoker = (document as unknown as FakeDocument).createElement("button");
-    (document as unknown as FakeDocument).body.appendChild(invoker);
+    const invoker = testDocument.createElement("button");
+    testDocument.body.appendChild(invoker);
     invoker.focus();
 
     const selectionPromise = showContextMenuFallback([

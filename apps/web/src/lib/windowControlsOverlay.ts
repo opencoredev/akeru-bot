@@ -21,6 +21,7 @@ function getWindowControlsOverlay(): WindowControlsOverlayLike | null {
     return null;
   }
 
+  // SAFETY: TypeScript omits this optional Chromium API; an absent overlay is handled as null.
   return (navigator as NavigatorWithWindowControlsOverlay).windowControlsOverlay ?? null;
 }
 

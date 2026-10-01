@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import type { StoreApi } from "zustand";
 import { ThreadId } from "@akeru/contracts";
 import { scopedThreadKey, scopeThreadRef } from "@akeru/client-runtime/environment";
@@ -133,7 +134,7 @@ export function createDraftIdentityActions(
     },
 
     getDraftThread: (threadRef) => {
-      if (typeof threadRef === "string") {
+      if (Predicate.isString(threadRef)) {
         return get().getDraftSession(DraftId.make(threadRef));
       }
 
@@ -181,12 +182,13 @@ export function createDraftIdentityActions(
           return state;
         }
 
-        const nextLogicalProjectDraftThreadKeyByLogicalProjectKey: Record<string, string> = {
-          ...state.logicalProjectDraftThreadKeyByLogicalProjectKey,
-          [normalizedLogicalProjectKey]: draftId,
-        };
+        const nextLogicalProjectDraftThreadKeyByLogicalProjectKey: ComposerDraftStoreState["logicalProjectDraftThreadKeyByLogicalProjectKey"] =
+          {
+            ...state.logicalProjectDraftThreadKeyByLogicalProjectKey,
+            [normalizedLogicalProjectKey]: draftId,
+          };
 
-        const nextDraftThreadsByThreadKey: Record<string, DraftThreadState> = {
+        const nextDraftThreadsByThreadKey: ComposerDraftStoreState["draftThreadsByThreadKey"] = {
           ...state.draftThreadsByThreadKey,
           [draftId]: nextDraftThread,
         };

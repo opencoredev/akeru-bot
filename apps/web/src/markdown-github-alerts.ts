@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 /**
  * GitHub's blockquote alerts: a quote whose first line is `[!NOTE]` — or TIP, IMPORTANT,
  * WARNING, CAUTION — renders as a titled callout. They are GitHub's own extension rather than
@@ -13,7 +14,10 @@ interface MarkdownAstNode {
   type?: string;
   value?: unknown;
   data?: {
-    hProperties?: Record<string, unknown>;
+    hProperties?: Record<
+      string,
+      string | number | boolean | ReadonlyArray<string | number> | null | undefined
+    >;
   };
   children?: MarkdownAstNode[];
 }
@@ -25,7 +29,7 @@ function readGithubAlert(node: MarkdownAstNode): void {
   const paragraph = node.children?.[0];
   const text = paragraph?.children?.[0];
 
-  if (paragraph?.type !== "paragraph" || text?.type !== "text" || typeof text.value !== "string") {
+  if (paragraph?.type !== "paragraph" || text?.type !== "text" || !Predicate.isString(text.value)) {
     return;
   }
 

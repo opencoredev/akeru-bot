@@ -1,3 +1,11 @@
+type FeedbackElement = Pick<Element, "tagName" | "getAttribute" | "hasAttribute"> & {
+  readonly textContent: string | null;
+  readonly parentElement: FeedbackElement | null;
+  readonly children: ArrayLike<FeedbackElement>;
+  closest: (selector: string) => FeedbackElement | null;
+  getBoundingClientRect: () => Pick<DOMRect, "width" | "height">;
+};
+
 import {
   PRODUCT_FEEDBACK_ELEMENT_LABEL_MAX_CHARS,
   type ProductFeedbackElement,
@@ -31,7 +39,7 @@ function safeName(value: string | null): string | undefined {
   return trimmed && SAFE_NAME_PATTERN.test(trimmed) ? trimmed : undefined;
 }
 
-function safeLabel(element: Element): string | undefined {
+function safeLabel(element: FeedbackElement): string | undefined {
   const explicit = element.getAttribute("aria-label") ?? element.getAttribute("title");
   const tagName = element.tagName.toLowerCase();
   const fallback = tagName === "button" || tagName === "a" ? element.textContent : null;
@@ -47,7 +55,7 @@ function safeLabel(element: Element): string | undefined {
   return normalized || undefined;
 }
 
-function elementRole(element: Element): string | undefined {
+function elementRole(element: FeedbackElement): string | undefined {
   const explicit = safeName(element.getAttribute("role"));
 
   if (explicit) return explicit;
@@ -66,7 +74,7 @@ function elementRole(element: Element): string | undefined {
   }
 }
 
-function selectorSegment(element: Element): string {
+function selectorSegment(element: FeedbackElement): string {
   const component = safeName(element.getAttribute("data-component"));
   const target = safeName(element.getAttribute("data-feedback-target"));
 
@@ -85,9 +93,9 @@ function selectorSegment(element: Element): string {
   return `${element.tagName.toLowerCase()}:nth-of-type(${Math.max(1, position)})`;
 }
 
-function stableSelector(element: Element): string {
+function stableSelector(element: FeedbackElement): string {
   const segments: string[] = [];
-  let current: Element | null = element;
+  let current: FeedbackElement | null = element;
 
   while (current && current !== document.documentElement && segments.length < 4) {
     segments.unshift(selectorSegment(current));
@@ -102,11 +110,13 @@ function stableSelector(element: Element): string {
   return segments.join(" > ").slice(0, 256);
 }
 
-export function isProductFeedbackPickable(element: Element): boolean {
+export function isProductFeedbackPickable(element: FeedbackElement): boolean {
   return element.closest(EXCLUDED_SELECTOR) === null;
 }
 
-export function productFeedbackElementDescriptor(element: Element): ProductFeedbackElement | null {
+export function productFeedbackElementDescriptor(
+  element: FeedbackElement,
+): ProductFeedbackElement | null {
   if (!isProductFeedbackPickable(element)) return null;
 
   if (element === document.body || element === document.documentElement) return null;

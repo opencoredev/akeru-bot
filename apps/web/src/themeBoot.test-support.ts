@@ -41,15 +41,19 @@ export function runBootScript(options: {
   const classes = new Set<string>();
   const bootVariables: Record<string, string> = {};
 
-  const meta = {
-    content: null as string | null,
+  type ThemeMeta = { content: string | null; setAttribute: (name: string, value: string) => void };
+
+  const meta: ThemeMeta = {
+    content: null,
     setAttribute(_name: string, value: string) {
       this.content = value;
     },
   };
 
+  const dataset: DOMStringMap = {};
+
   const documentElement = {
-    dataset: {} as Record<string, string | undefined>,
+    dataset,
     classList: {
       add: (name: string) => void classes.add(name),
       remove: (name: string) => void classes.delete(name),

@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import type { AuthSessionState } from "@akeru/contracts";
 import { PRIMARY_LOCAL_ENVIRONMENT_ID } from "@akeru/contracts";
 import {
@@ -57,7 +58,7 @@ function getDesktopBootstrapCredential(): string | null {
   const bootstraps = window.desktopBridge?.getLocalEnvironmentBootstraps() ?? [];
   const primary = bootstraps.find((entry) => entry.id === PRIMARY_LOCAL_ENVIRONMENT_ID);
 
-  return typeof primary?.bootstrapToken === "string" && primary.bootstrapToken.length > 0
+  return Predicate.isString(primary?.bootstrapToken) && primary.bootstrapToken.length > 0
     ? primary.bootstrapToken
     : null;
 }

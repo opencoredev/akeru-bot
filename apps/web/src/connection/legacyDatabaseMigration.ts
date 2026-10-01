@@ -1,3 +1,4 @@
+import { hasTag } from "~/lib/taggedUnion";
 import { ConnectionTransientError } from "@akeru/client-runtime/connection";
 import * as Effect from "effect/Effect";
 import {
@@ -108,7 +109,7 @@ export const migrateLegacyConnectionDatabase = Effect.fn(
     return;
   const legacyResult = yield* Effect.result(openDatabaseAt(LEGACY_DATABASE_NAME));
 
-  if (legacyResult._tag === "Failure") {
+  if (hasTag(legacyResult, "Failure")) {
     yield* Effect.logWarning("Could not open the legacy connection database for migration.").pipe(
       Effect.annotateLogs({ error: legacyResult.failure }),
     );

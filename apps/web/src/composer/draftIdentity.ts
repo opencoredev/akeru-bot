@@ -1,3 +1,5 @@
+import type * as Schema from "effect/Schema";
+import * as Predicate from "effect/Predicate";
 import {
   DEFAULT_LOCAL_EXECUTION_MODE,
   type EnvironmentId,
@@ -27,7 +29,7 @@ import {
 import { revokeDraftThreadPreviewUrls } from "./draftContent";
 
 export function normalizeDraftThreadEnvMode(
-  value: unknown,
+  value: Schema.Json | undefined,
   fallbackWorktreePath: string | null,
 ): DraftThreadEnvMode {
   if (value === "local" || value === "worktree") {
@@ -52,7 +54,7 @@ export function logicalProjectDraftKey(logicalProjectKey: string): string {
  * `ScopedThreadRef` so environment identity is always preserved.
  */
 function composerTargetKey(target: ScopedThreadRef | DraftId): string {
-  if (typeof target === "string") {
+  if (Predicate.isString(target)) {
     return target.trim();
   }
 
@@ -77,7 +79,7 @@ export function normalizeLegacyComposerStorageKey(
   }
 
   if (options?.environmentId) {
-    return composerTargetKey(scopeThreadRef(options.environmentId, threadKeyOrId as ThreadId));
+    return composerTargetKey(scopeThreadRef(options.environmentId, ThreadId.make(threadKeyOrId)));
   }
 
   return threadKeyOrId;
@@ -96,7 +98,7 @@ function normalizeComposerTarget(
   state: ComposerThreadLookupState,
   target: ComposerThreadTarget,
 ): ComposerThreadTarget | null {
-  if (typeof target === "string") {
+  if (Predicate.isString(target)) {
     const draftId = target.trim();
 
     return draftId.length > 0 ? DraftId.make(draftId) : null;
@@ -115,7 +117,7 @@ export function resolveComposerDraftKey(
     return null;
   }
 
-  if (typeof normalizedTarget !== "string") {
+  if (!Predicate.isString(normalizedTarget)) {
     const scopedKey = composerTargetKey(normalizedTarget);
 
     if (state.draftsByThreadKey[scopedKey]) {
@@ -149,7 +151,7 @@ export function resolveComposerThreadId(
     return null;
   }
 
-  if (typeof normalizedTarget !== "string") {
+  if (!Predicate.isString(normalizedTarget)) {
     return normalizedTarget.threadId;
   }
 
@@ -193,10 +195,10 @@ export function createDraftThreadState(
   existingThread: DraftThreadState | undefined,
   options?: {
     threadId?: ThreadId;
-    branch?: string | null;
-    worktreePath?: string | null;
+    branch?: string | null | undefined;
+    worktreePath?: string | null | undefined;
     createdAt?: string;
-    envMode?: DraftThreadEnvMode;
+    envMode?: DraftThreadEnvMode | undefined;
     startFromOrigin?: boolean;
     runtimeMode?: RuntimeMode;
     interactionMode?: ProviderInteractionMode;
@@ -303,7 +305,7 @@ export function removeDraftThreadReferences(
     Object.entries(state.logicalProjectDraftThreadKeyByLogicalProjectKey).filter(
       ([, draftThreadKey]) => draftThreadKey !== threadKey,
     ),
-  ) as Record<string, string>;
+  );
 
   const { [threadKey]: _removedDraftThread, ...restDraftThreadsByThreadKey } =
     state.draftThreadsByThreadKey;

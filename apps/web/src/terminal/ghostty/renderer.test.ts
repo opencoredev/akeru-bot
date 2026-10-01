@@ -48,7 +48,7 @@ describe("measureGhosttyCell", () => {
     const context = {
       font: "",
       measureText,
-    } as unknown as CanvasRenderingContext2D;
+    };
 
     expect(measureGhosttyCell(context, 12, "monospace")).toEqual({
       width: 7.2,
@@ -77,6 +77,8 @@ describe("renderGhosttySnapshot", () => {
     const fillRectCalls: number[][] = [];
 
     const context = {
+      strokeRect: () => {},
+      strokeStyle: "",
       canvas: { width: 200, height: 80 },
       beginPath: () => {},
       clip: () => {},
@@ -88,8 +90,8 @@ describe("renderGhosttySnapshot", () => {
       save: () => {},
       set fillStyle(_value: string) {},
       set font(_value: string) {},
-      set textBaseline(_value: string) {},
-    } as unknown as CanvasRenderingContext2D;
+      set textBaseline(_value: CanvasTextBaseline) {},
+    };
 
     const snapshot: GhosttySnapshot = {
       cols: 4,
@@ -135,6 +137,8 @@ describe("renderGhosttySnapshot", () => {
     const fillTextCalls: unknown[][] = [];
 
     const context = {
+      strokeRect: () => {},
+      strokeStyle: "",
       canvas: { width: 200, height: 40 },
       beginPath: () => {},
       clip: () => {},
@@ -146,8 +150,8 @@ describe("renderGhosttySnapshot", () => {
       save: () => {},
       set fillStyle(_value: string) {},
       set font(_value: string) {},
-      set textBaseline(_value: string) {},
-    } as unknown as CanvasRenderingContext2D;
+      set textBaseline(_value: CanvasTextBaseline) {},
+    };
 
     const cells = [cell("a"), cell("b"), cell("x")];
 
@@ -187,6 +191,8 @@ describe("renderGhosttySnapshot", () => {
     const fillTextCalls: unknown[][] = [];
 
     const context = {
+      strokeRect: () => {},
+      strokeStyle: "",
       canvas: { width: 200, height: 40 },
       beginPath: () => {},
       clip: () => {},
@@ -198,8 +204,8 @@ describe("renderGhosttySnapshot", () => {
       save: () => {},
       set fillStyle(_value: string) {},
       set font(_value: string) {},
-      set textBaseline(_value: string) {},
-    } as unknown as CanvasRenderingContext2D;
+      set textBaseline(_value: CanvasTextBaseline) {},
+    };
 
     const snapshot: GhosttySnapshot = {
       cols: 3,
@@ -243,6 +249,8 @@ describe("renderGhosttySnapshot", () => {
     const clearedRows: number[] = [];
 
     const context = {
+      strokeRect: () => {},
+      strokeStyle: "",
       canvas: { width: 200, height: 80 },
       beginPath: () => {},
       clip: () => {},
@@ -256,8 +264,8 @@ describe("renderGhosttySnapshot", () => {
       save: () => {},
       set fillStyle(_value: string) {},
       set font(_value: string) {},
-      set textBaseline(_value: string) {},
-    } as unknown as CanvasRenderingContext2D;
+      set textBaseline(_value: CanvasTextBaseline) {},
+    };
 
     const snapshot: GhosttySnapshot = {
       cols: 1,

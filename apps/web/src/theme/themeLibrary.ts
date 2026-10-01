@@ -1,14 +1,16 @@
+import * as Option from "effect/Option";
+import * as Predicate from "effect/Predicate";
 import * as Schema from "effect/Schema";
 import {
   type ThemeAppearance,
-  type ThemeColorRole,
   type ThemeColors,
   type ThemeDefinition,
   type ThemeVariants,
 } from "@akeru/shared/themePalettes";
 import {
   isRecord,
-  THEME_COLOR_ROLE_SET,
+  decodeThemeJson,
+  isThemeColorRole,
   isThemeAppearance,
   isThemeId,
   RESERVED_THEME_IDS,
@@ -27,7 +29,7 @@ const customThemeListeners = new Set<() => void>();
 type CustomThemeLibrarySnapshot =
   | Readonly<{
       status: "ready";
-      storedThemes: ReadonlyArray<unknown>;
+      storedThemes: ReadonlyArray<Schema.Json>;
       themes: ReadonlyArray<ThemeDefinition>;
     }>
   | Readonly<{ status: "unavailable"; reason: "malformed" }>
@@ -35,10 +37,13 @@ type CustomThemeLibrarySnapshot =
 
 let customThemeLibrarySnapshot: CustomThemeLibrarySnapshot | null = null;
 
-function parseStoredThemeColors(value: unknown, appearance: ThemeAppearance): ThemeColors | null {
+function parseStoredThemeColors(
+  value: Schema.Json | undefined,
+  appearance: ThemeAppearance,
+): ThemeColors | null {
   if (!isRecord(value)) return null;
 
-  const colors: Partial<Record<ThemeColorRole, string>> = {
+  const colors = {
     ...getDefaultThemeColors(appearance),
   };
 
@@ -47,16 +52,16 @@ function parseStoredThemeColors(value: unknown, appearance: ThemeAppearance): Th
   for (const [role, color] of Object.entries(value)) {
     const normalized = toCanonicalThemeColor(color);
 
-    if (THEME_COLOR_ROLE_SET.has(role) && normalized) {
-      colors[role as ThemeColorRole] = normalized;
+    if (isThemeColorRole(role) && normalized) {
+      colors[role] = normalized;
     }
   }
 
-  return colors as ThemeColors;
+  return colors;
 }
 
 function parseStoredThemeVariants(
-  value: unknown,
+  value: Schema.Json | undefined,
   baseAppearance: ThemeAppearance,
 ): ThemeVariants | null | undefined {
   if (value === undefined) return undefined;
@@ -80,7 +85,7 @@ function parseStoredThemeVariants(
   return Object.keys(variants).length > 0 ? variants : undefined;
 }
 
-function parseStoredTheme(value: unknown): ThemeDefinition | null {
+function parseStoredTheme(value: Schema.Json | undefined): ThemeDefinition | null {
   if (!isRecord(value)) return null;
 
   if (!isThemeId(value.id) || RESERVED_THEME_IDS.has(value.id)) return null;
@@ -105,7 +110,9 @@ function parseStoredTheme(value: unknown): ThemeDefinition | null {
   };
 }
 
-function parseStoredThemes(storedThemes: ReadonlyArray<unknown>): ReadonlyArray<ThemeDefinition> {
+function parseStoredThemes(
+  storedThemes: ReadonlyArray<Schema.Json>,
+): ReadonlyArray<ThemeDefinition> {
   const themes: ThemeDefinition[] = [];
 
   for (const value of storedThemes) {
@@ -147,10 +154,13 @@ function readCustomThemeLibrarySnapshot(): CustomThemeLibrarySnapshot {
 
   if (!raw) return { status: "ready", storedThemes: [], themes: [] };
 
-  let parsed: unknown;
+  let parsed: Schema.Json;
 
   try {
-    parsed = JSON.parse(raw);
+    const decoded = decodeThemeJson(JSON.parse(raw));
+
+    if (Option.isNone(decoded)) return { status: "unavailable", reason: "malformed" };
+    parsed = decoded.value;
   } catch {
     return { status: "unavailable", reason: "malformed" };
   }
@@ -235,7 +245,7 @@ export class ThemeLibraryStorageError extends Schema.TaggedErrorClass<ThemeLibra
 export const isThemeLibraryStorageError = Schema.is(ThemeLibraryStorageError);
 
 function saveCustomThemes(
-  storedThemes: ReadonlyArray<unknown>,
+  storedThemes: ReadonlyArray<Schema.Json>,
   themes: ReadonlyArray<ThemeDefinition>,
 ): void {
   if (typeof window === "undefined") return;
@@ -282,11 +292,11 @@ function readWritableCustomThemeLibrary(): Extract<
   return requireWritableCustomThemeLibrary(readCustomThemeLibrarySnapshot());
 }
 
-function storedThemeHasId(storedTheme: unknown, themeId: string): boolean {
+function storedThemeHasId(storedTheme: Schema.Json, themeId: string): boolean {
   return isRecord(storedTheme) && storedTheme.id === themeId;
 }
 
-function storedThemeHasCollectionId(storedTheme: unknown, collectionId: string): boolean {
+function storedThemeHasCollectionId(storedTheme: Schema.Json, collectionId: string): boolean {
   return (
     isRecord(storedTheme) &&
     isRecord(storedTheme.collection) &&
@@ -332,7 +342,7 @@ export function updateCustomTheme(theme: ThemeDefinition): ThemeDefinition {
   const nextThemes = [...themes];
   nextThemes[themeIndex] = canonicalTheme;
 
-  const nextStoredThemes: unknown[] = [];
+  const nextStoredThemes: Schema.Json[] = [];
   let replaced = false;
 
   for (const storedTheme of library.storedThemes) {
@@ -365,7 +375,7 @@ export function replaceCustomThemeCollection(
     throw new Error("That theme collection is invalid.");
   }
 
-  const replacement = validated as ThemeDefinition[];
+  const replacement = validated.filter((theme) => theme !== null);
   const library = readWritableCustomThemeLibrary();
   const current = library.themes;
   const currentCollection = current.filter((theme) => theme.collection?.id === collectionId);
@@ -383,7 +393,7 @@ export function replaceCustomThemeCollection(
     if (
       !storedThemeHasCollectionId(storedTheme, collectionId) &&
       isRecord(storedTheme) &&
-      typeof storedTheme.id === "string"
+      Predicate.isString(storedTheme.id)
     ) {
       occupiedIds.add(storedTheme.id);
     }
@@ -397,7 +407,7 @@ export function replaceCustomThemeCollection(
     throw new Error(`A theme named "${conflictingTheme.label}" is already installed.`);
   }
 
-  const nextStoredThemes: unknown[] = [];
+  const nextStoredThemes: Schema.Json[] = [];
   let insertedReplacement = false;
 
   for (const storedTheme of library.storedThemes) {
@@ -432,7 +442,7 @@ export function removeCustomThemes(themeIds: ReadonlyArray<string>): void {
     library.storedThemes.filter(
       (storedTheme) =>
         !isRecord(storedTheme) ||
-        typeof storedTheme.id !== "string" ||
+        !Predicate.isString(storedTheme.id) ||
         !removedIds.has(storedTheme.id),
     ),
     nextThemes,

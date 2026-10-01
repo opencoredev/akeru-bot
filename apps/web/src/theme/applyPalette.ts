@@ -1,5 +1,6 @@
 import {
   type ThemeAppearance,
+  THEME_COLOR_ROLES,
   type ThemeColorRole,
   type ThemeColors,
 } from "@akeru/shared/themePalettes";
@@ -113,7 +114,9 @@ export function applyThemeColorPreview(colors: ThemeColors, appearance: ThemeApp
   root.dataset.themeId = THEME_PREVIEW_ID;
   root.classList.toggle("dark", appearance === "dark");
 
-  for (const [role, value] of Object.entries(colors) as Array<[ThemeColorRole, string]>) {
+  for (const role of THEME_COLOR_ROLES) {
+    const value = colors[role];
+
     // A half-typed hex keeps the last good value instead of blanking the role.
     if (isThemeColor(value)) root.style.setProperty(APP_THEME_VARIABLES[role], value);
   }
@@ -134,7 +137,8 @@ export function applyThemePalette(theme: ThemePreference, appearance?: ThemeAppe
     const mode = appearance ?? legacyThemeMode(theme) ?? palette.appearance;
     const colors = getThemeColorsForMode(palette, mode) ?? palette.colors;
 
-    for (const [role, value] of Object.entries(colors) as Array<[ThemeColorRole, string]>) {
+    for (const role of THEME_COLOR_ROLES) {
+      const value = colors[role];
       root.style.setProperty(APP_THEME_VARIABLES[role], value);
     }
 

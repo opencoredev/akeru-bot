@@ -1,7 +1,11 @@
+import * as Schema from "effect/Schema";
+import * as Option from "effect/Option";
+import { storedField } from "./lib/persistedSchema";
+import * as Predicate from "effect/Predicate";
 import { scopedThreadKey } from "@akeru/client-runtime/environment";
 import type { ScopedThreadRef } from "@akeru/contracts";
 import { create } from "zustand";
-import { createJSONStorage, persist } from "zustand/middleware";
+import { createJSONStorage, persist, type PersistOptions } from "zustand/middleware";
 import { useShallow } from "zustand/react/shallow";
 
 import { normalizePreviewUrl } from "@akeru/shared/preview";
@@ -25,7 +29,7 @@ const MAX_VALID_DATE_MS = 8_640_000_000_000_000;
 
 export function isValidHistoryTimestamp(value: unknown): value is number {
   return (
-    typeof value === "number" && Number.isFinite(value) && Math.abs(value) <= MAX_VALID_DATE_MS
+    Predicate.isNumber(value) && Number.isFinite(value) && Math.abs(value) <= MAX_VALID_DATE_MS
   );
 }
 
@@ -120,36 +124,58 @@ export function evictExcessProjects(
   return Object.fromEntries(kept.map((key) => [key, byProjectKey[key] ?? []]));
 }
 
-export function migratePersistedBrowserHistoryState(persistedState: unknown): {
-  byProjectKey: Record<string, BrowserHistoryEntry[]>;
-} {
-  if (!persistedState || typeof persistedState !== "object") return { byProjectKey: {} };
-  const raw = (persistedState as { byProjectKey?: unknown }).byProjectKey;
+const StoredHistoryEntry = Schema.Struct({
+  url: storedField(Schema.NullOr(Schema.String), null),
+  lastVisitedAt: storedField(Schema.NullOr(Schema.Number), null),
+  title: storedField(Schema.NullOr(Schema.String), null),
+});
 
-  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return { byProjectKey: {} };
-  const byProjectKey: Record<string, BrowserHistoryEntry[]> = {};
+const StoredBrowserHistory = Schema.Struct({
+  byProjectKey: storedField(
+    Schema.Record(
+      Schema.String,
+      storedField(Schema.Array(storedField(Schema.NullOr(StoredHistoryEntry), null)), []),
+    ),
+    {},
+  ),
+  projectKeyByThreadKey: storedField(
+    Schema.Record(Schema.String, storedField(Schema.NullOr(Schema.String), null)),
+    {},
+  ),
+});
 
-  for (const [projectKey, value] of Object.entries(raw as Record<string, unknown>)) {
-    if (!Array.isArray(value)) continue;
+const decodeStoredHistory = Schema.decodeUnknownOption(StoredBrowserHistory);
+
+type PersistedBrowserHistory = Pick<BrowserHistoryStoreState, "byProjectKey">;
+
+export const migratePersistedBrowserHistoryState = ((persistedState) => {
+  const decoded = decodeStoredHistory(persistedState);
+  const byProjectKey: BrowserHistoryStoreState["byProjectKey"] = {};
+
+  if (Option.isNone(decoded)) return { byProjectKey };
+
+  for (const [projectKey, value] of Object.entries(decoded.value.byProjectKey)) {
     const seenUrls = new Set<string>();
 
     const entries = value
       .flatMap<BrowserHistoryEntry>((candidate) => {
-        if (!candidate || typeof candidate !== "object") return [];
-        const { url, lastVisitedAt, title } = candidate as Record<string, unknown>;
-
-        if (typeof url !== "string") return [];
+        if (candidate === null || candidate.url === null) return [];
+        const { url, lastVisitedAt, title } = candidate;
         const normalizedUrl = normalizeHistoryUrl(url);
 
-        if (!normalizedUrl) return [];
-
-        if (!isValidHistoryTimestamp(lastVisitedAt)) return [];
+        if (
+          !normalizedUrl ||
+          lastVisitedAt === null ||
+          !Number.isFinite(lastVisitedAt) ||
+          Math.abs(lastVisitedAt) > MAX_VALID_DATE_MS
+        )
+          return [];
 
         return [
           {
             url: normalizedUrl,
             lastVisitedAt,
-            ...(typeof title === "string" && title.length > 0
+            ...(title !== null && title.length > 0
               ? { title: title.slice(0, BROWSER_HISTORY_MAX_TITLE_LENGTH) }
               : {}),
           },
@@ -170,7 +196,9 @@ export function migratePersistedBrowserHistoryState(persistedState: unknown): {
   }
 
   return { byProjectKey: evictExcessProjects(byProjectKey) };
-}
+}) satisfies NonNullable<
+  PersistOptions<BrowserHistoryStoreState, PersistedBrowserHistory>["migrate"]
+>;
 
 const BROWSER_HISTORY_STORAGE_KEY = "akeru:browser-history:v1";
 
@@ -210,7 +238,7 @@ function addPendingByThread<T>(
   pendingByThreadKey: Record<string, T[]>,
   threadKey: string,
   item: T,
-): Record<string, T[]> {
+) {
   const existing = pendingByThreadKey[threadKey] ?? [];
   const next = { ...pendingByThreadKey };
   next[threadKey] = [...existing, item].slice(-PENDING_MAX_PER_THREAD);
@@ -224,6 +252,34 @@ function addPendingByThread<T>(
 
   return next;
 }
+
+export const mergeBrowserHistoryState = ((persistedState, currentState) => {
+  const migrated = migratePersistedBrowserHistoryState(persistedState);
+  const decoded = decodeStoredHistory(persistedState);
+
+  const projectKeyByThreadKey = Option.isSome(decoded)
+    ? Object.fromEntries(
+        Object.entries(decoded.value.projectKeyByThreadKey)
+          .filter(
+            (entry): entry is [string, string] =>
+              entry[1] !== null && entry[1] in migrated.byProjectKey,
+          )
+          .slice(-100),
+      )
+    : {};
+
+  const state: BrowserHistoryStoreState = {
+    ...currentState,
+    ...migrated,
+    projectKeyByThreadKey,
+    pendingVisitsByThreadKey: {},
+    pendingTitlesByThreadKey: {},
+  };
+
+  return state;
+}) satisfies NonNullable<
+  PersistOptions<BrowserHistoryStoreState, PersistedBrowserHistory>["merge"]
+>;
 
 export const useBrowserHistoryStore = create<BrowserHistoryStoreState>()(
   persist(
@@ -350,40 +406,6 @@ export const useBrowserHistoryStore = create<BrowserHistoryStoreState>()(
     },
   ),
 );
-
-export function mergeBrowserHistoryState(
-  persistedState: unknown,
-  currentState: BrowserHistoryStoreState,
-): BrowserHistoryStoreState {
-  const migrated = migratePersistedBrowserHistoryState(persistedState);
-
-  return {
-    ...currentState,
-    ...migrated,
-    projectKeyByThreadKey: migratePersistedThreadProjectKeys(persistedState, migrated.byProjectKey),
-    pendingVisitsByThreadKey: {},
-    pendingTitlesByThreadKey: {},
-  };
-}
-
-function migratePersistedThreadProjectKeys(
-  persistedState: unknown,
-  byProjectKey: Record<string, BrowserHistoryEntry[]>,
-): Record<string, string> {
-  if (!persistedState || typeof persistedState !== "object") return {};
-  const raw = (persistedState as { projectKeyByThreadKey?: unknown }).projectKeyByThreadKey;
-
-  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return {};
-
-  return Object.fromEntries(
-    Object.entries(raw as Record<string, unknown>)
-      .filter(
-        (entry): entry is [string, string] =>
-          typeof entry[1] === "string" && entry[1] in byProjectKey,
-      )
-      .slice(-100),
-  );
-}
 
 export function recordVisitForThread(ref: ScopedThreadRef, url: string, at?: number): void {
   const threadKey = scopedThreadKey(ref);

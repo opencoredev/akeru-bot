@@ -475,9 +475,6 @@ describe("composerDraftStore project draft thread mapping", () => {
     const runtimeUndefinedOptions = {
       branch: undefined,
       worktreePath: undefined,
-    } as unknown as {
-      branch?: string | null;
-      worktreePath?: string | null;
     };
 
     store.setProjectDraftThreadId(projectRef, draftId, runtimeUndefinedOptions);
@@ -504,10 +501,6 @@ describe("composerDraftStore project draft thread mapping", () => {
       branch: undefined,
       worktreePath: undefined,
       envMode: undefined,
-    } as unknown as {
-      branch?: string | null;
-      worktreePath?: string | null;
-      envMode?: "local" | "worktree";
     };
 
     store.setProjectDraftThreadId(projectRef, draftId, runtimeUndefinedOptions);

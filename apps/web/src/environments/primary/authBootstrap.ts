@@ -1,3 +1,4 @@
+import { hasTag } from "~/lib/taggedUnion";
 import type { AuthBrowserSessionResult, AuthSessionState } from "@akeru/contracts";
 import * as Effect from "effect/Effect";
 import { PrimaryEnvironmentHttpClient } from "./httpClient";
@@ -44,7 +45,7 @@ export async function exchangeBootstrapCredential(
     } catch (error) {
       if (
         isEnvironmentHttpCommonError(error) &&
-        error._tag === "EnvironmentAuthInvalidError" &&
+        hasTag(error, "EnvironmentAuthInvalidError") &&
         error.reason === "invalid_credential"
       ) {
         throw new PrimaryEnvironmentPairingCredentialRejectedError({
@@ -116,14 +117,14 @@ function waitForBootstrapRetry(delayMs: number): Promise<void> {
   });
 }
 
-function isTransientBootstrapError(error: unknown): boolean {
-  if (isPrimaryEnvironmentRequestError(error)) {
-    return TRANSIENT_BOOTSTRAP_STATUS_CODES.has(error.status);
+function isTransientBootstrapError(cause: unknown): boolean {
+  if (isPrimaryEnvironmentRequestError(cause)) {
+    return TRANSIENT_BOOTSTRAP_STATUS_CODES.has(cause.status);
   }
 
-  if (error instanceof TypeError) {
+  if (cause instanceof TypeError) {
     return true;
   }
 
-  return error instanceof DOMException && error.name === "AbortError";
+  return cause instanceof DOMException && cause.name === "AbortError";
 }

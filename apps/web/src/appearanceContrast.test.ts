@@ -6,7 +6,7 @@ function makeRoot() {
   const setProperty = vi.fn();
 
   return {
-    root: { style: { setProperty } } as unknown as HTMLElement,
+    root: { style: { setProperty } },
     setProperty,
   };
 }

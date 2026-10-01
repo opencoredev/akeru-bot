@@ -1,3 +1,4 @@
+import { hasTag } from "~/lib/taggedUnion";
 /**
  * Whether this client runs on the environment's own machine, so shell actions
  * such as "Open in editor" or "Reveal in file manager" land where the user can
@@ -36,7 +37,7 @@ export function isLocalShellTarget(input: {
   // No catalog entry: keep exec behavior rather than guessing.
   if (target === null) return true;
 
-  if (target._tag === "PrimaryConnectionTarget") {
+  if (hasTag(target, "PrimaryConnectionTarget")) {
     // The desktop app manages its own primary backend, so it is always on
     // this machine even when its URL is not loopback (wsl-only mode binds
     // the WSL2 NAT address). In a browser, a loopback primary means the

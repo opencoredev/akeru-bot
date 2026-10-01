@@ -1,3 +1,5 @@
+import * as Match from "effect/Match";
+import * as Predicate from "effect/Predicate";
 import {
   type GhosttyKeyboardLayoutMap,
   ghosttyConsumedMods,
@@ -162,7 +164,7 @@ export class GhosttyTerminalCore {
 
   write(data: string | Uint8Array): void {
     this.ensureActive();
-    const bytes = typeof data === "string" ? encoder.encode(data) : data;
+    const bytes = Predicate.isString(data) ? encoder.encode(data) : data;
 
     if (bytes.length === 0) return;
     const pointer = this.runtime.alloc(bytes.length);
@@ -477,7 +479,11 @@ export class GhosttyTerminalCore {
     this.runtime.call(
       "ghostty_mouse_event_set_action",
       this.mouseEvent,
-      input.action === "press" ? 0 : input.action === "release" ? 1 : 2,
+      Match.value(input.action).pipe(
+        Match.when("press", () => 0),
+        Match.when("release", () => 1),
+        Match.orElse(() => 2),
+      ),
     );
 
     if (input.button === null) {

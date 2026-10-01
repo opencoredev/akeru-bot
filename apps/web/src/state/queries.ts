@@ -65,13 +65,7 @@ export function useDebouncedValue<A>(value: A, delayMs: number): A {
   return debounced;
 }
 
-export function useThreadSearch(
-  environmentIds: ReadonlyArray<EnvironmentId>,
-  query: string,
-): {
-  readonly matches: ReadonlyArray<EnvironmentThreadSearchMatch>;
-  readonly isPending: boolean;
-} {
+export function useThreadSearch(environmentIds: ReadonlyArray<EnvironmentId>, query: string) {
   const normalizedQuery = query.trim();
   const debouncedQuery = useDebouncedValue(normalizedQuery, THREAD_SEARCH_DEBOUNCE_MS);
   const canSearch = environmentIds.length > 0 && normalizedQuery.length >= 2;

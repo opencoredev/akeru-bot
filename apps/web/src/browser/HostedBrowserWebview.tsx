@@ -1,5 +1,7 @@
 "use client";
 
+import { hasTag } from "~/lib/taggedUnion";
+
 import type { PreviewViewportSetting, ScopedThreadRef } from "@akeru/contracts";
 import { useShallow } from "zustand/react/shallow";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -33,7 +35,6 @@ interface ElectronWebview extends HTMLElement {
   preload?: string;
   webpreferences?: string;
   getWebContentsId: () => number;
-  executeJavaScript: (code: string, userGesture?: boolean) => Promise<unknown>;
 }
 
 declare global {
@@ -105,6 +106,7 @@ export function HostedBrowserWebview(props: {
   }, [initialUrl]);
 
   const setWebviewRef = useCallback((node: HTMLElement | null) => {
+    // SAFETY: This ref belongs to Electron’s webview custom element, whose methods are not included in HTMLElement typings.
     webviewRef.current = node as ElectronWebview | null;
 
     if (node && !node.hasAttribute("allowpopups")) node.setAttribute("allowpopups", "true");
@@ -175,8 +177,8 @@ export function HostedBrowserWebview(props: {
   const active = presentation.visible && presentation.rect !== null;
   const lastRect = presentation.rect;
   const normalizedZoomFactor = Number.isFinite(zoomFactor) && zoomFactor > 0 ? zoomFactor : 1;
-  const viewportWidth = viewport._tag === "fill" ? null : viewport.width;
-  const viewportHeight = viewport._tag === "fill" ? null : viewport.height;
+  const viewportWidth = hasTag(viewport, "fill") ? null : viewport.width;
+  const viewportHeight = hasTag(viewport, "fill") ? null : viewport.height;
 
   const viewportAspectRatio =
     viewportWidth === null || viewportHeight === null ? null : viewportWidth / viewportHeight;
@@ -195,19 +197,20 @@ export function HostedBrowserWebview(props: {
       }
     : null;
 
-  const hiddenSize =
-    viewport._tag !== "fill"
-      ? {
-          width: viewport.width * normalizedZoomFactor,
-          height: viewport.height * normalizedZoomFactor,
-        }
-      : {
-          width: hiddenContentSize?.width ?? lastRect?.width ?? 1280,
-          height: hiddenContentSize?.height ?? lastRect?.height ?? 800,
-        };
+  const hiddenSize = !hasTag(viewport, "fill")
+    ? {
+        width: viewport.width * normalizedZoomFactor,
+        height: viewport.height * normalizedZoomFactor,
+      }
+    : {
+        width: hiddenContentSize?.width ?? lastRect?.width ?? 1280,
+        height: hiddenContentSize?.height ?? lastRect?.height ?? 800,
+      };
 
   const containerSize = active && lastRect ? lastRect : hiddenSize;
-  const deviceToolbarVisible = active && viewport._tag !== "fill" && !presentation.fitSourceContent;
+
+  const deviceToolbarVisible =
+    active && !hasTag(viewport, "fill") && !presentation.fitSourceContent;
 
   const {
     activeDrag,
@@ -309,7 +312,7 @@ export function HostedBrowserWebview(props: {
           "--canvas-height": `${layout.canvasHeight}px`,
         }}
       >
-        {deviceToolbarVisible && effectiveViewport._tag !== "fill" ? (
+        {deviceToolbarVisible && !hasTag(effectiveViewport, "fill") ? (
           <BrowserDeviceToolbar
             setting={effectiveViewport}
             width={Math.max(1, Math.round(containerSize.width))}
@@ -332,14 +335,14 @@ export function HostedBrowserWebview(props: {
           data-preview-css-width={
             fittedSourceViewport
               ? fittedSourceViewport.width
-              : effectiveViewport._tag === "fill"
+              : hasTag(effectiveViewport, "fill")
                 ? Math.max(1, Math.round(layout.viewportWidth / normalizedZoomFactor))
                 : effectiveViewport.width
           }
           data-preview-css-height={
             fittedSourceViewport
               ? fittedSourceViewport.height
-              : effectiveViewport._tag === "fill"
+              : hasTag(effectiveViewport, "fill")
                 ? Math.max(1, Math.round(layout.viewportHeight / normalizedZoomFactor))
                 : effectiveViewport.height
           }
@@ -358,7 +361,7 @@ export function HostedBrowserWebview(props: {
               layout.viewportScale < 1 ? `scale(${layout.viewportScale})` : undefined,
           }}
         />
-        {active && effectiveViewport._tag !== "fill" && !fittedSourceViewport ? (
+        {active && !hasTag(effectiveViewport, "fill") && !fittedSourceViewport ? (
           <>
             <BrowserViewportResizeHandles
               layout={layout}

@@ -1,5 +1,7 @@
 "use client";
 
+import { hasTag } from "~/lib/taggedUnion";
+
 import { parseScopedThreadKey } from "@akeru/client-runtime/environment";
 import { FILL_PREVIEW_VIEWPORT } from "@akeru/contracts";
 import { useEffect, useMemo } from "react";
@@ -93,7 +95,7 @@ export function ElectronBrowserHost() {
   return (
     <div className="contents" data-electron-browser-host>
       {sessions.map(({ threadRef, snapshot, runtimeTabId, pictureInPicture, zoomFactor }) => {
-        const url = snapshot.navStatus._tag === "Idle" ? null : snapshot.navStatus.url;
+        const url = hasTag(snapshot.navStatus, "Idle") ? null : snapshot.navStatus.url;
 
         return (
           <HostedBrowserWebview

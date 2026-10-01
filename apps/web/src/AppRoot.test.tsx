@@ -1,4 +1,4 @@
-import { Children, isValidElement, type ReactElement, type ReactNode } from "react";
+import { Children, isValidElement } from "react";
 import { RouterProvider } from "@tanstack/react-router";
 import { describe, expect, it } from "vite-plus/test";
 
@@ -15,9 +15,7 @@ describe("AppRoot", () => {
 
     expect(root.type).toBe(AppAtomRegistryProvider);
 
-    const children = Children.toArray(
-      (root as ReactElement<{ readonly children: ReactNode }>).props.children,
-    );
+    const children = Children.toArray(root.props.children);
 
     expect(children).toHaveLength(4);
     expect(isValidElement(children[0]) && children[0].type).toBe(RouterProvider);

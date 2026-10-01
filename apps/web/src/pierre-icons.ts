@@ -54,7 +54,7 @@ export const T3_PIERRE_ICONS = {
 
 const completeIconResolver = createFileTreeIconResolver(T3_PIERRE_ICONS);
 
-const LANGUAGE_EXTENSION_ALIASES: Record<string, string> = {
+const LANGUAGE_EXTENSION_ALIASES = {
   bash: "sh",
   csharp: "cs",
   dockerfile: "dockerfile",
@@ -74,6 +74,8 @@ const LANGUAGE_EXTENSION_ALIASES: Record<string, string> = {
   yaml: "yml",
 };
 
+const LANGUAGE_EXTENSION_ALIASES_LOOKUP = new Map(Object.entries(LANGUAGE_EXTENSION_ALIASES));
+
 export function basenameOfPath(pathValue: string): string {
   const slashIndex = pathValue.lastIndexOf("/");
 
@@ -91,7 +93,7 @@ export function inferEntryKindFromPath(pathValue: string): "file" | "directory" 
 export function syntheticFileNameForLanguageId(languageId: string): string {
   const normalized = languageId.toLowerCase();
 
-  return `file.${LANGUAGE_EXTENSION_ALIASES[normalized] ?? normalized}`;
+  return `file.${LANGUAGE_EXTENSION_ALIASES_LOOKUP.get(normalized) ?? normalized}`;
 }
 
 export function resolvePierreIconForEntry(

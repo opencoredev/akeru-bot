@@ -1,6 +1,12 @@
 import {
+  type StoredComposerMigration,
+  type StoredElementContext,
+  type StoredTerminalContext,
+} from "./draftMigrationSchemas";
+import * as Predicate from "effect/Predicate";
+import {
   DEFAULT_LOCAL_EXECUTION_MODE,
-  type EnvironmentId,
+  EnvironmentId,
   ModelSelection,
   ProjectId,
   ProviderInstanceId,
@@ -21,8 +27,6 @@ import {
   type PersistedTerminalContextDraft,
   type PersistedComposerDraftStoreState,
   type PersistedDraftThreadState,
-  type PersistedComposerThreadDraftState,
-  type LegacyPersistedComposerThreadDraftState,
 } from "./draftPersistenceSchemas";
 import {
   normalizeLegacyComposerStorageKey,
@@ -41,12 +45,14 @@ import {
   compactModelSelectionByProvider,
 } from "./draftModelSelection";
 
-function normalizePersistedAttachment(value: unknown): PersistedComposerImageAttachment | null {
-  if (!value || typeof value !== "object") {
+function normalizePersistedAttachment(
+  value: PersistedComposerImageAttachment | null,
+): PersistedComposerImageAttachment | null {
+  if (!Predicate.isObjectOrArray(value)) {
     return null;
   }
 
-  const candidate = value as Record<string, unknown>;
+  const candidate = value;
   const id = candidate.id;
   const name = candidate.name;
   const mimeType = candidate.mimeType;
@@ -54,12 +60,12 @@ function normalizePersistedAttachment(value: unknown): PersistedComposerImageAtt
   const dataUrl = candidate.dataUrl;
 
   if (
-    typeof id !== "string" ||
-    typeof name !== "string" ||
-    typeof mimeType !== "string" ||
-    typeof sizeBytes !== "number" ||
+    !Predicate.isString(id) ||
+    !Predicate.isString(name) ||
+    !Predicate.isString(mimeType) ||
+    !Predicate.isNumber(sizeBytes) ||
     !Number.isFinite(sizeBytes) ||
-    typeof dataUrl !== "string" ||
+    !Predicate.isString(dataUrl) ||
     id.length === 0 ||
     dataUrl.length === 0
   ) {
@@ -76,10 +82,10 @@ function normalizePersistedAttachment(value: unknown): PersistedComposerImageAtt
 }
 
 function normalizePersistedElementContextDraft(
-  value: unknown,
+  value: StoredElementContext | null,
 ): PersistedElementContextDraft | null {
-  if (!value || typeof value !== "object") return null;
-  const candidate = value as Record<string, unknown>;
+  if (!Predicate.isObjectOrArray(value)) return null;
+  const candidate = value;
   const id = candidate.id;
   const threadId = candidate.threadId;
   const pickedAt = candidate.pickedAt;
@@ -87,15 +93,15 @@ function normalizePersistedElementContextDraft(
   const tagName = candidate.tagName;
 
   if (
-    typeof id !== "string" ||
+    !Predicate.isString(id) ||
     id.length === 0 ||
-    typeof threadId !== "string" ||
+    !Predicate.isString(threadId) ||
     threadId.length === 0 ||
-    typeof pickedAt !== "string" ||
+    !Predicate.isString(pickedAt) ||
     pickedAt.length === 0 ||
-    typeof pageUrl !== "string" ||
+    !Predicate.isString(pageUrl) ||
     pageUrl.length === 0 ||
-    typeof tagName !== "string" ||
+    !Predicate.isString(tagName) ||
     tagName.length === 0
   ) {
     return null;
@@ -104,18 +110,19 @@ function normalizePersistedElementContextDraft(
   const sourceCandidate = candidate.source;
   let source: PersistedElementContextDraft["source"] = null;
 
-  if (sourceCandidate && typeof sourceCandidate === "object") {
-    const sourceRecord = sourceCandidate as Record<string, unknown>;
+  if (Predicate.isObjectOrArray(sourceCandidate)) {
+    const sourceRecord = sourceCandidate;
     source = {
-      functionName:
-        typeof sourceRecord.functionName === "string" ? sourceRecord.functionName : null,
-      fileName: typeof sourceRecord.fileName === "string" ? sourceRecord.fileName : null,
+      functionName: Predicate.isString(sourceRecord.functionName)
+        ? sourceRecord.functionName
+        : null,
+      fileName: Predicate.isString(sourceRecord.fileName) ? sourceRecord.fileName : null,
       lineNumber:
-        typeof sourceRecord.lineNumber === "number" && Number.isFinite(sourceRecord.lineNumber)
+        Predicate.isNumber(sourceRecord.lineNumber) && Number.isFinite(sourceRecord.lineNumber)
           ? sourceRecord.lineNumber
           : null,
       columnNumber:
-        typeof sourceRecord.columnNumber === "number" && Number.isFinite(sourceRecord.columnNumber)
+        Predicate.isNumber(sourceRecord.columnNumber) && Number.isFinite(sourceRecord.columnNumber)
           ? sourceRecord.columnNumber
           : null,
     };
@@ -123,27 +130,27 @@ function normalizePersistedElementContextDraft(
 
   return {
     id,
-    threadId: threadId as ThreadId,
+    threadId: ThreadId.make(threadId),
     pickedAt,
     pageUrl,
-    pageTitle: typeof candidate.pageTitle === "string" ? candidate.pageTitle : null,
+    pageTitle: Predicate.isString(candidate.pageTitle) ? candidate.pageTitle : null,
     tagName,
-    selector: typeof candidate.selector === "string" ? candidate.selector : null,
-    htmlPreview: typeof candidate.htmlPreview === "string" ? candidate.htmlPreview : "",
-    componentName: typeof candidate.componentName === "string" ? candidate.componentName : null,
+    selector: Predicate.isString(candidate.selector) ? candidate.selector : null,
+    htmlPreview: Predicate.isString(candidate.htmlPreview) ? candidate.htmlPreview : "",
+    componentName: Predicate.isString(candidate.componentName) ? candidate.componentName : null,
     source,
-    styles: typeof candidate.styles === "string" ? candidate.styles : "",
+    styles: Predicate.isString(candidate.styles) ? candidate.styles : "",
   };
 }
 
 function normalizePersistedTerminalContextDraft(
-  value: unknown,
+  value: StoredTerminalContext | null,
 ): PersistedTerminalContextDraft | null {
-  if (!value || typeof value !== "object") {
+  if (!Predicate.isObjectOrArray(value)) {
     return null;
   }
 
-  const candidate = value as Record<string, unknown>;
+  const candidate = value;
   const id = candidate.id;
   const threadId = candidate.threadId;
   const createdAt = candidate.createdAt;
@@ -151,24 +158,25 @@ function normalizePersistedTerminalContextDraft(
   const lineEnd = candidate.lineEnd;
 
   if (
-    typeof id !== "string" ||
+    !Predicate.isString(id) ||
     id.length === 0 ||
-    typeof threadId !== "string" ||
+    !Predicate.isString(threadId) ||
     threadId.length === 0 ||
-    typeof createdAt !== "string" ||
+    !Predicate.isString(createdAt) ||
     createdAt.length === 0 ||
-    typeof lineStart !== "number" ||
+    !Predicate.isNumber(lineStart) ||
     !Number.isFinite(lineStart) ||
-    typeof lineEnd !== "number" ||
+    !Predicate.isNumber(lineEnd) ||
     !Number.isFinite(lineEnd)
   ) {
     return null;
   }
 
-  const terminalId = typeof candidate.terminalId === "string" ? candidate.terminalId.trim() : "";
+  const terminalId = Predicate.isString(candidate.terminalId) ? candidate.terminalId.trim() : "";
 
-  const terminalLabel =
-    typeof candidate.terminalLabel === "string" ? candidate.terminalLabel.trim() : "";
+  const terminalLabel = Predicate.isString(candidate.terminalLabel)
+    ? candidate.terminalLabel.trim()
+    : "";
 
   if (terminalId.length === 0 || terminalLabel.length === 0) {
     return null;
@@ -179,7 +187,7 @@ function normalizePersistedTerminalContextDraft(
 
   return {
     id,
-    threadId: threadId as ThreadId,
+    threadId: ThreadId.make(threadId),
     createdAt,
     terminalId,
     terminalLabel,
@@ -189,8 +197,8 @@ function normalizePersistedTerminalContextDraft(
 }
 
 export function normalizePersistedDraftThreads(
-  rawDraftThreadsByThreadId: unknown,
-  rawProjectDraftThreadIdByProjectKey: unknown,
+  rawDraftThreadsByThreadId: StoredComposerMigration["draftThreadsByThreadKey"],
+  rawProjectDraftThreadIdByProjectKey: StoredComposerMigration["logicalProjectDraftThreadKeyByLogicalProjectKey"],
 ): Pick<
   PersistedComposerDraftStoreState,
   "draftThreadsByThreadKey" | "logicalProjectDraftThreadKeyByLogicalProjectKey"
@@ -200,12 +208,11 @@ export function normalizePersistedDraftThreads(
 
   if (
     rawProjectDraftThreadIdByProjectKey &&
-    typeof rawProjectDraftThreadIdByProjectKey === "object"
+    (rawProjectDraftThreadIdByProjectKey === null ||
+      Predicate.isObjectOrArray(rawProjectDraftThreadIdByProjectKey))
   ) {
-    for (const [projectKey, threadId] of Object.entries(
-      rawProjectDraftThreadIdByProjectKey as Record<string, unknown>,
-    )) {
-      if (typeof threadId !== "string" || threadId.length === 0) {
+    for (const [projectKey, threadId] of Object.entries(rawProjectDraftThreadIdByProjectKey)) {
+      if (!Predicate.isString(threadId) || threadId.length === 0) {
         continue;
       }
 
@@ -222,83 +229,80 @@ export function normalizePersistedDraftThreads(
         continue;
       }
 
-      environmentIdByThreadId.set(threadId as ThreadId, projectRef.environmentId);
+      environmentIdByThreadId.set(ThreadId.make(threadId), projectRef.environmentId);
     }
   }
 
-  if (rawDraftThreadsByThreadId && typeof rawDraftThreadsByThreadId === "object") {
-    for (const [threadKeyOrId, rawDraftThread] of Object.entries(
-      rawDraftThreadsByThreadId as Record<string, unknown>,
-    )) {
-      if (typeof threadKeyOrId !== "string" || threadKeyOrId.length === 0) {
+  if (Predicate.isObjectOrArray(rawDraftThreadsByThreadId)) {
+    for (const [threadKeyOrId, rawDraftThread] of Object.entries(rawDraftThreadsByThreadId)) {
+      if (!Predicate.isString(threadKeyOrId) || threadKeyOrId.length === 0) {
         continue;
       }
 
-      if (!rawDraftThread || typeof rawDraftThread !== "object") {
+      if (!Predicate.isObjectOrArray(rawDraftThread)) {
         continue;
       }
 
-      const candidateDraftThread = rawDraftThread as Record<string, unknown>;
+      const candidateDraftThread = rawDraftThread;
       const parsedThreadRef = parseScopedThreadKey(threadKeyOrId);
       const threadKey = normalizeLegacyComposerStorageKey(threadKeyOrId);
 
       const threadId =
         parsedThreadRef?.threadId ??
-        (typeof candidateDraftThread.threadId === "string" &&
+        (Predicate.isString(candidateDraftThread.threadId) &&
         candidateDraftThread.threadId.length > 0
-          ? (candidateDraftThread.threadId as ThreadId)
-          : (threadKeyOrId as ThreadId));
+          ? ThreadId.make(candidateDraftThread.threadId)
+          : ThreadId.make(threadKeyOrId));
 
       const environmentId =
         parsedThreadRef?.environmentId ??
-        (typeof candidateDraftThread.environmentId === "string" &&
+        (Predicate.isString(candidateDraftThread.environmentId) &&
         candidateDraftThread.environmentId.length > 0
-          ? (candidateDraftThread.environmentId as EnvironmentId)
-          : environmentIdByThreadId.get(threadKeyOrId as ThreadId));
+          ? EnvironmentId.make(candidateDraftThread.environmentId)
+          : environmentIdByThreadId.get(ThreadId.make(threadKeyOrId)));
 
       const projectId = candidateDraftThread.projectId;
       const createdAt = candidateDraftThread.createdAt;
       const branch = candidateDraftThread.branch;
       const worktreePath = candidateDraftThread.worktreePath;
       const startFromOrigin = candidateDraftThread.startFromOrigin === true;
-      const normalizedWorktreePath = typeof worktreePath === "string" ? worktreePath : null;
+      const normalizedWorktreePath = Predicate.isString(worktreePath) ? worktreePath : null;
       const promotedToCandidate = candidateDraftThread.promotedTo;
 
-      const promotedToRecord =
-        promotedToCandidate && typeof promotedToCandidate === "object"
-          ? (promotedToCandidate as Record<string, unknown>)
-          : null;
+      const promotedToRecord = Predicate.isObjectOrArray(promotedToCandidate)
+        ? promotedToCandidate
+        : null;
 
       const promotedTo =
         promotedToRecord &&
-        typeof promotedToRecord.environmentId === "string" &&
+        Predicate.isString(promotedToRecord.environmentId) &&
         promotedToRecord.environmentId.length > 0 &&
-        typeof promotedToRecord.threadId === "string" &&
+        Predicate.isString(promotedToRecord.threadId) &&
         promotedToRecord.threadId.length > 0
           ? scopeThreadRef(
-              promotedToRecord.environmentId as EnvironmentId,
-              promotedToRecord.threadId as ThreadId,
+              EnvironmentId.make(promotedToRecord.environmentId),
+              ThreadId.make(promotedToRecord.threadId),
             )
           : null;
 
-      if (typeof projectId !== "string" || projectId.length === 0 || environmentId === undefined) {
+      if (!Predicate.isString(projectId) || projectId.length === 0 || environmentId === undefined) {
         continue;
       }
 
-      const normalizedEnvironmentId = environmentId as EnvironmentId;
+      const normalizedEnvironmentId = EnvironmentId.make(environmentId);
       draftThreadsByThreadKey[threadKey] = {
         threadId,
         environmentId: normalizedEnvironmentId,
-        projectId: projectId as ProjectId,
+        projectId: ProjectId.make(projectId),
         logicalProjectKey:
-          typeof candidateDraftThread.logicalProjectKey === "string" &&
+          Predicate.isString(candidateDraftThread.logicalProjectKey) &&
           candidateDraftThread.logicalProjectKey.length > 0
             ? candidateDraftThread.logicalProjectKey
             : parsedThreadRef
-              ? projectDraftKey(scopeProjectRef(normalizedEnvironmentId, projectId as ProjectId))
+              ? projectDraftKey(scopeProjectRef(normalizedEnvironmentId, ProjectId.make(projectId)))
               : threadKeyOrId,
         createdAt:
-          typeof createdAt === "string" && createdAt.length > 0
+          Predicate.isString(createdAt) && createdAt.length > 0
             ? createdAt
             : new Date().toISOString(),
         runtimeMode: isRuntimeMode(candidateDraftThread.runtimeMode)
@@ -309,7 +313,7 @@ export function normalizePersistedDraftThreads(
           candidateDraftThread.interactionMode === "default"
             ? candidateDraftThread.interactionMode
             : DEFAULT_INTERACTION_MODE,
-        branch: typeof branch === "string" ? branch : null,
+        branch: Predicate.isString(branch) ? branch : null,
         worktreePath: normalizedWorktreePath,
         envMode: normalizeDraftThreadEnvMode(candidateDraftThread.envMode, normalizedWorktreePath),
         startFromOrigin,
@@ -322,12 +326,13 @@ export function normalizePersistedDraftThreads(
 
   if (
     rawProjectDraftThreadIdByProjectKey &&
-    typeof rawProjectDraftThreadIdByProjectKey === "object"
+    (rawProjectDraftThreadIdByProjectKey === null ||
+      Predicate.isObjectOrArray(rawProjectDraftThreadIdByProjectKey))
   ) {
     for (const [logicalProjectKey, threadKeyOrId] of Object.entries(
-      rawProjectDraftThreadIdByProjectKey as Record<string, unknown>,
+      rawProjectDraftThreadIdByProjectKey,
     )) {
-      if (typeof threadKeyOrId !== "string" || threadKeyOrId.length === 0) {
+      if (!Predicate.isString(threadKeyOrId) || threadKeyOrId.length === 0) {
         continue;
       }
 
@@ -355,7 +360,7 @@ export function normalizePersistedDraftThreads(
 
       if (!draftThreadsByThreadKey[threadKey]) {
         draftThreadsByThreadKey[threadKey] = {
-          threadId: parsedThreadRef?.threadId ?? (threadKey as ThreadId),
+          threadId: parsedThreadRef?.threadId ?? ThreadId.make(threadKey),
           environmentId: projectRef.environmentId,
           projectId: projectRef.projectId,
           logicalProjectKey,
@@ -387,10 +392,10 @@ export function normalizePersistedDraftThreads(
 }
 
 export function normalizePersistedDraftsByThreadId(
-  rawDraftMap: unknown,
+  rawDraftMap: StoredComposerMigration["draftsByThreadKey"],
   draftThreadsByThreadKey: PersistedComposerDraftStoreState["draftThreadsByThreadKey"],
 ): PersistedComposerDraftStoreState["draftsByThreadKey"] {
-  if (!rawDraftMap || typeof rawDraftMap !== "object") {
+  if (!Predicate.isObjectOrArray(rawDraftMap)) {
     return {};
   }
 
@@ -405,26 +410,24 @@ export function normalizePersistedDraftsByThreadId(
 
     environmentIdByThreadId.set(
       parsedThreadRef.threadId,
-      draftThread.environmentId as EnvironmentId,
+      EnvironmentId.make(draftThread.environmentId),
     );
   }
 
   const nextDraftsByThreadKey: DeepMutable<PersistedComposerDraftStoreState["draftsByThreadKey"]> =
     {};
 
-  for (const [threadKeyOrId, draftValue] of Object.entries(
-    rawDraftMap as Record<string, unknown>,
-  )) {
-    if (typeof threadKeyOrId !== "string" || threadKeyOrId.length === 0) {
+  for (const [threadKeyOrId, draftValue] of Object.entries(rawDraftMap)) {
+    if (!Predicate.isString(threadKeyOrId) || threadKeyOrId.length === 0) {
       continue;
     }
 
-    if (!draftValue || typeof draftValue !== "object") {
+    if (!Predicate.isObjectOrArray(draftValue)) {
       continue;
     }
 
-    const draftCandidate = draftValue as PersistedComposerThreadDraftState;
-    const promptCandidate = typeof draftCandidate.prompt === "string" ? draftCandidate.prompt : "";
+    const draftCandidate = draftValue;
+    const promptCandidate = Predicate.isString(draftCandidate.prompt) ? draftCandidate.prompt : "";
 
     const attachments = Array.isArray(draftCandidate.attachments)
       ? draftCandidate.attachments.flatMap((entry) => {
@@ -465,18 +468,17 @@ export function normalizePersistedDraftsByThreadId(
     );
 
     // If the draft already has the v3 shape, use it directly
-    const legacyDraftCandidate = draftValue as LegacyPersistedComposerThreadDraftState;
+    const legacyDraftCandidate = draftValue;
     let modelSelectionByProvider: Partial<Record<ProviderInstanceId, ModelSelection>> = {};
     let activeProvider: ProviderInstanceId | null = null;
 
     if (
       draftCandidate.modelSelectionByProvider &&
-      typeof draftCandidate.modelSelectionByProvider === "object"
+      (draftCandidate.modelSelectionByProvider === null ||
+        Predicate.isObjectOrArray(draftCandidate.modelSelectionByProvider))
     ) {
       // v3 format
-      modelSelectionByProvider = draftCandidate.modelSelectionByProvider as Partial<
-        Record<ProviderInstanceId, ModelSelection>
-      >;
+      modelSelectionByProvider = draftCandidate.modelSelectionByProvider;
       activeProvider = normalizeProviderInstanceId(draftCandidate.activeProvider);
     } else {
       // v2 or legacy format: migrate
@@ -492,7 +494,7 @@ export function normalizePersistedDraftsByThreadId(
         {
           provider: legacyDraftCandidate.provider,
           model: legacyDraftCandidate.model,
-          modelOptions: normalizedModelOptions ?? (legacyDraftCandidate.modelOptions as unknown),
+          modelOptions: normalizedModelOptions ?? legacyDraftCandidate.modelOptions,
           legacyCodex: legacyDraftCandidate,
         },
       );
@@ -537,7 +539,7 @@ export function normalizePersistedDraftsByThreadId(
         : draftThreadsByThreadKey[threadKeyOrId] !== undefined
           ? threadKeyOrId
           : (() => {
-              const environmentId = environmentIdByThreadId.get(threadKeyOrId as ThreadId);
+              const environmentId = environmentIdByThreadId.get(ThreadId.make(threadKeyOrId));
 
               return environmentId
                 ? normalizeLegacyComposerStorageKey(threadKeyOrId, { environmentId })

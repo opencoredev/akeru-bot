@@ -58,7 +58,9 @@ describe("RootRouteErrorView", () => {
   });
 
   it("provides useful fallbacks for unknown and unserializable errors", () => {
-    const circular: { self?: unknown } = {};
+    type CircularFixture = { self?: CircularFixture };
+
+    const circular: CircularFixture = {};
     circular.self = circular;
 
     expect(errorMessage(new Error("boom"))).toBe("boom");

@@ -1,6 +1,8 @@
+import type * as Schema from "effect/Schema";
+
 export const ASSET_ROOT = "https://open-vsx.org/api/demo/theme/1.0.0/file";
 
-export function extensionDetail(overrides: Record<string, unknown> = {}) {
+export function extensionDetail(overrides: Schema.JsonObject = {}) {
   return {
     namespace: "demo",
     name: "theme",
