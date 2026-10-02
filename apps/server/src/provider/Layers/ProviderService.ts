@@ -3,6 +3,8 @@ import * as Predicate from "effect/Predicate";
 import { createProviderSessionBindings } from "./providerService/ProviderSessionBindings.ts";
 import { createProviderMcpSessions } from "./providerService/ProviderMcpSessions.ts";
 import { createProviderSessionRecovery } from "./providerService/ProviderSessionRecovery.ts";
+import { createProviderSessionListing } from "./providerService/ProviderSessionListing.ts";
+import { createProviderSessionStart } from "./providerService/ProviderSessionStart.ts";
 /**
  * ProviderServiceLive - Cross-provider orchestration layer.
  *
@@ -15,17 +17,14 @@ import { createProviderSessionRecovery } from "./providerService/ProviderSession
  * @module ProviderServiceLive
  */
 import {
-  ThreadId,
   ProviderInterruptTurnInput,
   ProviderRespondToRequestInput,
   ProviderRespondToUserInputInput,
   ProviderSendTurnInput,
-  ProviderSessionStartInput,
   ProviderStopSessionInput,
   ProviderUploadFeedbackInput,
   type ProviderInstanceId,
   type ProviderRuntimeEvent,
-  type ProviderSession,
 } from "@akeru/contracts";
 import { causeErrorTag } from "@akeru/shared/observability";
 import * as DateTime from "effect/DateTime";
@@ -63,7 +62,6 @@ import {
   ProviderRollbackConversationInput,
   toValidationError,
   decodeInputOrValidationError,
-  readPersistedCwd,
   dieOnMissingBindingInstanceId,
 } from "./providerService/ProviderSessionMapping.ts";
 
@@ -233,131 +231,15 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
     getAdapterEntries,
   });
 
-  const startSession: ProviderServiceMethod<"startSession"> = Effect.fn("startSession")(
-    function* (threadId, rawInput) {
-      const parsed = yield* decodeInputOrValidationError({
-        operation: "ProviderService.startSession",
-        schema: ProviderSessionStartInput,
-        payload: rawInput,
-      });
-
-      const resolvedInstanceId = yield* requireBindingInstanceId(
-        "ProviderService.startSession",
-        parsed,
-      );
-
-      let metricProvider = parsed.provider ?? String(resolvedInstanceId);
-      yield* Effect.annotateCurrentSpan({
-        "provider.operation": "start-session",
-        "provider.instance_id": resolvedInstanceId,
-        "provider.thread_id": threadId,
-        "provider.runtime_mode": parsed.runtimeMode,
-      });
-
-      return yield* Effect.gen(function* () {
-        const instanceInfo = yield* registry.getInstanceInfo(resolvedInstanceId);
-        const resolvedProvider = instanceInfo.driverKind;
-        metricProvider = resolvedProvider;
-
-        if (parsed.provider !== undefined && parsed.provider !== resolvedProvider) {
-          return yield* toValidationError(
-            "ProviderService.startSession",
-            `Provider instance '${resolvedInstanceId}' belongs to driver '${resolvedProvider}', not '${parsed.provider}'.`,
-          );
-        }
-
-        const input = {
-          ...parsed,
-          threadId,
-          provider: resolvedProvider,
-        };
-
-        if (!instanceInfo.enabled) {
-          return yield* toValidationError(
-            "ProviderService.startSession",
-            `Provider instance '${resolvedInstanceId}' is disabled in Akeru Bot settings.`,
-          );
-        }
-
-        const persistedBinding = Option.getOrUndefined(yield* directory.getBinding(threadId));
-
-        const effectiveResumeCursor =
-          input.resumeCursor ??
-          (persistedBinding?.providerInstanceId === resolvedInstanceId
-            ? persistedBinding.resumeCursor
-            : undefined);
-
-        const effectiveCwd =
-          input.cwd ??
-          (persistedBinding?.providerInstanceId === resolvedInstanceId
-            ? readPersistedCwd(persistedBinding.runtimePayload)
-            : undefined);
-
-        yield* Effect.annotateCurrentSpan({
-          "provider.kind": resolvedProvider,
-          "provider.resume_cursor.source":
-            input.resumeCursor !== undefined
-              ? "request"
-              : effectiveResumeCursor !== undefined &&
-                  persistedBinding?.providerInstanceId === resolvedInstanceId
-                ? "persisted"
-                : "none",
-          "provider.resume_cursor.present": effectiveResumeCursor !== undefined,
-          "provider.cwd.source":
-            input.cwd !== undefined
-              ? "request"
-              : effectiveCwd !== undefined &&
-                  persistedBinding?.providerInstanceId === resolvedInstanceId
-                ? "persisted"
-                : "none",
-          "provider.cwd.effective": effectiveCwd ?? "",
-        });
-        const adapter = yield* registry.getByInstance(resolvedInstanceId);
-        yield* prepareMcpSession(threadId, resolvedInstanceId);
-
-        const session = yield* adapter
-          .startSession({
-            ...input,
-            providerInstanceId: resolvedInstanceId,
-            ...(effectiveCwd !== undefined ? { cwd: effectiveCwd } : {}),
-            ...(effectiveResumeCursor !== undefined ? { resumeCursor: effectiveResumeCursor } : {}),
-          })
-          .pipe(Effect.onError(() => clearMcpSession(threadId)));
-
-        if (session.provider !== adapter.provider) {
-          yield* clearMcpSession(threadId);
-
-          return yield* toValidationError(
-            "ProviderService.startSession",
-            `Adapter/provider mismatch: requested '${adapter.provider}', received '${session.provider}'.`,
-          );
-        }
-
-        const sessionWithInstance = {
-          ...session,
-          providerInstanceId: resolvedInstanceId,
-        };
-
-        yield* stopStaleSessionsForThread({
-          threadId,
-          currentInstanceId: resolvedInstanceId,
-        });
-        yield* upsertSessionBinding(sessionWithInstance, threadId, {
-          modelSelection: input.modelSelection,
-        });
-
-        return sessionWithInstance;
-      }).pipe(
-        withMetrics({
-          counter: providerSessionsTotal,
-          attributes: () =>
-            providerMetricAttributes(metricProvider, {
-              operation: "start",
-            }),
-        }),
-      );
-    },
-  );
+  const startSession = createProviderSessionStart({
+    registry,
+    directory,
+    requireBindingInstanceId,
+    upsertSessionBinding,
+    prepareMcpSession,
+    clearMcpSession,
+    stopStaleSessionsForThread,
+  });
 
   const sendTurn: ProviderServiceMethod<"sendTurn"> = Effect.fn("sendTurn")(function* (rawInput) {
     const parsed = yield* decodeInputOrValidationError({
@@ -648,104 +530,7 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
     },
   );
 
-  const listSessions: ProviderServiceMethod<"listSessions"> = Effect.fn("listSessions")(
-    function* () {
-      const currentAdapters = yield* getAdapterEntries;
-
-      const sessionsByProvider = yield* Effect.forEach(currentAdapters, ([instanceId, adapter]) =>
-        adapter.listSessions().pipe(
-          Effect.map((sessions) =>
-            sessions.map((session) => ({
-              ...session,
-              providerInstanceId: instanceId,
-            })),
-          ),
-        ),
-      );
-
-      const activeSessions = sessionsByProvider.flatMap((sessions) => sessions);
-
-      // Only live adapter sessions appear in this response. Resolving every
-      // historical binding here makes each call scale with the full thread
-      // history instead of the active session set.
-      const persistedBindings = yield* Effect.forEach(
-        [...new Set(activeSessions.map((session) => session.threadId))],
-        (threadId) =>
-          directory
-            .getBinding(threadId)
-            .pipe(
-              Effect.orElseSucceed(() =>
-                Option.none<ProviderSessionDirectory.ProviderRuntimeBinding>(),
-              ),
-            ),
-        { concurrency: "unbounded" },
-      ).pipe(Effect.orElseSucceed(() => []));
-
-      const bindingsByThreadId = new Map<
-        ThreadId,
-        ProviderSessionDirectory.ProviderRuntimeBinding
-      >();
-
-      for (const bindingOption of persistedBindings) {
-        const binding = Option.getOrUndefined(bindingOption);
-
-        if (binding) {
-          bindingsByThreadId.set(binding.threadId, binding);
-        }
-      }
-
-      const sessions: ProviderSession[] = [];
-
-      for (const session of activeSessions) {
-        const binding = bindingsByThreadId.get(session.threadId);
-
-        if (!binding) {
-          sessions.push(session);
-          continue;
-        }
-
-        const overrides: {
-          -readonly [Key in
-            | "resumeCursor"
-            | "runtimeMode"
-            | "providerInstanceId"]?: ProviderSession[Key];
-        } = {};
-
-        overrides.providerInstanceId = dieOnMissingBindingInstanceId(
-          "ProviderService.listSessions",
-          binding,
-        );
-
-        if (binding.provider !== session.provider) {
-          return yield* Effect.die(
-            new Error(
-              `ProviderService.listSessions: thread '${session.threadId}' is active on provider '${session.provider}' but persisted binding names provider '${binding.provider}'.`,
-            ),
-          );
-        }
-
-        if (overrides.providerInstanceId !== session.providerInstanceId) {
-          return yield* Effect.die(
-            new Error(
-              `ProviderService.listSessions: thread '${session.threadId}' is active on provider instance '${session.providerInstanceId}' but persisted binding names '${overrides.providerInstanceId}'.`,
-            ),
-          );
-        }
-
-        if (session.resumeCursor === undefined && binding.resumeCursor !== undefined) {
-          overrides.resumeCursor = binding.resumeCursor;
-        }
-
-        if (binding.runtimeMode !== undefined) {
-          overrides.runtimeMode = binding.runtimeMode;
-        }
-
-        sessions.push(Object.assign({}, session, overrides));
-      }
-
-      return sessions;
-    },
-  );
+  const listSessions = createProviderSessionListing({ directory, getAdapterEntries });
 
   const getCapabilities: ProviderServiceMethod<"getCapabilities"> = (instanceId) =>
     registry.getByInstance(instanceId).pipe(Effect.map((adapter) => adapter.capabilities));
