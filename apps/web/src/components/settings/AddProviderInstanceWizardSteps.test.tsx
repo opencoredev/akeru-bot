@@ -17,15 +17,13 @@ const CUSTOM_API_STEPS = addAccountWizardSteps({ choosesService: true });
 
 function renderStepButtons(
   currentStep: number,
-  instanceIdError: string | null,
-  onNavigation: Parameters<typeof AddProviderInstanceWizardSteps>[0]["onNavigation"],
+  onStepChange: (step: number) => void,
 ): ReactElement<StepButtonProps>[] {
   const header = AddProviderInstanceWizardSteps({
     steps: CUSTOM_API_STEPS,
     currentStep,
     summaries: ["OpenRouter", "OpenRouter", null],
-    instanceIdError,
-    onNavigation,
+    onStepChange,
   });
 
   return Children.toArray(header.props.children)
@@ -34,35 +32,22 @@ function renderStepButtons(
 }
 
 describe("AddProviderInstanceWizardSteps", () => {
-  it("gates the actual Connect header click through Name validation", () => {
-    const onNavigation = vi.fn();
-    const buttons = renderStepButtons(0, "Account ID is required.", onNavigation);
+  it("moves to the clicked step in either direction", () => {
+    const onStepChange = vi.fn();
+    const buttons = renderStepButtons(1, onStepChange);
 
     expect(buttons).toHaveLength(CUSTOM_API_STEPS.length);
     buttons[2]!.props.onClick();
+    buttons[0]!.props.onClick();
 
-    expect(onNavigation).toHaveBeenCalledOnce();
-    expect(onNavigation).toHaveBeenCalledWith({
-      kind: "blocked",
-      step: 1,
-      error: "Account ID is required.",
-    });
+    expect(onStepChange.mock.calls).toEqual([[2], [0]]);
   });
 
   it("marks the wizard step separately from the clicked button focus", () => {
-    const buttons = renderStepButtons(1, "Account ID is required.", vi.fn());
+    const buttons = renderStepButtons(1, vi.fn());
 
     expect(buttons[0]!.props["aria-current"]).toBeUndefined();
     expect(buttons[1]!.props["aria-current"]).toBe("step");
     expect(buttons[2]!.props["aria-current"]).toBeUndefined();
-  });
-
-  it("preserves the actual backward header click", () => {
-    const onNavigation = vi.fn();
-    const buttons = renderStepButtons(2, "Account ID is required.", onNavigation);
-
-    buttons[0]!.props.onClick();
-
-    expect(onNavigation).toHaveBeenCalledWith({ kind: "navigate", step: 0 });
   });
 });

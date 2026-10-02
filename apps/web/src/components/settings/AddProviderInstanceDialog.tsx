@@ -12,7 +12,6 @@ import {
 
 import { useEnvironmentSettings, useUpdateEnvironmentSettings } from "../../hooks/useSettings";
 import { cn } from "../../lib/utils";
-import { normalizeProviderAccentColor } from "../../providerInstances";
 import { Button } from "../ui/button";
 import {
   Dialog,
@@ -27,11 +26,7 @@ import { toastManager } from "../ui/toast";
 import type { DriverOption } from "./providerDriverMeta";
 import { ProviderSettingsForm } from "./ProviderSettingsForm";
 import { AnimatedHeight } from "../AnimatedHeight";
-import {
-  addAccountWizardSteps,
-  resolveWizardNavigation,
-  type WizardNavigation,
-} from "./AddProviderInstanceDialog.logic";
+import { addAccountWizardSteps, deriveInstanceId } from "./AddProviderInstanceDialog.logic";
 import { AddProviderInstanceWizardSteps } from "./AddProviderInstanceWizardSteps";
 import { CustomApiKeyDraftField } from "./CustomApiKeyField";
 import { CustomApiPresetPicker } from "./CustomApiPresetPicker";
@@ -42,74 +37,7 @@ import {
   type CustomApiPreset,
 } from "./customApiPresets";
 
-const PROVIDER_ACCENT_SWATCHES = [
-  "#2563eb",
-  "#16a34a",
-  "#ea580c",
-  "#dc2626",
-  "#7c3aed",
-  "#0891b2",
-] as const;
-
-/**
- * Normalize a user-provided name into a slug suffix for the account id.
- * The full id is formed by prefixing the driver slug — e.g. label "Work" on
- * driver "codex" becomes `codex_work`. Output is trimmed to 48 chars so the
- * final composed id stays under the 64-char slug cap enforced by
- * `ProviderInstanceId` in `@akeru/contracts`.
- */
-function slugifyLabel(value: string): string {
-  return value
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "_")
-    .replace(/^_+|_+$/g, "")
-    .slice(0, 48);
-}
-
-/**
- * Account id from the name, or `{driver}` when the name is empty, with the
- * first free `_{n}` suffix when that id is taken.
- */
-function deriveInstanceId(
-  driver: ProviderDriverKind,
-  label: string,
-  existing: ReadonlySet<string>,
-): string {
-  const slug = slugifyLabel(label);
-  const base = slug ? `${driver}_${slug}` : driver;
-
-  if (slug && !existing.has(base)) return base;
-
-  let index = 2;
-
-  while (existing.has(`${base}_${index}`)) index += 1;
-
-  return `${base}_${index}`;
-}
-
-const INSTANCE_ID_PATTERN = /^[a-zA-Z][a-zA-Z0-9_-]*$/;
-
 const CUSTOM_API_DRIVER_KIND = ProviderDriverKind.make("customOpenai");
-
-/**
- * Validate an account id against the same slug rules the server applies in
- * `ProviderInstanceId` (see `packages/contracts/src/providerInstance.ts`).
- * Returns a user-facing error string, or `null` if valid.
- */
-function validateInstanceId(id: string, existing: ReadonlySet<string>): string | null {
-  if (id.length === 0) return "Account ID is required.";
-
-  if (id.length > 64) return "Account ID must be 64 characters or fewer.";
-
-  if (!INSTANCE_ID_PATTERN.test(id)) {
-    return "Account ID must start with a letter and use only letters, digits, '-', or '_'.";
-  }
-
-  if (existing.has(id)) return `An account named '${id}' already exists.`;
-
-  return null;
-}
 
 interface AddProviderInstanceDialogProps {
   readonly open: boolean;
@@ -144,12 +72,7 @@ export function AddProviderInstanceDialog({
   const [labelEdited, setLabelEdited] = useState(false);
   const [customApiPreset, setCustomApiPreset] = useState<CustomApiPreset>(OTHER_CUSTOM_API_PRESET);
   const [customApiKey, setCustomApiKey] = useState("");
-  const [accentColor, setAccentColor] = useState<string>("");
-  const [instanceIdOverride, setInstanceIdOverride] = useState<string | null>(null);
   const [configDraft, setConfigDraftState] = useState<ProviderConfig>({});
-  // Errors are suppressed until the user has tried to submit once. After that
-  // they update live so fixing the problem clears the message in place.
-  const [hasAttemptedSubmit, setHasAttemptedSubmit] = useState(false);
 
   const existingIds = useMemo(
     () => new Set(Object.keys(settings.providerInstances ?? {})),
@@ -157,10 +80,7 @@ export function AddProviderInstanceDialog({
   );
 
   const accountLabel = providerLabel ?? driverOption.label;
-  const instanceId = instanceIdOverride ?? deriveInstanceId(driver, label, existingIds);
-
-  const instanceIdError = validateInstanceId(instanceId, existingIds);
-  const showInstanceIdError = hasAttemptedSubmit && instanceIdError !== null;
+  const instanceId = deriveInstanceId(driver, label, existingIds);
 
   const wizardSteps = addAccountWizardSteps({ choosesService: isCustomApi });
 
@@ -189,28 +109,9 @@ export function AddProviderInstanceDialog({
     );
   };
 
-  const applyWizardNavigation = (navigation: WizardNavigation) => {
-    if (navigation.kind === "blocked") {
-      setHasAttemptedSubmit(true);
-    }
-
-    setWizardStep(navigation.step);
-  };
-
-  const navigateToStep = (requestedStep: number) => {
-    applyWizardNavigation(
-      resolveWizardNavigation(wizardStep, requestedStep, wizardSteps, { instanceIdError }),
-    );
-  };
-
   const handleSave = () => {
-    setHasAttemptedSubmit(true);
-
-    if (instanceIdError !== null) return;
-
     const config = configDraft;
     const hasConfig = Object.keys(config).length > 0;
-    const normalizedAccentColor = normalizeProviderAccentColor(accentColor);
 
     const environment = isCustomApi ? withCustomApiKey([], customApiKey) : [];
 
@@ -218,15 +119,12 @@ export function AddProviderInstanceDialog({
       driver,
       enabled: true,
       ...(label.trim().length > 0 ? { displayName: label.trim() } : {}),
-      ...(normalizedAccentColor ? { accentColor: normalizedAccentColor } : {}),
       ...(hasConfig ? { config } : {}),
       ...(environment.length > 0 ? { environment } : {}),
     };
 
-    // `ProviderInstanceId.make` revalidates the slug; we've already checked
-    // it via `validateInstanceId`, but going through the brand constructor
-    // keeps the type boundary honest and guards against any future drift in
-    // the slug rules.
+    // The id is derived from the name and always fits the slug rules;
+    // the brand constructor keeps the type boundary honest.
     const brandedId = ProviderInstanceId.make(instanceId);
 
     const nextMap = {
@@ -269,8 +167,7 @@ export function AddProviderInstanceDialog({
                 steps={wizardSteps}
                 currentStep={wizardStep}
                 summaries={wizardStepSummaries}
-                instanceIdError={instanceIdError}
-                onNavigation={applyWizardNavigation}
+                onStepChange={setWizardStep}
               />
             ) : null}
           </DialogHeader>
@@ -305,76 +202,6 @@ export function AddProviderInstanceDialog({
                     Shown in the model picker and on this page. Optional.
                   </span>
                 </label>
-
-                <label className={cn("grid gap-2", currentStepName !== "Name" && "hidden")}>
-                  <span className="text-xs font-medium text-foreground">Account ID</span>
-                  <Input
-                    surface="background"
-                    placeholder={`${driver}_work`}
-                    value={instanceId}
-                    onChange={(event) => {
-                      setInstanceIdOverride(event.target.value);
-                    }}
-                    aria-invalid={showInstanceIdError}
-                  />
-                  {showInstanceIdError ? (
-                    <span className="text-11px text-destructive">{instanceIdError}</span>
-                  ) : (
-                    <span className="text-11px text-muted-foreground">
-                      How bots and chats refer to this account. Letters, digits, '-', or '_'.
-                    </span>
-                  )}
-                </label>
-
-                <div className={cn("grid gap-2", currentStepName !== "Name" && "hidden")}>
-                  <span className="text-xs font-medium text-foreground">Accent color</span>
-                  <div className="flex min-w-0 flex-wrap items-center gap-2">
-                    <input
-                      type="color"
-                      value={
-                        normalizeProviderAccentColor(accentColor) ?? PROVIDER_ACCENT_SWATCHES[0]
-                      }
-                      onChange={(event) => setAccentColor(event.target.value)}
-                      aria-label="Account accent color"
-                      className="h-8 w-10 cursor-pointer rounded-xl border border-input bg-background p-0.5"
-                    />
-                    <div className="flex flex-wrap gap-1.5">
-                      {PROVIDER_ACCENT_SWATCHES.map((swatch) => {
-                        const selected = accentColor.toLowerCase() === swatch;
-
-                        return (
-                          <button
-                            key={swatch}
-                            type="button"
-                            className={cn(
-                              "size-6 cursor-pointer rounded-full border swatch-fill transition",
-                              selected
-                                ? "scale-110 border-foreground ring-2 ring-ring ring-offset-1 ring-offset-background"
-                                : "border-tint/10 hover:scale-105 dark:border-tint/20",
-                            )}
-                            style={{ "--swatch": swatch }}
-                            onClick={() => setAccentColor(swatch)}
-                            aria-label={`Use ${swatch} accent`}
-                          />
-                        );
-                      })}
-                    </div>
-                    {accentColor ? (
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="ghost"
-                        presentation="wizard-preview-action"
-                        onClick={() => setAccentColor("")}
-                      >
-                        Clear
-                      </Button>
-                    ) : null}
-                  </div>
-                  <span className="text-11px text-muted-foreground">
-                    Optional marker shown in the picker.
-                  </span>
-                </div>
 
                 {isCustomApi ? (
                   <div className={cn("grid gap-4", currentStepName !== "Connect" && "hidden")}>
@@ -415,7 +242,7 @@ export function AddProviderInstanceDialog({
               {wizardStep === 0 ? "Cancel" : "Back"}
             </Button>
             {wizardStep < lastStep ? (
-              <Button size="sm" onClick={() => navigateToStep(wizardStep + 1)}>
+              <Button size="sm" onClick={() => setWizardStep(wizardStep + 1)}>
                 Next
               </Button>
             ) : (

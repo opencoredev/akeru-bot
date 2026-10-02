@@ -1,7 +1,3 @@
-export type WizardNavigation =
-  | { readonly kind: "navigate"; readonly step: number }
-  | { readonly kind: "blocked"; readonly step: number; readonly error: string };
-
 export type AddAccountWizardStep = "Service" | "Name" | "Connect";
 
 /**
@@ -17,27 +13,38 @@ export function addAccountWizardSteps(options: {
 }
 
 /**
- * Resolve navigation within the add-account wizard.
- *
- * Moving forward past the Name step requires a valid account id, whether the
- * user advances one step at a time or skips ahead from a step header. A
- * blocked skip lands on Name so its inline validation is visible. Backward
- * navigation is always preserved.
+ * Normalize a user-provided name into a slug suffix for the account id.
+ * The full id is formed by prefixing the driver slug — e.g. label "Work" on
+ * driver "codex" becomes `codex_work`. Output is trimmed to 48 chars so the
+ * final composed id stays under the 64-char slug cap enforced by
+ * `ProviderInstanceId` in `@akeru/contracts`.
  */
-export function resolveWizardNavigation(
-  currentStep: number,
-  requestedStep: number,
-  steps: readonly AddAccountWizardStep[],
-  validation: { readonly instanceIdError: string | null },
-): WizardNavigation {
-  const lastStep = Math.max(0, steps.length - 1);
-  const targetStep = Math.max(0, Math.min(lastStep, requestedStep));
-  const nameStep = steps.indexOf("Name");
-  const movesForwardPastName = currentStep <= nameStep && targetStep > nameStep;
+function slugifyLabel(value: string): string {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "")
+    .slice(0, 48);
+}
 
-  if (movesForwardPastName && validation.instanceIdError !== null) {
-    return { kind: "blocked", step: nameStep, error: validation.instanceIdError };
-  }
+/**
+ * Account id from the name, or `{driver}` when the name is empty, with the
+ * first free `_{n}` suffix when that id is taken.
+ */
+export function deriveInstanceId(
+  driver: string,
+  label: string,
+  existing: ReadonlySet<string>,
+): string {
+  const slug = slugifyLabel(label);
+  const base = slug ? `${driver}_${slug}` : driver;
 
-  return { kind: "navigate", step: targetStep };
+  if (slug && !existing.has(base)) return base;
+
+  let index = 2;
+
+  while (existing.has(`${base}_${index}`)) index += 1;
+
+  return `${base}_${index}`;
 }
