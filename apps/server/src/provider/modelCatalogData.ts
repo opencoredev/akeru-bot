@@ -117,6 +117,7 @@ function isUsable(driver: string, model: ModelsDevModel): boolean {
     return (
       model.id.startsWith("gpt-") &&
       !/-(pro|nano)$/.test(model.family ?? "") &&
+      !/-(pro|nano)(-|$)/.test(model.id) &&
       efforts !== undefined
     );
   }
@@ -180,6 +181,28 @@ export function mergeCatalogs(
   return { version: 1, drivers: { ...previous.drivers, ...next.drivers } };
 }
 
+/**
+ * Combines the bundled catalog with a cached one. The cache usually wins, but
+ * an app update can ship a bundle generated after the cache was fetched; a
+ * driver whose bundled list has a newer release than its cached list uses the
+ * bundled list, so offline users still see the models the update added.
+ */
+export function preferNewerLists(
+  bundled: ModelCatalogData,
+  cached: ModelCatalogData,
+): ModelCatalogData {
+  const newestRelease = (models: ReadonlyArray<CatalogModel> | undefined) =>
+    Math.max(0, ...(models ?? []).map(releaseMs));
+
+  const drivers = { ...bundled.drivers, ...cached.drivers };
+
+  for (const [driver, models] of Object.entries(bundled.drivers)) {
+    if (newestRelease(models) > newestRelease(cached.drivers[driver])) drivers[driver] = models;
+  }
+
+  return { version: 1, drivers };
+}
+
 /** Catalog models for a driver, newest first. Empty for drivers the catalog does not cover. */
 export function catalogModelsFor(
   catalog: ModelCatalogData,
@@ -205,7 +228,9 @@ export function currentModelIds(
     return catalog.drivers[driver] ? new Set(models.map((model) => model.id)) : null;
   }
 
-  if (models.length === 0) return null;
+  if (!catalog.drivers[driver]) return null;
+
+  if (models.length === 0) return new Set();
   const newest = Math.max(...models.map(releaseMs));
   const newestByFamily = new Map<string, CatalogModel>();
 

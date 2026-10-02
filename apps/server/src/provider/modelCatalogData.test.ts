@@ -8,6 +8,7 @@ import {
   currentModelIds,
   harnessEffortLevels,
   mergeCatalogs,
+  preferNewerLists,
   type ModelCatalogData,
 } from "./modelCatalogData.ts";
 
@@ -122,6 +123,21 @@ describe("catalogFromModelsDev", () => {
     assert.deepStrictEqual(ids(CLAUDE), ["claude-next", "claude-retired", "claude-ancient"]);
   });
 
+  it("drops Pro and nano tiers by id when models.dev files them under the base family", () => {
+    const tiers = catalogFromModelsDev({
+      openai: {
+        models: Object.fromEntries(
+          ["gpt-7", "gpt-7-pro", "gpt-7-nano-2026"].map((id) => [
+            id,
+            { id, family: "gpt", tool_call: true, reasoning_options: effort(["low"]) },
+          ]),
+        ),
+      },
+    })!;
+
+    assert.deepStrictEqual(ids(CODEX, tiers), ["gpt-7"]);
+  });
+
   it("returns null when no covered provider has a usable model", () => {
     assert.isNull(catalogFromModelsDev({ openai: { models: {} } }));
   });
@@ -133,6 +149,31 @@ describe("catalogFromModelsDev", () => {
       ids(ProviderDriverKind.make("grok"), merged),
       ids(ProviderDriverKind.make("grok"), BUNDLED_MODEL_CATALOG),
     );
+  });
+});
+
+describe("preferNewerLists", () => {
+  it("keeps cached lists unless the bundle has a newer release for that driver", () => {
+    const bundled = {
+      version: 1 as const,
+      drivers: {
+        codex: [{ id: "gpt-new", name: "New", releaseDate: "2026-09-01" }],
+        kimi: [{ id: "k-old", name: "Old", releaseDate: "2026-01-01" }],
+      },
+    };
+
+    const cached = {
+      version: 1 as const,
+      drivers: {
+        codex: [{ id: "gpt-old", name: "Old", releaseDate: "2026-01-01" }],
+        kimi: [{ id: "k-new", name: "New", releaseDate: "2026-09-01" }],
+      },
+    };
+
+    const preferred = preferNewerLists(bundled, cached);
+
+    assert.deepStrictEqual(ids(CODEX, preferred), ["gpt-new"]);
+    assert.deepStrictEqual(ids(KIMI, preferred), ["k-new"]);
   });
 });
 
@@ -158,6 +199,15 @@ describe("currentModelIds", () => {
 
   it("treats every non-deprecated model as current for plan providers", () => {
     assert.deepStrictEqual([...currentModelIds(catalog, KIMI)!], ["k9"]);
+  });
+
+  it("returns no current models when every listed model is deprecated", () => {
+    const retired = {
+      version: 1 as const,
+      drivers: { [CODEX]: [{ id: "gpt-old", name: "Old", deprecated: true }] },
+    };
+
+    assert.deepStrictEqual([...currentModelIds(retired, CODEX)!], []);
   });
 
   it("returns null for drivers the catalog does not cover", () => {

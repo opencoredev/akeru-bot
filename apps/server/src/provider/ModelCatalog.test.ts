@@ -1,7 +1,10 @@
+import * as NodePath from "node:path";
+
 import { assert, describe, it } from "@effect/vitest";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { ProviderDriverKind, type ServerProviderModel } from "@akeru/contracts";
 import * as Effect from "effect/Effect";
+import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import { HttpClient, HttpClientResponse } from "effect/unstable/http";
 
@@ -98,7 +101,7 @@ const MODELS_DEV_PAYLOAD = {
       "gpt-remote": {
         id: "gpt-remote",
         name: "GPT Remote",
-        release_date: "2026-09-30",
+        release_date: "2099-01-01",
         tool_call: true,
         reasoning_options: [{ type: "effort", values: ["low", "medium"] }],
       },
@@ -146,6 +149,44 @@ describe("ModelCatalog service", () => {
       Effect.provide(
         serviceLayers({
           prefix: "model-catalog-fetch-test",
+          response: () => Response.json(MODELS_DEV_PAYLOAD),
+        }),
+      ),
+    ),
+  );
+
+  it.live("uses the bundled list for a driver whose disk cache predates the bundle", () =>
+    Effect.gen(function* () {
+      const config = yield* ServerConfig.ServerConfig;
+      const fileSystem = yield* FileSystem.FileSystem;
+
+      yield* fileSystem.makeDirectory(config.stateDir, { recursive: true });
+      yield* fileSystem.writeFileString(
+        NodePath.join(config.stateDir, "model-catalog.json"),
+        JSON.stringify({
+          fetchedAtMs: Date.now(),
+          catalog: {
+            version: 1,
+            drivers: {
+              codex: [{ id: "gpt-cached", name: "GPT Cached", releaseDate: "2020-01-01" }],
+              kimi: [{ id: "k-cached", name: "Kimi Cached", releaseDate: "2099-01-01" }],
+            },
+          },
+        }),
+      );
+
+      const current = yield* (yield* make).current;
+
+      assert.deepStrictEqual(current.drivers.codex, BUNDLED_MODEL_CATALOG.drivers.codex);
+      assert.deepStrictEqual(
+        current.drivers.kimi?.map((entry) => entry.id),
+        ["k-cached"],
+      );
+    }).pipe(
+      Effect.scoped,
+      Effect.provide(
+        serviceLayers({
+          prefix: "model-catalog-old-cache-test",
           response: () => Response.json(MODELS_DEV_PAYLOAD),
         }),
       ),

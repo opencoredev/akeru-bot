@@ -394,12 +394,15 @@ outside the Pro and nano tiers. For Codex, Claude, and Grok, a model is current 
 newest non-deprecated model in its family and was released within 180 days of the provider's
 newest model. Kimi For Coding and OpenCode Go list every non-deprecated model as current.
 
-The `ModelCatalog` service (`ModelCatalog.ts`) refetches models.dev at most hourly, retries a
-failed fetch after five minutes, and respects `enableProviderUpdateChecks`. Preference order is
-the last fetch, then its on-disk copy (`model-catalog.json` in the state directory), then the
-bundled `apps/server/src/provider/model-catalog.json`. A fetch that omits a driver keeps that
-driver's previous models, and a fetch never fails a provider check. Drivers apply the catalog to
-every snapshot, and the registry's periodic refresh pushes the result to clients. Kimi For Coding
+The `ModelCatalog` service (`ModelCatalog.ts`) runs its own loop that refetches models.dev
+hourly, retries a failed fetch after five minutes, and respects `enableProviderUpdateChecks`.
+Preference order is the last fetch, then its on-disk copy (`model-catalog.json` in the state
+directory), then the bundled `apps/server/src/provider/model-catalog.json`. A fetch that omits a
+driver keeps that driver's previous models, and a fetch never fails a provider check. When the bundle
+lists a driver release newer than anything in the on-disk copy, that driver uses the bundled list
+until the next fetch, so upgrading while offline still shows a newer release's models. Drivers apply the catalog to every snapshot. Codex, Claude, and
+Grok publish it on their periodic health check; Kimi For Coding and OpenCode Go have no periodic
+check, so they republish when the catalog's `changes` stream emits. Kimi For Coding
 and OpenCode Go keep a hardcoded fallback list whose first slug stays the default, and Grok keeps
 `grok-build` current because models.dev does not list it.
 

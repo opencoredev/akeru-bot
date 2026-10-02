@@ -96,6 +96,12 @@ export const KimiDriver: ProviderDriver<KimiSettings, KimiDriverEnv> = {
         Effect.tap((snapshot) => PubSub.publish(changes, snapshot)),
       );
 
+      // No periodic health check runs for this driver, so republish when the
+      // model catalog changes to bring new models to open clients.
+      yield* Stream.runForEach(modelCatalog.changes, () => refresh).pipe(
+        Effect.forkScoped({ startImmediately: true }),
+      );
+
       return {
         instanceId,
         driverKind: DRIVER_KIND,

@@ -8,13 +8,9 @@ const OPEN_CODE_GO_BASE_URL = "https://opencode.ai/zen/go/v1";
 
 const OPEN_CODE_GO_USER_AGENT = "akeru-bot/0.0.37";
 
-const RESPONSES_MODELS = new Set([
-  "gpt-5.6-luna",
-  "grok-4.5",
-  "grok-4.6",
-  "muse-spark-1.2-contributor",
-  "muse-spark-1.3-contributor",
-]);
+/** Model families OpenCode Go serves over the Responses API. Matched by
+ * prefix so new releases from the live model catalog route correctly. */
+const RESPONSES_MODEL_PREFIXES = ["gpt-", "grok-", "muse-spark-"];
 
 export type OpenCodeGoProtocol = "anthropic" | "chat-completions" | "responses";
 
@@ -24,7 +20,7 @@ type AkeruOpenCodeGoFetch = (
 ) => Promise<Response>;
 
 export function openCodeGoProtocol(modelId: string): OpenCodeGoProtocol {
-  if (RESPONSES_MODELS.has(modelId)) return "responses";
+  if (RESPONSES_MODEL_PREFIXES.some((prefix) => modelId.startsWith(prefix))) return "responses";
 
   if (modelId.startsWith("minimax-") || modelId.startsWith("qwen")) return "anthropic";
 

@@ -180,6 +180,7 @@ it.layer(testLayer)("Harness provider drivers without CLIs", (it) => {
                 current: Effect.succeed(catalog),
                 refresh: Effect.succeed(catalog),
                 refreshInBackground: Effect.void,
+                changes: Stream.empty,
               }),
             );
 

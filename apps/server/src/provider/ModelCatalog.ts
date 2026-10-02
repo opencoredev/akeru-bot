@@ -4,10 +4,10 @@
  *
  * The data comes from models.dev (see `modelCatalogData.ts`). A trimmed copy
  * ships as `model-catalog.json`. At runtime the server refetches models.dev
- * hourly, so a newly released model reaches every client on the next provider
- * check without an app update. Preference order is the last fetch, then the
- * on-disk copy of it, then the bundle. A failed fetch never fails a provider
- * check.
+ * hourly and publishes each new catalog on `changes`, so a newly released
+ * model reaches every client without an app update. Preference order is the
+ * last fetch, then the on-disk copy of it, then the bundle. A failed fetch
+ * never fails a provider check.
  *
  * Drivers apply the catalog to snapshot drafts with `applyModelCatalog`
  * before publishing, so every path that produces models (pending, probe,
@@ -20,8 +20,10 @@ import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Path from "effect/Path";
+import * as PubSub from "effect/PubSub";
 import * as Schema from "effect/Schema";
 import * as Semaphore from "effect/Semaphore";
+import * as Stream from "effect/Stream";
 import { HttpClient, HttpClientResponse } from "effect/unstable/http";
 
 import { ServerConfig } from "../config.ts";
@@ -35,6 +37,7 @@ import {
   ModelCatalogSchema,
   MODELS_DEV_URL,
   ModelsDevPayload,
+  preferNewerLists,
   type ModelCatalogData,
 } from "./modelCatalogData.ts";
 import type { ServerProviderDraft } from "./providerSnapshot.ts";
@@ -158,6 +161,9 @@ export class ModelCatalog extends Context.Service<
      * provider checks: the fetch is process-shared state, so it must survive
      * the teardown of whichever instance happened to trigger it. */
     readonly refreshInBackground: Effect.Effect<void>;
+    /** Emits the catalog after each fetch that produced one. Drivers without
+     * a periodic health check republish their snapshot from this. */
+    readonly changes: Stream.Stream<ModelCatalogData>;
   }
 >()("akeru-bot/provider/ModelCatalog") {}
 
@@ -166,6 +172,7 @@ export const BundledOnlyModelCatalog: ModelCatalog["Service"] = {
   current: Effect.succeed(BUNDLED_MODEL_CATALOG),
   refresh: Effect.succeed(BUNDLED_MODEL_CATALOG),
   refreshInBackground: Effect.void,
+  changes: Stream.empty,
 };
 
 export const layerTest = Layer.succeed(ModelCatalog, BundledOnlyModelCatalog);
@@ -184,6 +191,11 @@ export const make = Effect.gen(function* () {
   let lastAttemptMs: number | null = null;
   const refreshSemaphore = yield* Semaphore.make(1);
 
+  const changes = yield* Effect.acquireRelease(
+    PubSub.unbounded<ModelCatalogData>(),
+    PubSub.shutdown,
+  );
+
   // `Effect.cached` makes concurrent first readers await the same disk load
   // rather than racing a "loaded" flag. Only `refresh` takes the fetch
   // semaphore; `current` must never wait behind an in-flight network refresh.
@@ -196,8 +208,10 @@ export const make = Effect.gen(function* () {
 
       if (fromDisk === null) return;
       // The disk copy is the last fetched catalog, so it outranks the bundle
-      // even when stale: it is refreshed on the next successful fetch.
-      catalog = mergeCatalogs(BUNDLED_MODEL_CATALOG, fromDisk.catalog);
+      // even when stale: it is refreshed on the next successful fetch. Bundled
+      // models it does not list stay, so a cache written by an older release
+      // never hides models a newer release ships with.
+      catalog = preferNewerLists(BUNDLED_MODEL_CATALOG, fromDisk.catalog);
       fetchedAtMs = fromDisk.fetchedAtMs;
     }),
   );
@@ -244,6 +258,7 @@ export const make = Effect.gen(function* () {
       Effect.flatMap((serialized) => fileSystem.writeFileString(cachePath, serialized)),
       Effect.catchCause(() => Effect.void),
     );
+    yield* PubSub.publish(changes, catalog);
 
     return catalog;
   });
@@ -254,7 +269,21 @@ export const make = Effect.gen(function* () {
     current: ensureDiskCacheLoaded.pipe(Effect.map(() => catalog)),
     refresh: guardedRefresh,
     refreshInBackground: Effect.forkIn(guardedRefresh, serviceScope).pipe(Effect.asVoid),
+    changes: Stream.fromPubSub(changes),
   });
 });
 
-export const layer = Layer.effect(ModelCatalog, make);
+/** `refresh` is TTL-gated, so polling at the retry interval fetches hourly
+ * and retries a failed fetch after five minutes. */
+export const layer = Layer.effect(
+  ModelCatalog,
+  make.pipe(
+    Effect.tap((service) =>
+      service.refresh.pipe(
+        Effect.andThen(Effect.sleep(CATALOG_RETRY_MS)),
+        Effect.forever,
+        Effect.forkScoped,
+      ),
+    ),
+  ),
+);
