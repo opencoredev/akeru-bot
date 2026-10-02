@@ -8,6 +8,7 @@ import {
   mastraFixture,
   startTurn,
   modelFor,
+  mastraWireModelFor,
   THREAD_ID,
   runtimeBase,
   FIXTURE_TURN_ID,
@@ -76,7 +77,7 @@ for (const provider of MASTRA_PROVIDERS) {
             .mastraHarness!.getModelSwitches(THREAD_ID)
             .slice(switchesAfterFirstTurn);
 
-          assert.equal(secondTurnSwitches.at(-1)?.endsWith(modelFor(provider, "b")), true);
+          assert.equal(secondTurnSwitches.at(-1), mastraWireModelFor(provider));
         }),
       provider,
     ),

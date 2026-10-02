@@ -64,6 +64,17 @@ export function modelFor(provider: IntegrationProvider, variant: "a" | "b"): str
   return variant === "a" ? "gpt-5.6-luna" : "gpt-5.6-sol";
 }
 
+/** The Mastra wire id a turn on `modelFor(provider, "b")` switches the session to. */
+export function mastraWireModelFor(provider: IntegrationProvider): string {
+  // Claude turns select the 1M context variant, and grok-build resolves to
+  // its concrete model before reaching Mastra.
+  if (provider === CLAUDE_AGENT_PROVIDER) return "anthropic/claude-opus-4-6[1m]";
+
+  if (provider === GROK_PROVIDER) return "xai/grok-4.6";
+
+  return `opencode-go/${modelFor(provider, "b")}`;
+}
+
 export function mastraFixture(provider: IntegrationProvider, suffix: string): TestTurnResponse {
   const base = (eventId: string, createdAt: string) => ({
     ...runtimeBase(eventId, createdAt, provider),
