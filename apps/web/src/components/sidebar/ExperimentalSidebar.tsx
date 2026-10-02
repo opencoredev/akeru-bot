@@ -67,11 +67,15 @@ export function useSidebarExperiment(): boolean {
 /** Rail plus panel use a fixed width; resizing is ignored while experimenting. */
 export const EXPERIMENTAL_SIDEBAR_WIDTH = RAIL_WIDTH + PANEL_WIDTH;
 
-/** Full-page places such as Plugins show only the rail. */
+/** Full-page places such as Plugins and Usage show only the rail. */
 export const EXPERIMENTAL_RAIL_ONLY_WIDTH = RAIL_WIDTH;
 
 export function isRailOnlyPath(pathname: string): boolean {
-  return pathname === "/plugins" || pathname.startsWith("/plugins/");
+  return isPathUnder(pathname, "/plugins") || isPathUnder(pathname, "/usage");
+}
+
+function isPathUnder(pathname: string, base: string): boolean {
+  return pathname === base || pathname.startsWith(`${base}/`);
 }
 
 type Place = "chats" | "routines";
@@ -83,9 +87,11 @@ export function ExperimentalSidebar() {
   // Settings is a route, not a panel toggle: the URL decides whether it owns
   // the panel, and leaving it goes back to the chat workspace.
   const onSettings = pathname === "/settings" || pathname.startsWith("/settings/");
-  const onPlugins = isRailOnlyPath(pathname);
+  const onPlugins = isPathUnder(pathname, "/plugins");
+  const onUsage = isPathUnder(pathname, "/usage");
+  const railOnly = onPlugins || onUsage;
   // Collapsing hides the panel and keeps the rail; picking a place brings it back.
-  const { state: sidebarState, setOpen: setSidebarOpen } = useSidebar();
+  const { state: sidebarState, setOpen: setSidebarOpen, isMobile } = useSidebar();
 
   const revealPanel = () => {
     if (sidebarState === "collapsed") setSidebarOpen(true);
@@ -95,7 +101,7 @@ export function ExperimentalSidebar() {
     setPlace(next);
     revealPanel();
 
-    if (onSettings || onPlugins) void navigate({ to: "/" });
+    if (onSettings || railOnly) void navigate({ to: "/" });
   };
 
   const isMacosDesktop = isElectron && isMacPlatform(navigator.platform);
@@ -126,13 +132,13 @@ export function ExperimentalSidebar() {
           <RailButton
             label={t("Chats")}
             icon={BubbleChatIcon}
-            active={!onSettings && !onPlugins && place === "chats"}
+            active={!onSettings && !railOnly && place === "chats"}
             onClick={() => choosePlace("chats")}
           />
           <RailButton
             label={t("Routines")}
             icon={Calendar03Icon}
-            active={!onSettings && !onPlugins && place === "routines"}
+            active={!onSettings && !railOnly && place === "routines"}
             onClick={() => choosePlace("routines")}
           />
           <RailButton
@@ -143,7 +149,14 @@ export function ExperimentalSidebar() {
               if (!onPlugins) openPlugins();
             }}
           />
-          <RailButton label={t("Usage")} icon={Analytics01Icon} onClick={() => openUsage()} />
+          <RailButton
+            label={t("Usage")}
+            icon={Analytics01Icon}
+            active={onUsage}
+            onClick={() => {
+              if (!onUsage) openUsage();
+            }}
+          />
         </div>
         <div className="mt-auto flex flex-col items-center gap-1.5">
           <RailButton
@@ -171,7 +184,10 @@ export function ExperimentalSidebar() {
       {/* The panel is a raised card; its row tokens are re-based on the card surface. */}
       {/* Fixed width so collapsing clips the panel instead of squeezing its rows. */}
       <div
-        className={cn("flex w-(--panel-width) shrink-0 py-2 pr-2", onPlugins && "hidden")}
+        className={cn(
+          "flex w-(--panel-width) shrink-0 py-2 pr-2",
+          railOnly && !isMobile && "hidden",
+        )}
         style={{ "--panel-width": `${PANEL_WIDTH}px` }}
       >
         <div className="flex min-w-0 flex-1 flex-col overflow-hidden rounded-2xl border border-sidebar-border/70 bg-sidebar shadow-(--shell-card-shadow) sidebar-shell-card">
