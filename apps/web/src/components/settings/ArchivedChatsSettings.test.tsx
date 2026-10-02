@@ -140,6 +140,30 @@ describe("ArchivedChatsSettingsPanel", () => {
     expect(markup).toContain("Could not load archived chats");
   });
 
+  it("offers only delete for chats whose bot was deleted", () => {
+    mocks.archive.snapshots = [
+      {
+        environmentId,
+        snapshot: makeShellSnapshot({
+          bots: [],
+          groups: [],
+          threads: [
+            {
+              id: "thread-1",
+              title: "Trip plans",
+              createdAt: "2026-09-01T00:00:00.000Z",
+              updatedAt: "2026-09-20T00:00:00.000Z",
+              archivedAt: "2026-09-20T00:00:00.000Z",
+            },
+          ],
+        }),
+      },
+    ];
+    expect(render()).toContain("Other chats");
+    expect(mocks.buttons.has("Unarchive")).toBe(false);
+    expect(mocks.buttons.has("Delete Trip plans")).toBe(true);
+  });
+
   it("lists archived chats under their bot and restores or deletes them", async () => {
     mocks.bots = [{ id: "bot-mori", name: "Mori" } as OrchestrationBot];
     mocks.archive.snapshots = [

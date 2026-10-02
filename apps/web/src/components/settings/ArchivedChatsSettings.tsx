@@ -136,16 +136,19 @@ function ArchivedChatsContent({ environmentId }: { readonly environmentId: Envir
             description={t("Archived {time}", { time: archivedAt })}
             control={
               <>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="outline"
-                  disabled={busy}
-                  onClick={() => void run(chat, "unarchive")}
-                >
-                  <ArchiveRestoreIcon className="size-3.5" />
-                  {t("Unarchive")}
-                </Button>
+                {/* A chat with no bot or group has no page on web, so unarchiving would hide it. */}
+                {section.kind === "other" ? null : (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    disabled={busy}
+                    onClick={() => void run(chat, "unarchive")}
+                  >
+                    <ArchiveRestoreIcon className="size-3.5" />
+                    {t("Unarchive")}
+                  </Button>
+                )}
                 <Button
                   type="button"
                   size="icon-sm"
