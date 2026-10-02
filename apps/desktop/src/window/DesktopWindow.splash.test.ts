@@ -10,9 +10,17 @@ import { MENU_ACTION_CHANNEL } from "../ipc/channels.ts";
 
 import * as DesktopWindow from "./DesktopWindow.ts";
 
+import { buildConnectingSplashDataUrl } from "./WindowPresentation.ts";
+
 import { makeFakeBrowserWindow, makeSplashScenario } from "./test-support/DesktopWindowHarness.ts";
 
 describe("DesktopWindow", () => {
+  it.each([false, true])("animates the connecting splash with dark colors = %s", (dark) => {
+    const html = decodeURIComponent(buildConnectingSplashDataUrl(dark));
+    assert.include(html, "animation:spin .8s linear infinite");
+    assert.include(html, "@keyframes spin{to{transform:rotate(360deg)}}");
+  });
+
   it.effect(
     "retries opening the real main on activate when a failed post-readiness open left only the splash",
     () =>
@@ -33,8 +41,8 @@ describe("DesktopWindow", () => {
           assert.isString(splashUrl);
           const splashHtml = decodeURIComponent(String(splashUrl));
           assert.include(splashHtml, "Connecting to WSL");
-          assert.notInclude(splashHtml, "infinite");
-          assert.notInclude(splashHtml, "@keyframes");
+          assert.include(splashHtml, "animation:spin .8s linear infinite");
+          assert.include(splashHtml, "@keyframes spin{to{transform:rotate(360deg)}}");
 
           // 2. Backend reports ready, but opening the real main fails. The pool
           //    swallows that error in production, so handleBackendReady fails
