@@ -130,7 +130,7 @@ export const SETTINGS_NAV_GROUPS: ReadonlyArray<{
       { section: "keybindings", label: "Keyboard", icon: KeyboardIcon },
       { section: "connections", label: "Connections", icon: Link02Icon },
       { section: "privacy", label: "Privacy & data", icon: SecurityCheckIcon },
-      { section: "archived", label: "Archived chats", icon: Archive02Icon },
+      { section: "archived", label: "Archived", icon: Archive02Icon },
       { section: "advanced", label: "Advanced", icon: SlidersHorizontalIcon },
     ],
   },

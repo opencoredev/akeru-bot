@@ -27,7 +27,7 @@ import {
 } from "./test-support/BotDeleteFixtures.ts";
 
 it.layer(NodeServices.layer)("bot delete decider", (it) => {
-  it.effect("deletes a bot and detaches its chats", () =>
+  it.effect("deletes a bot and moves its detached chats to Archived chats", () =>
     Effect.gen(function* () {
       const readModel = makeReadModel({
         bots: [makeBot({ id: BOT_ID })],
@@ -47,6 +47,7 @@ it.layer(NodeServices.layer)("bot delete decider", (it) => {
 
       expect(events.map((event) => event.type)).toEqual([
         "thread.ownership-updated",
+        "thread.archived",
         "bot.deleted",
       ]);
       const ownership = events[0];
@@ -72,6 +73,7 @@ it.layer(NodeServices.layer)("bot delete decider", (it) => {
 
       expect(next.bots).toHaveLength(0);
       expect(next.threads[0]?.botId).toBeNull();
+      expect(next.threads[0]?.archivedAt).not.toBeNull();
     }),
   );
 
@@ -168,7 +170,9 @@ it.layer(NodeServices.layer)("bot delete decider", (it) => {
         "thread.session-stop-requested",
         "thread.session-stop-requested",
         "thread.ownership-updated",
+        "thread.archived",
         "thread.ownership-updated",
+        "thread.archived",
         "bot.deleted",
       ]);
       expect(
