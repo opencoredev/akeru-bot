@@ -75,12 +75,13 @@ export const createWsOrchestrationCommands = ({
             createdAt: bootstrap.createThread.createdAt,
           });
 
+          createdThread = true;
+
           // The successful create is a fence in the engine command queue:
           // every delete for the prior incarnation committed before it.
           // Drain through that event before setup or turn start can own
           // terminals and provider sessions under the reused thread id.
           yield* threadDeletionReactor.drainThrough(created.sequence);
-          createdThread = true;
         }
 
         if (bootstrap?.prepareWorktree) {
