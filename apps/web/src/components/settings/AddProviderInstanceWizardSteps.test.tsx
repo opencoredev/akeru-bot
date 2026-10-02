@@ -13,7 +13,7 @@ interface StepListItemProps {
   readonly children: ReactElement<StepButtonProps>;
 }
 
-const CUSTOM_API_STEPS = addAccountWizardSteps({ choosesService: true, hasSettings: true });
+const CUSTOM_API_STEPS = addAccountWizardSteps({ choosesService: true });
 
 function renderStepButtons(
   currentStep: number,

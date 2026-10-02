@@ -25,10 +25,7 @@ export function AddProviderInstanceWizardSteps({
 }: AddProviderInstanceWizardStepsProps) {
   return (
     <ol
-      className={cn(
-        "grid gap-1 rounded-xl bg-inset-surface p-1 ring-1 ring-tint/5",
-        steps.length === 3 ? "grid-cols-3" : "grid-cols-2",
-      )}
+      className="grid grid-cols-3 gap-1 rounded-xl bg-inset-surface p-1 ring-1 ring-tint/5"
       role="list"
     >
       {steps.map((step, index) => (

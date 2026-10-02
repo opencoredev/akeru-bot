@@ -25,7 +25,7 @@ import {
 import { Input } from "../ui/input";
 import { toastManager } from "../ui/toast";
 import type { DriverOption } from "./providerDriverMeta";
-import { ProviderSettingsForm, deriveProviderSettingsFields } from "./ProviderSettingsForm";
+import { ProviderSettingsForm } from "./ProviderSettingsForm";
 import { AnimatedHeight } from "../AnimatedHeight";
 import {
   addAccountWizardSteps,
@@ -159,18 +159,10 @@ export function AddProviderInstanceDialog({
   const accountLabel = providerLabel ?? driverOption.label;
   const instanceId = instanceIdOverride ?? deriveInstanceId(driver, label, existingIds);
 
-  const driverSettingsFields = useMemo(
-    () => deriveProviderSettingsFields(driverOption),
-    [driverOption],
-  );
-
   const instanceIdError = validateInstanceId(instanceId, existingIds);
   const showInstanceIdError = hasAttemptedSubmit && instanceIdError !== null;
 
-  const wizardSteps = addAccountWizardSteps({
-    choosesService: isCustomApi,
-    hasSettings: driverSettingsFields.length > 0,
-  });
+  const wizardSteps = addAccountWizardSteps({ choosesService: isCustomApi });
 
   const lastStep = wizardSteps.length - 1;
   const currentStepName = wizardSteps[wizardStep];
@@ -384,13 +376,8 @@ export function AddProviderInstanceDialog({
                   </span>
                 </div>
 
-                {driverSettingsFields.length > 0 ? (
-                  <div
-                    className={cn(
-                      "grid gap-4",
-                      currentStepName !== "Connect" && currentStepName !== "Settings" && "hidden",
-                    )}
-                  >
+                {isCustomApi ? (
+                  <div className={cn("grid gap-4", currentStepName !== "Connect" && "hidden")}>
                     <ProviderSettingsForm
                       definition={driverOption}
                       value={configDraft}
@@ -398,15 +385,13 @@ export function AddProviderInstanceDialog({
                       variant="dialog"
                       onChange={setConfigDraft}
                     />
-                    {isCustomApi ? (
-                      <CustomApiKeyDraftField
-                        id="add-provider-custom-api-key"
-                        value={customApiKey}
-                        required={customApiPreset.key.kind === "required"}
-                        hint={customApiKeyHint(customApiPreset)}
-                        onChange={setCustomApiKey}
-                      />
-                    ) : null}
+                    <CustomApiKeyDraftField
+                      id="add-provider-custom-api-key"
+                      value={customApiKey}
+                      required={customApiPreset.key.kind === "required"}
+                      hint={customApiKeyHint(customApiPreset)}
+                      onChange={setCustomApiKey}
+                    />
                   </div>
                 ) : null}
               </div>

@@ -2,20 +2,18 @@ export type WizardNavigation =
   | { readonly kind: "navigate"; readonly step: number }
   | { readonly kind: "blocked"; readonly step: number; readonly error: string };
 
-export type AddAccountWizardStep = "Service" | "Name" | "Connect" | "Settings";
+export type AddAccountWizardStep = "Service" | "Name" | "Connect";
 
 /**
  * Steps of the add-account dialog. The dialog is opened from one provider's
- * page, so it never asks which provider; Custom API first asks which service,
- * and a provider without settings stops at the name.
+ * page, so it never asks which provider. Custom API asks which service and
+ * how to reach it; a subscription account only needs a name, and the user
+ * signs in from its card afterwards.
  */
 export function addAccountWizardSteps(options: {
   readonly choosesService: boolean;
-  readonly hasSettings: boolean;
 }): readonly AddAccountWizardStep[] {
-  if (options.choosesService) return ["Service", "Name", "Connect"];
-
-  return options.hasSettings ? ["Name", "Settings"] : ["Name"];
+  return options.choosesService ? ["Service", "Name", "Connect"] : ["Name"];
 }
 
 /**

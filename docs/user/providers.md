@@ -13,7 +13,7 @@ about once an hour, and open clients pick them up within a few minutes, with no 
 update. Older models move to the picker's legacy section when a newer one in the same line ships.
 
 Use **Add account** on a provider's page to connect a second account of the same provider, such as a
-work and a personal subscription. An account configured with its own credentials uses those
+work and a personal subscription. Give it a name, then sign in from its card. An account configured with its own credentials uses those
 credentials rather than the shared connection. A custom configuration directory alone does not
 connect an account to Akeru's runtime.
 
