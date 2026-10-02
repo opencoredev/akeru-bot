@@ -7,6 +7,7 @@ import {
   customApiPresetForBaseUrl,
   OTHER_CUSTOM_API_PRESET,
   withCustomApiKey,
+  withStoredCustomApiKey,
 } from "./customApiPresets";
 
 function preset(id: string) {
@@ -61,5 +62,21 @@ describe("withCustomApiKey", () => {
 
   it("removes the key when the value is empty", () => {
     expect(withCustomApiKey(withCustomApiKey([other], "sk-old"), "")).toEqual([other]);
+  });
+});
+
+describe("withStoredCustomApiKey", () => {
+  const other = { name: "HTTP_PROXY", value: "http://proxy", sensitive: false };
+  const stored = { name: CUSTOM_API_KEY_ENV, value: "", sensitive: true, valueRedacted: true };
+
+  it("keeps the stored key through ordinary environment edits", () => {
+    expect(withStoredCustomApiKey([other], stored)).toEqual([other, stored]);
+  });
+
+  it("ignores a generic row that reuses the reserved name", () => {
+    const collision = { name: CUSTOM_API_KEY_ENV, value: "", sensitive: true };
+
+    expect(withStoredCustomApiKey([other, collision], stored)).toEqual([other, stored]);
+    expect(withStoredCustomApiKey([other, collision], undefined)).toEqual([other]);
   });
 });

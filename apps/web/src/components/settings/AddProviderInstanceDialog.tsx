@@ -210,6 +210,9 @@ export function AddProviderInstanceDialog({
   };
 
   const chooseCustomApiPreset = (preset: CustomApiPreset) => {
+    // A key belongs to one service; never send it to the next endpoint.
+    if (preset.id !== customApiPreset.id) setCustomApiKey("");
+
     setCustomApiPreset(preset);
 
     if (!labelEdited) setLabel(preset === OTHER_CUSTOM_API_PRESET ? "" : preset.label);

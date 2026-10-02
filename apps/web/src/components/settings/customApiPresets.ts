@@ -55,7 +55,7 @@ export const CUSTOM_API_PRESETS: readonly CustomApiPreset[] = [
     label: "Together AI",
     tagline: "Hosted open models",
     icon: TogetherLogo,
-    baseUrl: "https://api.together.xyz/v1",
+    baseUrl: "https://api.together.ai/v1",
     key: { kind: "required", url: "https://api.together.ai/settings/api-keys" },
   },
   {
@@ -173,4 +173,18 @@ export function withCustomApiKey(
   return trimmed.length === 0
     ? rest
     : [...rest, { name: CUSTOM_API_KEY_ENV, value: trimmed, sensitive: true }];
+}
+
+/**
+ * Merge edits from the generic environment editor with the stored key. The
+ * key field owns the reserved name, so a generic row with that name is
+ * dropped instead of replacing (and, when empty, deleting) the stored key.
+ */
+export function withStoredCustomApiKey(
+  environment: ReadonlyArray<ProviderInstanceEnvironmentVariable>,
+  stored: ProviderInstanceEnvironmentVariable | undefined,
+): ProviderInstanceEnvironmentVariable[] {
+  const rest = withoutCustomApiKey(environment);
+
+  return stored ? [...rest, stored] : rest;
 }

@@ -52,6 +52,7 @@ import {
   readCustomApiKey,
   withCustomApiKey,
   withoutCustomApiKey,
+  withStoredCustomApiKey,
 } from "./customApiPresets";
 import { ProviderAuthEmail } from "./ProviderAuthEmail";
 import {
@@ -500,9 +501,7 @@ export function ProviderInstanceCard({
               <ProviderEnvironmentSection
                 environment={isCustomApi ? withoutCustomApiKey(environment) : environment}
                 onChange={(next) =>
-                  updateEnvironment(
-                    customApiKey && !readCustomApiKey(next) ? [...next, customApiKey] : next,
-                  )
+                  updateEnvironment(isCustomApi ? withStoredCustomApiKey(next, customApiKey) : next)
                 }
               />
             </div>
