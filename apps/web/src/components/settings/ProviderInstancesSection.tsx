@@ -325,7 +325,7 @@ export function ProviderInstancesSection({
     <>
       <SettingsSection
         id="provider-instances"
-        title={rows.length > 1 ? t("Instances") : t("Configuration")}
+        title={rows.length > 1 ? t("Accounts") : t("Configuration")}
         headerAction={
           <div className="flex items-center gap-1">
             <Button
@@ -344,7 +344,7 @@ export function ProviderInstancesSection({
             </Button>
             <Button size="xs" variant="ghost-muted" onClick={() => setIsAddDialogOpen(true)}>
               <PlusIcon className="size-3.5" />
-              {t("Add instance")}
+              {t("Add account")}
             </Button>
           </div>
         }

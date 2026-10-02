@@ -348,13 +348,13 @@ export function ProviderInstanceCard({
                   variant="ghost"
                   presentation="provider-remove"
                   onClick={onDelete}
-                  aria-label={`Delete provider instance ${instanceId}`}
+                  aria-label={`Delete account ${instanceId}`}
                 >
                   <Trash2Icon className="size-3" />
                 </Button>
               }
             />
-            <TooltipPopup side="top">Delete instance</TooltipPopup>
+            <TooltipPopup side="top">Delete account</TooltipPopup>
           </Tooltip>
         </span>
       ) : null}
@@ -517,7 +517,7 @@ export function ProviderInstanceCard({
                   className="mt-1.5"
                   value={instance.displayName ?? ""}
                   onCommit={updateDisplayName}
-                  placeholder={driverOption?.label ?? "Instance label"}
+                  placeholder={driverOption?.label ?? "Account name"}
                   spellCheck={false}
                 />
                 <span className="mt-1 block text-xs text-muted-foreground">
@@ -532,7 +532,7 @@ export function ProviderInstanceCard({
                 value={accentColor}
                 onCommit={updateAccentColor}
                 commitDelayMs={120}
-                description="Used to distinguish this instance in picker rails and model lists."
+                description="Tells this account apart in the model picker."
               />
             </div>
 

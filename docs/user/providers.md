@@ -12,8 +12,10 @@ Model lists update on their own. The environment server checks models.dev for ne
 about once an hour, and open clients pick them up within a few minutes, with no reload or app
 update. Older models move to the picker's legacy section when a newer one in the same line ships.
 
-An instance configured with its own credentials uses those credentials rather than the shared
-connection. A custom configuration directory alone does not connect an account to Akeru's runtime.
+Use **Add account** on a provider's page to connect a second account of the same provider, such as a
+work and a personal subscription. An account configured with its own credentials uses those
+credentials rather than the shared connection. A custom configuration directory alone does not
+connect an account to Akeru's runtime.
 
 ## Custom API endpoints
 
@@ -21,15 +23,15 @@ connection. A custom configuration directory alone does not connect an account t
 hosted service, a gateway, or a server you run yourself. There is no account to connect and no
 sign-in flow.
 
-When you add a Custom API instance, pick what you are connecting to. OpenRouter, Groq, Together AI,
+Use **Add account** on the Custom API page and pick what you are connecting to. OpenRouter, Groq, Together AI,
 DeepSeek, Mistral, Fireworks, LM Studio, Ollama, and vLLM fill in their base URL and a name for you.
 Choose **Other** to type the URL of anything else. Local servers such as LM Studio and Ollama resolve
 on the machine running the environment, not on the device you are using.
 
 Paste the service's key into **API key**. Hosted services need one; local servers usually do not, and
 a base URL alone is enough for them. The key is stored outside the settings file, never sent back to
-a client, and sent to the configured endpoint as a bearer token. On a saved instance the field shows
-that a key is stored. Type a new key to replace it, or use **Remove key**. A key belongs to its
+a client, and sent to the configured endpoint as a bearer token. Once saved, the field shows that a
+key is stored. Type a new key to replace it, or use **Remove key**. A key belongs to its
 service: changing the base URL to a different host, or from HTTPS to HTTP, removes the stored key,
 so paste the new service's key afterwards. If the endpoint refuses to list models with that key, the
 instance shows **Needs attention** with the reason until a later check succeeds. You can still chat
@@ -39,8 +41,8 @@ The model list comes from the endpoint's `/models` response. Models you add by h
 it, and a model disappears from the picker once the endpoint stops listing it. If Akeru cannot read the
 endpoint, the last successful list stays and the provider row explains what went wrong.
 
-Use **Add instance** on the Custom API page to keep several endpoints side by side, such as a local
-server and a hosted gateway.
+Add one account per endpoint to keep several side by side, such as a local server and a hosted
+gateway.
 
 The environment sends requests to the URL you configure. Point it only at an endpoint you trust, and
 prefer HTTPS for anything outside your machine.

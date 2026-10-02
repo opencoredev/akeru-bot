@@ -3,12 +3,13 @@ import { CheckIcon } from "lucide-react";
 
 import { cn } from "../../lib/utils";
 import {
-  ADD_PROVIDER_WIZARD_STEPS,
   resolveWizardNavigation,
+  type AddAccountWizardStep,
   type WizardNavigation,
 } from "./AddProviderInstanceDialog.logic";
 
 interface AddProviderInstanceWizardStepsProps {
+  readonly steps: readonly AddAccountWizardStep[];
   readonly currentStep: number;
   readonly summaries: readonly (string | null)[];
   readonly instanceIdError: string | null;
@@ -16,6 +17,7 @@ interface AddProviderInstanceWizardStepsProps {
 }
 
 export function AddProviderInstanceWizardSteps({
+  steps,
   currentStep,
   summaries,
   instanceIdError,
@@ -23,10 +25,13 @@ export function AddProviderInstanceWizardSteps({
 }: AddProviderInstanceWizardStepsProps) {
   return (
     <ol
-      className="grid grid-cols-3 gap-1 rounded-xl bg-inset-surface p-1 ring-1 ring-tint/5"
+      className={cn(
+        "grid gap-1 rounded-xl bg-inset-surface p-1 ring-1 ring-tint/5",
+        steps.length === 3 ? "grid-cols-3" : "grid-cols-2",
+      )}
       role="list"
     >
-      {ADD_PROVIDER_WIZARD_STEPS.map((step, index) => (
+      {steps.map((step, index) => (
         <li key={step} className="min-w-0">
           <Button
             type="button"
@@ -35,11 +40,7 @@ export function AddProviderInstanceWizardSteps({
             aria-current={index === currentStep ? "step" : undefined}
             aria-label={`${step}, step ${index + 1}${index < currentStep && summaries[index] ? `, ${summaries[index]}` : ""}`}
             onClick={() =>
-              onNavigation(
-                resolveWizardNavigation(currentStep, index, ADD_PROVIDER_WIZARD_STEPS.length, {
-                  instanceIdError,
-                }),
-              )
+              onNavigation(resolveWizardNavigation(currentStep, index, steps, { instanceIdError }))
             }
           >
             <span
