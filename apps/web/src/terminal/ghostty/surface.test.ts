@@ -1,12 +1,12 @@
 import { describe, expect, it, vi } from "vite-plus/test";
+import { shouldBlinkTerminalCursor } from "./surface";
 import {
   DEFAULT_TERMINAL_FONT_FAMILY,
   DEFAULT_TERMINAL_FONT_SIZE,
   loadTerminalFontFamily,
-  shouldBlinkTerminalCursor,
   terminalFontFamily,
   terminalFontSize,
-} from "./surface";
+} from "./surfaceFont";
 
 describe("shouldBlinkTerminalCursor", () => {
   const blinking = {

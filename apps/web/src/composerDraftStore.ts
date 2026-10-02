@@ -49,6 +49,7 @@ import {
 import { createDraftIdentityActions } from "./composer/draftIdentityActions";
 import { createDraftModelActions } from "./composer/draftModelActions";
 import { createDraftContentActions } from "./composer/draftContentActions";
+import { createDraftContextActions } from "./composer/draftContextActions";
 import { revokeDraftThreadPreviewUrls } from "./composer/draftContent";
 import { getComposerDraftState } from "./composer/draftIdentity";
 import { deriveEffectiveComposerModelState } from "./composer/draftModelSelection";
@@ -91,6 +92,7 @@ const composerDraftStore = create<ComposerDraftStoreState>()(
         ...createDraftIdentityActions(set, get),
         ...createDraftModelActions(set, get),
         ...createDraftContentActions(set, get),
+        ...createDraftContextActions(set, get),
       };
     },
     {

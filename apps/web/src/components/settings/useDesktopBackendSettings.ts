@@ -8,28 +8,16 @@ import {
   type AuthPairingLink,
   type AdvertisedEndpoint,
   type DesktopDiscoveredSshHost,
-  type DesktopSshEnvironmentTarget,
   type DesktopServerExposureState,
   type EnvironmentId,
 } from "@akeru/contracts";
 import { useI18n } from "../../i18n";
-import {
-  isAtomCommandInterrupted,
-  squashAtomCommandFailure,
-} from "@akeru/client-runtime/state/runtime";
 import * as Option from "effect/Option";
 import {
   isAdvertisedEndpointRemotelyReachable,
   parsePairingUrlFields,
 } from "./ConnectionsSettings.logic";
-import { stackedThreadToast, toastManager } from "../ui/toast";
-import {
-  revokeOtherServerClientSessions,
-  revokeServerClientSession,
-  revokeServerPairingLink,
-  usePrimarySessionState,
-  type ServerClientSessionRecord,
-} from "~/environments/primary";
+import { usePrimarySessionState } from "~/environments/primary";
 import { useUiStateStore } from "~/uiStateStore";
 import { resolveServerConfigVersionMismatch } from "~/versionSkew";
 import { authEnvironment } from "~/state/auth";
@@ -39,10 +27,7 @@ import {
   connectSshEnvironment as connectSshEnvironmentAtom,
 } from "~/connection/onboarding";
 import { useEnvironmentQuery } from "~/state/query";
-import {
-  desktopNetworkAccessStateAtom,
-  refreshDesktopNetworkAccessState,
-} from "~/state/desktopNetworkAccess";
+import { desktopNetworkAccessStateAtom } from "~/state/desktopNetworkAccess";
 import { desktopSshHostsStateAtom } from "~/state/desktopSshHosts";
 import { desktopWslStateAtom } from "~/state/desktopWslState";
 import {
@@ -54,9 +39,6 @@ import { useAtomCommand } from "../../state/use-atom-command";
 import { serverEnvironment } from "~/state/server";
 import {
   formatDesktopSshTarget,
-  parseManualDesktopSshTarget,
-  parseRemotePairingFields,
-  formatDesktopSshConnectionError,
   sortDesktopPairingLinks,
   sortDesktopClientSessions,
   toDesktopPairingLinkRecord,
@@ -66,8 +48,12 @@ import {
   endpointDefaultPreferenceKey,
 } from "./connectionPresentation.logic";
 import { PendingWslChange, useDesktopWslCommands } from "./useDesktopWslCommands";
-
-const DEFAULT_TAILSCALE_SERVE_PORT = 443;
+import {
+  DEFAULT_TAILSCALE_SERVE_PORT,
+  useDesktopExposureCommands,
+} from "./useDesktopExposureCommands";
+import { useDesktopAccessCommands } from "./useDesktopAccessCommands";
+import { useSavedBackendCommands } from "./useSavedBackendCommands";
 
 const EMPTY_ADVERTISED_ENDPOINTS: ReadonlyArray<AdvertisedEndpoint> = [];
 
@@ -369,390 +355,67 @@ export function useDesktopBackendSettings() {
     }
   }, [isTailscaleServePortValid, parsedTailscaleServePort, pendingTailscaleServeEndpoint]);
 
-  const handleDesktopServerExposureChange = useCallback(
-    async (checked: boolean) => {
-      if (!desktopBridge) return;
-      setIsUpdatingDesktopServerExposure(true);
-      setDesktopServerExposureMutationError(null);
+  const {
+    handleConfirmDesktopServerExposureChange,
+    handleConfirmTailscaleServeSetup,
+    handleStartTailscaleServeSetup,
+    handleConfirmTailscaleServeDisable,
+    handleStartTailscaleServeDisable,
+  } = useDesktopExposureCommands({
+    desktopBridge,
+    desktopServerExposureState,
+    pendingDesktopServerExposureMode,
+    isTailscaleServePortValid,
+    parsedTailscaleServePort,
+    setIsUpdatingDesktopServerExposure,
+    setDesktopServerExposureMutationError,
+    setIsDesktopServerExposureDialogOpen,
+    setIsUpdatingTailscaleServe,
+    setPendingTailscaleServeEndpoint,
+    setTailscaleServePortInput,
+    setDisableTailscaleServeDialogOpen,
+  });
 
-      try {
-        await desktopBridge.setServerExposureMode(checked ? "network-accessible" : "local-only");
-        refreshDesktopNetworkAccessState();
-        setIsDesktopServerExposureDialogOpen(false);
-        setIsUpdatingDesktopServerExposure(false);
-      } catch (error) {
-        const message =
-          error instanceof Error ? error.message : "Failed to update network exposure.";
+  const {
+    handleRevokeDesktopPairingLink,
+    handleRevokeDesktopClientSession,
+    handleRevokeOtherDesktopClients,
+  } = useDesktopAccessCommands({
+    setRevokingDesktopPairingLinkId,
+    setRevokingDesktopClientSessionId,
+    setIsRevokingOtherDesktopClients,
+    setDesktopAccessManagementMutationError,
+  });
 
-        setIsDesktopServerExposureDialogOpen(false);
-        setDesktopServerExposureMutationError(message);
-        toastManager.add(
-          stackedThreadToast({
-            type: "error",
-            title: "Could not update network access",
-            description: message,
-          }),
-        );
-        setIsUpdatingDesktopServerExposure(false);
-      }
-    },
-    [desktopBridge],
-  );
-
-  const handleConfirmDesktopServerExposureChange = useCallback(() => {
-    if (pendingDesktopServerExposureMode === null) return;
-    const checked = pendingDesktopServerExposureMode === "network-accessible";
-    void handleDesktopServerExposureChange(checked);
-  }, [handleDesktopServerExposureChange, pendingDesktopServerExposureMode]);
-
-  const handleConfirmTailscaleServeSetup = useCallback(async () => {
-    if (!desktopBridge) return;
-
-    if (!isTailscaleServePortValid) return;
-    setIsUpdatingTailscaleServe(true);
-    setDesktopServerExposureMutationError(null);
-
-    try {
-      await desktopBridge.setTailscaleServeEnabled({
-        enabled: true,
-        port: parsedTailscaleServePort,
-      });
-      refreshDesktopNetworkAccessState();
-      setPendingTailscaleServeEndpoint(null);
-    } catch (error) {
-      const message =
-        error instanceof Error ? error.message : "Failed to configure Tailscale HTTPS.";
-
-      setDesktopServerExposureMutationError(message);
-      toastManager.add(
-        stackedThreadToast({
-          type: "error",
-          title: "Could not set up Tailscale HTTPS",
-          description: message,
-        }),
-      );
-    } finally {
-      setIsUpdatingTailscaleServe(false);
-    }
-  }, [desktopBridge, isTailscaleServePortValid, parsedTailscaleServePort]);
-
-  const handleStartTailscaleServeSetup = useCallback(
-    (endpoint: AdvertisedEndpoint) => {
-      setTailscaleServePortInput(
-        String(desktopServerExposureState?.tailscaleServePort ?? DEFAULT_TAILSCALE_SERVE_PORT),
-      );
-      setPendingTailscaleServeEndpoint(endpoint);
-    },
-    [desktopServerExposureState?.tailscaleServePort],
-  );
-
-  const handleConfirmTailscaleServeDisable = useCallback(async () => {
-    if (!desktopBridge) return;
-    setIsUpdatingTailscaleServe(true);
-    setDesktopServerExposureMutationError(null);
-
-    try {
-      await desktopBridge.setTailscaleServeEnabled({
-        enabled: false,
-        port: desktopServerExposureState?.tailscaleServePort ?? DEFAULT_TAILSCALE_SERVE_PORT,
-      });
-      refreshDesktopNetworkAccessState();
-      setDisableTailscaleServeDialogOpen(false);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Failed to disable Tailscale HTTPS.";
-      setDesktopServerExposureMutationError(message);
-      toastManager.add(
-        stackedThreadToast({
-          type: "error",
-          title: "Could not disable Tailscale HTTPS",
-          description: message,
-        }),
-      );
-    } finally {
-      setIsUpdatingTailscaleServe(false);
-    }
-  }, [desktopBridge, desktopServerExposureState?.tailscaleServePort]);
-
-  const handleStartTailscaleServeDisable = useCallback((_endpoint: AdvertisedEndpoint) => {
-    setDisableTailscaleServeDialogOpen(true);
-  }, []);
-
-  const handleRevokeDesktopPairingLink = useCallback(async (id: string) => {
-    setRevokingDesktopPairingLinkId(id);
-    setDesktopAccessManagementMutationError(null);
-
-    try {
-      await revokeServerPairingLink(id);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Failed to revoke pairing link.";
-      setDesktopAccessManagementMutationError(message);
-      toastManager.add(
-        stackedThreadToast({
-          type: "error",
-          title: "Could not revoke pairing link",
-          description: message,
-        }),
-      );
-    } finally {
-      setRevokingDesktopPairingLinkId(null);
-    }
-  }, []);
-
-  const handleRevokeDesktopClientSession = useCallback(
-    async (sessionId: ServerClientSessionRecord["sessionId"]) => {
-      setRevokingDesktopClientSessionId(sessionId);
-      setDesktopAccessManagementMutationError(null);
-
-      try {
-        await revokeServerClientSession(sessionId);
-      } catch (error) {
-        const message = error instanceof Error ? error.message : "Failed to revoke client access.";
-        setDesktopAccessManagementMutationError(message);
-        toastManager.add(
-          stackedThreadToast({
-            type: "error",
-            title: "Could not revoke client access",
-            description: message,
-          }),
-        );
-      } finally {
-        setRevokingDesktopClientSessionId(null);
-      }
-    },
-    [],
-  );
-
-  const handleRevokeOtherDesktopClients = useCallback(async () => {
-    setIsRevokingOtherDesktopClients(true);
-    setDesktopAccessManagementMutationError(null);
-
-    try {
-      const revokedCount = await revokeOtherServerClientSessions();
-      toastManager.add({
-        type: "success",
-        title: revokedCount === 1 ? "Revoked 1 other client" : `Revoked ${revokedCount} clients`,
-        description: "Other paired clients will need a new pairing link before reconnecting.",
-      });
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Failed to revoke other clients.";
-      setDesktopAccessManagementMutationError(message);
-      toastManager.add(
-        stackedThreadToast({
-          type: "error",
-          title: "Could not revoke other clients",
-          description: message,
-        }),
-      );
-    } finally {
-      setIsRevokingOtherDesktopClients(false);
-    }
-  }, []);
-
-  const handleAddSavedBackend = useCallback(async () => {
-    if (savedBackendMode === "ssh") {
-      setIsAddingSavedBackend(true);
-      setSavedBackendError(null);
-      let target: DesktopSshEnvironmentTarget;
-
-      try {
-        target = parseManualDesktopSshTarget({
-          host: savedBackendSshHost,
-          username: savedBackendSshUsername,
-          port: savedBackendSshPort,
-        });
-      } catch (error) {
-        setSavedBackendError(formatDesktopSshConnectionError(error));
-        setIsAddingSavedBackend(false);
-
-        return;
-      }
-
-      const result = await connectSshEnvironment({ target, label: "" });
-
-      if (Predicate.isTagged(result, "Failure")) {
-        if (!isAtomCommandInterrupted(result)) {
-          setSavedBackendError(formatDesktopSshConnectionError(squashAtomCommandFailure(result)));
-        }
-
-        setIsAddingSavedBackend(false);
-
-        return;
-      }
-
-      setSavedBackendHost("");
-      setSavedBackendPairingCode("");
-      setSavedBackendSshHost("");
-      setSavedBackendSshUsername("");
-      setSavedBackendSshPort("");
-      setAddBackendDialogOpen(false);
-      toastManager.add({
-        type: "success",
-        title: "Environment connected",
-        description: `${target.alias} is ready over an SSH-managed tunnel.`,
-      });
-      setIsAddingSavedBackend(false);
-
-      return;
-    }
-
-    setIsAddingSavedBackend(true);
-    setSavedBackendError(null);
-    let remotePairingInput: ReturnType<typeof parseRemotePairingFields>;
-
-    try {
-      remotePairingInput = parseRemotePairingFields({
-        host: savedBackendHost,
-        pairingCode: savedBackendPairingCode,
-      });
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Failed to add backend.";
-      setSavedBackendError(message);
-      toastManager.add(
-        stackedThreadToast({
-          type: "error",
-          title: "Could not add backend",
-          description: message,
-        }),
-      );
-      setIsAddingSavedBackend(false);
-
-      return;
-    }
-
-    const result = await connectPairing(remotePairingInput);
-
-    if (Predicate.isTagged(result, "Failure")) {
-      if (!isAtomCommandInterrupted(result)) {
-        const error = squashAtomCommandFailure(result);
-        const message = error instanceof Error ? error.message : "Failed to add backend.";
-        setSavedBackendError(message);
-        toastManager.add(
-          stackedThreadToast({
-            type: "error",
-            title: "Could not add backend",
-            description: message,
-          }),
-        );
-      }
-
-      setIsAddingSavedBackend(false);
-
-      return;
-    }
-
-    setSavedBackendHost("");
-    setSavedBackendPairingCode("");
-    setSavedBackendSshHost("");
-    setSavedBackendSshUsername("");
-    setSavedBackendSshPort("");
-    setAddBackendDialogOpen(false);
-    toastManager.add({
-      type: "success",
-      title: "Backend added",
-      description: "The environment is saved and will reconnect on app startup.",
-    });
-    setIsAddingSavedBackend(false);
-  }, [
+  const {
+    handleAddSavedBackend,
+    handleConnectSavedBackend,
+    handleRemoveSavedBackend,
+    handleConnectSshHost,
+  } = useSavedBackendCommands({
     connectPairing,
     connectSshEnvironment,
-    savedBackendHost,
+    removeEnvironment,
+    retryEnvironment,
     savedBackendMode,
+    savedBackendHost,
     savedBackendPairingCode,
     savedBackendSshHost,
-    savedBackendSshPort,
     savedBackendSshUsername,
-  ]);
-
-  const handleConnectSavedBackend = useCallback(
-    async (environmentId: EnvironmentId) => {
-      setSavedBackendError(null);
-      const result = await retryEnvironment(environmentId);
-
-      if (Predicate.isTagged(result, "Failure") && !isAtomCommandInterrupted(result)) {
-        const error = squashAtomCommandFailure(result);
-        const message = error instanceof Error ? error.message : "Failed to connect backend.";
-        setSavedBackendError(message);
-        toastManager.add(
-          stackedThreadToast({
-            type: "error",
-            title: "Could not connect backend",
-            description: message,
-          }),
-        );
-      }
-    },
-    [retryEnvironment],
-  );
-
-  const handleRemoveSavedBackend = useCallback(
-    async (environmentId: EnvironmentId) => {
-      setRemovingSavedEnvironmentId(environmentId);
-      setSavedBackendError(null);
-      const result = await removeEnvironment(environmentId);
-      setRemovingSavedEnvironmentId(null);
-
-      if (Predicate.isTagged(result, "Failure") && !isAtomCommandInterrupted(result)) {
-        const error = squashAtomCommandFailure(result);
-        const message = error instanceof Error ? error.message : "Failed to remove backend.";
-        setSavedBackendError(message);
-        toastManager.add(
-          stackedThreadToast({
-            type: "error",
-            title: "Could not remove backend",
-            description: message,
-          }),
-        );
-      }
-    },
-    [removeEnvironment],
-  );
-
-  const handleConnectSshHost = useCallback(
-    async (target: DesktopSshEnvironmentTarget, label?: string) => {
-      setConnectingSshHostAlias(target.alias);
-
-      if (savedBackendMode === "ssh") {
-        setSavedBackendError(null);
-      } else {
-        setSshConnectionError(null);
-      }
-
-      const result = await connectSshEnvironment({
-        target,
-        ...(label === undefined ? {} : { label }),
-      });
-
-      setConnectingSshHostAlias(null);
-
-      if (Predicate.isTagged(result, "Success")) {
-        setSavedBackendSshHost("");
-        setSavedBackendSshUsername("");
-        setSavedBackendSshPort("");
-        setAddBackendDialogOpen(false);
-        toastManager.add({
-          type: "success",
-          title: savedDesktopSshEnvironmentsByAlias[target.alias]
-            ? "Environment reconnected"
-            : "Environment connected",
-          description: `${label?.trim() || target.alias} is ready over an SSH-managed tunnel.`,
-        });
-
-        return;
-      }
-
-      if (!isAtomCommandInterrupted(result)) {
-        const error = squashAtomCommandFailure(result);
-        const message = formatDesktopSshConnectionError(error);
-
-        if (savedBackendMode === "ssh") {
-          setSavedBackendError(message);
-        } else {
-          setSshConnectionError(message);
-        }
-      }
-    },
-    [connectSshEnvironment, savedBackendMode, savedDesktopSshEnvironmentsByAlias],
-  );
+    savedBackendSshPort,
+    savedDesktopSshEnvironmentsByAlias,
+    setIsAddingSavedBackend,
+    setSavedBackendError,
+    setSavedBackendHost,
+    setSavedBackendPairingCode,
+    setSavedBackendSshHost,
+    setSavedBackendSshUsername,
+    setSavedBackendSshPort,
+    setAddBackendDialogOpen,
+    setRemovingSavedEnvironmentId,
+    setConnectingSshHostAlias,
+    setSshConnectionError,
+  });
 
   const visibleDesktopPairingLinks = desktopPairingLinks;
 

@@ -31,7 +31,7 @@ import { AnimatedHeight } from "../AnimatedHeight";
 import { resolveServerSelfUpdateCapability } from "~/versionSkew";
 import { ServerUpdateAction, ServerUpdateProgress } from "../ServerUpdateAction";
 import { RemoteHealthSection } from "./RemoteHealthSection";
-import { AuthorizedClientsHeaderAction } from "./ConnectionAuthorizedClients";
+import { AuthorizedClientsHeaderAction } from "./ConnectionPairingLinkDialog";
 import { SavedBackendListRow, EmptyRemoteEnvironments } from "./DesktopBackendRows";
 import { useDesktopBackendSettings } from "./useDesktopBackendSettings";
 import { connectionSettingsViews } from "./ConnectionSettingsViews";

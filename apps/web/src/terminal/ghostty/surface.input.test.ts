@@ -12,7 +12,7 @@ import {
   resolveTerminalMouseData,
   resolveTerminalMouseTrackingState,
   shouldReportTerminalMouse,
-} from "./surface";
+} from "./surfaceInput";
 
 describe("isTerminalAltGraphText", () => {
   it("defers printable AltGr output to the textarea input event", () => {

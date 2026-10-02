@@ -1,12 +1,14 @@
 import { describe, expect, it } from "vite-plus/test";
 import type { GhosttyRow } from "./core";
 import {
-  advanceTerminalSelectionClickSequence,
-  isTerminalLinkPointerGesture,
   terminalLinkAtColumn,
   terminalLinkAtPosition,
   terminalLinkAtPositionWithRange,
-} from "./surface";
+} from "./surfaceGeometry";
+import {
+  advanceTerminalSelectionClickSequence,
+  isTerminalLinkPointerGesture,
+} from "./surfaceInput";
 import { cell } from "./surface.test-support";
 
 describe("terminalLinkAtColumn", () => {
