@@ -54,7 +54,9 @@ it.effect("deletes bots archived for seven days or more and keeps the rest", () 
     Effect.tap(() =>
       Effect.sync(() => {
         assert.deepStrictEqual(
-          dispatched.map((command) => (command.type === "bot.delete" ? String(command.botId) : null)),
+          dispatched.map((command) =>
+            command.type === "bot.delete" ? String(command.botId) : null,
+          ),
           ["exactly-seven-days", "old"],
         );
       }),
@@ -66,10 +68,7 @@ it.effect("keeps sweeping after one bot fails to delete", () => {
   const attempted: string[] = [];
 
   return runSweep({
-    bots: [
-      makeBot("boss", "2026-09-01T00:00:00.000Z"),
-      makeBot("old", "2026-09-02T00:00:00.000Z"),
-    ],
+    bots: [makeBot("boss", "2026-09-01T00:00:00.000Z"), makeBot("old", "2026-09-02T00:00:00.000Z")],
     dispatch: (command) =>
       Effect.gen(function* () {
         if (command.type !== "bot.delete") return yield* Effect.die("unexpected command");
@@ -84,7 +83,5 @@ it.effect("keeps sweeping after one bot fails to delete", () => {
 
         return { sequence: attempted.length };
       }),
-  }).pipe(
-    Effect.tap(() => Effect.sync(() => assert.deepStrictEqual(attempted, ["boss", "old"]))),
-  );
+  }).pipe(Effect.tap(() => Effect.sync(() => assert.deepStrictEqual(attempted, ["boss", "old"]))));
 });

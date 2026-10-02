@@ -1,6 +1,10 @@
 import { Predicate } from "effect";
 import { useAtomValue } from "@effect/atom-react";
-import { archivedBotDeletesAtMs, type EnvironmentId, type OrchestrationBot } from "@akeru/contracts";
+import {
+  archivedBotDeletesAtMs,
+  type EnvironmentId,
+  type OrchestrationBot,
+} from "@akeru/contracts";
 import { ArchiveRestoreIcon, Trash2Icon } from "lucide-react";
 import { useMemo, useState } from "react";
 
