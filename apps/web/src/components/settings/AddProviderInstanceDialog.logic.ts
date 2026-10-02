@@ -28,8 +28,17 @@ function slugifyLabel(value: string): string {
     .slice(0, 48);
 }
 
+/** First free `{driver}_{n}` number, starting at 2; the default account is `{driver}`. */
+export function nextAccountNumber(driver: string, existing: ReadonlySet<string>): number {
+  let index = 2;
+
+  while (existing.has(`${driver}_${index}`)) index += 1;
+
+  return index;
+}
+
 /**
- * Account id from the name, or `{driver}` when the name is empty, with the
+ * Account id from the name, or `{driver}_{n}` when the name is empty, with the
  * first free `_{n}` suffix when that id is taken.
  */
 export function deriveInstanceId(
@@ -38,13 +47,10 @@ export function deriveInstanceId(
   existing: ReadonlySet<string>,
 ): string {
   const slug = slugifyLabel(label);
-  const base = slug ? `${driver}_${slug}` : driver;
 
-  if (slug && !existing.has(base)) return base;
+  if (!slug) return `${driver}_${nextAccountNumber(driver, existing)}`;
 
-  let index = 2;
+  const base = `${driver}_${slug}`;
 
-  while (existing.has(`${base}_${index}`)) index += 1;
-
-  return `${base}_${index}`;
+  return existing.has(base) ? `${base}_${nextAccountNumber(base, existing)}` : base;
 }

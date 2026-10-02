@@ -26,7 +26,11 @@ import { toastManager } from "../ui/toast";
 import type { DriverOption } from "./providerDriverMeta";
 import { ProviderSettingsForm } from "./ProviderSettingsForm";
 import { AnimatedHeight } from "../AnimatedHeight";
-import { addAccountWizardSteps, deriveInstanceId } from "./AddProviderInstanceDialog.logic";
+import {
+  addAccountWizardSteps,
+  deriveInstanceId,
+  nextAccountNumber,
+} from "./AddProviderInstanceDialog.logic";
 import { AddProviderInstanceWizardSteps } from "./AddProviderInstanceWizardSteps";
 import { CustomApiKeyDraftField } from "./CustomApiKeyField";
 import { CustomApiPresetPicker } from "./CustomApiPresetPicker";
@@ -81,6 +85,9 @@ export function AddProviderInstanceDialog({
 
   const accountLabel = providerLabel ?? driverOption.label;
   const instanceId = deriveInstanceId(driver, label, existingIds);
+  // A blank name still gets one, so the new account never shares the default's.
+  const fallbackName = `${accountLabel} ${nextAccountNumber(driver, existingIds)}`;
+  const accountName = label.trim() || fallbackName;
 
   const wizardSteps = addAccountWizardSteps({ choosesService: isCustomApi });
 
@@ -118,7 +125,7 @@ export function AddProviderInstanceDialog({
     const nextInstance: ProviderInstanceConfig = {
       driver,
       enabled: true,
-      ...(label.trim().length > 0 ? { displayName: label.trim() } : {}),
+      displayName: accountName,
       ...(hasConfig ? { config } : {}),
       ...(environment.length > 0 ? { environment } : {}),
     };
@@ -137,7 +144,7 @@ export function AddProviderInstanceDialog({
       toastManager.add({
         type: "success",
         title: "Account added",
-        description: `${label.trim() || accountLabel} was added. Sign in or connect it from its card.`,
+        description: `${accountName} was added. Sign in or connect it from its card.`,
       });
       onOpenChange(false);
     } catch (error) {
@@ -188,18 +195,29 @@ export function AddProviderInstanceDialog({
                 ) : null}
 
                 <label className={cn("grid gap-2", currentStepName !== "Name" && "hidden")}>
-                  <span className="text-xs font-medium text-foreground">Name</span>
+                  <span className="text-xs font-medium text-foreground">
+                    Name <span className="font-normal text-muted-foreground">(optional)</span>
+                  </span>
                   <Input
                     surface="background"
-                    placeholder="e.g. Work"
+                    placeholder={fallbackName}
                     value={label}
+                    autoFocus={!isCustomApi}
                     onChange={(event) => {
                       setLabel(event.target.value);
                       setLabelEdited(true);
                     }}
+                    onKeyDown={(event) => {
+                      if (event.key !== "Enter") return;
+
+                      event.preventDefault();
+
+                      if (wizardStep < lastStep) setWizardStep(wizardStep + 1);
+                      else handleSave();
+                    }}
                   />
                   <span className="text-11px text-muted-foreground">
-                    Shown in the model picker and on this page. Optional.
+                    Leave it blank to call it {fallbackName}. Press Enter to continue.
                   </span>
                 </label>
 

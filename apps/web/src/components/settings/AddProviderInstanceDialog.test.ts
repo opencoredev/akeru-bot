@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import { addAccountWizardSteps, deriveInstanceId } from "./AddProviderInstanceDialog.logic";
+import {
+  addAccountWizardSteps,
+  deriveInstanceId,
+  nextAccountNumber,
+} from "./AddProviderInstanceDialog.logic";
 
 describe("addAccountWizardSteps", () => {
   it("asks Custom API which service before naming it", () => {
@@ -19,6 +23,11 @@ describe("deriveInstanceId", () => {
 
   it("numbers an unnamed account", () => {
     expect(deriveInstanceId("codex", "  ", new Set(["codex"]))).toBe("codex_2");
+    expect(deriveInstanceId("codex", "", new Set(["codex", "codex_2"]))).toBe("codex_3");
+  });
+
+  it("numbers the fallback name like the id", () => {
+    expect(nextAccountNumber("claudeAgent", new Set(["claudeAgent_2"]))).toBe(3);
   });
 
   it("takes the first free suffix when the name is taken", () => {
