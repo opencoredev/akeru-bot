@@ -1,11 +1,4 @@
 export const chatCatalog = {
-  "Worked for {duration}": "已工作 {duration}",
-  Worked: "已工作",
-  "You stopped after {duration}": "你在 {duration}后停止了回复",
-  "You stopped this response": "你停止了这次回复",
-  "{count}ms": "{count}毫秒",
-  "{count}s": "{count}秒",
-
   "I have reviewed my VMs — continue": "我已检查虚拟机 — 继续",
   "Add attachment": "添加附件",
   Archive: "归档",

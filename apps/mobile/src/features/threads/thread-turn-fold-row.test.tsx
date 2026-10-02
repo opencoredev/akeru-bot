@@ -23,61 +23,32 @@ beforeEach(() => {
   state.locale = "en";
 });
 
-function entry(interrupted: boolean, elapsedMs: number | null) {
+function entry(label: string) {
   return {
     type: "turn-fold" as const,
     id: "turn-fold:turn-1",
     createdAt: "2026-04-01T00:00:00Z",
     turnId: TurnId.make("turn-1"),
     expanded: false,
-    interrupted,
-    elapsedMs,
+    label,
   };
 }
 
-describe("mobile turn fold translations", () => {
-  it.each([
-    { interrupted: false, elapsedMs: 17_000, english: "Worked for 17s", chinese: "已工作 17秒" },
-    { interrupted: false, elapsedMs: null, english: "Worked", chinese: "已工作" },
-    {
-      interrupted: true,
-      elapsedMs: 17_000,
-      english: "You stopped after 17s",
-      chinese: "你在 17秒后停止了回复",
-    },
-    {
-      interrupted: true,
-      elapsedMs: null,
-      english: "You stopped this response",
-      chinese: "你停止了这次回复",
-    },
-  ])(
-    "translates $english when the locale changes with the same feed entry",
-    ({ interrupted, elapsedMs, english, chinese }) => {
-      const fold = entry(interrupted, elapsedMs);
+describe("mobile turn fold labels", () => {
+  it.each(["Worked for 17s", "Worked", "You stopped after 17s", "You stopped this response"])(
+    "preserves %s when the locale changes with the same feed entry",
+    (label) => {
+      const fold = entry(label);
 
       const render = () =>
         renderToStaticMarkup(
           <ThreadTurnFoldRow entry={fold} onToggle={() => {}} iconColor="gray" />,
         );
 
-      expect(render()).toContain(`>${english}</span>`);
+      expect(render()).toContain(`>${label}</span>`);
+      expect(render()).toContain("border-work-fold-separator");
       state.locale = "zh-CN";
-      expect(render()).toContain(`>${chinese}</span>`);
+      expect(render()).toContain(`>${label}</span>`);
     },
   );
-  it.each([
-    [0, "1ms"],
-    [100, "100ms"],
-    [1200, "1.2s"],
-    [9950, "10s"],
-    [61_000, "1m 1s"],
-    [3_661_000, "1h 1m"],
-  ])("preserves English duration formatting for %s ms", (elapsedMs, duration) => {
-    expect(
-      renderToStaticMarkup(
-        <ThreadTurnFoldRow entry={entry(false, elapsedMs)} onToggle={() => {}} iconColor="gray" />,
-      ),
-    ).toContain(`>Worked for ${duration}</span>`);
-  });
 });

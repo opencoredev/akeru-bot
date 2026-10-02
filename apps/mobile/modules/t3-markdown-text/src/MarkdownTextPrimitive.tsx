@@ -27,7 +27,18 @@ export type SelectionChangeEvent = {
 
 // The native view reports layout lines as strings rather than React Native's measured
 // TextLayoutLine objects, so this primitive does not offer `onTextLayout`.
-export type MarkdownTextPrimitiveProps = Omit<TextProps, "onTextLayout"> & {
+type MarkdownPressEvent =
+  | Parameters<NonNullable<TextProps["onPress"]>>[0]
+  | Parameters<
+      NonNullable<React.ComponentProps<typeof T3MarkdownTextRunNativeComponent>["onPress"]>
+    >[0];
+
+export type MarkdownTextPrimitiveProps = Omit<
+  TextProps,
+  "onTextLayout" | "onPress" | "onLongPress"
+> & {
+  onPress?: (event: MarkdownPressEvent) => void;
+  onLongPress?: (event: MarkdownPressEvent) => void;
   uiTextView?: boolean;
   /**
    * Fired when the native text selection changes. Only fires on iOS when
@@ -46,14 +57,10 @@ function MarkdownTextPrimitiveChild({
   ellipsizeMode,
   selectable = textDefaults.selectable,
   onSelectionChange,
-  testID,
-  nativeID,
-  accessible,
-  accessibilityLabel,
-  accessibilityHint,
-  accessibilityRole,
-  accessibilityState,
-}: MarkdownTextPrimitiveProps) {
+  onPress,
+  onLongPress,
+  ...sharedProps
+}: Omit<MarkdownTextPrimitiveProps, "uiTextView">) {
   const [isAncestor, rootStyle] = useTextAncestorContext();
 
   // Flatten the styles, and apply the root styles when needed
@@ -85,6 +92,9 @@ function MarkdownTextPrimitiveChild({
         key={`text-${position}-${text.length}-${text}`}
         style={flattenedStyle}
         text={text}
+        {...sharedProps}
+        onPress={onPress}
+        onLongPress={onLongPress}
       />
     );
   });
@@ -98,13 +108,7 @@ function MarkdownTextPrimitiveChild({
           ellipsizeMode={ellipsizeMode}
           selectable={selectable}
           onSelectionChange={onSelectionChange}
-          testID={testID}
-          nativeID={nativeID}
-          accessible={accessible}
-          accessibilityLabel={accessibilityLabel}
-          accessibilityHint={accessibilityHint}
-          accessibilityRole={accessibilityRole}
-          accessibilityState={accessibilityState}
+          {...sharedProps}
           style={[flattenedStyle]}
         >
           {nativeChildren}
@@ -116,13 +120,13 @@ function MarkdownTextPrimitiveChild({
   return <>{nativeChildren}</>;
 }
 
-function MarkdownTextPrimitiveInner(props: MarkdownTextPrimitiveProps) {
+function MarkdownTextPrimitiveInner({ uiTextView, ...props }: MarkdownTextPrimitiveProps) {
   const [isAncestor] = useTextAncestorContext();
 
   // Even if the uiTextView prop is set, we can still default to using
   // normal selection (i.e. base RN text) if the text doesn't need to be
   // selectable
-  if ((!props.selectable || !props.uiTextView) && !isAncestor) {
+  if ((!props.selectable || !uiTextView) && !isAncestor) {
     return <RNText {...props} />;
   }
 

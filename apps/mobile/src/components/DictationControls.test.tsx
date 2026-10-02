@@ -245,7 +245,7 @@ describe("native DictationControls interaction handlers", () => {
 });
 
 describe("send-slot dictation icon", () => {
-  it("tints the idle and retry icons with the primary foreground and recording with white", () => {
+  it("preserves the send-slot icon tint in every dictation state", () => {
     const handlers = callbacks();
 
     const icon = (status: DictationControlsProps["status"], name: string) => {
@@ -258,8 +258,9 @@ describe("send-slot dictation icon", () => {
       );
     };
 
-    expect(icon("idle", "mic.fill")?.tintColor).toBe("--color-primary-foreground");
-    expect(icon("failed", "arrow.clockwise")?.tintColor).toBe("--color-primary-foreground");
-    expect(icon("recording", "mic.fill")?.tintColor).toBe("white");
+    expect(icon("idle", "mic.fill")?.tintColor).toBe("--color-dictation-send-icon");
+    expect(icon("failed", "arrow.clockwise")?.tintColor).toBe("--color-dictation-send-icon");
+    expect(icon("recording", "mic.fill")?.tintColor).toBe("--color-dictation-send-icon");
+    expect(icon("transcribing", "stop.fill")?.tintColor).toBe("--color-dictation-send-icon");
   });
 });
