@@ -29,6 +29,7 @@ import { AnimatedHeight } from "../AnimatedHeight";
 import {
   addAccountWizardSteps,
   deriveInstanceId,
+  isSubmitEnter,
   nextAccountNumber,
 } from "./AddProviderInstanceDialog.logic";
 import { AddProviderInstanceWizardSteps } from "./AddProviderInstanceWizardSteps";
@@ -208,7 +209,15 @@ export function AddProviderInstanceDialog({
                       setLabelEdited(true);
                     }}
                     onKeyDown={(event) => {
-                      if (event.key !== "Enter") return;
+                      if (
+                        !isSubmitEnter({
+                          key: event.key,
+                          keyCode: event.keyCode,
+                          isComposing: event.nativeEvent.isComposing,
+                        })
+                      ) {
+                        return;
+                      }
 
                       event.preventDefault();
 

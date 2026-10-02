@@ -12,20 +12,27 @@ export function addAccountWizardSteps(options: {
   return options.choosesService ? ["Service", "Name", "Connect"] : ["Name"];
 }
 
+// `ProviderInstanceId` in `@akeru/contracts` caps ids at 64 characters.
+const MAX_INSTANCE_ID_LENGTH = 64;
+
+// Room kept for a `_{n}` suffix when the name is already taken.
+const SUFFIX_RESERVE = "_99999".length;
+
 /**
- * Normalize a user-provided name into a slug suffix for the account id.
- * The full id is formed by prefixing the driver slug — e.g. label "Work" on
- * driver "codex" becomes `codex_work`. Output is trimmed to 48 chars so the
- * final composed id stays under the 64-char slug cap enforced by
- * `ProviderInstanceId` in `@akeru/contracts`.
+ * Normalize a name into the slug part of an account id, so "Work" on driver
+ * "codex" becomes `codex_work`. The slug is cut short enough that the driver
+ * prefix and a collision suffix still fit the id length cap.
  */
-function slugifyLabel(value: string): string {
+function slugifyLabel(driver: string, value: string): string {
+  const maxLength = Math.min(48, MAX_INSTANCE_ID_LENGTH - driver.length - 1 - SUFFIX_RESERVE);
+
   return value
     .trim()
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "_")
     .replace(/^_+|_+$/g, "")
-    .slice(0, 48);
+    .slice(0, maxLength)
+    .replace(/_+$/, "");
 }
 
 /** First free `{driver}_{n}` number, starting at 2; the default account is `{driver}`. */
@@ -46,11 +53,20 @@ export function deriveInstanceId(
   label: string,
   existing: ReadonlySet<string>,
 ): string {
-  const slug = slugifyLabel(label);
+  const slug = slugifyLabel(driver, label);
 
   if (!slug) return `${driver}_${nextAccountNumber(driver, existing)}`;
 
   const base = `${driver}_${slug}`;
 
   return existing.has(base) ? `${base}_${nextAccountNumber(base, existing)}` : base;
+}
+
+/** Enter that submits, not one that confirms an IME candidate. */
+export function isSubmitEnter(event: {
+  readonly key: string;
+  readonly keyCode: number;
+  readonly isComposing: boolean;
+}): boolean {
+  return event.key === "Enter" && !event.isComposing && event.keyCode !== 229;
 }

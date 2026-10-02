@@ -1,8 +1,10 @@
+import { ProviderInstanceId } from "@akeru/contracts";
 import { describe, expect, it } from "vite-plus/test";
 
 import {
   addAccountWizardSteps,
   deriveInstanceId,
+  isSubmitEnter,
   nextAccountNumber,
 } from "./AddProviderInstanceDialog.logic";
 
@@ -40,9 +42,28 @@ describe("deriveInstanceId", () => {
     ).toBe("customOpenai_openrouter_3");
   });
 
-  it("keeps long names within the id length limit", () => {
-    expect(deriveInstanceId("opencodeGo", "x".repeat(200), new Set()).length).toBeLessThanOrEqual(
-      64,
-    );
+  it("keeps long names valid even after many collisions", () => {
+    const label = "x".repeat(200);
+    const first = deriveInstanceId("customOpenai", label, new Set());
+    const taken = new Set([first, ...Array.from({ length: 98 }, (_, i) => `${first}_${i + 2}`)]);
+    const id = deriveInstanceId("customOpenai", label, taken);
+
+    expect(id).toBe(`${first}_100`);
+    expect(ProviderInstanceId.make(id)).toBe(id);
+  });
+});
+
+describe("isSubmitEnter", () => {
+  it("submits on a plain Enter", () => {
+    expect(isSubmitEnter({ key: "Enter", keyCode: 13, isComposing: false })).toBe(true);
+  });
+
+  it("ignores Enter that confirms an IME candidate", () => {
+    expect(isSubmitEnter({ key: "Enter", keyCode: 13, isComposing: true })).toBe(false);
+    expect(isSubmitEnter({ key: "Process", keyCode: 229, isComposing: false })).toBe(false);
+  });
+
+  it("ignores other keys", () => {
+    expect(isSubmitEnter({ key: "a", keyCode: 65, isComposing: false })).toBe(false);
   });
 });
