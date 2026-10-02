@@ -13,7 +13,7 @@ import { HttpClient, HttpClientResponse } from "effect/unstable/http";
 import * as BackgroundPolicy from "../../background/BackgroundPolicy.ts";
 import { ServerConfig } from "../../config.ts";
 import { layerTest as serverSettingsLayerTest } from "../../serverSettings.ts";
-import * as ModelManifest from "../ModelManifest.ts";
+import * as ModelCatalog from "../ModelCatalog.ts";
 import { NoOpProviderEventLoggers, ProviderEventLoggers } from "../Layers/ProviderEventLoggers.ts";
 import { GrokDriver } from "./GrokDriver.ts";
 
@@ -63,7 +63,7 @@ const grokDriverTestLayer = Layer.mergeAll(
   TestHttpClientLive,
   Layer.succeed(ProviderEventLoggers, NoOpProviderEventLoggers),
   BackgroundPolicyAlwaysRunLayer,
-  ModelManifest.layerTest,
+  ModelCatalog.layerTest,
 );
 
 const LOGGED_IN_MODELS_OUTPUT = [

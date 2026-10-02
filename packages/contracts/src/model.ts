@@ -154,7 +154,7 @@ const OPENCODE_DRIVER_KIND = ProviderDriverKind.make("opencode");
 
 const OPENCODE_GO_DRIVER_KIND = ProviderDriverKind.make("opencodeGo");
 
-export const DEFAULT_MODEL = "gpt-6-sol";
+export const DEFAULT_MODEL = "gpt-6.1-sol";
 
 /**
  * Codex default-model preference, most preferred first. The provider snapshot
@@ -162,6 +162,7 @@ export const DEFAULT_MODEL = "gpt-6-sol";
  * default; when none are available, Codex's own `isDefault` flag wins.
  */
 export const PREFERRED_DEFAULT_CODEX_MODELS: ReadonlyArray<string> = [
+  "gpt-6.1-sol",
   "gpt-6-sol",
   "gpt-5.6-sol",
   "gpt-5.6-terra",
@@ -202,7 +203,12 @@ export const MODEL_SLUG_ALIASES_BY_PROVIDER: Partial<
     "gpt-5.3-spark": "gpt-5.3-codex-spark",
   },
   [CLAUDE_DRIVER_KIND]: {
-    opus: "claude-opus-5",
+    opus: "claude-opus-5-5",
+    "opus-5.5": "claude-opus-5-5",
+    "claude-opus-5.5": "claude-opus-5-5",
+    fable: "claude-fable-5-1",
+    "fable-5.1": "claude-fable-5-1",
+    "claude-fable-5.1": "claude-fable-5-1",
     "opus-5": "claude-opus-5",
     "claude-opus-5.0": "claude-opus-5",
     "claude-opus-5-0": "claude-opus-5",

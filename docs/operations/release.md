@@ -23,6 +23,14 @@ GitHub Release. Ordinary feature merges do not release immediately, and this flo
 the `akeru-bot` npm package. CI rejects stable-version edits from every PR except the authenticated,
 repository-owned Changesets PR.
 
+Before merging the Version Packages pull request, refresh the bundled model catalog with
+`node apps/server/scripts/sync-model-catalog.ts` and commit any change. Running servers fetch
+models.dev on their own; the bundle only covers first launch and offline environments.
+
+Releases from before the catalog still read `apps/server/src/provider/model-manifest.json` from
+`main` to decide which models are current. When a model release changes the current lineup, update
+that file's `currentModels` lists to match the new catalog in the same commit.
+
 ## Nightly releases
 
 GitHub Actions checks `main` at minute 17 every three hours. If `main` has not advanced since the

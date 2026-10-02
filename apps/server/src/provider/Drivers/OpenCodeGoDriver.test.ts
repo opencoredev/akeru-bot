@@ -8,6 +8,7 @@ import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 
 import { ServerConfig } from "../../config.ts";
+import * as ModelCatalog from "../ModelCatalog.ts";
 import { BUILT_IN_DRIVERS } from "../builtInDrivers.ts";
 import { OpenCodeGoDriver } from "./OpenCodeGoDriver.ts";
 
@@ -35,6 +36,7 @@ describe("OpenCodeGoDriver", () => {
       Effect.provide(
         ServerConfig.layerTest(process.cwd(), { prefix: "akeru-opencode-go-driver-test-" }).pipe(
           Layer.provideMerge(NodeServices.layer),
+          Layer.provideMerge(ModelCatalog.layerTest),
         ),
       ),
       Effect.tap(({ instance, snapshot }) =>
@@ -84,6 +86,7 @@ describe("OpenCodeGoDriver", () => {
       Effect.provide(
         ServerConfig.layerTest(process.cwd(), { prefix: "akeru-opencode-go-refresh-test-" }).pipe(
           Layer.provideMerge(NodeServices.layer),
+          Layer.provideMerge(ModelCatalog.layerTest),
         ),
       ),
       Effect.tap((snapshot) =>

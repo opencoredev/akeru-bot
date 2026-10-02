@@ -26,6 +26,9 @@ document. See [Bot memory](memory.md).
   current playback only. See [Voice and spoken replies](voice.md).
 - Provider update checks contact the release source for configured providers. Signed desktop builds
   contact the configured Akeru release host.
+- The environment server downloads the public model list from models.dev about once an hour, so new
+  provider models appear without an app update. The request sends no account or chat data. Turning
+  off provider update checks also stops this download.
 - Anonymous analytics send fixed aggregate counters and app, platform, architecture, and client
   dimensions when analytics is on.
 
