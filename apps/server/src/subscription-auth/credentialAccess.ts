@@ -17,14 +17,17 @@ import { SubscriptionHealthService } from "./healthService.ts";
 
 export class SubscriptionCredentialAccess {
   private readonly clock: Clock.Clock;
+  private readonly reload: () => Effect.Effect<void>;
   private readonly store: SubscriptionCredentialStore;
   private readonly healthService: SubscriptionHealthService;
   constructor(
     store: SubscriptionCredentialStore,
     healthService: SubscriptionHealthService,
     clock: Clock.Clock,
+    reload: () => Effect.Effect<void>,
   ) {
     this.clock = clock;
+    this.reload = reload;
     this.store = store;
     this.healthService = healthService;
   }
@@ -32,7 +35,7 @@ export class SubscriptionCredentialAccess {
     return this.store.current().data;
   }
   private reloadAsync() {
-    return Effect.runPromise(this.store.reload);
+    return Effect.runPromise(this.reload());
   }
   private updateCredentials(update: (data: SubscriptionAuthData) => SubscriptionAuthData) {
     return Effect.runPromise(this.store.update(update));

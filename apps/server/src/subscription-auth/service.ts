@@ -77,10 +77,13 @@ export class SubscriptionAuthService {
       clock,
       path,
       options.checkHealthOnConnect ?? false,
+      () => this.reload(),
     );
     this.pendingPath = `${this.authPath}.pending`;
 
-    this.credentialAccess = new SubscriptionCredentialAccess(store, this.healthService, clock);
+    this.credentialAccess = new SubscriptionCredentialAccess(store, this.healthService, clock, () =>
+      this.reload(),
+    );
     this.reloadLocal();
   }
 
