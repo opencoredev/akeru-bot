@@ -8,7 +8,7 @@ export default Effect.gen(function* () {
     name: string;
   }>`SELECT name FROM pragma_table_info('projection_threads')`;
 
-  const names = new Set(columns.map((column) => column.name));
+  const names = new Set(columns.map((column) => column.name.toLowerCase()));
 
   if (!names.has("latest_user_message_at"))
     yield* sql`
