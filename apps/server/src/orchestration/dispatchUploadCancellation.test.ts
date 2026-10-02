@@ -168,13 +168,20 @@ it.effect("keeps a claimed upload when its queued turn start commits after cance
         receipts: Option.some(receipts),
       }).pipe(Effect.forkChild({ startImmediately: true }));
 
-      const interruptor = yield* Effect.fiberId;
-      const interrupting = yield* Effect.forkChild(Fiber.interruptAs(caller, interruptor));
-      yield* Effect.yieldNow;
+      // Cancelling returns while the engine is still stalled on the blocker.
+      yield* Fiber.interrupt(caller);
+      const exit = yield* Fiber.await(caller);
+
       yield* Deferred.succeed(releaseBlocker, undefined);
       yield* Fiber.join(blocker);
-      yield* Fiber.join(interrupting);
-      const exit = yield* Fiber.await(caller);
+
+      // The engine runs commands in order, so this settles after the turn start.
+      yield* engine.dispatch({
+        type: "thread.meta.update",
+        commandId: CommandId.make("cmd-upload-after"),
+        threadId,
+        title: "After",
+      });
 
       assert.isTrue(Exit.isFailure(exit));
 

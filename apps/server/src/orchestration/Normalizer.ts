@@ -1,5 +1,6 @@
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
+import * as Fiber from "effect/Fiber";
 import * as FileSystem from "effect/FileSystem";
 import * as Option from "effect/Option";
 import * as Path from "effect/Path";
@@ -345,12 +346,13 @@ export const cleanupFailedUploadedAttachments = Effect.fn(
 /**
  * Dispatches a normalized command and removes the pending uploads it claimed
  * unless the engine accepted it. The engine commits a queued command even
- * after its caller stops waiting, so `dispatch` runs uninterruptibly and the
- * command receipt, not the caller's exit, decides whether a committed message
- * references the files. `awaitReady` stays cancellable
- * because nothing has reached the engine while it waits. Set `interruptible`
- * only for a dispatch that already awaits its own engine results
- * uninterruptibly, such as a thread bootstrap.
+ * after its caller stops waiting, so the command receipt, not the caller's
+ * exit, decides whether a committed message references the files. The
+ * dispatch runs detached and cleans up once the engine settles it, so a
+ * cancelled caller returns without waiting on a stalled engine. `awaitReady`
+ * stays cancellable because nothing has reached the engine while it waits.
+ * Set `interruptible` for a dispatch that awaits its own engine results
+ * uninterruptibly, such as a thread bootstrap, so cancelling stops it inline.
  */
 export const dispatchKeepingAcceptedUploads = <A, E, R, E2, R2>(input: {
   readonly command: ClientOrchestrationCommand;
@@ -399,10 +401,22 @@ export const dispatchKeepingAcceptedUploads = <A, E, R, E2, R2>(input: {
     ),
   );
 
+  if (input.interruptible) {
+    return input.awaitReady.pipe(
+      Effect.andThen(input.dispatch),
+      Effect.onError(() => removeUnacceptedUploads),
+    );
+  }
+
   return Effect.uninterruptibleMask((restore) =>
     restore(input.awaitReady).pipe(
-      Effect.andThen(input.interruptible ? restore(input.dispatch) : input.dispatch),
       Effect.onError(() => removeUnacceptedUploads),
+      Effect.andThen(
+        Effect.forkDetach(input.dispatch.pipe(Effect.onError(() => removeUnacceptedUploads)), {
+          startImmediately: true,
+        }),
+      ),
+      Effect.flatMap((dispatched) => restore(Fiber.join(dispatched))),
     ),
   );
 };
