@@ -10,8 +10,11 @@ import { BUILT_IN_DRIVERS } from "../builtInDrivers.ts";
 import { CustomOpenaiDriver } from "./CustomOpenaiDriver.ts";
 
 const DRIVER_KIND = ProviderDriverKind.make("customOpenai");
+
 const INSTANCE_ID = ProviderInstanceId.make("customOpenai");
+
 const API_KEY_ENV = "CUSTOM_OPENAI_API_KEY";
+
 const BASE_URL_ENV = "CUSTOM_OPENAI_BASE_URL";
 
 interface RecordedRequest {
@@ -22,6 +25,7 @@ interface RecordedRequest {
 /** A `/models` endpoint whose answers the test flips between phases. */
 const catalogEndpoint = (responses: ReadonlyArray<Response>, recorded: RecordedRequest[] = []) => {
   let index = 0;
+
   return ((
     input: Parameters<typeof globalThis.fetch>[0],
     init: Parameters<typeof globalThis.fetch>[1],
@@ -30,6 +34,7 @@ const catalogEndpoint = (responses: ReadonlyArray<Response>, recorded: RecordedR
     recorded.push({ url: String(input), authorization: headers.get("authorization") });
     const response = responses[Math.min(index, responses.length - 1)]!;
     index += 1;
+
     return Promise.resolve(response.clone());
   }) as typeof globalThis.fetch;
 };
@@ -69,15 +74,19 @@ const withApiKey = (name: string, value: string) => ({ name, value, sensitive: t
 describe("CustomOpenaiDriver", () => {
   it.effect("registers an endpoint-driven provider with no bundled models", () => {
     expect(BUILT_IN_DRIVERS.map((driver) => String(driver.driverKind))).toContain("customOpenai");
+
     const program = Effect.scoped(
       Effect.gen(function* () {
         const instance = yield* createInstance({
           config: CustomOpenaiDriver.defaultConfig(),
         });
+
         const snapshot = yield* instance.snapshot.getSnapshot;
+
         return { instance, snapshot };
       }),
     );
+
     return program.pipe(
       Effect.provide(testLayer("akeru-custom-openai-driver-test-", catalogEndpoint([]))),
       Effect.tap(({ instance, snapshot }) =>
@@ -101,6 +110,7 @@ describe("CustomOpenaiDriver", () => {
 
   it.effect("lists the endpoint catalog alongside hand-added models", () => {
     const recorded: RecordedRequest[] = [];
+
     const program = Effect.scoped(
       Effect.gen(function* () {
         const instance = yield* createInstance({
@@ -111,10 +121,13 @@ describe("CustomOpenaiDriver", () => {
           },
           environment: [withApiKey(API_KEY_ENV, "sk-test")],
         });
+
         const snapshot = yield* instance.snapshot.refresh;
+
         return { instance, snapshot };
       }),
     );
+
     return program.pipe(
       Effect.provide(
         testLayer(
@@ -147,19 +160,23 @@ describe("CustomOpenaiDriver", () => {
 
   it.effect("keeps the last good catalog when a probe fails", () => {
     const recorded: RecordedRequest[] = [];
+
     const program = Effect.scoped(
       Effect.gen(function* () {
         const instance = yield* createInstance({
           config: {
             ...CustomOpenaiDriver.defaultConfig(),
-            baseUrl: "https://api.example.com/v1",
+            baseUrl: "https://user:pass@api.example.com/v1/gateway-token",
           },
         });
+
         const good = yield* instance.snapshot.refresh;
         const failed = yield* instance.snapshot.refresh;
+
         return { good, failed };
       }),
     );
+
     return program.pipe(
       Effect.provide(
         testLayer(
@@ -175,9 +192,42 @@ describe("CustomOpenaiDriver", () => {
           // snapshot stops claiming to be authoritative.
           expect(failed.models.map((model) => model.slug)).toEqual(["alpha", "beta"]);
           expect(failed.status).toBe("warning");
-          expect(failed.message).toBe(
-            "Model list from https://api.example.com/v1 returned HTTP 503.",
-          );
+          // Only the origin is published; credentials and paths stay private.
+          expect(failed.message).toBe("Model list from https://api.example.com returned HTTP 503.");
+        }),
+      ),
+    );
+  });
+
+  it.effect("never contacts the endpoint while the instance is disabled", () => {
+    const recorded: RecordedRequest[] = [];
+
+    const program = Effect.scoped(
+      Effect.gen(function* () {
+        const instance = yield* createInstance({
+          config: {
+            ...CustomOpenaiDriver.defaultConfig(),
+            enabled: false,
+            baseUrl: "https://api.example.com/v1",
+          },
+          environment: [withApiKey(API_KEY_ENV, "sk-test")],
+        });
+
+        return yield* instance.snapshot.refresh;
+      }),
+    );
+
+    return program.pipe(
+      Effect.provide(
+        testLayer(
+          "akeru-custom-openai-disabled-test-",
+          catalogEndpoint([modelListResponse(["alpha"])], recorded),
+        ),
+      ),
+      Effect.tap((snapshot) =>
+        Effect.sync(() => {
+          expect(snapshot.status).toBe("disabled");
+          expect(recorded).toEqual([]);
         }),
       ),
     );
@@ -193,9 +243,11 @@ describe("CustomOpenaiDriver", () => {
             customModels: ["llama3.2"],
           },
         });
+
         return yield* instance.snapshot.refresh;
       }),
     );
+
     return program.pipe(
       Effect.provide(
         testLayer("akeru-custom-openai-unreadable-test-", catalogEndpoint([unreadableResponse()])),
@@ -204,7 +256,7 @@ describe("CustomOpenaiDriver", () => {
         Effect.sync(() => {
           expect(snapshot.status).toBe("warning");
           expect(snapshot.message).toBe(
-            "Model list from http://localhost:11434/v1 was not a readable list of models.",
+            "Model list from http://localhost:11434 was not a readable list of models.",
           );
           // A keyless local endpoint still runs turns; only the catalog is unknown.
           expect(snapshot.auth).toMatchObject({ status: "authenticated", type: "apiKey" });
@@ -219,19 +271,23 @@ describe("CustomOpenaiDriver", () => {
     const previousUrl = process.env[BASE_URL_ENV];
     process.env[API_KEY_ENV] = "process-wide-key";
     process.env[BASE_URL_ENV] = "https://process.invalid/v1";
+
     const program = Effect.scoped(
       Effect.gen(function* () {
         const instance = yield* createInstance({
           config: CustomOpenaiDriver.defaultConfig(),
         });
+
         return { instance, snapshot: yield* instance.snapshot.getSnapshot };
       }),
     );
+
     return program.pipe(
       Effect.ensuring(
         Effect.sync(() => {
           if (previousKey === undefined) delete process.env[API_KEY_ENV];
           else process.env[API_KEY_ENV] = previousKey;
+
           if (previousUrl === undefined) delete process.env[BASE_URL_ENV];
           else process.env[BASE_URL_ENV] = previousUrl;
         }),
@@ -263,9 +319,11 @@ describe("CustomOpenaiDriver", () => {
             withApiKey(API_KEY_ENV, "env-key"),
           ],
         });
+
         return { instance, snapshot: yield* instance.snapshot.getSnapshot };
       }),
     );
+
     return program.pipe(
       Effect.provide(testLayer("akeru-custom-openai-env-test-", catalogEndpoint([]))),
       Effect.tap(({ instance, snapshot }) =>

@@ -157,6 +157,10 @@ export const CustomOpenaiDriver: ProviderDriver<CustomOpenaiSettings, CustomOpen
       // URL rather than the key; the key is only sent when one is configured.
       const connected = baseUrl.length > 0;
 
+      // Probe failures are published to every client. The base URL may come
+      // from a sensitive variable, so messages name only its origin.
+      const endpointLabel = URL.canParse(baseUrl) ? new URL(baseUrl).origin : "the endpoint";
+
       const continuationIdentity = defaultProviderContinuationIdentity({
         driverKind: DRIVER_KIND,
         instanceId,
@@ -213,7 +217,7 @@ export const CustomOpenaiDriver: ProviderDriver<CustomOpenaiSettings, CustomOpen
           if (response.status < 200 || response.status >= 300) {
             return {
               ok: false as const,
-              failure: `Model list from ${baseUrl} returned HTTP ${response.status}.`,
+              failure: `Model list from ${endpointLabel} returned HTTP ${response.status}.`,
             } satisfies ProbeResult;
           }
 
@@ -230,7 +234,7 @@ export const CustomOpenaiDriver: ProviderDriver<CustomOpenaiSettings, CustomOpen
             ? { ok: true as const, catalog: ids.value }
             : {
                 ok: false as const,
-                failure: `Model list from ${baseUrl} was not a readable list of models.`,
+                failure: `Model list from ${endpointLabel} was not a readable list of models.`,
               };
         }).pipe(
           Effect.timeoutOption(MODELS_TIMEOUT_MS),
@@ -238,13 +242,15 @@ export const CustomOpenaiDriver: ProviderDriver<CustomOpenaiSettings, CustomOpen
         );
 
         return Option.isNone(outcome)
-          ? { ok: false, failure: `Could not list models from ${baseUrl}.` }
+          ? { ok: false, failure: `Could not list models from ${endpointLabel}.` }
           : outcome.value;
       });
 
       const refresh = probeLock.withPermits(1)(
         Effect.gen(function* () {
-          if (!connected) {
+          // Disabled instances publish their snapshot without contacting the
+          // endpoint, so a configured key is never sent.
+          if (!connected || !effectiveEnabled) {
             yield* Ref.set(probeFailure, null);
             yield* Ref.set(probeSettled, false);
           } else {

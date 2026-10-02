@@ -8,7 +8,15 @@ import {
   ProviderDriverKind,
 } from "@akeru/contracts";
 import type * as Schema from "effect/Schema";
-import { ClaudeAI, GrokIcon, KimiIcon, type Icon, OpenAI, OpenCodeIcon } from "../Icons";
+import {
+  ClaudeAI,
+  CustomApiIcon,
+  GrokIcon,
+  KimiIcon,
+  type Icon,
+  OpenAI,
+  OpenCodeIcon,
+} from "../Icons";
 
 type ProviderSettingsSchema = {
   readonly fields: Readonly<Record<string, Schema.Top>>;
@@ -71,7 +79,7 @@ export const PROVIDER_CLIENT_DEFINITIONS: readonly ProviderClientDefinition[] = 
   {
     value: ProviderDriverKind.make("customOpenai"),
     label: "Custom API",
-    icon: OpenCodeIcon,
+    icon: CustomApiIcon,
     settingsSchema: CustomOpenaiSettings,
   },
 ];

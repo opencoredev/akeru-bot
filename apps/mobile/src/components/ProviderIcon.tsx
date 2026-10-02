@@ -51,6 +51,26 @@ export function ProviderIcon(props: ProviderIconProps) {
     );
   }
 
+  if (props.provider === "customOpenai") {
+    return (
+      <Svg
+        width={size}
+        height={size}
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke={mono}
+        strokeWidth={2}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
+        <Path d="M12 22v-5" />
+        <Path d="M15 8V2" />
+        <Path d="M17 8a1 1 0 0 1 1 1v4a4 4 0 0 1-4 4h-4a4 4 0 0 1-4-4V9a1 1 0 0 1 1-1z" />
+        <Path d="M9 8V2" />
+      </Svg>
+    );
+  }
+
   if (props.provider === "opencode" || props.provider === "opencodeGo") {
     return (
       <Svg width={size} height={size} viewBox="0 0 32 40" fill="none">

@@ -47,8 +47,15 @@ export const mergeProviderModels = (
 ): ReadonlyArray<ServerProvider["models"][number]> => {
   const shouldRetainMissingModels = shouldRetainMissingProviderModels(provider);
 
-  if (shouldRetainMissingModels && nextModels.length === 0 && previousModels.length > 0) {
-    return previousModels;
+  // Custom API models added by hand come from settings, not discovery, so the
+  // driver always reports the current list. A removed one must not be kept.
+  const retainableModels =
+    provider.driver === ProviderDriverKind.make("customOpenai")
+      ? previousModels.filter((model) => !model.isCustom)
+      : previousModels;
+
+  if (shouldRetainMissingModels && nextModels.length === 0 && retainableModels.length > 0) {
+    return retainableModels;
   }
 
   const previousBySlug = new Map(previousModels.map((model) => [model.slug, model] as const));
@@ -69,7 +76,7 @@ export const mergeProviderModels = (
   const nextSlugs = new Set(nextModels.map((model) => model.slug));
 
   return shouldRetainMissingModels
-    ? [...mergedModels, ...previousModels.filter((model) => !nextSlugs.has(model.slug))]
+    ? [...mergedModels, ...retainableModels.filter((model) => !nextSlugs.has(model.slug))]
     : mergedModels;
 };
 

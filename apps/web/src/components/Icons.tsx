@@ -2,7 +2,14 @@ export { VisualStudioCode, VisualStudioCodeInsiders, VSCodium, Zed } from "./ico
 
 export { type Icon } from "./icons/iconTypes";
 
-export { ClaudeAI, GrokIcon, KimiIcon, OpenAI, OpenCodeIcon } from "./icons/ProviderIcons";
+export {
+  ClaudeAI,
+  CustomApiIcon,
+  GrokIcon,
+  KimiIcon,
+  OpenAI,
+  OpenCodeIcon,
+} from "./icons/ProviderIcons";
 
 export {
   ACPRegistryIcon,

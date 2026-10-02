@@ -346,7 +346,12 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsModule.layerTest(), Te
           auth: { status: "authenticated" },
           checkedAt: "2026-07-17T00:00:00.000Z",
           version: null,
-          models: [model("alpha"), model("removed-by-endpoint")],
+          // The user removed "hand-added" in Settings; no probe state may revive it.
+          models: [
+            model("alpha"),
+            model("removed-by-endpoint"),
+            { ...model("hand-added"), isCustom: true },
+          ],
           slashCommands: [],
           skills: [],
         } as const satisfies ServerProvider;
@@ -360,7 +365,7 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsModule.layerTest(), Te
         const failedProbe = {
           ...settledProbe,
           status: "warning",
-          message: "Could not list models from https://api.example.com/v1.",
+          message: "Could not list models from https://api.example.com.",
         } satisfies ServerProvider;
 
         const pendingFirstProbe = {
@@ -379,6 +384,12 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsModule.layerTest(), Te
         );
         assert.deepStrictEqual(
           mergeProviderSnapshot(previousProvider, pendingFirstProbe).models.map(
+            (entry) => entry.slug,
+          ),
+          ["alpha", "removed-by-endpoint"],
+        );
+        assert.deepStrictEqual(
+          mergeProviderSnapshot(previousProvider, { ...failedProbe, models: [] }).models.map(
             (entry) => entry.slug,
           ),
           ["alpha", "removed-by-endpoint"],
