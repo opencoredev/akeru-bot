@@ -66,3 +66,28 @@ it("rejects external local paths left in the lockfile", () => {
     },
   ]);
 });
+
+it("imports only Node built-ins because CI runs it before installing dependencies", () => {
+  const source = NodeFS.readFileSync(
+    NodePath.join(import.meta.dirname, "check-public-dependencies.ts"),
+    "utf8",
+  );
+
+  const specifiers = [...source.matchAll(/^import .* from "([^"]+)";$/gmu)].map(
+    (match) => match[1],
+  );
+
+  assert.isAbove(specifiers.length, 0);
+  assert.deepStrictEqual(
+    specifiers.filter((specifier) => !specifier?.startsWith("node:")),
+    [],
+  );
+});
+
+it("rejects manifests with non-string dependency specifiers", () => {
+  const root = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "akeru-public-deps-"));
+  const manifestPath = NodePath.join(root, "package.json");
+  NodeFS.writeFileSync(manifestPath, JSON.stringify({ dependencies: { example: 1 } }));
+
+  assert.throws(() => findExternalLocalDependencies(root, [manifestPath]), /non-string/u);
+});

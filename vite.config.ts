@@ -258,8 +258,10 @@ export default defineConfig({
       {
         // Standalone scripts and the plugin catalog run without the Effect runtime or any
         // application dependency, so they read the host and check primitives directly.
+        // check-public-dependencies.ts runs in CI before install and must stay dependency-free.
         files: [
           "apps/desktop/scripts/**",
+          "scripts/check-public-dependencies.ts",
           "packages/effect-codex-app-server/test/fixtures/**",
           "plugins/**",
           "scripts/**/*.{mjs,cjs}",

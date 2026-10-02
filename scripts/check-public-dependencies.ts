@@ -1,5 +1,4 @@
 #!/usr/bin/env node
-import * as Schema from "effect/Schema";
 import * as NodeFS from "node:fs";
 import * as NodePath from "node:path";
 import * as NodeURL from "node:url";
@@ -11,15 +10,32 @@ const DEPENDENCY_SECTIONS = [
   "peerDependencies",
 ] as const;
 
-const decodePackageManifest = Schema.decodeUnknownSync(
-  Schema.Struct({
-    name: Schema.optionalKey(Schema.String),
-    dependencies: Schema.optionalKey(Schema.Record(Schema.String, Schema.String)),
-    devDependencies: Schema.optionalKey(Schema.Record(Schema.String, Schema.String)),
-    optionalDependencies: Schema.optionalKey(Schema.Record(Schema.String, Schema.String)),
-    peerDependencies: Schema.optionalKey(Schema.Record(Schema.String, Schema.String)),
-  }),
-);
+// CI runs this script before installing dependencies, so it reads manifests with Node built-ins only.
+function readDependencyEntries(manifestPath: string): ReadonlyArray<readonly [string, string]> {
+  const manifest: unknown = JSON.parse(NodeFS.readFileSync(manifestPath, "utf8"));
+
+  if (typeof manifest !== "object" || manifest === null) {
+    throw new Error(`${manifestPath} is not a JSON object`);
+  }
+
+  return DEPENDENCY_SECTIONS.flatMap((section) => {
+    const dependencies: unknown = Object.getOwnPropertyDescriptor(manifest, section)?.value;
+
+    if (dependencies === undefined) return [];
+
+    if (typeof dependencies !== "object" || dependencies === null) {
+      throw new Error(`${manifestPath} has a non-object ${section}`);
+    }
+
+    return Object.entries(dependencies).map(([dependency, specifier]: [string, unknown]) => {
+      if (typeof specifier !== "string") {
+        throw new Error(`${manifestPath} has a non-string ${section}.${dependency}`);
+      }
+
+      return [dependency, specifier] as const;
+    });
+  });
+}
 
 export interface PublicDependencyProblem {
   readonly dependency: string;
@@ -73,15 +89,11 @@ export function findExternalLocalDependencies(
   const problems: PublicDependencyProblem[] = [];
 
   for (const manifestPath of manifestPaths) {
-    const manifest = decodePackageManifest(JSON.parse(NodeFS.readFileSync(manifestPath, "utf8")));
+    for (const [dependency, specifier] of readDependencyEntries(manifestPath)) {
+      if (!/^(?:file|link):/u.test(specifier)) continue;
 
-    for (const section of DEPENDENCY_SECTIONS) {
-      for (const [dependency, specifier] of Object.entries(manifest[section] ?? {})) {
-        if (!/^(?:file|link):/u.test(specifier)) continue;
-
-        if (!escapesRepository(repoRoot, manifestPath, specifier)) continue;
-        problems.push({ dependency, manifestPath, specifier });
-      }
+      if (!escapesRepository(repoRoot, manifestPath, specifier)) continue;
+      problems.push({ dependency, manifestPath, specifier });
     }
   }
 
