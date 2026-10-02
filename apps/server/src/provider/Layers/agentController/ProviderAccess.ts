@@ -1,3 +1,4 @@
+import { harnessCredentialIssue } from "../../HarnessProviderStatus.ts";
 import { ProviderDriverKind } from "@akeru/contracts";
 import { ProviderInstanceId } from "@akeru/contracts";
 import * as NodeCrypto from "node:crypto";
@@ -83,6 +84,10 @@ export function mastraConnectionIssue(
 ): string | undefined {
   if (!connection) return undefined;
 
+  if (provider === "codex" || provider === "claudeAgent" || provider === "grok") {
+    return harnessCredentialIssue(provider, connection, savedCredentialConnected);
+  }
+
   const env = connection.useSavedCredential
     ? connection.environment
     : connection.instanceEnvironment;
@@ -90,16 +95,6 @@ export function mastraConnectionIssue(
   if (connection.useSavedCredential) {
     const hasAmbientCredential = (() => {
       switch (String(provider)) {
-        case "codex":
-          return Boolean(env.OPENAI_API_KEY?.trim());
-        case "claudeAgent":
-          return Boolean(
-            env.ANTHROPIC_API_KEY?.trim() ||
-            env.ANTHROPIC_AUTH_TOKEN?.trim() ||
-            env.CLAUDE_CODE_OAUTH_TOKEN?.trim(),
-          );
-        case "grok":
-          return Boolean(env.XAI_API_KEY?.trim());
         case "opencodeGo":
           return Boolean(env.OPENCODE_API_KEY?.trim() || openCodeGoInlineConnection(env).apiKey);
         default:
@@ -115,20 +110,6 @@ export function mastraConnectionIssue(
   }
 
   switch (String(provider)) {
-    case "codex":
-      return env.OPENAI_API_KEY?.trim()
-        ? undefined
-        : "This Codex instance needs OPENAI_API_KEY for the Akeru harness.";
-    case "claudeAgent":
-      return env.ANTHROPIC_API_KEY?.trim() ||
-        env.ANTHROPIC_AUTH_TOKEN?.trim() ||
-        env.CLAUDE_CODE_OAUTH_TOKEN?.trim()
-        ? undefined
-        : "This Claude instance needs an API key or auth token for the Akeru harness.";
-    case "grok":
-      return env.XAI_API_KEY?.trim()
-        ? undefined
-        : "This Grok instance needs XAI_API_KEY for the Akeru harness.";
     case "kimi":
       return "Custom Kimi credentials are not supported by the Akeru harness.";
     case "opencodeGo":

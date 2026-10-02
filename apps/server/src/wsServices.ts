@@ -1,3 +1,5 @@
+import { subscriptionProviderMutation } from "./subscription-auth/providerMutation.ts";
+import { ProviderInstanceRegistryMutator } from "./provider/Services/ProviderInstanceRegistryMutator.ts";
 import { computerRegistry } from "./provider/computerRegistry.ts";
 import * as Cause from "effect/Cause";
 import * as Crypto from "effect/Crypto";
@@ -267,6 +269,13 @@ export const createWsServices = (
     const lifecycleEvents = yield* ServerLifecycleEvents.ServerLifecycleEvents;
 
     const serverSettings = yield* ServerSettings.ServerSettingsService;
+
+    const refreshChangedSubscriptionProviders = subscriptionProviderMutation(
+      subscriptionAuth,
+      serverSettings,
+      yield* ProviderInstanceRegistryMutator,
+      providerRegistry,
+    );
 
     const syncSubscriptionProviderSettings = Effect.gen(function* () {
       const settings = yield* serverSettings.getSettings;
@@ -705,6 +714,7 @@ export const createWsServices = (
       lifecycleEvents,
       serverSettings,
       syncSubscriptionProviderSettings,
+      refreshChangedSubscriptionProviders,
       resetChangedApiKeySessions,
       validateAccountInstance,
       startup,

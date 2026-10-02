@@ -1,3 +1,4 @@
+import { resolveClaudeApiModelId } from "../ClaudeProvider.ts";
 import { ProviderDriverKind } from "@akeru/contracts";
 import { ProviderInstanceId } from "@akeru/contracts";
 
@@ -145,7 +146,12 @@ export function createEngineRouting(deps: {
           modelSelection,
           provider: inspected.routing.driverKind,
           providerInstanceId: modelSelection.instanceId,
-          mastraModelId: mastraModelId(inspected.routing.driverKind, modelSelection.model),
+          mastraModelId: mastraModelId(
+            inspected.routing.driverKind,
+            inspected.routing.driverKind === "claudeAgent"
+              ? resolveClaudeApiModelId(modelSelection)
+              : modelSelection.model,
+          ),
           botConversation: input.botConversation,
           ...(previous?.botName ? { botName: previous.botName } : {}),
           ...(previous?.personalityTone !== undefined

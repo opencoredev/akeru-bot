@@ -557,7 +557,7 @@ export const mastraWireCases = [
     instanceId: claudeInstanceId,
     model: "claude-opus-4-6",
     options: [{ id: "effort", value: "max" }] as const,
-    wireModelId: "anthropic/claude-opus-4-6",
+    wireModelId: "anthropic/claude-opus-4-6[1m]",
     modelOptions: undefined,
   },
   {

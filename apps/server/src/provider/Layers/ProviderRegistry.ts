@@ -1,3 +1,4 @@
+import * as Scope from "effect/Scope";
 /**
  * ProviderRegistryLive — aggregates per-instance snapshot streams into a
  * single materialized list.
@@ -121,6 +122,7 @@ export const ProviderRegistryLive = Layer.effect(
   ProviderRegistry,
   Effect.gen(function* () {
     const instanceRegistry = yield* ProviderInstanceRegistry;
+    const scope = yield* Scope.Scope;
     const config = yield* ServerConfig;
     const fileSystem = yield* FileSystem.FileSystem;
     const path = yield* Path.Path;
@@ -718,7 +720,11 @@ export const ProviderRegistryLive = Layer.effect(
       refresh: (provider?: ProviderDriverKind) =>
         refresh(provider).pipe(Effect.catchCause(recoverRefreshFailure)),
       refreshInstance: (instanceId: ProviderInstanceId) =>
-        refreshInstance(instanceId).pipe(Effect.catchCause(recoverRefreshFailure)),
+        syncLiveSources.pipe(
+          Effect.andThen(refreshInstance(instanceId)),
+          Effect.provideService(Scope.Scope, scope),
+          Effect.catchCause(recoverRefreshFailure),
+        ),
       getProviderMaintenanceCapabilitiesForInstance,
       setProviderMaintenanceActionState,
       get streamChanges() {

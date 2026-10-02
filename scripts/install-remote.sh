@@ -68,7 +68,7 @@ curl --proto '=https' --tlsv1.2 -fsSL -o "$tmp/AKERU-REMOTE-MANIFEST.txt" "$base
 curl --proto '=https' --tlsv1.2 -fsSL -o "$tmp/AKERU-REMOTE-MANIFEST.sig" "$base/AKERU-REMOTE-MANIFEST.sig"
 cat > "$tmp/akeru-release-manifest.pub" <<'KEY'
 -----BEGIN PUBLIC KEY-----
-MCowBQYDK2VwAyEAr6AVDZl+P/T3TxY0EbpuMaNCImQ7EKTQYZc81ozkh+E=
+MCowBQYDK2VwAyEAA74gQCflQCtBbynI3b+W2z/unYne9w6mPsei/hpmEWg=
 -----END PUBLIC KEY-----
 KEY
 openssl pkeyutl -verify -pubin -inkey "$tmp/akeru-release-manifest.pub" -rawin \

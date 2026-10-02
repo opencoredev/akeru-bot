@@ -65,7 +65,7 @@ export const MASTRA_MODEL_PREFIX = {
 } as const;
 
 export function mastraModelId(provider: ProviderDriverKind, model: string): string {
-  const trimmed = model.trim();
+  const trimmed = provider === "grok" && model.trim() === "grok-build" ? "grok-4.6" : model.trim();
   const prefix = Object.entries(MASTRA_MODEL_PREFIX).find(([driver]) => driver === provider)?.[1];
 
   if (!prefix) return trimmed.includes("/") ? trimmed : `${provider}/${trimmed}`;
@@ -182,14 +182,22 @@ export function resolveAkeruMastraModel(
   }
 
   if (trimmed.startsWith("anthropic/")) {
-    const model = trimmed.slice("anthropic/".length);
+    const selectedModel = trimmed.slice("anthropic/".length);
+    const extendedContext = selectedModel.endsWith("[1m]");
+    const model = extendedContext ? selectedModel.slice(0, -4) : selectedModel;
+
+    const contextHeaders = extendedContext
+      ? { headers: { "anthropic-beta": "context-1m-2025-08-07" } }
+      : {};
+
     const instanceApiKey = environment?.ANTHROPIC_API_KEY?.trim();
 
     const instanceAuthToken =
-      environment?.ANTHROPIC_AUTH_TOKEN?.trim() ?? environment?.CLAUDE_CODE_OAUTH_TOKEN?.trim();
+      environment?.ANTHROPIC_AUTH_TOKEN?.trim() || environment?.CLAUDE_CODE_OAUTH_TOKEN?.trim();
 
     if (instanceApiKey || instanceAuthToken) {
       return createAnthropic({
+        ...contextHeaders,
         ...(instanceApiKey ? { apiKey: instanceApiKey } : { authToken: instanceAuthToken! }),
         ...(environment?.ANTHROPIC_BASE_URL?.trim()
           ? { baseURL: environment.ANTHROPIC_BASE_URL.trim() }
@@ -201,6 +209,7 @@ export function resolveAkeruMastraModel(
 
     if (credential) {
       return createAnthropic({
+        ...contextHeaders,
         apiKey: credential.access,
         ...(credential.baseUrl ? { baseURL: credential.baseUrl } : {}),
       })(model);
@@ -212,7 +221,7 @@ export function resolveAkeruMastraModel(
       );
     }
 
-    return opencodeClaudeMaxProvider(model, { authStorage: scopedAuthStorage });
+    return opencodeClaudeMaxProvider(model, { ...contextHeaders, authStorage: scopedAuthStorage });
   }
 
   if (trimmed.startsWith("xai/")) {

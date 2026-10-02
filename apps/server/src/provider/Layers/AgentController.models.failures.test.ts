@@ -1,3 +1,4 @@
+import { codexHarnessModelIds, GROK_HARNESS_MODELS } from "../HarnessProviderStatus.ts";
 import * as Predicate from "effect/Predicate";
 import * as NodeFS from "node:fs";
 import * as NodeOS from "node:os";
@@ -188,7 +189,7 @@ describe("AgentControllerLive", () => {
         expect(bridge.sendTurn).not.toHaveBeenCalled();
         expect(mastra.createSession).toHaveBeenCalledOnce();
         expect(mastra.session.model.switch).toHaveBeenCalledWith({
-          modelId: "anthropic/claude-fable-5",
+          modelId: "anthropic/claude-fable-5[1m]",
         });
         expect(mastra.session.mode.switch).not.toHaveBeenCalledWith({ modeId: "plan" });
         expect(mastra.sendMessage).toHaveBeenCalledOnce();
@@ -326,12 +327,12 @@ describe("AgentControllerLive", () => {
               mastra.finishSend();
               yield* Effect.yieldNow;
               expect(mastra.session.model.switch).toHaveBeenCalledWith({
-                modelId: `${testCase.wirePrefix}/${testCase.from}`,
+                modelId: `${testCase.wirePrefix}/${testCase.from}${testCase.provider === "claudeAgent" ? "[1m]" : ""}`,
               });
 
               yield* resolve(testCase.to);
               expect(mastra.session.model.switch).toHaveBeenCalledWith({
-                modelId: `${testCase.wirePrefix}/${testCase.to}`,
+                modelId: `${testCase.wirePrefix}/${testCase.to}${testCase.provider === "claudeAgent" ? "[1m]" : ""}`,
               });
               expect(mastra.createSession).toHaveBeenCalledOnce();
 
@@ -369,6 +370,99 @@ describe("AgentControllerLive", () => {
 
 describe("AgentControllerLive", () => {
   describe("in-session model switch between turns", () => {
+    it.effect(
+      "continues an existing engine using a historical Codex model outside currentModels",
+      () => {
+        const bridge = makeBridge();
+        const mastra = mastraHarnessFixture();
+        instanceModelCatalog.set(String(codexInstanceId), {
+          models: codexHarnessModelIds(["gpt-6-sol"]),
+        });
+
+        return provideController(
+          Effect.gen(function* () {
+            const controller = yield* AgentController;
+
+            const resolved = yield* controller.resolveEngine({
+              threadId: codexThreadId,
+              engine: { provider: "codex", model: "gpt-5.4" },
+              fallback: codexSelection,
+              mode: "default",
+              botConversation: true,
+            });
+
+            assert.equal(resolved.modelSelection.model, "gpt-5.4");
+          }),
+          bridge.service,
+          mastra.factory,
+        );
+      },
+    );
+
+    for (const model of ["grok-4.6", "grok-4.5"] as const) {
+      it.effect(`continues an existing ready Grok engine using ${model}`, () => {
+        const bridge = makeBridge();
+        const mastra = mastraHarnessFixture();
+        instanceModelCatalog.set(String(grokInstanceId), { models: [...GROK_HARNESS_MODELS] });
+
+        return provideController(
+          Effect.gen(function* () {
+            const controller = yield* AgentController;
+
+            const resolved = yield* controller.resolveEngine({
+              threadId: grokThreadId,
+              engine: { provider: "grok", model },
+              fallback: { instanceId: grokInstanceId, model: "grok-build" },
+              mode: "default",
+              botConversation: true,
+            });
+
+            assert.equal(resolved.modelSelection.model, model);
+          }),
+          bridge.service,
+          mastra.factory,
+        );
+      });
+    }
+
+    it.effect("preserves an existing Claude engine and its 1M context selection", () => {
+      const bridge = makeBridge();
+      const mastra = mastraHarnessFixture();
+      instanceModelCatalog.set(String(claudeInstanceId), { models: ["claude-opus-4-6"] });
+
+      return provideController(
+        Effect.gen(function* () {
+          const controller = yield* AgentController;
+
+          const resolved = yield* controller.resolveEngine({
+            threadId: claudeThreadId,
+            engine: {
+              provider: "claudeAgent",
+              model: "claude-opus-4-6",
+              options: [{ id: "contextWindow", value: "1m" }],
+            },
+            fallback: { instanceId: claudeInstanceId, model: "claude-fable-5" },
+            mode: "default",
+            botConversation: true,
+          });
+
+          assert.equal(resolved.modelSelection.model, "claude-opus-4-6");
+          yield* controller.startSession(claudeThreadId, {
+            threadId: claudeThreadId,
+            provider: ProviderDriverKind.make("claudeAgent"),
+            providerInstanceId: claudeInstanceId,
+            cwd: process.cwd(),
+            runtimeMode: "approval-required",
+          });
+          expect(mastra.session.model.switch).toHaveBeenCalledWith({
+            modelId: "anthropic/claude-opus-4-6[1m]",
+          });
+        }),
+        bridge.service,
+        mastra.factory,
+      );
+    });
+
     it.effect("fails closed when the saved model is not in the instance snapshot", () => {
       const bridge = makeBridge();
       const mastra = mastraHarnessFixture();

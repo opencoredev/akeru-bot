@@ -23,7 +23,7 @@ export const createWsAuthHandlers = ({
   projectionSnapshotQuery,
   agentController,
   subscriptionAuth,
-  syncSubscriptionProviderSettings,
+  refreshChangedSubscriptionProviders,
   resetChangedApiKeySessions,
   validateAccountInstance,
   composio,
@@ -41,7 +41,7 @@ export const createWsAuthHandlers = ({
   | "projectionSnapshotQuery"
   | "agentController"
   | "subscriptionAuth"
-  | "syncSubscriptionProviderSettings"
+  | "refreshChangedSubscriptionProviders"
   | "resetChangedApiKeySessions"
   | "validateAccountInstance"
   | "composio"
@@ -178,10 +178,7 @@ export const createWsAuthHandlers = ({
             new SubscriptionAuthError({
               reason: cause instanceof Error ? cause.message : String(cause),
             }),
-        }).pipe(
-          resetChangedApiKeySessions,
-          Effect.tap(() => syncSubscriptionProviderSettings),
-        ),
+        }).pipe(refreshChangedSubscriptionProviders, resetChangedApiKeySessions),
         { "rpc.aggregate": "server" },
       ),
 
@@ -194,10 +191,7 @@ export const createWsAuthHandlers = ({
             new SubscriptionAuthError({
               reason: cause instanceof Error ? cause.message : String(cause),
             }),
-        }).pipe(
-          resetChangedApiKeySessions,
-          Effect.tap(() => syncSubscriptionProviderSettings),
-        ),
+        }).pipe(refreshChangedSubscriptionProviders, resetChangedApiKeySessions),
         { "rpc.aggregate": "server" },
       ),
 
@@ -221,7 +215,11 @@ export const createWsAuthHandlers = ({
             new SubscriptionAuthError({
               reason: cause instanceof Error ? cause.message : String(cause),
             }),
-        }).pipe(resetChangedApiKeySessions, Effect.andThen(getAccessHealthSnapshot())),
+        }).pipe(
+          refreshChangedSubscriptionProviders,
+          resetChangedApiKeySessions,
+          Effect.andThen(getAccessHealthSnapshot()),
+        ),
         { "rpc.aggregate": "server" },
       ),
 

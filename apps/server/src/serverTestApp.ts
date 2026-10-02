@@ -1,3 +1,4 @@
+import { ProviderInstanceRegistryMutator } from "./provider/Services/ProviderInstanceRegistryMutator.ts";
 import { HostProcessEnvironment } from "@akeru/shared/hostProcess";
 
 import { DEFAULT_SERVER_SETTINGS, type PreviewEvent } from "@akeru/contracts";
@@ -384,6 +385,7 @@ export const buildAppUnderTest = (options?: {
             streamChanges: Stream.empty,
             ...options?.layers?.providerRegistry,
           }),
+          Layer.succeed(ProviderInstanceRegistryMutator, { reconcile: () => Effect.void }),
           Layer.mock(AgentController.AgentController)({
             uploadFeedback: () => Effect.die("Provider feedback is not stubbed in this test"),
             ...options?.layers?.agentController,

@@ -155,11 +155,11 @@ const SettingsWatcherLive = Layer.effectDiscard(
  *
  * Composing via `Layer.provideMerge` makes the watcher's deps available
  * from the mutable layer while still surfacing the registry as an output.
- * The mutator tag is technically also exposed; only this module imports
- * it, so the visibility leak is harmless in practice.
+ * The mutator is also exposed so credential mutations can await reconciliation
+ * before refreshing and publishing the affected provider snapshots.
  */
 export const ProviderInstanceRegistryHydrationLive: Layer.Layer<
-  ProviderInstanceRegistry,
+  ProviderInstanceRegistry | ProviderInstanceRegistryMutator,
   never,
   BuiltInDriversEnv | ServerSettingsService
 > = Layer.unwrap(

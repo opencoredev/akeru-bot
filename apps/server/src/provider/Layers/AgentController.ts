@@ -1,7 +1,5 @@
-import { makeBotWorkspaceIO } from "../workspace/BotWorkspaceIO.ts";
-import { createSessionResources } from "./agentController/SessionResources.ts";
+import { createControllerState } from "./agentController/ControllerState.ts";
 import { createAuxiliaryOperations } from "./agentController/AuxiliaryOperations.ts";
-import { createPreviewMcpSessions } from "./agentController/PreviewMcpSessions.ts";
 import { createToolRuntime } from "./agentController/ToolRuntime.ts";
 import { createHarness } from "./agentController/Harness.ts";
 import { createWorkers } from "./agentController/Workers.ts";
@@ -41,21 +39,9 @@ import { createTurnRequests } from "./agentController/TurnRequests.ts";
 import { createApprovals } from "./agentController/Approvals.ts";
 import { createConversation } from "./agentController/Conversation.ts";
 
-import * as FileSystem from "effect/FileSystem";
-import * as Path from "effect/Path";
 import { createMcpManager } from "@mastra/code-sdk/mcp/index";
 
-import {
-  ProviderDriverKind,
-  TurnId,
-  type BotId,
-  type AkeruCreateRoutineInput,
-  type ProviderRuntimeEvent,
-  type RuntimeMode,
-  ThreadId,
-} from "@akeru/contracts";
-
-import { HostProcessPlatform } from "@akeru/shared/hostProcess";
+import { TurnId, type ProviderRuntimeEvent, type RuntimeMode, ThreadId } from "@akeru/contracts";
 
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -64,62 +50,36 @@ import * as PubSub from "effect/PubSub";
 import * as Schedule from "effect/Schedule";
 import * as Ref from "effect/Ref";
 
-import * as Semaphore from "effect/Semaphore";
-
-import { BotInboxService } from "../../bot-inbox/service.ts";
-
-import { ServerConfig } from "../../config.ts";
-import { BotMemoryStore, type BotMemoryAccess } from "../../memory/BotMemory.ts";
+import { type BotMemoryAccess } from "../../memory/BotMemory.ts";
 
 import { EntityMemoryRepository } from "../../memory/Services/EntityMemoryRepository.ts";
 
-import { OrchestrationEngineService } from "../../orchestration/Services/OrchestrationEngine.ts";
-import { ProjectionSnapshotQuery } from "../../orchestration/Services/ProjectionSnapshotQuery.ts";
-
-import { ProjectionThreadMessageRepository } from "../../persistence/Services/ProjectionThreadMessages.ts";
-import { ProjectionTurnRepository } from "../../persistence/Services/ProjectionTurns.ts";
 import { ProjectionThreadMessageRepositoryLive } from "../../persistence/Layers/ProjectionThreadMessages.ts";
 import { ProjectionTurnRepositoryLive } from "../../persistence/Layers/ProjectionTurns.ts";
 
 import * as McpMemoryToolSession from "../../mcp/McpMemoryToolSession.ts";
 
-import * as McpSessionRegistry from "../../mcp/McpSessionRegistry.ts";
-import * as ServerSettings from "../../serverSettings.ts";
-import { BotUsageLedger } from "../../usage/BotUsageLedger.ts";
+import { createAkeruChannelRuntime } from "../AkeruChannelRuntime.ts";
+import { createAkeruBotStateRuntime } from "../AkeruBotStateRuntime.ts";
+import { type AkeruMemoryTurn } from "../AkeruMemoryTurnHarness.ts";
 
-import { SubscriptionAuthService } from "../../subscription-auth/service.ts";
-
-import type { ProviderInstanceRoutingInfo } from "../Services/ProviderAdapterRegistry.ts";
-import { createAkeruChannelRuntime, type AkeruChannelRuntime } from "../AkeruChannelRuntime.ts";
-import { createAkeruBotStateRuntime, type AkeruBotStateRuntime } from "../AkeruBotStateRuntime.ts";
-import { AkeruMemoryTurnHarness, type AkeruMemoryTurn } from "../AkeruMemoryTurnHarness.ts";
-import { type AkeruDelegationChildOutcome } from "../AkeruDelegationRuntime.ts";
-
-import { makeAkeruRuntimeSeam } from "../AkeruRuntimeSeam.ts";
-import { makePendingWaiters } from "../PendingWaiters.ts";
 import {
   createAkeruPluginRuntime,
   type AkeruPluginRuntimeOptions,
 } from "../AkeruCatalogToolHandlers.ts";
-import { createAkeruWebFetch } from "../AkeruWebFetch.ts";
 
 import { authenticateMcpServer } from "../McpServerAuthentication.ts";
 
 import { AgentControllerRuntimeError } from "../Errors.ts";
 import { AgentController } from "../Services/AgentController.ts";
-import { LegacyProviderBridge } from "../Services/LegacyProviderBridge.ts";
-import { RoutineDraftDispatcher } from "../../routines/RoutineDraftDispatcher.ts";
-import { MemoryApprovals } from "../../memory/MemoryApprovals.ts";
 
 import {
-  type ResolvedEngine,
   type PendingTurn,
   type ActiveSession,
   type LegacyTurnMemoryState,
   type LegacyResourceIdentity,
   type WorkerOrchestration,
 } from "./agentController/State.ts";
-import { createAkeruMastraAuthStorage } from "./agentController/ProviderAccess.ts";
 
 import { toMcpServerConfigs } from "./agentController/McpConfiguration.ts";
 
@@ -133,113 +93,48 @@ const APPROVAL_FREE_MASTRA_TOOL_NAMES: ReadonlySet<string> = new Set(["ask_user"
 
 const make = (options?: AgentControllerLiveOptions) =>
   Effect.gen(function* () {
-    const config = yield* ServerConfig;
-    const fileSystem = yield* FileSystem.FileSystem;
-    const path = yield* Path.Path;
-    const hostPlatform = yield* HostProcessPlatform;
-    const legacyProviderBridge = yield* LegacyProviderBridge;
-    const botUsageLedger = yield* BotUsageLedger;
-    const serverSettings = yield* Effect.serviceOption(ServerSettings.ServerSettingsService);
-    const mcpSessionRegistry = yield* Effect.serviceOption(McpSessionRegistry.McpSessionRegistry);
-    // Promise-based callers re-enter Effect only through this seam; its fibers
-    // are interrupted when the layer scope closes.
-    const { runPromise, fork, forkPromise } = yield* makeAkeruRuntimeSeam;
-    const routineDraftDispatcher = yield* Effect.serviceOption(RoutineDraftDispatcher);
-    const memoryApprovals = yield* Effect.serviceOption(MemoryApprovals);
-    const routineDispatcher = Option.getOrUndefined(routineDraftDispatcher);
-    const mutationLock = yield* Semaphore.make(1);
-    const runtimeEvents = yield* PubSub.unbounded<ProviderRuntimeEvent>();
-    const orchestrationEngine = yield* Effect.serviceOption(OrchestrationEngineService);
-    const projectionSnapshotQuery = yield* Effect.serviceOption(ProjectionSnapshotQuery);
-    const projectionMessages = yield* Effect.serviceOption(ProjectionThreadMessageRepository);
-    const projectionTurns = yield* Effect.serviceOption(ProjectionTurnRepository);
-    const resolvedByThread = new Map<string, ResolvedEngine>();
-    const webFetch = createAkeruWebFetch(options?.webFetch);
-
-    const modelConnections = new Map<
-      string,
-      NonNullable<ProviderInstanceRoutingInfo["mastraConnection"]>
-    >();
-
-    const sessions = new Map<string, ActiveSession>();
-
-    // Tool calls consume no model tokens, so their entries hold no cap while they run.
-    // `persisted` is false when the start write failed; finish then writes the whole entry.
-    const toolUsageStarts = new Map<
-      string,
-      {
-        persisted: boolean;
-        readonly turnId: TurnId | null;
-        readonly provider: ProviderDriverKind | null;
-        readonly model: string | null;
-      }
-    >();
-
-    // Providers only promise tool-call ids unique within a chat.
-    const toolUsageKey = (input: { readonly threadId: string; readonly toolCallId: string }) =>
-      `tool:${input.threadId}:${input.toolCallId}`;
-
-    const legacyHiddenWakeByTurn = new Map<string, boolean>();
-
-    // Memory calls with no live turn reservation, recorded when they finish.
-    const unreservedMemoryCalls = new Map<
-      string,
-      {
-        readonly botId: BotId;
-        readonly threadId: ThreadId;
-        readonly category: "observer" | "reflector";
-        readonly provider: ProviderDriverKind | null;
-        readonly model: string | null;
-      }
-    >();
-
-    const memoryUsageByThread = new Map<
-      string,
-      { readonly botId: BotId; readonly capLimit: number; turnId: TurnId }
-    >();
-
-    const { clearPreviewMcpSession, preparePreviewMcpSession } = createPreviewMcpSessions({
-      options,
-      mcpSessionRegistry,
+    const {
+      config,
+      fileSystem,
+      path,
+      legacyProviderBridge,
+      botUsageLedger,
       serverSettings,
-    });
-
-    /**
-     * Orchestration-backed runtimes. The orchestration layer is built after this
-     * controller, so it hands them over through configurePluginRuntime and
-     * configureDelegation.
-     */
-    const lateWiring = yield* Ref.make<{
-      readonly channelRuntime?: AkeruChannelRuntime;
-      readonly pluginRuntime?: ReturnType<typeof createAkeruPluginRuntime>;
-      readonly pluginRuntimeOptions?: AkeruPluginRuntimeOptions;
-      readonly botStateRuntime?: AkeruBotStateRuntime;
-      readonly delegationRuntime?: AgentControllerLiveOptions["delegationRuntime"];
-      readonly workerOrchestration?: WorkerOrchestration;
-    }>({ delegationRuntime: options?.delegationRuntime });
-
-    const wired = () => Ref.getUnsafe(lateWiring);
-
-    const childWaiters = yield* makePendingWaiters<null, AkeruDelegationChildOutcome>(
-      "The agent controller stopped.",
-    );
-
-    const resolveChildWaiter = (threadId: ThreadId, outcome: AkeruDelegationChildOutcome) => {
-      childWaiters.resolve(String(threadId), outcome);
-    };
-
-    const pendingRoutineRequests = yield* makePendingWaiters<
-      {
-        readonly threadId: string;
-        readonly input: AkeruCreateRoutineInput;
-        readonly timezone: string;
-      },
-      unknown,
-      Error
-    >("The agent controller stopped before the routine review finished.");
-
-    // Accepted routine reviews whose routine is still being created, by tool call.
-    const creatingRoutineReviews = new Map<string, string>();
+      memoryApprovals,
+      routineDispatcher,
+      mutationLock,
+      runtimeEvents,
+      orchestrationEngine,
+      projectionSnapshotQuery,
+      projectionMessages,
+      projectionTurns,
+      resolvedByThread,
+      webFetch,
+      modelConnections,
+      sessions,
+      toolUsageStarts,
+      toolUsageKey,
+      legacyHiddenWakeByTurn,
+      unreservedMemoryCalls,
+      memoryUsageByThread,
+      lateWiring,
+      wired,
+      childWaiters,
+      resolveChildWaiter,
+      pendingRoutineRequests,
+      clearPreviewMcpSession,
+      preparePreviewMcpSession,
+      sessionResources,
+      authStorage,
+      subscriptionAuth,
+      botInbox,
+      botMemoryStore,
+      memoryTurnHarness,
+      creatingRoutineReviews,
+      runPromise,
+      fork,
+      forkPromise,
+    } = yield* createControllerState(options);
 
     // A turn waits on the user while any tool approval, question, or routine review
     // it opened is unanswered, or an accepted routine is still being created.
@@ -322,36 +217,6 @@ const make = (options?: AgentControllerLiveOptions) =>
             cause,
           }),
       });
-
-    yield* fileSystem
-      .makeDirectory(config.stateDir, { recursive: true, mode: 0o700 })
-      .pipe(Effect.orDie);
-
-    const authStorage = yield* createAkeruMastraAuthStorage(config.secretsDir);
-    const subscriptionAuth = yield* SubscriptionAuthService.forSecretsDir(config.secretsDir);
-    const botInbox = BotInboxService.forSecretsDir(config.secretsDir);
-
-    const { sessionResources } = createSessionResources({
-      io: makeBotWorkspaceIO(fileSystem, path, runPromise),
-      get config() {
-        return config;
-      },
-      get hostPlatform() {
-        return hostPlatform;
-      },
-      get subscriptionAuth() {
-        return subscriptionAuth;
-      },
-      get botInbox() {
-        return botInbox;
-      },
-      get options() {
-        return options;
-      },
-    });
-
-    const botMemoryStore = options?.botMemoryStore ?? new BotMemoryStore(config.stateDir);
-    const memoryTurnHarness = new AkeruMemoryTurnHarness(botMemoryStore);
 
     const { toolRuntime } = createToolRuntime({
       botInbox,
