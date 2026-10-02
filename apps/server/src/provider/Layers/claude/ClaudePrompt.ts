@@ -21,6 +21,11 @@ export const SUPPORTED_CLAUDE_IMAGE_MIME_TYPES = new Set([
   "image/webp",
 ]);
 
+const isSupportedClaudeImageMimeType = (
+  mimeType: string,
+): mimeType is Parameters<typeof buildClaudeImageContentBlock>[0]["mimeType"] =>
+  SUPPORTED_CLAUDE_IMAGE_MIME_TYPES.has(mimeType);
+
 export const CLAUDE_SETTING_SOURCES = [
   "user",
   "project",
@@ -98,12 +103,7 @@ export const buildUserMessageEffect = Effect.fn("buildUserMessageEffect")(functi
 
     const imageMimeType = attachment.mimeType;
 
-    if (
-      imageMimeType !== "image/gif" &&
-      imageMimeType !== "image/jpeg" &&
-      imageMimeType !== "image/png" &&
-      imageMimeType !== "image/webp"
-    ) {
+    if (!isSupportedClaudeImageMimeType(imageMimeType)) {
       return yield* new ProviderAdapterRequestError({
         provider: PROVIDER,
         method: "turn/start",

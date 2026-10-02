@@ -140,9 +140,11 @@ export const createWsOrchestrationCommands = ({
         Effect.catchCause((cause) => {
           const dispatchError = toBootstrapDispatchCommandCauseError(cause);
 
-          if (Cause.hasInterruptsOnly(cause)) {
-            return Effect.fail(dispatchError);
-          }
+          const failure = Cause.hasInterruptsOnly(cause)
+            ? Effect.failCause(
+                Cause.fromReasons<never>(cause.reasons.filter(Cause.isInterruptReason)),
+              )
+            : Effect.fail(dispatchError);
 
           return Effect.uninterruptible(cleanupCreatedThread()).pipe(
             Effect.matchCauseEffect({
@@ -150,19 +152,21 @@ export const createWsOrchestrationCommands = ({
                 Effect.logWarning("bootstrap thread cleanup failed", {
                   threadId: command.threadId,
                   detail: Cause.pretty(cleanupCause),
-                }).pipe(Effect.flatMap(() => Effect.fail(dispatchError))),
+                }).pipe(Effect.andThen(failure)),
               onSuccess: (threadDeleted) =>
-                Effect.fail(
-                  threadDeleted
-                    ? new OrchestrationDispatchCommandError({
-                        message: dispatchError.message,
-                        ...(dispatchError.cause !== undefined
-                          ? { cause: dispatchError.cause }
-                          : {}),
-                        bootstrapThreadDisposition: "deleted",
-                      })
-                    : dispatchError,
-                ),
+                Cause.hasInterruptsOnly(cause)
+                  ? failure
+                  : Effect.fail(
+                      threadDeleted
+                        ? new OrchestrationDispatchCommandError({
+                            message: dispatchError.message,
+                            ...(dispatchError.cause !== undefined
+                              ? { cause: dispatchError.cause }
+                              : {}),
+                            bootstrapThreadDisposition: "deleted",
+                          })
+                        : dispatchError,
+                    ),
             }),
           );
         }),

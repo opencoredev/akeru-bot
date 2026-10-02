@@ -406,9 +406,7 @@ export const orchestrationHttpApiLayer = HttpApiBuilder.group(
           }
 
           return yield* orchestrationEngine.dispatch(normalizedCommand, { actor }).pipe(
-            Effect.tapError(() =>
-              cleanupFailedUploadedAttachments(args.payload, normalizedCommand),
-            ),
+            Effect.onError(() => cleanupFailedUploadedAttachments(args.payload, normalizedCommand)),
             Effect.catch((cause) =>
               failEnvironmentInternal("orchestration_dispatch_failed", cause),
             ),

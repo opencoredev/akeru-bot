@@ -36,3 +36,27 @@ it.effect("fails rather than acknowledging a migration without its table", () =>
     assert.equal(error._tag, "SqlError");
   }).pipe(Effect.provide(SqliteClient.layerMemory()), Effect.scoped),
 );
+
+for (const column of ["LATEST_USER_MESSAGE_AT", "Latest_User_Message_At"]) {
+  it.effect(`recognizes existing SQLite column ${column}`, () =>
+    Effect.gen(function* () {
+      const sql = yield* SqlClient.SqlClient;
+      yield* sql.unsafe(`CREATE TABLE projection_threads (id TEXT PRIMARY KEY, ${column} TEXT)`);
+      yield* migration;
+      yield* migration;
+      yield* sql`INSERT INTO projection_threads (id, latest_user_message_at) VALUES ('thread', 'saved')`;
+
+      const rows =
+        yield* sql`SELECT latest_user_message_at AS message_at, pending_approval_count, pending_user_input_count, has_actionable_proposed_plan FROM projection_threads`;
+
+      assert.deepEqual(rows, [
+        {
+          message_at: "saved",
+          pending_approval_count: 0,
+          pending_user_input_count: 0,
+          has_actionable_proposed_plan: 0,
+        },
+      ]);
+    }).pipe(Effect.provide(SqliteClient.layerMemory()), Effect.scoped),
+  );
+}

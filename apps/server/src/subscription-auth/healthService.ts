@@ -29,6 +29,7 @@ import {
 
 export class SubscriptionHealthService {
   private readonly clock: Clock.Clock;
+  private readonly reload: () => Effect.Effect<void>;
   private readonly path: Path.Path;
   private readonly store: SubscriptionCredentialStore;
   constructor(
@@ -36,8 +37,10 @@ export class SubscriptionHealthService {
     clock: Clock.Clock,
     path: Path.Path,
     checkHealthOnConnect: boolean,
+    reload: () => Effect.Effect<void>,
   ) {
     this.clock = clock;
+    this.reload = reload;
     this.path = path;
     this.store = store;
     this.healthPath = store.path + ".health";
@@ -47,7 +50,7 @@ export class SubscriptionHealthService {
     return this.store.current().data;
   }
   private reloadAsync() {
-    return Effect.runPromise(this.store.reload);
+    return Effect.runPromise(this.reload());
   }
   private updateCredentials(update: (data: SubscriptionAuthData) => SubscriptionAuthData) {
     return Effect.runPromise(this.store.update(update));
