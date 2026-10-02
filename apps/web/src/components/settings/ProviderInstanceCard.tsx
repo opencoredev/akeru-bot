@@ -17,7 +17,7 @@ import {
   type ProviderInstanceConfig,
   type ProviderInstanceEnvironmentVariable,
   type ProviderInstanceId,
-  type ProviderDriverKind,
+  ProviderDriverKind,
   type ServerProvider,
 } from "@akeru/contracts";
 import { cn } from "../../lib/utils";
@@ -33,7 +33,7 @@ import { Switch } from "../ui/switch";
 import { stackedThreadToast, toastManager } from "../ui/toast";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import type { DriverOption } from "./providerDriverMeta";
-import { ProviderSettingsForm } from "./ProviderSettingsForm";
+import { ProviderSettingsForm, readProviderConfigString } from "./ProviderSettingsForm";
 import { ProviderModelsSection } from "./ProviderModelsSection";
 import { ProviderInstanceIcon } from "../chat/ProviderInstanceIcon";
 import { ProviderAccentColorPicker } from "./ProviderAccentColorPicker";
@@ -45,6 +45,14 @@ import {
   type ProviderStatusKey,
 } from "./providerStatus";
 import { ProviderEnvironmentSection } from "./ProviderEnvironmentSection";
+import { CustomApiKeyField } from "./CustomApiKeyField";
+import {
+  customApiKeyHint,
+  customApiPresetForBaseUrl,
+  readCustomApiKey,
+  withCustomApiKey,
+  withoutCustomApiKey,
+} from "./customApiPresets";
 import { ProviderAuthEmail } from "./ProviderAuthEmail";
 import {
   readConfigStringArray,
@@ -226,6 +234,16 @@ export function ProviderInstanceCard({
     const { environment: _omit, ...rest } = instance;
     onUpdate(cleaned.length > 0 ? { ...rest, environment: cleaned } : rest);
   };
+
+  // Custom API keeps its key in a dedicated field, so the generic variable
+  // table hides it and merges it back on edit.
+  const isCustomApi = instance.driver === ProviderDriverKind.make("customOpenai");
+  const environment = instance.environment ?? [];
+  const customApiKey = isCustomApi ? readCustomApiKey(environment) : undefined;
+
+  const customApiPreset = customApiPresetForBaseUrl(
+    readProviderConfigString(instance.config, "baseUrl"),
+  );
 
   const titleIconNode = driverKind ? (
     <ProviderInstanceIcon
@@ -480,8 +498,12 @@ export function ProviderInstanceCard({
 
             <div>
               <ProviderEnvironmentSection
-                environment={instance.environment ?? []}
-                onChange={updateEnvironment}
+                environment={isCustomApi ? withoutCustomApiKey(environment) : environment}
+                onChange={(next) =>
+                  updateEnvironment(
+                    customApiKey && !readCustomApiKey(next) ? [...next, customApiKey] : next,
+                  )
+                }
               />
             </div>
 
@@ -492,6 +514,17 @@ export function ProviderInstanceCard({
                 idPrefix={`provider-instance-${instanceId}`}
                 variant="card"
                 onChange={updateConfig}
+              />
+            ) : null}
+
+            {isCustomApi ? (
+              <CustomApiKeyField
+                id={`provider-instance-${instanceId}-api-key`}
+                variable={customApiKey}
+                required={customApiPreset.key.kind === "required"}
+                hint={customApiKeyHint(customApiPreset)}
+                onCommit={(value) => updateEnvironment(withCustomApiKey(environment, value))}
+                onRemove={() => updateEnvironment(withCustomApiKey(environment, ""))}
               />
             ) : null}
 

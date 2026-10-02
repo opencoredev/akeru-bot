@@ -202,10 +202,9 @@ export const CustomOpenaiSettings = providerSettingsSchema(
       Schema.withDecodingDefault(Effect.succeed("")),
       Schema.annotateKey({
         title: "Base URL",
-        description:
-          "OpenAI-compatible API root, e.g. https://api.openai.com/v1 or http://localhost:11434/v1. Add CUSTOM_OPENAI_API_KEY as a sensitive environment variable when the endpoint needs a key.",
+        description: "The API root of any OpenAI-compatible service.",
         providerSettingsForm: {
-          placeholder: "https://api.openai.com/v1",
+          placeholder: "https://api.example.com/v1",
           clearWhenEmpty: "omit",
         },
       }),

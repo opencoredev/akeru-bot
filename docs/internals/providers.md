@@ -9,14 +9,14 @@ orchestration layer does not know which one is behind a thread.
 
 [`builtInDrivers.ts`][drivers] exports `BUILT_IN_DRIVERS` with seven entries:
 
-| Driver kind    | Driver source                                     |
-| -------------- | ------------------------------------------------- |
-| `codex`        | [`Drivers/CodexDriver.ts`][codex]                 |
-| `claudeAgent`  | [`Drivers/ClaudeDriver.ts`][claude]               |
-| `grok`         | [`Drivers/GrokDriver.ts`][grok]                   |
-| `kimi`         | [`Drivers/KimiDriver.ts`][kimi]                   |
-| `opencode`     | [`Drivers/OpenCodeDriver.ts`][opencode]           |
-| `opencodeGo`   | [`Drivers/OpenCodeGoDriver.ts`][opencode-go]      |
+| Driver kind    | Driver source                                    |
+| -------------- | ------------------------------------------------ |
+| `codex`        | [`Drivers/CodexDriver.ts`][codex]                |
+| `claudeAgent`  | [`Drivers/ClaudeDriver.ts`][claude]              |
+| `grok`         | [`Drivers/GrokDriver.ts`][grok]                  |
+| `kimi`         | [`Drivers/KimiDriver.ts`][kimi]                  |
+| `opencode`     | [`Drivers/OpenCodeDriver.ts`][opencode]          |
+| `opencodeGo`   | [`Drivers/OpenCodeGoDriver.ts`][opencode-go]     |
 | `customOpenai` | [`Drivers/CustomOpenaiDriver.ts`][custom-openai] |
 
 Each driver declares its `driverKind`, a `configSchema`, and a `create` function that builds a
@@ -163,6 +163,12 @@ its `baseUrl` config. The optional key comes only from the instance's sensitive
 `CUSTOM_OPENAI_API_KEY` variable, never from the process environment, so a process-wide key is
 never sent to an arbitrary URL. A base URL alone makes the instance ready, because local servers
 such as Ollama take no key.
+
+The web settings write that key for the user. The add dialog offers presets from
+`apps/web/src/components/settings/customApiPresets.ts` that fill `baseUrl` and the instance name,
+and an **API key** field that saves `CUSTOM_OPENAI_API_KEY` as a sensitive variable. Presets are a
+client convenience: the server stores only the URL, and the card matches the URL back to a preset
+to word its key hint.
 
 The model list is `GET {baseUrl}/models` plus the instance's hand-added models. Discovery is
 optional: a failed or unreadable probe keeps the last good catalog and reports a warning naming only

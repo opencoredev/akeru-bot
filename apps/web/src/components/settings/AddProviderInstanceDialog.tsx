@@ -38,6 +38,14 @@ import {
   type WizardNavigation,
 } from "./AddProviderInstanceDialog.logic";
 import { AddProviderInstanceWizardSteps } from "./AddProviderInstanceWizardSteps";
+import { CustomApiKeyDraftField } from "./CustomApiKeyField";
+import { CustomApiPresetPicker } from "./CustomApiPresetPicker";
+import {
+  customApiKeyHint,
+  OTHER_CUSTOM_API_PRESET,
+  withCustomApiKey,
+  type CustomApiPreset,
+} from "./customApiPresets";
 
 const PROVIDER_ACCENT_SWATCHES = [
   "#2563eb",
@@ -73,6 +81,8 @@ function deriveInstanceId(driver: ProviderDriverKind, label: string): string {
 const INSTANCE_ID_PATTERN = /^[a-zA-Z][a-zA-Z0-9_-]*$/;
 
 const DEFAULT_DRIVER_KIND = ProviderDriverKind.make("codex");
+
+const CUSTOM_API_DRIVER_KIND = ProviderDriverKind.make("customOpenai");
 
 const DEFAULT_DRIVER_OPTION = DRIVER_OPTIONS[0]!;
 
@@ -152,6 +162,10 @@ export function AddProviderInstanceDialog({
   );
 
   const [label, setLabel] = useState("");
+  // A preset names the instance until the user types a label of their own.
+  const [labelEdited, setLabelEdited] = useState(false);
+  const [customApiPreset, setCustomApiPreset] = useState<CustomApiPreset>(OTHER_CUSTOM_API_PRESET);
+  const [customApiKey, setCustomApiKey] = useState("");
   const [accentColor, setAccentColor] = useState<string>("");
   const [instanceIdOverride, setInstanceIdOverride] = useState<string | null>(null);
   // Driver-specific config drafts keyed by driver so toggling between drivers
@@ -195,6 +209,21 @@ export function AddProviderInstanceDialog({
     });
   };
 
+  const chooseCustomApiPreset = (preset: CustomApiPreset) => {
+    setCustomApiPreset(preset);
+
+    if (!labelEdited) setLabel(preset === OTHER_CUSTOM_API_PRESET ? "" : preset.label);
+
+    setConfigByDriver((existing) => {
+      const { baseUrl: _omit, ...rest } = existing[CUSTOM_API_DRIVER_KIND] ?? {};
+
+      return {
+        ...existing,
+        [CUSTOM_API_DRIVER_KIND]: preset.baseUrl ? { ...rest, baseUrl: preset.baseUrl } : rest,
+      };
+    });
+  };
+
   const applyWizardNavigation = (navigation: WizardNavigation) => {
     if (navigation.kind === "blocked") {
       setHasAttemptedSubmit(true);
@@ -220,12 +249,15 @@ export function AddProviderInstanceDialog({
     const hasConfig = Object.keys(config).length > 0;
     const normalizedAccentColor = normalizeProviderAccentColor(accentColor);
 
+    const environment = driver === CUSTOM_API_DRIVER_KIND ? withCustomApiKey([], customApiKey) : [];
+
     const nextInstance: ProviderInstanceConfig = {
       driver,
       enabled: true,
       ...(label.trim().length > 0 ? { displayName: label.trim() } : {}),
       ...(normalizedAccentColor ? { accentColor: normalizedAccentColor } : {}),
       ...(hasConfig ? { config } : {}),
+      ...(environment.length > 0 ? { environment } : {}),
     };
 
     // `ProviderInstanceId.make` revalidates the slug; we've already checked
@@ -342,6 +374,14 @@ export function AddProviderInstanceDialog({
                     );
                   })}
                 </RadioGroup>
+                {driver === CUSTOM_API_DRIVER_KIND ? (
+                  <div className="mt-3">
+                    <CustomApiPresetPicker
+                      value={customApiPreset.id}
+                      onChange={chooseCustomApiPreset}
+                    />
+                  </div>
+                ) : null}
               </div>
 
               <label className={cn("grid gap-2", wizardStep !== 1 && "hidden")}>
@@ -350,7 +390,10 @@ export function AddProviderInstanceDialog({
                   surface="background"
                   placeholder="e.g. Work"
                   value={label}
-                  onChange={(event) => setLabel(event.target.value)}
+                  onChange={(event) => {
+                    setLabel(event.target.value);
+                    setLabelEdited(true);
+                  }}
                 />
                 <span className="text-11px text-muted-foreground">
                   Shown in the provider list. Optional.
@@ -434,6 +477,15 @@ export function AddProviderInstanceDialog({
                     variant="dialog"
                     onChange={setConfigDraft}
                   />
+                  {driver === CUSTOM_API_DRIVER_KIND ? (
+                    <CustomApiKeyDraftField
+                      id="add-provider-custom-api-key"
+                      value={customApiKey}
+                      required={customApiPreset.key.kind === "required"}
+                      hint={customApiKeyHint(customApiPreset)}
+                      onChange={setCustomApiKey}
+                    />
+                  ) : null}
                 </div>
               ) : wizardStep === 2 ? (
                 <div className="grid gap-2">

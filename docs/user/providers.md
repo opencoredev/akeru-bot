@@ -13,16 +13,19 @@ connection. A custom configuration directory alone does not connect an account t
 
 ## Custom API endpoints
 
-**Settings > Providers > Custom API** connects Akeru Bot to any OpenAI-compatible HTTP endpoint:
-a self-hosted server (Ollama, llama.cpp, vLLM, LM Studio), a hosted gateway, or a proxy in front of
-other models. There is no account to connect and no sign-in flow.
+**Settings > Providers > Custom API** connects Akeru Bot to any OpenAI-compatible HTTP endpoint: a
+hosted service, a gateway, or a server you run yourself. There is no account to connect and no
+sign-in flow.
 
-Set the endpoint root, for example `https://api.openai.com/v1` or `http://localhost:11434/v1`. A base
-URL is enough on its own, so a local server that takes no API key works as-is.
+When you add a Custom API instance, pick what you are connecting to. OpenRouter, Groq, Together AI,
+DeepSeek, Mistral, Fireworks, LM Studio, Ollama, and vLLM fill in their base URL and a name for you.
+Choose **Other** to type the URL of anything else. Local servers such as LM Studio and Ollama resolve
+on the machine running the environment, not on the device you are using.
 
-When the endpoint needs a key, add `CUSTOM_OPENAI_API_KEY` under the instance's **Environment
-variables** and leave **Sensitive** on. Sensitive values are stored outside the settings file and are
-never sent back to a client. The key is sent to the configured endpoint as a bearer token.
+Paste the service's key into **API key**. Hosted services need one; local servers usually do not, and
+a base URL alone is enough for them. The key is stored outside the settings file, never sent back to
+a client, and sent to the configured endpoint as a bearer token. On a saved instance the field shows
+that a key is stored. Type a new key to replace it, or use **Remove key**.
 
 The model list comes from the endpoint's `/models` response. Models you add by hand are kept alongside
 it, and a model disappears from the picker once the endpoint stops listing it. If Akeru cannot read the
