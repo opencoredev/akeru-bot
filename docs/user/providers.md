@@ -26,8 +26,9 @@ Paste the service's key into **API key**. Hosted services need one; local server
 a base URL alone is enough for them. The key is stored outside the settings file, never sent back to
 a client, and sent to the configured endpoint as a bearer token. On a saved instance the field shows
 that a key is stored. Type a new key to replace it, or use **Remove key**. A key belongs to its
-service: changing the base URL to a different host removes the stored key, so paste the new
-service's key afterwards.
+service: changing the base URL to a different host, or from HTTPS to HTTP, removes the stored key,
+so paste the new service's key afterwards. If the endpoint turns the key down, the instance shows
+**Not connected** with the reason until a later check succeeds.
 
 The model list comes from the endpoint's `/models` response. Models you add by hand are kept alongside
 it, and a model disappears from the picker once the endpoint stops listing it. If Akeru cannot read the

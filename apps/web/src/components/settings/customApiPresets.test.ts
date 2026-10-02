@@ -4,7 +4,7 @@ import {
   CUSTOM_API_KEY_ENV,
   CUSTOM_API_PRESETS,
   customApiKeyHint,
-  customApiKeyLeavesHost,
+  customApiKeyLeavesEndpoint,
   customApiPresetForBaseUrl,
   OTHER_CUSTOM_API_PRESET,
   withCustomApiKey,
@@ -82,27 +82,63 @@ describe("withStoredCustomApiKey", () => {
   });
 });
 
-describe("customApiKeyLeavesHost", () => {
-  it("keeps the key when only the path or scheme changes", () => {
-    expect(
-      customApiKeyLeavesHost("https://openrouter.ai/api/v1", "https://openrouter.ai/api/v2"),
-    ).toBe(false);
-    expect(customApiKeyLeavesHost("http://localhost:1234/v1", "https://localhost:1234/v1")).toBe(
-      false,
-    );
+const endpoint = (baseUrl: string, override?: { value: string; valueRedacted?: boolean }) => ({
+  baseUrl,
+  environment: override ? [{ name: "CUSTOM_OPENAI_BASE_URL", sensitive: false, ...override }] : [],
+});
+
+describe("customApiKeyLeavesEndpoint", () => {
+  const leaves = (previous: string, next: string) =>
+    customApiKeyLeavesEndpoint(endpoint(previous), endpoint(next));
+
+  it("keeps the key when only the path changes or the scheme upgrades", () => {
+    expect(leaves("https://openrouter.ai/api/v1", "https://openrouter.ai/api/v2")).toBe(false);
+    expect(leaves("http://localhost:1234/v1", "https://localhost:1234/v1")).toBe(false);
   });
 
   it("drops the key when the base URL moves to another host", () => {
-    expect(
-      customApiKeyLeavesHost("https://openrouter.ai/api/v1", "https://api.groq.com/openai/v1"),
-    ).toBe(true);
-    expect(customApiKeyLeavesHost("http://localhost:1234/v1", "http://localhost:11434/v1")).toBe(
-      true,
-    );
-    expect(customApiKeyLeavesHost("https://openrouter.ai/api/v1", "")).toBe(true);
+    expect(leaves("https://openrouter.ai/api/v1", "https://api.groq.com/openai/v1")).toBe(true);
+    expect(leaves("http://localhost:1234/v1", "http://localhost:11434/v1")).toBe(true);
+    expect(leaves("https://openrouter.ai/api/v1", "")).toBe(true);
   });
 
-  it("keeps the key when the instance had no base URL yet", () => {
-    expect(customApiKeyLeavesHost("", "https://openrouter.ai/api/v1")).toBe(false);
+  it("drops the key when the base URL downgrades from HTTPS to HTTP", () => {
+    expect(leaves("https://openrouter.ai/api/v1", "http://openrouter.ai/api/v1")).toBe(true);
+  });
+
+  it("keeps the key when an instance gets its first base URL", () => {
+    expect(leaves("", "https://openrouter.ai/api/v1")).toBe(false);
+  });
+
+  it("follows the CUSTOM_OPENAI_BASE_URL override the driver sends to", () => {
+    const configured = "https://openrouter.ai/api/v1";
+
+    expect(
+      customApiKeyLeavesEndpoint(
+        endpoint(configured),
+        endpoint(configured, { value: "https://evil.example/v1" }),
+      ),
+    ).toBe(true);
+    expect(
+      customApiKeyLeavesEndpoint(
+        endpoint(configured, { value: "https://evil.example/v1" }),
+        endpoint("https://api.groq.com/openai/v1", { value: "https://evil.example/v1" }),
+      ),
+    ).toBe(false);
+  });
+
+  it("drops the key when a redacted override changes and keeps it when untouched", () => {
+    const redacted = { value: "", valueRedacted: true };
+    const configured = "https://openrouter.ai/api/v1";
+
+    expect(
+      customApiKeyLeavesEndpoint(
+        endpoint(configured, redacted),
+        endpoint(configured, { value: "https://openrouter.ai/api/v1" }),
+      ),
+    ).toBe(true);
+    expect(
+      customApiKeyLeavesEndpoint(endpoint(configured, redacted), endpoint(configured, redacted)),
+    ).toBe(false);
   });
 });

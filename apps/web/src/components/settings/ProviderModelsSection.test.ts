@@ -61,11 +61,15 @@ describe("ProviderModelsSection bulk visibility control", () => {
     models: ReadonlyArray<ServerProviderModel>;
     hiddenModels?: ReadonlyArray<string>;
     customModels?: ReadonlyArray<string>;
+    favoriteModels?: ReadonlyArray<string>;
+    modelOrder?: ReadonlyArray<string>;
   }) {
     mocks.buttons.clear();
     mocks.labelledButtons.clear();
     const onHiddenModelsChange = vi.fn();
     const onChange = vi.fn();
+    const onFavoriteModelsChange = vi.fn();
+    const onModelOrderChange = vi.fn();
     renderToStaticMarkup(
       createElement(ProviderModelsSection, {
         instanceId: ProviderInstanceId.make("codex"),
@@ -75,16 +79,16 @@ describe("ProviderModelsSection bulk visibility control", () => {
           input.customModels ??
           input.models.flatMap((entry) => (entry.isCustom ? [entry.slug] : [])),
         hiddenModels: input.hiddenModels ?? [],
-        favoriteModels: [],
-        modelOrder: [],
+        favoriteModels: input.favoriteModels ?? [],
+        modelOrder: input.modelOrder ?? [],
         onChange,
         onHiddenModelsChange,
-        onFavoriteModelsChange: vi.fn(),
-        onModelOrderChange: vi.fn(),
+        onFavoriteModelsChange,
+        onModelOrderChange,
       }),
     );
 
-    return { onHiddenModelsChange, onChange };
+    return { onHiddenModelsChange, onChange, onFavoriteModelsChange, onModelOrderChange };
   }
 
   it("omits the bulk control when every model is custom", () => {
@@ -116,10 +120,12 @@ describe("ProviderModelsSection bulk visibility control", () => {
     expect(onHiddenModelsChange).toHaveBeenCalledWith(["legacy", "custom"]);
   });
 
-  it("removes a hand-added model the endpoint also reports", () => {
-    const { onChange } = renderSection({
+  it("removes a hand-added model the endpoint also reports and keeps its preferences", () => {
+    const { onChange, onFavoriteModelsChange, onModelOrderChange } = renderSection({
       models: [model("gpt-4o-mini"), model("llama-3.3")],
       customModels: ["gpt-4o-mini"],
+      favoriteModels: ["gpt-4o-mini"],
+      modelOrder: ["gpt-4o-mini", "llama-3.3"],
     });
 
     const remove = mocks.labelledButtons.get("Remove gpt-4o-mini");
@@ -127,6 +133,21 @@ describe("ProviderModelsSection bulk visibility control", () => {
     // The tooltip trigger wraps the handler, so it reads `nativeEvent` first.
     remove?.onClick?.({ nativeEvent: {} });
     expect(onChange).toHaveBeenCalledWith([]);
+    expect(onFavoriteModelsChange).not.toHaveBeenCalled();
+    expect(onModelOrderChange).not.toHaveBeenCalled();
+  });
+
+  it("clears the preferences of a hand-added model that leaves the list", () => {
+    const { onChange, onFavoriteModelsChange, onModelOrderChange } = renderSection({
+      models: [model("llama-3.3"), model("my-model", true)],
+      favoriteModels: ["my-model"],
+      modelOrder: ["my-model", "llama-3.3"],
+    });
+
+    mocks.labelledButtons.get("Remove my-model")?.onClick?.({ nativeEvent: {} });
+    expect(onChange).toHaveBeenCalledWith([]);
+    expect(onFavoriteModelsChange).toHaveBeenCalledWith([]);
+    expect(onModelOrderChange).toHaveBeenCalledWith(["llama-3.3"]);
   });
 
   it("leaves catalog-only models without a remove control", () => {

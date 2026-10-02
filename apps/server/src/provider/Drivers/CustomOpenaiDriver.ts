@@ -108,7 +108,7 @@ function models(
 
 type ProbeResult =
   | { readonly ok: true; readonly catalog: ReadonlyArray<string> }
-  | { readonly ok: false; readonly failure: string };
+  | { readonly ok: false; readonly failure: string; readonly rejected: boolean };
 
 export type CustomOpenaiDriverEnv = ServerConfig | HttpClient.HttpClient;
 
@@ -128,6 +128,9 @@ export const CustomOpenaiDriver: ProviderDriver<CustomOpenaiSettings, CustomOpen
 
       const catalog = yield* Ref.make<ReadonlyArray<string>>([]);
       const probeFailure = yield* Ref.make<string | null>(null);
+      // True after the endpoint answered 401 or 403: the instance cannot run
+      // turns until its key is fixed, so it must not read as connected.
+      const probeRejected = yield* Ref.make(false);
       // False until the first probe settles. The catalog is not authoritative
       // before then, so the registry keeps the models it hydrated from the
       // on-disk cache instead of trusting an empty list.
@@ -155,6 +158,7 @@ export const CustomOpenaiDriver: ProviderDriver<CustomOpenaiSettings, CustomOpen
       // servers (Ollama, llama.cpp, LM Studio) take no API key. `auth.status`
       // is the app-wide "this instance can run" signal, so it follows the base
       // URL rather than the key; the key is only sent when one is configured.
+      // An endpoint that rejects the request (401/403) clears it again.
       const connected = baseUrl.length > 0;
 
       // Probe failures are published to every client. The base URL may come
@@ -170,6 +174,7 @@ export const CustomOpenaiDriver: ProviderDriver<CustomOpenaiSettings, CustomOpen
         const endpointModels = yield* Ref.get(catalog);
         const failure = yield* Ref.get(probeFailure);
         const settled = yield* Ref.get(probeSettled);
+        const rejected = yield* Ref.get(probeRejected);
 
         const message = !connected
           ? "Set a base URL in Settings."
@@ -192,7 +197,10 @@ export const CustomOpenaiDriver: ProviderDriver<CustomOpenaiSettings, CustomOpen
             : connected && failure === null && settled
               ? "ready"
               : "warning",
-          auth: { status: connected ? "authenticated" : "unauthenticated", type: "apiKey" },
+          auth: {
+            status: connected && !rejected ? "authenticated" : "unauthenticated",
+            type: "apiKey",
+          },
           checkedAt: DateTime.formatIso(DateTime.nowUnsafe()),
           ...(effectiveEnabled && message !== undefined ? { message } : {}),
           availability: "available",
@@ -214,10 +222,19 @@ export const CustomOpenaiDriver: ProviderDriver<CustomOpenaiSettings, CustomOpen
         const outcome = yield* Effect.gen(function* () {
           const response = yield* httpClient.execute(request);
 
+          if (response.status === 401 || response.status === 403) {
+            return {
+              ok: false as const,
+              failure: `API key rejected by ${endpointLabel} (HTTP ${response.status}). Check the key in Settings.`,
+              rejected: true,
+            } satisfies ProbeResult;
+          }
+
           if (response.status < 200 || response.status >= 300) {
             return {
               ok: false as const,
               failure: `Model list from ${endpointLabel} returned HTTP ${response.status}.`,
+              rejected: false,
             } satisfies ProbeResult;
           }
 
@@ -235,6 +252,7 @@ export const CustomOpenaiDriver: ProviderDriver<CustomOpenaiSettings, CustomOpen
             : {
                 ok: false as const,
                 failure: `Model list from ${endpointLabel} was not a readable list of models.`,
+                rejected: false,
               };
         }).pipe(
           Effect.timeoutOption(MODELS_TIMEOUT_MS),
@@ -242,7 +260,7 @@ export const CustomOpenaiDriver: ProviderDriver<CustomOpenaiSettings, CustomOpen
         );
 
         return Option.isNone(outcome)
-          ? { ok: false, failure: `Could not list models from ${endpointLabel}.` }
+          ? { ok: false, failure: `Could not list models from ${endpointLabel}.`, rejected: false }
           : outcome.value;
       });
 
@@ -252,6 +270,7 @@ export const CustomOpenaiDriver: ProviderDriver<CustomOpenaiSettings, CustomOpen
           // endpoint, so a configured key is never sent.
           if (!connected || !effectiveEnabled) {
             yield* Ref.set(probeFailure, null);
+            yield* Ref.set(probeRejected, false);
             yield* Ref.set(probeSettled, false);
           } else {
             const result = yield* probeEndpointModels;
@@ -259,10 +278,12 @@ export const CustomOpenaiDriver: ProviderDriver<CustomOpenaiSettings, CustomOpen
             if (result.ok) {
               yield* Ref.set(catalog, result.catalog);
               yield* Ref.set(probeFailure, null);
+              yield* Ref.set(probeRejected, false);
             } else {
               // Keep the last good catalog: a transient failure must not empty
               // the picker or block models the endpoint still serves.
               yield* Ref.set(probeFailure, result.failure);
+              yield* Ref.set(probeRejected, result.rejected);
             }
 
             yield* Ref.set(probeSettled, true);

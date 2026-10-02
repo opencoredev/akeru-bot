@@ -187,10 +187,16 @@ export function ProviderModelsSection({
     setTimeout(() => observer.disconnect(), 2_000);
   };
 
-  const handleRemove = (slug: string) => {
+  // A hand-added entry for a model the endpoint also lists only drops the
+  // entry; the model stays, so its favorite and position stay with it.
+  const handleRemove = (slug: string, stillListed: boolean) => {
     onChange(customModels.filter((model) => model !== slug));
-    onModelOrderChange(modelOrder.filter((model) => model !== slug));
-    onFavoriteModelsChange(favoriteModels.filter((model) => model !== slug));
+
+    if (!stillListed) {
+      onModelOrderChange(modelOrder.filter((model) => model !== slug));
+      onFavoriteModelsChange(favoriteModels.filter((model) => model !== slug));
+    }
+
     setError(null);
   };
 
@@ -424,7 +430,7 @@ export function ProviderModelsSection({
                           size="icon-micro"
                           variant="ghost-muted"
                           aria-label={`Remove ${model.slug}`}
-                          onClick={() => handleRemove(model.slug)}
+                          onClick={() => handleRemove(model.slug, !model.isCustom)}
                         />
                       }
                     >

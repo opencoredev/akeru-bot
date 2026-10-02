@@ -48,7 +48,7 @@ import { ProviderEnvironmentSection } from "./ProviderEnvironmentSection";
 import { CustomApiKeyField } from "./CustomApiKeyField";
 import {
   customApiKeyHint,
-  customApiKeyLeavesHost,
+  customApiKeyLeavesEndpoint,
   customApiPresetForBaseUrl,
   readCustomApiKey,
   withCustomApiKey,
@@ -220,16 +220,21 @@ export function ProviderInstanceCard({
     onUpdate(normalized ? { ...rest, accentColor: normalized } : rest);
   };
 
-  const updateConfig = (nextConfig: ProviderConfig | undefined) => {
-    const { config: _omit, ...rest } = instance;
-    const next = nextConfig !== undefined ? { ...rest, config: nextConfig } : rest;
-
+  // Every edit that can move a Custom API endpoint goes through here, so a
+  // stored key is never probed against a host it was not saved for.
+  const commitEndpointEdit = (next: ProviderInstanceConfig) => {
     const dropsCustomApiKey =
       instance.driver === ProviderDriverKind.make("customOpenai") &&
-      readCustomApiKey(instance.environment ?? []) !== undefined &&
-      customApiKeyLeavesHost(
-        readProviderConfigString(instance.config, "baseUrl"),
-        readProviderConfigString(nextConfig, "baseUrl"),
+      readCustomApiKey(next.environment ?? []) !== undefined &&
+      customApiKeyLeavesEndpoint(
+        {
+          baseUrl: readProviderConfigString(instance.config, "baseUrl"),
+          environment: instance.environment ?? [],
+        },
+        {
+          baseUrl: readProviderConfigString(next.config, "baseUrl"),
+          environment: next.environment ?? [],
+        },
       );
 
     if (!dropsCustomApiKey) {
@@ -238,9 +243,8 @@ export function ProviderInstanceCard({
       return;
     }
 
-    // Save the new address and drop the old key together, so the key is
-    // never probed against the new host.
-    const environment = withoutCustomApiKey(instance.environment ?? []);
+    // Save the new address and drop the old key together.
+    const environment = withoutCustomApiKey(next.environment ?? []);
     const { environment: _omitEnvironment, ...withoutEnvironment } = next;
     onUpdate(environment.length > 0 ? { ...next, environment } : withoutEnvironment);
     toastManager.add({
@@ -250,17 +254,26 @@ export function ProviderInstanceCard({
     });
   };
 
+  const updateConfig = (nextConfig: ProviderConfig | undefined) => {
+    const { config: _omit, ...rest } = instance;
+    commitEndpointEdit(nextConfig !== undefined ? { ...rest, config: nextConfig } : rest);
+  };
+
   const updateCustomModels = (next: ReadonlyArray<string>) => {
     const nextConfig = nextConfigBlobWithValue(instance.config, "customModels", [...next]);
     const { config: _omit, ...rest } = instance;
     onUpdate({ ...rest, config: nextConfig });
   };
 
-  const updateEnvironment = (environment: ReadonlyArray<ProviderInstanceEnvironmentVariable>) => {
+  const withEnvironment = (environment: ReadonlyArray<ProviderInstanceEnvironmentVariable>) => {
     const cleaned = environment.filter((variable) => variable.name.trim().length > 0);
     const { environment: _omit, ...rest } = instance;
-    onUpdate(cleaned.length > 0 ? { ...rest, environment: cleaned } : rest);
+
+    return cleaned.length > 0 ? { ...rest, environment: cleaned } : rest;
   };
+
+  const updateEnvironment = (environment: ReadonlyArray<ProviderInstanceEnvironmentVariable>) =>
+    onUpdate(withEnvironment(environment));
 
   // Custom API keeps its key in a dedicated field, so the generic variable
   // table hides it and merges it back on edit.
@@ -527,7 +540,11 @@ export function ProviderInstanceCard({
               <ProviderEnvironmentSection
                 environment={isCustomApi ? withoutCustomApiKey(environment) : environment}
                 onChange={(next) =>
-                  updateEnvironment(isCustomApi ? withStoredCustomApiKey(next, customApiKey) : next)
+                  commitEndpointEdit(
+                    withEnvironment(
+                      isCustomApi ? withStoredCustomApiKey(next, customApiKey) : next,
+                    ),
+                  )
                 }
               />
             </div>

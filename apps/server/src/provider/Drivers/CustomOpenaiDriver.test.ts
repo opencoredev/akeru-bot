@@ -48,6 +48,12 @@ const modelListResponse = (modelIds: ReadonlyArray<string>) =>
 const failingResponse = () =>
   new Response("upstream unavailable", { status: 503, headers: { "content-type": "text/plain" } });
 
+const rejectedResponse = () =>
+  new Response('{"error":"invalid api key"}', {
+    status: 401,
+    headers: { "content-type": "application/json" },
+  });
+
 const unreadableResponse = () =>
   new Response("<html>not json</html>", { status: 200, headers: { "content-type": "text/html" } });
 
@@ -194,6 +200,42 @@ describe("CustomOpenaiDriver", () => {
           expect(failed.status).toBe("warning");
           // Only the origin is published; credentials and paths stay private.
           expect(failed.message).toBe("Model list from https://api.example.com returned HTTP 503.");
+        }),
+      ),
+    );
+  });
+
+  it.effect("stops reporting a connection when the endpoint rejects the key", () => {
+    const program = Effect.scoped(
+      Effect.gen(function* () {
+        const instance = yield* createInstance({
+          config: { ...CustomOpenaiDriver.defaultConfig(), baseUrl: "https://api.example.com/v1" },
+          environment: [withApiKey(API_KEY_ENV, "sk-wrong")],
+        });
+
+        const rejected = yield* instance.snapshot.refresh;
+        const recovered = yield* instance.snapshot.refresh;
+
+        return { rejected, recovered };
+      }),
+    );
+
+    return program.pipe(
+      Effect.provide(
+        testLayer(
+          "akeru-custom-openai-rejected-test-",
+          catalogEndpoint([rejectedResponse(), modelListResponse(["alpha"])]),
+        ),
+      ),
+      Effect.tap(({ rejected, recovered }) =>
+        Effect.sync(() => {
+          expect(rejected.status).toBe("warning");
+          expect(rejected.auth.status).toBe("unauthenticated");
+          expect(rejected.message).toBe(
+            "API key rejected by https://api.example.com (HTTP 401). Check the key in Settings.",
+          );
+          expect(recovered.auth.status).toBe("authenticated");
+          expect(recovered.status).toBe("ready");
         }),
       ),
     );

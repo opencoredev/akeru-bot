@@ -189,19 +189,65 @@ export function withStoredCustomApiKey(
   return stored ? [...rest, stored] : rest;
 }
 
-function endpointHost(baseUrl: string): string {
-  const trimmed = baseUrl.trim();
+/** The instance variable that overrides the configured base URL. */
+const CUSTOM_API_BASE_URL_ENV = "CUSTOM_OPENAI_BASE_URL";
 
-  return URL.canParse(trimmed) ? new URL(trimmed).host : trimmed;
+/** The parts of a saved instance that decide where its key is sent. */
+export interface CustomApiEndpoint {
+  readonly baseUrl: string;
+  readonly environment: ReadonlyArray<ProviderInstanceEnvironmentVariable>;
+}
+
+function sameVariable(
+  left: ProviderInstanceEnvironmentVariable | undefined,
+  right: ProviderInstanceEnvironmentVariable | undefined,
+): boolean {
+  return (
+    left?.value === right?.value &&
+    left?.sensitive === right?.sensitive &&
+    left?.valueRedacted === right?.valueRedacted
+  );
+}
+
+function urlLeaves(previousBaseUrl: string, nextBaseUrl: string): boolean {
+  const previous = previousBaseUrl.trim();
+  const next = nextBaseUrl.trim();
+
+  if (previous.length === 0) return false;
+
+  if (!URL.canParse(previous) || !URL.canParse(next)) return previous !== next;
+
+  const before = new URL(previous);
+  const after = new URL(next);
+
+  return (
+    before.host !== after.host || (before.protocol === "https:" && after.protocol !== "https:")
+  );
 }
 
 /**
- * A stored key belongs to the host it was saved for. Moving the base URL to
- * another host would send it to a different service, so the key must go.
- * A first URL on an instance that had none keeps the key.
+ * A stored key belongs to the endpoint it was saved for. The driver sends it to
+ * `CUSTOM_OPENAI_BASE_URL` when that variable is set and to the configured base
+ * URL otherwise, so the key must go when that address moves to another host or
+ * drops from HTTPS to HTTP. A first URL on an instance that had none keeps the
+ * key. A redacted override cannot be compared, so any change to it drops the key.
  */
-export function customApiKeyLeavesHost(previousBaseUrl: string, nextBaseUrl: string): boolean {
-  if (previousBaseUrl.trim().length === 0) return false;
+export function customApiKeyLeavesEndpoint(
+  previous: CustomApiEndpoint,
+  next: CustomApiEndpoint,
+): boolean {
+  const override = (endpoint: CustomApiEndpoint) =>
+    endpoint.environment.find((variable) => variable.name === CUSTOM_API_BASE_URL_ENV);
 
-  return endpointHost(previousBaseUrl) !== endpointHost(nextBaseUrl);
+  const previousOverride = override(previous);
+  const nextOverride = override(next);
+
+  if (previousOverride?.valueRedacted === true || nextOverride?.valueRedacted === true) {
+    return !sameVariable(previousOverride, nextOverride);
+  }
+
+  const effective = (endpoint: CustomApiEndpoint) =>
+    override(endpoint)?.value.trim() || endpoint.baseUrl;
+
+  return urlLeaves(effective(previous), effective(next));
 }
