@@ -462,7 +462,49 @@ const makeOrchestrationEngine = Effect.gen(function* () {
   yield* projectionPipeline.bootstrap;
   commandReadModel = yield* projectionSnapshotQuery.getCommandReadModel();
 
-  const worker = Effect.forever(Queue.take(commandQueue).pipe(Effect.flatMap(processEnvelope)));
+  // Closing the engine settles every command it accepted, so callers that
+  // await a result, including uninterruptible ones, cannot outlive it.
+  yield* Effect.addFinalizer(() =>
+    Effect.sync(() => {
+      Queue.failCauseUnsafe(commandQueue, Cause.interrupt());
+
+      const pending: Array<CommandEnvelope> = [];
+
+      for (
+        let next = Queue.takeUnsafe(commandQueue);
+        next !== undefined && Exit.isSuccess(next);
+        next = Queue.takeUnsafe(commandQueue)
+      ) {
+        pending.push(next.value);
+      }
+
+      return pending;
+    }).pipe(
+      Effect.flatMap((pending) =>
+        Effect.forEach(
+          pending,
+          (envelope) =>
+            Deferred.interrupt(envelope.result).pipe(
+              Effect.ensuring(Effect.sync(() => envelope.admission?.release())),
+            ),
+          { discard: true },
+        ),
+      ),
+    ),
+  );
+
+  const worker = Effect.forever(
+    Effect.uninterruptibleMask((restore) =>
+      restore(Queue.take(commandQueue)).pipe(
+        Effect.flatMap((envelope) =>
+          restore(processEnvelope(envelope)).pipe(
+            Effect.onInterrupt(() => Deferred.interrupt(envelope.result)),
+          ),
+        ),
+      ),
+    ),
+  );
+
   yield* Effect.forkScoped(worker);
   yield* Effect.logDebug("orchestration engine started").pipe(
     Effect.annotateLogs({ sequence: commandReadModel.snapshotSequence }),
@@ -520,7 +562,11 @@ const makeOrchestrationEngine = Effect.gen(function* () {
           admission,
         });
 
-        if (!offered) admission?.release();
+        if (!offered) {
+          admission?.release();
+
+          return yield* Effect.interrupt;
+        }
 
         return yield* restore(Deferred.await(result));
       }),
