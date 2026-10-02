@@ -2,7 +2,7 @@
 
 exports[`discovered interface message coverage > covers static calls and finite label sources without translating identifiers 1`] = `
 {
-  "directMessageCount": 1771,
+  "directMessageCount": 1770,
   "expressions": {
     "apps/mobile/src/components/DictationControls.tsx": [
       "announcements[status]);",
@@ -242,7 +242,7 @@ exports[`discovered interface message coverage > covers static calls and finite 
       "Keyboard",
       "Connections",
       "Privacy & data",
-      "Archived chats",
+      "Archived",
       "Advanced",
       "Bots",
       "Providers",
@@ -297,6 +297,7 @@ exports[`discovered interface message coverage > covers static calls and finite 
       "Stream token by token (legacy)",
       "Keybindings",
       "Archived chats",
+      "Archived bots",
       "Providers",
       "Sandbox",
       "Default sandbox",
@@ -487,7 +488,6 @@ exports[`discovered interface message coverage > covers static calls and finite 
     "apps/web/src/components/roster/MemoryApprovalPrompt.tsx",
     "apps/web/src/components/roster/NewBotDialog.tsx",
     "apps/web/src/components/roster/NewGroupDialog.tsx",
-    "apps/web/src/components/roster/RosterArchivedSection.tsx",
     "apps/web/src/components/roster/RosterHeaders.tsx",
     "apps/web/src/components/roster/RosterLoadStatus.tsx",
     "apps/web/src/components/roster/RosterRows.tsx",
@@ -506,6 +506,7 @@ exports[`discovered interface message coverage > covers static calls and finite 
     "apps/web/src/components/roster/useBotLandingTimeline.ts",
     "apps/web/src/components/roster/useBotProfileDraft.ts",
     "apps/web/src/components/roster/useMessageReactionUpdater.ts",
+    "apps/web/src/components/settings/ArchivedBotsSettings.tsx",
     "apps/web/src/components/settings/ArchivedChatsSettings.tsx",
     "apps/web/src/components/settings/BackgroundActivitySettings.tsx",
     "apps/web/src/components/settings/BotChannelsSettings.tsx",

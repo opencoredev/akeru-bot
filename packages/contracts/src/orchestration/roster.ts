@@ -361,3 +361,10 @@ export const OrchestrationGroup = Schema.Struct({
 });
 
 export type OrchestrationGroup = typeof OrchestrationGroup.Type;
+
+/** Days an archived bot is kept before the server deletes it. Its chats stay in history. */
+export const ARCHIVED_BOT_RETENTION_DAYS = 7;
+
+/** When the server deletes a bot archived at `archivedAt`, in epoch milliseconds. */
+export const archivedBotDeletesAtMs = (archivedAt: string): number =>
+  Date.parse(archivedAt) + ARCHIVED_BOT_RETENTION_DAYS * 24 * 60 * 60 * 1000;

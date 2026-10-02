@@ -12,10 +12,11 @@ import { useSettingsEnvironmentId } from "../../settingsDialogStore";
 import { environmentBotsAtom, environmentGroupsAtom } from "../../state/bots";
 import { Button } from "../ui/button";
 import { Spinner } from "../ui/spinner";
+import { ArchivedBotsSection } from "./ArchivedBotsSettings";
 import { buildArchivedChatSections, type ArchivedChat } from "./ArchivedChatsSettings.logic";
 import { SettingsPageContainer, SettingsRow, SettingsSection } from "./settingsLayout";
 
-/** Settings > Archived chats: every archived chat on this environment, by bot or group. */
+/** Settings > Archived: archived bots, then every archived chat on this environment, by bot or group. */
 export function ArchivedChatsSettingsPanel() {
   const { t } = useI18n();
   const environmentId = useSettingsEnvironmentId();
@@ -30,7 +31,10 @@ export function ArchivedChatsSettingsPanel() {
           />
         </SettingsSection>
       ) : (
-        <ArchivedChatsContent key={environmentId} environmentId={environmentId} />
+        <>
+          <ArchivedBotsSection key={`bots-${environmentId}`} environmentId={environmentId} />
+          <ArchivedChatsContent key={environmentId} environmentId={environmentId} />
+        </>
       )}
     </SettingsPageContainer>
   );
@@ -132,16 +136,19 @@ function ArchivedChatsContent({ environmentId }: { readonly environmentId: Envir
             description={t("Archived {time}", { time: archivedAt })}
             control={
               <>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="outline"
-                  disabled={busy}
-                  onClick={() => void run(chat, "unarchive")}
-                >
-                  <ArchiveRestoreIcon className="size-3.5" />
-                  {t("Unarchive")}
-                </Button>
+                {/* A chat with no bot or group has no page on web, so unarchiving would hide it. */}
+                {section.kind === "other" ? null : (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    disabled={busy}
+                    onClick={() => void run(chat, "unarchive")}
+                  >
+                    <ArchiveRestoreIcon className="size-3.5" />
+                    {t("Unarchive")}
+                  </Button>
+                )}
                 <Button
                   type="button"
                   size="icon-sm"
