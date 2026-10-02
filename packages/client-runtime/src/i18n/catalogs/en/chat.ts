@@ -1,11 +1,4 @@
 export const chatCatalog = {
-  "Worked for {duration}": "Worked for {duration}",
-  Worked: "Worked",
-  "You stopped after {duration}": "You stopped after {duration}",
-  "You stopped this response": "You stopped this response",
-  "{count}ms": "{count}ms",
-  "{count}s": "{count}s",
-
   "I have reviewed my VMs — continue": "I have reviewed my VMs — continue",
   "Add attachment": "Add attachment",
   Archive: "Archive",

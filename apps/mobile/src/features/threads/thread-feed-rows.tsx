@@ -189,7 +189,7 @@ export function renderFeedEntry(
             }}
           >
             {message.channelOrigin ? (
-              <NativeText className="font-t3-medium text-[11px] text-user-bubble-foreground-muted">
+              <NativeText className="font-t3-medium text-[11px] text-channel-detail">
                 {channelOriginLabel(message.channelOrigin, message.authorDisplayName)}
               </NativeText>
             ) : null}

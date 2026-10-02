@@ -1,3 +1,4 @@
+import { formatDuration } from "@akeru/shared/orchestrationTiming";
 import type { BotId, TurnId } from "@akeru/contracts";
 import type { ThreadFeedEntry, ThreadFeedLatestTurn } from "./threadActivityTypes";
 import { MAX_VISIBLE_WORK_LOG_ENTRIES } from "./threadWorkLog";
@@ -41,8 +42,7 @@ interface ThreadFeedTurnFold {
   readonly turnId: TurnId;
   readonly createdAt: string;
   readonly hiddenEntryIds: ReadonlySet<string>;
-  readonly elapsedMs: number | null;
-  readonly interrupted: boolean;
+  readonly label: string;
 }
 
 function deriveThreadFeedTurnFolds(
@@ -161,14 +161,22 @@ function deriveThreadFeedTurnFolds(
             ) ?? lastEntryEnd,
           );
 
+    const duration = elapsedMs === null ? null : formatDuration(elapsedMs);
     const interrupted = latestTurnMatches && latestTurn.state === "interrupted";
+
+    const label = interrupted
+      ? duration
+        ? `You stopped after ${duration}`
+        : "You stopped this response"
+      : duration
+        ? `Worked for ${duration}`
+        : "Worked";
 
     foldsByAnchorId.set(firstHiddenEntry.id, {
       turnId,
       createdAt: firstHiddenEntry.createdAt,
       hiddenEntryIds,
-      elapsedMs,
-      interrupted,
+      label,
     });
   }
 
@@ -209,8 +217,7 @@ export function deriveThreadFeedPresentation(
         id: `turn-fold:${fold.turnId}`,
         createdAt: fold.createdAt,
         turnId: fold.turnId,
-        elapsedMs: fold.elapsedMs,
-        interrupted: fold.interrupted,
+        label: fold.label,
         expanded: expandedTurnIds.has(fold.turnId),
       });
     }

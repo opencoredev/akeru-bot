@@ -9,7 +9,18 @@ import {
 import { makeActivity, makeThread } from "./threadActivity.test-support";
 
 describe("buildThreadFeed presentation", () => {
-  it("keeps the first and terminal assistant messages visible around settled work", () => {
+  it.each([
+    { state: "completed", elapsedMs: 17_000, label: "Worked for 17s" },
+    { state: "completed", elapsedMs: 0, label: "Worked for 1ms" },
+    { state: "completed", elapsedMs: 100, label: "Worked for 100ms" },
+    { state: "completed", elapsedMs: 1200, label: "Worked for 1.2s" },
+    { state: "completed", elapsedMs: 9950, label: "Worked for 10s" },
+    { state: "completed", elapsedMs: 61_000, label: "Worked for 1m 1s" },
+    { state: "completed", elapsedMs: 3_661_000, label: "Worked for 1h 1m" },
+    { state: "completed", elapsedMs: null, label: "Worked" },
+    { state: "interrupted", elapsedMs: 17_000, label: "You stopped after 17s" },
+    { state: "interrupted", elapsedMs: null, label: "You stopped this response" },
+  ] as const)("keeps boundary messages visible around $label", ({ state, elapsedMs, label }) => {
     const turnId = TurnId.make("turn-1");
 
     const thread = makeThread({
@@ -18,10 +29,13 @@ describe("buildThreadFeed presentation", () => {
       title: "Folded work",
       latestTurn: {
         turnId,
-        state: "completed",
+        state,
         requestedAt: "2026-04-01T00:00:00.000Z",
         startedAt: "2026-04-01T00:00:01.000Z",
-        completedAt: "2026-04-01T00:00:18.000Z",
+        completedAt:
+          elapsedMs === null
+            ? "invalid"
+            : new Date(Date.parse("2026-04-01T00:00:01.000Z") + elapsedMs).toISOString(),
         assistantMessageId: MessageId.make("assistant-final"),
       },
       messages: [
@@ -70,8 +84,7 @@ describe("buildThreadFeed presentation", () => {
     ]);
     expect(collapsed[1]).toMatchObject({
       type: "turn-fold",
-      elapsedMs: 17_000,
-      interrupted: false,
+      label,
       expanded: false,
     });
 
@@ -215,8 +228,7 @@ describe("buildThreadFeed presentation", () => {
     const collapsed = deriveThreadFeedPresentation(feed, thread.latestTurn, new Set());
     expect(collapsed.find((entry) => entry.type === "turn-fold")).toMatchObject({
       turnId: firstTurnId,
-      elapsedMs: 12_000,
-      interrupted: false,
+      label: "Worked for 12s",
     });
   });
 

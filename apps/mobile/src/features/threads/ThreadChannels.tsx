@@ -64,7 +64,7 @@ export function ThreadChannels(props: {
 
   return (
     <View className="mb-3 gap-2" accessibilityLabel={t("Channels")}>
-      <Text className="font-t3-medium text-sm text-foreground">{t("Channels")}</Text>
+      <Text className="font-t3-medium text-sm text-channel-heading">{t("Channels")}</Text>
       {bot.channelBindings.map((binding, index) => {
         const channel = channelBindingPresentation(binding, projects);
         const key = binding.connectionId ?? `${binding.provider}:${index}`;
@@ -78,7 +78,7 @@ export function ThreadChannels(props: {
 
         return (
           <View key={key} className="gap-1">
-            <Text className="font-t3-medium text-xs text-foreground">
+            <Text className="font-t3-medium text-xs text-channel-heading">
               {channel.provider} · {channel.health}
             </Text>
             {needsProject ? (
@@ -90,17 +90,17 @@ export function ThreadChannels(props: {
             ) : warning ? (
               <Text className="text-xs text-amber-700 dark:text-amber-400">{warning}</Text>
             ) : null}
-            <Text className="text-xs text-foreground-secondary">Project · {channel.project}</Text>
-            <Text className="text-xs text-foreground-secondary">
+            <Text className="text-xs text-channel-detail">Project · {channel.project}</Text>
+            <Text className="text-xs text-channel-detail">
               Recent delivery · {channel.delivery}
             </Text>
             {needsProject && !canManageChannels ? (
-              <Text className="text-xs text-foreground-secondary">
+              <Text className="text-xs text-channel-detail">
                 {t("Repair this channel from Settings > Bot channels on the host.")}
               </Text>
             ) : null}
             {needsProject && canManageChannels && projects.length === 0 ? (
-              <Text className="text-xs text-foreground-secondary">
+              <Text className="text-xs text-channel-detail">
                 {t("Add a project before connecting a channel.")}
               </Text>
             ) : null}
@@ -113,7 +113,7 @@ export function ThreadChannels(props: {
                     disabled={busyKey !== null}
                     onPress={() => void repair(binding, key, project.id)}
                   >
-                    <Text className="font-t3-medium text-xs text-foreground">
+                    <Text className="font-t3-medium text-xs text-channel-heading">
                       {t("Reconnect in {project}", { project: project.title })}
                     </Text>
                   </Pressable>

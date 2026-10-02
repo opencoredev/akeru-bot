@@ -69,6 +69,37 @@ describe("mobile themes", () => {
     );
   });
 
+  it.each([
+    ["light", "#171717", "#525252", "rgba(229, 229, 229, 0.8)"],
+    ["dark", "#f5f5f5", "#d4d4d4", "rgba(255, 255, 255, 0.08)"],
+  ] as const)(
+    "preserves channel, fold, and dictation colors in %s",
+    (appearance, heading, detail, separator) => {
+      const variables = getMobileThemeVariables(DEFAULT_MOBILE_THEME_ID, appearance);
+      expect(variables["--color-channel-heading"]).toBe(heading);
+      expect(variables["--color-channel-detail"]).toBe(detail);
+      expect(variables["--color-work-fold-separator"]).toBe(separator);
+      expect(variables["--color-dictation-send-icon"]).toBe("#ffffff");
+    },
+  );
+
+  it("uses the channel palette for headings, detail, and message-origin captions", () => {
+    const channels = NodeFS.readFileSync(
+      new URL("../features/threads/ThreadChannels.tsx", import.meta.url),
+      "utf8",
+    );
+
+    const rows = NodeFS.readFileSync(
+      new URL("../features/threads/thread-feed-rows.tsx", import.meta.url),
+      "utf8",
+    );
+
+    expect(channels).toContain('className="font-t3-medium text-sm text-channel-heading"');
+    expect(channels.match(/text-channel-heading/g)).toHaveLength(3);
+    expect(channels.match(/text-channel-detail/g)).toHaveLength(4);
+    expect(rows).toContain('className="font-t3-medium text-[11px] text-channel-detail"');
+  });
+
   it("shares all built-in desktop palettes", () => {
     expect(BUILT_IN_THEME_IDS).toContain("akeru-paper");
     expect(BUILT_IN_THEMES.map((theme) => theme.id)).toEqual(BUILT_IN_THEME_IDS);
@@ -178,7 +209,9 @@ describe("mobile themes", () => {
 
   it("maps semantic palette roles onto every mobile color variable", () => {
     const variables = createMobileThemeVariables(BUILT_IN_THEMES[0].colors, "light");
-    expect(Object.keys(variables)).toHaveLength(65);
+    expect(Object.keys(variables).sort()).toEqual(
+      Object.keys(DEFAULT_MOBILE_THEME_VARIABLES.light).sort(),
+    );
     expect(variables["--color-sheet-solid"]).toBe(
       themeColorToNativeColor(BUILT_IN_THEMES[0].colors.chrome),
     );
