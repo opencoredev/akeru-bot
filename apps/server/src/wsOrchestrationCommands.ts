@@ -137,40 +137,42 @@ export const createWsOrchestrationCommands = ({
         });
       });
 
-      return yield* bootstrapProgram.pipe(
-        Effect.catchCause((cause) => {
-          const dispatchError = toBootstrapDispatchCommandCauseError(cause);
+      return yield* Effect.uninterruptibleMask((restore) =>
+        restore(bootstrapProgram).pipe(
+          Effect.catchCause((cause) => {
+            const dispatchError = toBootstrapDispatchCommandCauseError(cause);
 
-          const failure = Cause.hasInterruptsOnly(cause)
-            ? Effect.failCause(
-                Cause.fromReasons<never>(cause.reasons.filter(Cause.isInterruptReason)),
-              )
-            : Effect.fail(dispatchError);
+            const failure = Cause.hasInterruptsOnly(cause)
+              ? Effect.failCause(
+                  Cause.fromReasons<never>(cause.reasons.filter(Cause.isInterruptReason)),
+                )
+              : Effect.fail(dispatchError);
 
-          return Effect.uninterruptible(cleanupCreatedThread()).pipe(
-            Effect.matchCauseEffect({
-              onFailure: (cleanupCause) =>
-                Effect.logWarning("bootstrap thread cleanup failed", {
-                  threadId: command.threadId,
-                  detail: Cause.pretty(cleanupCause),
-                }).pipe(Effect.andThen(failure)),
-              onSuccess: (threadDeleted) =>
-                Cause.hasInterruptsOnly(cause)
-                  ? failure
-                  : Effect.fail(
-                      threadDeleted
-                        ? new OrchestrationDispatchCommandError({
-                            message: dispatchError.message,
-                            ...(dispatchError.cause !== undefined
-                              ? { cause: dispatchError.cause }
-                              : {}),
-                            bootstrapThreadDisposition: "deleted",
-                          })
-                        : dispatchError,
-                    ),
-            }),
-          );
-        }),
+            return Effect.uninterruptible(cleanupCreatedThread()).pipe(
+              Effect.matchCauseEffect({
+                onFailure: (cleanupCause) =>
+                  Effect.logWarning("bootstrap thread cleanup failed", {
+                    threadId: command.threadId,
+                    detail: Cause.pretty(cleanupCause),
+                  }).pipe(Effect.andThen(failure)),
+                onSuccess: (threadDeleted) =>
+                  Cause.hasInterruptsOnly(cause)
+                    ? failure
+                    : Effect.fail(
+                        threadDeleted
+                          ? new OrchestrationDispatchCommandError({
+                              message: dispatchError.message,
+                              ...(dispatchError.cause !== undefined
+                                ? { cause: dispatchError.cause }
+                                : {}),
+                              bootstrapThreadDisposition: "deleted",
+                            })
+                          : dispatchError,
+                      ),
+              }),
+            );
+          }),
+        ),
       );
     });
 
