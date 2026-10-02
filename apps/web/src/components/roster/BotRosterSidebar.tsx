@@ -2,7 +2,7 @@ import { Match, Predicate } from "effect";
 import { DndContext } from "@dnd-kit/core";
 import { SortableContext } from "@dnd-kit/sortable";
 import { useAtomValue } from "@effect/atom-react";
-import { BotId, GroupId } from "@akeru/contracts";
+import { ARCHIVED_BOT_RETENTION_DAYS, BotId, GroupId } from "@akeru/contracts";
 import { useLocation, useNavigate } from "@tanstack/react-router";
 import { SearchIcon } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -51,7 +51,6 @@ import {
 import { RosterDragLifecycle } from "./roster.pointer";
 import { useRosterStore } from "./rosterStore";
 import { resolveRosterListState } from "./rosterRouteSelection";
-import { RosterArchivedSection } from "./RosterArchivedSection";
 import { RosterLoadStatus } from "./RosterLoadStatus";
 import { useRosterLoadState } from "./useServerRoster";
 import type { Bot, BotAvatar, Group } from "./types";
@@ -703,7 +702,6 @@ export default function BotRosterSidebar({ chrome = "full" }: { chrome?: "full" 
           )),
         )}
         {/* Archiving is reversible, so the way back stays in the roster itself. */}
-        <RosterArchivedSection bots={bots} />
       </SidebarContent>
       {/* Rail create menu sits above the footer, like the expanded header's plus. */}
       <RosterRailCreateMenu onNewBot={handleNewBot} onNewGroup={handleNewGroup} />
@@ -742,8 +740,8 @@ export default function BotRosterSidebar({ chrome = "full" }: { chrome?: "full" 
               </AlertDialogTitle>
               <AlertDialogDescription>
                 {t(
-                  "{name} leaves the roster and stops taking messages. Its chat history is kept, and you can restore it from Archived at any time.",
-                  { name: archivingBot.name },
+                  "{name} leaves the roster and stops taking messages. You can restore it from Settings > Archived for {days} days, then it is deleted. Its chats stay in your history.",
+                  { name: archivingBot.name, days: ARCHIVED_BOT_RETENTION_DAYS },
                 )}
               </AlertDialogDescription>
             </AlertDialogHeader>

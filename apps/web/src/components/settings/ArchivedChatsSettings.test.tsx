@@ -41,6 +41,8 @@ vi.mock("../../state/bots", () => ({
   environmentGroupsAtom: () => "groups",
 }));
 
+vi.mock("./ArchivedBotsSettings", () => ({ ArchivedBotsSection: () => null }));
+
 vi.mock("../../lib/archivedThreadsState", () => ({
   useArchivedThreadSnapshots: () => mocks.archive,
 }));

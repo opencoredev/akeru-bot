@@ -236,7 +236,16 @@ function OpenCommandPaletteDialog(props: { readonly setOpen: (open: boolean) => 
     }),
     {
       value: "action:archived-chats",
-      searchTerms: [t("Archived chats"), "archived", "archive", "unarchive", "restore", "chats"],
+      searchTerms: [
+        t("Archived chats"),
+        t("Archived bots"),
+        "archived",
+        "archive",
+        "unarchive",
+        "restore",
+        "chats",
+        "bots",
+      ],
       title: t("Archived chats"),
       icon: <ArchiveIcon className={ITEM_ICON_CLASS} />,
       run: async () => {

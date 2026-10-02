@@ -33,6 +33,7 @@ import {
   ServerRuntimeStartupError,
   ServerRuntimeStartup,
 } from "./startupCommandGate.ts";
+import { archivedBotRetentionLoop } from "./archivedBotRetention.ts";
 import { reconcileDelegations, reconcileProviderSessions } from "./startupReconciliation.ts";
 import {
   resolveWelcomeBase,
@@ -124,6 +125,8 @@ export const make = (options?: StartupOptions) =>
       );
 
       yield* runStartupPhase("provider-sessions.reconcile", reconcileProviderSessions);
+
+      yield* forkParked(archivedBotRetentionLoop).pipe(Scope.provide(reactorScope));
 
       yield* runStartupPhase(
         "channels.restore",

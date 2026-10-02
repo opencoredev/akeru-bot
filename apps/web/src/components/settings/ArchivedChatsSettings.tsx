@@ -12,10 +12,11 @@ import { useSettingsEnvironmentId } from "../../settingsDialogStore";
 import { environmentBotsAtom, environmentGroupsAtom } from "../../state/bots";
 import { Button } from "../ui/button";
 import { Spinner } from "../ui/spinner";
+import { ArchivedBotsSection } from "./ArchivedBotsSettings";
 import { buildArchivedChatSections, type ArchivedChat } from "./ArchivedChatsSettings.logic";
 import { SettingsPageContainer, SettingsRow, SettingsSection } from "./settingsLayout";
 
-/** Settings > Archived chats: every archived chat on this environment, by bot or group. */
+/** Settings > Archived: archived bots, then every archived chat on this environment, by bot or group. */
 export function ArchivedChatsSettingsPanel() {
   const { t } = useI18n();
   const environmentId = useSettingsEnvironmentId();
@@ -30,7 +31,10 @@ export function ArchivedChatsSettingsPanel() {
           />
         </SettingsSection>
       ) : (
-        <ArchivedChatsContent key={environmentId} environmentId={environmentId} />
+        <>
+          <ArchivedBotsSection key={`bots-${environmentId}`} environmentId={environmentId} />
+          <ArchivedChatsContent key={environmentId} environmentId={environmentId} />
+        </>
       )}
     </SettingsPageContainer>
   );
