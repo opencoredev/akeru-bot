@@ -83,7 +83,7 @@ export function ExperimentalSidebar() {
   const onUsage = isPathUnder(pathname, "/usage");
   const railOnly = onPlugins || onUsage;
   // Collapsing hides the panel and keeps the rail; picking a place brings it back.
-  const { state: sidebarState, setOpen: setSidebarOpen } = useSidebar();
+  const { state: sidebarState, setOpen: setSidebarOpen, isMobile } = useSidebar();
   const revealPanel = () => {
     if (sidebarState === "collapsed") setSidebarOpen(true);
   };
@@ -172,7 +172,7 @@ export function ExperimentalSidebar() {
       {/* The panel is a raised card; its row tokens are re-based on the card surface. */}
       {/* Fixed width so collapsing clips the panel instead of squeezing its rows. */}
       <div
-        className={cn("flex shrink-0 py-2 pr-2", railOnly && "hidden")}
+        className={cn("flex shrink-0 py-2 pr-2", railOnly && !isMobile && "hidden")}
         style={{ width: PANEL_WIDTH }}
       >
         <div className="flex min-w-0 flex-1 flex-col overflow-hidden rounded-2xl border border-sidebar-border/70 bg-sidebar shadow-[var(--shell-card-shadow)] [--sidebar-row-active:color-mix(in_srgb,var(--sidebar-foreground)_7%,transparent)] [--sidebar-row-hover:color-mix(in_srgb,var(--sidebar-foreground)_4%,transparent)] [--card:var(--shell-card)] [--sidebar:var(--shell-card)]">
