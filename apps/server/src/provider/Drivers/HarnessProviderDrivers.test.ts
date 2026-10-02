@@ -27,7 +27,8 @@ import { ProviderRegistryLive } from "../Layers/ProviderRegistry.ts";
 import { ProviderInstanceRegistry } from "../Services/ProviderInstanceRegistry.ts";
 import { ProviderRegistry } from "../Services/ProviderRegistry.ts";
 import { NoOpProviderEventLoggers, ProviderEventLoggers } from "../Layers/ProviderEventLoggers.ts";
-import * as ModelManifest from "../ModelManifest.ts";
+import * as ModelCatalog from "../ModelCatalog.ts";
+import { BUNDLED_MODEL_CATALOG } from "../modelCatalogData.ts";
 import type { ProviderDriver, ProviderDriverCreateInput } from "../ProviderDriver.ts";
 import { CodexDriver } from "./CodexDriver.ts";
 import { ClaudeDriver } from "./ClaudeDriver.ts";
@@ -40,7 +41,7 @@ const testLayer = Layer.mergeAll(
     Layer.provideMerge(NodeServices.layer),
   ),
   settingsLayer(),
-  ModelManifest.layerTest,
+  ModelCatalog.layerTest,
   Layer.succeed(ProviderEventLoggers, NoOpProviderEventLoggers),
   Layer.succeed(
     HttpClient.HttpClient,
@@ -139,7 +140,7 @@ const undefinedValuePaths = (value: SnapshotValue, path = "$"): string[] =>
       : [];
 
 it.layer(testLayer)("Harness provider drivers without CLIs", (it) => {
-  it.effect("merges manifest models into Claude and Grok's built-in catalogs", () =>
+  it.effect("merges models.dev catalog models into Claude and Grok's built-in lists", () =>
     Effect.scoped(
       Effect.gen(function* () {
         const config = yield* ServerConfig;
@@ -156,11 +157,14 @@ it.layer(testLayer)("Harness provider drivers without CLIs", (it) => {
         for (const driver of [driverCase(ClaudeDriver), driverCase(GrokDriver)]) {
           const added = driver.driverKind === "claudeAgent" ? "claude-next" : "grok-next";
 
-          const manifest = {
-            ...ModelManifest.BUNDLED_MODEL_MANIFEST,
-            currentModels: {
-              ...ModelManifest.BUNDLED_MODEL_MANIFEST.currentModels,
-              [driver.driverKind]: [added],
+          const catalog = {
+            ...BUNDLED_MODEL_CATALOG,
+            drivers: {
+              ...BUNDLED_MODEL_CATALOG.drivers,
+              [driver.driverKind]: [
+                { id: added, name: "Next Model", family: "next", releaseDate: "2099-01-01" },
+                ...(BUNDLED_MODEL_CATALOG.drivers[driver.driverKind] ?? []),
+              ],
             },
           };
 
@@ -172,9 +176,9 @@ it.layer(testLayer)("Harness provider drivers without CLIs", (it) => {
               environment: [{ name: "PATH", value: "", sensitive: false }],
             })
             .pipe(
-              Effect.provideService(ModelManifest.ModelManifest, {
-                current: Effect.succeed(manifest),
-                refresh: Effect.succeed(manifest),
+              Effect.provideService(ModelCatalog.ModelCatalog, {
+                current: Effect.succeed(catalog),
+                refresh: Effect.succeed(catalog),
                 refreshInBackground: Effect.void,
               }),
             );
@@ -182,8 +186,9 @@ it.layer(testLayer)("Harness provider drivers without CLIs", (it) => {
           const snapshot = yield* instance.snapshot.refresh;
           expect(snapshot.status).toBe("ready");
           expect(snapshot.models).toContainEqual(
-            expect.objectContaining({ slug: added, isCustom: false }),
+            expect.objectContaining({ slug: added, name: "Next Model", isCustom: false }),
           );
+          expect(snapshot.models.find((model) => model.slug === added)?.isLegacy).toBeUndefined();
           expect(undefinedValuePaths(snapshot)).toEqual([]);
         }
       }),
@@ -410,8 +415,11 @@ it.layer(testLayer)("Harness provider drivers without CLIs", (it) => {
               expect(after.models).toContainEqual(
                 expect.objectContaining({ slug: "gpt-5.4", isCustom: false, isLegacy: true }),
               );
+              expect(after.models).toContainEqual(
+                expect.objectContaining({ slug: "gpt-6.1-sol", name: "GPT-6.1 Sol" }),
+              );
               expect(
-                after.models.find((model) => model.slug === "gpt-6-sol")?.capabilities
+                after.models.find((model) => model.slug === "gpt-6.1-sol")?.capabilities
                   ?.optionDescriptors,
               ).toEqual(
                 expect.arrayContaining([

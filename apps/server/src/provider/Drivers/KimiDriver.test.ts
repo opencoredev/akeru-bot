@@ -8,6 +8,7 @@ import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 
 import { ServerConfig } from "../../config.ts";
+import * as ModelCatalog from "../ModelCatalog.ts";
 import { BUILT_IN_DRIVERS } from "../builtInDrivers.ts";
 import { KimiDriver } from "./KimiDriver.ts";
 
@@ -36,6 +37,7 @@ describe("KimiDriver", () => {
       Effect.provide(
         ServerConfig.layerTest(process.cwd(), { prefix: "akeru-kimi-driver-test-" }).pipe(
           Layer.provideMerge(NodeServices.layer),
+          Layer.provideMerge(ModelCatalog.layerTest),
         ),
       ),
       Effect.tap((result) =>
@@ -98,6 +100,7 @@ describe("KimiDriver", () => {
       Effect.provide(
         ServerConfig.layerTest(process.cwd(), { prefix: "akeru-kimi-refresh-test-" }).pipe(
           Layer.provideMerge(NodeServices.layer),
+          Layer.provideMerge(ModelCatalog.layerTest),
         ),
       ),
       Effect.tap((result) =>

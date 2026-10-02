@@ -9,7 +9,7 @@ import * as AnalyticsService from "./telemetry/AnalyticsService.ts";
 import { ProviderSessionDirectoryLive } from "./provider/Layers/ProviderSessionDirectory.ts";
 import * as ProviderSessionRuntime from "./persistence/ProviderSessionRuntime.ts";
 import { ProviderAdapterRegistryLive } from "./provider/Layers/ProviderAdapterRegistry.ts";
-import * as ModelManifest from "./provider/ModelManifest.ts";
+import * as ModelCatalog from "./provider/ModelCatalog.ts";
 import * as ProviderEventLoggers from "./provider/Layers/ProviderEventLoggers.ts";
 import { AgentControllerLive } from "./provider/Layers/AgentController.ts";
 import { LegacyProviderBridgeLive } from "./provider/Layers/LegacyProviderBridge.ts";
@@ -258,10 +258,9 @@ export const RuntimeCoreDependenciesLive = ReactorLayerLive.pipe(
   // `ProviderService` (canonical stream, written after event normalization).
   // Provided once at the runtime level so every consumer sees the same
   // logger instances.
-  // `ModelManifest.layer` is the legacy-model classification data, refreshed
-  // from the repo's `model-manifest.json` on `main` and applied by the
-  // Codex/Claude drivers.
-  Layer.provideMerge(Layer.mergeAll(ProviderEventLoggers.layer, ModelManifest.layer)),
+  // `ModelCatalog.layer` holds the provider model lists, names, and legacy
+  // classification, refreshed from models.dev and applied by the drivers.
+  Layer.provideMerge(Layer.mergeAll(ProviderEventLoggers.layer, ModelCatalog.layer)),
   // `OpenCodeDriver.create()` yields `OpenCodeRuntime`; previously the old
   // `ProviderRegistryLive` pulled `OpenCodeRuntimeLive` in for itself, but
   // the rewritten registry reads snapshots off the instance registry and

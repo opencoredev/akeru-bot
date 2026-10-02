@@ -15,7 +15,7 @@ import { type ServerSettings as ContractServerSettings } from "@akeru/contracts"
 import { ChildProcessSpawner } from "effect/unstable/process";
 import { deepMerge } from "@akeru/shared/Struct";
 import { checkCodexProviderStatus } from "./CodexProvider.ts";
-import * as ModelManifest from "../ModelManifest.ts";
+import * as ModelCatalog from "../ModelCatalog.ts";
 import * as OpenCodeRuntime from "../opencodeRuntime.ts";
 import * as ProviderEventLoggers from "./ProviderEventLoggers.ts";
 import { ProviderInstanceRegistryHydrationLive } from "./ProviderInstanceRegistryHydration.ts";
@@ -341,7 +341,7 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsModule.layerTest(), Te
                   ProviderEventLoggers.NoOpProviderEventLoggers,
                 ),
               ),
-              Layer.provideMerge(ModelManifest.layerTest),
+              Layer.provideMerge(ModelCatalog.layerTest),
               Layer.provideMerge(OpenCodeRuntime.OpenCodeRuntimeLive),
               Layer.provideMerge(BackgroundPolicyAlwaysRunLayer),
             );
@@ -423,7 +423,7 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsModule.layerTest(), Te
                 ProviderEventLoggers.NoOpProviderEventLoggers,
               ),
             ),
-            Layer.provideMerge(ModelManifest.layerTest),
+            Layer.provideMerge(ModelCatalog.layerTest),
             Layer.provideMerge(OpenCodeRuntime.OpenCodeRuntimeLive),
             Layer.updateService(ChildProcessSpawner.ChildProcessSpawner, (spawner) =>
               ChildProcessSpawner.make((command) => {

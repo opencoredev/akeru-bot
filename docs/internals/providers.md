@@ -161,15 +161,17 @@ provider binary exists. The initial snapshot and each refresh reload `Subscripti
 from the environment's `subscription-auth.json`. A connected saved credential makes the instance
 ready; a missing credential reports unauthenticated and asks the user to connect in Settings.
 
-The model list comes from built-in metadata and `ModelManifest.applyModelManifest`. Codex combines
-current manifest IDs with bundled and historical compatibility models. The manifest classifies
-models as current or legacy; it is not an exhaustive allowlist. The OAuth transport forwards the
-selected ID to the Codex API without a local catalog restriction. Account access is still checked
-by the provider when a request runs. Thinking levels come from the harness SDK, without a CLI
-`model/list` request.
-Standard and Fast service tiers remain selectable. Claude merges manifest additions into its
-built-in capability catalog without dropping historical models. Grok includes its API model IDs
-alongside manifest additions. It labels the compatibility `grok-build` selection as Grok 4.6 and maps it to `grok-4.6` in
+The model list comes from the [model catalog](#model-catalog) and `ModelCatalog.applyModelCatalog`.
+Codex combines catalog IDs with bundled and historical compatibility models, and takes names,
+reasoning efforts, and Fast availability from the catalog entry. Models the catalog does not list
+fall back to the harness SDK's thinking levels and keep the Standard and Fast tiers. Catalog
+efforts the SDK would silently downgrade, such as Max on older GPT aliases, are not offered. The catalog
+classifies models as current or legacy; it is not an exhaustive allowlist. The OAuth transport
+forwards the selected ID to the Codex API without a local catalog restriction. Account access is
+still checked by the provider when a request runs. Claude merges catalog additions into its
+built-in capability catalog without dropping historical models. A Claude model newer than the
+build inherits the capabilities of the newest built-in model in its family. Grok includes its API model IDs
+alongside catalog additions. It labels the compatibility `grok-build` selection as Grok 4.6 and maps it to `grok-4.6` in
 `mastraModelId`, because the product slug is not an API model ID. Keeping the selection slug lets
 existing bots and the default model pass catalog validation. Custom models are retained.
 
@@ -381,17 +383,30 @@ produces the activity.
 Adding a driver means writing the driver plus adapter and adding it to `BUILT_IN_DRIVERS`. No
 orchestration, contract, or client change is required for the common case.
 
-## Model manifest
+## Model catalog
 
-The model picker's legacy section is driven by `apps/server/src/provider/model-manifest.json`, which
-lists the current (non-legacy) model slugs per driver kind. The `ModelManifest` service
-(`apps/server/src/provider/ModelManifest.ts`) refreshes that data from the same file on `main` via
-raw.githubusercontent.com, so moving a model in or out of the legacy section is a commit, not a
-release. Preference order is remote fetch, then the on-disk copy of the last successful fetch (in
-the state directory), then the bundled copy. Fetches are TTL-gated, run concurrently with provider
-probes, respect the `enableProviderUpdateChecks` setting, and never fail a provider check. The
-Codex and Claude drivers apply the classification to every snapshot with `applyModelManifest`;
-driver kinds absent from the manifest have no legacy concept.
+Model lists, display names, and the picker's legacy section come from
+[models.dev](https://models.dev). `modelCatalogData.ts` maps each driver to a models.dev provider
+(`codex` to `openai`, `claudeAgent` to `anthropic`, `grok` to `xai`, `kimi` to
+`kimi-code-plan-global`, `opencodeGo` to `opencode-go`) and keeps only models a coding agent can
+run: tool calling, text output, no dated Claude snapshots, and for Codex only GPT reasoning models
+outside the Pro and nano tiers. For Codex, Claude, and Grok, a model is current when it is the
+newest non-deprecated model in its family and was released within 180 days of the provider's
+newest model. Kimi For Coding and OpenCode Go list every non-deprecated model as current.
+
+The `ModelCatalog` service (`ModelCatalog.ts`) refetches models.dev at most hourly, retries a
+failed fetch after five minutes, and respects `enableProviderUpdateChecks`. Preference order is
+the last fetch, then its on-disk copy (`model-catalog.json` in the state directory), then the
+bundled `apps/server/src/provider/model-catalog.json`. A fetch that omits a driver keeps that
+driver's previous models, and a fetch never fails a provider check. Drivers apply the catalog to
+every snapshot, and the registry's periodic refresh pushes the result to clients. Kimi For Coding
+and OpenCode Go keep a hardcoded fallback list whose first slug stays the default, and Grok keeps
+`grok-build` current because models.dev does not list it.
+
+Regenerate the bundle with `node apps/server/scripts/sync-model-catalog.ts` (pass a saved
+`api.json` path to work offline). `model-manifest.json` is the older current-model list that
+released builds before the catalog still fetch from `main`; keep its current IDs in step with the
+catalog until those builds age out.
 
 ## How provider work is requested
 

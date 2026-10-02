@@ -28,81 +28,97 @@ export const MINIMUM_CLAUDE_OPUS_4_8_VERSION = "2.1.154";
 
 export const MINIMUM_CLAUDE_OPUS_4_7_VERSION = "2.1.111";
 
+const CLAUDE_FABLE_5_CAPABILITIES = createModelCapabilities({
+  optionDescriptors: [
+    buildSelectOptionDescriptor({
+      id: "effort",
+      label: "Reasoning",
+      options: [
+        { value: "low", label: "Low" },
+        { value: "medium", label: "Medium" },
+        { value: "high", label: "High", isDefault: true },
+        { value: "xhigh", label: "Extra High" },
+        { value: "max", label: "Max" },
+        {
+          value: "ultracode",
+          label: "Ultracode",
+          description: "xhigh effort plus multi-agent workflow orchestration",
+        },
+        { value: "ultrathink", label: "Ultrathink" },
+      ],
+      promptInjectedValues: ["ultrathink"],
+    }),
+    buildSelectOptionDescriptor({
+      id: "contextWindow",
+      label: "Context Window",
+      options: [
+        { value: "200k", label: "200k" },
+        { value: "1m", label: "1M", isDefault: true },
+      ],
+    }),
+  ],
+});
+
+const CLAUDE_OPUS_5_CAPABILITIES = createModelCapabilities({
+  optionDescriptors: [
+    buildSelectOptionDescriptor({
+      id: "effort",
+      label: "Reasoning",
+      options: [
+        { value: "low", label: "Low" },
+        { value: "medium", label: "Medium" },
+        { value: "high", label: "High", isDefault: true },
+        { value: "xhigh", label: "Extra High" },
+        { value: "max", label: "Max" },
+        {
+          value: "ultracode",
+          label: "Ultracode",
+          description: "xhigh effort plus multi-agent workflow orchestration",
+        },
+        { value: "ultrathink", label: "Ultrathink" },
+      ],
+      promptInjectedValues: ["ultrathink"],
+    }),
+    buildBooleanOptionDescriptor({
+      id: "fastMode",
+      label: "Fast Mode",
+    }),
+    buildSelectOptionDescriptor({
+      id: "contextWindow",
+      label: "Context Window",
+      // Claude Code selects the 1M variant explicitly (`claude-opus-5[1m]`).
+      options: [
+        { value: "200k", label: "200k" },
+        { value: "1m", label: "1M", isDefault: true },
+      ],
+    }),
+  ],
+});
+
 export const CLAUDE_MODEL_CATALOG: ReadonlyArray<ServerProviderModel> = [
+  {
+    slug: "claude-opus-5-5",
+    name: "Claude Opus 5.5",
+    isCustom: false,
+    capabilities: CLAUDE_OPUS_5_CAPABILITIES,
+  },
+  {
+    slug: "claude-fable-5-1",
+    name: "Claude Fable 5.1",
+    isCustom: false,
+    capabilities: CLAUDE_FABLE_5_CAPABILITIES,
+  },
   {
     slug: "claude-fable-5",
     name: "Claude Fable 5",
     isCustom: false,
-    capabilities: createModelCapabilities({
-      optionDescriptors: [
-        buildSelectOptionDescriptor({
-          id: "effort",
-          label: "Reasoning",
-          options: [
-            { value: "low", label: "Low" },
-            { value: "medium", label: "Medium" },
-            { value: "high", label: "High", isDefault: true },
-            { value: "xhigh", label: "Extra High" },
-            { value: "max", label: "Max" },
-            {
-              value: "ultracode",
-              label: "Ultracode",
-              description: "xhigh effort plus multi-agent workflow orchestration",
-            },
-            { value: "ultrathink", label: "Ultrathink" },
-          ],
-          promptInjectedValues: ["ultrathink"],
-        }),
-        buildSelectOptionDescriptor({
-          id: "contextWindow",
-          label: "Context Window",
-          options: [
-            { value: "200k", label: "200k" },
-            { value: "1m", label: "1M", isDefault: true },
-          ],
-        }),
-      ],
-    }),
+    capabilities: CLAUDE_FABLE_5_CAPABILITIES,
   },
   {
     slug: "claude-opus-5",
     name: "Claude Opus 5",
     isCustom: false,
-    capabilities: createModelCapabilities({
-      optionDescriptors: [
-        buildSelectOptionDescriptor({
-          id: "effort",
-          label: "Reasoning",
-          options: [
-            { value: "low", label: "Low" },
-            { value: "medium", label: "Medium" },
-            { value: "high", label: "High", isDefault: true },
-            { value: "xhigh", label: "Extra High" },
-            { value: "max", label: "Max" },
-            {
-              value: "ultracode",
-              label: "Ultracode",
-              description: "xhigh effort plus multi-agent workflow orchestration",
-            },
-            { value: "ultrathink", label: "Ultrathink" },
-          ],
-          promptInjectedValues: ["ultrathink"],
-        }),
-        buildBooleanOptionDescriptor({
-          id: "fastMode",
-          label: "Fast Mode",
-        }),
-        buildSelectOptionDescriptor({
-          id: "contextWindow",
-          label: "Context Window",
-          // Claude Code selects the 1M variant explicitly (`claude-opus-5[1m]`).
-          options: [
-            { value: "200k", label: "200k" },
-            { value: "1m", label: "1M", isDefault: true },
-          ],
-        }),
-      ],
-    }),
+    capabilities: CLAUDE_OPUS_5_CAPABILITIES,
   },
   {
     slug: "claude-opus-4-8",
@@ -293,7 +309,7 @@ export const CLAUDE_MODEL_CATALOG: ReadonlyArray<ServerProviderModel> = [
   },
 ];
 
-// Legacy classification happens at the driver boundary via `applyModelManifest`,
+// Legacy classification happens at the driver boundary via `applyModelCatalog`,
 // so the catalog itself carries no `isLegacy` flags.
 export const BUILT_IN_MODELS: ReadonlyArray<ServerProviderModel> = CLAUDE_MODEL_CATALOG;
 
@@ -317,11 +333,11 @@ export function getBuiltInClaudeModelsForVersion(
   version: string | null | undefined,
 ): ReadonlyArray<ServerProviderModel> {
   return BUILT_IN_MODELS.filter((model) => {
-    if (model.slug === "claude-opus-5") {
+    if (model.slug === "claude-opus-5" || model.slug === "claude-opus-5-5") {
       return supportsClaudeOpus5(version);
     }
 
-    if (model.slug === "claude-fable-5") {
+    if (model.slug === "claude-fable-5" || model.slug === "claude-fable-5-1") {
       return supportsClaudeFable5(version);
     }
 
@@ -361,11 +377,24 @@ export function formatClaudeOpus47UpgradeMessage(version: string | null): string
   return `Claude Code ${versionLabel} is too old for Claude Opus 4.7. Upgrade to v${MINIMUM_CLAUDE_OPUS_4_7_VERSION} or newer to access it.`;
 }
 
+/** `claude-sonnet-5-5` → `claude-sonnet`. */
+const claudeModelFamily = (slug: string) => slug.replace(/(-\d+)+$/, "");
+
+/**
+ * Capabilities for a Claude model slug. A model released after this build
+ * (listed by the models.dev catalog but not here) inherits the newest built-in
+ * model of its family, so new releases keep their reasoning controls.
+ */
 export function getClaudeModelCapabilities(model: string | null | undefined): ModelCapabilities {
-  const slug = model?.trim();
+  const slug = model?.trim() ?? "";
+  const family = claudeModelFamily(slug);
 
   return (
     BUILT_IN_MODELS.find((candidate) => candidate.slug === slug)?.capabilities ??
+    (slug.startsWith("claude-") && family !== slug
+      ? BUILT_IN_MODELS.find((candidate) => claudeModelFamily(candidate.slug) === family)
+          ?.capabilities
+      : undefined) ??
     DEFAULT_CLAUDE_MODEL_CAPABILITIES
   );
 }
@@ -409,7 +438,9 @@ export function normalizeClaudeCliEffort(
 
   if (
     effort === "xhigh" &&
+    model !== "claude-fable-5-1" &&
     model !== "claude-fable-5" &&
+    model !== "claude-opus-5-5" &&
     model !== "claude-opus-5" &&
     model !== "claude-opus-4-8" &&
     model !== "claude-sonnet-5"

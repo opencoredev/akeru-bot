@@ -14,7 +14,7 @@ import { ServerSettingsService } from "../../serverSettings.ts";
 import { makeHarnessTextGeneration } from "../../textGeneration/HarnessTextGeneration.ts";
 import { ProviderDriverError } from "../Errors.ts";
 import { makeHarnessProviderStatus } from "../HarnessProviderStatus.ts";
-import * as ModelManifest from "../ModelManifest.ts";
+import * as ModelCatalog from "../ModelCatalog.ts";
 import { buildInitialGrokProviderSnapshot, enrichGrokSnapshot } from "../Layers/GrokProvider.ts";
 import { discoverGrokSkills } from "./GrokSkills.ts";
 import { ProviderEventLoggers } from "../Layers/ProviderEventLoggers.ts";
@@ -55,7 +55,7 @@ export type GrokDriverEnv =
   | Crypto.Crypto
   | FileSystem.FileSystem
   | HttpClient.HttpClient
-  | ModelManifest.ModelManifest
+  | ModelCatalog.ModelCatalog
   | Path.Path
   | ProviderEventLoggers
   | ServerConfig
