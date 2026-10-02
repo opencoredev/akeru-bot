@@ -19,7 +19,7 @@ import * as Deferred from "effect/Deferred";
 import * as Semaphore from "effect/Semaphore";
 import { type BotMemoryAccess } from "../../../memory/BotMemory.ts";
 import { type AkeruMemoryToolHandler } from "../../../memory/BotMemoryToolHandlers.ts";
-import { type AkeruMastraSession } from "../../AkeruMastraHarness.ts";
+import { type AkeruControllerSession } from "../../mastra/AkeruHarnessTypes.ts";
 import { type AkeruMemoryTurn } from "../../AkeruMemoryTurnHarness.ts";
 import { type AkeruToolSession } from "../../AkeruToolRuntime.ts";
 import {
@@ -27,7 +27,7 @@ import {
   type AgentControllerShape,
 } from "../../Services/AgentController.ts";
 
-export type MastraSession = AkeruMastraSession;
+export type MastraSession = AkeruControllerSession;
 
 export interface ResolvedEngine {
   readonly modelSelection: ModelSelection;

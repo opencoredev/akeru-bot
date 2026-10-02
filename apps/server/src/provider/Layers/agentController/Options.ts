@@ -1,3 +1,4 @@
+import type { AkeruControllerHarness } from "../../mastra/AkeruHarnessTypes.ts";
 import { runImageGenerationTool } from "../../../image-generation/ImageGenerationRuntime.ts";
 import { createMcpManager } from "@mastra/code-sdk/mcp/index";
 
@@ -14,7 +15,6 @@ import { type EntityMemoryRepositoryShape } from "../../../memory/Services/Entit
 import * as McpSessionRegistry from "../../../mcp/McpSessionRegistry.ts";
 
 import {
-  type AkeruMastraHarness,
   type AkeruMastraHarnessError,
   type AkeruMastraHarnessOptions,
 } from "../../AkeruMastraHarness.ts";
@@ -32,7 +32,7 @@ export interface AgentControllerLiveOptions {
   /** Builds the harness in the layer scope; closing the scope shuts it down. */
   readonly makeMastraHarness?: (
     options: AkeruMastraHarnessOptions,
-  ) => Effect.Effect<AkeruMastraHarness, AkeruMastraHarnessError, Scope.Scope>;
+  ) => Effect.Effect<AkeruControllerHarness, AkeruMastraHarnessError, Scope.Scope>;
   readonly makeMcpManager?: typeof createMcpManager;
   readonly makeRemoteWorkspace?: (
     input: CreateRemoteBotWorkspaceInput,

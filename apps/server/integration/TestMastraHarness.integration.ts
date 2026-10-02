@@ -1,3 +1,4 @@
+import type { AkeruControllerSession } from "../src/provider/mastra/AkeruHarnessTypes.ts";
 import type { AkeruMastraState } from "../src/provider/AkeruMastraHarness.ts";
 import * as Predicate from "effect/Predicate";
 /**
@@ -11,7 +12,7 @@ import * as Predicate from "effect/Predicate";
  * (`sendMessage`, `subscribe`, approval and abort hooks) so the full
  * orchestration pipeline still runs deterministically.
  */
-import type { AgentControllerEvent, MastraDBMessage, Session } from "@mastra/core/agent-controller";
+import type { AgentControllerEvent, MastraDBMessage } from "@mastra/core/agent-controller";
 import {
   ApprovalRequestId,
   ThreadId,
@@ -229,10 +230,8 @@ export function testMastraHarness(): TestMastraHarness {
     for (const raw of terminal) emitFixtureEvent(state, raw);
   };
 
-  // SAFETY: This integration factory implements the controller and conversation methods exercised by AgentController; unused SDK machinery is intentionally absent.
   const createSession = (state: SessionState) =>
-    // SAFETY: The controller test harness invokes only the session methods implemented below.
-    Object.assign({} as Session<AkeruMastraState>, {
+    ({
       stream: {
         isActive: () => state.activeTurnId !== undefined,
         waitForTeardown: async () => undefined,
@@ -289,9 +288,11 @@ export function testMastraHarness(): TestMastraHarness {
         toolCallId,
         decision,
       }: {
-        readonly toolCallId: string;
+        readonly toolCallId?: string;
         readonly decision: string;
       }) => {
+        if (!toolCallId) return;
+
         state.approvalResponses.push({
           threadId: state.threadId,
           requestId: ApprovalRequestId.make(toolCallId),
@@ -307,9 +308,8 @@ export function testMastraHarness(): TestMastraHarness {
         resolve?.();
       },
       respondToToolSuspension: async () => undefined,
-    });
+    }) satisfies AkeruControllerSession;
 
-  // SAFETY: This integration factory implements the controller and conversation methods exercised by AgentController; unused SDK machinery is intentionally absent.
   const factory: TestMastraHarness["factory"] = () =>
     Effect.succeed({
       rebuildConversation: async (threadId: string, messages: ReadonlyArray<MastraDBMessage>) => {
@@ -323,11 +323,13 @@ export function testMastraHarness(): TestMastraHarness {
       },
       controller: {
         init: async () => undefined,
-        createSession: async (input: {
-          readonly resourceId?: string;
-          readonly threadId?: string;
-          readonly tags?: { readonly projectPath?: string };
-        }) => {
+        createSession: async (
+          input: {
+            readonly resourceId?: string;
+            readonly threadId?: string;
+            readonly tags?: { readonly projectPath?: string };
+          } = {},
+        ) => {
           const threadId = ThreadId.make(String(input.resourceId ?? input.threadId));
 
           const state: SessionState = {
@@ -357,7 +359,7 @@ export function testMastraHarness(): TestMastraHarness {
         deleteSession: async ({ resourceId }: { readonly resourceId?: string }) =>
           sessions.delete(String(resourceId)),
       },
-    } as never);
+    });
 
   return {
     factory,

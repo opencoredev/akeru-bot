@@ -1,4 +1,4 @@
-import type { AkeruMastraHarness } from "../../AkeruMastraHarness.ts";
+import type { AkeruControllerHarness } from "../../mastra/AkeruHarnessTypes.ts";
 import type { AgentControllerShape } from "../../Services/AgentController.ts";
 import { ThreadIdBrand, toProviderSession } from "./Policy.ts";
 
@@ -32,7 +32,7 @@ export function createAuxiliaryOperations({
   legacyBufferedTerminals,
   drainLegacyTerminals,
 }: {
-  readonly bundle: AkeruMastraHarness;
+  readonly bundle: AkeruControllerHarness;
   readonly runMastra: <A>(
     operation: string,
     run: (signal: AbortSignal) => Promise<A>,

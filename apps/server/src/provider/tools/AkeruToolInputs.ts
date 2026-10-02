@@ -1,4 +1,4 @@
-import { decodeAkeruToolInput } from "@akeru/contracts";
+import { AkeruToolInputSchemas, decodeAkeruToolInput } from "@akeru/contracts";
 import * as Predicate from "effect/Predicate";
 import * as Schema from "effect/Schema";
 import { AkeruMemoryToolInputSchema } from "../../memory/BotMemoryToolHandlers.ts";
@@ -6,16 +6,36 @@ import type { AkeruRuntimeToolId } from "./AkeruToolTypes.ts";
 
 const decodeMemoryInput = Schema.decodeUnknownSync(AkeruMemoryToolInputSchema);
 
-export function normalizeAkeruToolInput<Input>(input: Input) {
+export function normalizeAkeruToolInput<Input>(
+  toolId: Exclude<AkeruRuntimeToolId, "memory">,
+  input: Input,
+  omitUnknownNulls = false,
+) {
   if (!Predicate.isObject(input) || Array.isArray(input)) return input;
 
-  return Object.fromEntries(Object.entries(input).filter(([, value]) => value !== null));
+  const schema = AkeruToolInputSchemas[toolId];
+  const fields: Readonly<Record<string, Schema.Top>> = "fields" in schema ? schema.fields : {};
+
+  return Object.fromEntries(
+    Object.entries(input).filter(([key, value]) => {
+      const field = fields[key];
+
+      return (
+        value !== null ||
+        (field ? !Schema.is(field)(undefined) || Schema.is(field)(null) : !omitUnknownNulls)
+      );
+    }),
+  );
 }
 
-export function decodeAkeruRuntimeToolInput<Input>(toolId: AkeruRuntimeToolId, input: Input) {
+export function decodeAkeruRuntimeToolInput<Input>(
+  toolId: AkeruRuntimeToolId,
+  input: Input,
+  options?: { readonly approvalGrant: boolean },
+) {
   if (toolId === "memory")
     return { toolId, input: decodeMemoryInput(input, { onExcessProperty: "error" }) };
-  const normalized = normalizeAkeruToolInput(input);
+  const normalized = normalizeAkeruToolInput(toolId, input, options?.approvalGrant);
 
   switch (toolId) {
     case "Shell":

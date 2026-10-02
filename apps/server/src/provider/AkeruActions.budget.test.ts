@@ -22,10 +22,16 @@ describe("Akeru action inspection budget", () => {
     expect(akeruActionNeedsApproval("custom_tool", args)).toBe(true);
   });
 
-  it("shares the budget across nested arrays and object properties", () => {
+  it("counts containers separately from primitive entries", () => {
     const args = { items: Array.from({ length: 60 }, () => ({ operation: "read" })) };
 
-    expect(akeruActionNeedsApproval("custom_tool", args)).toBe(true);
+    expect(akeruActionNeedsApproval("custom_tool", args)).toBe(false);
+  });
+
+  it("permits a modest read-only batch", () => {
+    const args = { ids: Array.from({ length: 100 }, (_, index) => String(index)) };
+
+    expect(akeruActionNeedsApproval("custom_read", args)).toBe(false);
   });
 
   it("fails closed on cycles", () => {

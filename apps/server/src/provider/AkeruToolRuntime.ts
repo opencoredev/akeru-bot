@@ -221,7 +221,7 @@ export function createAkeruToolRuntime(options?: AkeruToolRuntimeOptions): Akeru
   };
 
   const decodedGrantInput = (toolId: AkeruRuntimeToolId, input: AkeruToolExecution["input"]) =>
-    decodeAkeruRuntimeToolInput(toolId, input).input;
+    decodeAkeruRuntimeToolInput(toolId, input, { approvalGrant: true }).input;
 
   const requiresApproval = async (
     session: AkeruToolSession,

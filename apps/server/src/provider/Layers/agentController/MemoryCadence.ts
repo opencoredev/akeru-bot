@@ -4,7 +4,7 @@ import { type ProviderRuntimeEvent, ThreadId } from "@akeru/contracts";
 
 import * as Effect from "effect/Effect";
 
-import { type AkeruMastraHarness } from "../../AkeruMastraHarness.ts";
+import type { AkeruControllerHarness } from "../../mastra/AkeruHarnessTypes.ts";
 
 import { type AkeruMemoryTurn } from "../../AkeruMemoryTurnHarness.ts";
 import { type AkeruDelegationChildOutcome } from "../../AkeruDelegationRuntime.ts";
@@ -30,7 +30,7 @@ export function createMemoryCadence(deps: {
   readonly restoreLegacyMemoryHandler: (key: string, pending: LegacyTurnMemoryState) => void;
   readonly removeLegacyPending: (key: string, pending: LegacyTurnMemoryState) => void;
   readonly legacyPending: (key: string) => LegacyTurnMemoryState[];
-  readonly bundle: AkeruMastraHarness;
+  readonly bundle: AkeruControllerHarness;
   readonly legacyBufferedTerminals: Map<string, Map<string, ProviderRuntimeEvent>>;
   readonly resolvedByThread: Map<string, ResolvedEngine>;
 }) {

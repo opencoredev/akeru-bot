@@ -21,7 +21,7 @@ import { retainProjectionMessagesAfterRevert } from "../../../orchestration/Reta
 import { ProjectionThreadMessageRepository } from "../../../persistence/Services/ProjectionThreadMessages.ts";
 import { ProjectionTurnRepository } from "../../../persistence/Services/ProjectionTurns.ts";
 
-import { type AkeruMastraHarness } from "../../AkeruMastraHarness.ts";
+import type { AkeruControllerHarness } from "../../mastra/AkeruHarnessTypes.ts";
 
 import type { AkeruWorkerRuntime } from "../../AkeruWorkerRuntime.ts";
 
@@ -73,7 +73,7 @@ export function createConversation(deps: {
     state: "ready" | "running" | "waiting" | "stopped" | "error",
     reason?: string,
   ) => void;
-  readonly bundle: AkeruMastraHarness;
+  readonly bundle: AkeruControllerHarness;
   readonly memoryUsageByThread: Map<
     string,
     { readonly botId: BotId; readonly capLimit: number; turnId: TurnId }

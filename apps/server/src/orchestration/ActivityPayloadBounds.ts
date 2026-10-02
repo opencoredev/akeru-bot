@@ -41,7 +41,9 @@ function copyTruncatedString(value: string): string {
     prefix = prefix.slice(0, -1);
   }
 
-  return `${prefix}…`;
+  const copiedPrefix = Array.from(prefix).join("");
+
+  return `${copiedPrefix}…`;
 }
 
 export function projectBoundedValue(value: ActivityValue, depth = 0): ActivityValue {
