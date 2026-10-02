@@ -345,13 +345,12 @@ export function ComposioSection({
             value={apiKey}
             onChange={(event) => setApiKey(event.currentTarget.value)}
           />
-          <Button disabled={!apiKey.trim() || pendingId !== null} size="sm" type="submit">
+          <Button disabled={!apiKey.trim() || pendingId !== null} type="submit">
             {configured ? t("Replace key") : t("Save key")}
           </Button>
           {configured ? (
             <Button
               disabled={pendingId !== null}
-              size="sm"
               type="button"
               variant="ghost"
               onClick={() => void removeKey()}
