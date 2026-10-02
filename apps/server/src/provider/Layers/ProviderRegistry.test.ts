@@ -396,6 +396,53 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsModule.layerTest(), Te
         );
       });
 
+      it("keeps an endpoint model through a pending probe when it was also hand-added", () => {
+        const model = (slug: string, isCustom: boolean) => ({
+          slug,
+          name: slug,
+          isCustom,
+          capabilities: null,
+        });
+
+        const discovered = {
+          instanceId: ProviderInstanceId.make("customOpenai"),
+          driver: ProviderDriverKind.make("customOpenai"),
+          status: "ready",
+          enabled: true,
+          installed: true,
+          auth: { status: "authenticated" },
+          checkedAt: "2026-07-17T00:00:00.000Z",
+          version: null,
+          models: [model("alpha", false)],
+          slashCommands: [],
+          skills: [],
+        } as const satisfies ServerProvider;
+
+        // After a restart the driver has no catalog yet, so the hand-added
+        // "alpha" arrives marked custom.
+        const pendingWithHandAdded = {
+          ...discovered,
+          status: "warning",
+          message: "Listing models from the endpoint…",
+          models: [model("alpha", true)],
+        } satisfies ServerProvider;
+
+        const pending = mergeProviderSnapshot(discovered, pendingWithHandAdded);
+        assert.deepStrictEqual(pending.models, [model("alpha", false)]);
+
+        // The user then removes the hand-added copy while the probe still fails.
+        const failedWithoutHandAdded = {
+          ...pendingWithHandAdded,
+          message: "Could not list models from https://api.example.com.",
+          models: [],
+        } satisfies ServerProvider;
+
+        assert.deepStrictEqual(
+          mergeProviderSnapshot(pending, failedWithoutHandAdded).models.map((entry) => entry.slug),
+          ["alpha"],
+        );
+      });
+
       it("classifies pending, logout, uninstall, and reconnect OpenCode inventories", () => {
         const previousProvider = {
           instanceId: ProviderInstanceId.make("opencode"),

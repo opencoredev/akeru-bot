@@ -60,8 +60,19 @@ export const mergeProviderModels = (
 
   const previousBySlug = new Map(previousModels.map((model) => [model.slug, model] as const));
 
-  const mergedModels = nextModels.map((model) => {
-    const previousModel = previousBySlug.get(model.slug);
+  // Before a Custom API probe settles, the driver marks every hand-added model
+  // custom, even one the last good catalog also listed. Keep the endpoint's
+  // claim so removing the hand-added copy does not drop the model.
+  const keepsDiscoveredModels =
+    shouldRetainMissingModels && provider.driver === ProviderDriverKind.make("customOpenai");
+
+  const mergedModels = nextModels.map((nextModel) => {
+    const previousModel = previousBySlug.get(nextModel.slug);
+
+    const model =
+      keepsDiscoveredModels && nextModel.isCustom && previousModel?.isCustom === false
+        ? { ...nextModel, isCustom: false }
+        : nextModel;
 
     if (!previousModel || hasModelCapabilities(model) || !hasModelCapabilities(previousModel)) {
       return model;

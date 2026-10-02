@@ -4,6 +4,7 @@ import {
   CUSTOM_API_KEY_ENV,
   CUSTOM_API_PRESETS,
   customApiKeyHint,
+  customApiKeyLeavesHost,
   customApiPresetForBaseUrl,
   OTHER_CUSTOM_API_PRESET,
   withCustomApiKey,
@@ -78,5 +79,30 @@ describe("withStoredCustomApiKey", () => {
 
     expect(withStoredCustomApiKey([other, collision], stored)).toEqual([other, stored]);
     expect(withStoredCustomApiKey([other, collision], undefined)).toEqual([other]);
+  });
+});
+
+describe("customApiKeyLeavesHost", () => {
+  it("keeps the key when only the path or scheme changes", () => {
+    expect(
+      customApiKeyLeavesHost("https://openrouter.ai/api/v1", "https://openrouter.ai/api/v2"),
+    ).toBe(false);
+    expect(customApiKeyLeavesHost("http://localhost:1234/v1", "https://localhost:1234/v1")).toBe(
+      false,
+    );
+  });
+
+  it("drops the key when the base URL moves to another host", () => {
+    expect(
+      customApiKeyLeavesHost("https://openrouter.ai/api/v1", "https://api.groq.com/openai/v1"),
+    ).toBe(true);
+    expect(customApiKeyLeavesHost("http://localhost:1234/v1", "http://localhost:11434/v1")).toBe(
+      true,
+    );
+    expect(customApiKeyLeavesHost("https://openrouter.ai/api/v1", "")).toBe(true);
+  });
+
+  it("keeps the key when the instance had no base URL yet", () => {
+    expect(customApiKeyLeavesHost("", "https://openrouter.ai/api/v1")).toBe(false);
   });
 });

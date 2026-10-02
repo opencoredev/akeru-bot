@@ -188,3 +188,20 @@ export function withStoredCustomApiKey(
 
   return stored ? [...rest, stored] : rest;
 }
+
+function endpointHost(baseUrl: string): string {
+  const trimmed = baseUrl.trim();
+
+  return URL.canParse(trimmed) ? new URL(trimmed).host : trimmed;
+}
+
+/**
+ * A stored key belongs to the host it was saved for. Moving the base URL to
+ * another host would send it to a different service, so the key must go.
+ * A first URL on an instance that had none keeps the key.
+ */
+export function customApiKeyLeavesHost(previousBaseUrl: string, nextBaseUrl: string): boolean {
+  if (previousBaseUrl.trim().length === 0) return false;
+
+  return endpointHost(previousBaseUrl) !== endpointHost(nextBaseUrl);
+}

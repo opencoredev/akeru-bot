@@ -48,6 +48,7 @@ import { ProviderEnvironmentSection } from "./ProviderEnvironmentSection";
 import { CustomApiKeyField } from "./CustomApiKeyField";
 import {
   customApiKeyHint,
+  customApiKeyLeavesHost,
   customApiPresetForBaseUrl,
   readCustomApiKey,
   withCustomApiKey,
@@ -221,7 +222,32 @@ export function ProviderInstanceCard({
 
   const updateConfig = (nextConfig: ProviderConfig | undefined) => {
     const { config: _omit, ...rest } = instance;
-    onUpdate(nextConfig !== undefined ? { ...rest, config: nextConfig } : rest);
+    const next = nextConfig !== undefined ? { ...rest, config: nextConfig } : rest;
+
+    const dropsCustomApiKey =
+      instance.driver === ProviderDriverKind.make("customOpenai") &&
+      readCustomApiKey(instance.environment ?? []) !== undefined &&
+      customApiKeyLeavesHost(
+        readProviderConfigString(instance.config, "baseUrl"),
+        readProviderConfigString(nextConfig, "baseUrl"),
+      );
+
+    if (!dropsCustomApiKey) {
+      onUpdate(next);
+
+      return;
+    }
+
+    // Save the new address and drop the old key together, so the key is
+    // never probed against the new host.
+    const environment = withoutCustomApiKey(instance.environment ?? []);
+    const { environment: _omitEnvironment, ...withoutEnvironment } = next;
+    onUpdate(environment.length > 0 ? { ...next, environment } : withoutEnvironment);
+    toastManager.add({
+      type: "info",
+      title: "API key removed",
+      description: "The new address is a different service. Paste its key to connect.",
+    });
   };
 
   const updateCustomModels = (next: ReadonlyArray<string>) => {
