@@ -531,10 +531,11 @@ export const OpenCodeGoSettings = makeProviderSettingsSchema({
 export type OpenCodeGoSettings = typeof OpenCodeGoSettings.Type;
 
 /**
- * Any OpenAI-compatible HTTP endpoint: a base URL, an API key, and a
- * user-authored model list. Unlike the subscription drivers there is no
- * account to sign in to, so the base URL + key live in this config blob and
- * drive both the connection state and the Mastra transport.
+ * Any OpenAI-compatible HTTP endpoint: a base URL plus a user-authored model
+ * list. There is no account to sign in to, and no secret here: the API key is
+ * an instance environment variable (`CUSTOM_OPENAI_API_KEY`), because only
+ * sensitive environment variables are kept in the secret store and redacted
+ * before settings reach a client.
  */
 export const CustomOpenaiSettings = makeProviderSettingsSchema(
   {
@@ -547,22 +548,9 @@ export const CustomOpenaiSettings = makeProviderSettingsSchema(
       Schema.annotateKey({
         title: "Base URL",
         description:
-          "OpenAI-compatible API root, e.g. https://api.openai.com/v1 or http://localhost:11434/v1.",
+          "OpenAI-compatible API root, e.g. https://api.openai.com/v1 or http://localhost:11434/v1. Add CUSTOM_OPENAI_API_KEY as a sensitive environment variable when the endpoint needs a key.",
         providerSettingsForm: {
           placeholder: "https://api.openai.com/v1",
-          clearWhenEmpty: "omit",
-        },
-      }),
-    ),
-    apiKey: TrimmedString.pipe(
-      Schema.withDecodingDefault(Effect.succeed("")),
-      Schema.annotateKey({
-        title: "API key",
-        description:
-          "Sent as an Authorization Bearer header. Leave empty for local servers without auth.",
-        providerSettingsForm: {
-          control: "password",
-          placeholder: "sk-…",
           clearWhenEmpty: "omit",
         },
       }),
@@ -572,7 +560,7 @@ export const CustomOpenaiSettings = makeProviderSettingsSchema(
       Schema.annotateKey({ providerSettingsForm: { hidden: true } }),
     ),
   },
-  { order: ["baseUrl", "apiKey"] },
+  { order: ["baseUrl"] },
 );
 export type CustomOpenaiSettings = typeof CustomOpenaiSettings.Type;
 
@@ -1056,7 +1044,6 @@ const OpenCodeGoSettingsPatch = Schema.Struct({
 const CustomOpenaiSettingsPatch = Schema.Struct({
   enabled: Schema.optionalKey(Schema.Boolean),
   baseUrl: Schema.optionalKey(TrimmedString),
-  apiKey: Schema.optionalKey(TrimmedString),
   customModels: Schema.optionalKey(Schema.Array(Schema.String)),
 });
 

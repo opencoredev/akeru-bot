@@ -10,6 +10,7 @@ import * as Option from "effect/Option";
 import * as PubSub from "effect/PubSub";
 import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
+import * as Semaphore from "effect/Semaphore";
 import * as Stream from "effect/Stream";
 import { HttpClient, HttpClientRequest } from "effect/unstable/http";
 
@@ -22,18 +23,29 @@ import { makeManualOnlyProviderMaintenanceCapabilities } from "../providerMainte
 const DRIVER_KIND = ProviderDriverKind.make("customOpenai");
 const decodeSettings = Schema.decodeSync(CustomOpenaiSettings);
 
-/** Env variables a user may set on the instance to keep credentials out of settings. */
+/**
+ * The API key is an instance environment variable, not a config field: the
+ * settings blob is serialized to every client that can read settings, and only
+ * sensitive environment variables are stored in the secret store and redacted
+ * on the way out. Instance variables win over the process environment, which is
+ * deliberately NOT read here — this driver talks to an arbitrary endpoint, so
+ * inheriting a process-wide key would send it to whatever URL an instance
+ * happens to configure.
+ */
 const API_KEY_ENV = "CUSTOM_OPENAI_API_KEY";
 const BASE_URL_ENV = "CUSTOM_OPENAI_BASE_URL";
 
-/** How long one `/models` probe may take before the instance keeps its last catalog. */
+/** The whole `/models` probe — request, headers, and body — must fit this budget. */
 const MODELS_TIMEOUT_MS = 10_000;
 
 /**
  * OpenAI-compatible `/models` payloads come in two shapes: the standard
  * `{ data: [{ id }] }` envelope and a bare array from smaller gateways.
- * Entries are decoded one at a time so a single malformed row cannot discard
- * the whole catalog.
+ * The envelope is validated as a whole so an unreadable body is reported as a
+ * failed probe rather than as an endpoint that lists no models; entries are
+ * decoded one at a time so a single malformed row cannot discard the catalog.
+ *
+ * `None` means "not a model list at all".
  */
 const EndpointModelEnvelope = Schema.Struct({ data: Schema.Array(Schema.Unknown) });
 const EndpointModelArray = Schema.Array(Schema.Unknown);
@@ -43,11 +55,12 @@ const decodeEndpointModelEnvelope = Schema.decodeUnknownOption(EndpointModelEnve
 const decodeEndpointModelArray = Schema.decodeUnknownOption(EndpointModelArray);
 const decodeEndpointModelId = Schema.decodeUnknownOption(EndpointModelId);
 
-function readEndpointModelIds(payload: unknown): string[] {
+function readEndpointModelIds(payload: unknown): Option.Option<ReadonlyArray<string>> {
   const envelope = decodeEndpointModelEnvelope(payload);
   const entries = Option.isSome(envelope)
     ? envelope.value.data
-    : Option.getOrElse(decodeEndpointModelArray(payload), () => []);
+    : Option.getOrUndefined(decodeEndpointModelArray(payload));
+  if (entries === undefined) return Option.none();
   const ids: string[] = [];
   for (const entry of entries) {
     const id =
@@ -59,7 +72,7 @@ function readEndpointModelIds(payload: unknown): string[] {
     );
     if (Option.isSome(resolved)) ids.push(resolved.value);
   }
-  return [...new Set(ids)];
+  return Option.some([...new Set(ids)]);
 }
 
 /**
@@ -82,6 +95,10 @@ function models(
   }));
 }
 
+type ProbeResult =
+  | { readonly ok: true; readonly catalog: ReadonlyArray<string> }
+  | { readonly ok: false; readonly failure: string };
+
 export type CustomOpenaiDriverEnv = ServerConfig | HttpClient.HttpClient;
 
 export const CustomOpenaiDriver: ProviderDriver<CustomOpenaiSettings, CustomOpenaiDriverEnv> = {
@@ -98,17 +115,26 @@ export const CustomOpenaiDriver: ProviderDriver<CustomOpenaiSettings, CustomOpen
       );
       const catalog = yield* Ref.make<ReadonlyArray<string>>([]);
       const probeFailure = yield* Ref.make<string | null>(null);
+      // False until the first probe settles. The catalog is not authoritative
+      // before then, so the registry keeps the models it hydrated from the
+      // on-disk cache instead of trusting an empty list.
+      const probeSettled = yield* Ref.make(false);
+      // One probe at a time: an explicit refresh must not race the startup
+      // probe and let the older response land last.
+      const probeLock = yield* Semaphore.make(1);
       const effectiveEnabled = enabled && config.enabled;
-      // Instance env vars win over the settings blob so a user can keep an API
-      // key out of `~/.akeru` while still seeing the instance in the UI.
       const explicitEnvironment = explicitProviderInstanceEnvironment(environment);
-      const apiKey = explicitEnvironment[API_KEY_ENV]?.trim() || config.apiKey.trim();
+      const apiKey = explicitEnvironment[API_KEY_ENV]?.trim() ?? "";
       const baseUrl = explicitEnvironment[BASE_URL_ENV]?.trim() || config.baseUrl.trim();
-      const connectionEnvironment = {
+      const connectionEnvironment: NodeJS.ProcessEnv = {
         ...mergeSubscriptionInstanceEnvironment(environment),
-        ...(apiKey ? { [API_KEY_ENV]: apiKey } : {}),
-        ...(baseUrl ? { [BASE_URL_ENV]: baseUrl } : {}),
+        ...(apiKey.length > 0 ? { [API_KEY_ENV]: apiKey } : {}),
+        ...(baseUrl.length > 0 ? { [BASE_URL_ENV]: baseUrl } : {}),
       };
+      // Drop anything the process environment supplied for these two names:
+      // only the instance's own variables and its configured base URL count.
+      if (apiKey.length === 0) delete connectionEnvironment[API_KEY_ENV];
+      if (baseUrl.length === 0) delete connectionEnvironment[BASE_URL_ENV];
       // A base URL alone is enough to run turns: plenty of OpenAI-compatible
       // servers (Ollama, llama.cpp, LM Studio) take no API key. `auth.status`
       // is the app-wide "this instance can run" signal, so it follows the base
@@ -121,7 +147,13 @@ export const CustomOpenaiDriver: ProviderDriver<CustomOpenaiSettings, CustomOpen
       const buildSnapshot = Effect.gen(function* () {
         const endpointModels = yield* Ref.get(catalog);
         const failure = yield* Ref.get(probeFailure);
-        const message = !connected ? "Set a base URL in Settings." : (failure ?? undefined);
+        const settled = yield* Ref.get(probeSettled);
+        const message = !connected
+          ? "Set a base URL in Settings."
+          : (failure ?? (settled ? undefined : "Listing models from the endpoint…"));
+        // `warning` covers every state whose catalog is not authoritative:
+        // disabled, no base URL, an in-flight first probe, and a failed probe
+        // that is still serving the last good catalog.
         return {
           instanceId,
           driver: DRIVER_KIND,
@@ -131,7 +163,11 @@ export const CustomOpenaiDriver: ProviderDriver<CustomOpenaiSettings, CustomOpen
           enabled: effectiveEnabled,
           installed: true,
           version: null,
-          status: !effectiveEnabled ? "disabled" : connected ? "ready" : "warning",
+          status: !effectiveEnabled
+            ? "disabled"
+            : connected && failure === null && settled
+              ? "ready"
+              : "warning",
           auth: { status: connected ? "authenticated" : "unauthenticated", type: "apiKey" },
           checkedAt: DateTime.formatIso(DateTime.nowUnsafe()),
           ...(effectiveEnabled && message !== undefined ? { message } : {}),
@@ -141,38 +177,63 @@ export const CustomOpenaiDriver: ProviderDriver<CustomOpenaiSettings, CustomOpen
           skills: [],
         } satisfies ServerProvider;
       });
-      const probeEndpointModels = Effect.gen(function* () {
+      const probeEndpointModels: Effect.Effect<ProbeResult> = Effect.gen(function* () {
         const bare = HttpClientRequest.get(`${baseUrl.replace(/\/+$/, "")}/models`).pipe(
           HttpClientRequest.setHeader("accept", "application/json"),
         );
-        const response = yield* httpClient
-          .execute(apiKey.length > 0 ? HttpClientRequest.bearerToken(apiKey)(bare) : bare)
-          .pipe(
-            Effect.timeoutOption(MODELS_TIMEOUT_MS),
+        const request = apiKey.length > 0 ? HttpClientRequest.bearerToken(apiKey)(bare) : bare;
+        // One timeout covers the request, the response headers, and the body:
+        // a gateway that answers 200 and then stalls must not hang a refresh.
+        const outcome = yield* Effect.gen(function* () {
+          const response = yield* httpClient.execute(request);
+          if (response.status < 200 || response.status >= 300) {
+            return {
+              ok: false as const,
+              failure: `Model list from ${baseUrl} returned HTTP ${response.status}.`,
+            } satisfies ProbeResult;
+          }
+          const ids = yield* response.json.pipe(
+            Effect.map(readEndpointModelIds),
+            // A body that is not JSON at all is as unreadable as one with the
+            // wrong shape; both mean "this is not a model list".
             Effect.orElseSucceed(() => Option.none()),
           );
-        if (Option.isNone(response)) {
-          return { models: [] as string[], failure: `Could not list models from ${baseUrl}.` };
-        }
-        if (response.value.status < 200 || response.value.status >= 300) {
-          return {
-            models: [] as string[],
-            failure: `Model list from ${baseUrl} returned HTTP ${response.value.status}.`,
-          };
-        }
-        const payload = yield* response.value.json.pipe(Effect.orElseSucceed(() => null));
-        return { models: readEndpointModelIds(payload), failure: null };
+          return Option.isSome(ids)
+            ? { ok: true as const, catalog: ids.value }
+            : {
+                ok: false as const,
+                failure: `Model list from ${baseUrl} was not a readable list of models.`,
+              };
+        }).pipe(
+          Effect.timeoutOption(MODELS_TIMEOUT_MS),
+          Effect.catchCause(() => Effect.succeed(Option.none())),
+        );
+        return Option.isNone(outcome)
+          ? { ok: false, failure: `Could not list models from ${baseUrl}.` }
+          : outcome.value;
       });
-      const refresh = Effect.gen(function* () {
-        if (connected) {
-          const result = yield* probeEndpointModels;
-          yield* Ref.set(catalog, result.models);
-          yield* Ref.set(probeFailure, result.failure);
-        }
-        const snapshot = yield* buildSnapshot;
-        yield* PubSub.publish(changes, snapshot);
-        return snapshot;
-      });
+      const refresh = probeLock.withPermits(1)(
+        Effect.gen(function* () {
+          if (!connected) {
+            yield* Ref.set(probeFailure, null);
+            yield* Ref.set(probeSettled, false);
+          } else {
+            const result = yield* probeEndpointModels;
+            if (result.ok) {
+              yield* Ref.set(catalog, result.catalog);
+              yield* Ref.set(probeFailure, null);
+            } else {
+              // Keep the last good catalog: a transient failure must not empty
+              // the picker or block models the endpoint still serves.
+              yield* Ref.set(probeFailure, result.failure);
+            }
+            yield* Ref.set(probeSettled, true);
+          }
+          const snapshot = yield* buildSnapshot;
+          yield* PubSub.publish(changes, snapshot);
+          return snapshot;
+        }),
+      );
       // Populate the catalog without blocking the registry's layer build.
       yield* Effect.forkScoped(refresh);
       return {
@@ -186,8 +247,8 @@ export const CustomOpenaiDriver: ProviderDriver<CustomOpenaiSettings, CustomOpen
           environment: connectionEnvironment,
           instanceEnvironment: explicitEnvironment,
           // No subscription credential exists for this driver; `true` selects
-          // the merged `environment` (which carries the config-derived key and
-          // base URL) in `resolveAkeruMastraModel`.
+          // the merged `environment` (which carries the instance key and base
+          // URL) in `resolveAkeruMastraModel`.
           useSavedCredential: true,
         },
         adapter: undefined,

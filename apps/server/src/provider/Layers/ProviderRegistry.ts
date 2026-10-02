@@ -88,6 +88,14 @@ const shouldRetainMissingProviderModels = (provider: ServerProvider): boolean =>
     // and keeps the last good list.
     return provider.enabled && provider.status !== "ready";
   }
+  if (provider.driver === ProviderDriverKind.make("customOpenai")) {
+    // A Custom API endpoint is the whole inventory: once a `/models` probe
+    // settles, a model it no longer reports is genuinely gone. While the first
+    // probe is still in flight, the instance has no base URL, or the last probe
+    // failed, the snapshot is not authoritative and keeps the last good list
+    // (including the models hydrated from the on-disk cache at boot).
+    return provider.enabled && provider.status !== "ready";
+  }
   if (provider.driver !== ProviderDriverKind.make("opencode")) {
     return true;
   }

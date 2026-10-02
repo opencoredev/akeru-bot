@@ -774,6 +774,58 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsModule.layerTest(), Te
         );
       });
 
+      it("drops Custom API models only once a catalog probe settles", () => {
+        const model = (slug: string) => ({
+          slug,
+          name: slug,
+          isCustom: false,
+          capabilities: null,
+        });
+        const previousProvider = {
+          instanceId: ProviderInstanceId.make("customOpenai"),
+          driver: ProviderDriverKind.make("customOpenai"),
+          status: "ready",
+          enabled: true,
+          installed: true,
+          auth: { status: "authenticated" },
+          checkedAt: "2026-07-17T00:00:00.000Z",
+          version: null,
+          models: [model("alpha"), model("removed-by-endpoint")],
+          slashCommands: [],
+          skills: [],
+        } as const satisfies ServerProvider;
+        const settledProbe = {
+          ...previousProvider,
+          checkedAt: "2026-07-17T00:01:00.000Z",
+          models: [model("alpha")],
+        } satisfies ServerProvider;
+        const failedProbe = {
+          ...settledProbe,
+          status: "warning",
+          message: "Could not list models from https://api.example.com/v1.",
+        } satisfies ServerProvider;
+        const pendingFirstProbe = {
+          ...settledProbe,
+          status: "warning",
+          message: "Listing models from the endpoint…",
+        } satisfies ServerProvider;
+
+        assert.deepStrictEqual(
+          mergeProviderSnapshot(previousProvider, settledProbe).models.map((entry) => entry.slug),
+          ["alpha"],
+        );
+        assert.deepStrictEqual(
+          mergeProviderSnapshot(previousProvider, failedProbe).models.map((entry) => entry.slug),
+          ["alpha", "removed-by-endpoint"],
+        );
+        assert.deepStrictEqual(
+          mergeProviderSnapshot(previousProvider, pendingFirstProbe).models.map(
+            (entry) => entry.slug,
+          ),
+          ["alpha", "removed-by-endpoint"],
+        );
+      });
+
       it("classifies pending, logout, uninstall, and reconnect OpenCode inventories", () => {
         const previousProvider = {
           instanceId: ProviderInstanceId.make("opencode"),

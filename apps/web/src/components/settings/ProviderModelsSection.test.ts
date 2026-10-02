@@ -4,12 +4,18 @@ import { describe, expect, it, vi } from "vite-plus/test";
 import { ProviderDriverKind, ProviderInstanceId, type ServerProviderModel } from "@akeru/contracts";
 
 const mocks = vi.hoisted(() => ({
-  buttons: new Map<string, { onClick?: () => void }>(),
+  buttons: new Map<string, { onClick?: (event?: unknown) => void }>(),
+  labelledButtons: new Map<string, { onClick?: (event?: unknown) => void }>(),
 }));
 
 vi.mock("../ui/button", () => ({
-  Button: (props: { children: ReactNode; onClick?: () => void }) => {
+  Button: (props: {
+    children: ReactNode;
+    onClick?: (event?: unknown) => void;
+    "aria-label"?: string;
+  }) => {
     if (typeof props.children === "string") mocks.buttons.set(props.children, props);
+    if (props["aria-label"]) mocks.labelledButtons.set(props["aria-label"], props);
     return null;
   },
 }));
@@ -48,25 +54,30 @@ describe("ProviderModelsSection bulk visibility control", () => {
   function renderSection(input: {
     models: ReadonlyArray<ServerProviderModel>;
     hiddenModels?: ReadonlyArray<string>;
+    customModels?: ReadonlyArray<string>;
   }) {
     mocks.buttons.clear();
+    mocks.labelledButtons.clear();
     const onHiddenModelsChange = vi.fn();
+    const onChange = vi.fn();
     renderToStaticMarkup(
       createElement(ProviderModelsSection, {
         instanceId: ProviderInstanceId.make("codex"),
         driverKind: ProviderDriverKind.make("codex"),
         models: input.models,
-        customModels: input.models.filter((entry) => entry.isCustom).map((entry) => entry.slug),
+        customModels:
+          input.customModels ??
+          input.models.filter((entry) => entry.isCustom).map((entry) => entry.slug),
         hiddenModels: input.hiddenModels ?? [],
         favoriteModels: [],
         modelOrder: [],
-        onChange: vi.fn(),
+        onChange,
         onHiddenModelsChange,
         onFavoriteModelsChange: vi.fn(),
         onModelOrderChange: vi.fn(),
       }),
     );
-    return { onHiddenModelsChange };
+    return { onHiddenModelsChange, onChange };
   }
 
   it("omits the bulk control when every model is custom", () => {
@@ -96,5 +107,24 @@ describe("ProviderModelsSection bulk visibility control", () => {
     expect(mocks.buttons.has("Disable all")).toBe(false);
     mocks.buttons.get("Enable all")?.onClick?.();
     expect(onHiddenModelsChange).toHaveBeenCalledWith(["legacy", "custom"]);
+  });
+
+  it("removes a hand-added model the endpoint also reports", () => {
+    const { onChange } = renderSection({
+      models: [model("gpt-4o-mini"), model("llama-3.3")],
+      customModels: ["gpt-4o-mini"],
+    });
+
+    const remove = mocks.labelledButtons.get("Remove gpt-4o-mini");
+    expect(remove).toBeDefined();
+    // The tooltip trigger wraps the handler, so it reads `nativeEvent` first.
+    remove?.onClick?.({ nativeEvent: {} });
+    expect(onChange).toHaveBeenCalledWith([]);
+  });
+
+  it("leaves catalog-only models without a remove control", () => {
+    renderSection({ models: [model("gpt-4o-mini")], customModels: [] });
+
+    expect(mocks.labelledButtons.has("Remove gpt-4o-mini")).toBe(false);
   });
 });

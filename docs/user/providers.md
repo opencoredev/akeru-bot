@@ -11,6 +11,29 @@ it in **Settings → Providers**.
 An instance configured with its own credentials uses those credentials rather than the shared
 connection. A custom configuration directory alone does not connect an account to Akeru's runtime.
 
+## Custom API endpoints
+
+**Settings > Providers > Custom API** connects Akeru Bot to any OpenAI-compatible HTTP endpoint:
+a self-hosted server (Ollama, llama.cpp, vLLM, LM Studio), a hosted gateway, or a proxy in front of
+other models. There is no account to connect and no sign-in flow.
+
+Set the endpoint root, for example `https://api.openai.com/v1` or `http://localhost:11434/v1`. A base
+URL is enough on its own, so a local server that takes no API key works as-is.
+
+When the endpoint needs a key, add `CUSTOM_OPENAI_API_KEY` under the instance's **Environment
+variables** and leave **Sensitive** on. Sensitive values are stored outside the settings file and are
+never sent back to a client. The key is sent to the configured endpoint as a bearer token.
+
+The model list comes from the endpoint's `/models` response. Models you add by hand are kept alongside
+it, and a model disappears from the picker once the endpoint stops listing it. If Akeru cannot read the
+endpoint, the last successful list stays and the provider row explains what went wrong.
+
+Use **Add instance** on the Custom API page to keep several endpoints side by side, such as a local
+server and a hosted gateway.
+
+The environment sends requests to the URL you configure. Point it only at an endpoint you trust, and
+prefer HTTPS for anything outside your machine.
+
 ## Subscription login health
 
 After a login or API key save completes, the environment server sends one request that costs nothing, to confirm the account can reach its models or usage endpoint. The check runs on the server, so closing the app or losing the connection right after login does not stop it. While it runs, the provider row shows **Checking health…**. It then changes to **Connected** when the request succeeds or **Failed** when it does not. A failed check does not undo a successful login. Repair the provider account, then use **Reconnect** or **Check OAuth**.

@@ -119,6 +119,10 @@ export function ProviderModelsSection({
   const listRef = useRef<HTMLDivElement | null>(null);
   const hiddenModelSet = useMemo(() => new Set(hiddenModels), [hiddenModels]);
   const favoriteModelSet = useMemo(() => new Set(favoriteModels), [favoriteModels]);
+  // A slug can be both hand-added and reported by the endpoint (a catalog that
+  // later gained the model). It renders as one row, and that row still needs the
+  // remove control for the saved entry.
+  const savedCustomModelSet = useMemo(() => new Set(customModels), [customModels]);
   const orderedModels = useMemo(() => {
     return sortModelsForProviderInstance(models, {
       favoriteModels: favoriteModelSet,
@@ -307,7 +311,7 @@ export function ProviderModelsSection({
                 {isHidden ? (
                   <span className="text-[10px] text-muted-foreground">hidden</span>
                 ) : null}
-                {model.isCustom ? (
+                {model.isCustom || savedCustomModelSet.has(model.slug) ? (
                   <span className="text-[10px] text-muted-foreground">custom</span>
                 ) : null}
               </div>
@@ -387,7 +391,7 @@ export function ProviderModelsSection({
                     </TooltipPopup>
                   </Tooltip>
                 ) : null}
-                {model.isCustom ? (
+                {model.isCustom || savedCustomModelSet.has(model.slug) ? (
                   <Tooltip>
                     <TooltipTrigger
                       render={

@@ -84,7 +84,7 @@ the saved connection from the environment.
 
 ## What Akeru runs
 
-Codex, Claude, Grok, Kimi For Coding, and OpenCode Go use Akeru's custom Mastra-based runtime.
+Codex, Claude, Grok, Kimi For Coding, OpenCode Go, and Custom API use Akeru's custom Mastra-based runtime.
 Akeru supplies the workspace, memory, plugins, approval rules, and subscription access for each
 chat.
 
