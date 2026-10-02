@@ -1,4 +1,4 @@
-// @effect-diagnostics nodeBuiltinImport:off - CLI integration exercises Node HTTP and filesystem boundaries.
+import * as Predicate from "effect/Predicate";
 import * as NodeHttp from "node:http";
 import * as NodeFS from "node:fs";
 import * as NodeOS from "node:os";
@@ -33,10 +33,7 @@ import { OrchestrationLayerLive } from "./orchestration/runtimeLayer.ts";
 import { orchestrationHttpApiLayer } from "./orchestration/http.ts";
 import { layerConfig as SqlitePersistenceLayerLive } from "./persistence/Layers/Sqlite.ts";
 import * as RepositoryIdentityResolver from "./project/RepositoryIdentityResolver.ts";
-import {
-  makePersistedServerRuntimeState,
-  persistServerRuntimeState,
-} from "./serverRuntimeState.ts";
+import { persistedServerRuntimeState, persistServerRuntimeState } from "./serverRuntimeState.ts";
 import * as WorkspacePaths from "./workspace/WorkspacePaths.ts";
 import * as ServerSecretStore from "./auth/ServerSecretStore.ts";
 import * as EnvironmentAuth from "./auth/EnvironmentAuth.ts";
@@ -44,25 +41,30 @@ import { environmentAuthenticatedAuthLayer } from "./auth/http.ts";
 import * as ServerEnvironment from "./environment/ServerEnvironment.ts";
 
 const CliRuntimeLayer = Layer.mergeAll(NodeServices.layer, NetService.layer);
+
 class ProjectCliHttpApi extends HttpApi.make("environment").add(EnvironmentOrchestrationHttpApi) {}
 
 const runCli = (args: ReadonlyArray<string>, command = cli) =>
   Command.runWith(command, { version: "0.0.0" })(args);
+
 const runCliWithRuntime = (args: ReadonlyArray<string>) =>
   runCli(args).pipe(Effect.provide(CliRuntimeLayer));
 
 const captureStdout = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
   Effect.gen(function* () {
     const result = yield* effect;
+
     const output =
-      (yield* TestConsole.logLines).findLast((line): line is string => typeof line === "string") ??
+      (yield* TestConsole.logLines).findLast((line): line is string => Predicate.isString(line)) ??
       "";
+
     return { result, output };
   }).pipe(Effect.provide(Layer.mergeAll(CliRuntimeLayer, TestConsole.layer)));
 
 const makeCliTestServerConfig = (baseDir: string) =>
   Effect.gen(function* () {
     const derivedPaths = yield* ServerConfig.deriveServerPaths(baseDir, undefined);
+
     return {
       logLevel: "Info",
       traceMinLevel: "Info",
@@ -106,8 +108,10 @@ const makeProjectPersistenceLayer = (config: ServerConfig.ServerConfig["Service"
 const readPersistedSnapshot = (baseDir: string) =>
   Effect.gen(function* () {
     const config = yield* makeCliTestServerConfig(baseDir);
+
     return yield* Effect.gen(function* () {
       const projectionSnapshotQuery = yield* ProjectionSnapshotQuery.ProjectionSnapshotQuery;
+
       return yield* projectionSnapshotQuery.getSnapshot();
     }).pipe(Effect.provide(makeProjectPersistenceLayer(config)));
   });
@@ -115,10 +119,12 @@ const readPersistedSnapshot = (baseDir: string) =>
 const withLiveProjectCliServer = <A, E, R>(baseDir: string, run: () => Effect.Effect<A, E, R>) =>
   Effect.gen(function* () {
     const config = yield* makeCliTestServerConfig(baseDir);
+
     const routesLayer = HttpApiBuilder.layer(ProjectCliHttpApi).pipe(
       Layer.provide(orchestrationHttpApiLayer),
       Layer.provide(environmentAuthenticatedAuthLayer),
     );
+
     const appLayer = HttpRouter.serve(routesLayer, {
       disableListenLog: true,
       disableLogger: true,
@@ -145,16 +151,19 @@ const withLiveProjectCliServer = <A, E, R>(baseDir: string, run: () => Effect.Ef
       Effect.gen(function* () {
         const server = yield* HttpServer.HttpServer;
         const address = server.address;
-        if (typeof address === "string" || !("port" in address)) {
+
+        if (Predicate.isString(address) || !("port" in address)) {
           assert.fail(`Expected TCP address, got ${address}`);
         }
+
         yield* persistServerRuntimeState({
           path: config.serverRuntimeStatePath,
-          state: yield* makePersistedServerRuntimeState({
+          state: yield* persistedServerRuntimeState({
             config,
             port: address.port,
           }),
         });
+
         return yield* run();
       }).pipe(Effect.provide(Layer.mergeAll(appLayer, NodeServices.layer))),
     );
@@ -176,9 +185,11 @@ it.layer(NodeServices.layer)("bin cli parsing", (it) => {
       if (!CliError.isCliError(error)) {
         assert.fail(`Expected CliError, got ${String(error)}`);
       }
-      if (error._tag !== "InvalidValue") {
+
+      if (!Predicate.isTagged(error, "InvalidValue")) {
         assert.fail(`Expected InvalidValue, got ${error._tag}`);
       }
+
       assert.equal(error.option, "log-level");
       assert.equal(error.value, "Debug");
     }),
@@ -205,22 +216,23 @@ it.layer(NodeServices.layer)("bin cli parsing", (it) => {
       const createdOutput = yield* captureStdout(
         runCli(["auth", "pairing", "create", "--base-dir", baseDir, "--json"]),
       );
-      // @effect-diagnostics-next-line preferSchemaOverJson:off
+
       const created = JSON.parse(createdOutput.output) as {
         readonly id: string;
         readonly credential: string;
       };
+
       const listedOutput = yield* captureStdout(
         runCli(["auth", "pairing", "list", "--base-dir", baseDir, "--json"]),
       );
-      // @effect-diagnostics-next-line preferSchemaOverJson:off
+
       const listed = JSON.parse(listedOutput.output) as ReadonlyArray<{
         readonly id: string;
         readonly credential?: string;
       }>;
 
-      assert.equal(typeof created.id, "string");
-      assert.equal(typeof created.credential, "string");
+      assert.equal(Predicate.isString(created.id), true);
+      assert.equal(Predicate.isString(created.credential), true);
       assert.equal(created.credential.length > 0, true);
       assert.equal(listed.length, 1);
       assert.equal(listed[0]?.id, created.id);
@@ -237,24 +249,25 @@ it.layer(NodeServices.layer)("bin cli parsing", (it) => {
       const issuedOutput = yield* captureStdout(
         runCli(["auth", "session", "issue", "--base-dir", baseDir, "--json"]),
       );
-      // @effect-diagnostics-next-line preferSchemaOverJson:off
+
       const issued = JSON.parse(issuedOutput.output) as {
         readonly sessionId: string;
         readonly token: string;
         readonly scopes: ReadonlyArray<string>;
       };
+
       const listedOutput = yield* captureStdout(
         runCli(["auth", "session", "list", "--base-dir", baseDir, "--json"]),
       );
-      // @effect-diagnostics-next-line preferSchemaOverJson:off
+
       const listed = JSON.parse(listedOutput.output) as ReadonlyArray<{
         readonly sessionId: string;
         readonly token?: string;
         readonly scopes: ReadonlyArray<string>;
       }>;
 
-      assert.equal(typeof issued.sessionId, "string");
-      assert.equal(typeof issued.token, "string");
+      assert.equal(Predicate.isString(issued.sessionId), true);
+      assert.equal(Predicate.isString(issued.token), true);
       assert.deepEqual(issued.scopes, [
         "orchestration:read",
         "orchestration:operate",
@@ -282,14 +295,18 @@ it.layer(NodeServices.layer)("bin cli parsing", (it) => {
       if (!CliError.isCliError(error)) {
         assert.fail(`Expected CliError, got ${String(error)}`);
       }
-      if (error._tag !== "ShowHelp") {
+
+      if (!Predicate.isTagged(error, "ShowHelp")) {
         assert.fail(`Expected ShowHelp, got ${error._tag}`);
       }
+
       assert.deepEqual(error.commandPath, ["akeru", "auth", "pairing", "create"]);
       const ttlError = error.errors[0] as CliError.CliError | undefined;
-      if (!ttlError || ttlError._tag !== "InvalidValue") {
+
+      if (!ttlError || !Predicate.isTagged(ttlError, "InvalidValue")) {
         assert.fail(`Expected InvalidValue, got ${String(ttlError?._tag)}`);
       }
+
       assert.equal(ttlError.option, "ttl");
       assert.equal(ttlError.value, "soon");
       assert.isTrue(ttlError.message.includes("Invalid duration"));
@@ -302,6 +319,7 @@ it.layer(NodeServices.layer)("bin cli parsing", (it) => {
       const baseDir = NodeFS.mkdtempSync(
         NodePath.join(NodeOS.tmpdir(), "t3-cli-projects-offline-test-"),
       );
+
       const workspaceRoot = NodeFS.mkdtempSync(
         NodePath.join(NodeOS.tmpdir(), "t3-cli-projects-workspace-"),
       );
@@ -316,17 +334,21 @@ it.layer(NodeServices.layer)("bin cli parsing", (it) => {
         baseDir,
       ]);
       const afterAdd = yield* readPersistedSnapshot(baseDir);
+
       const addedProject = afterAdd.projects.find(
         (project) => project.workspaceRoot === workspaceRoot && project.deletedAt === null,
       );
+
       assert.isTrue(addedProject !== undefined);
       assert.equal(addedProject?.title, "Alpha");
 
       yield* runCliWithRuntime(["project", "rename", workspaceRoot, "Beta", "--base-dir", baseDir]);
       const afterRename = yield* readPersistedSnapshot(baseDir);
+
       const renamedProject = afterRename.projects.find(
         (project) => project.id === addedProject?.id,
       );
+
       assert.equal(renamedProject?.title, "Beta");
       assert.equal(renamedProject?.deletedAt, null);
 
@@ -338,9 +360,11 @@ it.layer(NodeServices.layer)("bin cli parsing", (it) => {
         baseDir,
       ]);
       const afterRemove = yield* readPersistedSnapshot(baseDir);
+
       const removedProject = afterRemove.projects.find(
         (project) => project.id === addedProject?.id,
       );
+
       assert.isTrue((removedProject?.deletedAt ?? null) !== null);
     }),
   );
@@ -350,15 +374,18 @@ it.layer(NodeServices.layer)("bin cli parsing", (it) => {
       const baseDir = NodeFS.mkdtempSync(
         NodePath.join(NodeOS.tmpdir(), "t3-cli-projects-force-remove-test-"),
       );
+
       const workspaceRoot = NodeFS.mkdtempSync(
         NodePath.join(NodeOS.tmpdir(), "t3-cli-projects-force-remove-workspace-"),
       );
 
       yield* runCliWithRuntime(["project", "add", workspaceRoot, "--base-dir", baseDir]);
       const afterAdd = yield* readPersistedSnapshot(baseDir);
+
       const project = afterAdd.projects.find(
         (candidate) => candidate.workspaceRoot === workspaceRoot && candidate.deletedAt === null,
       );
+
       assert.isTrue(project !== undefined);
 
       const config = yield* makeCliTestServerConfig(baseDir);
@@ -407,6 +434,7 @@ it.layer(NodeServices.layer)("bin cli parsing", (it) => {
       const baseDir = NodeFS.mkdtempSync(
         NodePath.join(NodeOS.tmpdir(), "t3-cli-projects-live-test-"),
       );
+
       const workspaceRoot = NodeFS.mkdtempSync(
         NodePath.join(NodeOS.tmpdir(), "t3-cli-projects-live-workspace-"),
       );
@@ -424,9 +452,11 @@ it.layer(NodeServices.layer)("bin cli parsing", (it) => {
           ]);
           const projectionSnapshotQuery = yield* ProjectionSnapshotQuery.ProjectionSnapshotQuery;
           const readModel = yield* projectionSnapshotQuery.getSnapshot();
+
           const addedProject = readModel.projects.find(
             (project) => project.workspaceRoot === workspaceRoot && project.deletedAt === null,
           );
+
           assert.isTrue(addedProject !== undefined);
           assert.equal(addedProject?.title, "Live Project");
         }),
@@ -439,6 +469,7 @@ it.layer(NodeServices.layer)("bin cli parsing", (it) => {
       const workspaceRoot = NodeFS.mkdtempSync(
         NodePath.join(NodeOS.tmpdir(), "t3-cli-projects-unknown-option-workspace-"),
       );
+
       const error = yield* runCliWithRuntime([
         "project",
         "add",
@@ -450,14 +481,18 @@ it.layer(NodeServices.layer)("bin cli parsing", (it) => {
       if (!CliError.isCliError(error)) {
         assert.fail(`Expected CliError, got ${String(error)}`);
       }
-      if (error._tag !== "ShowHelp") {
+
+      if (!Predicate.isTagged(error, "ShowHelp")) {
         assert.fail(`Expected ShowHelp, got ${error._tag}`);
       }
+
       assert.deepEqual(error.commandPath, ["akeru", "project", "add"]);
       const optionError = error.errors[0] as CliError.CliError | undefined;
-      if (!optionError || optionError._tag !== "UnrecognizedOption") {
+
+      if (!optionError || !Predicate.isTagged(optionError, "UnrecognizedOption")) {
         assert.fail(`Expected UnrecognizedOption, got ${String(optionError?._tag)}`);
       }
+
       assert.equal(optionError.option, "--dev-url");
     }),
   );

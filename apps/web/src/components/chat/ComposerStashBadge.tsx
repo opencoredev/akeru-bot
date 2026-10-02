@@ -23,14 +23,16 @@ export const ComposerStashBadge = memo(function ComposerStashBadge(props: {
   onToggleMenu: () => void;
 }) {
   const { t } = useI18n();
+
   if (props.count === 0) return null;
   const inline = props.placement === "inline";
+
   const count = (
     <ComposerBanner.Count
       key={props.pulseKey}
       className={cn(
         props.pulsing
-          ? "animate-[prompt-stash-count-enter_180ms_ease-out_both] text-primary motion-reduce:animate-none"
+          ? "animate-prompt-stash-count-enter text-primary motion-reduce:animate-none"
           : "text-muted-foreground",
       )}
     >
@@ -46,11 +48,8 @@ export const ComposerStashBadge = memo(function ComposerStashBadge(props: {
         data-prompt-stash-badge="true"
         aria-label={t("Stashed prompts: {count}. Open stash.", { count: props.count })}
         aria-expanded={props.menuOpen}
-        className={cn(
-          "shrink-0 gap-1 px-1.5",
-          (props.menuOpen || props.pulsing) &&
-            "[--control-icon-color:currentColor] text-foreground",
-        )}
+        presentation={props.menuOpen || props.pulsing ? "stash-badge-active" : "stash-badge"}
+        className="shrink-0"
         onPointerDown={(event) => event.preventDefault()}
         onClick={props.onToggleMenu}
       >

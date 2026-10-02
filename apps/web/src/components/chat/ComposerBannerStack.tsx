@@ -7,20 +7,9 @@ import { Alert, AlertAction, AlertDescription, AlertTitle } from "../ui/alert";
 import { Button } from "../ui/button";
 
 const DISMISS_TRANSITION_MS = 220;
-const frontExitStyle = {
-  opacity: 0,
-  transform: "translate3d(0, 4rem, 0)",
-} satisfies CSSProperties;
-const stackedExitStyle = {
-  opacity: 0,
-  transform: "translate3d(0, 7rem, 0)",
-} satisfies CSSProperties;
-const restingStyle = {
-  opacity: 1,
-  transform: "none",
-} satisfies CSSProperties;
-const exitTransitionStyle = {
-  transition: `transform ${DISMISS_TRANSITION_MS}ms ease-in, opacity ${DISMISS_TRANSITION_MS}ms ease-in`,
+
+const dismissalStyle = {
+  "--banner-dismiss-duration": `${DISMISS_TRANSITION_MS}ms`,
 } satisfies CSSProperties;
 
 // The collapsed cap peeking above the front banner is the only hint that more
@@ -44,8 +33,6 @@ export interface ComposerBannerStackItem {
   readonly title: ReactNode;
   readonly description?: ReactNode;
   readonly actions?: ReactNode;
-  readonly className?: string;
-  readonly actionClassName?: string;
   readonly dismissLabel?: string;
   readonly onDismiss?: () => void;
 }
@@ -58,6 +45,7 @@ interface ComposerBannerStackProps {
 export function ComposerBannerStack({ className, items }: ComposerBannerStackProps) {
   const [requestedExitingItemId, setExitingItemId] = useState<string | null>(null);
   const dismissTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   const exitingItemId =
     requestedExitingItemId !== null && items.some((item) => item.id === requestedExitingItemId)
       ? requestedExitingItemId
@@ -76,9 +64,11 @@ export function ComposerBannerStack({ className, items }: ComposerBannerStackPro
   }
 
   const frontItem = items[0];
+
   if (!frontItem) {
     return null;
   }
+
   const stackedItems = items.slice(1);
   const hasStack = stackedItems.length > 0;
   const showCollapsedStackCap = hasStack && exitingItemId !== frontItem.id;
@@ -88,10 +78,13 @@ export function ComposerBannerStack({ className, items }: ComposerBannerStackPro
     if (!item.onDismiss || exitingItemId) {
       return;
     }
+
     setExitingItemId(item.id);
+
     if (dismissTimeoutRef.current) {
       clearTimeout(dismissTimeoutRef.current);
     }
+
     dismissTimeoutRef.current = setTimeout(() => {
       dismissTimeoutRef.current = null;
       item.onDismiss?.();
@@ -112,25 +105,23 @@ export function ComposerBannerStack({ className, items }: ComposerBannerStackPro
         {showCollapsedStackCap && firstStackedItem ? (
           <div
             className={cn(
-              "pointer-events-none absolute inset-x-0 -top-3 z-0 mx-auto h-3 rounded-t-2xl",
-              "chat-composer-banner-stack-cap border border-b-0 shadow-[0_6px_18px_rgba(0,0,0,0.06)]",
+              "pointer-events-none absolute inset-x-0 -top-3 z-0 mx-auto h-3 w-24/25 rounded-t-2xl",
+              "chat-composer-banner-stack-cap border border-b-0 shadow-peek",
               stackCapBorderClass[firstStackedItem.variant],
               "transition-opacity duration-150 ease-out",
               "group-hover/banner-stack:opacity-0 group-focus-within/banner-stack:opacity-0",
             )}
-            style={{ width: "96%" }}
             aria-hidden="true"
           />
         ) : null}
         <div
           className={cn(
-            "relative z-10",
-            exitingItemId === frontItem.id ? "pointer-events-none" : null,
+            "relative z-10 composer-banner-dismissal",
+            exitingItemId === frontItem.id
+              ? "pointer-events-none composer-banner-exit-front"
+              : "opacity-100 transform-none",
           )}
-          style={{
-            ...exitTransitionStyle,
-            ...(exitingItemId === frontItem.id ? frontExitStyle : restingStyle),
-          }}
+          style={dismissalStyle}
         >
           <ComposerBannerStackAlert
             item={frontItem}
@@ -143,15 +134,15 @@ export function ComposerBannerStack({ className, items }: ComposerBannerStackPro
           <div
             data-composer-banner-stack-expanded-items="true"
             className={cn(
-              "relative z-20 grid grid-rows-[0fr] transition-[grid-template-rows] duration-150 ease-out",
-              "group-hover/banner-stack:grid-rows-[1fr] group-focus-within/banner-stack:grid-rows-[1fr]",
+              "relative z-20 grid grid-rows-collapsed transition-grid-rows duration-150 ease-out",
+              "group-hover/banner-stack:grid-rows-expanded group-focus-within/banner-stack:grid-rows-expanded",
             )}
           >
             <div className="min-h-0 overflow-hidden">
               <div
                 className={cn(
                   "invisible pointer-events-none space-y-2 pb-2 opacity-0",
-                  "translate-y-1 transform-gpu transition-[opacity,transform] duration-150 ease-out will-change-[opacity,transform]",
+                  "translate-y-1 transform-gpu transition-transform-opacity duration-150 ease-out will-change-opacity-transform",
                   "group-hover/banner-stack:visible group-hover/banner-stack:pointer-events-auto group-hover/banner-stack:translate-y-0 group-hover/banner-stack:opacity-100",
                   "group-focus-within/banner-stack:visible group-focus-within/banner-stack:pointer-events-auto group-focus-within/banner-stack:translate-y-0 group-focus-within/banner-stack:opacity-100",
                 )}
@@ -159,11 +150,13 @@ export function ComposerBannerStack({ className, items }: ComposerBannerStackPro
                 {stackedItems.map((item) => (
                   <div
                     key={item.id}
-                    className={cn(exitingItemId === item.id ? "pointer-events-none" : null)}
-                    style={{
-                      ...exitTransitionStyle,
-                      ...(exitingItemId === item.id ? stackedExitStyle : restingStyle),
-                    }}
+                    className={cn(
+                      "composer-banner-dismissal",
+                      exitingItemId === item.id
+                        ? "pointer-events-none composer-banner-exit-stacked"
+                        : "opacity-100 transform-none",
+                    )}
+                    style={dismissalStyle}
                   >
                     <ComposerBannerStackAlert
                       item={item}
@@ -195,18 +188,14 @@ function ComposerBannerStackAlert({
 }) {
   const { t } = useI18n();
   const dismissOnly = item.onDismiss && !item.actions;
+
   const visualVariant =
     item.variant === "info" || item.variant === "success" ? "default" : item.variant;
 
   return (
     <Alert
       variant={visualVariant}
-      className={cn(
-        attached
-          ? "chat-composer-drawer-surface chat-composer-drawer-attached px-3 pt-2 pb-[calc(var(--chat-composer-attachment-overlap)_+_0.375rem)] text-xs sm:px-4"
-          : "alert-glass rounded-[22px]",
-        item.className,
-      )}
+      presentation={attached ? "composer-drawer" : "glass"}
       data-variant={visualVariant}
     >
       {item.icon}
@@ -214,12 +203,11 @@ function ComposerBannerStackAlert({
       {item.description ? <AlertDescription>{item.description}</AlertDescription> : null}
       {item.actions || item.onDismiss ? (
         <AlertAction
-          className={cn(
-            item.actionClassName,
+          className={
             dismissOnly
               ? "max-sm:col-start-3 max-sm:row-start-1 max-sm:mt-0 max-sm:self-start"
-              : undefined,
-          )}
+              : undefined
+          }
         >
           {item.actions}
           {item.onDismiss ? (

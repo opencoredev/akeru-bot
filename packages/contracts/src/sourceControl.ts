@@ -13,6 +13,7 @@ export const SourceControlProviderKind = Schema.Literals([
   "bitbucket",
   "unknown",
 ]);
+
 export type SourceControlProviderKind = typeof SourceControlProviderKind.Type;
 
 export const SourceControlProviderInfo = Schema.Struct({
@@ -20,4 +21,5 @@ export const SourceControlProviderInfo = Schema.Struct({
   name: TrimmedNonEmptyString,
   baseUrl: Schema.String,
 });
+
 export type SourceControlProviderInfo = typeof SourceControlProviderInfo.Type;

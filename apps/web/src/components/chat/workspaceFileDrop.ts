@@ -21,6 +21,7 @@ function isFileDrag(event: WorkspaceFileDragEvent): boolean {
 }
 
 function movedWithinDropTarget(event: WorkspaceFileDragEvent): boolean {
+  // SAFETY: DOM drag transitions supply a node as relatedTarget; contains only checks that node against this drop container.
   return event.relatedTarget !== null && event.currentTarget.contains(event.relatedTarget as Node);
 }
 
@@ -29,6 +30,7 @@ export function makeWorkspaceFileDropHandlers(host: WorkspaceFileDropHost) {
     onDragEnter(event: WorkspaceFileDragEvent) {
       if (!isFileDrag(event)) return;
       event.preventDefault();
+
       if (movedWithinDropTarget(event)) return;
       host.setDragActive(true);
     },
@@ -41,6 +43,7 @@ export function makeWorkspaceFileDropHandlers(host: WorkspaceFileDropHost) {
     onDragLeave(event: WorkspaceFileDragEvent) {
       if (!isFileDrag(event)) return;
       event.preventDefault();
+
       if (movedWithinDropTarget(event)) return;
       host.setDragActive(false);
     },

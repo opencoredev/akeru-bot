@@ -1,17 +1,19 @@
-import { EnvironmentId, ThreadId } from "@akeru/contracts";
+import { EnvironmentId, ThreadId, type AssetResource } from "@akeru/contracts";
 import { renderToStaticMarkup } from "react-dom/server";
 import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 const testState = vi.hoisted(() => ({
-  resources: [] as Array<unknown>,
+  resources: [] as Array<AssetResource>,
   assetState: "success" as "success" | "loading",
   imageDimensions: undefined as { width: number; height: number } | undefined,
 }));
 
 vi.mock("@effect/atom-react", () => ({ useAtomValue: () => null }));
+
 vi.mock("../assets/assetUrls", () => ({
-  useAssetUrlState: (_environmentId: unknown, resource: unknown) => {
+  useAssetUrlState: (_environmentId: EnvironmentId, resource: AssetResource) => {
     testState.resources.push(resource);
+
     return testState.assetState === "loading"
       ? { _tag: "Loading" }
       : {
@@ -21,20 +23,27 @@ vi.mock("../assets/assetUrls", () => ({
         };
   },
 }));
+
 vi.mock("../hooks/useTheme", () => ({ useTheme: () => ({ resolvedTheme: "dark" }) }));
+
 vi.mock("../state/use-atom-query-runner", () => ({ useAtomQueryRunner: () => vi.fn() }));
+
 vi.mock("../state/use-atom-command", () => ({ useAtomCommand: () => vi.fn() }));
+
 vi.mock("../state/session", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../state/session")>()),
   usePreparedConnection: () => ({ _tag: "Loading" }),
 }));
+
 vi.mock("../state/entities", () => ({
   readThreadShell: () => null,
   useProjects: () => [],
 }));
+
 vi.mock("../localShellAccess", () => ({
   useLocalShellAccess: () => ({ isLocal: true, isResolved: true }),
 }));
+
 vi.mock("../editorPreferences", () => ({
   useOpenInPreferredEditor: () => vi.fn(),
   usePreferredEditor: () => [null, vi.fn()],
@@ -66,6 +75,7 @@ describe("ChatMarkdown workspace images", () => {
 
   it("loads every Windows workspace path form through a signed asset URL", () => {
     const imagePath = "C:/Users/shawn/project/.t3/workspace-image.svg";
+
     const html = render(
       [
         "![relative](.t3/workspace-image.svg)",
@@ -90,8 +100,8 @@ describe("ChatMarkdown workspace images", () => {
       },
     ]);
     expect(html.match(/https:\/\/signed\.test\/workspace-image\.svg/g)).toHaveLength(4);
-    expect(html.match(/max-w-\[min\(100%,30rem\)\]/g)).toHaveLength(4);
-    expect(html.match(/max-h-\[30rem\]/g)).toHaveLength(4);
+    expect(html.match(/max-w-min-full-30rem/g)).toHaveLength(4);
+    expect(html.match(/max-h-120/g)).toHaveLength(4);
     expect(html).not.toContain("Image unavailable");
   });
 
@@ -122,8 +132,8 @@ describe("ChatMarkdown workspace images", () => {
 
     const html = render("![shot](.t3/workspace-image.svg)");
 
-    expect(html).toContain("width:720px");
-    expect(html).toContain("aspect-ratio:720 / 1400");
+    expect(html).toContain("--image-width:720px");
+    expect(html).toContain("--image-aspect:720 / 1400");
   });
 
   it("never passes a workspace source to a raw image when thread context is unavailable", () => {
@@ -149,8 +159,8 @@ describe("ChatMarkdown workspace images", () => {
 
     expect(testState.resources).toEqual([]);
     expect(html).toContain('src="https://example.com/image.png"');
-    expect(html).toContain("max-w-[min(100%,30rem)]");
-    expect(html).toContain("max-h-[30rem]");
+    expect(html).toContain("max-w-min-full-30rem");
+    expect(html).toContain("max-h-120");
     expect(html).not.toContain("Image unavailable");
   });
 });

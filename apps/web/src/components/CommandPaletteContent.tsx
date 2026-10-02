@@ -12,7 +12,6 @@ type CommandPaletteContentProps = Omit<ComponentProps<typeof Command>, "children
   readonly footerTrailing?: ReactNode;
   readonly inputAccessory?: ReactNode;
   readonly inputProps: ComponentProps<typeof CommandInput>;
-  readonly panelClassName?: string;
   readonly showBackHint?: boolean;
   readonly testId?: string;
 };
@@ -29,12 +28,12 @@ export function CommandPaletteContent({
   footerTrailing,
   inputAccessory,
   inputProps,
-  panelClassName,
   showBackHint,
   testId,
   ...commandProps
 }: CommandPaletteContentProps) {
   const { t } = useI18n();
+
   return (
     <div className="contents" data-testid={testId}>
       <Command {...commandProps}>
@@ -42,7 +41,7 @@ export function CommandPaletteContent({
           <CommandInput {...inputProps} />
           {inputAccessory}
         </div>
-        <CommandPanel className={panelClassName}>{children}</CommandPanel>
+        <CommandPanel className="max-h-(--spacing-min-28rem-70vh)">{children}</CommandPanel>
         <CommandFooter className="gap-3 max-sm:flex-col max-sm:items-start">
           <div className="flex items-center gap-3">
             <KbdGroup className="items-center gap-1.5">

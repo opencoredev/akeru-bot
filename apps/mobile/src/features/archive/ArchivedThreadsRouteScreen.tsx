@@ -21,6 +21,7 @@ export function ArchivedThreadsRouteScreen() {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedEnvironmentId, setSelectedEnvironmentId] = useState<EnvironmentId | null>(null);
   const [sortOrder, setSortOrder] = useState<ArchivedThreadSortOrder>("newest");
+
   const environments = useMemo<ReadonlyArray<ArchivedThreadsHeaderEnvironment>>(
     () =>
       Arr.sort(
@@ -34,10 +35,12 @@ export function ArchivedThreadsRouteScreen() {
       ),
     [savedConnectionsById],
   );
+
   const environmentIds = useMemo(
     () => environments.map((environment) => environment.environmentId),
     [environments],
   );
+
   const environmentLabels = useMemo(
     () =>
       Object.fromEntries(
@@ -45,7 +48,9 @@ export function ArchivedThreadsRouteScreen() {
       ),
     [environments],
   );
+
   const { error, isLoading, refresh, snapshots } = useArchivedThreadSnapshots(environmentIds);
+
   const groups = useMemo(
     () =>
       buildArchivedThreadGroups({
@@ -57,12 +62,14 @@ export function ArchivedThreadsRouteScreen() {
       }),
     [environmentLabels, searchQuery, selectedEnvironmentId, snapshots, sortOrder],
   );
+
   const refreshChangedEnvironment = useCallback(
     (thread: { readonly environmentId: EnvironmentId }) => {
       refreshArchivedThreadsForEnvironment(thread.environmentId);
     },
     [],
   );
+
   const { unarchiveThread, confirmDeleteThread } =
     useArchivedThreadListActions(refreshChangedEnvironment);
 

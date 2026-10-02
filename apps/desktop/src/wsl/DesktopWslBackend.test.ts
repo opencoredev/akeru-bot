@@ -85,16 +85,19 @@ const netLayer = Layer.succeed(NetService.NetService, {
 describe("DesktopWslBackend", () => {
   it.effect("clears the stored preflight error when a registered WSL backend becomes ready", () => {
     let registeredSpec: DesktopBackendPool.BackendInstanceSpec | undefined;
+
     const primary = makeStubInstance({
       id: DesktopBackendPool.PRIMARY_INSTANCE_ID,
       label: "Windows",
       snapshot: primarySnapshot,
     });
+
     const wsl = makeStubInstance({
       id: DesktopBackendPool.BackendInstanceId("wsl:Ubuntu"),
       label: "WSL (Ubuntu)",
       snapshot: primarySnapshot,
     });
+
     const poolLayer = Layer.succeed(DesktopBackendPool.DesktopBackendPool, {
       get: (id) =>
         Effect.succeed(
@@ -107,6 +110,7 @@ describe("DesktopWslBackend", () => {
       register: (spec) =>
         Effect.sync(() => {
           registeredSpec = spec;
+
           return wsl;
         }),
       unregister: () => Effect.die("unexpected unregister"),
@@ -118,13 +122,16 @@ describe("DesktopWslBackend", () => {
       yield* backend.reconcile;
       const spec = registeredSpec;
       assert.isDefined(spec);
+
       if (spec === undefined) {
         throw new Error("Expected WSL backend registration");
       }
+
       const recordFailure = spec.onPreflightFailed;
       const clearFailure = spec.onReady;
       assert.isDefined(recordFailure);
       assert.isDefined(clearFailure);
+
       if (recordFailure === undefined || clearFailure === undefined) {
         throw new Error("Expected WSL backend callbacks");
       }
@@ -157,11 +164,13 @@ describe("DesktopWslBackend", () => {
 
   it.effect("retries an unchanged WSL instance when it is idle after failed preflight", () => {
     let startCount = 0;
+
     const primary = makeStubInstance({
       id: DesktopBackendPool.PRIMARY_INSTANCE_ID,
       label: "Windows",
       snapshot: primarySnapshot,
     });
+
     const wsl = makeStubInstance({
       id: DesktopBackendPool.BackendInstanceId("wsl:Ubuntu"),
       label: "WSL (Ubuntu)",

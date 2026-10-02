@@ -1,4 +1,4 @@
-// @effect-diagnostics nodeBuiltinImport:off preferSchemaOverJson:off
+import * as Predicate from "effect/Predicate";
 import * as NodePath from "node:path";
 import { NodeServices } from "@effect/platform-node";
 import { describe, expect, it } from "@effect/vitest";
@@ -16,9 +16,10 @@ import * as Harness from "../provider/AkeruMastraHarness.ts";
 import { resolveAttachmentPath } from "../attachmentStore.ts";
 
 const { generate, agents } = vi.hoisted(() => ({ generate: vi.fn(), agents: vi.fn() }));
+
 vi.mock("@mastra/core/agent", () => ({
   Agent: class {
-    constructor(options: unknown) {
+    constructor(options: ConstructorParameters<typeof import("@mastra/core/agent").Agent>[0]) {
       agents(options);
     }
     generate = generate;
@@ -38,6 +39,7 @@ describe("HarnessTextGeneration", () => {
         Effect.gen(function* () {
           const config = yield* ServerConfig;
           const instanceId = ProviderInstanceId.make("codex");
+
           const writer = yield* makeHarnessTextGeneration({
             secretsDir: config.secretsDir,
             driver: ProviderDriverKind.make("codex"),
@@ -48,29 +50,36 @@ describe("HarnessTextGeneration", () => {
               useSavedCredential: true,
             },
           });
+
           const started = Promise.withResolvers<AbortSignal>();
           generate.mockImplementationOnce((_message, options) => {
             started.resolve(options.abortSignal);
+
             return new Promise(() => {});
           });
+
           const input = {
             cwd: config.cwd,
             message: "Fix this",
             modelSelection: { instanceId, model: "gpt-6-sol" },
           };
+
           const request =
             operation === "generateThreadTitle"
               ? writer.generateThreadTitle(input).pipe(Effect.asVoid)
               : writer.generateBranchName(input).pipe(Effect.asVoid);
+
           const fiber = yield* request.pipe(
             Effect.flip,
             Effect.forkChild({ startImmediately: true }),
           );
+
           const signal = yield* Effect.tryPromise({
             try: () => started.promise,
             catch: (cause) =>
               new TextGenerationError({ operation, detail: "Generation did not start.", cause }),
           });
+
           yield* TestClock.adjust("180 seconds");
           expect(yield* Fiber.join(fiber)).toMatchObject({
             _tag: "TextGenerationError",
@@ -94,6 +103,7 @@ describe("HarnessTextGeneration", () => {
       Effect.gen(function* () {
         const config = yield* ServerConfig;
         const instanceId = ProviderInstanceId.make("claudeAgent");
+
         const writer = yield* makeHarnessTextGeneration({
           secretsDir: config.secretsDir,
           driver: ProviderDriverKind.make("claudeAgent"),
@@ -104,6 +114,7 @@ describe("HarnessTextGeneration", () => {
             useSavedCredential: true,
           },
         });
+
         const request = {
           cwd: config.cwd,
           message: "Fix this",
@@ -116,6 +127,7 @@ describe("HarnessTextGeneration", () => {
             ],
           },
         };
+
         generate.mockResolvedValueOnce({ text: '{"title":"Fix This"}' });
         yield* writer.generateThreadTitle(request);
         generate.mockResolvedValueOnce({ text: '{"branch":"fix-this"}' });
@@ -143,6 +155,7 @@ describe("HarnessTextGeneration", () => {
       Effect.gen(function* () {
         const config = yield* ServerConfig;
         const instanceId = ProviderInstanceId.make("codex");
+
         const writer = yield* makeHarnessTextGeneration({
           secretsDir: config.secretsDir,
           driver: ProviderDriverKind.make("codex"),
@@ -153,6 +166,7 @@ describe("HarnessTextGeneration", () => {
             useSavedCredential: true,
           },
         });
+
         const request = {
           cwd: config.cwd,
           message: "Fix this",
@@ -165,11 +179,12 @@ describe("HarnessTextGeneration", () => {
             sizeBytes: 4,
           })),
         };
+
         generate.mockResolvedValueOnce({ text: '{"title":"Fix This"}' });
         expect(yield* writer.generateThreadTitle(request)).toEqual({ title: "Fix This" });
         generate.mockResolvedValueOnce({ text: '{"branch":"fix-this"}' });
         expect(yield* writer.generateBranchName(request)).toEqual({ branch: "fix-this" });
-        expect(generate.mock.calls.every((call) => typeof call[0] === "string")).toBe(true);
+        expect(generate.mock.calls.every((call) => Predicate.isString(call[0]))).toBe(true);
       }),
     ).pipe(
       Effect.provide(
@@ -194,6 +209,7 @@ describe("HarnessTextGeneration", () => {
             const fs = yield* FileSystem.FileSystem;
             yield* fs.makeDirectory(config.secretsDir, { recursive: true });
             const instanceId = ProviderInstanceId.make(driver);
+
             const textGeneration = yield* makeHarnessTextGeneration({
               secretsDir: config.secretsDir,
               driver: ProviderDriverKind.make(driver),
@@ -204,15 +220,18 @@ describe("HarnessTextGeneration", () => {
                 useSavedCredential: true,
               },
             });
+
             yield* fs.writeFileString(
               NodePath.join(config.secretsDir, "subscription-auth.json"),
               JSON.stringify({ [provider]: { type: "api-key", access: "saved-test-key" } }),
             );
+
             const request = {
               cwd: config.cwd,
               message: "Fix provider onboarding",
               modelSelection: { instanceId, model },
             };
+
             generate.mockResolvedValueOnce({ text: '{"title":"Fix Provider Onboarding"}' });
             expect(yield* textGeneration.generateThreadTitle(request)).toEqual({
               title: "Fix Provider Onboarding",
@@ -242,6 +261,7 @@ describe("HarnessTextGeneration", () => {
         const config = yield* ServerConfig;
         const resolver = vi.spyOn(Harness, "resolveAkeruMastraModel");
         const instanceId = ProviderInstanceId.make("codex");
+
         const writer = yield* makeHarnessTextGeneration({
           secretsDir: config.secretsDir,
           driver: ProviderDriverKind.make("codex"),
@@ -252,6 +272,7 @@ describe("HarnessTextGeneration", () => {
             useSavedCredential: true,
           },
         });
+
         const request = {
           cwd: config.cwd,
           message: "Fix provider onboarding",
@@ -264,6 +285,7 @@ describe("HarnessTextGeneration", () => {
             ],
           },
         };
+
         generate.mockResolvedValueOnce({ text: '{"title":"Provider Onboarding"}' });
         yield* writer.generateThreadTitle(request);
         generate.mockResolvedValueOnce({ text: '{"branch":"provider-onboarding"}' });
@@ -310,6 +332,7 @@ describe("HarnessTextGeneration", () => {
         const config = yield* ServerConfig;
         const fs = yield* FileSystem.FileSystem;
         const instanceId = ProviderInstanceId.make("codex");
+
         const image = {
           type: "image" as const,
           id: "chat-12345678-1234-1234-1234-123456789abc",
@@ -317,14 +340,17 @@ describe("HarnessTextGeneration", () => {
           mimeType: "image/png",
           sizeBytes: 4,
         };
+
         const imagePath = resolveAttachmentPath({
           attachmentsDir: config.attachmentsDir,
           attachment: image,
         });
+
         expect(imagePath).not.toBeNull();
         yield* fs.makeDirectory(config.attachmentsDir, { recursive: true });
         const bytes = new Uint8Array([137, 80, 78, 71]);
         yield* fs.writeFile(imagePath!, bytes);
+
         const writer = yield* makeHarnessTextGeneration({
           secretsDir: config.secretsDir,
           driver: ProviderDriverKind.make("codex"),
@@ -335,6 +361,7 @@ describe("HarnessTextGeneration", () => {
             useSavedCredential: true,
           },
         });
+
         const request = {
           cwd: config.cwd,
           message: "fix this",
@@ -345,10 +372,12 @@ describe("HarnessTextGeneration", () => {
           ],
           modelSelection: { instanceId, model: "gpt-6-sol" },
         };
+
         generate.mockResolvedValueOnce({ text: '{"title":"Repair Screenshot Layout"}' });
         yield* writer.generateThreadTitle(request);
         generate.mockResolvedValueOnce({ text: '{"branch":"repair-screenshot-layout"}' });
         yield* writer.generateBranchName(request);
+
         for (const call of generate.mock.calls) {
           expect(call[0]).toEqual([
             {
@@ -376,6 +405,7 @@ describe("HarnessTextGeneration", () => {
       Effect.gen(function* () {
         const config = yield* ServerConfig;
         const instanceId = ProviderInstanceId.make("codex_custom");
+
         const textGeneration = yield* makeHarnessTextGeneration({
           secretsDir: config.secretsDir,
           driver: ProviderDriverKind.make("codex"),
@@ -386,7 +416,9 @@ describe("HarnessTextGeneration", () => {
             useSavedCredential: false,
           },
         });
+
         generate.mockResolvedValueOnce({ text: "not JSON" });
+
         const error = yield* textGeneration
           .generateThreadTitle({
             cwd: config.cwd,
@@ -394,6 +426,7 @@ describe("HarnessTextGeneration", () => {
             modelSelection: { instanceId, model: "gpt-6-sol" },
           })
           .pipe(Effect.flip);
+
         expect(error).toMatchObject({
           _tag: "TextGenerationError",
           operation: "generateThreadTitle",

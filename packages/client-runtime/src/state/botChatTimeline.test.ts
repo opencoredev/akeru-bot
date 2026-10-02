@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import {
   BotId,
   DelegationId,
@@ -204,8 +205,8 @@ describe("botChatTimeline", () => {
       "message:user-2",
       "message:bot-2",
     ]);
-    expect(entries.flatMap((entry) => (entry._tag === "Message" ? [entry.index] : []))).toEqual([
-      0, 1, 2, 3,
-    ]);
+    expect(
+      entries.flatMap((entry) => (Predicate.isTagged(entry, "Message") ? [entry.index] : [])),
+    ).toEqual([0, 1, 2, 3]);
   });
 });

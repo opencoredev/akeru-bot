@@ -1,3 +1,4 @@
+import { registeredProviderDriver } from "../registeredProviderDriver.ts";
 /**
  * Multi-instance validation slices for `ProviderInstanceRegistryLive`.
  *
@@ -23,146 +24,43 @@
  * behaviour rather than the runtime details of each provider.
  */
 import { describe, expect, it } from "@effect/vitest";
-import * as NodeServices from "@effect/platform-node/NodeServices";
 import {
-  type ClaudeSettings,
-  type CodexSettings,
-  type GrokSettings,
-  type KimiSettings,
-  type OpenCodeSettings,
   ProviderDriverKind,
   type ProviderInstanceConfigMap,
   ProviderInstanceId,
-  ThreadId,
 } from "@akeru/contracts";
-import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as Context from "effect/Context";
 import * as Layer from "effect/Layer";
-import * as Stream from "effect/Stream";
-import { HttpClient, HttpClientResponse } from "effect/unstable/http";
-
-import * as BackgroundPolicy from "../../background/BackgroundPolicy.ts";
 import type { BuiltInDriversEnv } from "../builtInDrivers.ts";
-import { ServerConfig } from "../../config.ts";
-import { ServerSettingsService } from "../../serverSettings.ts";
 import { ClaudeDriver } from "../Drivers/ClaudeDriver.ts";
 import { CodexDriver } from "../Drivers/CodexDriver.ts";
 import { GrokDriver } from "../Drivers/GrokDriver.ts";
 import { KimiDriver } from "../Drivers/KimiDriver.ts";
 import { OpenCodeDriver } from "../Drivers/OpenCodeDriver.ts";
-import * as ModelManifest from "../ModelManifest.ts";
 import { LegacyProviderBridgeLive } from "./LegacyProviderBridge.ts";
 import { LegacyProviderBridge } from "../Services/LegacyProviderBridge.ts";
 import { ProviderAdapterRegistry, makeProviderAdapterRegistry } from "./ProviderAdapterRegistry.ts";
 import { ProviderInstanceRegistry } from "../Services/ProviderInstanceRegistry.ts";
-import { makeProviderServiceLive } from "./ProviderService.ts";
+import { providerServiceLayerWith } from "./ProviderService.ts";
 import { ProviderSessionDirectoryLive } from "./ProviderSessionDirectory.ts";
 import * as ProviderSessionRuntime from "../../persistence/ProviderSessionRuntime.ts";
 import { SqlitePersistenceMemory } from "../../persistence/Layers/Sqlite.ts";
-
-import { OpenCodeRuntimeLive } from "../opencodeRuntime.ts";
-import { NoOpProviderEventLoggers, ProviderEventLoggers } from "./ProviderEventLoggers.ts";
 import { makeProviderInstanceRegistry } from "./ProviderInstanceRegistryLive.ts";
-
-const TestHttpClientLive = Layer.succeed(
-  HttpClient.HttpClient,
-  HttpClient.make((request) =>
-    Effect.succeed(HttpClientResponse.fromWeb(request, Response.json({ version: "0.0.0" }))),
-  ),
-);
-
-const TEST_EPOCH = DateTime.makeUnsafe("1970-01-01T00:00:00.000Z");
-
-const BackgroundPolicyAlwaysRunLayer = Layer.mock(BackgroundPolicy.BackgroundPolicy)({
-  reportClientActivity: () => Effect.void,
-  removeRpcClient: () => Effect.void,
-  reportHostPowerState: () => Effect.void,
-  snapshot: Effect.succeed({
-    hostPower: {
-      source: "unknown",
-      idle: "unknown",
-      idleSeconds: null,
-      locked: "unknown",
-      suspended: false,
-      onBattery: "unknown",
-      lowPowerMode: "unknown",
-      thermalState: "unknown",
-      stale: true,
-      updatedAt: TEST_EPOCH,
-    },
-    leases: [],
-    activeForegroundLeaseCount: 0,
-    activeScopeKeys: [],
-    shouldRunOpportunisticWork: true,
-    updatedAt: TEST_EPOCH,
-  }),
-  streamChanges: Stream.empty,
-  hasDemand: () => Effect.succeed(true),
-  shouldRunScopeWork: () => Effect.succeed(true),
-  shouldRunOpportunisticWork: Effect.succeed(true),
-});
-
-const makeCodexConfig = (overrides: Partial<CodexSettings>): CodexSettings => ({
-  enabled: false,
-  binaryPath: "codex",
-  homePath: "",
-  shadowHomePath: "",
-  launchArgs: "",
-  customModels: [],
-  ...overrides,
-});
-
-const makeClaudeConfig = (overrides: Partial<ClaudeSettings>): ClaudeSettings => ({
-  enabled: false,
-  binaryPath: "claude",
-  homePath: "",
-  customModels: [],
-  launchArgs: "",
-  autoCompactWindow: "",
-  ...overrides,
-});
-
-const makeGrokConfig = (overrides: Partial<GrokSettings>): GrokSettings => ({
-  enabled: false,
-  binaryPath: "grok",
-  customModels: [],
-  verboseProtocolLogging: false,
-  ...overrides,
-});
-
-const makeKimiConfig = (overrides: Partial<KimiSettings>): KimiSettings => ({
-  enabled: false,
-  customModels: [],
-  ...overrides,
-});
-
-const makeOpenCodeConfig = (overrides: Partial<OpenCodeSettings>): OpenCodeSettings => ({
-  enabled: false,
-  binaryPath: "opencode",
-  serverUrl: "",
-  serverPassword: "",
-  customModels: [],
-  ...overrides,
-});
+import {
+  makeCodexConfig,
+  makeClaudeConfig,
+  makeGrokConfig,
+  makeKimiConfig,
+  makeOpenCodeConfig,
+  testLayer,
+  allDriversTestLayer,
+  kimiTestLayer,
+  kimiId,
+  kimiThread,
+} from "./test-support/providerInstances.ts";
 
 describe("ProviderInstanceRegistryLive — multi-instance codex slice", () => {
-  // `ServerConfig.layerTest` needs `FileSystem` to materialize its scratch
-  // directory. `Layer.merge` just unions requirements, so we have to push
-  // `NodeServices.layer` through `Layer.provideMerge` to satisfy that
-  // dependency while still surfacing NodeServices to the test body (the
-  // codex driver's `create` yields `ChildProcessSpawner` directly).
-  const testLayer = ServerConfig.layerTest(process.cwd(), {
-    prefix: "provider-instance-registry-test",
-  }).pipe(
-    Layer.provideMerge(NodeServices.layer),
-    Layer.provideMerge(BackgroundPolicyAlwaysRunLayer),
-    Layer.provideMerge(ServerSettingsService.layerTest()),
-    Layer.provideMerge(TestHttpClientLive),
-    Layer.provideMerge(Layer.succeed(ProviderEventLoggers, NoOpProviderEventLoggers)),
-    Layer.provideMerge(ModelManifest.layerTest),
-  );
-
   it.live("boots two independent codex instances from a ProviderInstanceConfigMap", () =>
     Effect.gen(function* () {
       const personalId = ProviderInstanceId.make("codex_personal");
@@ -193,7 +91,7 @@ describe("ProviderInstanceRegistryLive — multi-instance codex slice", () => {
       };
 
       const { registry } = yield* makeProviderInstanceRegistry({
-        drivers: [CodexDriver],
+        drivers: [registeredProviderDriver(CodexDriver)],
         configMap,
       });
 
@@ -238,12 +136,15 @@ describe("ProviderInstanceRegistryLive — multi-instance codex slice", () => {
       expect(unavailable).toEqual([]);
     }).pipe(Effect.provide(testLayer)),
   );
+});
 
+describe("ProviderInstanceRegistryLive — multi-instance codex slice", () => {
   it.live("treats an explicit in-config enabled:false as disabling despite the envelope", () =>
     Effect.gen(function* () {
       // Old settings files can carry both flags with conflicting values.
       // The explicit false must win so a user's disable is never undone.
       const staleId = ProviderInstanceId.make("codex_stale");
+
       const configMap: ProviderInstanceConfigMap = {
         [staleId]: {
           driver: ProviderDriverKind.make("codex"),
@@ -253,7 +154,7 @@ describe("ProviderInstanceRegistryLive — multi-instance codex slice", () => {
       };
 
       const { registry } = yield* makeProviderInstanceRegistry({
-        drivers: [CodexDriver],
+        drivers: [registeredProviderDriver(CodexDriver)],
         configMap,
       });
 
@@ -264,10 +165,13 @@ describe("ProviderInstanceRegistryLive — multi-instance codex slice", () => {
       expect(snapshot.enabled).toBe(false);
     }).pipe(Effect.provide(testLayer)),
   );
+});
 
+describe("ProviderInstanceRegistryLive — multi-instance codex slice", () => {
   it.live("blocks dispatch after disable without awaiting the provider promise", () =>
     Effect.gen(function* () {
       const instanceId = ProviderInstanceId.make("codex_atomic");
+
       const enabledConfig: ProviderInstanceConfigMap = {
         [instanceId]: {
           driver: ProviderDriverKind.make("codex"),
@@ -275,6 +179,7 @@ describe("ProviderInstanceRegistryLive — multi-instance codex slice", () => {
           config: makeCodexConfig({ enabled: true }),
         },
       };
+
       const disabledConfig: ProviderInstanceConfigMap = {
         [instanceId]: {
           driver: ProviderDriverKind.make("codex"),
@@ -282,39 +187,49 @@ describe("ProviderInstanceRegistryLive — multi-instance codex slice", () => {
           config: makeCodexConfig({ enabled: false }),
         },
       };
+
       const { registry, mutator } = yield* makeProviderInstanceRegistry({
-        drivers: [CodexDriver],
+        drivers: [registeredProviderDriver(CodexDriver)],
         configMap: enabledConfig,
       });
+
       let dispatchCalls = 0;
       let resolveDispatch!: () => void;
+
       const pendingDispatch = new Promise<void>((resolve) => {
         resolveDispatch = resolve;
       });
 
       const admitted = yield* registry.dispatchIfEnabled(instanceId, () => {
         dispatchCalls += 1;
+
         return pendingDispatch;
       });
+
       expect(admitted._tag).toBe("Dispatched");
       expect(dispatchCalls).toBe(1);
 
       yield* mutator.reconcile(disabledConfig);
+
       const disabled = yield* registry.dispatchIfEnabled(instanceId, () => {
         dispatchCalls += 1;
       });
+
       expect(disabled._tag).toBe("Disabled");
       expect(dispatchCalls).toBe(1);
 
       const missing = yield* registry.dispatchIfEnabled(ProviderInstanceId.make("missing"), () => {
         dispatchCalls += 1;
       });
+
       expect(missing._tag).toBe("Missing");
       expect(dispatchCalls).toBe(1);
       resolveDispatch();
     }).pipe(Effect.provide(testLayer)),
   );
+});
 
+describe("ProviderInstanceRegistryLive — multi-instance codex slice", () => {
   it.live(
     "shadows instances whose driver is not registered in this build without failing boot",
     () =>
@@ -337,7 +252,7 @@ describe("ProviderInstanceRegistryLive — multi-instance codex slice", () => {
         };
 
         const { registry } = yield* makeProviderInstanceRegistry({
-          drivers: [CodexDriver],
+          drivers: [registeredProviderDriver(CodexDriver)],
           configMap,
         });
 
@@ -357,30 +272,6 @@ describe("ProviderInstanceRegistryLive — multi-instance codex slice", () => {
 });
 
 describe("ProviderInstanceRegistryLive — all drivers slice", () => {
-  // All drivers need `NodeServices` (ChildProcessSpawner + FileSystem +
-  // Path). `OpenCodeDriver.create` additionally yields `OpenCodeRuntime`
-  // at construction time, so we wire `OpenCodeRuntimeLive` into the stack.
-  // `OpenCodeRuntimeLive` bundles its own `NetService.layer` via
-  // `Layer.provide`, so the only external requirement it still exposes is
-  // `ChildProcessSpawner` — resolved here by piping it through
-  // `provideMerge(NodeServices.layer)`.
-  //
-  // The nested `provideMerge`s read bottom-up: `NodeServices.layer`
-  // provides `OpenCodeRuntimeLive`'s deps while keeping its own outputs
-  // surfaced; that merged layer then provides `ServerConfig.layerTest`'s
-  // `FileSystem` dep while keeping everything else surfaced to the test.
-  const infraLayer = OpenCodeRuntimeLive.pipe(Layer.provideMerge(NodeServices.layer));
-  const testLayer = ServerConfig.layerTest(process.cwd(), {
-    prefix: "provider-instance-registry-all-drivers-test",
-  }).pipe(
-    Layer.provideMerge(infraLayer),
-    Layer.provideMerge(BackgroundPolicyAlwaysRunLayer),
-    Layer.provideMerge(ServerSettingsService.layerTest()),
-    Layer.provideMerge(TestHttpClientLive),
-    Layer.provideMerge(Layer.succeed(ProviderEventLoggers, NoOpProviderEventLoggers)),
-    Layer.provideMerge(ModelManifest.layerTest),
-  );
-
   it.live("boots one instance of every shipped driver from a single config map", () =>
     Effect.gen(function* () {
       const codexId = ProviderInstanceId.make("codex_default");
@@ -432,7 +323,13 @@ describe("ProviderInstanceRegistryLive — all drivers slice", () => {
       };
 
       const { registry } = yield* makeProviderInstanceRegistry<BuiltInDriversEnv>({
-        drivers: [CodexDriver, ClaudeDriver, GrokDriver, KimiDriver, OpenCodeDriver],
+        drivers: [
+          registeredProviderDriver(CodexDriver),
+          registeredProviderDriver(ClaudeDriver),
+          registeredProviderDriver(GrokDriver),
+          registeredProviderDriver(KimiDriver),
+          registeredProviderDriver(OpenCodeDriver),
+        ],
         configMap,
       });
 
@@ -470,16 +367,20 @@ describe("ProviderInstanceRegistryLive — all drivers slice", () => {
         expect(instance.adapter).toBeUndefined();
         expect(instance.mastraConnection).toBeDefined();
       }
+
       expect(openCode!.adapter).toBeDefined();
+
       const textGenerations = [
         codex!.textGeneration,
         claude!.textGeneration,
         grok!.textGeneration,
         openCode!.textGeneration,
       ];
+
       expect(new Set(textGenerations).size).toBe(textGenerations.length);
       expect(kimi!.adapter).toBeUndefined();
       expect(kimi!.textGeneration).toBeUndefined();
+
       const snapshots = [
         codex!.snapshot,
         claude!.snapshot,
@@ -487,6 +388,7 @@ describe("ProviderInstanceRegistryLive — all drivers slice", () => {
         kimi!.snapshot,
         openCode!.snapshot,
       ];
+
       expect(new Set(snapshots).size).toBe(snapshots.length);
 
       // Snapshots identify themselves by `instanceId` + `driver` so
@@ -526,34 +428,11 @@ describe("ProviderInstanceRegistryLive — all drivers slice", () => {
       expect(openCodeSnapshot.continuation?.groupKey).toBe(
         `${openCodeDriverKind}:instance:${openCodeId}`,
       );
-    }).pipe(Effect.provide(testLayer)),
+    }).pipe(Effect.provide(allDriversTestLayer)),
   );
 });
 
 describe("ProviderInstanceRegistryLive — Kimi never reaches the legacy bridge", () => {
-  // The legacy turn path is `AgentController` → `LegacyProviderBridge` →
-  // `ProviderService` → `ProviderAdapterRegistry.getByInstance` → the
-  // instance's `adapter`. Mastra-native drivers ship `adapter: undefined`,
-  // so the only thing that can carry a Kimi session or turn down the
-  // bridge is a registry defect. This block boots the real stack — real
-  // `KimiDriver` through `ProviderInstanceRegistry`, the real
-  // `ProviderAdapterRegistry` facade, the real `ProviderService`, and the
-  // real `LegacyProviderBridgeLive` layer — and asserts every legacy entry
-  // point fails closed instead of driving a turn.
-  const kimiId = ProviderInstanceId.make("kimi_default");
-  const kimiThread = ThreadId.make("thread-registry-kimi");
-
-  const testLayer = ServerConfig.layerTest(process.cwd(), {
-    prefix: "provider-instance-registry-kimi-no-bridge-test",
-  }).pipe(
-    Layer.provideMerge(NodeServices.layer),
-    Layer.provideMerge(BackgroundPolicyAlwaysRunLayer),
-    Layer.provideMerge(ServerSettingsService.layerTest()),
-    Layer.provideMerge(TestHttpClientLive),
-    Layer.provideMerge(Layer.succeed(ProviderEventLoggers, NoOpProviderEventLoggers)),
-    Layer.provideMerge(ModelManifest.layerTest),
-  );
-
   it.live("fails closed through ProviderService and LegacyProviderBridge", () =>
     Effect.gen(function* () {
       const configMap: ProviderInstanceConfigMap = {
@@ -566,7 +445,7 @@ describe("ProviderInstanceRegistryLive — Kimi never reaches the legacy bridge"
       };
 
       const { registry } = yield* makeProviderInstanceRegistry({
-        drivers: [KimiDriver],
+        drivers: [registeredProviderDriver(KimiDriver)],
         configMap,
       });
 
@@ -585,6 +464,7 @@ describe("ProviderInstanceRegistryLive — Kimi never reaches the legacy bridge"
         ProviderInstanceRegistry,
         registry,
       );
+
       const lookup = yield* adapterRegistry.getByInstance(kimiId).pipe(Effect.flip);
       expect(lookup._tag).toBe("ProviderUnsupportedError");
       const info = yield* adapterRegistry.getInstanceInfo(kimiId);
@@ -599,7 +479,7 @@ describe("ProviderInstanceRegistryLive — Kimi never reaches the legacy bridge"
       const bridgeContext = yield* Layer.build(
         LegacyProviderBridgeLive.pipe(
           Layer.provide(
-            makeProviderServiceLive().pipe(
+            providerServiceLayerWith().pipe(
               Layer.provide(Layer.succeed(ProviderAdapterRegistry, adapterRegistry)),
               Layer.provide(
                 ProviderSessionDirectoryLive.pipe(
@@ -612,6 +492,7 @@ describe("ProviderInstanceRegistryLive — Kimi never reaches the legacy bridge"
           ),
         ),
       );
+
       const bridge = Context.get(bridgeContext, LegacyProviderBridge);
 
       const startError = yield* bridge
@@ -622,6 +503,7 @@ describe("ProviderInstanceRegistryLive — Kimi never reaches the legacy bridge"
           runtimeMode: "full-access",
         })
         .pipe(Effect.flip);
+
       expect(startError._tag).toBe("ProviderUnsupportedError");
 
       // The directory never saw a binding, so sendTurn fails closed at
@@ -629,15 +511,17 @@ describe("ProviderInstanceRegistryLive — Kimi never reaches the legacy bridge"
       const sendError = yield* bridge
         .sendTurn({ threadId: kimiThread, input: "This must never reach a provider." })
         .pipe(Effect.flip);
+
       expect(sendError._tag).toBe("ProviderValidationError");
 
       const interruptError = yield* bridge
         .interruptTurn({ threadId: kimiThread })
         .pipe(Effect.flip);
+
       expect(interruptError._tag).toBe("ProviderValidationError");
 
       const sessions = yield* bridge.listSessions();
       expect(sessions).toEqual([]);
-    }).pipe(Effect.provide(testLayer)),
+    }).pipe(Effect.provide(kimiTestLayer)),
   );
 });

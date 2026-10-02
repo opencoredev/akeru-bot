@@ -1,4 +1,3 @@
-// @effect-diagnostics nodeBuiltinImport:off preferSchemaOverJson:off
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { describe, expect, it } from "@effect/vitest";
 import { ProviderInstanceId } from "@akeru/contracts";
@@ -117,6 +116,7 @@ const writeFakeGrokCli = (input: {
         ],
       }),
     );
+
     const inspectCase =
       input.inspect === "fail"
         ? "  inspect) exit 1;;"
@@ -127,6 +127,7 @@ const writeFakeGrokCli = (input: {
             "    fi",
             `    cat ${shellQuote(machineSkillsPath)}; exit 0;;`,
           ].join("\n");
+
     yield* fs.writeFileString(
       grokPath,
       [
@@ -142,6 +143,7 @@ const writeFakeGrokCli = (input: {
       ].join("\n"),
     );
     yield* fs.chmod(grokPath, 0o755);
+
     return grokPath;
   });
 
@@ -160,9 +162,11 @@ it.layer(grokDriverTestLayer)("GrokDriver.snapshotForCwd", (it) => {
       Effect.scoped(
         Effect.gen(function* () {
           const fs = yield* FileSystem.FileSystem;
+
           const workspaceCwd = yield* fs.makeTempDirectoryScoped({
             prefix: "akeru-grok-disabled-workspace-",
           });
+
           const grokPath = yield* writeFakeGrokCli({ workspaceCwd, inspect: "fail" });
           const instance = yield* createGrokInstance({ enabled: false, binaryPath: grokPath });
           expect(instance.snapshotForCwd).toBeTypeOf("function");
@@ -180,9 +184,11 @@ it.layer(grokDriverTestLayer)("GrokDriver.snapshotForCwd", (it) => {
       Effect.scoped(
         Effect.gen(function* () {
           const fs = yield* FileSystem.FileSystem;
+
           const workspaceCwd = yield* fs.makeTempDirectoryScoped({
             prefix: "akeru-grok-workspace-",
           });
+
           const grokPath = yield* writeFakeGrokCli({ workspaceCwd, inspect: "skills" });
           const instance = yield* createGrokInstance({ enabled: true, binaryPath: grokPath });
           const machine = yield* instance.snapshot.refresh;
@@ -205,9 +211,11 @@ it.layer(grokDriverTestLayer)("GrokDriver.snapshotForCwd", (it) => {
       Effect.scoped(
         Effect.gen(function* () {
           const fs = yield* FileSystem.FileSystem;
+
           const workspaceCwd = yield* fs.makeTempDirectoryScoped({
             prefix: "akeru-grok-failed-workspace-",
           });
+
           const grokPath = yield* writeFakeGrokCli({ workspaceCwd, inspect: "fail" });
           const instance = yield* createGrokInstance({ enabled: true, binaryPath: grokPath });
 
@@ -215,12 +223,15 @@ it.layer(grokDriverTestLayer)("GrokDriver.snapshotForCwd", (it) => {
           expect(machine.skills ?? []).toEqual([]);
 
           const messages: unknown[] = [];
+
           const logger = Logger.make(({ message }) => {
             messages.push(message);
           });
+
           const workspace = yield* instance.snapshotForCwd!(workspaceCwd).pipe(
             Effect.provide(Logger.layer([logger], { mergeWithExisting: false })),
           );
+
           expect(workspace.skills).toEqual([]);
           expect(workspace.auth).toEqual(machine.auth);
           expect(messages.flat()).toContain("Grok skill discovery failed");
@@ -235,13 +246,17 @@ it.layer(grokDriverTestLayer)("GrokDriver.snapshotForCwd", (it) => {
             enabled: true,
             binaryPath: "/no/provider/grok",
           });
+
           const messages: unknown[] = [];
+
           const logger = Logger.make(({ message }) => {
             messages.push(message);
           });
+
           const workspace = yield* instance.snapshotForCwd!(process.cwd()).pipe(
             Effect.provide(Logger.layer([logger], { mergeWithExisting: false })),
           );
+
           expect(workspace.skills).toEqual([]);
           expect(messages).toEqual([]);
         }),

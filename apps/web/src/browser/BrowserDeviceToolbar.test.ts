@@ -9,12 +9,14 @@ import {
 describe("commitViewportAndAspectRatio", () => {
   it("commits the aspect ratio only after the viewport succeeds", async () => {
     let resolveChange: (() => void) | undefined;
+
     const onChange = vi.fn(
       () =>
         new Promise<void>((resolve) => {
           resolveChange = resolve;
         }),
     );
+
     const onAspectRatioChange = vi.fn();
     const setting: PreviewViewportSetting = { _tag: "freeform", width: 900, height: 600 };
 

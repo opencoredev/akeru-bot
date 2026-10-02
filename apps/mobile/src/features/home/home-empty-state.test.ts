@@ -103,11 +103,13 @@ describe("environmentsToRetry", () => {
     connectionErrorCode: null,
     connectionErrorTraceId: null,
   });
+
   const loaded: EnvironmentShellState = {
     snapshot: Option.some({} as never),
     status: "live",
     error: Option.none(),
   };
+
   const failed: EnvironmentShellState = {
     snapshot: Option.none(),
     status: "synchronizing",
@@ -119,6 +121,7 @@ describe("environmentsToRetry", () => {
       ["alpha", failed],
       ["beta", loaded],
     ]);
+
     expect(
       environmentsToRetry(
         [environment("alpha", "connected"), environment("beta", "connected")],

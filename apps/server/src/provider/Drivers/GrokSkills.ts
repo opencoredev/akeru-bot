@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 /**
  * GrokSkills — skill discovery for the `$` picker via `grok inspect --json`.
  *
@@ -38,6 +39,7 @@ export class GrokSkillsProbeError extends Schema.TaggedErrorClass<GrokSkillsProb
   override get message(): string {
     const location = this.cwd === undefined ? "" : ` for '${this.cwd}'`;
     const exitCode = this.exitCode === undefined ? "" : ` with exit code ${this.exitCode}`;
+
     return `\`grok inspect --json\` failed during ${this.stage}${location}${exitCode}.`;
   }
 }
@@ -49,37 +51,49 @@ export class GrokSkillsProbeError extends Schema.TaggedErrorClass<GrokSkillsProb
  */
 function decodeGrokInspectSkills(stdout: string): ReadonlyArray<ServerProviderSkill> | undefined {
   let parsed: unknown;
+
   try {
     parsed = JSON.parse(stdout);
   } catch {
     return undefined;
   }
-  if (typeof parsed !== "object" || parsed === null) {
+
+  if (!Predicate.isObjectOrArray(parsed) || parsed === null) {
     return undefined;
   }
-  const entries = (parsed as Record<string, unknown>).skills;
+
+  const entries = (Array.isArray(parsed) ? {} : parsed).skills;
+
   if (!Array.isArray(entries)) {
     return undefined;
   }
 
   const skillsByName = new Map<string, ServerProviderSkill>();
+
   for (const entry of entries) {
-    if (typeof entry !== "object" || entry === null) {
+    if (!Predicate.isObjectOrArray(entry) || entry === null) {
       continue;
     }
-    const record = entry as Record<string, unknown>;
-    const name = typeof record.name === "string" ? record.name.trim() : "";
+
+    const record = Array.isArray(entry) ? {} : entry;
+    const name = Predicate.isString(record.name) ? record.name.trim() : "";
+
     const source =
-      typeof record.source === "object" && record.source !== null
-        ? (record.source as Record<string, unknown>)
+      Predicate.isObjectOrArray(record.source) && record.source !== null
+        ? Array.isArray(record.source)
+          ? {}
+          : record.source
         : undefined;
-    const path = typeof source?.path === "string" ? source.path.trim() : "";
+
+    const path = Predicate.isString(source?.path) ? source.path.trim() : "";
+
     if (!name || !path) {
       continue;
     }
-    const scope = typeof source?.type === "string" ? source.type.trim() : "";
-    const description = typeof record.description === "string" ? record.description.trim() : "";
-    const icon = typeof record.icon === "string" ? record.icon.trim() : "";
+
+    const scope = Predicate.isString(source?.type) ? source.type.trim() : "";
+    const description = Predicate.isString(record.description) ? record.description.trim() : "";
+    const icon = Predicate.isString(record.icon) ? record.icon.trim() : "";
     skillsByName.set(name, {
       name,
       path,
@@ -108,10 +122,12 @@ export const discoverGrokSkills = Effect.fn("discoverGrokSkills")(function* (
   cwd?: string,
 ) {
   const command = grokSettings.binaryPath || "grok";
+
   const inspectResult = yield* Effect.gen(function* () {
     const spawnCommand = yield* resolveSpawnCommand(command, ["inspect", "--json"], {
       env: environment,
     });
+
     return yield* spawnAndCollect(
       command,
       ChildProcess.make(spawnCommand.command, spawnCommand.args, {
@@ -138,7 +154,9 @@ export const discoverGrokSkills = Effect.fn("discoverGrokSkills")(function* (
       ...(cwd ? { cwd } : {}),
     });
   }
+
   const output = inspectResult.value;
+
   if (output.code !== 0) {
     return yield* new GrokSkillsProbeError({
       stage: "exit",
@@ -146,12 +164,15 @@ export const discoverGrokSkills = Effect.fn("discoverGrokSkills")(function* (
       exitCode: output.code,
     });
   }
+
   const skills = decodeGrokInspectSkills(output.stdout);
+
   if (!skills) {
     return yield* new GrokSkillsProbeError({
       stage: "decode",
       ...(cwd ? { cwd } : {}),
     });
   }
+
   return skills;
 });

@@ -6,6 +6,7 @@
 // plugins/withWidgetLogoAsset.cjs and runs on prebuild.
 
 const path = require("path");
+
 const fs = require("fs");
 
 const xcodePath = require.resolve("xcode", {
@@ -13,11 +14,15 @@ const xcodePath = require.resolve("xcode", {
     require.resolve("@expo/config-plugins", { paths: [require.resolve("expo/package.json")] }),
   ],
 });
+
 const xcode = require(xcodePath);
+
 const { addWidgetAssetCatalog } = require("../plugins/lib/addWidgetAssetCatalog.cjs");
 
 const pbxprojPath = path.join(__dirname, "..", "ios", "AkeruBotDev.xcodeproj", "project.pbxproj");
+
 const proj = xcode.project(pbxprojPath);
+
 proj.parseSync();
 
 const added = addWidgetAssetCatalog(proj, { targetName: "ExpoWidgetsTarget" });

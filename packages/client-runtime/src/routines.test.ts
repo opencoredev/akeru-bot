@@ -1,9 +1,21 @@
-import { BotId, RoutineId, ThreadId, type Routine, type RoutineRun } from "@akeru/contracts";
+import {
+  BotId,
+  SkillAssignmentId,
+  McpServerId,
+  RoutineId,
+  ThreadId,
+  Routine,
+  RoutineRun,
+  SkillId,
+} from "@akeru/contracts";
+import * as Schema from "effect/Schema";
 import { describe, expect, it } from "vite-plus/test";
 
 import { createTranslator } from "./i18n/index.ts";
 import { zhCNCatalog } from "./i18n/zh-CN.ts";
 import {
+  absoluteRunTime,
+  relativeRunTime,
   botRoutinesView,
   routineApprovalSummary,
   routineLifecycleAction,
@@ -12,7 +24,11 @@ import {
   toRoutinePanelItem,
 } from "./routines.ts";
 
-const routine = {
+const decodeRoutine = Schema.decodeUnknownSync(Routine);
+
+const decodeRoutineRun = Schema.decodeUnknownSync(RoutineRun);
+
+const routine = decodeRoutine({
   id: RoutineId.make("routine-1"),
   botId: "bot-1",
   targetThreadId: ThreadId.make("thread-1"),
@@ -37,10 +53,10 @@ const routine = {
   createdAt: "2026-09-19T08:00:00.000Z",
   updatedAt: "2026-09-19T08:05:00.000Z",
   deletedAt: null,
-} as unknown as Routine;
+});
 
 const run = (id: string, createdAt: string, overrides: Partial<RoutineRun> = {}) =>
-  ({
+  decodeRoutineRun({
     id,
     routineId: routine.id,
     trigger: "manual",
@@ -56,24 +72,44 @@ const run = (id: string, createdAt: string, overrides: Partial<RoutineRun> = {})
     createdAt,
     updatedAt: createdAt,
     ...overrides,
-  }) as unknown as RoutineRun;
+  });
 
 const snapshot = {
   routines: [
     routine,
-    { ...routine, id: RoutineId.make("routine-deleted"), lifecycle: "deleted" },
-    { ...routine, id: RoutineId.make("routine-other"), botId: "bot-2" },
-  ] as unknown as Routine[],
+    { ...routine, id: RoutineId.make("routine-deleted"), lifecycle: "deleted" as const },
+    { ...routine, id: RoutineId.make("routine-other"), botId: BotId.make("bot-2") },
+  ],
   routineRuns: [
     run("run-old", "2026-09-19T09:00:00.000Z"),
     run("run-new", "2026-09-19T10:00:00.000Z", {
       status: "failed",
       failure: { kind: "provider", message: "Provider timed out" },
-    } as unknown as Partial<RoutineRun>),
+    }),
   ],
-  skillAssignments: [{ id: "assignment-1", name: "research" }],
-  mcpServers: [{ id: "mcp-1", name: "Gmail" }],
-} as unknown as Parameters<typeof botRoutinesView>[0];
+  skillAssignments: [
+    {
+      id: SkillAssignmentId.make("assignment-1"),
+      name: "research",
+      botId: routine.botId,
+      skillId: SkillId.make("research"),
+      description: null,
+      createdAt: routine.createdAt,
+      updatedAt: routine.updatedAt,
+    },
+  ],
+  mcpServers: [
+    {
+      id: McpServerId.make("mcp-1"),
+      name: "Gmail",
+      transport: "stdio",
+      command: "gmail",
+      enabled: true,
+      createdAt: routine.createdAt,
+      updatedAt: routine.updatedAt,
+    },
+  ],
+} satisfies Parameters<typeof botRoutinesView>[0];
 
 describe("toRoutinePanelItem", () => {
   it("resolves names and orders run history newest first", () => {
@@ -111,6 +147,7 @@ describe("botRoutinesView", () => {
   it("keeps only the bot's live routines with their skills and connectors", () => {
     const view = botRoutinesView(snapshot, "bot-1");
     expect(view.kind).toBe("ready");
+
     if (view.kind !== "ready") return;
     expect(view.routines.map((item) => item.id)).toEqual(["routine-1"]);
     expect(view.routines[0]).toMatchObject({
@@ -146,12 +183,9 @@ describe("routineStateNote", () => {
 
   it("tells a user-paused routine apart from one Akeru stopped", () => {
     expect(routineStateNote({ ...item, paused: true })).toBe("Paused until you resume it.");
-    const blocked = toRoutinePanelItem(
-      { ...routine, lifecycle: "blocked" } as unknown as Routine,
-      [],
-      [],
-      [],
-    );
+
+    const blocked = toRoutinePanelItem({ ...routine, lifecycle: "blocked" }, [], [], []);
+
     expect(blocked.pausedByAkeru).toBe(true);
     expect(routineStateNote(blocked)).toBe("Paused. Fix the cause in Bot inbox, then resume it.");
   });
@@ -223,5 +257,27 @@ describe("routineApprovalSummary", () => {
       routineApprovalSummary({ name: "Brief", schedule: { kind: "daily", time: "08:00" } }, t)
         .schedule,
     ).toBe(t("{schedule} at {time}", { schedule: t("Daily"), time: "08:00" }));
+  });
+});
+
+describe("routine run timestamps", () => {
+  it("preserves malformed values and relative time boundaries", () => {
+    const now = Date.parse("2026-08-11T12:00:00Z");
+
+    expect(absoluteRunTime("invalid")).toBe("");
+    expect(relativeRunTime("invalid", now)).toBe("");
+    expect(relativeRunTime("2026-08-11T12:00:59Z", now)).toBe("now");
+    expect(relativeRunTime("2026-08-11T12:01:00Z", now)).toBe("in 1m");
+    expect(relativeRunTime("2026-08-11T11:00:00Z", now)).toBe("1h ago");
+    expect(relativeRunTime("2026-08-13T12:00:00Z", now)).toBe("in 2d");
+  });
+
+  it("keeps unzoned timestamps in the viewer's local zone", () => {
+    const value = "2026-08-11T12:37:00";
+    const zoned = new Date(value).toISOString();
+    const now = Date.parse("2026-08-11T12:00:00Z");
+
+    expect(absoluteRunTime(value)).toBe(absoluteRunTime(zoned));
+    expect(relativeRunTime(value, now)).toBe(relativeRunTime(zoned, now));
   });
 });

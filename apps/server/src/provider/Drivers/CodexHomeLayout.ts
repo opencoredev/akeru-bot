@@ -1,3 +1,5 @@
+import * as Data from "effect/Data";
+import * as Predicate from "effect/Predicate";
 import * as NodeOS from "node:os";
 
 import { ProviderDriverKind, type CodexSettings } from "@akeru/contracts";
@@ -8,6 +10,8 @@ import * as Schema from "effect/Schema";
 import * as PlatformError from "effect/PlatformError";
 
 import { expandHomePath } from "../../pathExpansion.ts";
+
+const linkStates = Data.taggedEnum<LinkState>();
 
 export interface CodexHomeLayout {
   readonly mode: "direct" | "authOverlay";
@@ -30,14 +34,17 @@ const KNOWN_SHARED_DIRECTORIES = [
 ] as const;
 
 const PRIVATE_ENTRY_NAMES = new Set(["auth.json", "models_cache.json"]);
+
 const SHADOW_LOCAL_ENTRY_NAMES = new Set(["log", "memories", "tmp"]);
+
 const REPLACEABLE_SHARED_RUNTIME_DIRECTORIES = new Set(["mcp-oauth-locks"]);
 
 function resolveHomePath(path: Path.Path, value: string | undefined): string {
   const expanded =
     value && value.trim().length > 0
-      ? expandHomePath(value)
+      ? expandHomePath(value, path)
       : path.join(NodeOS.homedir(), ".codex");
+
   return path.resolve(expanded);
 }
 
@@ -47,6 +54,7 @@ export const resolveCodexHomeLayout = Effect.fn("resolveCodexHomeLayout")(functi
   const path = yield* Path.Path;
   const sharedHomePath = resolveHomePath(path, config.homePath);
   const shadowHomePath = config.shadowHomePath.trim();
+
   if (shadowHomePath.length === 0) {
     return {
       mode: "direct",
@@ -56,7 +64,8 @@ export const resolveCodexHomeLayout = Effect.fn("resolveCodexHomeLayout")(functi
     };
   }
 
-  const effectiveHomePath = path.resolve(expandHomePath(shadowHomePath));
+  const effectiveHomePath = path.resolve(expandHomePath(shadowHomePath, path));
+
   return {
     mode: "authOverlay",
     sharedHomePath,
@@ -83,6 +92,7 @@ export class CodexShadowHomeFileSystemError extends Schema.TaggedErrorClass<Code
 ) {
   override get message(): string {
     const target = this.targetPath === undefined ? "" : ` to '${this.targetPath}'`;
+
     return `Codex shadow home filesystem operation '${this.operation}' failed for '${this.path}'${target}.`;
   }
 }
@@ -129,6 +139,7 @@ export const CodexShadowHomeError = Schema.Union([
   CodexShadowHomeEntryConflictError,
   CodexShadowHomePrivateEntrySymlinkError,
 ]);
+
 export type CodexShadowHomeError = typeof CodexShadowHomeError.Type;
 
 type LinkState =
@@ -145,9 +156,10 @@ type LinkState =
 
 function isNotSymlinkError(error: PlatformError.PlatformError): boolean {
   const cause = error.reason.cause;
+
   return (
-    error.reason._tag === "Unknown" &&
-    typeof cause === "object" &&
+    Predicate.isTagged(error.reason, "Unknown") &&
+    Predicate.isObjectOrArray(cause) &&
     cause !== null &&
     "code" in cause &&
     cause.code === "EINVAL"
@@ -162,15 +174,17 @@ const readLinkState = Effect.fn("CodexHomeLayout.readLinkState")(function* (inpu
   readonly linkPath: string;
 }): Effect.fn.Return<LinkState, CodexShadowHomeError> {
   return yield* input.fileSystem.readLink(input.linkPath).pipe(
-    Effect.map((target): LinkState => ({ _tag: "Symlink", target })),
+    Effect.map((target): LinkState => linkStates.Symlink({ target })),
     Effect.catchTags({
       PlatformError: (cause) => {
-        if (cause.reason._tag === "NotFound") {
-          return Effect.succeed<LinkState>({ _tag: "Missing" });
+        if (Predicate.isTagged(cause.reason, "NotFound")) {
+          return Effect.succeed<LinkState>(linkStates.Missing());
         }
+
         if (isNotSymlinkError(cause)) {
-          return Effect.succeed<LinkState>({ _tag: "NotSymlink" });
+          return Effect.succeed<LinkState>(linkStates.NotSymlink());
         }
+
         return new CodexShadowHomeFileSystemError({
           sharedHomePath: input.sharedHomePath,
           effectiveHomePath: input.effectiveHomePath,
@@ -192,11 +206,13 @@ const removePrivateSymlink = Effect.fn("CodexHomeLayout.removePrivateSymlink")(f
 }): Effect.fn.Return<void, CodexShadowHomeError, Path.Path> {
   const path = yield* Path.Path;
   const privatePath = path.join(input.effectiveHomePath, input.entryName);
+
   const state = yield* readLinkState({
     ...input,
     linkPath: privatePath,
   });
-  if (state._tag === "Symlink") {
+
+  if (Predicate.isTagged(state, "Symlink")) {
     yield* input.fileSystem.remove(privatePath).pipe(
       Effect.catchTags({
         PlatformError: (cause) =>
@@ -222,6 +238,7 @@ const ensureSymlink = Effect.fn("CodexHomeLayout.ensureSymlink")(function* (inpu
   const path = yield* Path.Path;
   const target = path.join(input.sharedHomePath, input.entryName);
   const link = path.join(input.effectiveHomePath, input.entryName);
+
   const state = yield* readLinkState({
     ...input,
     linkPath: link,
@@ -242,7 +259,7 @@ const ensureSymlink = Effect.fn("CodexHomeLayout.ensureSymlink")(function* (inpu
     }),
   );
 
-  if (state._tag === "NotSymlink") {
+  if (Predicate.isTagged(state, "NotSymlink")) {
     if (!REPLACEABLE_SHARED_RUNTIME_DIRECTORIES.has(input.entryName)) {
       return yield* new CodexShadowHomeEntryConflictError({
         sharedHomePath: input.sharedHomePath,
@@ -266,14 +283,16 @@ const ensureSymlink = Effect.fn("CodexHomeLayout.ensureSymlink")(function* (inpu
           }),
       }),
     );
+
     return yield* createLink;
   }
 
-  if (state._tag === "Missing") {
+  if (!Predicate.isTagged(state, "Symlink")) {
     return yield* createLink;
   }
 
   const resolvedExisting = path.resolve(path.dirname(link), state.target);
+
   if (resolvedExisting !== target) {
     yield* input.fileSystem.remove(link).pipe(
       Effect.catchTags({
@@ -301,12 +320,14 @@ const ensureShadowAuthIsPrivate = Effect.fn("CodexHomeLayout.ensureShadowAuthIsP
     const path = yield* Path.Path;
     const entryName = "auth.json";
     const authPath = path.join(input.effectiveHomePath, entryName);
+
     const state = yield* readLinkState({
       ...input,
       entryName,
       linkPath: authPath,
     });
-    if (state._tag === "Symlink") {
+
+    if (Predicate.isTagged(state, "Symlink")) {
       return yield* new CodexShadowHomePrivateEntrySymlinkError({
         sharedHomePath: input.sharedHomePath,
         effectiveHomePath: input.effectiveHomePath,
@@ -322,7 +343,9 @@ export const materializeCodexShadowHome = Effect.fn("materializeCodexShadowHome"
 ) {
   if (layout.mode !== "authOverlay") return;
   const effectiveHomePath = layout.effectiveHomePath;
+
   if (!effectiveHomePath) return;
+
   if (layout.sharedHomePath === effectiveHomePath) {
     return yield* new CodexShadowHomePathConflictError({
       sharedHomePath: layout.sharedHomePath,
@@ -370,7 +393,9 @@ export const materializeCodexShadowHome = Effect.fn("materializeCodexShadowHome"
         }),
     }),
   );
+
   const entries = new Set<string>(KNOWN_SHARED_DIRECTORIES);
+
   for (const entryName of sharedEntryNames) {
     if (!PRIVATE_ENTRY_NAMES.has(entryName) && !SHADOW_LOCAL_ENTRY_NAMES.has(entryName)) {
       entries.add(entryName);
@@ -397,6 +422,7 @@ export const materializeCodexShadowHome = Effect.fn("materializeCodexShadowHome"
       if (PRIVATE_ENTRY_NAMES.has(entryName)) {
         return Effect.void;
       }
+
       return ensureSymlink({
         fileSystem,
         sharedHomePath: layout.sharedHomePath,

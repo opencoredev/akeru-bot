@@ -48,6 +48,7 @@ describe("dictation draft insertion", () => {
         ...original,
         identity: { ...original.identity, [key]: key === "generation" ? 2 : "other" },
       };
+
       expect(merge(current)).toBe(current);
     },
   );
@@ -60,17 +61,19 @@ describe("dictation draft insertion", () => {
   it("keeps serialized mentions and attachment state when appending after concurrent edits", () => {
     const text = "Keep [@file](file:///project/file.ts) and my edit";
     const attachments = [{ id: "image-1", name: "fixture.png" }];
+
     const current = {
       ...original,
       text,
       selection: { start: 5, end: 36 },
       attachments,
     };
+
     const result = mergeDictationDraft(original, current, "spoken words", 1000);
     expect(result.text).toBe(`${text} spoken words`);
     expect(result.selection).toEqual(current.selection);
     expect(result).toMatchObject({ attachments });
-    expect(Reflect.get(result, "attachments")).toBe(attachments);
+    expect("attachments" in result && result.attachments).toBe(attachments);
   });
 
   it("does not split emoji at a malformed caret", () => {

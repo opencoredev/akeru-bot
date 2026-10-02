@@ -19,6 +19,7 @@ layer("035_ProjectionThreadTitleRegeneration", (it) => {
       const columns = yield* sql<{ readonly name: string }>`
         PRAGMA table_info(projection_threads)
       `;
+
       const names = new Set(columns.map((column) => column.name));
       assert.ok(names.has("title_regeneration_request_id"));
       assert.ok(names.has("title_regeneration_started_at"));

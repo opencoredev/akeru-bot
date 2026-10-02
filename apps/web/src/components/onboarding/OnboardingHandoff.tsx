@@ -14,12 +14,16 @@ import {
 
 /** Slide-in for the sent bubble: --duration-fast on --ease-smooth-out. */
 const LAUNCH_DURATION = 0.25;
+
 const SMOOTH_OUT = [0.22, 1, 0.36, 1] as const;
 
 /** Status swap: --think-swap, --think-gap, --think-distance, --think-blur. */
 const SWAP_DURATION = 0.15;
+
 const SWAP_GAP = 0.05;
+
 const SWAP_DISTANCE = 8;
+
 const SWAP_BLUR = "blur(2px)";
 
 /**
@@ -40,6 +44,7 @@ function HandoffStatus({
   const reducedMotion = useReducedMotion();
   const { t } = useI18n();
   const status = desktopOnboardingHandoffStatus(phase, botName, t);
+
   const widest = useMemo(
     () =>
       desktopOnboardingHandoffStatuses(botName, t).reduce(
@@ -62,7 +67,7 @@ function HandoffStatus({
       <AnimatePresence initial={false}>
         <motion.span
           key={status}
-          className="bot-status-shimmer bot-status-shimmer-finite absolute inset-x-0 top-0 block truncate"
+          className="bot-status-shimmer absolute inset-x-0 top-0 block truncate"
           initial={reducedMotion ? false : { opacity: 0, y: SWAP_DISTANCE, filter: SWAP_BLUR }}
           animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
           exit={
@@ -110,7 +115,7 @@ export function OnboardingHandoff({
   return (
     <div className="w-full max-w-2xl space-y-8" data-testid="onboarding-handoff">
       <motion.div
-        className="ml-auto max-w-[78%] rounded-2xl rounded-br-md bg-foreground px-4 py-3 text-sm text-background shadow-sm"
+        className="ml-auto max-w-39/50 rounded-2xl rounded-br-md bg-foreground px-4 py-3 text-sm text-background shadow-sm"
         initial={reducedMotion ? false : { opacity: 0, y: 16, scale: 0.97 }}
         animate={{ opacity: 1, y: 0, scale: 1 }}
         transition={{ duration: reducedMotion ? 0 : LAUNCH_DURATION, ease: SMOOTH_OUT }}

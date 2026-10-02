@@ -1,4 +1,3 @@
-// @effect-diagnostics nodeBuiltinImport:off
 import * as NodeFS from "node:fs";
 import * as NodeOS from "node:os";
 import * as NodePath from "node:path";
@@ -7,9 +6,11 @@ import { afterEach, describe, expect, it } from "vite-plus/test";
 import { RotatingFileSink, RotatingFileSinkConfigurationError } from "./logging.ts";
 
 const tempDirectories: string[] = [];
+
 const makeTempDirectory = (): string => {
   const directory = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "t3code-logging-"));
   tempDirectories.push(directory);
+
   return directory;
 };
 
@@ -54,9 +55,11 @@ describe("RotatingFileSink", () => {
     const writes = lines.map((line) => sink.write(line));
     await sink.close();
     await Promise.all(writes);
+
     const retained = [5, 4, 3, 2, 1, 0]
       .map((index) => NodeFS.readFileSync(index === 0 ? filePath : `${filePath}.${index}`, "utf8"))
       .join("");
+
     expect(retained).toBe(lines.slice(3).join(""));
     expect(NodeFS.existsSync(`${filePath}.6`)).toBe(false);
     expect(sink.bufferedBytes).toBe(0);
@@ -81,12 +84,14 @@ describe("RotatingFileSink", () => {
 
   it("bounds accepted bytes without dropping or retrying accepted chunks", async () => {
     const filePath = NodePath.join(makeTempDirectory(), "log");
+
     const sink = new RotatingFileSink({
       filePath,
       maxBytes: 100,
       maxFiles: 1,
       maxBufferedBytes: 4,
     });
+
     const first = sink.write("🙂");
     expect(sink.bufferedBytes).toBe(4);
     await expect(sink.write("x")).rejects.toMatchObject({ operation: "buffer" });
@@ -98,12 +103,14 @@ describe("RotatingFileSink", () => {
 
   it("bounds the number of queued chunks independently", async () => {
     const filePath = NodePath.join(makeTempDirectory(), "log");
+
     const sink = new RotatingFileSink({
       filePath,
       maxBytes: 100,
       maxFiles: 1,
       maxBufferedChunks: 1,
     });
+
     const first = sink.write("a");
     await expect(sink.write("b")).rejects.toMatchObject({ operation: "buffer" });
     await first;

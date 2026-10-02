@@ -43,6 +43,7 @@ function makeTelemetryLayer(
       sampleIntervalMs: 1_000,
     }),
   });
+
   const desktopLayer = desktopSnapshot
     ? DesktopTelemetryReceiver.layerTest({
         latest: Effect.succeedSome(desktopSnapshot),
@@ -53,6 +54,7 @@ function makeTelemetryLayer(
         }),
       })
     : DesktopTelemetryReceiver.layerTest();
+
   return ResourceTelemetry.layer.pipe(
     Layer.provide(Layer.mergeAll(nativeLayer, desktopLayer, ResourceAttribution.layer)),
   );
@@ -95,11 +97,13 @@ describe("ProcessDiagnostics", () => {
           ioSemantics: "storage",
         },
       ]);
+
       const telemetryLayer = makeTelemetryLayer(snapshot);
       const layer = ProcessDiagnostics.layer.pipe(Layer.provideMerge(telemetryLayer));
 
       const diagnostics = yield* Effect.gen(function* () {
         const processDiagnostics = yield* ProcessDiagnostics.ProcessDiagnostics;
+
         return yield* processDiagnostics.read;
       }).pipe(Effect.provide(layer));
 
@@ -156,10 +160,12 @@ describe("ProcessDiagnostics", () => {
           ioSemantics: "storage",
         },
       ]);
+
       const staleTelemetry = yield* Effect.service(ResourceTelemetry.ResourceTelemetry).pipe(
         Effect.flatMap((telemetry) => telemetry.latest),
         Effect.provide(makeTelemetryLayer(snapshot)),
       );
+
       const telemetryLayer = Layer.succeed(
         ResourceTelemetry.ResourceTelemetry,
         ResourceTelemetry.ResourceTelemetry.of({
@@ -177,6 +183,7 @@ describe("ProcessDiagnostics", () => {
           retry: Effect.die("unused"),
         }),
       );
+
       const layer = ProcessDiagnostics.layer.pipe(Layer.provide(telemetryLayer));
 
       const result = yield* Effect.service(ProcessDiagnostics.ProcessDiagnostics).pipe(
@@ -206,6 +213,7 @@ describe("ProcessDiagnostics", () => {
       const sampledAtUnixMs = DateTime.toEpochMillis(
         DateTime.makeUnsafe("2026-05-05T10:00:00.000Z"),
       );
+
       const snapshot = makeNativeSnapshot([
         {
           pid: 4_242,
@@ -224,7 +232,9 @@ describe("ProcessDiagnostics", () => {
           ioSemantics: "storage",
         },
       ]);
+
       const sampledAt = DateTime.makeUnsafe(sampledAtUnixMs);
+
       const telemetryLayer = makeTelemetryLayer(snapshot, {
         version: 1,
         type: "desktopTelemetry",
@@ -257,6 +267,7 @@ describe("ProcessDiagnostics", () => {
           },
         ],
       });
+
       const layer = ProcessDiagnostics.layer.pipe(Layer.provide(telemetryLayer));
 
       const result = yield* Effect.service(ProcessDiagnostics.ProcessDiagnostics).pipe(
@@ -281,6 +292,7 @@ describe("ProcessDiagnostics", () => {
         Effect.flatMap((processDiagnostics) => processDiagnostics.read),
         Effect.provide(layer),
       );
+
       expect(diagnostics.processes).toEqual([]);
       expect(diagnostics.processCount).toBe(0);
       expect(diagnostics.totalCpuPercent).toBe(0);

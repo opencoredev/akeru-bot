@@ -7,17 +7,18 @@ import * as DesktopClientSettings from "../../settings/DesktopClientSettings.ts"
 import * as IpcChannels from "../channels.ts";
 import * as DesktopIpc from "../DesktopIpc.ts";
 
-export const getClientSettings = DesktopIpc.makeIpcMethod({
+export const getClientSettings = DesktopIpc.defineIpcMethod({
   channel: IpcChannels.GET_CLIENT_SETTINGS_CHANNEL,
   payload: Schema.Void,
   result: Schema.NullOr(ClientSettingsSchema),
   handler: Effect.fn("desktop.ipc.clientSettings.get")(function* () {
     const clientSettings = yield* DesktopClientSettings.DesktopClientSettings;
+
     return Option.getOrNull(yield* clientSettings.get);
   }),
 });
 
-export const setClientSettings = DesktopIpc.makeIpcMethod({
+export const setClientSettings = DesktopIpc.defineIpcMethod({
   channel: IpcChannels.SET_CLIENT_SETTINGS_CHANNEL,
   payload: ClientSettingsSchema,
   result: Schema.Void,

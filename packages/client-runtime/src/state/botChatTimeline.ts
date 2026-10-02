@@ -1,3 +1,5 @@
+import * as Data from "effect/Data";
+import * as Predicate from "effect/Predicate";
 import type { AkeruDelegationRecord, MessageId, TurnId } from "@akeru/contracts";
 
 /** The message fields the timeline needs to place rows. */
@@ -58,47 +60,58 @@ export function botChatTimeline<
   input: BotChatTimelineInput<TMessage, TReceipt>,
 ): Array<BotChatTimelineEntry<TMessage, TReceipt>> {
   type Entry = BotChatTimelineEntry<TMessage, TReceipt>;
+
+  const Entry = Data.taggedEnum<Entry>();
+
   const base: Array<{ readonly createdAt: string; readonly entry: Entry }> = [
     ...input.messages.map((message, index) => ({
       createdAt: message.createdAt,
-      entry: { _tag: "Message", key: `message:${message.id}`, message, index } as const,
+      entry: Entry.Message({ key: `message:${message.id}`, message, index }),
     })),
     ...(input.receipts ?? []).map((receipt) => ({
       createdAt: receipt.createdAt,
-      entry: { _tag: "Receipt", key: `receipt:${receipt.id}`, receipt } as const,
+      entry: Entry.Receipt({ key: `receipt:${receipt.id}`, receipt }),
     })),
   ];
+
   // .sort() on a copy, not .toSorted(): Hermes lacks ES2023 change-by-copy.
   const sorted = [...base].sort((left, right) => left.createdAt.localeCompare(right.createdAt));
   const rows = sorted.map(({ entry }) => entry);
+
   const lastPositionAt = (createdAt: string) => {
     for (let index = sorted.length - 1; index >= 0; index -= 1) {
       if (sorted[index]!.createdAt.localeCompare(createdAt) <= 0) return index;
     }
+
     return -1;
   };
 
   const positionByMessageId = new Map<string, number>();
   const lastPositionByTurnId = new Map<string, number>();
   rows.forEach((row, position) => {
-    if (row._tag !== "Message") return;
+    if (!Predicate.isTagged(row, "Message")) return;
     positionByMessageId.set(row.message.id, position);
+
     if (row.message.turnId !== null) lastPositionByTurnId.set(row.message.turnId, position);
   });
 
   // Cards inserted after the same row keep creation order.
   const cardsAfter = new Map<number, Entry[]>();
+
   const delegations = [...(input.delegations ?? [])].sort(
     (left, right) =>
       left.createdAt.localeCompare(right.createdAt) ||
       left.delegationId.localeCompare(right.delegationId),
   );
+
   for (const delegation of delegations) {
     const anchor =
       delegation.anchorMessageId === null
         ? undefined
         : positionByMessageId.get(delegation.anchorMessageId);
+
     const turnEnd = lastPositionByTurnId.get(delegation.parentTurnId);
+
     const position =
       anchor !== undefined
         ? Math.max(anchor, turnEnd ?? anchor)
@@ -106,15 +119,17 @@ export function botChatTimeline<
           (delegation.trigger === "scheduled"
             ? lastPositionAt(delegation.createdAt)
             : rows.length - 1));
-    const card: Entry = {
-      _tag: "Delegation",
+
+    const card = Entry.Delegation({
       key: `delegation:${delegation.delegationId}`,
       delegation,
-    };
+    });
+
     cardsAfter.set(position, [...(cardsAfter.get(position) ?? []), card]);
   }
 
   const leading = cardsAfter.get(-1) ?? [];
+
   return [
     ...leading,
     ...rows.flatMap((row, position) => [row, ...(cardsAfter.get(position) ?? [])]),

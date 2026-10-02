@@ -7,8 +7,10 @@ import { describe, expect, it, vi } from "vite-plus/test";
 vi.mock("../../i18n", async () => {
   const { createTranslator } = await import("@akeru/client-runtime/i18n");
   const translator = createTranslator("en");
+
   return { useI18n: () => ({ ...translator, t: translator.translate }) };
 });
+
 // The real row reads router and search state; the copy under test is what the row passes in.
 vi.mock("./settingsLayout", () => ({
   SettingsRow: (props: {
@@ -25,17 +27,23 @@ vi.mock("./settingsLayout", () => ({
     </div>
   ),
 }));
+
 vi.mock("../../pluginsDialogStore", () => ({ openPlugins: () => {} }));
+
 vi.mock("../../settingsDialogStore", () => ({
   openSettings: () => {},
   useSettingsEnvironmentId: () => null,
 }));
+
 vi.mock("../../state/botInbox", () => ({ botInboxEnvironment: {} }));
+
 vi.mock("../../state/memory", () => ({ memoryEnvironment: {} }));
+
 vi.mock("../../state/query", () => ({
   formatEnvironmentQueryError: String,
   useEnvironmentQuery: () => ({}),
 }));
+
 vi.mock("../../state/use-atom-command", () => ({ useAtomCommand: () => async () => {} }));
 
 import { InboxIncidentRow } from "./InboxPanel";
@@ -96,6 +104,7 @@ describe("InboxIncidentRow", () => {
       ...memoryItem,
       memoryApproval: { ...approvalRequest, sensitive: true },
     });
+
     // The marker is its own flex child behind the row's separator, never fused to the kind label.
     expect(markup).toMatch(
       /Memory approval<\/span><span class="[^"]*">· Sensitive, always needs approval<\/span>/,
@@ -104,12 +113,14 @@ describe("InboxIncidentRow", () => {
 
   it("keeps the server copy for other items", () => {
     const { memoryApproval: _memoryApproval, ...approval } = memoryItem;
+
     const markup = render({
       ...approval,
       incidentKey: "approval:req-1",
       lastFailure: "Codex wants to run a command.",
       nextAction: "Open the chat to answer.",
     });
+
     expect(markup).toContain("Ada · Refactor login · Approval needed");
     expect(markup).toContain("Codex wants to run a command.");
     expect(markup).toContain("Open the chat to answer.");

@@ -1,4 +1,3 @@
-// @effect-diagnostics nodeBuiltinImport:off
 import * as NodeFS from "node:fs";
 import * as NodeOS from "node:os";
 import * as NodePath from "node:path";
@@ -21,6 +20,7 @@ afterEach(() => {
 function fixture() {
   const directory = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "akeru-incidents-"));
   directories.push(directory);
+
   return new BotInboxService(NodePath.join(directory, "bot-inbox.json"));
 }
 
@@ -136,6 +136,7 @@ describe("connector inbox incidents", () => {
 
   it("opens and resolves an MCP access incident without retry claims", () => {
     const inbox = fixture();
+
     const access: ProviderAccessStatus = {
       id: "mcp-builtin-exa",
       label: "Exa",

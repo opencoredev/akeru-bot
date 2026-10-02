@@ -15,6 +15,7 @@ const inFlightWrites = new Set<Promise<void>>();
 function trackInFlightWrite(operation: Promise<void>): Promise<void> {
   inFlightWrites.add(operation);
   void operation.catch(() => undefined).finally(() => inFlightWrites.delete(operation));
+
   return operation;
 }
 
@@ -67,11 +68,13 @@ async function getOutboxDirectory() {
   const { Directory, Paths } = await import("expo-file-system");
   const directory = new Directory(Paths.document, THREAD_OUTBOX_DIRECTORY);
   directory.create({ idempotent: true, intermediates: true });
+
   return directory;
 }
 
 async function getMessageFile(messageId: MessageId) {
   const { File } = await import("expo-file-system");
+
   return new File(await getOutboxDirectory(), messageFileName(messageId));
 }
 
@@ -79,6 +82,7 @@ export const expoThreadOutboxStorage: ThreadOutboxStorage = {
   load: async () => {
     const messages: QueuedThreadMessage[] = [];
     const unreadRecords: ThreadOutboxStorageError[] = [];
+
     try {
       const { File } = await import("expo-file-system");
       const directory = await getOutboxDirectory();
@@ -87,8 +91,9 @@ export const expoThreadOutboxStorage: ThreadOutboxStorage = {
         if (!(entry instanceof File) || !entry.name.endsWith(".json")) {
           continue;
         }
+
         try {
-          messages.push(decodeQueuedThreadMessage(JSON.parse(await entry.text()) as unknown));
+          messages.push(decodeQueuedThreadMessage(JSON.parse(await entry.text())));
         } catch (cause) {
           // Leave the file on disk. Cleanup must see that ownership is
           // incomplete, while delivery can still hydrate readable messages.
@@ -114,10 +119,12 @@ export const expoThreadOutboxStorage: ThreadOutboxStorage = {
         cause,
       });
     }
+
     return { messages, unreadRecords };
   },
   write: async (message) => {
     const fileName = messageFileName(message.messageId);
+
     try {
       await trackInFlightWrite(
         (async () => {
@@ -138,8 +145,10 @@ export const expoThreadOutboxStorage: ThreadOutboxStorage = {
   },
   remove: async (message) => {
     const fileName = messageFileName(message.messageId);
+
     try {
       const file = await getMessageFile(message.messageId);
+
       if (file.exists) {
         file.delete();
       }

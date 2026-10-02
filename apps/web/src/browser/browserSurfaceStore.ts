@@ -61,6 +61,7 @@ export function resolveBrowserSurfacePanelRect(
   tabId: string,
 ): BrowserSurfaceRect | null {
   const current = byTabId[tabId];
+
   return current?.rect ?? null;
 }
 
@@ -82,14 +83,17 @@ export const useBrowserSurfaceStore = create<BrowserSurfaceStoreState>()((set) =
         [tabId]: (state.activityByTabId[tabId] ?? 0) + 1,
       },
     }));
+
     return () => {
       if (released) return;
       released = true;
       set((state) => {
         const count = state.activityByTabId[tabId] ?? 0;
         const activityByTabId = { ...state.activityByTabId };
+
         if (count <= 1) delete activityByTabId[tabId];
         else activityByTabId[tabId] = count - 1;
+
         return { activityByTabId };
       });
     };
@@ -97,7 +101,9 @@ export const useBrowserSurfaceStore = create<BrowserSurfaceStoreState>()((set) =
   claim: (tabId, owner, fitSourceContent) =>
     set((state) => {
       const current = state.byTabId[tabId];
+
       if (current?.owner === owner) return state;
+
       return {
         byTabId: {
           ...state.byTabId,
@@ -118,7 +124,9 @@ export const useBrowserSurfaceStore = create<BrowserSurfaceStoreState>()((set) =
   present: (tabId, owner, rect, visible, interactive, cornerRadius) =>
     set((state) => {
       const current = state.byTabId[tabId];
+
       if (current?.owner !== owner) return state;
+
       if (
         current &&
         current.visible === visible &&
@@ -128,6 +136,7 @@ export const useBrowserSurfaceStore = create<BrowserSurfaceStoreState>()((set) =
       ) {
         return state;
       }
+
       return {
         byTabId: {
           ...state.byTabId,
@@ -138,6 +147,7 @@ export const useBrowserSurfaceStore = create<BrowserSurfaceStoreState>()((set) =
   presentContent: (tabId, content) =>
     set((state) => {
       const current = state.byTabId[tabId];
+
       if (!current) {
         return {
           byTabId: {
@@ -156,7 +166,9 @@ export const useBrowserSurfaceStore = create<BrowserSurfaceStoreState>()((set) =
           },
         };
       }
+
       const previous = current.content;
+
       if (
         previous &&
         previous.x === content.x &&
@@ -169,6 +181,7 @@ export const useBrowserSurfaceStore = create<BrowserSurfaceStoreState>()((set) =
       ) {
         return state;
       }
+
       return {
         byTabId: {
           ...state.byTabId,
@@ -187,7 +200,9 @@ export const useBrowserSurfaceStore = create<BrowserSurfaceStoreState>()((set) =
   release: (tabId, owner) =>
     set((state) => {
       const current = state.byTabId[tabId];
+
       if (current?.owner !== owner) return state;
+
       return {
         byTabId: {
           ...state.byTabId,
@@ -219,10 +234,12 @@ export function acquireBrowserSurface(
   return {
     present: (rect, visible, interactive = visible, cornerRadius = 0) => {
       if (released) return false;
+
       if (useBrowserSurfaceStore.getState().byTabId[tabId]?.owner !== owner) return false;
       useBrowserSurfaceStore
         .getState()
         .present(tabId, owner, rect, visible, interactive, cornerRadius);
+
       return true;
     },
     release: () => {

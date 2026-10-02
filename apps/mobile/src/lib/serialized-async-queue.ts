@@ -11,6 +11,7 @@ export class SerializedAsyncQueue {
       () => undefined,
       () => undefined,
     );
+
     return result;
   }
 }

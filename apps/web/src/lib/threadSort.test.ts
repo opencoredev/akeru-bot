@@ -10,6 +10,7 @@ import type { Thread } from "../types";
 import { getLatestThreadForProject, sortThreads } from "./threadSort";
 
 const LOCAL_ENVIRONMENT_ID = EnvironmentId.make("environment-local");
+
 const PROJECT_ID = ProjectId.make("project-1");
 
 function makeThread(overrides: Partial<Thread> = {}): Thread {

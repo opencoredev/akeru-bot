@@ -29,6 +29,7 @@ const LegacySavedRemoteConnection = Schema.Struct({
 const LegacyConnectionDocument = Schema.Struct({
   connections: Schema.optionalKey(Schema.Array(LegacySavedRemoteConnection)),
 });
+
 const decodeLegacyConnectionDocument = Schema.decodeUnknownEffect(LegacyConnectionDocument);
 
 export class LegacyConnectionMigrationError extends Schema.TaggedErrorClass<LegacyConnectionMigrationError>()(
@@ -55,6 +56,7 @@ function migrateConnection(
   }
 
   const connectionId = `bearer:${connection.environmentId}`;
+
   return registerConnectionInCatalog(
     document,
     new BearerConnectionRegistration({
@@ -81,12 +83,13 @@ export const migrateLegacyConnectionCatalog = Effect.fn(
   "mobile.connectionMigration.migrateCatalog",
 )(function* (raw: string) {
   const parsed = yield* Effect.try({
-    try: () => JSON.parse(raw) as unknown,
+    try: () => JSON.parse(raw),
     catch: (cause) =>
       new LegacyConnectionMigrationError({
         message: `Could not parse the legacy mobile connection catalog: ${String(cause)}`,
       }),
   });
+
   const legacy = yield* decodeLegacyConnectionDocument(parsed).pipe(
     Effect.mapError(
       (cause) =>

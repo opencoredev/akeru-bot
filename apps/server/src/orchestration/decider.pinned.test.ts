@@ -12,6 +12,7 @@ import * as Effect from "effect/Effect";
 import { decideOrchestrationCommand } from "./decider.ts";
 
 const NOW = "2026-01-01T00:00:00.000Z";
+
 const PINNED_AT = "1969-12-30T00:00:00.000Z";
 
 function makeReadModel(input: {
@@ -72,9 +73,11 @@ it.layer(NodeServices.layer)("pinned thread decider", (it) => {
         },
         readModel: makeReadModel({}),
       });
+
       const events = Array.isArray(event) ? event : [event];
       expect(events).toHaveLength(1);
       expect(events[0]?.type).toBe("thread.pinned");
+
       if (events[0]?.type === "thread.pinned") {
         expect(events[0].payload.pinnedAt).toBe(events[0].payload.updatedAt);
       }
@@ -91,8 +94,10 @@ it.layer(NodeServices.layer)("pinned thread decider", (it) => {
         },
         readModel: makeReadModel({ pinnedAt: PINNED_AT }),
       });
+
       const events = Array.isArray(event) ? event : [event];
       expect(events[0]?.type).toBe("thread.pinned");
+
       if (events[0]?.type === "thread.pinned") {
         expect(events[0].payload.pinnedAt).toBe(PINNED_AT);
         expect(events[0].payload.updatedAt).toBe(NOW);
@@ -110,8 +115,10 @@ it.layer(NodeServices.layer)("pinned thread decider", (it) => {
         },
         readModel: makeReadModel({ pinnedAt: PINNED_AT }),
       });
+
       const events = Array.isArray(event) ? event : [event];
       expect(events[0]?.type).toBe("thread.unpinned");
+
       if (events[0]?.type === "thread.unpinned") {
         expect(events[0].payload.updatedAt).not.toBe(NOW);
       }
@@ -128,8 +135,10 @@ it.layer(NodeServices.layer)("pinned thread decider", (it) => {
         },
         readModel: makeReadModel({}),
       });
+
       const events = Array.isArray(event) ? event : [event];
       expect(events[0]?.type).toBe("thread.unpinned");
+
       if (events[0]?.type === "thread.unpinned") {
         expect(events[0].payload.updatedAt).toBe(NOW);
       }
@@ -146,9 +155,11 @@ it.layer(NodeServices.layer)("pinned thread decider", (it) => {
         },
         readModel: makeReadModel({ settledOverride: "settled" }),
       });
+
       const events = Array.isArray(event) ? event : [event];
       expect(events.map((entry) => entry.type)).toEqual(["thread.pinned", "thread.unsettled"]);
       const unsettled = events.find((entry) => entry.type === "thread.unsettled");
+
       if (unsettled?.type === "thread.unsettled") {
         expect(unsettled.payload.reason).toBe("user");
       }
@@ -165,6 +176,7 @@ it.layer(NodeServices.layer)("pinned thread decider", (it) => {
         },
         readModel: makeReadModel({ snoozedUntil: "1970-01-02T09:00:00.000Z" }),
       });
+
       const events = Array.isArray(event) ? event : [event];
       expect(events.map((entry) => entry.type)).toEqual(["thread.pinned", "thread.unsnoozed"]);
     }),
@@ -180,6 +192,7 @@ it.layer(NodeServices.layer)("pinned thread decider", (it) => {
         },
         readModel: makeReadModel({}),
       });
+
       const events = Array.isArray(event) ? event : [event];
       expect(events.map((entry) => entry.type)).toEqual(["thread.pinned"]);
     }),
@@ -195,6 +208,7 @@ it.layer(NodeServices.layer)("pinned thread decider", (it) => {
         },
         readModel: makeReadModel({ pinnedAt: PINNED_AT }),
       });
+
       const events = Array.isArray(event) ? event : [event];
       expect(events.map((entry) => entry.type)).toEqual(["thread.settled", "thread.unpinned"]);
     }),
@@ -210,6 +224,7 @@ it.layer(NodeServices.layer)("pinned thread decider", (it) => {
         },
         readModel: makeReadModel({}),
       });
+
       const events = Array.isArray(event) ? event : [event];
       expect(events.map((entry) => entry.type)).toEqual(["thread.settled"]);
     }),
@@ -225,6 +240,7 @@ it.layer(NodeServices.layer)("pinned thread decider", (it) => {
         },
         readModel: makeReadModel({ archivedAt: NOW }),
       }).pipe(Effect.flip);
+
       expect(error._tag).toBe("OrchestrationCommandInvariantError");
     }),
   );
@@ -240,8 +256,10 @@ it.layer(NodeServices.layer)("pinned thread decider", (it) => {
         },
         readModel: makeReadModel({}),
       });
+
       const events = Array.isArray(event) ? event : [event];
       expect(events[0]?.type).toBe("thread.pinned");
+
       if (events[0]?.type === "thread.pinned") {
         expect(events[0].payload.pinOrderKey).toBe("g");
       }
@@ -261,8 +279,10 @@ it.layer(NodeServices.layer)("pinned thread decider", (it) => {
           },
           readModel: makeReadModel({ pinnedAt: PINNED_AT, pinOrderKey: "g" }),
         });
+
         const events = Array.isArray(event) ? event : [event];
         expect(events[0]?.type).toBe("thread.pinned");
+
         if (events[0]?.type === "thread.pinned") {
           expect(events[0].payload.pinOrderKey).toBeUndefined();
         }
@@ -280,8 +300,10 @@ it.layer(NodeServices.layer)("pinned thread decider", (it) => {
         },
         readModel: makeReadModel({ pinnedAt: PINNED_AT, pinOrderKey: "g" }),
       });
+
       const events = Array.isArray(event) ? event : [event];
       expect(events[0]?.type).toBe("thread.pin-reordered");
+
       if (events[0]?.type === "thread.pin-reordered") {
         expect(events[0].payload.orderKey).toBe("m");
         // A real move stamps the command time (the test clock), not the
@@ -302,8 +324,10 @@ it.layer(NodeServices.layer)("pinned thread decider", (it) => {
         },
         readModel: makeReadModel({ pinnedAt: PINNED_AT, pinOrderKey: "g" }),
       });
+
       const events = Array.isArray(event) ? event : [event];
       expect(events[0]?.type).toBe("thread.pin-reordered");
+
       if (events[0]?.type === "thread.pin-reordered") {
         expect(events[0].payload.updatedAt).toBe(NOW);
       }
@@ -321,6 +345,7 @@ it.layer(NodeServices.layer)("pinned thread decider", (it) => {
         },
         readModel: makeReadModel({}),
       }).pipe(Effect.flip);
+
       expect(error._tag).toBe("OrchestrationCommandInvariantError");
     }),
   );

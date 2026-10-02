@@ -1,3 +1,5 @@
+import * as Predicate from "effect/Predicate";
+import type { DesktopLogAnnotations } from "../app/DesktopObservability.ts";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, describe, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
@@ -14,7 +16,7 @@ import * as DesktopClientSettings from "./DesktopClientSettings.ts";
 
 interface LogRecord {
   readonly message: unknown;
-  readonly annotations: Readonly<Record<string, unknown>>;
+  readonly annotations: Readonly<DesktopLogAnnotations>;
 }
 
 const baseDir = "/virtual-home";
@@ -43,6 +45,7 @@ function makeLayer(fileSystemLayer: Layer.Layer<FileSystem.FileSystem>) {
 
 const readWithLogs = (fileSystemLayer: Layer.Layer<FileSystem.FileSystem>) => {
   const records: Array<LogRecord> = [];
+
   const logger = Logger.make(({ fiber, message }) => {
     records.push({
       message,
@@ -53,6 +56,7 @@ const readWithLogs = (fileSystemLayer: Layer.Layer<FileSystem.FileSystem>) => {
   return Effect.gen(function* () {
     const environment = yield* DesktopEnvironment.DesktopEnvironment;
     const settings = yield* DesktopClientSettings.DesktopClientSettings;
+
     return {
       result: yield* settings.get,
       settingsPath: environment.clientSettingsPath,
@@ -114,14 +118,18 @@ describe("DesktopClientSettings diagnostics", () => {
       assert.isTrue(Option.isNone(result.result));
       assert.equal(result.records.length, 1);
       const message = result.records[0]?.message;
+
       if (!Array.isArray(message)) {
         return assert.fail("expected structured warning arguments");
       }
+
       assert.equal(message[0], "Could not decode desktop client settings.");
       const schemaError = message[1];
-      if (schemaError === null || typeof schemaError !== "object") {
+
+      if (schemaError === null || !Predicate.isObjectOrArray(schemaError)) {
         return assert.fail("expected the schema error in the warning");
       }
+
       assert.equal("_tag" in schemaError ? schemaError._tag : undefined, "SchemaError");
       assert.equal(result.records[0]?.annotations.settingsPath, result.settingsPath);
     }),

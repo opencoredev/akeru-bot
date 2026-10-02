@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vite-plus/test";
@@ -6,8 +7,9 @@ import { BotToolsSection } from "./BotToolsSection";
 
 vi.mock("react-dom", async (importOriginal) => ({
   ...(await importOriginal<typeof import("react-dom")>()),
-  createPortal: (children: unknown) => children,
+  createPortal: (children: ReactNode) => children,
 }));
+
 vi.stubGlobal("document", { body: null });
 
 const render = (canDelegate?: boolean) =>

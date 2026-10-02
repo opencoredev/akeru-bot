@@ -21,11 +21,13 @@ export function resolveChatListAnchoredEndSpace<Item, AnchorId>(
 
   for (let index = 0; index < items.length; index += 1) {
     const item = items[index];
+
     if (item === undefined) {
       continue;
     }
 
     const itemAnchorId = getAnchorId(item);
+
     if (itemAnchorId === null) {
       continue;
     }

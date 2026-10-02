@@ -9,12 +9,14 @@ import * as CodexClient from "../../src/client.ts";
 
 const program = Effect.gen(function* () {
   const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
+
   const handle = yield* spawner.spawn(
     ChildProcess.make(process.env.CODEX_BIN ?? "codex", ["app-server"], {
       cwd: process.cwd(),
       shell: false,
     }),
   );
+
   const codexLayer = CodexClient.layerChildProcess(handle, {
     logIncoming: true,
     logOutgoing: true,
@@ -50,6 +52,7 @@ const program = Effect.gen(function* () {
         optOutNotificationMethods: null,
       },
     });
+
     yield* Console.log("initialize", initialized);
 
     yield* client.notify("initialized", undefined);
@@ -60,6 +63,7 @@ const program = Effect.gen(function* () {
     const skills = yield* client.request("skills/list", {
       cwds: [process.cwd()],
     });
+
     yield* Console.log("skills/list", skills);
   }).pipe(Effect.provide(codexLayer));
 });

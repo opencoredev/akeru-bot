@@ -23,6 +23,7 @@
  */
 import type {
   ProviderDriverKind,
+  ProviderInstanceConfig,
   ProviderInstanceEnvironment,
   ProviderInstanceId,
   ServerProvider,
@@ -30,6 +31,7 @@ import type {
 import type * as Effect from "effect/Effect";
 import type * as Schema from "effect/Schema";
 import type * as Scope from "effect/Scope";
+import type * as SchemaError from "effect/SchemaError";
 
 import type * as TextGeneration from "../textGeneration/TextGeneration.ts";
 import type { ProviderAdapterError, ProviderDriverError } from "./Errors.ts";
@@ -150,10 +152,8 @@ export interface ProviderDriver<Config, R = never> {
    * without casts. The registry only ever decodes `unknown` envelopes here,
    * so the precise encoded type is irrelevant at this boundary.
    *
-   * Using `Codec` rather than `Schema` pins `DecodingServices = never` — if
-   * we used `Schema<Config>`, the erased `any` in `AnyProviderDriver` would
-   * widen `DecodingServices` to `unknown` and poison the R channel of every
-   * caller of `decodeUnknownEffect`.
+   * Using `Codec` rather than `Schema` pins `DecodingServices = never`, so
+   * decoding does not add requirements to the registry's R channel.
    */
   readonly configSchema: Schema.Codec<Config, unknown>;
   /**
@@ -175,14 +175,19 @@ export interface ProviderDriver<Config, R = never> {
   ) => Effect.Effect<ProviderInstance, ProviderDriverError, R | Scope.Scope>;
 }
 
-/**
- * Heterogeneous-array convenience: the registry stores drivers as
- * `ReadonlyArray<AnyProviderDriver<R>>` where `R` is the union of all
- * registered drivers' env requirements.
- */
-// `any` here intentionally erases the per-driver Config; the registry
-// already decoded it before invoking `create`, so downstream code never
-// needs the original `Config` type. Using `unknown` instead would force
-// `create` callers into casts since `unknown` is not assignable to a
-// concrete `Config` from inside the driver body.
-export type AnyProviderDriver<R = never> = ProviderDriver<any, R>;
+/** A prepared config retains its typed driver constructor inside the closure. */
+export interface PreparedProviderDriver<R = never> {
+  readonly config: unknown;
+  readonly create: (
+    input: Omit<ProviderDriverCreateInput<never>, "config">,
+  ) => Effect.Effect<ProviderInstance, ProviderDriverError, R | Scope.Scope>;
+}
+
+/** Registry entry point for drivers with different config schemas. */
+export interface AnyProviderDriver<R = never> {
+  readonly driverKind: ProviderDriverKind;
+  readonly metadata: ProviderDriverMetadata;
+  readonly prepare: (
+    config: ProviderInstanceConfig["config"],
+  ) => Effect.Effect<PreparedProviderDriver<R>, SchemaError.SchemaError>;
+}

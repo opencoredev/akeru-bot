@@ -7,6 +7,7 @@ import {
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
+import * as Predicate from "effect/Predicate";
 import * as PubSub from "effect/PubSub";
 import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
@@ -18,9 +19,10 @@ import { ServerConfig } from "../../config.ts";
 import { mergeSubscriptionInstanceEnvironment } from "../../subscription-auth/runtime.ts";
 import { defaultProviderContinuationIdentity, type ProviderDriver } from "../ProviderDriver.ts";
 import { explicitProviderInstanceEnvironment } from "../ProviderInstanceEnvironment.ts";
-import { makeManualOnlyProviderMaintenanceCapabilities } from "../providerMaintenance.ts";
+import { manualOnlyProviderMaintenanceCapabilities } from "../providerMaintenance.ts";
 
 const DRIVER_KIND = ProviderDriverKind.make("customOpenai");
+
 const decodeSettings = Schema.decodeSync(CustomOpenaiSettings);
 
 /**
@@ -33,6 +35,7 @@ const decodeSettings = Schema.decodeSync(CustomOpenaiSettings);
  * happens to configure.
  */
 const API_KEY_ENV = "CUSTOM_OPENAI_API_KEY";
+
 const BASE_URL_ENV = "CUSTOM_OPENAI_BASE_URL";
 
 /** The whole `/models` probe — request, headers, and body — must fit this budget. */
@@ -48,31 +51,33 @@ const MODELS_TIMEOUT_MS = 10_000;
  * `None` means "not a model list at all".
  */
 const EndpointModelEnvelope = Schema.Struct({ data: Schema.Array(Schema.Unknown) });
+
 const EndpointModelArray = Schema.Array(Schema.Unknown);
-const EndpointModelId = Schema.Struct({ id: Schema.String });
 
-const decodeEndpointModelEnvelope = Schema.decodeUnknownOption(EndpointModelEnvelope);
-const decodeEndpointModelArray = Schema.decodeUnknownOption(EndpointModelArray);
-const decodeEndpointModelId = Schema.decodeUnknownOption(EndpointModelId);
+const EndpointModelList = Schema.Union([EndpointModelEnvelope, EndpointModelArray]);
 
-function readEndpointModelIds(payload: unknown): Option.Option<ReadonlyArray<string>> {
-  const envelope = decodeEndpointModelEnvelope(payload);
-  const entries = Option.isSome(envelope)
-    ? envelope.value.data
-    : Option.getOrUndefined(decodeEndpointModelArray(payload));
-  if (entries === undefined) return Option.none();
-  const ids: string[] = [];
+const EndpointModelEntry = Schema.Union([Schema.String, Schema.Struct({ id: Schema.String })]);
+
+const decodeEndpointModelList = Schema.decodeUnknownOption(EndpointModelList);
+
+const decodeEndpointModelEntry = Schema.decodeUnknownOption(EndpointModelEntry);
+
+function readEndpointModelIds(
+  list: typeof EndpointModelList.Type,
+): Option.Option<ReadonlyArray<string>> {
+  const entries = "data" in list ? list.data : list;
+  const ids = new Set<string>();
+
   for (const entry of entries) {
-    const id =
-      typeof entry === "string"
-        ? Option.some(entry)
-        : Option.map(decodeEndpointModelId(entry), (model) => model.id);
-    const resolved = Option.map(id, (value) => value.trim()).pipe(
+    const resolved = decodeEndpointModelEntry(entry).pipe(
+      Option.map((model) => (Predicate.isString(model) ? model : model.id).trim()),
       Option.filter((value) => value.length > 0),
     );
-    if (Option.isSome(resolved)) ids.push(resolved.value);
+
+    if (Option.isSome(resolved)) ids.add(resolved.value);
   }
-  return Option.some([...new Set(ids)]);
+
+  return Option.some([...ids]);
 }
 
 /**
@@ -84,8 +89,14 @@ function models(
   catalog: readonly string[],
   customModels: readonly string[],
 ): ServerProviderModel[] {
-  const custom = customModels.map((model) => model.trim()).filter((model) => model.length > 0);
+  const custom = customModels.flatMap((model) => {
+    const trimmed = model.trim();
+
+    return trimmed.length > 0 ? [trimmed] : [];
+  });
+
   const catalogSlugs = new Set(catalog);
+
   return [...new Set([...catalog, ...custom])].map((slug, index) => ({
     slug,
     name: slug,
@@ -109,10 +120,12 @@ export const CustomOpenaiDriver: ProviderDriver<CustomOpenaiSettings, CustomOpen
   create: ({ instanceId, displayName, accentColor, environment, enabled, config }) =>
     Effect.gen(function* () {
       const httpClient = yield* HttpClient.HttpClient;
+
       const changes = yield* Effect.acquireRelease(
         PubSub.unbounded<ServerProvider>(),
         PubSub.shutdown,
       );
+
       const catalog = yield* Ref.make<ReadonlyArray<string>>([]);
       const probeFailure = yield* Ref.make<string | null>(null);
       // False until the first probe settles. The catalog is not authoritative
@@ -126,31 +139,38 @@ export const CustomOpenaiDriver: ProviderDriver<CustomOpenaiSettings, CustomOpen
       const explicitEnvironment = explicitProviderInstanceEnvironment(environment);
       const apiKey = explicitEnvironment[API_KEY_ENV]?.trim() ?? "";
       const baseUrl = explicitEnvironment[BASE_URL_ENV]?.trim() || config.baseUrl.trim();
+
       const connectionEnvironment: NodeJS.ProcessEnv = {
         ...mergeSubscriptionInstanceEnvironment(environment),
         ...(apiKey.length > 0 ? { [API_KEY_ENV]: apiKey } : {}),
         ...(baseUrl.length > 0 ? { [BASE_URL_ENV]: baseUrl } : {}),
       };
+
       // Drop anything the process environment supplied for these two names:
       // only the instance's own variables and its configured base URL count.
       if (apiKey.length === 0) delete connectionEnvironment[API_KEY_ENV];
+
       if (baseUrl.length === 0) delete connectionEnvironment[BASE_URL_ENV];
       // A base URL alone is enough to run turns: plenty of OpenAI-compatible
       // servers (Ollama, llama.cpp, LM Studio) take no API key. `auth.status`
       // is the app-wide "this instance can run" signal, so it follows the base
       // URL rather than the key; the key is only sent when one is configured.
       const connected = baseUrl.length > 0;
+
       const continuationIdentity = defaultProviderContinuationIdentity({
         driverKind: DRIVER_KIND,
         instanceId,
       });
+
       const buildSnapshot = Effect.gen(function* () {
         const endpointModels = yield* Ref.get(catalog);
         const failure = yield* Ref.get(probeFailure);
         const settled = yield* Ref.get(probeSettled);
+
         const message = !connected
           ? "Set a base URL in Settings."
           : (failure ?? (settled ? undefined : "Listing models from the endpoint…"));
+
         // `warning` covers every state whose catalog is not authoritative:
         // disabled, no base URL, an in-flight first probe, and a failed probe
         // that is still serving the last good catalog.
@@ -177,27 +197,35 @@ export const CustomOpenaiDriver: ProviderDriver<CustomOpenaiSettings, CustomOpen
           skills: [],
         } satisfies ServerProvider;
       });
+
       const probeEndpointModels: Effect.Effect<ProbeResult> = Effect.gen(function* () {
         const bare = HttpClientRequest.get(`${baseUrl.replace(/\/+$/, "")}/models`).pipe(
           HttpClientRequest.setHeader("accept", "application/json"),
         );
+
         const request = apiKey.length > 0 ? HttpClientRequest.bearerToken(apiKey)(bare) : bare;
+
         // One timeout covers the request, the response headers, and the body:
         // a gateway that answers 200 and then stalls must not hang a refresh.
         const outcome = yield* Effect.gen(function* () {
           const response = yield* httpClient.execute(request);
+
           if (response.status < 200 || response.status >= 300) {
             return {
               ok: false as const,
               failure: `Model list from ${baseUrl} returned HTTP ${response.status}.`,
             } satisfies ProbeResult;
           }
+
           const ids = yield* response.json.pipe(
-            Effect.map(readEndpointModelIds),
+            Effect.map((body) =>
+              Option.flatMap(decodeEndpointModelList(body), readEndpointModelIds),
+            ),
             // A body that is not JSON at all is as unreadable as one with the
             // wrong shape; both mean "this is not a model list".
             Effect.orElseSucceed(() => Option.none()),
           );
+
           return Option.isSome(ids)
             ? { ok: true as const, catalog: ids.value }
             : {
@@ -208,10 +236,12 @@ export const CustomOpenaiDriver: ProviderDriver<CustomOpenaiSettings, CustomOpen
           Effect.timeoutOption(MODELS_TIMEOUT_MS),
           Effect.catchCause(() => Effect.succeed(Option.none())),
         );
+
         return Option.isNone(outcome)
           ? { ok: false, failure: `Could not list models from ${baseUrl}.` }
           : outcome.value;
       });
+
       const refresh = probeLock.withPermits(1)(
         Effect.gen(function* () {
           if (!connected) {
@@ -219,6 +249,7 @@ export const CustomOpenaiDriver: ProviderDriver<CustomOpenaiSettings, CustomOpen
             yield* Ref.set(probeSettled, false);
           } else {
             const result = yield* probeEndpointModels;
+
             if (result.ok) {
               yield* Ref.set(catalog, result.catalog);
               yield* Ref.set(probeFailure, null);
@@ -227,15 +258,20 @@ export const CustomOpenaiDriver: ProviderDriver<CustomOpenaiSettings, CustomOpen
               // the picker or block models the endpoint still serves.
               yield* Ref.set(probeFailure, result.failure);
             }
+
             yield* Ref.set(probeSettled, true);
           }
+
           const snapshot = yield* buildSnapshot;
           yield* PubSub.publish(changes, snapshot);
+
           return snapshot;
         }),
       );
+
       // Populate the catalog without blocking the registry's layer build.
       yield* Effect.forkScoped(refresh);
+
       return {
         instanceId,
         driverKind: DRIVER_KIND,
@@ -254,7 +290,7 @@ export const CustomOpenaiDriver: ProviderDriver<CustomOpenaiSettings, CustomOpen
         adapter: undefined,
         textGeneration: undefined,
         snapshot: {
-          maintenanceCapabilities: makeManualOnlyProviderMaintenanceCapabilities({
+          maintenanceCapabilities: manualOnlyProviderMaintenanceCapabilities({
             provider: DRIVER_KIND,
             packageName: null,
           }),

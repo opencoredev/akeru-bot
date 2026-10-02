@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import { BotId, MessageId, ThreadId, TurnId } from "@akeru/contracts";
 import { assert, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
@@ -60,7 +61,8 @@ layer("ProjectionThreadMessageRepository", (it) => {
 
       const result = yield* repository.getByMessageId({ messageId });
       assert.equal(result._tag, "Some");
-      if (result._tag === "Some") {
+
+      if (Predicate.isTagged(result, "Some")) {
         assert.equal(result.value.text, "one two three");
         assert.isFalse(result.value.isStreaming);
         assert.equal(result.value.updatedAt, "2026-09-01T17:00:03.000Z");
@@ -98,7 +100,8 @@ layer("ProjectionThreadMessageRepository", (it) => {
 
       const result = yield* repository.getByMessageId({ messageId });
       assert.equal(result._tag, "Some");
-      if (result._tag === "Some") {
+
+      if (Predicate.isTagged(result, "Some")) {
         assert.equal(result.value.text, "");
       }
     }),
@@ -111,11 +114,13 @@ layer("ProjectionThreadMessageRepository", (it) => {
       const messageId = MessageId.make("message-streaming-append");
       const respondingBotId = BotId.make("bot-streaming-append");
       const createdAt = "2026-09-01T18:00:00.000Z";
+
       const channelOrigin = {
         provider: "telegram" as const,
         externalThreadId: "telegram-chat-streaming",
         externalSenderId: "telegram-user-streaming",
       };
+
       const attachments = [
         {
           type: "image" as const,
@@ -141,7 +146,8 @@ layer("ProjectionThreadMessageRepository", (it) => {
 
       const initial = yield* repository.getByMessageId({ messageId });
       assert.equal(initial._tag, "Some");
-      if (initial._tag === "Some") {
+
+      if (Predicate.isTagged(initial, "Some")) {
         yield* repository.upsert({
           ...initial.value,
           reactions: [{ botId: respondingBotId, emoji: "eyes" }],
@@ -161,7 +167,8 @@ layer("ProjectionThreadMessageRepository", (it) => {
 
       const result = yield* repository.getByMessageId({ messageId });
       assert.equal(result._tag, "Some");
-      if (result._tag === "Some") {
+
+      if (Predicate.isTagged(result, "Some")) {
         assert.equal(result.value.text, "hello world");
         assert.equal(result.value.respondingBotId, respondingBotId);
         assert.deepEqual(result.value.channelOrigin, channelOrigin);
@@ -181,6 +188,7 @@ layer("ProjectionThreadMessageRepository", (it) => {
       const messageId = MessageId.make("message-preserve-attachments");
       const createdAt = "2026-02-28T19:00:00.000Z";
       const updatedAt = "2026-02-28T19:00:01.000Z";
+
       const persistedAttachments = [
         {
           type: "image" as const,
@@ -190,6 +198,7 @@ layer("ProjectionThreadMessageRepository", (it) => {
           sizeBytes: 5,
         },
       ];
+
       const channelOrigin = {
         provider: "telegram" as const,
         externalThreadId: "telegram-chat-1",
@@ -228,7 +237,8 @@ layer("ProjectionThreadMessageRepository", (it) => {
 
       const rowById = yield* repository.getByMessageId({ messageId });
       assert.equal(rowById._tag, "Some");
-      if (rowById._tag === "Some") {
+
+      if (Predicate.isTagged(rowById, "Some")) {
         assert.equal(rowById.value.text, "updated");
         assert.deepEqual(rowById.value.attachments, persistedAttachments);
         assert.deepEqual(rowById.value.channelOrigin, channelOrigin);
@@ -296,6 +306,7 @@ layer("ProjectionThreadMessageRepository", (it) => {
         { role: "assistant", createdAt: "2026-02-28T19:05:03.000Z" },
         { role: "system", createdAt: "2026-02-28T19:05:04.000Z" },
       ] as const;
+
       for (const [index, message] of messages.entries()) {
         yield* repository.upsert({
           messageId: MessageId.make(`latest-user-message-${index}`),
@@ -307,6 +318,7 @@ layer("ProjectionThreadMessageRepository", (it) => {
           updatedAt: "2026-02-28T19:06:00.000Z",
         });
       }
+
       yield* repository.upsert({
         messageId: MessageId.make("latest-user-message-other-thread"),
         threadId: ThreadId.make("thread-latest-user-message-other"),

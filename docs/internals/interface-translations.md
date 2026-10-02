@@ -56,12 +56,12 @@ The coverage test scans every file that imports `useI18n` or `useMobileI18n`, pl
 These surfaces render English in every language. Each is a known gap, not a claim of coverage.
 
 - Desktop native shell: the application menu, context menus built in the main process, updater dialogs, and the startup splash (`DesktopApplicationMenu.ts`, `DesktopWindow.ts`, startup assets). Electron's built-in menu roles follow the operating system. Translating them needs a client-local preference bridge into the main process, a menu rebuild on change, and Electron restart verification.
-- Web workspace tools: the file browser, diff panel, terminal drawer, git actions, branch toolbar, project scripts, and preview panels.
+- Web workspace tools: the file browser, code-block diffs, project scripts, and preview panels. Font previews in Settings also render English sample text.
 - Web Settings section bodies outside General. Row titles translate everywhere through Settings search, but descriptions, controls, and dialogs in Appearance and the theme editor, Keybindings, Bot channels setup, Voice, Image generation, Browser, Plugins, Sandbox, Privacy (except Memory), Connections access details, Source control and writing style, Errors, Diagnostics, and project settings render English.
 - Desktop update tooltips and toasts built in `desktopUpdate.logic.ts` and `providerUpdates.logic.ts`.
 - Web roster timestamps and the chat timestamp tooltip format with the browser or host locale, not the interface language (`roster.logic.ts`, `BotRosterSidebar.tsx`, `timestampFormat.ts`).
 - Channel origin labels and shared composer mention labels in `packages/client-runtime` and `packages/shared`.
-- Mobile screens: git sheets and progress overlay, chat channels, the composer command popover, files, review, terminal, usage and bot usage, image generation settings, legal documents, and the activity widget.
+- Mobile screens: chat channels, the composer command popover, files, usage and bot usage, image generation settings, legal documents, and the activity widget.
 - Mobile relative times in chat lists and archived chats (`lib/time.ts` `relativeTime`) stay English.
 - Toast titles and descriptions raised from non-component code outside the translated areas, and confirm dialog messages passed by callers in those areas.
 - Raw error text from providers, the environment server, git, and the operating system. It is shown as received, next to a translated explanation where a stable code exists.

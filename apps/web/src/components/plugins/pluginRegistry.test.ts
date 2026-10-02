@@ -10,8 +10,11 @@ import {
 } from "./pluginRegistry";
 
 const directory = loadDirectoryCatalog();
+
 const exaEntry = directory.find((plugin) => plugin.id === "exa");
+
 const firecrawlEntry = directory.find((plugin) => plugin.id === "firecrawl");
+
 if (
   !exaEntry ||
   exaEntry.kind !== "mcp-url" ||
@@ -20,6 +23,7 @@ if (
 ) {
   throw new TypeError("Required catalog plugins are missing.");
 }
+
 // The pending directory keeps verified URLs visible; the registry tests model
 // the recovered installable shape once each lifecycle passes.
 const exa = {
@@ -27,6 +31,7 @@ const exa = {
   connection: { type: "ready" as const },
   catalogStatus: "available" as const,
 } satisfies PluginDefinition;
+
 const firecrawl = {
   ...firecrawlEntry,
   connection: { type: "ready" as const },
@@ -34,9 +39,11 @@ const firecrawl = {
 } satisfies PluginDefinition;
 
 const executorDirectory = loadDirectoryCatalog().find((plugin) => plugin.id === "executor");
+
 if (!executorDirectory || executorDirectory.kind !== "mcp-url") {
   throw new TypeError("Executor is missing its HTTP recipe.");
 }
+
 const executor = {
   ...executorDirectory,
   connection: { type: "ready" as const },
@@ -52,6 +59,7 @@ const exaServer: McpServer = {
   createdAt: "2026-08-27T00:00:00.000Z",
   updatedAt: "2026-08-27T00:00:00.000Z",
 };
+
 const rawServer: McpServer = {
   id: McpServerId.make("raw-filesystem"),
   name: "Raw filesystem",

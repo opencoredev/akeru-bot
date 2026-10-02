@@ -30,9 +30,11 @@ function record(overrides: Partial<UsageRecord> = {}): UsageRecord {
 
 function cacheWith(entries: readonly [string, number, readonly UsageRecord[]][]): ScanCache {
   const cache: ScanCache = new Map();
+
   for (const [path, mtimeMs, records] of entries) {
     cache.set(path, { size: records.length * 10, mtimeMs, provider: "claude", records });
   }
+
   return cache;
 }
 
@@ -68,6 +70,7 @@ describe("scan cache round trip", () => {
 
   it("skips malformed file entries but keeps good ones", () => {
     const encoded = encodeScanCache(cacheWith([["/good.jsonl", 100, [record()]]]));
+
     const withJunk = {
       ...encoded,
       files: { ...encoded.files, "/bad.jsonl": { s: "nope", m: 1, p: "claude", r: [] } },
@@ -92,7 +95,9 @@ describe("scan cache round trip", () => {
     const encoded = encodeScanCache(
       cacheWith([["/a.jsonl", 100, [record(), record({ dedupeKey: "msg_2:" })]]]),
     );
+
     const rows = encoded.files["/a.jsonl"]!.r;
+
     const poisoned = {
       ...encoded,
       files: {

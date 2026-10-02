@@ -17,19 +17,24 @@ export interface PendingNewTask {
 
 export function usePendingNewTasks(): ReadonlyArray<PendingNewTask> {
   const queuedMessagesByThreadKey = useThreadOutboxMessages();
+
   return useMemo(() => {
     const tasks: PendingNewTask[] = [];
+
     for (const message of flattenQueuedThreadMessages(queuedMessagesByThreadKey)) {
       if (!message.creation) {
         continue;
       }
+
       tasks.push({
         message,
         creation: message.creation,
         title: deriveThreadTitleFromPrompt(message.text),
       });
     }
+
     tasks.sort((left, right) => right.message.createdAt.localeCompare(left.message.createdAt));
+
     return tasks;
   }, [queuedMessagesByThreadKey]);
 }

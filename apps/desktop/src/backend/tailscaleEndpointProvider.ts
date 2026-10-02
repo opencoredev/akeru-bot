@@ -35,8 +35,11 @@ function resolveTailscaleIpAdvertisedEndpoints(input: {
 
     for (const address of interfaceAddresses) {
       if (address.internal) continue;
+
       if (address.family !== "IPv4") continue;
+
       if (!isTailscaleIpv4Address(address.address)) continue;
+
       if (seen.has(address.address)) continue;
       seen.add(address.address);
 
@@ -74,11 +77,13 @@ const resolveTailscaleMagicDnsAdvertisedEndpoint = Effect.fn(
     magicDnsName: input.dnsName,
     ...(input.servePort === undefined ? {} : { servePort: input.servePort }),
   });
+
   const probe =
     input.probe?.(httpBaseUrl) ??
     probeTailscaleHttpsEndpoint({
       baseUrl: httpBaseUrl,
     });
+
   const isReachable = input.serveEnabled ? yield* probe : false;
 
   return Option.some(
@@ -117,12 +122,14 @@ export const resolveTailscaleAdvertisedEndpoints = Effect.fn("resolveTailscaleAd
     ChildProcessSpawner.ChildProcessSpawner | HttpClient.HttpClient
   > {
     const ipEndpoints = resolveTailscaleIpAdvertisedEndpoints(input);
+
     const readDnsName =
       input.readMagicDnsName ??
       readTailscaleStatus.pipe(
         Effect.map((status) => status.magicDnsName),
         Effect.orElseSucceed(() => null),
       );
+
     const dnsName =
       input.statusJson === undefined
         ? yield* readDnsName
@@ -131,6 +138,7 @@ export const resolveTailscaleAdvertisedEndpoints = Effect.fn("resolveTailscaleAd
               Effect.orElseSucceed(() => null),
             )
           : null;
+
     const magicDnsEndpoint = yield* resolveTailscaleMagicDnsAdvertisedEndpoint({
       dnsName,
       serveEnabled: input.serveEnabled === true,

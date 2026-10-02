@@ -5,22 +5,27 @@ import {
   createReplyReadoutPreference,
   type ReplyPlaybackRequest,
 } from "@akeru/client-runtime/reply-playback";
+import { ReplyPlaybackControls } from "./ReplyPlaybackControls";
+import { ReplyReadoutPreference } from "./ReplyReadoutPreference";
 
 vi.mock("react", async (importOriginal) => ({
   ...(await importOriginal<typeof import("react")>()),
-  useSyncExternalStore: (_subscribe: unknown, snapshot: () => unknown) => snapshot(),
+  useSyncExternalStore: <T,>(_subscribe: (callback: () => void) => () => void, snapshot: () => T) =>
+    snapshot(),
 }));
+
 vi.mock("react-native", () => ({ View: "View", Pressable: "Pressable" }));
+
 vi.mock("../../components/AppText", () => ({ AppText: "AppText" }));
+
 vi.mock("../../components/ThemedSwitch", () => ({ ThemedSwitch: "ThemedSwitch" }));
+
 vi.mock("../../lib/i18n", async () => {
   const { createTranslator } = await import("@akeru/client-runtime/i18n");
   const translator = createTranslator("en");
+
   return { useMobileI18n: () => ({ ...translator, t: translator.translate }) };
 });
-
-import { ReplyPlaybackControls } from "./ReplyPlaybackControls";
-import { ReplyReadoutPreference } from "./ReplyReadoutPreference";
 
 type ElementProps = {
   children?: ReactNode;
@@ -33,16 +38,20 @@ type ElementProps = {
   onPress?: () => void;
   onValueChange?: (value: boolean) => void;
 };
+
 function elements(node: ReactNode): ElementProps[] {
   return Children.toArray(node).flatMap((child) =>
     isValidElement<ElementProps>(child) ? [child.props, ...elements(child.props.children)] : [],
   );
 }
+
 function named(node: ReactNode, label: string) {
   const found = elements(node).find((props) => props.accessibilityLabel === label);
   expect(found, label).toBeDefined();
+
   return found!;
 }
+
 const request: ReplyPlaybackRequest = {
   identity: {
     environmentId: "remote",
@@ -55,11 +64,13 @@ const request: ReplyPlaybackRequest = {
   text: "A completed reply",
   automatic: false,
 };
+
 function setup() {
   const audio = { play: vi.fn(async () => {}), pause: vi.fn(), dispose: vi.fn() };
   const prepare = vi.fn(async () => audio);
   const controller = createReplyPlaybackController(prepare);
   controller.setContext({ ...request.identity, connected: true, mediaBlocked: false });
+
   return {
     controller,
     audio,
@@ -110,12 +121,14 @@ describe("native reply playback controls", () => {
 
   it("exposes unavailable reasons and service disclosure without starting playback", () => {
     const { controller, prepare } = setup();
+
     const tree = ReplyPlaybackControls({
       controller,
       request,
       unavailableReason: "Connect to this environment",
       disclosure: "Your speech service may charge for audio.",
     });
+
     const button = named(tree, "Read aloud");
     expect(button.disabled).toBe(true);
     expect(button.accessibilityHint).toBe("Connect to this environment");
@@ -171,6 +184,7 @@ describe("native reply readout preference", () => {
       },
       () => {},
     );
+
     await preference.setEnabled(true);
     const tree = ReplyReadoutPreference({ preference });
     expect(elements(tree).some((props) => props.accessibilityRole === "alert")).toBe(true);

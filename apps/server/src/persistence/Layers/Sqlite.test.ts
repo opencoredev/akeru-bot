@@ -1,4 +1,3 @@
-// @effect-diagnostics nodeBuiltinImport:off
 import * as NodeChildProcess from "node:child_process";
 import * as NodeFS from "node:fs";
 import * as NodeOS from "node:os";
@@ -10,7 +9,7 @@ import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as SqlClient from "effect/unstable/sql/SqlClient";
 
-import { SqlitePersistenceMemory, makeSqlitePersistenceLive } from "./Sqlite.ts";
+import { SqlitePersistenceMemory, sqlitePersistenceLayer } from "./Sqlite.ts";
 
 const lockHolderSource = `
 const { DatabaseSync } = require("node:sqlite");
@@ -32,6 +31,7 @@ const spawnWriteLockHolder = (dbPath: string, holdMs: number) =>
           ["-e", lockHolderSource, dbPath, String(holdMs)],
           { stdio: ["ignore", "pipe", "ignore"] },
         );
+
         holder.stdout.once("data", () => resolve());
         holder.on("error", reject);
         holder.on("exit", () =>
@@ -52,7 +52,7 @@ it.effect("waits out a concurrent writer instead of failing with SQLITE_BUSY", (
     const rows = yield* sql<{ readonly id: number }>`SELECT id FROM busy_probe`;
     assert.deepEqual([...rows], [{ id: 1 }]);
   }).pipe(
-    Effect.provide(makeSqlitePersistenceLive(dbPath).pipe(Layer.provide(NodeServices.layer))),
+    Effect.provide(sqlitePersistenceLayer(dbPath).pipe(Layer.provide(NodeServices.layer))),
     Effect.ensuring(Effect.sync(() => NodeFS.rmSync(tempDir, { recursive: true, force: true }))),
   );
 });

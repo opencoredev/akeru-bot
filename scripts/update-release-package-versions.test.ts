@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, it } from "@effect/vitest";
 import * as Config from "effect/Config";
@@ -22,10 +23,15 @@ import {
 } from "./update-release-package-versions.ts";
 
 const ScriptTestLayer = Layer.mergeAll(NodeServices.layer, TestConsole.layer);
+
 const runCli = Command.runWith(updateReleasePackageVersionsCommand, { version: "0.0.0" });
+
 const PackageJsonSchema = Schema.Record(Schema.String, Schema.Unknown);
+
 const PackageJsonPrettyJson = fromJsonStringPretty(PackageJsonSchema);
+
 const decodePackageJson = Schema.decodeEffect(PackageJsonPrettyJson);
+
 const encodePackageJson = Schema.encodeEffect(PackageJsonPrettyJson);
 
 const writePackageJsonFixtures = Effect.fn("writePackageJsonFixtures")(function* (
@@ -66,9 +72,11 @@ const readReleaseVersions = Effect.fn("readReleaseVersions")(function* (rootDir:
 const captureLogs = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
   Effect.gen(function* () {
     const result = yield* effect;
-    const logs = (yield* TestConsole.logLines).filter(
-      (line): line is string => typeof line === "string",
+
+    const logs = (yield* TestConsole.logLines).filter((line): line is string =>
+      Predicate.isString(line),
     );
+
     return { result, logs };
   });
 
@@ -76,6 +84,7 @@ it.layer(ScriptTestLayer)("update-release-package-versions", (it) => {
   it.effect("updates all release package versions under the provided root", () =>
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
+
       const baseDir = yield* fs.makeTempDirectoryScoped({
         prefix: "update-release-package-versions-",
       });
@@ -96,6 +105,7 @@ it.layer(ScriptTestLayer)("update-release-package-versions", (it) => {
   it.effect("returns changed=false when all versions already match", () =>
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
+
       const baseDir = yield* fs.makeTempDirectoryScoped({
         prefix: "update-release-package-versions-unchanged-",
       });
@@ -112,9 +122,11 @@ it.layer(ScriptTestLayer)("update-release-package-versions", (it) => {
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
+
       const baseDir = yield* fs.makeTempDirectoryScoped({
         prefix: "update-release-package-versions-read-error-",
       });
+
       const filePath = path.join(baseDir, releasePackageFiles[0]);
 
       const error = yield* updateReleasePackageVersions("1.2.3", {
@@ -133,9 +145,11 @@ it.layer(ScriptTestLayer)("update-release-package-versions", (it) => {
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
+
       const baseDir = yield* fs.makeTempDirectoryScoped({
         prefix: "update-release-package-versions-decode-error-",
       });
+
       const filePath = path.join(baseDir, releasePackageFiles[0]);
 
       yield* writePackageJsonFixtures(baseDir, "0.0.1");
@@ -156,9 +170,11 @@ it.layer(ScriptTestLayer)("update-release-package-versions", (it) => {
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
+
       const baseDir = yield* fs.makeTempDirectoryScoped({
         prefix: "update-release-package-versions-write-error-",
       });
+
       const filePath = path.join(baseDir, releasePackageFiles[0]);
 
       yield* writePackageJsonFixtures(baseDir, "0.0.1");
@@ -179,9 +195,11 @@ it.layer(ScriptTestLayer)("update-release-package-versions", (it) => {
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
+
       const baseDir = yield* fs.makeTempDirectoryScoped({
         prefix: "update-release-package-versions-cli-",
       });
+
       const githubOutputPath = path.join(baseDir, "github-output.txt");
 
       yield* writePackageJsonFixtures(baseDir, "0.0.1");
@@ -207,6 +225,7 @@ it.layer(ScriptTestLayer)("update-release-package-versions", (it) => {
     captureLogs(
       Effect.gen(function* () {
         const fs = yield* FileSystem.FileSystem;
+
         const baseDir = yield* fs.makeTempDirectoryScoped({
           prefix: "update-release-package-versions-cli-log-",
         });
@@ -217,6 +236,7 @@ it.layer(ScriptTestLayer)("update-release-package-versions", (it) => {
     ).pipe(
       Effect.tap(({ logs }) => {
         assert.deepStrictEqual(logs, ["All package.json versions already match release version."]);
+
         return Effect.void;
       }),
     ),
@@ -225,6 +245,7 @@ it.layer(ScriptTestLayer)("update-release-package-versions", (it) => {
   it.effect("requires GITHUB_OUTPUT when --github-output is set", () =>
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
+
       const baseDir = yield* fs.makeTempDirectoryScoped({
         prefix: "update-release-package-versions-cli-missing-output-",
       });
@@ -248,6 +269,7 @@ it.layer(ScriptTestLayer)("update-release-package-versions", (it) => {
   it.effect("preserves GITHUB_OUTPUT write context and the filesystem cause", () =>
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
+
       const baseDir = yield* fs.makeTempDirectoryScoped({
         prefix: "update-release-package-versions-cli-output-error-",
       });
@@ -285,10 +307,11 @@ it.layer(ScriptTestLayer)("update-release-package-versions", (it) => {
         assert.fail(`Expected CliError, got ${String(error)}`);
       }
 
-      const optionError =
-        error._tag === "ShowHelp" ? (error.errors[0] as CliError.CliError | undefined) : error;
+      const optionError = Predicate.isTagged(error, "ShowHelp")
+        ? (error.errors[0] as CliError.CliError | undefined)
+        : error;
 
-      if (!optionError || optionError._tag !== "UnrecognizedOption") {
+      if (!optionError || !Predicate.isTagged(optionError, "UnrecognizedOption")) {
         assert.fail(`Expected UnrecognizedOption, got ${String(optionError?._tag)}`);
       }
 
@@ -304,10 +327,11 @@ it.layer(ScriptTestLayer)("update-release-package-versions", (it) => {
         assert.fail(`Expected CliError, got ${String(error)}`);
       }
 
-      const versionError =
-        error._tag === "ShowHelp" ? (error.errors[0] as CliError.CliError | undefined) : error;
+      const versionError = Predicate.isTagged(error, "ShowHelp")
+        ? (error.errors[0] as CliError.CliError | undefined)
+        : error;
 
-      if (!versionError || versionError._tag !== "MissingArgument") {
+      if (!versionError || !Predicate.isTagged(versionError, "MissingArgument")) {
         assert.fail(`Expected MissingArgument, got ${String(versionError?._tag)}`);
       }
 

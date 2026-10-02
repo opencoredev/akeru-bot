@@ -1,4 +1,6 @@
 #!/usr/bin/env node
+import * as Data from "effect/Data";
+import * as Predicate from "effect/Predicate";
 
 import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
 import * as NodeServices from "@effect/platform-node/NodeServices";
@@ -12,6 +14,8 @@ import * as Schema from "effect/Schema";
 import { Command, Flag } from "effect/unstable/cli";
 import { FetchHttpClient, HttpClient, HttpClientResponse } from "effect/unstable/http";
 import { ChildProcess, ChildProcessSpawner } from "effect/unstable/process";
+
+const CommandError = Data.taggedEnum<GenerateCommandError>();
 
 const CURRENT_SCHEMA_RELEASE = "v0.11.3";
 
@@ -31,25 +35,31 @@ interface GeneratedPaths {
 const UpstreamJsonSchemaSchema = Schema.Struct({
   $defs: Schema.Record(Schema.String, Schema.Json),
 });
+
 const MetaJsonSchema = Schema.Struct({
   agentMethods: Schema.Record(Schema.String, Schema.String),
   clientMethods: Schema.Record(Schema.String, Schema.String),
   version: Schema.Union([Schema.Number, Schema.String]),
 });
+
 const encodeAgentMethods = Schema.encodeEffect(
   Schema.fromJsonString(MetaJsonSchema.fields.agentMethods),
 );
+
 const encodeClientMethods = Schema.encodeEffect(
   Schema.fromJsonString(MetaJsonSchema.fields.clientMethods),
 );
+
 const encodeVersion = Schema.encodeEffect(Schema.fromJsonString(MetaJsonSchema.fields.version));
 
 const decodeUpstreamSchema = Schema.decodeEffect(Schema.fromJsonString(UpstreamJsonSchemaSchema));
+
 const decodeMetaJson = Schema.decodeEffect(Schema.fromJsonString(MetaJsonSchema));
 
 const getGeneratedPaths = Effect.fn("getGeneratedPaths")(function* () {
   const path = yield* Path.Path;
   const generatedDir = path.join(import.meta.dirname, "..", "src", "_generated");
+
   return {
     generatedDir,
     upstreamSchemaPath: path.join(generatedDir, "upstream-schema.json"),
@@ -97,6 +107,7 @@ const downloadSchemas = Effect.fn("downloadSchemas")(function* (tag: string) {
 
 const readFileString = Effect.fn("readJsonFile")(function* (filePath: string) {
   const fs = yield* FileSystem.FileSystem;
+
   return yield* fs.readFileString(filePath);
 });
 
@@ -118,20 +129,24 @@ function collectSchemaEntries(
     .split("\n")
     .map((line) => line.trim())
     .filter((line) => line.length > 0 && !line.startsWith("//"));
+
   const entries: Array<{ name: string; code: string }> = [];
 
   for (let index = 0; index < lines.length; index += 1) {
     const typeLine = lines[index];
+
     if (!typeLine?.startsWith("export type ")) {
       continue;
     }
 
     const constLine = lines[index + 1];
+
     if (!constLine?.startsWith("export const ")) {
       throw new Error(`Malformed generator output near: ${typeLine}`);
     }
 
     const match = /^export type ([A-Za-z0-9_]+)/.exec(typeLine);
+
     if (!match?.[1]) {
       throw new Error(`Could not extract schema name from: ${typeLine}`);
     }
@@ -150,33 +165,44 @@ function normalizeNullableTypes(value: Schema.Json): Schema.Json {
   if (Array.isArray(value)) {
     return value.map(normalizeNullableTypes);
   }
-  if (value === null || typeof value !== "object") {
+
+  if (
+    value === null ||
+    Predicate.isString(value) ||
+    Predicate.isNumber(value) ||
+    Predicate.isBoolean(value)
+  ) {
     return value;
   }
 
-  const normalizedEntries = Object.entries(value).map(([key, child]) => [
+  const normalizedEntries = Object.entries(value).map(([key, child]): [string, Schema.Json] => [
     key,
     normalizeNullableTypes(child),
   ]);
-  const normalizedObject = Object.fromEntries(normalizedEntries) as Record<string, Schema.Json>;
+
+  const normalizedObject = Object.fromEntries(normalizedEntries);
   const typeValue = normalizedObject.type;
 
   if (!Array.isArray(typeValue)) {
     return normalizedObject;
   }
 
-  const normalizedTypes = typeValue.filter((entry): entry is string => typeof entry === "string");
+  const normalizedTypes = typeValue.filter((entry): entry is string => Predicate.isString(entry));
+
   if (normalizedTypes.length !== typeValue.length || !normalizedTypes.includes("null")) {
     return normalizedObject;
   }
 
   const nonNullTypes = normalizedTypes.filter((entry) => entry !== "null");
+
   if (nonNullTypes.length !== 1) {
     return normalizedObject;
   }
+
   const nonNullType = nonNullTypes[0]!;
 
   const nextObject: Record<string, Schema.Json> = {};
+
   for (const [key, child] of Object.entries(normalizedObject)) {
     if (key !== "type") {
       nextObject[key] = child;
@@ -207,7 +233,9 @@ const generateSchemas = Effect.fn("generateSchemas")(function* (skipDownload: bo
   const upstreamSchema = yield* readFileString(upstreamSchemaPath).pipe(
     Effect.flatMap(decodeUpstreamSchema),
   );
+
   const upstreamMeta = yield* readFileString(upstreamMetaPath).pipe(Effect.flatMap(decodeMetaJson));
+
   const normalizedDefinitions = Object.fromEntries(
     Object.entries(upstreamSchema.$defs).map(([name, schema]) => [
       name,
@@ -218,14 +246,18 @@ const generateSchemas = Effect.fn("generateSchemas")(function* (skipDownload: bo
   const sortedEntries = Object.entries(normalizedDefinitions).toSorted(([left], [right]) =>
     left.localeCompare(right),
   );
+
   const generatedEntries = new Map<string, string>();
   const generator = makeJsonSchemaGenerator();
 
   for (const [name, schema] of sortedEntries) {
+    // SAFETY: These are upstream JSON Schema definitions; normalization keeps their schema structure. The generator types only its supported dialect.
     generator.addSchema(name, schema as never);
   }
 
+  // SAFETY: Every entry is an upstream or explicit compatibility JSON Schema definition normalized for OpenAPI 3.1.
   const output = generator.generate("openapi-3.1", normalizedDefinitions as never, false).trim();
+
   if (output.length > 0) {
     for (const entry of collectSchemaEntries(output)) {
       if (!generatedEntries.has(entry.name)) {
@@ -270,10 +302,9 @@ const generateSchemas = Effect.fn("generateSchemas")(function* (skipDownload: bo
     Effect.tap((code) =>
       code === 0
         ? Effect.void
-        : Effect.fail<GenerateCommandError>({
-            _tag: "GenerateCommandError",
-            message: `oxfmt failed with exit code ${code}`,
-          }),
+        : Effect.fail<GenerateCommandError>(
+            CommandError.GenerateCommandError({ message: `oxfmt failed with exit code ${code}` }),
+          ),
     ),
   );
 });

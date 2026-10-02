@@ -17,7 +17,9 @@ export { isLocalLoopbackHost, isPrivateNetworkHost, isPublicFaviconHost, normali
 
 const readEnvironmentUrl = (environmentId: EnvironmentId): URL => {
   const connection = readPreparedConnection(environmentId);
+
   if (!connection) throw new Error(`Environment ${environmentId} is not connected.`);
+
   return new URL(connection.httpBaseUrl);
 };
 
@@ -33,9 +35,11 @@ const resolveEnvironmentPortTarget = (
       "This environment port needs the planned authenticated preview gateway; its server address is not directly private-network reachable.",
     );
   }
+
   const protocol = target.protocol ?? "http";
   const path = target.path?.startsWith("/") ? target.path : `/${target.path ?? ""}`;
   const normalizedEnvironmentHost = environmentUrl.hostname.replace(/^\[|\]$/g, "");
+
   // Local loopback environments should advertise `localhost` so Chromium
   // dual-stack lookup can reach a Vite server bound only to ::1 or 127.0.0.1.
   const resolvedHost = isLocalLoopbackHost(normalizedEnvironmentHost)
@@ -43,13 +47,16 @@ const resolveEnvironmentPortTarget = (
     : normalizedEnvironmentHost.includes(":")
       ? `[${normalizedEnvironmentHost}]`
       : normalizedEnvironmentHost;
+
   const resolved = sourceUrl
     ? new URL(sourceUrl)
     : new URL(path, `${protocol}://${resolvedHost}:${target.port}`);
+
   if (sourceUrl) {
     resolved.hostname = resolvedHost;
     resolved.port = String(target.port);
   }
+
   return {
     requestedUrl: requestedUrl ?? `${protocol}://localhost:${target.port}${path}`,
     resolvedUrl: resolved.toString(),
@@ -66,14 +73,17 @@ export function resolveBrowserNavigationTarget(
 ): PreviewUrlResolution {
   if (target.kind === "url") {
     let parsed: URL | null = null;
+
     try {
       parsed = new URL(normalizePreviewUrl(target.url));
     } catch {
       // Preserve the existing direct-navigation behavior so the preview host
       // reports malformed URL errors through its normal navigation path.
     }
+
     if (parsed && isLoopbackHost(parsed.hostname)) {
       const environmentUrl = readEnvironmentUrl(environmentId);
+
       if (parsed.hostname === "0.0.0.0" || !isLocalLoopbackHost(environmentUrl.hostname)) {
         return resolveEnvironmentPortTarget(
           environmentId,
@@ -89,6 +99,7 @@ export function resolveBrowserNavigationTarget(
         );
       }
     }
+
     return {
       requestedUrl: target.url,
       resolvedUrl: target.url,
@@ -96,12 +107,14 @@ export function resolveBrowserNavigationTarget(
       environmentId,
     };
   }
+
   return resolveEnvironmentPortTarget(environmentId, target, readEnvironmentUrl(environmentId));
 }
 
 export function resolveDiscoveredServerUrl(environmentId: EnvironmentId, rawUrl: string): string {
   try {
     const normalizedUrl = normalizePreviewUrl(rawUrl);
+
     return resolveBrowserNavigationTarget(environmentId, {
       kind: "url",
       url: normalizedUrl,

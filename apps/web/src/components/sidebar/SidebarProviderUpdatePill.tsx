@@ -1,3 +1,4 @@
+import { Match } from "effect";
 import { useAtomValue } from "@effect/atom-react";
 import type { ServerProvider } from "@akeru/contracts";
 import { CircleCheckIcon, DownloadIcon, LoaderIcon, TriangleAlertIcon, XIcon } from "lucide-react";
@@ -50,6 +51,7 @@ export function SidebarProviderUpdatePill() {
   const [dismissAfterExitKey, setDismissAfterExitKey] = useState<string | null>(null);
   const [visibleAfterIso, setVisibleAfterIso] = useState<string | undefined>();
   const effectiveVisibleAfterIso = visibleAfterIso ?? latestProviderCheckedAt(providers);
+
   const view = getProviderUpdateSidebarPillView(providers, {
     ...(effectiveVisibleAfterIso !== undefined
       ? { visibleAfterIso: effectiveVisibleAfterIso }
@@ -66,9 +68,11 @@ export function SidebarProviderUpdatePill() {
   const openProviderSettings = useCallback(() => {
     openSettings("providers");
   }, []);
+
   const displayedView = renderedView ?? view;
   const dismissAfterVisibleMs = displayedView?.dismissAfterVisibleMs;
   const viewKey = displayedView?.key ?? null;
+
   const showDismissProgress =
     dismissAfterVisibleMs !== undefined &&
     displayedView?.tone !== "loading" &&
@@ -79,6 +83,7 @@ export function SidebarProviderUpdatePill() {
       if (exitingKey === key) {
         return;
       }
+
       setPendingView(nextView);
       setExitingKey(key);
       setDismissAfterExitKey(dismissKey ?? null);
@@ -90,18 +95,24 @@ export function SidebarProviderUpdatePill() {
     if (exitingKey !== null) {
       return;
     }
+
     if (!renderedView) {
       if (view) {
         setRenderedView(view);
       }
+
       return;
     }
+
     if (!view) {
       startExit(renderedView.key, null);
+
       return;
     }
+
     if (view.key !== renderedView.key) {
       startExit(renderedView.key, view);
+
       return;
     }
   }, [exitingKey, renderedView, startExit, view]);
@@ -110,9 +121,11 @@ export function SidebarProviderUpdatePill() {
     if (!dismissAfterVisibleMs || !viewKey) {
       return;
     }
+
     if (exitingKey === viewKey) {
       return;
     }
+
     const timeoutId = window.setTimeout(() => {
       startExit(viewKey, null, viewKey);
     }, dismissAfterVisibleMs);
@@ -124,9 +137,10 @@ export function SidebarProviderUpdatePill() {
     return null;
   }
 
+  // SAFETY: React CSSProperties omits custom properties; these values are CSS variables consumed by the component stylesheet.
   return (
     <div
-      className={`group/provider-update relative flex h-7 w-full items-center overflow-hidden rounded-lg text-xs font-medium transform-gpu transition-all duration-180 ease-[cubic-bezier(0.22,1,0.36,1)] will-change-transform ${
+      className={`group/provider-update relative flex h-7 w-full items-center overflow-hidden rounded-lg text-xs font-medium transform-gpu transition-all duration-180 ease-(--ease-smooth-out) will-change-transform ${
         PROVIDER_UPDATE_PILL_STYLES[displayedView.tone]
       } ${
         exitingKey === displayedView.key
@@ -137,12 +151,15 @@ export function SidebarProviderUpdatePill() {
         if (event.target !== event.currentTarget) {
           return;
         }
+
         if (!displayedView || exitingKey !== displayedView.key) {
           return;
         }
+
         if (dismissAfterExitKey === displayedView.key) {
           setDismissedKeys((previous) => new Set(previous).add(displayedView.key));
         }
+
         setRenderedView(pendingView);
         setPendingView(null);
         setExitingKey(null);
@@ -153,7 +170,7 @@ export function SidebarProviderUpdatePill() {
         <div
           key={displayedView.key}
           aria-hidden="true"
-          className={`pointer-events-none absolute inset-y-0 left-0 w-full origin-left animate-[provider-update-pill-countdown_var(--provider-update-pill-dismiss-ms)_linear_forwards] border-r border-current/15 shadow-[inset_0_1px_0_rgb(255_255_255_/_0.08)] ${
+          className={`pointer-events-none absolute inset-y-0 left-0 w-full origin-left animate-provider-update-pill-countdown border-r border-current/15 shadow-inset-highlight ${
             PROVIDER_UPDATE_PILL_PROGRESS_STYLES[displayedView.tone]
           }`}
           style={
@@ -170,17 +187,16 @@ export function SidebarProviderUpdatePill() {
             <button
               type="button"
               aria-label={displayedView.description}
-              className="provider-update-main relative z-[1] flex h-full flex-1 items-center gap-2 px-2 text-left"
+              className="provider-update-main relative z-1 flex h-full flex-1 items-center gap-2 px-2 text-left"
               onClick={openProviderSettings}
             >
-              {displayedView.tone === "loading" ? (
-                <LoaderIcon className="size-3.5 animate-spin" />
-              ) : displayedView.tone === "success" ? (
-                <CircleCheckIcon className="size-3.5" />
-              ) : displayedView.tone === "error" ? (
-                <TriangleAlertIcon className="size-3.5" />
-              ) : (
-                <DownloadIcon className="size-3.5" />
+              {Match.value(displayedView).pipe(
+                Match.when({ tone: "loading" }, () => (
+                  <LoaderIcon className="size-3.5 animate-spin" />
+                )),
+                Match.when({ tone: "success" }, () => <CircleCheckIcon className="size-3.5" />),
+                Match.when({ tone: "error" }, () => <TriangleAlertIcon className="size-3.5" />),
+                Match.orElse(() => <DownloadIcon className="size-3.5" />),
               )}
               <span>{displayedView.title}</span>
             </button>
@@ -196,7 +212,8 @@ export function SidebarProviderUpdatePill() {
                 size="icon-micro"
                 variant="ghost"
                 aria-label={t("Dismiss provider update notice")}
-                className="relative z-[1] mr-1 [--control-icon-color:currentColor] rounded-md text-inherit opacity-70 hover:bg-transparent hover:opacity-100"
+                presentation="update-pill-dismiss"
+                className="relative z-1 mr-1"
                 onClick={() => startExit(displayedView.key, null, displayedView.key)}
               >
                 <XIcon className="size-3.5" />

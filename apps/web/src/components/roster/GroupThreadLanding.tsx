@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 import { threadDelegations } from "@akeru/client-runtime/delegation-presentation";
 import { botChatTimeline } from "@akeru/client-runtime/state/bot-chat-timeline";
 import { pendingMemoryApprovals } from "@akeru/client-runtime/durable-memory";
@@ -55,7 +56,7 @@ import {
 import { useBotPromptMentionScope } from "./BotPromptMentions";
 import { BotTurnFailureRow } from "./BotTurnFailureRow";
 import { botEngineFailureContext, botEngineTakesDelegatedWork } from "./botEngineSelection";
-import { buildBotStepMeters } from "./botStepMeter.logic";
+import { buildBotStepMeters } from "@akeru/client-runtime/bot-step-usage";
 import { useGroupPresence } from "./botPresence";
 import { groupBotMembers, isCurrentGroupPerson } from "./roster.logic";
 import { useMessageArrivals } from "./messageArrival";
@@ -70,6 +71,7 @@ import { useGroupDetailsOpen } from "./detailsPanelOpen";
 import { activeThreadRuntimeWarning } from "./threadRuntimeWarning.logic";
 import { ThreadRuntimeWarningBanner } from "./ThreadRuntimeWarningBanner";
 
+// SAFETY: the empty ID is an inactive-query sentinel; no environment request is sent for it.
 const NO_ENVIRONMENT = "" as EnvironmentId;
 
 export function resolveAvailableGroupBoss<T extends { readonly id: string }>(
@@ -91,34 +93,43 @@ export function resolveGroupAddressedBot<T extends { readonly id: string }>(
 export function GroupThreadLanding({ groupId }: { readonly groupId: string }) {
   const { t, locale } = useI18n();
   const environmentId = usePrimaryEnvironmentId();
+
+  // SAFETY: the empty ID is an inactive-query sentinel; no environment request is sent for it.
   const peopleIdentity = useAtomValue(
     environmentPeopleAtom((environmentId ?? "") as EnvironmentId),
   );
+
   const group = useRosterStore((state) =>
     state.groups.find((candidate) => candidate.id === groupId),
   );
+
   const rosterLoadState = useRosterLoadState();
   const bots = useRosterStore((state) => state.bots);
   const runtime = useGroupThreadRuntime(groupId);
   useMarkChatVisited(runtime.linkedThreadRef);
   const [detailsPanelOpen] = useGroupDetailsOpen();
+
   const mentionScope = useBotPromptMentionScope({
     environmentId,
     threadRef: runtime.linkedThreadRef,
     projectId: runtime.defaultProject?.id,
     cwd: runtime.defaultProject?.workspaceRoot,
   });
+
   const respondingBot = bots.find((bot) => bot.id === runtime.respondingBotId) ?? null;
   // Names the provider behind a failed reply, like a bot chat does.
   const respondingEngine = useBotEngineAvailability(respondingBot?.engine ?? null);
+
   const failureContext = botEngineFailureContext(
     respondingEngine.selection,
     respondingEngine.instanceEntries,
     runtime.failure?.unavailability,
   );
+
   const members = group
     ? groupBotMembers(group, bots).filter((bot) => bot.archivedAt === null)
     : [];
+
   const boss = group ? resolveAvailableGroupBoss(members, group.bossBotId) : null;
   // The boss answers a group message first, so its provider's skills label sent messages.
   const bossCatalog = useBotEngineAvailability(boss?.engine ?? null).catalog;
@@ -135,20 +146,25 @@ export function GroupThreadLanding({ groupId }: { readonly groupId: string }) {
   const activities = useThreadActivities(runtime.linkedThreadRef);
   const memoryApprovals = useMemo(() => pendingMemoryApprovals(activities), [activities]);
   const stepMeters = useMemo(() => buildBotStepMeters(activities), [activities]);
+
   const botActivity = useMemo(
     () => deriveBotActivity(activities, runtime.latestTurn),
     [activities, runtime.latestTurn],
   );
+
   const runtimeWarning = useMemo(
     () => activeThreadRuntimeWarning(activities, runtime.latestTurn),
     [activities, runtime.latestTurn],
   );
+
   const presence = useGroupPresence(groupId);
+
   const inboxQuery = useEnvironmentQuery(
     environmentId === null
       ? null
       : serverEnvironment.subscriptionAuth({ environmentId, input: {} }),
   );
+
   const snapshot = useAtomValue(environmentSnapshotAtom(environmentId ?? NO_ENVIRONMENT));
 
   useEffect(() => {
@@ -157,8 +173,10 @@ export function GroupThreadLanding({ groupId }: { readonly groupId: string }) {
 
   const pendingApproval = approvalState.pendingApproval;
   const pendingUserInput = runtime.pendingUserInputs[0] ?? null;
+
   const waitingForUserInput =
     pendingUserInput !== null && !runtime.respondingRequestIds.includes(pendingUserInput.requestId);
+
   // Derived before the transcript is built: the visible set depends on whether a turn is
   // still open, so an intermediate answer from the active turn stays behind the status.
   const working = isBotConversationWorking({
@@ -168,31 +186,40 @@ export function GroupThreadLanding({ groupId }: { readonly groupId: string }) {
     turnRunning: runtime.latestTurn?.state === "running",
     waitingForUserInput,
   });
+
   const workingUpdate = botActivityUpdate(activities, runtime.latestTurn?.turnId ?? null, t);
+
   const silentRun = runtime.latestTurn?.completedAt
     ? null
     : threadSilentRun(activities, runtime.latestTurn?.turnId);
+
   const messages = useMemo(
     () => visibleBotChatMessages(runtime.messages, working),
     [runtime.messages, working],
   );
+
   const today = useLocalDay();
   const todayLabel = t("Today");
+
   const entries = useMemo(
     () => buildBotConversationEntries(messages, today, todayLabel, locale),
     [messages, today, todayLabel, locale],
   );
+
   const arrivedMessageIds = useMessageArrivals(
     { owner: groupId, thread: runtime.linkedThreadRef?.threadId ?? null },
     messages.map((message) => message.id),
   );
+
   const playbackKey = useReplyPlaybackThread({
     environmentId: group ? (runtime.linkedThreadRef?.environmentId ?? environmentId) : null,
     threadId: group ? runtime.linkedThreadRef?.threadId : null,
     messages: group ? messages : [],
     mediaBlocked: Boolean(voiceCall?.activeCall || voiceCall?.startingBotId),
   });
+
   const updateReaction = useMessageReactionUpdater(runtime.linkedThreadRef);
+
   const replyTo = useCallback<MessageReplyHandler>(
     (messageId, label, text) => setReplyTarget({ messageId, label, text }),
     [],
@@ -203,23 +230,28 @@ export function GroupThreadLanding({ groupId }: { readonly groupId: string }) {
     // a retry rather than a blank pane.
     return rosterLoadState.kind === "failed" ? (
       <SidebarInset
+        tone="muted"
         aria-label={t("Could not load bots")}
-        className="h-dvh min-h-0 overflow-hidden bg-background text-muted-foreground"
+        className="h-dvh min-h-0 overflow-hidden"
       >
         <RosterLoadStatus state={rosterLoadState} variant="page" />
       </SidebarInset>
     ) : null;
   }
+
   const currentPersonId = peopleIdentity.current?.id;
   const activeBot = members.find((bot) => bot.id === runtime.respondingBotId) ?? boss;
+
   const inboxItems = selectOpenBotInboxItems(
     inboxQuery.data?.inbox ?? [],
     new Set(members.map((bot) => bot.id)),
   );
+
   const { delegations, waitingOnChildren } =
     runtime.linkedThreadRef && snapshot
       ? threadDelegations(snapshot.delegations, runtime.linkedThreadRef.threadId)
       : { delegations: [], waitingOnChildren: false };
+
   const timeline = botChatTimeline({
     messages: entries.map((entry) => ({
       id: entry.message.id,
@@ -229,12 +261,15 @@ export function GroupThreadLanding({ groupId }: { readonly groupId: string }) {
     })),
     delegations,
   });
+
   const activeBotById = (id: string) =>
     bots.find((candidate) => candidate.id === id && candidate.archivedAt === null) ?? null;
+
   return (
     <SidebarInset
+      tone="foreground"
       aria-label={t("{name} group chat", { name: group.name })}
-      className="h-dvh min-h-0 overflow-hidden bg-background text-foreground"
+      className="h-dvh min-h-0 overflow-hidden"
       data-testid="group-thread-landing"
     >
       <div className="flex min-h-0 min-w-0 flex-1 flex-col">
@@ -268,7 +303,7 @@ export function GroupThreadLanding({ groupId }: { readonly groupId: string }) {
             </div>
           ) : (
             timeline.map((item) => {
-              if (item._tag === "Delegation") {
+              if (Predicate.isTagged(item, "Delegation")) {
                 return (
                   <DelegationCard
                     key={item.key}
@@ -280,12 +315,15 @@ export function GroupThreadLanding({ groupId }: { readonly groupId: string }) {
                   />
                 );
               }
-              if (item._tag !== "Message") return null;
+
+              if (!Predicate.isTagged(item, "Message")) return null;
               const { message, separator, startsGroup } = item.message.entry;
+
               if (message.role === "assistant") {
                 const respondingBot = message.respondingBotId
                   ? members.find((bot) => bot.id === message.respondingBotId)
                   : boss;
+
                 return (
                   <Fragment key={message.id}>
                     {separator ? <ConversationSeparator label={separator} /> : null}
@@ -311,11 +349,13 @@ export function GroupThreadLanding({ groupId }: { readonly groupId: string }) {
                   </Fragment>
                 );
               }
+
               const current = isCurrentGroupPerson(
                 message.authorPersonId,
                 currentPersonId,
                 peopleIdentity.host?.id,
               );
+
               return (
                 <Fragment key={message.id}>
                   {separator ? <ConversationSeparator label={separator} /> : null}
@@ -399,9 +439,11 @@ export function GroupThreadLanding({ groupId }: { readonly groupId: string }) {
                 error={approvalState.responseError}
                 onRespond={async (decision) => {
                   const answered = await approvalState.respond(pendingApproval.requestId, decision);
+
                   if (answered && decision === "acceptAlways" && boss) {
                     await enableAutoReview(boss.id);
                   }
+
                   return answered;
                 }}
               />
@@ -452,7 +494,9 @@ export function GroupThreadLanding({ groupId }: { readonly groupId: string }) {
               files,
               respondingBotId,
             );
+
             if (sent) setReplyTarget(null);
+
             return sent;
           }}
         />

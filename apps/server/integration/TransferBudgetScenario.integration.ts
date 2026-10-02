@@ -15,12 +15,14 @@ import type { TurnProcessingQuiescedReceipt } from "../src/orchestration/Service
 import type { OrchestrationIntegrationHarness } from "./OrchestrationEngineHarness.integration.ts";
 import {
   expectedRecordedAssistantText,
-  makeRecordedTransferTurn,
+  recordedTransferTurn,
   TRANSFER_HISTORY_TURN_COUNT,
 } from "./fixtures/transferBudget.ts";
 
 export const TRANSFER_PROJECT_ID = ProjectId.make("transfer-budget-project");
+
 export const TRANSFER_THREAD_ID = ThreadId.make("transfer-budget-thread");
+
 export const TRANSFER_MEASURED_TURN_INDEX = TRANSFER_HISTORY_TURN_COUNT;
 
 export function transferModelSelection(provider: ProviderDriverKind) {
@@ -46,8 +48,10 @@ const waitForTurnQuiesced = Effect.fn("TransferBudget.waitForTurnQuiesced")(func
       receipt.threadId === TRANSFER_THREAD_ID &&
       receipt.checkpointTurnCount === checkpointTurnCount,
   );
+
   yield* harness.drainProviderRuntime;
   yield* harness.drainCheckpointReactor;
+
   return receipt;
 });
 
@@ -84,7 +88,8 @@ export const seedTransferBudgetHistory = Effect.fn("TransferBudget.seedHistory")
   });
 
   for (let turnIndex = 0; turnIndex < TRANSFER_HISTORY_TURN_COUNT; turnIndex += 1) {
-    const response = makeRecordedTransferTurn(provider, turnIndex);
+    const response = recordedTransferTurn(provider, turnIndex);
+
     if (turnIndex === 0) {
       yield* harness.adapterHarness.queueTurnResponseForNextSession(response);
     } else {
@@ -117,7 +122,8 @@ export const queueMeasuredTransferTurn = Effect.fn("TransferBudget.queueMeasured
   if (!harness.adapterHarness) {
     return yield* Effect.die(new Error("Transfer budget measurement requires the replay adapter."));
   }
-  const response = makeRecordedTransferTurn(provider, TRANSFER_MEASURED_TURN_INDEX);
+
+  const response = recordedTransferTurn(provider, TRANSFER_MEASURED_TURN_INDEX);
   yield* harness.adapterHarness.queueTurnResponse(TRANSFER_THREAD_ID, response);
 });
 

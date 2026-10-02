@@ -149,6 +149,7 @@ describe("withMetrics", () => {
       }).pipe(Effect.provide(TestClock.layer()));
 
       const snapshots = yield* Metric.snapshot;
+
       const snapshot = findHistogramSnapshot(snapshots, "with_metrics_nanos_duration", {
         operation: "nanos",
       });

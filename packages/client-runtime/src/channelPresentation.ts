@@ -12,9 +12,13 @@ type ProjectRef = { readonly id: ProjectId };
 
 export function channelProviderLabel(provider: ChannelProvider): string {
   if (provider === "imessage") return "iMessage";
+
   if (provider === "whatsapp") return "WhatsApp";
+
   if (provider === "telegram") return "Telegram";
+
   if (provider === "slack") return "Slack";
+
   return "Discord";
 }
 
@@ -45,7 +49,9 @@ export function channelFailureReason(
         return t("Photon rejected the connection credentials.");
     }
   }
+
   const name = channelProviderLabel(provider);
+
   switch (category) {
     case "network":
       return t("Could not reach {provider}. Check the network and try again.", { provider: name });
@@ -101,7 +107,9 @@ export function channelRepairAction(
   liveProjects?: ReadonlyArray<ProjectRef>,
 ): ChannelRepairAction {
   if (binding.status === "connecting") return "wait";
+
   if (binding.status === "not-live") return "configure-public-url";
+
   if (
     binding.status === "blocked" ||
     binding.failureCategory === "project" ||
@@ -109,12 +117,14 @@ export function channelRepairAction(
   ) {
     return "choose-project";
   }
+
   if (
     binding.failureCategory === "delivery-unknown" &&
     (binding.status === "connected" || binding.status === "failed")
   ) {
     return "check-delivery";
   }
+
   switch (binding.status) {
     case "connected":
       // A connected binding with a failure means a later attempt or reply failed while the
@@ -128,6 +138,7 @@ export function channelRepairAction(
         default:
           return "none";
       }
+
     // Rejected credentials would fail again, so every idle state asks for new ones first.
     case "disconnected":
       return binding.failureCategory === "credentials" ? "update-credentials" : "connect";
@@ -165,6 +176,7 @@ export function channelBindingPresentation(
 ) {
   const deliveredCount = new Set(binding.sentMessageIds).size;
   const needsProject = channelBindingNeedsProject(binding, projects);
+
   return {
     provider: channelProviderLabel(binding.provider),
     health: channelHealthLabel(binding.status),
@@ -221,10 +233,13 @@ export function channelPickerProjectId(input: {
 }): ProjectId | null {
   const live = (id: ProjectId | null | undefined): id is ProjectId =>
     !!id && input.liveProjects.some((project) => project.id === id);
+
   if (live(input.selected)) return input.selected;
+
   if (input.binding && !channelBindingNeedsProject(input.binding, input.liveProjects)) {
     return input.binding.projectId ?? null;
   }
+
   return live(input.hint) ? input.hint : null;
 }
 
@@ -239,9 +254,11 @@ export function canChangeChannelProject(
   if (binding.status === "disconnected" && !channelBindingNeedsProject(binding, liveProjects)) {
     return false;
   }
+
   if (!pickedProjectId || !liveProjects.some((project) => project.id === pickedProjectId)) {
     return false;
   }
+
   return channelBindingNeedsProject(binding, liveProjects) || pickedProjectId !== binding.projectId;
 }
 

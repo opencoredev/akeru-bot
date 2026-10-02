@@ -40,6 +40,7 @@ const EFFORT = selectDescriptor(
   ],
   "high",
 );
+
 const CONTEXT_WINDOW = selectDescriptor(
   "contextWindow",
   [
@@ -111,6 +112,7 @@ describe("buildTraitsTriggerDisplay", () => {
       type: "boolean",
       currentValue: true,
     };
+
     expect(display([EFFORT, thinking])).toEqual({
       label: "High · Thinking On",
       showFastModeIcon: false,
@@ -141,6 +143,7 @@ describe("buildTraitsTriggerDisplay", () => {
         { id: "high", label: "High" },
       ],
     };
+
     expect(display([unresolved])).toEqual({ label: "", showFastModeIcon: false });
   });
 

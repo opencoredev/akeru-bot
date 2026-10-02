@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 import type {
   SubscriptionProviderId,
   UsagePlanWindow,
@@ -10,7 +11,7 @@ import type { DailyTotals } from "@akeru/shared/usageMerge";
 import { Line } from "../dither-kit/area";
 import { LineChart } from "../dither-kit/area-chart";
 import { BlockLegend } from "../dither-kit/block-legend";
-import type { ChartConfig } from "../dither-kit/chart-context";
+
 import type { DitherColor } from "../dither-kit/palette";
 import { Grid } from "../dither-kit/grid";
 import { Tooltip } from "../dither-kit/tooltip";
@@ -51,9 +52,12 @@ export const PLAN_PROVIDER_ORDER: readonly LiveSubscriptionProviderId[] = [
 function formatReset(resetsAt: string | null): string {
   if (resetsAt === null) return "Reset time unknown";
   const deltaMs = Date.parse(resetsAt) - Date.now();
+
   if (Number.isNaN(deltaMs) || deltaMs <= 0) return "Resets soon";
   const hours = Math.round(deltaMs / (60 * 60 * 1000));
+
   if (hours < 48) return `Resets in ${hours}h`;
+
   return `Resets in ${Math.round(hours / 24)}d`;
 }
 
@@ -62,19 +66,23 @@ function remainingPercent(window: UsagePlanWindow): number {
 }
 
 function ProviderMark({ icon }: { readonly icon: Icon | string }) {
-  if (typeof icon !== "string") {
+  if (!Predicate.isString(icon)) {
     const Mark = icon;
+
     return <Mark className="size-4 shrink-0" />;
   }
+
   return <img src={icon} alt="" className="size-4 shrink-0 brightness-0 dark:invert" />;
 }
 
 export function UsagePlanMeters(props: { readonly limits: UsageProviderPlanLimits }) {
   const presentation = PLAN_PROVIDER_PRESENTATION[props.limits.provider];
+
   const title =
     props.limits.plan === null
       ? presentation.label
       : `${presentation.label} · ${props.limits.plan}`;
+
   return (
     <section className="flex min-w-0 flex-col gap-3">
       <h2 className="flex items-center gap-2 px-1 text-sm font-medium text-foreground">
@@ -89,10 +97,11 @@ export function UsagePlanMeters(props: { readonly limits: UsageProviderPlanLimit
         <div className="divide-y divide-border/60 overflow-hidden rounded-xl border border-border/70">
           {props.limits.windows.map((window) => {
             const left = remainingPercent(window);
+
             return (
               <div
                 key={`${window.kind}:${window.label}`}
-                className="grid gap-3 px-4 py-4 md:grid-cols-[10rem_minmax(0,1fr)_7rem] md:items-center md:gap-5"
+                className="grid gap-3 px-4 py-4 md:grid-cols-10rem-1fr-7rem md:items-center md:gap-5"
               >
                 <div className="flex items-baseline justify-between gap-3 md:block">
                   <span className="text-sm font-medium text-foreground">{window.label}</span>
@@ -107,13 +116,13 @@ export function UsagePlanMeters(props: { readonly limits: UsageProviderPlanLimit
                   className="relative h-7 overflow-hidden rounded-md bg-muted/70"
                 >
                   <div
-                    className="absolute inset-y-0 start-0 rounded-md opacity-75"
+                    className="absolute inset-y-0 start-0 w-(--share-width) rounded-md bg-(--share-color) opacity-75"
                     style={{
-                      width: `${left}%`,
-                      backgroundColor: `var(--color-${presentation.color}-500, var(--foreground))`,
+                      "--share-width": `${left}%`,
+                      "--share-color": `var(--color-${presentation.color}-500, var(--foreground))`,
                     }}
                   />
-                  <div className="absolute inset-0 bg-[repeating-linear-gradient(135deg,transparent_0,transparent_4px,var(--border)_4px,var(--border)_5px)] opacity-30" />
+                  <div className="absolute inset-0 bg-hatched opacity-30" />
                 </div>
                 <span className="text-xs text-muted-foreground tabular-nums md:text-end">
                   {formatReset(window.resetsAt)}
@@ -148,20 +157,29 @@ export function UsageActivityChart(props: {
   const active = providersWithUsage(props.providers);
   const days = enumerateDays(props.sinceDay, props.untilDay);
   const byDay = new Map(props.daily.map((entry) => [entry.day, entry]));
+
   const data = days.map((day) => {
     const totals = byDay.get(day);
-    const row: Record<string, string | number> = { label: formatDayShort(day) };
-    for (const provider of PROVIDER_ORDER) {
-      row[provider] = totals?.byProvider.get(provider)?.totalTokens ?? 0;
-    }
+
+    const row = {
+      label: formatDayShort(day),
+      ...Object.fromEntries(
+        PROVIDER_ORDER.map((provider) => [
+          provider,
+          totals?.byProvider.get(provider)?.totalTokens ?? 0,
+        ]),
+      ),
+    };
+
     return row;
   });
+
   const config = Object.fromEntries(
     active.map((provider) => [
       provider,
       { label: PROVIDER_PRESENTATION[provider].label, color: ACTIVITY_COLOR[provider] },
     ]),
-  ) as ChartConfig;
+  );
 
   if (active.length === 0 || days.length === 0) {
     return <p className="text-sm text-muted-foreground">No activity in this window.</p>;

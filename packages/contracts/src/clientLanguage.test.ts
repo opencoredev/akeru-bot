@@ -8,7 +8,9 @@ import {
 } from "./settings.ts";
 
 const decodeClient = Schema.decodeUnknownSync(ClientSettingsSchema);
+
 const decodePatch = Schema.decodeUnknownSync(ClientSettingsPatch);
+
 const encodeClient = Schema.encodeSync(ClientSettingsSchema);
 
 describe("client-local language preference", () => {

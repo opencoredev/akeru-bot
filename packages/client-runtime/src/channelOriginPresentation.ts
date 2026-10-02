@@ -13,6 +13,7 @@ export function channelOriginLabel(
 ): string {
   const sender = senderDisplayName?.trim() || origin.externalSenderId;
   const provider = channelProviderLabel(origin.provider);
+
   return sender ? `${provider} · ${sender}` : provider;
 }
 
@@ -26,10 +27,13 @@ export function channelOriginForAssistantMessage(
   assistantIndex: number,
 ): ChannelMessageOrigin | null {
   if (messages[assistantIndex]?.role !== "assistant") return null;
+
   for (let index = assistantIndex - 1; index >= 0; index -= 1) {
     const message = messages[index];
+
     if (message?.role === "user") return message.channelOrigin ?? null;
   }
+
   return null;
 }
 
@@ -44,6 +48,7 @@ export function channelDeliveryLabel(
   provider: ChannelProvider | null | undefined,
 ): { readonly message: string; readonly tone: "neutral" | "warning" | "error" } | null {
   const channel = provider ? channelProviderLabel(provider) : "the channel";
+
   switch (delivery) {
     case "sent":
       return { message: `Sent to ${channel}`, tone: "neutral" };

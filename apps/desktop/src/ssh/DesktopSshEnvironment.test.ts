@@ -14,6 +14,7 @@ import * as DesktopSshPasswordPrompts from "./DesktopSshPasswordPrompts.ts";
 function makeTempHomeDir() {
   return Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;
+
     return yield* fs.makeTempDirectoryScoped({ prefix: "t3-ssh-env-test-" });
   });
 }

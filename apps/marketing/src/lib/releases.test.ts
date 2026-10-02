@@ -36,6 +36,7 @@ class DownloadLinkStub extends EventTarget {
 
   removeAttribute(name: string) {
     this.attributes.delete(name);
+
     if (name === "href") this.href = "";
   }
 
@@ -86,9 +87,11 @@ describe("release downloads", () => {
 
   it("uses one resolver for direct assets and fallback links", async () => {
     let finishRelease!: (value: Release) => void;
+
     const pendingRelease = new Promise<Release>((resolve) => {
       finishRelease = resolve;
     });
+
     const link = new DownloadLinkStub();
     const resolving = resolveAssetDownload(link, "x64.exe", pendingRelease);
     const pendingClick = new Event("click", { cancelable: true });
@@ -133,23 +136,29 @@ describe("release downloads", () => {
 
 function deferred<T>() {
   let resolve!: (value: T) => void;
+
   const promise = new Promise<T>((finish) => {
     resolve = finish;
   });
+
   return { promise, resolve };
 }
 
-function releaseResponse(data: unknown = release): Response {
+function releaseResponse(
+  data: Omit<Release, "assets"> & { assets: (Release["assets"][number] | null)[] } = release,
+): Response {
   return new Response(JSON.stringify(data), { headers: { "Content-Type": "application/json" } });
 }
 
 describe("bounded shared release requests", () => {
   const cache = new Map<string, string>();
+
   const storage = {
     getItem: vi.fn((key: string) => cache.get(key) ?? null),
     setItem: vi.fn((key: string, value: string) => cache.set(key, value)),
     removeItem: vi.fn((key: string) => cache.delete(key)),
   };
+
   const fetchMock = vi.fn<typeof fetch>();
 
   beforeEach(() => {
@@ -174,10 +183,12 @@ describe("bounded shared release requests", () => {
     expect(fetchLatestRelease()).toBe(first);
     const mac = new DownloadLinkStub();
     const windows = new DownloadLinkStub();
+
     const downloads = [
       resolveAssetDownload(mac, "arm64.dmg"),
       resolveAssetDownload(windows, "x64.exe"),
     ];
+
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(vi.getTimerCount()).toBe(1);
 
@@ -205,11 +216,13 @@ describe("bounded shared release requests", () => {
           ? stalled.promise
           : Promise.resolve({ ok: true, json: () => body.promise } as Response),
       );
+
       const { fetchLatestRelease, resolveAssetDownload, RELEASE_REQUEST_TIMEOUT_MS } =
         await import("./releases");
+
       const cards = [new DownloadLinkStub(), new DownloadLinkStub(), new DownloadLinkStub()];
       const downloads = cards.map((card) => resolveAssetDownload(card, "x64.exe"));
-      const request = fetchLatestRelease().catch((error: unknown) => error);
+      const request = fetchLatestRelease().catch((cause: unknown) => cause);
       const signal = fetchMock.mock.calls[0]?.[1]?.signal;
       expect(signal?.aborted).toBe(false);
       await vi.advanceTimersByTimeAsync(RELEASE_REQUEST_TIMEOUT_MS - 1);
@@ -218,6 +231,7 @@ describe("bounded shared release requests", () => {
       expect(await request).toEqual(new Error("GitHub release request timed out"));
       expect(await Promise.all(downloads)).toEqual([null, null, null]);
       expect(signal?.aborted).toBe(true);
+
       for (const card of cards) {
         expect(card.href).toBe(RELEASES_URL);
         expect(card.attributes.has("aria-disabled")).toBe(false);
@@ -225,6 +239,7 @@ describe("bounded shared release requests", () => {
         card.dispatchEvent(click);
         expect(click.defaultPrevented).toBe(false);
       }
+
       expect(fetchMock).toHaveBeenCalledTimes(1);
       expect(storage.setItem).not.toHaveBeenCalled();
       expect(vi.getTimerCount()).toBe(0);
@@ -266,6 +281,7 @@ describe("bounded shared release requests", () => {
         default:
           fetchMock.mockResolvedValueOnce(releaseResponse({ ...release, assets: [null] }));
       }
+
       const { fetchLatestRelease, resolveAssetDownload } = await import("./releases");
       const link = new DownloadLinkStub();
       expect(await resolveAssetDownload(link, "arm64.dmg")).toBeNull();

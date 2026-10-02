@@ -24,6 +24,7 @@ export function scopeThreadRef(
 
 export function scopedRefKey(ref: ScopedProjectRef | ScopedThreadRef): string {
   const localId = "projectId" in ref ? ref.projectId : ref.threadId;
+
   return `${ref.environmentId}:${localId}`;
 }
 
@@ -37,9 +38,11 @@ export function scopedThreadKey(ref: ScopedThreadRef): string {
 
 function parseScopedKey(key: string): { environmentId: EnvironmentIdType; localId: string } | null {
   const separatorIndex = key.indexOf(":");
+
   if (separatorIndex <= 0 || separatorIndex >= key.length - 1) {
     return null;
   }
+
   return {
     environmentId: EnvironmentId.make(key.slice(0, separatorIndex)),
     localId: key.slice(separatorIndex + 1),
@@ -48,9 +51,11 @@ function parseScopedKey(key: string): { environmentId: EnvironmentIdType; localI
 
 export function parseScopedProjectKey(key: string): ScopedProjectRef | null {
   const parsed = parseScopedKey(key);
+
   if (!parsed) {
     return null;
   }
+
   return {
     environmentId: parsed.environmentId,
     projectId: ProjectId.make(parsed.localId),
@@ -59,9 +64,11 @@ export function parseScopedProjectKey(key: string): ScopedProjectRef | null {
 
 export function parseScopedThreadKey(key: string): ScopedThreadRef | null {
   const parsed = parseScopedKey(key);
+
   if (!parsed) {
     return null;
   }
+
   return {
     environmentId: parsed.environmentId,
     threadId: ThreadId.make(parsed.localId),

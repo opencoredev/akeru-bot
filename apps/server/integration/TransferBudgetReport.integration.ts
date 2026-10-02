@@ -38,7 +38,7 @@ const TRANSFER_BUDGET = {
   measuredTurnWebSocketMessages: 21,
 } satisfies ProviderTransferBudget;
 
-export const TRANSFER_BUDGETS: Readonly<Record<string, ProviderTransferBudget>> = {
+export const TRANSFER_BUDGETS = {
   codex: TRANSFER_BUDGET,
   claudeAgent: TRANSFER_BUDGET,
   opencode: TRANSFER_BUDGET,
@@ -63,7 +63,10 @@ function observedTransfer(run: TransferBudgetRun) {
 export function formatTransferBudgetResult(runs: ReadonlyArray<TransferBudgetRun>): string {
   const providers = Object.fromEntries(
     runs.flatMap((run) => {
-      const ceiling = TRANSFER_BUDGETS[run.provider];
+      const ceiling = Object.entries(TRANSFER_BUDGETS).find(
+        ([provider]) => provider === run.provider,
+      )?.[1];
+
       return ceiling ? [[run.provider, { observed: observedTransfer(run), ceiling }]] : [];
     }),
   );
@@ -88,9 +91,11 @@ export function formatTransferBudgetResult(runs: ReadonlyArray<TransferBudgetRun
 
 function formatBytes(bytes: number): string {
   if (bytes < 1_024) return `${bytes} B`;
+
   if (bytes >= 1_024 * 1_024) {
     return `${(bytes / 1_024 / 1_024).toFixed(2)} MiB (${bytes.toLocaleString("en-US")} B)`;
   }
+
   return `${(bytes / 1_024).toFixed(1)} KiB (${bytes.toLocaleString("en-US")} B)`;
 }
 
@@ -103,17 +108,23 @@ function row(
   format: (value: number) => string = formatBytes,
 ): string {
   const status = observed <= maximum ? "PASS" : "FAIL";
+
   return `| ${provider} | ${phase} | ${metric} | ${format(observed)} | ${format(maximum)} | ${status} |`;
 }
 
 export function transferBudgetViolations(runs: ReadonlyArray<TransferBudgetRun>): string[] {
   const violations: string[] = [];
+
   for (const run of runs) {
-    const budget = TRANSFER_BUDGETS[run.provider];
+    const budget = Object.entries(TRANSFER_BUDGETS).find(
+      ([provider]) => provider === run.provider,
+    )?.[1];
+
     if (!budget) {
       violations.push(`${run.provider}: no transfer budget is configured`);
       continue;
     }
+
     const checks = [
       ["total thread wire bytes", totalWireBytes(run), budget.totalWireBytes],
       ["thread snapshot wire bytes", run.threadSnapshot.wireBytes, budget.threadSnapshotWireBytes],
@@ -133,12 +144,14 @@ export function transferBudgetViolations(runs: ReadonlyArray<TransferBudgetRun>)
         budget.measuredTurnWebSocketMessages,
       ],
     ] as const;
+
     for (const [metric, observed, maximum] of checks) {
       if (observed > maximum) {
         violations.push(`${run.provider}: ${metric} was ${observed}, maximum ${maximum}`);
       }
     }
   }
+
   return violations;
 }
 
@@ -152,9 +165,13 @@ export function formatTransferBudgetReport(runs: ReadonlyArray<TransferBudgetRun
     "| Provider | Total thread wire | Budget | Result |",
     "| --- | ---: | ---: | --- |",
     ...runs.flatMap((run) => {
-      const budget = TRANSFER_BUDGETS[run.provider];
+      const budget = Object.entries(TRANSFER_BUDGETS).find(
+        ([provider]) => provider === run.provider,
+      )?.[1];
+
       if (!budget) return [];
       const observed = observedTransfer(run).totalWireBytes;
+
       return [
         `| ${run.provider} | ${formatBytes(observed)} | ${formatBytes(budget.totalWireBytes)} | ${observed <= budget.totalWireBytes ? "PASS" : "FAIL"} |`,
       ];
@@ -167,7 +184,10 @@ export function formatTransferBudgetReport(runs: ReadonlyArray<TransferBudgetRun
   ];
 
   for (const run of runs) {
-    const budget = TRANSFER_BUDGETS[run.provider];
+    const budget = Object.entries(TRANSFER_BUDGETS).find(
+      ([provider]) => provider === run.provider,
+    )?.[1];
+
     if (!budget) continue;
     lines.push(
       row(
@@ -203,6 +223,7 @@ export function formatTransferBudgetReport(runs: ReadonlyArray<TransferBudgetRun
   }
 
   lines.push("", "## Compression diagnostics", "");
+
   for (const run of runs) {
     lines.push(
       `- ${run.provider}: thread snapshot ${formatBytes(run.threadSnapshot.decodedBodyBytes)} decoded to ${formatBytes(run.threadSnapshot.encodedBodyBytes)} gzip.`,

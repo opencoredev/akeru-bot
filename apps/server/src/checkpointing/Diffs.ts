@@ -12,14 +12,17 @@ export function parseTurnDiffFilesFromNumstat(numstat: string): ReadonlyArray<Tu
   for (let index = 0; index < records.length; index += 1) {
     const record = records[index]!;
     const counts = /^(\d+|-)\t(\d+|-)\t/.exec(record);
+
     if (!counts) continue;
 
     let path = record.slice(counts[0].length);
+
     if (path.length === 0) {
       // Renames and copies use two more records: the source and destination.
       path = records[index + 2] ?? "";
       index += 2;
     }
+
     if (path.length === 0) continue;
 
     files.push({

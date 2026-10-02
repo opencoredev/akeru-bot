@@ -15,6 +15,7 @@ export async function addBrowserSurface<E>(input: {
     openPreview: input.openPreview,
     threadRef: input.threadRef,
   });
+
   return mapAtomCommandResult(result, (snapshot) => {
     useRightPanelStore.getState().openBrowser(input.threadRef, snapshot.tabId);
   });

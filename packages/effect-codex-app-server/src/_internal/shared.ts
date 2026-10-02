@@ -17,15 +17,27 @@ export const JsonRpcResponseEnvelope = Schema.Struct({
   error: Schema.optional(JsonRpcError),
 });
 
+export type JsonRpcResponseEnvelope = typeof JsonRpcResponseEnvelope.Type;
+
+export const JsonRpcRequestEnvelope = Schema.Struct({
+  id: JsonRpcId,
+  method: Schema.String,
+  params: Schema.optional(Schema.Unknown),
+});
+
+export type JsonRpcRequestEnvelope = typeof JsonRpcRequestEnvelope.Type;
+
 export const decodeOptionalPayload = <A, I>(
   method: string,
   schema: Schema.Codec<A, I> | undefined,
-  raw: unknown,
+  raw: JsonRpcRequestEnvelope["params"],
 ): Effect.Effect<A, CodexError.CodexAppServerRequestError> => {
   if (!schema) {
     if (raw === undefined) {
+      // SAFETY: Generated methods without a payload schema have undefined params or responses, and raw is checked above.
       return Effect.sync(() => undefined as A);
     }
+
     return Effect.fail(
       CodexError.CodexAppServerRequestError.unexpectedPayload(method, "decode-payload", raw),
     );
@@ -47,6 +59,7 @@ export const encodeOptionalPayload = <A, I>(
     if (payload === undefined) {
       return Effect.sync(() => undefined);
     }
+
     return Effect.fail(
       CodexError.CodexAppServerRequestError.unexpectedPayload(method, "encode-payload", payload),
     );
@@ -62,7 +75,7 @@ export const encodeOptionalPayload = <A, I>(
 export const decodeNotificationPayload = <A, I>(
   method: string,
   schema: Schema.Codec<A, I> | undefined,
-  raw: unknown,
+  raw: JsonRpcRequestEnvelope["params"],
 ): Effect.Effect<A, CodexError.CodexAppServerProtocolParseError> =>
   decodeOptionalPayload(method, schema, raw).pipe(
     Effect.mapError((error) =>

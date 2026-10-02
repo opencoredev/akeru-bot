@@ -1,18 +1,27 @@
+import * as Schema from "effect/Schema";
+import * as Data from "effect/Data";
+import type { PreviewSessionSnapshot } from "@akeru/contracts";
+import * as Match from "effect/Match";
+import {
+  DEFAULT_VIEWPORT,
+  browserbaseContexts,
+  requireBrowserbaseApiKey,
+} from "./BrowserbaseContext.ts";
 import {
   FILL_PREVIEW_VIEWPORT,
-  type PreviewAutomationClickInput,
-  type PreviewAutomationEvaluateInput,
-  type PreviewAutomationNavigateInput,
-  type PreviewAutomationOpenInput,
-  type PreviewAutomationPressInput,
+  PreviewAutomationClickInput,
+  PreviewAutomationEvaluateInput,
+  PreviewAutomationNavigateInput,
+  PreviewAutomationOpenInput,
+  PreviewAutomationPressInput,
   type PreviewAutomationRequest,
-  type PreviewAutomationResizeInput,
-  type PreviewAutomationScrollInput,
-  type PreviewAutomationSetColorSchemeInput,
-  type PreviewAutomationSnapshot,
+  PreviewAutomationResizeInput,
+  PreviewAutomationScrollInput,
+  PreviewAutomationSetColorSchemeInput,
+  PreviewAutomationSnapshot,
   type PreviewAutomationStatus,
-  type PreviewAutomationTypeInput,
-  type PreviewAutomationWaitForInput,
+  PreviewAutomationTypeInput,
+  PreviewAutomationWaitForInput,
   type PreviewRenderedViewportSize,
   type PreviewTabId,
   type ThreadId,
@@ -20,19 +29,15 @@ import {
 import { normalizePreviewUrl } from "@akeru/shared/preview";
 import { resolvePreviewViewport } from "@akeru/shared/previewViewport";
 import * as Context from "effect/Context";
-import * as Schema from "effect/Schema";
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
 import * as Layer from "effect/Layer";
 import * as RcMap from "effect/RcMap";
 import * as Scope from "effect/Scope";
-import { HttpBody, HttpClient, HttpClientResponse } from "effect/unstable/http";
-import { chromium, type BrowserContext, type Page } from "playwright-core";
-
+import { HttpClient } from "effect/unstable/http";
+import { type BrowserContext, type Page } from "playwright-core";
 import * as ServerSettings from "../serverSettings.ts";
 import * as PreviewManager from "./Manager.ts";
-
-const DEFAULT_VIEWPORT = { width: 1280, height: 800 } as const;
 
 interface BrowserTab {
   readonly threadId: ThreadId;
@@ -40,33 +45,30 @@ interface BrowserTab {
   loading: boolean;
 }
 
-interface BrowserbaseSession {
-  readonly id: string;
-  readonly connectUrl: string;
-}
-
 const requestedUrl = (input: PreviewAutomationNavigateInput): string => {
   if (input.url) return normalizePreviewUrl(input.url);
   const target = input.target!;
+
   if (target.kind === "url") return normalizePreviewUrl(target.url);
   const path = target.path?.startsWith("/") ? target.path : `/${target.path ?? ""}`;
+
   return `${target.protocol ?? "http"}://127.0.0.1:${target.port}${path}`;
 };
 
 const viewportForSetting = (
   setting: ReturnType<typeof resolvePreviewViewport> | typeof FILL_PREVIEW_VIEWPORT,
 ): PreviewRenderedViewportSize =>
-  setting._tag === "fill" ? DEFAULT_VIEWPORT : { width: setting.width, height: setting.height };
+  Match.value(setting).pipe(
+    Match.tag("fill", () => DEFAULT_VIEWPORT),
+    Match.orElse((viewport) => ({ width: viewport.width, height: viewport.height })),
+  );
 
 const selectorFor = (input: {
   readonly locator?: string | undefined;
   readonly selector?: string | undefined;
 }) => input.locator ?? input.selector ?? null;
 
-export class BrowserConfigurationError extends Schema.TaggedErrorClass<BrowserConfigurationError>()(
-  "BrowserConfigurationError",
-  { message: Schema.String },
-) {}
+export { BrowserConfigurationError } from "./BrowserbaseContext.ts";
 
 const errorMessage = (cause: unknown): string =>
   cause instanceof Error ? cause.message : "Browser operation failed.";
@@ -74,100 +76,52 @@ const errorMessage = (cause: unknown): string =>
 export class ServerPreviewBrowser extends Context.Service<
   ServerPreviewBrowser,
   {
-    readonly handle: (request: PreviewAutomationRequest) => Promise<unknown>;
+    readonly handle: (
+      request: PreviewAutomationRequest,
+    ) => Promise<import("@akeru/contracts").PreviewAutomationResponse["result"]>;
     readonly close: () => Promise<void>;
   }
 >()("akeru-bot/preview/ServerPreviewBrowser") {}
 
 export const make = Effect.gen(function* ServerPreviewBrowserMake() {
+  const runtimeContext = yield* Effect.context<never>();
+  const runPromise = Effect.runPromiseWith(runtimeContext);
+  const runSync = Effect.runSyncWith(runtimeContext);
   const previewManager = yield* PreviewManager.PreviewManager;
   const httpClient = yield* HttpClient.HttpClient;
   const settingsService = yield* ServerSettings.ServerSettingsService;
+  const requireApiKey = requireBrowserbaseApiKey(settingsService);
   const tabs = new Map<PreviewTabId, BrowserTab>();
   const activeByThread = new Map<string, PreviewTabId>();
 
-  const requireApiKey = Effect.gen(function* () {
-    const settings = yield* settingsService.getSettings;
-    if (!settings.browserProvider.enabled) {
-      return yield* Effect.fail(
-        new BrowserConfigurationError({
-          message: "Browserbase is disabled. Enable it in Settings > Browser.",
-        }),
-      );
-    }
-    const apiKey = settings.browserProvider.browserbaseApiKey || process.env.BROWSERBASE_API_KEY;
-    if (!apiKey)
-      return yield* Effect.fail(
-        new BrowserConfigurationError({ message: "Browserbase is not configured." }),
-      );
-    return apiKey;
-  });
-
-  const contexts = yield* RcMap.make({
-    lookup: (_key: string) =>
-      Effect.acquireRelease(
-        requireApiKey.pipe(
-          Effect.flatMap((apiKey) =>
-            httpClient
-              .post("https://api.browserbase.com/v1/sessions", {
-                headers: {
-                  "Content-Type": "application/json",
-                  "X-BB-API-Key": apiKey,
-                },
-                body: HttpBody.jsonUnsafe({
-                  browserSettings: { viewport: DEFAULT_VIEWPORT, recordSession: true },
-                }),
-              })
-              .pipe(
-                Effect.flatMap(HttpClientResponse.filterStatusOk),
-                Effect.flatMap((response) => response.json),
-                Effect.map((value) => value as unknown as BrowserbaseSession),
-              ),
-          ),
-          Effect.flatMap((session) =>
-            Effect.tryPromise(() => chromium.connectOverCDP(session.connectUrl)),
-          ),
-          Effect.flatMap((browser) => {
-            const context = browser.contexts()[0];
-            return context
-              ? Effect.succeed({ browser, context })
-              : Effect.tryPromise(() => browser.close()).pipe(
-                  Effect.andThen(
-                    Effect.fail(
-                      new BrowserConfigurationError({
-                        message: "Browserbase returned no browser context.",
-                      }),
-                    ),
-                  ),
-                );
-          }),
-        ),
-        ({ browser }) => Effect.promise(() => browser.close()).pipe(Effect.orDie),
-      ),
-  });
+  const contexts = yield* browserbaseContexts(httpClient, settingsService);
 
   // One lease holds the shared browser open. close() releases it, which closes the
   // Browserbase session; the next getContext() opens a fresh one.
   let lease: { readonly scope: Scope.Closeable; readonly context: Promise<BrowserContext> } | null =
     null;
+
   // Bumped by close() so an open that raced it does not leave a tab behind.
   let closeGeneration = 0;
 
   const getContext = (): Promise<BrowserContext> => {
     if (lease) return lease.context;
-    const scope = Effect.runSync(Scope.make());
-    const context = Effect.runPromise(
+    const scope = runSync(Scope.make());
+
+    const context = runPromise(
       RcMap.get(contexts, "browser").pipe(
         Effect.map(({ context }) => context),
         Scope.provide(scope),
       ),
     ).catch(async (cause: unknown) => {
       if (lease === current) lease = null;
-      await Effect.runPromise(Scope.close(scope, Exit.void));
+      await runPromise(Scope.close(scope, Exit.void));
       throw cause;
     });
+
     const current = { scope, context };
     lease = current;
+
     return context;
   };
 
@@ -178,15 +132,18 @@ export const make = Effect.gen(function* ServerPreviewBrowserMake() {
     if (generation !== closeGeneration) {
       return Promise.reject(new Error("The browser was closed while this request was running."));
     }
+
     return getContext();
   };
 
   const resolveTab = (request: PreviewAutomationRequest): BrowserTab => {
     const tabId = request.tabId ?? activeByThread.get(request.threadId);
     const tab = tabId ? tabs.get(tabId) : undefined;
+
     if (!tab || tab.threadId !== request.threadId) {
       throw new Error("No active browser tab exists for this chat.");
     }
+
     return tab;
   };
 
@@ -206,6 +163,7 @@ export const make = Effect.gen(function* ServerPreviewBrowserMake() {
         loading: false,
       };
     }
+
     return {
       available: true,
       visible: true,
@@ -223,33 +181,35 @@ export const make = Effect.gen(function* ServerPreviewBrowserMake() {
   ): Promise<PreviewAutomationSnapshot["screenshot"]> => {
     const data = await tab.page.screenshot({ type: "png" });
     const viewport = tab.page.viewportSize() ?? DEFAULT_VIEWPORT;
+
     const screenshot = {
       mimeType: "image/png" as const,
       data: data.toString("base64"),
       width: viewport.width,
       height: viewport.height,
     };
-    await Effect.runPromise(
+
+    await runPromise(
       previewManager.reportFrame({
         threadId: tab.threadId,
         tabId: tabIdFor(tab),
         frame: screenshot,
       }),
     );
+
     return screenshot;
   };
 
   const reportPageStatus = async (tab: BrowserTab): Promise<void> => {
     const url = tab.page.url();
-    await Effect.runPromise(
+    await runPromise(
       previewManager.reportStatus({
         threadId: tab.threadId,
         tabId: tabIdFor(tab),
-        navStatus: {
-          _tag: "Success",
+        navStatus: Navigation["Success"]({
           url: url === "about:blank" ? "about:blank" : url,
           title: await tab.page.title(),
-        },
+        }),
         canGoBack: false,
         canGoForward: false,
       }),
@@ -264,72 +224,80 @@ export const make = Effect.gen(function* ServerPreviewBrowserMake() {
     const url = requestedUrl(input);
     const readiness = input.readiness ?? "load";
     tab.loading = true;
+
     try {
       await tab.page.goto(url, {
         timeout: input.timeoutMs ?? fallbackTimeout,
-        waitUntil:
-          readiness === "domContentLoaded"
-            ? "domcontentloaded"
-            : readiness === "none"
-              ? "commit"
-              : "load",
+        waitUntil: Match.value(readiness).pipe(
+          Match.when("domContentLoaded", (): "domcontentloaded" => "domcontentloaded"),
+          Match.when("none", (): "commit" => "commit"),
+          Match.orElse((): "load" => "load"),
+        ),
       });
       tab.loading = false;
       await reportPageStatus(tab);
       await publishFrame(tab);
+
       return await status(tab);
     } catch (cause) {
       tab.loading = false;
-      throw new Error(errorMessage(cause));
+      throw new Error(errorMessage(cause), { cause: cause });
     }
   };
 
-  const handle = async (request: PreviewAutomationRequest): Promise<unknown> => {
+  const handle = async (request: PreviewAutomationRequest) => {
     const generation = closeGeneration;
-    await Effect.runPromise(requireApiKey);
+    await runPromise(requireApiKey);
+
     if (request.operation === "status") {
       const tabId = request.tabId ?? activeByThread.get(request.threadId);
+
       return await status(tabId ? (tabs.get(tabId) ?? null) : null);
     }
 
     if (request.operation === "open") {
-      const input = request.input as PreviewAutomationOpenInput;
+      const input = decodeOpenInput(request.input);
       let tabId = request.tabId ?? activeByThread.get(request.threadId);
       let tab = tabId ? tabs.get(tabId) : undefined;
+
       if (!tab || input.reuseExistingTab === false) {
-        const snapshot = await Effect.runPromise(
+        const snapshot = await runPromise(
           previewManager.open({
             threadId: request.threadId,
             ...(input.url ? { url: input.url } : {}),
           }),
         );
+
         tabId = snapshot.tabId;
         const page = await (await contextFor(generation)).newPage();
+
         if (generation !== closeGeneration) {
           await page.close().catch(() => undefined);
           throw new Error("The browser was closed while this tab was opening.");
         }
+
         tab = { threadId: request.threadId, page, loading: false };
         tabs.set(tabId, tab);
       }
+
       activeByThread.set(request.threadId, tabId!);
+
       if (input.url) {
         return await navigate(tab, { url: input.url }, request.timeoutMs);
       }
+
       await reportPageStatus(tab);
       await publishFrame(tab);
+
       return await status(tab);
     }
 
     const tab = resolveTab(request);
     const tabId = tabIdFor(tab);
+
     switch (request.operation) {
       case "navigate":
-        return await navigate(
-          tab,
-          request.input as PreviewAutomationNavigateInput,
-          request.timeoutMs,
-        );
+        return await navigate(tab, decodeNavigateInput(request.input), request.timeoutMs);
       case "snapshot": {
         const [rawPageData, screenshot] = await Promise.all([
           tab.page.evaluate(`(() => {
@@ -353,10 +321,9 @@ export const make = Effect.gen(function* ServerPreviewBrowserMake() {
           })()`),
           publishFrame(tab),
         ]);
-        const pageData = rawPageData as {
-          readonly visibleText: string;
-          readonly interactiveElements: PreviewAutomationSnapshot["interactiveElements"];
-        };
+
+        const pageData = decodePageData(rawPageData);
+
         return {
           url: tab.page.url(),
           title: await tab.page.title(),
@@ -372,20 +339,26 @@ export const make = Effect.gen(function* ServerPreviewBrowserMake() {
           screenshot,
         } satisfies PreviewAutomationSnapshot;
       }
+
       case "click": {
-        const input = request.input as PreviewAutomationClickInput;
+        const input = decodeClickInput(request.input);
         const selector = selectorFor(input);
+
         if (selector)
           await tab.page.locator(selector).click({ timeout: input.timeoutMs ?? request.timeoutMs });
         else await tab.page.mouse.click(input.x!, input.y!);
         await publishFrame(tab);
+
         return undefined;
       }
+
       case "type": {
-        const input = request.input as PreviewAutomationTypeInput;
+        const input = decodeTypeInput(request.input);
         const selector = selectorFor(input);
+
         if (selector) {
           const locator = tab.page.locator(selector);
+
           if (input.clear)
             await locator.fill(input.text, { timeout: input.timeoutMs ?? request.timeoutMs });
           else {
@@ -396,18 +369,24 @@ export const make = Effect.gen(function* ServerPreviewBrowserMake() {
           if (input.clear) await tab.page.keyboard.press("Meta+A");
           await tab.page.keyboard.insertText(input.text);
         }
+
         await publishFrame(tab);
+
         return undefined;
       }
+
       case "press": {
-        const input = request.input as PreviewAutomationPressInput;
+        const input = decodePressInput(request.input);
         await tab.page.keyboard.press([...(input.modifiers ?? []), input.key].join("+"));
         await publishFrame(tab);
+
         return undefined;
       }
+
       case "scroll": {
-        const input = request.input as PreviewAutomationScrollInput;
+        const input = decodeScrollInput(request.input);
         const selector = selectorFor(input);
+
         if (selector) {
           await tab.page
             .locator(selector)
@@ -417,59 +396,75 @@ export const make = Effect.gen(function* ServerPreviewBrowserMake() {
             });
         } else await tab.page.mouse.wheel(input.deltaX ?? 0, input.deltaY ?? 0);
         await publishFrame(tab);
+
         return undefined;
       }
+
       case "evaluate": {
-        const input = request.input as PreviewAutomationEvaluateInput;
+        const input = decodeEvaluateInput(request.input);
         const session = await (await contextFor(generation)).newCDPSession(tab.page);
+
         try {
           const result = await session.send("Runtime.evaluate", {
             expression: input.expression,
             awaitPromise: input.awaitPromise ?? true,
             returnByValue: input.returnByValue ?? true,
           });
+
           await publishFrame(tab);
+
           if (result.exceptionDetails) throw new Error(result.exceptionDetails.text);
+
           return result.result.value ?? result.result.description ?? null;
         } finally {
           await session.detach();
         }
       }
+
       case "waitFor": {
-        const input = request.input as PreviewAutomationWaitForInput;
+        const input = decodeWaitForInput(request.input);
         const timeout = input.timeoutMs ?? request.timeoutMs;
-        const waits: Promise<unknown>[] = [];
+        const waits: Promise<void>[] = [];
         const selector = selectorFor(input);
+
         if (selector) waits.push(tab.page.locator(selector).waitFor({ state: "visible", timeout }));
+
         if (input.text)
           waits.push(tab.page.getByText(input.text, { exact: false }).first().waitFor({ timeout }));
+
         if (input.urlIncludes)
           waits.push(
             tab.page.waitForURL((url) => url.href.includes(input.urlIncludes!), { timeout }),
           );
         await Promise.all(waits);
         await publishFrame(tab);
+
         return undefined;
       }
+
       case "resize": {
-        const input = request.input as PreviewAutomationResizeInput;
+        const input = decodeResizeInput(request.input);
         const setting = resolvePreviewViewport(input);
         const viewport = viewportForSetting(setting);
         await tab.page.setViewportSize(viewport);
-        await Effect.runPromise(
+        await runPromise(
           previewManager.resize({ threadId: request.threadId, tabId, viewport: setting }),
         );
         await publishFrame(tab);
+
         return { tabId, setting, viewport };
       }
+
       case "setColorScheme": {
-        const input = request.input as PreviewAutomationSetColorSchemeInput;
+        const input = decodeSetColorSchemeInput(request.input);
         await tab.page.emulateMedia({
           colorScheme: input.colorScheme === "system" ? null : input.colorScheme,
         });
         await publishFrame(tab);
+
         return { tabId, colorScheme: input.colorScheme };
       }
+
       case "recordingStart":
       case "recordingStop":
         throw new Error("Browser recording is not available in the web preview host.");
@@ -485,9 +480,10 @@ export const make = Effect.gen(function* ServerPreviewBrowserMake() {
     // Pages die with the browser session.
     tabs.clear();
     activeByThread.clear();
+
     if (!current) return;
     await current.context.catch(() => undefined);
-    await Effect.runPromise(Scope.close(current.scope, Exit.void));
+    await runPromise(Scope.close(current.scope, Exit.void));
   };
 
   return ServerPreviewBrowser.of({ handle, close });
@@ -498,4 +494,33 @@ export const layer = Layer.effect(
   Effect.acquireRelease(make, (browser) =>
     Effect.promise(() => browser.close()).pipe(Effect.orDie),
   ),
+);
+
+const Navigation = Data.taggedEnum<PreviewSessionSnapshot["navStatus"]>();
+
+const decodeOpenInput = Schema.decodeUnknownSync(PreviewAutomationOpenInput);
+
+const decodeNavigateInput = Schema.decodeUnknownSync(PreviewAutomationNavigateInput);
+
+const decodeClickInput = Schema.decodeUnknownSync(PreviewAutomationClickInput);
+
+const decodeTypeInput = Schema.decodeUnknownSync(PreviewAutomationTypeInput);
+
+const decodePressInput = Schema.decodeUnknownSync(PreviewAutomationPressInput);
+
+const decodeScrollInput = Schema.decodeUnknownSync(PreviewAutomationScrollInput);
+
+const decodeEvaluateInput = Schema.decodeUnknownSync(PreviewAutomationEvaluateInput);
+
+const decodeWaitForInput = Schema.decodeUnknownSync(PreviewAutomationWaitForInput);
+
+const decodeResizeInput = Schema.decodeUnknownSync(PreviewAutomationResizeInput);
+
+const decodeSetColorSchemeInput = Schema.decodeUnknownSync(PreviewAutomationSetColorSchemeInput);
+
+const decodePageData = Schema.decodeUnknownSync(
+  Schema.Struct({
+    visibleText: Schema.String,
+    interactiveElements: PreviewAutomationSnapshot.fields.interactiveElements,
+  }),
 );

@@ -12,7 +12,21 @@ import {
 } from "./appShortcuts";
 
 function navState(route: { name: string; params?: unknown }): NavigationState {
-  return { index: 0, routes: [route] } as unknown as NavigationState;
+  return {
+    key: "test-stack",
+    type: "stack",
+    stale: false,
+    index: 0,
+    routeNames: [route.name],
+    routes: [
+      {
+        key: "test-route",
+        name: route.name,
+        // Negative tests deliberately supply malformed params to the route parser.
+        ...(route.params === undefined ? {} : { params: route.params as object }),
+      },
+    ],
+  };
 }
 
 function thread(suffix: string, title = `Thread ${suffix}`): RecentThreadShortcut {
@@ -70,6 +84,7 @@ describe("buildShortcutActions", () => {
     const actions = buildShortcutActions([
       { environmentId: "env 1", threadId: "thread/2", title: "Spaced out" },
     ]);
+
     expect(actions[1]?.params?.href).toBe("/threads/env%201/thread%2F2");
     expect(actions[1]?.title).toBe("Spaced out");
   });
@@ -105,6 +120,7 @@ describe("shortcutHref", () => {
     ]) {
       expect(shortcutHref({ id: "x", title: "x", params: { href } })).toBe(null);
     }
+
     expect(shortcutHref({ id: "x", title: "x", params: { href: 3 } })).toBe(null);
     expect(shortcutHref({ id: "x", title: "x" })).toBe(null);
   });
@@ -115,6 +131,7 @@ describe("activeThreadRef", () => {
     const ref = activeThreadRef(
       navState({ name: "Thread", params: { environmentId: "env-1", threadId: "thread-2" } }),
     );
+
     expect(ref).toEqual({ environmentId: "env-1", threadId: "thread-2" });
   });
 
@@ -122,6 +139,7 @@ describe("activeThreadRef", () => {
     const ref = activeThreadRef(
       navState({ name: "Thread", params: { environmentId: ["env-1"], threadId: ["thread-2"] } }),
     );
+
     expect(ref).toEqual({ environmentId: "env-1", threadId: "thread-2" });
   });
 
@@ -141,6 +159,7 @@ describe("activeThreadRef", () => {
       { environmentId: { nested: true }, threadId: "thread-2" },
       { environmentId: [], threadId: [] },
     ];
+
     for (const params of malformed) {
       expect(activeThreadRef(navState({ name: "Thread", params }))).toBe(null);
     }

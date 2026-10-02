@@ -1,6 +1,23 @@
 import { afterEach, describe, expect, it } from "@effect/vitest";
 import { EnvironmentId, ProviderInstanceId } from "@akeru/contracts";
 import { vi } from "vite-plus/test";
+import { appAtomRegistry } from "./atom-registry";
+import {
+  clearComposerDraftContentState,
+  ComposerDraftPersistenceError,
+  composerDraftsAtom,
+  copyComposerDraftContentIfEmpty,
+  copyComposerDraftContentState,
+  decodePersistedComposerDrafts,
+  type ComposerDraft,
+  flushComposerDrafts,
+  getComposerDraftSnapshot,
+  mergeComposerDraftContentState,
+  removeComposerDraftsForEnvironment,
+  resetComposerDraftsLoadState,
+  restoreComposerDraftSnapshotState,
+  setComposerDraftText,
+} from "./use-composer-drafts";
 
 const composerDraftFileMocks = vi.hoisted(() => {
   let document = JSON.stringify({ schemaVersion: 1, drafts: {} });
@@ -22,7 +39,10 @@ const composerDraftFileMocks = vi.hoisted(() => {
     getDocument() {
       return document;
     },
-    setDocument(value: unknown) {
+    setDocument(value: {
+      readonly schemaVersion: number;
+      readonly drafts: Record<string, ComposerDraft>;
+    }) {
       document = JSON.stringify(value);
     },
     setReadError(error: Error | null) {
@@ -44,7 +64,9 @@ const composerDraftFileMocks = vi.hoisted(() => {
 
       async text() {
         await readBarrier;
+
         if (readError) throw readError;
+
         return document;
       }
 
@@ -52,6 +74,7 @@ const composerDraftFileMocks = vi.hoisted(() => {
         if (writeError) {
           throw writeError;
         }
+
         document = value;
       }
     },
@@ -63,24 +86,6 @@ vi.mock("expo-file-system", () => ({
   File: composerDraftFileMocks.File,
   Paths: { document: "/documents" },
 }));
-
-import { appAtomRegistry } from "./atom-registry";
-import {
-  clearComposerDraftContentState,
-  ComposerDraftPersistenceError,
-  composerDraftsAtom,
-  copyComposerDraftContentIfEmpty,
-  copyComposerDraftContentState,
-  decodePersistedComposerDrafts,
-  type ComposerDraft,
-  flushComposerDrafts,
-  getComposerDraftSnapshot,
-  mergeComposerDraftContentState,
-  removeComposerDraftsForEnvironment,
-  resetComposerDraftsLoadState,
-  restoreComposerDraftSnapshotState,
-  setComposerDraftText,
-} from "./use-composer-drafts";
 
 const DRAFT: ComposerDraft = {
   text: "hello",
@@ -167,6 +172,7 @@ describe("mobile composer drafts", () => {
 
   it("clears sent content without clearing the selected model or workspace", () => {
     const draftKey = "environment-1:thread-1";
+
     const draft: ComposerDraft = {
       text: "send this",
       attachments: [],
@@ -195,6 +201,7 @@ describe("mobile composer drafts", () => {
 
   it("drops the workspace selection when clearing a sent new-task draft", () => {
     const draftKey = "new-task:environment-1:project-1";
+
     const draft: ComposerDraft = {
       text: "send this",
       attachments: [],
@@ -225,6 +232,7 @@ describe("mobile composer drafts", () => {
 
   it("reads the latest selector state synchronously for send", () => {
     const draftKey = "environment-1:thread-1";
+
     const selectedDraft: ComposerDraft = {
       text: "send this",
       attachments: [],
@@ -234,6 +242,7 @@ describe("mobile composer drafts", () => {
         options: [{ id: "reasoningEffort", value: "xhigh" }],
       },
     };
+
     appAtomRegistry.set(composerDraftsAtom, { [draftKey]: selectedDraft });
 
     expect(getComposerDraftSnapshot(draftKey)).toEqual(selectedDraft);
@@ -242,6 +251,7 @@ describe("mobile composer drafts", () => {
   it("carries unfinished content to a newly selected project without overwriting its settings", () => {
     const sourceKey = "new-task:environment-1:project-1";
     const targetKey = "new-task:environment-1:project-2";
+
     const source: ComposerDraft = {
       text: "Keep this task",
       attachments: [],
@@ -252,6 +262,7 @@ describe("mobile composer drafts", () => {
         worktreePath: null,
       },
     };
+
     const target: ComposerDraft = {
       text: "",
       attachments: [],
@@ -278,7 +289,8 @@ describe("mobile composer drafts", () => {
   it("does not overwrite unfinished content already stored for the selected project", () => {
     const sourceKey = "new-task:environment-1:project-1";
     const targetKey = "new-task:environment-1:project-2";
-    const drafts: Record<string, ComposerDraft> = {
+
+    const drafts = {
       [sourceKey]: { text: "Source task", attachments: [] },
       [targetKey]: { text: "Target task", attachments: [] },
     };
@@ -288,6 +300,7 @@ describe("mobile composer drafts", () => {
 
   it("merges shared content into a project draft without duplicating retries", () => {
     const draftKey = "new-task:environment-1:project-1";
+
     const sharedAttachment = {
       id: "share-1:image:0",
       type: "image" as const,
@@ -297,9 +310,11 @@ describe("mobile composer drafts", () => {
       dataUrl: "data:image/png;base64,YWJj",
       previewUri: "data:image/png;base64,YWJj",
     };
-    const existing: Record<string, ComposerDraft> = {
+
+    const existing = {
       [draftKey]: { text: "Existing context", attachments: [] },
     };
+
     const content = {
       text: "Shared note",
       attachments: [sharedAttachment],
@@ -318,11 +333,13 @@ describe("mobile composer drafts", () => {
       ...merged,
       [draftKey]: { ...merged[draftKey]!, text: "User edited the imported context" },
     };
+
     expect(mergeComposerDraftContentState(edited, draftKey, content)).toBe(edited);
   });
 
   it("preserves existing images when shared content exceeds the draft attachment limit", () => {
     const draftKey = "new-task:environment-1:project-1";
+
     const image = (id: string) => ({
       id,
       type: "image" as const,
@@ -332,6 +349,7 @@ describe("mobile composer drafts", () => {
       dataUrl: "data:image/png;base64,YWJj",
       previewUri: "data:image/png;base64,YWJj",
     });
+
     const existingImage = image("existing");
     const sharedImages = Array.from({ length: 8 }, (_, index) => image(`shared-${index}`));
 
@@ -348,11 +366,13 @@ describe("mobile composer drafts", () => {
 
   it("restores the exact draft captured before an interrupted share import", () => {
     const draftKey = "new-task:environment-1:project-1";
+
     const beforeImport: ComposerDraft = {
       text: "Existing context",
       attachments: [],
       runtimeMode: "approval-required",
     };
+
     const imported: ComposerDraft = {
       ...beforeImport,
       text: "Existing context\n\nShared note",
@@ -471,6 +491,7 @@ describe("mobile composer drafts", () => {
         drafts: { "environment-1:saved": DRAFT },
       });
       const original = composerDraftFileMocks.getDocument();
+
       if (failure === "read") {
         composerDraftFileMocks.setReadError(new Error("storage unavailable"));
       }

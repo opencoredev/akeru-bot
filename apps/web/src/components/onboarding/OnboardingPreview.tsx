@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { useEffect, useState } from "react";
 
@@ -22,8 +23,11 @@ const EASE = [0.23, 1, 0.32, 1] as const;
 /** Caption under the assembling bot. Names what the user just did. */
 function previewCaption(draft: DesktopOnboardingDraft, t: OnboardingTranslate): string {
   if (draft.step === "subscription") return t("Pick the subscription that powers your bot");
+
   if (draft.step === "goal") return t("Say what you want help with");
+
   if (draft.step === "identity") return t("Give it a name and a look");
+
   return t("Send the first message");
 }
 
@@ -33,14 +37,20 @@ function ProviderChip({
   readonly providerId: DesktopOnboardingDraft["providerId"];
 }) {
   const provider = SUBSCRIPTION_PROVIDERS.find((candidate) => candidate.id === providerId);
+
   if (!provider) return null;
-  const ProviderIcon = typeof provider.icon === "string" ? null : provider.icon;
+  const ProviderIcon = Predicate.isString(provider.icon) ? null : provider.icon;
+
   return (
     <span className="inline-flex items-center gap-1.5 rounded-full border border-border/60 bg-background/70 py-1 pe-2.5 ps-2 text-xs text-muted-foreground">
       {ProviderIcon ? (
         <ProviderIcon className="size-3.5" />
       ) : (
-        <img src={provider.icon as string} alt="" className="size-3.5 brightness-0 dark:invert" />
+        <img
+          src={Predicate.isString(provider.icon) ? provider.icon : undefined}
+          alt=""
+          className="size-3.5 brightness-0 dark:invert"
+        />
       )}
       {provider.label}
     </span>
@@ -83,6 +93,7 @@ function FirstMessageComposer({
   const runtime = useBotThreadRuntime(botId, modelSelection);
   const { t } = useI18n();
   const [error, setError] = useState<string | null>(null);
+
   const destinationReady =
     submittedMessage !== null &&
     desktopOnboardingDestinationReady({
@@ -105,14 +116,20 @@ function FirstMessageComposer({
         onSubmit={async (prompt, files) => {
           if (captureMode) {
             onComplete(prompt);
+
             return true;
           }
+
           const sent = await runtime.send(prompt, files);
+
           if (!sent) {
             setError(runtime.error ?? t("Could not send the message."));
+
             return false;
           }
+
           onComplete(prompt);
+
           return true;
         }}
       />
@@ -151,8 +168,10 @@ export function OnboardingPreview({
   const { t } = useI18n();
   const messageStep = draft.step === "message";
   const displayName = draft.name.trim() || t("Your bot");
+
   const focusLabel =
     draft.step === "subscription" ? null : resolveDesktopOnboardingFocusLabel(draft.goal);
+
   const named = draft.name.trim().length > 0;
   const headerState = handoff ? desktopOnboardingHandoffAvatarState(handoff) : "idle";
 
@@ -181,7 +200,7 @@ export function OnboardingPreview({
               <motion.div
                 layout
                 transition={{ duration: reducedMotion ? 0 : 0.35, ease: EASE }}
-                className="relative z-20 flex size-24 items-center justify-center rounded-[2rem] border border-border/55 bg-card/35 shadow-[0_24px_70px_-36px_rgba(0,0,0,0.45)]"
+                className="relative z-20 flex size-24 items-center justify-center rounded-2rem border border-border/55 bg-card/35 shadow-preview-frame"
               >
                 <BotAvatarView
                   avatar={draft.avatar}
@@ -192,7 +211,7 @@ export function OnboardingPreview({
               </motion.div>
               <motion.h2
                 layout
-                className="mt-5 text-xl font-medium tracking-[-0.02em]"
+                className="mt-5 text-xl font-medium tracking-title-lg"
                 data-preview-named={named ? "true" : "false"}
               >
                 {displayName}
@@ -224,9 +243,8 @@ export function OnboardingPreview({
           )}
         </div>
         <motion.div
-          className="shrink-0"
+          className={handoff ? "pointer-events-none shrink-0" : "shrink-0"}
           animate={handoff ? { opacity: 0, y: 8 } : { opacity: 1, y: 0 }}
-          style={{ pointerEvents: handoff ? "none" : "auto" }}
           transition={{ duration: reducedMotion ? 0 : 0.25, ease: EASE }}
         >
           {messageStep && draft.botId && createdBotReady ? (

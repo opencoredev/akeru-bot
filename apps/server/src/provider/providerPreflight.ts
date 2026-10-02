@@ -30,13 +30,17 @@ const recordedFailureStillBlocks = (
   now: number,
 ): boolean => {
   if (category === "temporary-failure") return false;
+
   if (category === "unsupported-model") return failure?.model === model;
+
   if (category !== "limit-reached") return true;
+
   const retryAt = nextRetryAt
     ? Date.parse(nextRetryAt)
     : failure?.at
       ? Date.parse(failure.at) + RATE_LIMIT_RETRY_WINDOW_MS
       : Number.NaN;
+
   return Number.isFinite(retryAt) && now < retryAt;
 };
 
@@ -46,13 +50,15 @@ export interface ProviderPreflightVerdict {
   readonly repairAction?: "providers" | "usage";
 }
 
-const SUBSCRIPTION_PROVIDER_BY_DRIVER: Record<string, SubscriptionProviderId> = {
-  codex: "openai-codex",
-  claudeAgent: "anthropic",
-  grok: "xai",
-  kimi: "kimi-for-coding",
-  opencodeGo: "opencode-go",
-};
+const SUBSCRIPTION_PROVIDER_BY_DRIVER = new Map<string, SubscriptionProviderId>(
+  Object.entries({
+    codex: "openai-codex",
+    claudeAgent: "anthropic",
+    grok: "xai",
+    kimi: "kimi-for-coding",
+    opencodeGo: "opencode-go",
+  } satisfies Record<string, SubscriptionProviderId>),
+);
 
 /**
  * Decides whether a turn can start on a provider instance before any work is
@@ -86,13 +92,16 @@ export const preflightProvider = (input: {
   readonly requireSettledCatalog?: boolean;
 }): ProviderPreflightVerdict | undefined => {
   const provider = input.providers.find((candidate) => candidate.instanceId === input.providerId);
+
   if (!provider) {
     // An empty or stale snapshot can occur before the provider registry has
     // completed its first probe. That is not evidence that the provider is
     // unavailable; let dispatch perform its normal adapter-level check.
     return undefined;
   }
+
   const name = provider.displayName ?? provider.driver;
+
   if (!provider.enabled) {
     return {
       category: "temporary-failure",
@@ -100,17 +109,23 @@ export const preflightProvider = (input: {
       repairAction: "providers",
     };
   }
-  const subscriptionId = SUBSCRIPTION_PROVIDER_BY_DRIVER[provider.driver];
+
+  const subscriptionId = SUBSCRIPTION_PROVIDER_BY_DRIVER.get(provider.driver);
+
   const subscription = subscriptionId
     ? (input.subscriptionStatusForInstance?.(subscriptionId, provider.instanceId) ??
       input.subscriptionStatuses?.find((status) => status.provider === subscriptionId))
     : undefined;
+
   const requestHealth = input.subscriptionHealth?.(provider.instanceId);
+
   const sharedCredential =
     subscriptionId !== undefined &&
     instanceUsesSavedCredential(subscriptionId, input.providerInstanceConfig);
+
   const sharedHealth = sharedCredential ? subscription?.health : undefined;
   const canRefreshExpiredLogin = sharedHealth === "expired" && subscription?.authMode === "oauth";
+
   const health =
     sharedHealth === "revoked" || (sharedHealth === "expired" && !canRefreshExpiredLogin)
       ? sharedHealth
@@ -118,6 +133,7 @@ export const preflightProvider = (input: {
         (provider.auth.status === "unauthenticated" && !canRefreshExpiredLogin
           ? sharedHealth
           : undefined));
+
   if (health === "missing" || health === "revoked") {
     return {
       category: health === "revoked" ? "expired-login" : "missing-login",
@@ -125,6 +141,7 @@ export const preflightProvider = (input: {
       repairAction: "providers",
     };
   }
+
   if (health === "expired") {
     return {
       category: "expired-login",
@@ -132,11 +149,13 @@ export const preflightProvider = (input: {
       repairAction: "providers",
     };
   }
+
   if (health === "failed" || health === "failed-first-request") {
     const failure = requestHealth?.lastFailedRequest ?? subscription?.lastFailedRequest;
     const detail = failure?.message ?? "The provider request failed.";
     const category = providerUnavailabilityFromDetail(provider.driver, detail);
     const nextRetryAt = requestHealth ? requestHealth.nextRetryAt : subscription?.nextRetryAt;
+
     if (
       recordedFailureStillBlocks(category, failure, nextRetryAt, input.model, input.now) &&
       !(canRefreshExpiredLogin && category === "expired-login")
@@ -144,6 +163,7 @@ export const preflightProvider = (input: {
       return withRepair(category, detail);
     }
   }
+
   if (
     provider.unavailability &&
     provider.unavailability !== "temporary-failure" &&
@@ -154,6 +174,7 @@ export const preflightProvider = (input: {
       provider.unavailabilityDetail ?? provider.message ?? "Provider access is unavailable.",
     );
   }
+
   if (
     !provider.installed ||
     (provider.availability === "unavailable" &&
@@ -166,6 +187,7 @@ export const preflightProvider = (input: {
       repairAction: "providers",
     };
   }
+
   if (provider.auth.status === "unauthenticated" && !canRefreshExpiredLogin) {
     return {
       category: "missing-login",
@@ -173,7 +195,9 @@ export const preflightProvider = (input: {
       repairAction: "providers",
     };
   }
+
   const catalogSettled = !input.requireSettledCatalog || provider.status === "ready";
+
   if (
     catalogSettled &&
     provider.models.length > 0 &&
@@ -184,6 +208,7 @@ export const preflightProvider = (input: {
       detail: `Model '${input.model}' is not available for ${name}.`,
     };
   }
+
   return undefined;
 };
 

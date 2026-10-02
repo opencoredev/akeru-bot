@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 import {
   ConnectionCatalogDocument,
   type ConnectionCatalogDocument as ConnectionCatalogDocumentType,
@@ -14,7 +15,9 @@ import * as MobileSecureStorage from "../persistence/mobile-secure-storage";
 import { migrateLegacyConnectionCatalog } from "./migration";
 
 export const CONNECTION_CATALOG_KEY = "akeru.connection-catalog.v1";
+
 export const LEGACY_CONNECTIONS_KEY = "t3code.connections";
+
 // The catalog itself shipped under the `t3code` prefix; checked once before
 // the legacy flat-connections migration runs.
 const LEGACY_CATALOG_KEY = "t3code.connection-catalog.v1";
@@ -27,7 +30,9 @@ function catalogError(operation: string, cause: unknown) {
 }
 
 const ConnectionCatalogDocumentJson = Schema.fromJsonString(ConnectionCatalogDocument);
+
 const decodeConnectionCatalogDocument = Schema.decodeEffect(ConnectionCatalogDocumentJson);
+
 const encodeConnectionCatalogDocument = Schema.encodeEffect(ConnectionCatalogDocumentJson);
 
 const decodeCatalog = Effect.fn("mobile.connectionStorage.decodeCatalog")(function* (raw: string) {
@@ -53,29 +58,39 @@ interface CatalogStore {
 
 export const make = Effect.fn("mobile.connectionStorage.makeCatalogStore")(function* () {
   const storage = yield* MobileSecureStorage.MobileSecureStorage;
+
   const getItem = (key: string) =>
     storage.getItem(key).pipe(Effect.mapError((cause) => catalogError("load", cause)));
+
   const setItem = (key: string, value: string) =>
     storage.setItem(key, value).pipe(Effect.mapError((cause) => catalogError("save", cause)));
+
   const deleteItem = (key: string) =>
     storage.removeItem(key).pipe(Effect.mapError((cause) => catalogError("delete", cause)));
+
   const state = yield* Ref.make<Option.Option<ConnectionCatalogDocumentType>>(Option.none());
   const lock = yield* Semaphore.make(1);
 
   const loadLegacyCatalog = Effect.fn("mobile.connectionStorage.loadLegacyCatalog")(function* () {
     // Pre-rebrand catalogs migrate as-is: the document shape did not change.
     const rebrandedRaw = yield* getItem(LEGACY_CATALOG_KEY);
+
     if (rebrandedRaw !== null && rebrandedRaw.trim() !== "") {
       const decoded = yield* Effect.result(decodeCatalog(rebrandedRaw));
-      if (decoded._tag === "Success") {
+
+      if (Predicate.isTagged(decoded, "Success")) {
         yield* setItem(CONNECTION_CATALOG_KEY, rebrandedRaw);
         yield* deleteItem(LEGACY_CATALOG_KEY).pipe(Effect.ignore);
+
         return decoded.success;
       }
+
       yield* Effect.logWarning("Discarding corrupt legacy mobile connection catalog");
       yield* deleteItem(LEGACY_CATALOG_KEY);
     }
+
     const legacyRaw = yield* getItem(LEGACY_CONNECTIONS_KEY);
+
     const catalog =
       legacyRaw === null || legacyRaw.trim() === ""
         ? EMPTY_CONNECTION_CATALOG_DOCUMENT
@@ -87,21 +102,26 @@ export const make = Effect.fn("mobile.connectionStorage.makeCatalogStore")(funct
               ),
             ),
           );
+
     if (legacyRaw !== null && legacyRaw.trim() !== "") {
       const encoded = yield* encodeCatalog(catalog);
       yield* setItem(CONNECTION_CATALOG_KEY, encoded);
       yield* deleteItem(LEGACY_CONNECTIONS_KEY).pipe(Effect.ignore);
     }
+
     return catalog;
   });
 
   const loadUnlocked = Effect.fn("mobile.connectionStorage.loadCatalog")(function* () {
     const cached = yield* Ref.get(state);
+
     if (Option.isSome(cached)) {
       return cached.value;
     }
+
     const raw = yield* getItem(CONNECTION_CATALOG_KEY);
     let catalog: ConnectionCatalogDocumentType;
+
     if (raw !== null && raw.trim() !== "") {
       catalog = yield* decodeCatalog(raw).pipe(
         Effect.catch((error) =>
@@ -114,11 +134,14 @@ export const make = Effect.fn("mobile.connectionStorage.makeCatalogStore")(funct
     } else {
       catalog = yield* loadLegacyCatalog();
     }
+
     yield* Ref.set(state, Option.some(catalog));
+
     return catalog;
   });
 
   const read = lock.withPermits(1)(loadUnlocked());
+
   const update: CatalogStore["update"] = Effect.fn("mobile.connectionStorage.updateCatalog")(
     function* (transform) {
       yield* lock.withPermits(1)(

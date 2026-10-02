@@ -1,53 +1,20 @@
+import { Predicate } from "effect";
 import { describe, expect, it } from "@effect/vitest";
 import { EnvironmentNotRegisteredError } from "@akeru/client-runtime/connection";
 import { isTransportConnectionErrorMessage } from "@akeru/client-runtime/errors";
 import { EnvironmentRpcUnavailableError } from "@akeru/client-runtime/rpc";
 import {
-  CommandId,
   EnvironmentAuthorizationError,
   EnvironmentId,
-  MessageId,
   OrchestrationDispatchCommandError,
   ProjectId,
   ProviderInstanceId,
-  ThreadId,
 } from "@akeru/contracts";
-import { AtomRegistry } from "effect/unstable/reactivity";
 import * as RpcClientError from "effect/unstable/rpc/RpcClientError";
 import * as Socket from "effect/unstable/socket/Socket";
-import { onTestFinished, vi } from "vite-plus/test";
-
-const outboxFiles = vi.hoisted(() => new Map<string, string | Error>());
-
-vi.mock("expo-file-system", () => {
-  class File {
-    constructor(readonly name: string) {}
-
-    async text(): Promise<string> {
-      const contents = outboxFiles.get(this.name);
-      if (contents instanceof Error) throw contents;
-      if (contents === undefined) throw new Error("Missing file");
-      return contents;
-    }
-  }
-
-  return {
-    File,
-    Directory: class {
-      create() {}
-
-      list() {
-        return Array.from(outboxFiles.keys(), (name) => new File(name));
-      }
-    },
-    Paths: { document: "/documents" },
-  };
-});
-
 import {
   decodeQueuedThreadMessage,
   encodeQueuedThreadMessage,
-  flattenQueuedThreadMessages,
   groupQueuedThreadMessages,
   isQueuedThreadCreationSendable,
   modelSelectionsEqual,
@@ -59,289 +26,15 @@ import {
   threadOutboxRetryDelayMs,
   type QueuedThreadMessage,
 } from "./thread-outbox-model";
-import { createThreadOutboxManager, ThreadOutboxManagerError } from "./thread-outbox-manager";
-import {
-  emptyThreadOutboxLoadResult,
-  expoThreadOutboxStorage,
-  ThreadOutboxStorageError,
-  type ThreadOutboxStorage,
-} from "./thread-outbox-storage";
-
-function queuedMessage(input: {
-  readonly environmentId?: string;
-  readonly threadId?: string;
-  readonly messageId: string;
-  readonly createdAt: string;
-}): QueuedThreadMessage {
-  return {
-    environmentId: EnvironmentId.make(input.environmentId ?? "environment-1"),
-    threadId: ThreadId.make(input.threadId ?? "thread-1"),
-    messageId: MessageId.make(input.messageId),
-    commandId: CommandId.make(`command-${input.messageId}`),
-    text: input.messageId,
-    attachments: [],
-    createdAt: input.createdAt,
-  };
-}
+import { queuedMessage } from "./thread-outbox.test-support";
 
 describe("thread outbox", () => {
-  it.each(["read", "json", "schema"] as const)(
-    "hydrates valid queued messages after a record %s failure and keeps the unread file",
-    async (failure) => {
-      onTestFinished(() => outboxFiles.clear());
-      const first = queuedMessage({
-        messageId: "message-1",
-        createdAt: "2026-06-08T10:00:01.000Z",
-      });
-      const second = queuedMessage({
-        messageId: "message-2",
-        createdAt: "2026-06-08T10:00:02.000Z",
-      });
-      const corruptContents =
-        failure === "read"
-          ? new Error("storage unavailable")
-          : failure === "json"
-            ? "{"
-            : JSON.stringify({ ...second, schemaVersion: 999 });
-      outboxFiles.set("message-1.json", JSON.stringify(encodeQueuedThreadMessage(first)));
-      outboxFiles.set("message-2.json", corruptContents);
-
-      const loaded = await expoThreadOutboxStorage.load();
-      expect(loaded.messages).toEqual([first]);
-      expect(loaded.unreadRecords).toMatchObject([
-        { operation: "read-message", fileName: "message-2.json" },
-      ]);
-      expect(outboxFiles.get("message-2.json")).toBe(corruptContents);
-
-      outboxFiles.set("message-2.json", JSON.stringify(encodeQueuedThreadMessage(second)));
-      await expect(expoThreadOutboxStorage.load()).resolves.toEqual({
-        messages: [first, second],
-        unreadRecords: [],
-      });
-    },
-  );
-
-  it("publishes readable queued messages while reporting unread records", async () => {
-    const registry = AtomRegistry.make();
-    onTestFinished(() => registry.dispose());
-    const readable = queuedMessage({
-      messageId: "message-1",
-      createdAt: "2026-06-08T10:00:01.000Z",
-    });
-    const unread = new ThreadOutboxStorageError({
-      operation: "read-message",
-      environmentId: null,
-      threadId: null,
-      messageId: null,
-      fileName: "message-2.json",
-      cause: new Error("storage unavailable"),
-    });
-    const warnings: Array<{ message: string; error: unknown }> = [];
-    const manager = createThreadOutboxManager({
-      registry,
-      warn: (message, error) => warnings.push({ message, error }),
-      storage: {
-        load: async () => ({ messages: [readable], unreadRecords: [unread] }),
-        write: async () => undefined,
-        remove: async () => undefined,
-      },
-    });
-
-    await expect(manager.load()).resolves.toBe(false);
-
-    expect(registry.get(manager.queuedMessagesByThreadKeyAtom)).toEqual({
-      "environment-1:thread-1": [readable],
-    });
-    expect(warnings).toEqual([
-      { message: "[thread-outbox] left unreadable persisted message on disk", error: unread },
-    ]);
-  });
-
-  it("retries a mixed load so a later-readable record can join the drain queue", async () => {
-    const registry = AtomRegistry.make();
-    onTestFinished(() => registry.dispose());
-    const first = queuedMessage({
-      messageId: "message-1",
-      createdAt: "2026-06-08T10:00:01.000Z",
-    });
-    const second = queuedMessage({
-      messageId: "message-2",
-      createdAt: "2026-06-08T10:00:02.000Z",
-    });
-    const unread = new ThreadOutboxStorageError({
-      operation: "read-message",
-      environmentId: null,
-      threadId: null,
-      messageId: null,
-      fileName: "message-2.json",
-      cause: new Error("{"),
-    });
-    let loadCalls = 0;
-    const manager = createThreadOutboxManager({
-      registry,
-      warn: () => {},
-      storage: {
-        load: async () => {
-          loadCalls += 1;
-          if (loadCalls === 1) {
-            return { messages: [first], unreadRecords: [unread] };
-          }
-          return { messages: [first, second], unreadRecords: [] };
-        },
-        write: async () => undefined,
-        remove: async () => undefined,
-      },
-    });
-
-    await expect(manager.load()).resolves.toBe(false);
-    expect(
-      flattenQueuedThreadMessages(registry.get(manager.queuedMessagesByThreadKeyAtom)),
-    ).toEqual([first]);
-    expect(loadCalls).toBe(1);
-
-    await expect(manager.load()).resolves.toBe(true);
-    expect(loadCalls).toBe(2);
-    expect(
-      flattenQueuedThreadMessages(registry.get(manager.queuedMessagesByThreadKeyAtom)),
-    ).toEqual([first, second]);
-
-    await expect(manager.load()).resolves.toBe(true);
-    expect(loadCalls).toBe(2);
-  });
-
-  it("makes a readable pending task visible to drain after a mixed valid/corrupt load", async () => {
-    onTestFinished(() => outboxFiles.clear());
-    const registry = AtomRegistry.make();
-    onTestFinished(() => registry.dispose());
-    const pendingTask = {
-      ...queuedMessage({
-        messageId: "message-1",
-        createdAt: "2026-06-08T10:00:01.000Z",
-      }),
-      text: "Retry the upload worker",
-      creation: {
-        projectId: ProjectId.make("project-1"),
-        workspaceMode: "local" as const,
-        branch: null,
-        worktreePath: null,
-      },
-    };
-    outboxFiles.set("message-1.json", JSON.stringify(encodeQueuedThreadMessage(pendingTask)));
-    outboxFiles.set("message-2.json", "{");
-
-    const manager = createThreadOutboxManager({
-      registry,
-      warn: () => {},
-      storage: expoThreadOutboxStorage,
-    });
-    await manager.load();
-
-    const visible = flattenQueuedThreadMessages(
-      registry.get(manager.queuedMessagesByThreadKeyAtom),
-    );
-    expect(visible).toEqual([pendingTask]);
-    expect(
-      resolveThreadOutboxDeliveryAction({
-        isCreation: true,
-        threadExists: false,
-        shellStatus: "live",
-        environmentConnected: true,
-        threadBusy: false,
-      }),
-    ).toBe("send");
-    expect(outboxFiles.get("message-2.json")).toBe("{");
-    expect(outboxFiles.has("message-1.json")).toBe(true);
-
-    await expect(manager.clearEnvironment(pendingTask.environmentId)).rejects.toMatchObject({
-      operation: "clear-environment-load",
-    });
-    expect(outboxFiles.get("message-2.json")).toBe("{");
-    expect(JSON.parse(outboxFiles.get("message-1.json") as string)).toMatchObject({
-      messageId: pendingTask.messageId,
-      text: pendingTask.text,
-    });
-  });
-
-  it("preserves queued messages when environment cleanup cannot read the outbox", async () => {
-    const registry = AtomRegistry.make();
-    onTestFinished(() => registry.dispose());
-    const message = queuedMessage({
-      messageId: "message-1",
-      createdAt: "2026-06-08T10:00:01.000Z",
-    });
-    const stored = new Map<MessageId, QueuedThreadMessage>();
-    const manager = createThreadOutboxManager({
-      registry,
-      warn: () => {},
-      storage: {
-        load: async () => {
-          throw new Error("storage unavailable");
-        },
-        write: async (entry) => {
-          stored.set(entry.messageId, entry);
-        },
-        remove: async (entry) => {
-          stored.delete(entry.messageId);
-        },
-      },
-    });
-    await manager.enqueue(message);
-
-    await expect(manager.clearEnvironment(message.environmentId)).rejects.toMatchObject({
-      operation: "clear-environment-load",
-    });
-    expect([...stored.values()]).toEqual([message]);
-    expect(registry.get(manager.queuedMessagesByThreadKeyAtom)).toEqual({
-      "environment-1:thread-1": [message],
-    });
-  });
-
-  it("preserves queued messages when environment cleanup sees an unread outbox record", async () => {
-    const registry = AtomRegistry.make();
-    onTestFinished(() => registry.dispose());
-    const message = queuedMessage({
-      messageId: "message-1",
-      createdAt: "2026-06-08T10:00:01.000Z",
-    });
-    const unread = new ThreadOutboxStorageError({
-      operation: "read-message",
-      environmentId: null,
-      threadId: null,
-      messageId: null,
-      fileName: "message-2.json",
-      cause: new Error("{"),
-    });
-    const stored = new Map<MessageId, QueuedThreadMessage>();
-    const manager = createThreadOutboxManager({
-      registry,
-      warn: () => {},
-      storage: {
-        load: async () => ({ messages: [message], unreadRecords: [unread] }),
-        write: async (entry) => {
-          stored.set(entry.messageId, entry);
-        },
-        remove: async (entry) => {
-          stored.delete(entry.messageId);
-        },
-      },
-    });
-    await manager.enqueue(message);
-
-    await expect(manager.clearEnvironment(message.environmentId)).rejects.toMatchObject({
-      operation: "clear-environment-load",
-      cause: [unread],
-    });
-    expect([...stored.values()]).toEqual([message]);
-    expect(registry.get(manager.queuedMessagesByThreadKeyAtom)).toEqual({
-      "environment-1:thread-1": [message],
-    });
-  });
-
   it("groups messages by scoped thread and preserves creation order", () => {
     const later = queuedMessage({
       messageId: "message-2",
       createdAt: "2026-06-08T10:00:02.000Z",
     });
+
     const earlier = queuedMessage({
       messageId: "message-1",
       createdAt: "2026-06-08T10:00:01.000Z",
@@ -377,6 +70,7 @@ describe("thread outbox", () => {
       messageId: "message-1",
       createdAt: "2026-06-08T10:00:01.000Z",
     });
+
     const selectedMessage = {
       ...legacyMessage,
       modelSelection: {
@@ -424,331 +118,6 @@ describe("thread outbox", () => {
     expect([1, 2, 3, 4, 5, 6].map(threadOutboxRetryDelayMs)).toEqual([
       1_000, 2_000, 4_000, 8_000, 16_000, 16_000,
     ]);
-  });
-
-  it("serializes mutations even when an earlier mutation is slower", async () => {
-    const registry = AtomRegistry.make();
-    const manager = createThreadOutboxManager({
-      registry,
-      storage: {
-        load: async () => emptyThreadOutboxLoadResult(),
-        write: async () => undefined,
-        remove: async () => undefined,
-      },
-    });
-    const order: string[] = [];
-    let releaseFirst!: () => void;
-    const firstBlocked = new Promise<void>((resolve) => {
-      releaseFirst = resolve;
-    });
-
-    const first = manager.serialize(async () => {
-      order.push("first:start");
-      await firstBlocked;
-      order.push("first:end");
-    });
-    const second = manager.serialize(async () => {
-      order.push("second");
-    });
-
-    await Promise.resolve();
-    expect(order).toEqual(["first:start"]);
-    releaseFirst();
-    await Promise.all([first, second]);
-    expect(order).toEqual(["first:start", "first:end", "second"]);
-    registry.dispose();
-  });
-
-  it("holds the mutation queue while persisted messages are loading", async () => {
-    const registry = AtomRegistry.make();
-    const message = queuedMessage({
-      messageId: "message-1",
-      createdAt: "2026-06-08T10:00:01.000Z",
-    });
-    const stored = new Map([[message.messageId, message]]);
-    let loadCalls = 0;
-    let removeCalls = 0;
-    let releaseInitialLoad!: () => void;
-    const initialLoadBlocked = new Promise<void>((resolve) => {
-      releaseInitialLoad = resolve;
-    });
-    const storage: ThreadOutboxStorage = {
-      load: async () => {
-        loadCalls += 1;
-        if (loadCalls === 1) {
-          await initialLoadBlocked;
-        }
-        return { messages: [...stored.values()], unreadRecords: [] };
-      },
-      write: async () => undefined,
-      remove: async (candidate) => {
-        removeCalls += 1;
-        stored.delete(candidate.messageId);
-      },
-    };
-    const manager = createThreadOutboxManager({ registry, storage });
-
-    const loading = manager.load();
-    await Promise.resolve();
-    const clearing = manager.clearEnvironment(message.environmentId);
-    await Promise.resolve();
-    await Promise.resolve();
-
-    expect(loadCalls).toBe(1);
-    expect(removeCalls).toBe(0);
-
-    releaseInitialLoad();
-    await Promise.all([loading, clearing]);
-    expect(registry.get(manager.queuedMessagesByThreadKeyAtom)).toEqual({});
-    registry.dispose();
-  });
-
-  it("reports structured load failures and permits a retry", async () => {
-    const registry = AtomRegistry.make();
-    const loadCause = new Error("storage unavailable");
-    const warnings: Array<{ message: string; error: unknown }> = [];
-    let loadCalls = 0;
-    const manager = createThreadOutboxManager({
-      registry,
-      storage: {
-        load: async () => {
-          loadCalls += 1;
-          if (loadCalls === 1) throw loadCause;
-          return emptyThreadOutboxLoadResult();
-        },
-        write: async () => undefined,
-        remove: async () => undefined,
-      },
-      warn: (message, error) => warnings.push({ message, error }),
-    });
-
-    await manager.load();
-    expect(warnings).toEqual([
-      {
-        message: "[thread-outbox] failed to load persisted messages",
-        error: new ThreadOutboxManagerError({
-          operation: "load",
-          environmentId: null,
-          threadId: null,
-          messageId: null,
-          cause: loadCause,
-        }),
-      },
-    ]);
-
-    await manager.load();
-    expect(loadCalls).toBe(2);
-    registry.dispose();
-  });
-
-  it("keeps atom state aligned with durable writes and removals", async () => {
-    const registry = AtomRegistry.make();
-    const stored = new Map<MessageId, QueuedThreadMessage>();
-    const removalCause = new Error("remove failed");
-    let failRemoval = true;
-    const storage: ThreadOutboxStorage = {
-      load: async () => ({ messages: [...stored.values()], unreadRecords: [] }),
-      write: async (message) => {
-        stored.set(message.messageId, message);
-      },
-      remove: async (message) => {
-        if (failRemoval) {
-          throw removalCause;
-        }
-        stored.delete(message.messageId);
-      },
-    };
-    const manager = createThreadOutboxManager({ registry, storage });
-    const message = queuedMessage({
-      messageId: "message-1",
-      createdAt: "2026-06-08T10:00:01.000Z",
-    });
-
-    await manager.enqueue(message);
-    expect(registry.get(manager.queuedMessagesByThreadKeyAtom)).toEqual({
-      "environment-1:thread-1": [message],
-    });
-
-    await expect(manager.remove(message)).rejects.toEqual(
-      new ThreadOutboxManagerError({
-        operation: "remove",
-        environmentId: message.environmentId,
-        threadId: message.threadId,
-        messageId: message.messageId,
-        cause: removalCause,
-      }),
-    );
-    expect(registry.get(manager.queuedMessagesByThreadKeyAtom)).toEqual({
-      "environment-1:thread-1": [message],
-    });
-
-    failRemoval = false;
-    await manager.remove(message);
-    expect(registry.get(manager.queuedMessagesByThreadKeyAtom)).toEqual({});
-    registry.dispose();
-  });
-
-  it("publishes an enqueued message before the durable write resolves", async () => {
-    const registry = AtomRegistry.make();
-    let releaseWrite!: () => void;
-    const writeBlocked = new Promise<void>((resolve) => {
-      releaseWrite = resolve;
-    });
-    const manager = createThreadOutboxManager({
-      registry,
-      storage: {
-        load: async () => emptyThreadOutboxLoadResult(),
-        write: async () => writeBlocked,
-        remove: async () => undefined,
-      },
-    });
-    const message = queuedMessage({
-      messageId: "message-1",
-      createdAt: "2026-06-08T10:00:01.000Z",
-    });
-
-    const enqueueing = manager.enqueue(message);
-    expect(registry.get(manager.queuedMessagesByThreadKeyAtom)).toEqual({
-      "environment-1:thread-1": [message],
-    });
-
-    releaseWrite();
-    await enqueueing;
-    expect(registry.get(manager.queuedMessagesByThreadKeyAtom)).toEqual({
-      "environment-1:thread-1": [message],
-    });
-    registry.dispose();
-  });
-
-  it("rolls an enqueued message back out when the durable write fails", async () => {
-    const registry = AtomRegistry.make();
-    const writeCause = new Error("disk full");
-    const manager = createThreadOutboxManager({
-      registry,
-      storage: {
-        load: async () => emptyThreadOutboxLoadResult(),
-        write: async () => {
-          throw writeCause;
-        },
-        remove: async () => undefined,
-      },
-    });
-    const message = queuedMessage({
-      messageId: "message-1",
-      createdAt: "2026-06-08T10:00:01.000Z",
-    });
-
-    await expect(manager.enqueue(message)).rejects.toEqual(
-      new ThreadOutboxManagerError({
-        operation: "enqueue",
-        environmentId: message.environmentId,
-        threadId: message.threadId,
-        messageId: message.messageId,
-        cause: writeCause,
-      }),
-    );
-    expect(registry.get(manager.queuedMessagesByThreadKeyAtom)).toEqual({});
-    registry.dispose();
-  });
-
-  it("keeps a same-id retry queued when the first attempt's write fails", async () => {
-    const registry = AtomRegistry.make();
-    let failNextWrite = true;
-    let releaseFirstWrite!: () => void;
-    const firstWriteBlocked = new Promise<void>((resolve) => {
-      releaseFirstWrite = resolve;
-    });
-    const manager = createThreadOutboxManager({
-      registry,
-      storage: {
-        load: async () => emptyThreadOutboxLoadResult(),
-        write: async () => {
-          if (failNextWrite) {
-            failNextWrite = false;
-            await firstWriteBlocked;
-            throw new Error("disk full");
-          }
-        },
-        remove: async () => undefined,
-      },
-    });
-    const message = queuedMessage({
-      messageId: "message-1",
-      createdAt: "2026-06-08T10:00:01.000Z",
-    });
-    const retried = { ...message, text: "retried" };
-
-    const first = manager.enqueue(message);
-    const second = manager.enqueue(retried);
-    releaseFirstWrite();
-    await expect(first).rejects.toBeInstanceOf(ThreadOutboxManagerError);
-    await second;
-
-    // The failed first attempt must not roll back the retry that replaced it.
-    expect(registry.get(manager.queuedMessagesByThreadKeyAtom)).toEqual({
-      "environment-1:thread-1": [retried],
-    });
-    await expect(manager.confirmQueued(retried)).resolves.toBe(true);
-    await expect(manager.confirmQueued(message)).resolves.toBe(false);
-    registry.dispose();
-  });
-
-  it("replaces an existing message when an enqueue retry uses the same id", async () => {
-    const registry = AtomRegistry.make();
-    const manager = createThreadOutboxManager({
-      registry,
-      storage: {
-        load: async () => emptyThreadOutboxLoadResult(),
-        write: async () => undefined,
-        remove: async () => undefined,
-      },
-    });
-    const message = queuedMessage({
-      messageId: "message-1",
-      createdAt: "2026-06-08T10:00:01.000Z",
-    });
-    const retried = { ...message, text: "retried" };
-
-    await manager.enqueue(message);
-    await manager.enqueue(retried);
-
-    expect(registry.get(manager.queuedMessagesByThreadKeyAtom)).toEqual({
-      "environment-1:thread-1": [retried],
-    });
-    registry.dispose();
-  });
-
-  it("updates a queued message in place but never resurrects a removed one", async () => {
-    const registry = AtomRegistry.make();
-    const stored = new Map<MessageId, QueuedThreadMessage>();
-    const storage: ThreadOutboxStorage = {
-      load: async () => ({ messages: [...stored.values()], unreadRecords: [] }),
-      write: async (message) => {
-        stored.set(message.messageId, message);
-      },
-      remove: async (message) => {
-        stored.delete(message.messageId);
-      },
-    };
-    const manager = createThreadOutboxManager({ registry, storage });
-    const message = queuedMessage({
-      messageId: "message-1",
-      createdAt: "2026-06-08T10:00:01.000Z",
-    });
-
-    await manager.enqueue(message);
-    const edited = { ...message, text: "edited" };
-    await expect(manager.update(edited)).resolves.toBe(true);
-    expect(registry.get(manager.queuedMessagesByThreadKeyAtom)).toEqual({
-      "environment-1:thread-1": [edited],
-    });
-    expect(stored.get(message.messageId)).toEqual(edited);
-
-    await manager.remove(edited);
-    await expect(manager.update({ ...message, text: "stale flush" })).resolves.toBe(false);
-    expect(registry.get(manager.queuedMessagesByThreadKeyAtom)).toEqual({});
-    expect(stored.size).toBe(0);
-    registry.dispose();
   });
 
   it("only removes a missing-thread message after shell synchronization is live", () => {
@@ -848,6 +217,7 @@ describe("thread outbox", () => {
       messageId: "message-1",
       createdAt: "2026-06-08T10:00:01.000Z",
     });
+
     const creationMessage = {
       ...base,
       modelSelection: {
@@ -924,13 +294,16 @@ describe("thread outbox", () => {
       new Socket.SocketCloseError({ code: 1006 }),
       new Socket.SocketOpenError({ kind: "Timeout", cause: new Error("timeout") }),
     ];
+
     for (const reason of socketReasons) {
       const error = new RpcClientError.RpcClientError({ reason });
       expect(isTransportConnectionErrorMessage(error.message)).toBe(
-        reason._tag === "SocketCloseError" || reason._tag === "SocketOpenError",
+        Predicate.isTagged(reason, "SocketCloseError") ||
+          Predicate.isTagged(reason, "SocketOpenError"),
       );
       expect(shouldRetryThreadOutboxDelivery(error)).toBe(true);
     }
+
     expect(
       shouldRetryThreadOutboxDelivery(
         new RpcClientError.RpcClientError({

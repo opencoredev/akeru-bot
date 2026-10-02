@@ -5,5 +5,6 @@ export const environmentEndpointUrl = (httpBaseUrl: string, pathname: string): s
   url.pathname = pathname;
   url.search = "";
   url.hash = "";
+
   return url.toString();
 };

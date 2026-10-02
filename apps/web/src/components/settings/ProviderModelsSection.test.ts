@@ -1,21 +1,27 @@
+import { Predicate } from "effect";
 import { createElement, type ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vite-plus/test";
 import { ProviderDriverKind, ProviderInstanceId, type ServerProviderModel } from "@akeru/contracts";
 
+/** Base UI trigger wrappers read `nativeEvent` before calling the handler. */
+type TriggerClick = { readonly nativeEvent: object };
+
 const mocks = vi.hoisted(() => ({
-  buttons: new Map<string, { onClick?: (event?: unknown) => void }>(),
-  labelledButtons: new Map<string, { onClick?: (event?: unknown) => void }>(),
+  buttons: new Map<string, { onClick?: (event?: TriggerClick) => void }>(),
+  labelledButtons: new Map<string, { onClick?: (event?: TriggerClick) => void }>(),
 }));
 
 vi.mock("../ui/button", () => ({
   Button: (props: {
     children: ReactNode;
-    onClick?: (event?: unknown) => void;
+    onClick?: (event?: TriggerClick) => void;
     "aria-label"?: string;
   }) => {
-    if (typeof props.children === "string") mocks.buttons.set(props.children, props);
+    if (Predicate.isString(props.children)) mocks.buttons.set(props.children, props);
+
     if (props["aria-label"]) mocks.labelledButtons.set(props["aria-label"], props);
+
     return null;
   },
 }));
@@ -67,7 +73,7 @@ describe("ProviderModelsSection bulk visibility control", () => {
         models: input.models,
         customModels:
           input.customModels ??
-          input.models.filter((entry) => entry.isCustom).map((entry) => entry.slug),
+          input.models.flatMap((entry) => (entry.isCustom ? [entry.slug] : [])),
         hiddenModels: input.hiddenModels ?? [],
         favoriteModels: [],
         modelOrder: [],
@@ -77,6 +83,7 @@ describe("ProviderModelsSection bulk visibility control", () => {
         onModelOrderChange: vi.fn(),
       }),
     );
+
     return { onHiddenModelsChange, onChange };
   }
 

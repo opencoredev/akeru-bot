@@ -12,6 +12,7 @@ describe("model picker empty messages", () => {
       selectedInstanceId,
       hasAnyModels: false,
     };
+
     expect(modelPickerEmptyMessage({ ...state, selectedInstanceModelsLoaded: false })).toBe(
       "Loading models…",
     );

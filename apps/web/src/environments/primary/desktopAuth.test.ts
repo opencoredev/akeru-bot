@@ -18,9 +18,12 @@ describe("desktop primary auth", () => {
 
   it("reuses the main-process bearer token across renderer requests", async () => {
     const getLocalEnvironmentBearerToken = vi.fn().mockResolvedValue("desktop-bearer-token");
-    window.desktopBridge = {
+
+    const desktopBridge = {
       getLocalEnvironmentBearerToken,
-    } as unknown as DesktopBridge;
+    } satisfies Partial<DesktopBridge>;
+
+    Object.defineProperty(window, "desktopBridge", { configurable: true, value: desktopBridge });
 
     await expect(readDesktopPrimaryBearerToken()).resolves.toBe("desktop-bearer-token");
     await expect(readDesktopPrimaryBearerToken()).resolves.toBe("desktop-bearer-token");

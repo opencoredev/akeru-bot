@@ -13,6 +13,7 @@ interface ActionElementProps {
 function findButtons(node: ReactNode): ReactElement<ActionElementProps>[] {
   if (!isValidElement<ActionElementProps>(node)) return [];
   const match = node.type === Button ? [node] : [];
+
   return [...match, ...Children.toArray(node.props.children).flatMap(findButtons)];
 }
 
@@ -57,7 +58,9 @@ describe("RootRouteErrorView", () => {
   });
 
   it("provides useful fallbacks for unknown and unserializable errors", () => {
-    const circular: { self?: unknown } = {};
+    type CircularFixture = { self?: CircularFixture };
+
+    const circular: CircularFixture = {};
     circular.self = circular;
 
     expect(errorMessage(new Error("boom"))).toBe("boom");

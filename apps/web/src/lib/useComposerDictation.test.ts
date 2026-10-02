@@ -12,6 +12,7 @@ import { useComposerDictation } from "./useComposerDictation";
 vi.mock("react", async (importOriginal) => {
   const actual = await importOriginal<typeof import("react")>();
   const { reactHookHarness } = await import("../test/reactHookHarness");
+
   return {
     ...actual,
     useCallback: reactHookHarness.useCallback,
@@ -47,6 +48,7 @@ describe("useComposerDictation", () => {
     const send = vi.fn();
     const audio = { bytes: new Uint8Array([1]), durationMs: 10, mediaType: "audio/webm" };
     hooks.beginRender();
+
     const controls = useComposerDictation({
       identity,
       connected: true,
@@ -65,6 +67,7 @@ describe("useComposerDictation", () => {
           }),
         }),
     });
+
     expect(controls.unavailableReason).toBeNull();
     await controls.onStart();
     current = { ...current, text: "Keep this concurrent" };
@@ -77,6 +80,7 @@ describe("useComposerDictation", () => {
     let current = draft();
     const transcribe = vi.fn(async () => "late");
     hooks.beginRender();
+
     const controls = useComposerDictation({
       identity,
       connected: true,
@@ -99,6 +103,7 @@ describe("useComposerDictation", () => {
           }),
         }),
     });
+
     await controls.onStart();
     current = {
       ...current,
@@ -111,10 +116,12 @@ describe("useComposerDictation", () => {
 
   it("keeps typed text through a failed transcription and a retry", async () => {
     let current = draft("Please check ");
+
     const transcribe = vi
       .fn<() => Promise<string>>()
       .mockRejectedValueOnce(new Error("Provider unavailable"))
       .mockResolvedValueOnce("the logs");
+
     const binding = {
       identity,
       connected: true,
@@ -137,6 +144,7 @@ describe("useComposerDictation", () => {
           }),
         }),
     };
+
     hooks.beginRender();
     const first = useComposerDictation(binding);
     await first.onStart();
@@ -156,6 +164,7 @@ describe("useComposerDictation", () => {
 
   it("blocks an active call without treating missing transcription as a dead button", () => {
     hooks.beginRender();
+
     const call = useComposerDictation({
       identity,
       connected: true,
@@ -164,10 +173,12 @@ describe("useComposerDictation", () => {
       getDraft: () => draft(),
       applyDraft: () => undefined,
     });
+
     expect(call.unavailableReason).toBe(DICTATION_UNAVAILABLE.callActive);
     call.onStart();
     hooks.reset();
     hooks.beginRender();
+
     const missing = useComposerDictation({
       identity,
       connected: true,
@@ -175,11 +186,13 @@ describe("useComposerDictation", () => {
       getDraft: () => draft(),
       applyDraft: () => undefined,
     });
+
     expect(missing.unavailableReason).toBeNull();
   });
 
   it("names the next step when capture or transcription is unavailable", () => {
     hooks.beginRender();
+
     const insecure = useComposerDictation({
       identity,
       connected: true,
@@ -189,9 +202,11 @@ describe("useComposerDictation", () => {
       getDraft: () => draft(),
       applyDraft: () => undefined,
     });
+
     expect(insecure.unavailableReason).toBe("Open this page over HTTPS.");
     hooks.reset();
     hooks.beginRender();
+
     const voiceOff = useComposerDictation({
       identity,
       connected: true,
@@ -200,6 +215,7 @@ describe("useComposerDictation", () => {
       getDraft: () => draft(),
       applyDraft: () => undefined,
     });
+
     expect(voiceOff.unavailableReason).toBe("Voice is turned off.");
   });
 });

@@ -7,9 +7,11 @@ import type { HomeListFilterMenu } from "../home/home-list-filter-menu";
 import { withNativeGlassHeaderItem } from "../layout/native-glass-header-items";
 
 type NativeHeaderMenuItems = NativeStackHeaderItemMenu["menu"]["items"];
+
 type NativeHeaderIcon = NonNullable<Extract<NativeStackHeaderItem, { type: "button" }>["icon"]>;
 
 function sfSymbolIcon(name: string): NativeHeaderIcon {
+  // SAFETY: Sidebar icons are app-owned SF Symbol names passed unchanged to the native bridge.
   return { type: "sfSymbol", name: name as never };
 }
 

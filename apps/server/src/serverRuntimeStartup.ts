@@ -1,17 +1,4 @@
-import {
-  type AkeruDelegationRecord,
-  CommandId,
-  DEFAULT_MODEL,
-  DEFAULT_PROVIDER_INTERACTION_MODE,
-  type ModelSelection,
-  PLACEHOLDER_THREAD_TITLE,
-  ProjectId,
-  ProviderInstanceId,
-  ThreadId,
-} from "@akeru/contracts";
-import * as Cause from "effect/Cause";
 import * as Console from "effect/Console";
-import * as Context from "effect/Context";
 import * as Crypto from "effect/Crypto";
 import * as DateTime from "effect/DateTime";
 import * as Deferred from "effect/Deferred";
@@ -19,25 +6,16 @@ import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
-import * as Path from "effect/Path";
-import * as Queue from "effect/Queue";
-import * as Ref from "effect/Ref";
-import * as Schema from "effect/Schema";
 import * as Scope from "effect/Scope";
-
 import * as ServerConfig from "./config.ts";
 import * as ChannelRuntime from "./channels/ChannelRuntime.ts";
 import * as Keybindings from "./keybindings.ts";
-import * as ExternalLauncher from "./process/externalLauncher.ts";
 import * as OrchestrationEngine from "./orchestration/Services/OrchestrationEngine.ts";
-import * as ProjectionSnapshotQuery from "./orchestration/Services/ProjectionSnapshotQuery.ts";
 import * as OrchestrationReactor from "./orchestration/Services/OrchestrationReactor.ts";
 import * as ServerLifecycleEvents from "./serverLifecycleEvents.ts";
 import * as ServerSettings from "./serverSettings.ts";
 import * as ServerEnvironment from "./environment/ServerEnvironment.ts";
 import * as EnvironmentAuth from "./auth/EnvironmentAuth.ts";
-import * as AgentController from "./provider/Services/AgentController.ts";
-import * as ProviderSessionDirectory from "./provider/Services/ProviderSessionDirectory.ts";
 import * as ProviderSessionReaper from "./provider/Services/ProviderSessionReaper.ts";
 import { forkParked } from "./serverActivation.ts";
 import * as ServiceLauncherClient from "./cloud/serviceLauncherClient.ts";
@@ -45,414 +23,28 @@ import { isRemoteInstall } from "./remote/remoteMode.ts";
 import {
   announceRemoteStartup,
   formatHeadlessServeOutput,
-  formatHostForUrl,
-  isWildcardHost,
   issueHeadlessServeAccessInfo,
 } from "./startupAccess.ts";
 import { RoutineRuntime } from "./routines/Runtime.ts";
 
-export class ServerRuntimeStartupError extends Schema.TaggedErrorClass<ServerRuntimeStartupError>()(
-  "ServerRuntimeStartupError",
-  {
-    mode: ServerConfig.RuntimeMode,
-    host: Schema.NullOr(Schema.String),
-    port: Schema.Number,
-    cause: Schema.Defect(),
-  },
-) {
-  override get message(): string {
-    return "Server runtime startup failed before command readiness.";
-  }
-}
-
-export class ServerRuntimeStartup extends Context.Service<
+import { type StartupOptions, restoreExternalChannels } from "./startupChannels.ts";
+import {
+  scopedCommandGate,
+  ServerRuntimeStartupError,
   ServerRuntimeStartup,
-  {
-    readonly awaitCommandReady: Effect.Effect<void, ServerRuntimeStartupError>;
-    readonly markHttpListening: Effect.Effect<void>;
-    readonly enqueueCommand: <A, E>(
-      effect: Effect.Effect<A, E>,
-    ) => Effect.Effect<A, E | ServerRuntimeStartupError>;
-  }
->()("akeru-bot/serverRuntimeStartup") {}
-
-interface QueuedCommand {
-  readonly run: Effect.Effect<void, never>;
-}
-
-type CommandReadinessState = "pending" | "ready" | ServerRuntimeStartupError;
-
-interface CommandGate {
-  readonly awaitCommandReady: Effect.Effect<void, ServerRuntimeStartupError>;
-  readonly signalCommandReady: Effect.Effect<void>;
-  readonly failCommandReady: (error: ServerRuntimeStartupError) => Effect.Effect<void>;
-  readonly enqueueCommand: <A, E>(
-    effect: Effect.Effect<A, E>,
-  ) => Effect.Effect<A, E | ServerRuntimeStartupError>;
-}
-
-const settleQueuedCommand = <A, E>(deferred: Deferred.Deferred<A, E>, exit: Exit.Exit<A, E>) =>
-  Exit.isSuccess(exit)
-    ? Deferred.succeed(deferred, exit.value)
-    : Deferred.failCause(deferred, exit.cause);
-
-export const makeCommandGate = Effect.gen(function* () {
-  const commandReady = yield* Deferred.make<void, ServerRuntimeStartupError>();
-  const commandQueue = yield* Queue.unbounded<QueuedCommand>();
-  const commandReadinessState = yield* Ref.make<CommandReadinessState>("pending");
-
-  const commandWorker = Effect.forever(
-    Queue.take(commandQueue).pipe(Effect.flatMap((command) => command.run)),
-  );
-  yield* Effect.forkScoped(commandWorker);
-
-  return {
-    awaitCommandReady: Deferred.await(commandReady),
-    signalCommandReady: Effect.gen(function* () {
-      yield* Ref.set(commandReadinessState, "ready");
-      yield* Deferred.succeed(commandReady, undefined).pipe(Effect.orDie);
-    }),
-    failCommandReady: (error) =>
-      Effect.gen(function* () {
-        yield* Ref.set(commandReadinessState, error);
-        yield* Deferred.fail(commandReady, error).pipe(Effect.orDie);
-      }),
-    enqueueCommand: <A, E>(effect: Effect.Effect<A, E>) =>
-      Effect.gen(function* () {
-        const readinessState = yield* Ref.get(commandReadinessState);
-        if (readinessState === "ready") {
-          return yield* effect;
-        }
-        if (readinessState !== "pending") {
-          return yield* readinessState;
-        }
-
-        const result = yield* Deferred.make<A, E | ServerRuntimeStartupError>();
-        yield* Queue.offer(commandQueue, {
-          run: Deferred.await(commandReady).pipe(
-            Effect.flatMap(() => effect),
-            Effect.exit,
-            Effect.flatMap((exit) => settleQueuedCommand(result, exit)),
-          ),
-        });
-        return yield* Deferred.await(result);
-      }),
-  } satisfies CommandGate;
-});
-
-export const getAutoBootstrapDefaultModelSelection = (): ModelSelection => ({
-  instanceId: ProviderInstanceId.make("codex"),
-  model: DEFAULT_MODEL,
-});
-
-export const resolveWelcomeBase = Effect.gen(function* () {
-  const serverConfig = yield* ServerConfig.ServerConfig;
-  const segments = serverConfig.cwd.split(/[/\\]/).filter(Boolean);
-  const projectName = segments[segments.length - 1] ?? "project";
-
-  return {
-    cwd: serverConfig.cwd,
-    projectName,
-  } as const;
-});
-
-export const resolveAutoBootstrapWelcomeTargets = Effect.gen(function* () {
-  const crypto = yield* Crypto.Crypto;
-  const randomUUID = crypto.randomUUIDv4;
-  const serverConfig = yield* ServerConfig.ServerConfig;
-  const projectionReadModelQuery = yield* ProjectionSnapshotQuery.ProjectionSnapshotQuery;
-  const orchestrationEngine = yield* OrchestrationEngine.OrchestrationEngineService;
-  const path = yield* Path.Path;
-
-  let bootstrapProjectId: ProjectId | undefined;
-  let bootstrapThreadId: ThreadId | undefined;
-
-  // Akeru Bot always lands in a chat: with no active project, a bot click
-  // would dead-end at the add-project wall, so first run provisions a
-  // workspace from the server cwd even without the explicit flag.
-  let shouldBootstrap = serverConfig.autoBootstrapProjectFromCwd;
-  if (!shouldBootstrap) {
-    const readModel = yield* projectionReadModelQuery.getCommandReadModel();
-    shouldBootstrap = !readModel.projects.some((project) => project.deletedAt === null);
-  }
-
-  if (shouldBootstrap) {
-    yield* Effect.gen(function* () {
-      const existingProject = yield* projectionReadModelQuery.getActiveProjectByWorkspaceRoot(
-        serverConfig.cwd,
-      );
-      let nextProjectId: ProjectId;
-      let nextProjectDefaultModelSelection: ModelSelection;
-
-      if (Option.isNone(existingProject)) {
-        const createdAt = DateTime.formatIso(yield* DateTime.now);
-        nextProjectId = ProjectId.make(yield* randomUUID);
-        const bootstrapProjectTitle = path.basename(serverConfig.cwd) || "project";
-        nextProjectDefaultModelSelection = getAutoBootstrapDefaultModelSelection();
-        yield* orchestrationEngine.dispatch({
-          type: "project.create",
-          commandId: CommandId.make(yield* randomUUID),
-          projectId: nextProjectId,
-          title: bootstrapProjectTitle,
-          workspaceRoot: serverConfig.cwd,
-          defaultModelSelection: nextProjectDefaultModelSelection,
-          createdAt,
-        });
-      } else {
-        nextProjectId = existingProject.value.id;
-        nextProjectDefaultModelSelection =
-          existingProject.value.defaultModelSelection ?? getAutoBootstrapDefaultModelSelection();
-      }
-
-      const existingThreadId =
-        yield* projectionReadModelQuery.getFirstActiveThreadIdByProjectId(nextProjectId);
-      if (Option.isNone(existingThreadId)) {
-        const createdAt = DateTime.formatIso(yield* DateTime.now);
-        const createdThreadId = ThreadId.make(yield* randomUUID);
-        yield* orchestrationEngine.dispatch({
-          type: "thread.create",
-          commandId: CommandId.make(yield* randomUUID),
-          threadId: createdThreadId,
-          projectId: nextProjectId,
-          title: PLACEHOLDER_THREAD_TITLE,
-          modelSelection: nextProjectDefaultModelSelection,
-          interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
-          runtimeMode: "full-access",
-          branch: null,
-          worktreePath: null,
-          createdAt,
-        });
-        bootstrapProjectId = nextProjectId;
-        bootstrapThreadId = createdThreadId;
-      } else {
-        bootstrapProjectId = nextProjectId;
-        bootstrapThreadId = existingThreadId.value;
-      }
-    });
-  }
-
-  return {
-    ...(bootstrapProjectId ? { bootstrapProjectId } : {}),
-    ...(bootstrapThreadId ? { bootstrapThreadId } : {}),
-  } as const;
-});
-
-const resolveStartupBrowserTarget = Effect.gen(function* () {
-  const serverConfig = yield* ServerConfig.ServerConfig;
-  const serverAuth = yield* EnvironmentAuth.EnvironmentAuth;
-  const localUrl = `http://localhost:${serverConfig.port}`;
-  const bindUrl =
-    serverConfig.host && !isWildcardHost(serverConfig.host)
-      ? `http://${formatHostForUrl(serverConfig.host)}:${serverConfig.port}`
-      : localUrl;
-  const baseTarget = serverConfig.devUrl?.toString() ?? bindUrl;
-  return yield* Effect.succeed(serverConfig.mode === "desktop" ? baseTarget : undefined).pipe(
-    Effect.flatMap((target) =>
-      target ? Effect.succeed(target) : serverAuth.issueStartupPairingUrl(baseTarget),
-    ),
-  );
-});
-
-const maybeOpenBrowser = (target: string) =>
-  Effect.gen(function* () {
-    const serverConfig = yield* ServerConfig.ServerConfig;
-    if (serverConfig.noBrowser) {
-      return;
-    }
-    const externalLauncher = yield* ExternalLauncher.ExternalLauncher;
-
-    yield* externalLauncher.launchBrowser(target).pipe(
-      Effect.catch(() =>
-        Effect.logInfo("browser auto-open unavailable", {
-          hint: `Open ${target} in your browser.`,
-        }),
-      ),
-    );
-  });
+} from "./startupCommandGate.ts";
+import { reconcileDelegations, reconcileProviderSessions } from "./startupReconciliation.ts";
+import {
+  resolveWelcomeBase,
+  resolveAutoBootstrapWelcomeTargets,
+  resolveStartupBrowserTarget,
+  maybeOpenBrowser,
+} from "./startupWelcome.ts";
 
 const runStartupPhase = <A, E, R>(phase: string, effect: Effect.Effect<A, E, R>) =>
   effect.pipe(
     Effect.annotateSpans({ "startup.phase": phase }),
     Effect.withSpan(`server.startup.${phase}`),
-  );
-
-const ORPHANED_PROVIDER_SESSION_ERROR =
-  "Provider session did not survive a server restart. Send a new message to continue.";
-
-export const reconcileProviderSessions = Effect.gen(function* () {
-  const crypto = yield* Crypto.Crypto;
-  const directory = yield* ProviderSessionDirectory.ProviderSessionDirectory;
-  const orchestrationEngine = yield* OrchestrationEngine.OrchestrationEngineService;
-  const agentController = yield* AgentController.AgentController;
-  const query = yield* ProjectionSnapshotQuery.ProjectionSnapshotQuery;
-
-  const liveThreadIds = new Set(
-    (yield* agentController.listSessions()).map((session) => session.threadId),
-  );
-  const { threads } = yield* query.getCommandReadModel();
-  const orphanedThreads = threads.filter(
-    (thread) =>
-      thread.session !== null &&
-      (thread.session.status === "starting" ||
-        thread.session.status === "running" ||
-        thread.session.activeTurnId !== null) &&
-      !liveThreadIds.has(thread.id),
-  );
-
-  for (const thread of orphanedThreads) {
-    const session = thread.session;
-    if (session === null) {
-      continue;
-    }
-    yield* Effect.gen(function* () {
-      const binding = yield* directory.getBinding(thread.id);
-      if (Option.isSome(binding)) {
-        yield* directory.upsert({
-          ...binding.value,
-          status: "stopped",
-          runtimePayload: { activeTurnId: null },
-        });
-      }
-    }).pipe(
-      Effect.catchCause((cause) =>
-        Cause.hasInterrupts(cause)
-          ? Effect.failCause(cause)
-          : Effect.logWarning("failed to reconcile orphaned provider session directory binding", {
-              threadId: thread.id,
-              cause,
-            }),
-      ),
-    );
-
-    yield* Effect.gen(function* () {
-      const reconciledAt = DateTime.formatIso(yield* DateTime.now);
-      yield* orchestrationEngine.dispatch({
-        type: "thread.session.set",
-        commandId: CommandId.make(yield* crypto.randomUUIDv4),
-        threadId: thread.id,
-        session: {
-          ...session,
-          status: "error",
-          activeTurnId: null,
-          lastError: ORPHANED_PROVIDER_SESSION_ERROR,
-          updatedAt: reconciledAt,
-        },
-        createdAt: reconciledAt,
-      });
-    }).pipe(
-      Effect.retry({ times: 1 }),
-      Effect.catchCause((cause) =>
-        Cause.hasInterrupts(cause)
-          ? Effect.failCause(cause)
-          : Effect.logWarning("failed to settle orphaned provider session projection", {
-              threadId: thread.id,
-              cause,
-            }),
-      ),
-    );
-  }
-}).pipe(
-  Effect.catchCause((cause) =>
-    Cause.hasInterrupts(cause)
-      ? Effect.failCause(cause)
-      : Effect.logWarning("provider session startup reconciliation failed", { cause }),
-  ),
-);
-
-export const DELEGATION_RESTART_FAILURE_MESSAGE = "The server restarted before this work finished.";
-
-/**
- * Fails bot work that was queued or running when the server last stopped. Its completion watch
- * lived in memory and did not survive, so nothing else would ever settle the card. Runs before the
- * reactors start, while no delegation of this process can exist yet. Blocked work waits on the
- * user and stays; terminal work is untouched, so a second run changes nothing.
- */
-export const reconcileDelegations = Effect.gen(function* () {
-  const crypto = yield* Crypto.Crypto;
-  const orchestrationEngine = yield* OrchestrationEngine.OrchestrationEngineService;
-  const query = yield* ProjectionSnapshotQuery.ProjectionSnapshotQuery;
-
-  const { delegations } = yield* query.getCommandReadModel();
-  for (const delegation of delegations) {
-    const phase = delegation.phase;
-    if (phase._tag !== "Queued" && phase._tag !== "Running") {
-      continue;
-    }
-    yield* Effect.gen(function* () {
-      const reconciledAt = DateTime.formatIso(yield* DateTime.now);
-      const completedAt =
-        Date.parse(reconciledAt) >= Date.parse(delegation.updatedAt)
-          ? reconciledAt
-          : delegation.updatedAt;
-      const failed: AkeruDelegationRecord = {
-        ...delegation,
-        phase: {
-          _tag: "Failed",
-          childThreadId: phase._tag === "Queued" ? null : phase.childThreadId,
-          childTurnId: phase._tag === "Queued" ? null : phase.childTurnId,
-          startedAt: phase._tag === "Queued" ? null : phase.startedAt,
-          completedAt,
-          failure: { failureCode: "internal", message: DELEGATION_RESTART_FAILURE_MESSAGE },
-          acknowledgedAt: null,
-        },
-        updatedAt: completedAt,
-      };
-      yield* orchestrationEngine.dispatch({
-        type: "delegation.state.set",
-        commandId: CommandId.make(yield* crypto.randomUUIDv4),
-        delegation: failed,
-      });
-    }).pipe(
-      Effect.retry({ times: 1 }),
-      Effect.catchCause((cause) =>
-        Cause.hasInterrupts(cause)
-          ? Effect.failCause(cause)
-          : Effect.logWarning("failed to settle orphaned delegation", {
-              delegationId: delegation.delegationId,
-              cause,
-            }),
-      ),
-    );
-  }
-}).pipe(
-  Effect.catchCause((cause) =>
-    Cause.hasInterrupts(cause)
-      ? Effect.failCause(cause)
-      : Effect.logWarning("delegation startup reconciliation failed", { cause }),
-  ),
-);
-
-interface StartupOptions {
-  readonly activate?: Effect.Effect<void>;
-  readonly awaitAuxiliaryParked?: Effect.Effect<void>;
-  readonly abort?: (error: ServerRuntimeStartupError) => Effect.Effect<void>;
-}
-
-/**
- * Reconnects saved channel bindings at startup. Restore errors can wrap provider responses, so
- * the logs carry only the bot, provider, and failure category, never the error or its cause.
- */
-export const restoreExternalChannels = (
-  runtime: Pick<ChannelRuntime.ChannelRuntimeShape, "restoreConnectedChannels">,
-) =>
-  runtime.restoreConnectedChannels.pipe(
-    Effect.flatMap((failures) =>
-      Effect.forEach(
-        failures,
-        (failure) =>
-          Effect.logWarning("failed to restore external channel", {
-            botId: failure.botId,
-            provider: failure.provider,
-            category: failure.category,
-          }),
-        { discard: true },
-      ),
-    ),
-    Effect.catchCause((cause) =>
-      Effect.logWarning("external channel startup restore failed", {
-        interrupted: Cause.hasInterruptsOnly(cause),
-      }),
-    ),
   );
 
 export const make = (options?: StartupOptions) =>
@@ -469,7 +61,7 @@ export const make = (options?: StartupOptions) =>
     const orchestrationEngine = yield* OrchestrationEngine.OrchestrationEngineService;
     const channelRuntime = yield* Effect.serviceOption(ChannelRuntime.ChannelRuntime);
 
-    const commandGate = yield* makeCommandGate;
+    const commandGate = yield* scopedCommandGate;
     const httpListening = yield* Deferred.make<void>();
     const reactorScope = yield* Scope.make("sequential");
 
@@ -516,12 +108,15 @@ export const make = (options?: StartupOptions) =>
         Effect.gen(function* () {
           yield* orchestrationReactor.start().pipe(Scope.provide(reactorScope));
           yield* providerSessionReaper.start().pipe(Scope.provide(reactorScope));
+
           if (Option.isSome(channelRuntime)) {
             yield* forkParked(
               channelRuntime.value.stopArchivedBotChannels(orchestrationEngine.streamDomainEvents),
             ).pipe(Scope.provide(reactorScope));
           }
+
           const routineRuntime = yield* Effect.serviceOption(RoutineRuntime);
+
           if (Option.isSome(routineRuntime)) {
             yield* routineRuntime.value.start.pipe(Scope.provide(reactorScope));
           }
@@ -552,6 +147,7 @@ export const make = (options?: StartupOptions) =>
               const bootstrapTargets = yield* resolveAutoBootstrapWelcomeTargets.pipe(
                 Effect.provideService(Crypto.Crypto, crypto),
               );
+
               if (!bootstrapTargets.bootstrapProjectId && !bootstrapTargets.bootstrapThreadId) {
                 return;
               }
@@ -605,11 +201,13 @@ export const make = (options?: StartupOptions) =>
             );
           } else {
             const startupBrowserTarget = yield* resolveStartupBrowserTarget;
+
             if (serverConfig.mode !== "desktop") {
               yield* Effect.logInfo(
                 "Authentication required. Open Akeru Bot using the pairing URL.",
               ).pipe(Effect.annotateLogs({ pairingUrl: startupBrowserTarget }));
             }
+
             yield* runStartupPhase("browser.open", maybeOpenBrowser(startupBrowserTarget));
           }
         }),
@@ -663,12 +261,14 @@ export const make = (options?: StartupOptions) =>
       Effect.exit(startup).pipe(
         Effect.flatMap((startupExit) => {
           if (Exit.isSuccess(startupExit)) return Effect.void;
+
           const error = new ServerRuntimeStartupError({
             mode: serverConfig.mode,
             host: serverConfig.host ?? null,
             port: serverConfig.port,
             cause: startupExit.cause,
           });
+
           return Effect.logError("server runtime startup failed", {
             cause: startupExit.cause,
           }).pipe(
@@ -690,3 +290,23 @@ export const layerWithOptions = (options?: StartupOptions) =>
   Layer.effect(ServerRuntimeStartup, make(options));
 
 export const layer = layerWithOptions();
+
+export {
+  ServerRuntimeStartupError,
+  ServerRuntimeStartup,
+  scopedCommandGate,
+} from "./startupCommandGate.ts";
+
+export {
+  getAutoBootstrapDefaultModelSelection,
+  resolveWelcomeBase,
+  resolveAutoBootstrapWelcomeTargets,
+} from "./startupWelcome.ts";
+
+export {
+  reconcileProviderSessions,
+  DELEGATION_RESTART_FAILURE_MESSAGE,
+  reconcileDelegations,
+} from "./startupReconciliation.ts";
+
+export { restoreExternalChannels } from "./startupChannels.ts";

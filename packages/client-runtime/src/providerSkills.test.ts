@@ -34,6 +34,7 @@ describe("getProviderSkillsForSlashMenu", () => {
       path: "/Users/matt/.agents/skills/ask-matt/SKILL.md",
       enabled: true,
     };
+
     expect(getProviderSkillsForSlashMenu([askMatt], true).map((skill) => skill.name)).toEqual([
       "ask-matt",
     ]);
@@ -45,6 +46,7 @@ describe("getProviderSlashCommandsForSlashMenu", () => {
     { name: "ask-matt", description: "Ask which skill fits your situation." },
     { name: "compact", description: "Compact the conversation." },
   ];
+
   const skills = [
     {
       name: "ask-matt",

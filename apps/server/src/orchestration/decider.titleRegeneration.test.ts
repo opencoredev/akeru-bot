@@ -61,9 +61,11 @@ it.layer(NodeServices.layer)("title regeneration decider", (it) => {
         },
         readModel,
       });
+
       const event = Array.isArray(result) ? result[0] : result;
 
       expect(event.type).toBe("thread.meta-updated");
+
       if (event.type === "thread.meta-updated") {
         expect(event.payload).toEqual({
           threadId: ThreadId.make("thread-1"),

@@ -71,6 +71,7 @@ Done.`),
     const decoded = decodeCredential('{"token":"credential=secret-value"}');
 
     expect(Result.isFailure(decoded)).toBe(true);
+
     if (Result.isFailure(decoded)) {
       expect(formatSchemaError(decoded.failure)).toBe('Invalid type\n  at ["token"]');
     }
@@ -85,9 +86,11 @@ Done.`),
         })),
       ),
     );
+
     const decoded = decode('"credential=secret-value"');
 
     expect(Result.isFailure(decoded)).toBe(true);
+
     if (Result.isFailure(decoded)) {
       const diagnostic = formatSchemaError(decoded.failure);
       expect(diagnostic).toBe('Invalid value\n  at ["session"]["token"]');
@@ -100,6 +103,7 @@ Done.`),
     const exit = decode('{"token":"credential=secret-value",,}');
 
     expect(Exit.isFailure(exit)).toBe(true);
+
     if (Exit.isFailure(exit)) {
       const diagnostic = formatSchemaError(exit.cause);
       expect(diagnostic).toBe("Invalid value");
@@ -118,8 +122,10 @@ Done.`),
   it("bounds the number of formatted schema issues", () => {
     const decode = decodeJsonResult(Schema.Struct({ token: Schema.Number }));
     const failures: Array<Cause.Cause<Schema.SchemaError>> = [];
+
     for (let index = 0; index < 10; index += 1) {
       const decoded = decode(`{"token":"credential=secret-value-${index}"}`);
+
       if (Result.isFailure(decoded)) {
         failures.push(decoded.failure);
       }
@@ -133,14 +139,18 @@ Done.`),
 
   it("retains the omitted issue count when bounding long diagnostics", () => {
     const longPath = Array.from({ length: 16 }, (_, index) => `${index}-${"segment".repeat(16)}`);
+
     const decode = decodeJsonResult(
       Schema.String.check(
         Schema.makeFilter(() => ({ path: longPath, issue: "credential is invalid" })),
       ),
     );
+
     const failures: Array<Cause.Cause<Schema.SchemaError>> = [];
+
     for (let index = 0; index < 10; index += 1) {
       const decoded = decode(`"credential=secret-value-${index}"`);
+
       if (Result.isFailure(decoded)) {
         failures.push(decoded.failure);
       }

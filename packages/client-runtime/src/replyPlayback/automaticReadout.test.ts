@@ -59,11 +59,13 @@ describe("automatic reply readout", () => {
     const tracker = createAutomaticReadoutTracker();
     tracker.reset("chat", 0);
     tracker.setEnabled(true);
+
     for (let index = 1; index <= 2048; index += 1) {
       expect(
         tracker.completed("chat", index, { ...reply, messageId: String(index) }),
       ).not.toBeNull();
     }
+
     expect(tracker.completed("chat", 2049, reply)).toBeNull();
     expect(tracker.completed("chat", 2050, { ...reply, messageId: "1" })).toBeNull();
   });

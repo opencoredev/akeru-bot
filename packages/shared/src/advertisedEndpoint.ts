@@ -23,6 +23,7 @@ export interface CreateAdvertisedEndpointInput {
 
 export function normalizeHttpBaseUrl(rawValue: string): string {
   const url = new URL(rawValue);
+
   if (url.protocol === "ws:") {
     url.protocol = "http:";
   } else if (url.protocol === "wss:") {
@@ -36,12 +37,14 @@ export function normalizeHttpBaseUrl(rawValue: string): string {
   url.pathname = "/";
   url.search = "";
   url.hash = "";
+
   return url.toString();
 }
 
 export function deriveWsBaseUrl(httpBaseUrl: string): string {
   const url = new URL(normalizeHttpBaseUrl(httpBaseUrl));
   url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
+
   return url.toString();
 }
 
@@ -50,14 +53,17 @@ export function classifyHostedHttpsCompatibility(
   fallback: AdvertisedEndpointHostedHttpsCompatibility = "unknown",
 ): AdvertisedEndpointHostedHttpsCompatibility {
   const url = new URL(normalizeHttpBaseUrl(httpBaseUrl));
+
   if (url.protocol === "http:") {
     return "mixed-content-blocked";
   }
+
   return fallback === "mixed-content-blocked" ? "unknown" : fallback;
 }
 
 export function createAdvertisedEndpoint(input: CreateAdvertisedEndpointInput): AdvertisedEndpoint {
   const httpBaseUrl = normalizeHttpBaseUrl(input.httpBaseUrl);
+
   return {
     id: input.id,
     label: input.label,

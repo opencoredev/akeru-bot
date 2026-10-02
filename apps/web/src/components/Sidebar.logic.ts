@@ -37,6 +37,7 @@ function getProjectSortTimestamp(
   if (sortOrder === "created_at") {
     return toSortableTimestamp(project.createdAt) ?? Number.NEGATIVE_INFINITY;
   }
+
   return toSortableTimestamp(project.updatedAt ?? project.createdAt) ?? Number.NEGATIVE_INFINITY;
 }
 
@@ -53,8 +54,10 @@ function sortProjectsByActivity<TProject extends SidebarProject>(
   return [...projects].toSorted((left, right) => {
     const rightTimestamp = getProjectSortTimestamp(right, getProjectThreads(right), sortOrder);
     const leftTimestamp = getProjectSortTimestamp(left, getProjectThreads(left), sortOrder);
+
     const byTimestamp =
       rightTimestamp === leftTimestamp ? 0 : rightTimestamp > leftTimestamp ? 1 : -1;
+
     return byTimestamp || compareTies(left, right);
   });
 }
@@ -74,11 +77,14 @@ export function sortScopedProjectsForSidebar<
 ): TProject[] {
   const scopedKey = (environmentId: string, projectId: string) =>
     `${environmentId}\u0000${projectId}`;
+
   const threadsByProject = new Map<string, TThread[]>();
+
   for (const thread of threads) {
     if (thread.archivedAt !== null) {
       continue;
     }
+
     const key = scopedKey(thread.environmentId, thread.projectId);
     const existing = threadsByProject.get(key) ?? [];
     existing.push(thread);

@@ -10,7 +10,7 @@ import {
   TurnId,
 } from "./baseSchemas.ts";
 import { ProviderDriverKind } from "./providerInstance.ts";
-import { BotEngine, BotUsageCap } from "./orchestration.ts";
+import { BotEngine, BotUsageCap } from "./orchestration/roster.ts";
 
 export const AkeruUsageCategory = Schema.Literals([
   "turn",
@@ -22,9 +22,11 @@ export const AkeruUsageCategory = Schema.Literals([
   "routine",
   "delegated",
 ]);
+
 export type AkeruUsageCategory = typeof AkeruUsageCategory.Type;
 
 export const AkeruUsageState = Schema.Literals(["reserved", "reported", "unavailable", "released"]);
+
 export type AkeruUsageState = typeof AkeruUsageState.Type;
 
 export const AkeruUsageEntry = Schema.Struct({
@@ -47,6 +49,7 @@ export const AkeruUsageEntry = Schema.Struct({
   createdAt: IsoDateTime,
   settledAt: Schema.NullOr(IsoDateTime),
 });
+
 export type AkeruUsageEntry = typeof AkeruUsageEntry.Type;
 
 export const AkeruBotUsageSummary = Schema.Struct({
@@ -61,9 +64,11 @@ export const AkeruBotUsageSummary = Schema.Struct({
   }),
   entries: Schema.Array(AkeruUsageEntry),
 });
+
 export type AkeruBotUsageSummary = typeof AkeruBotUsageSummary.Type;
 
 export const AkeruBotUsageInput = Schema.Struct({ botId: BotId });
+
 export type AkeruBotUsageInput = typeof AkeruBotUsageInput.Type;
 
 export const AkeruEstimatedCost = Schema.Union([
@@ -73,6 +78,7 @@ export const AkeruEstimatedCost = Schema.Union([
   }),
   Schema.Struct({ status: Schema.Literal("unavailable"), usd: Schema.Null }),
 ]);
+
 export type AkeruEstimatedCost = typeof AkeruEstimatedCost.Type;
 
 export const AkeruStepUsageSnapshot = Schema.Struct({
@@ -81,6 +87,7 @@ export const AkeruStepUsageSnapshot = Schema.Struct({
   tokens: Schema.NullOr(NonNegativeInt),
   estimatedCost: AkeruEstimatedCost,
 });
+
 export type AkeruStepUsageSnapshot = typeof AkeruStepUsageSnapshot.Type;
 
 export const AkeruBotUsageSnapshot = Schema.Struct({
@@ -102,6 +109,7 @@ export const AkeruBotUsageSnapshot = Schema.Struct({
     }),
   ]),
 });
+
 export type AkeruBotUsageSnapshot = typeof AkeruBotUsageSnapshot.Type;
 
 export class AkeruBotUsageReadError extends Schema.TaggedErrorClass<AkeruBotUsageReadError>()(

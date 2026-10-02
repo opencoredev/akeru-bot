@@ -20,12 +20,14 @@ export function assertPreviewRuntimeCurrent(
   request: Pick<PreviewAutomationRequest, "operation" | "requestId">,
 ) {
   const state = readThreadPreviewState(threadRef);
+
   if (
     state.sessions[tabId] &&
     isCurrentPreviewRuntimeTab(threadRef, state.serverEpoch, tabId, runtimeTabId)
   ) {
     return state;
   }
+
   throw new PreviewAutomationTargetUnavailableError({
     requestId: request.requestId,
     operation: request.operation,
@@ -46,23 +48,31 @@ export async function waitForNavigationReadiness(
   timeoutMs: number,
 ): Promise<void> {
   const targetReadiness = readiness ?? "load";
+
   if (!previewBridge) return;
   assertPreviewRuntimeCurrent(threadRef, tabId, runtimeTabId, { operation, requestId });
+
   if (targetReadiness === "none") return;
   const deadline = Date.now() + timeoutMs;
+
   while (Date.now() <= deadline) {
     assertPreviewRuntimeCurrent(threadRef, tabId, runtimeTabId, { operation, requestId });
+
     if (targetReadiness === "domContentLoaded") {
       const readyState = await previewBridge.automation.evaluate(runtimeTabId, {
         expression: "document.readyState",
       });
+
       if (readyState === "interactive" || readyState === "complete") return;
     } else {
       const status = await previewBridge.automation.status(runtimeTabId);
+
       if (status.available && !status.loading) return;
     }
+
     await new Promise<void>((resolve) => window.setTimeout(resolve, 50));
   }
+
   throw new PreviewAutomationNavigationTimeoutError({
     requestId,
     environmentId: threadRef.environmentId,

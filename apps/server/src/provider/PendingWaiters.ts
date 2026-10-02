@@ -85,8 +85,10 @@ export const makePendingWaiters = <Meta, A, E = never>(
 
     const settle = (key: string, exit: Exit.Exit<A, E | PendingWaiterError>) => {
       const entry = waiters.get(key);
+
       if (!entry) return false;
       waiters.delete(key);
+
       return Deferred.doneUnsafe(entry.deferred, exit);
     };
 
@@ -112,20 +114,25 @@ export const makePendingWaiters = <Meta, A, E = never>(
             }),
           );
         }
+
         const timeoutError = new PendingWaiterTimeoutError({
           key,
           message: options.timeoutMessage,
         });
+
         if (Duration.toMillis(options.timeout) <= 0) {
           return Effect.fail(timeoutError);
         }
+
         const entry: Entry<Meta, A, E> = {
           meta,
           deferred: Deferred.makeUnsafe(),
           claimed: false,
         };
+
         waiters.set(key, entry);
         options.onOpen?.();
+
         return Deferred.await(entry.deferred).pipe(
           Effect.timeoutOrElse({
             duration: options.timeout,
@@ -133,7 +140,9 @@ export const makePendingWaiters = <Meta, A, E = never>(
             orElse: () =>
               Effect.suspend(() => {
                 if (entry.claimed) return Deferred.await(entry.deferred);
+
                 if (waiters.get(key) === entry) waiters.delete(key);
+
                 return Effect.fail(timeoutError);
               }),
           }),
@@ -151,17 +160,18 @@ export const makePendingWaiters = <Meta, A, E = never>(
       reject: (key, error) => settle(key, Exit.fail(error)),
       claim: (key) => {
         const entry = waiters.get(key);
+
         if (!entry || entry.claimed) return undefined;
         entry.claimed = true;
+
         return entry.meta;
       },
       get: (key) => {
         const entry = waiters.get(key);
+
         return entry && !entry.claimed ? entry.meta : undefined;
       },
       entries: () =>
-        [...waiters]
-          .filter(([, entry]) => !entry.claimed)
-          .map(([key, entry]) => [key, entry.meta] as const),
+        [...waiters].flatMap(([key, entry]) => (entry.claimed ? [] : [[key, entry.meta] as const])),
     };
   });

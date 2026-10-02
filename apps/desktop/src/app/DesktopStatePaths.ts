@@ -7,7 +7,9 @@ function normalizeConfiguredBaseDir(t3Home: Option.Option<string>): Option.Optio
   if (Option.isNone(t3Home)) {
     return Option.none();
   }
+
   const trimmed = t3Home.value.trim();
+
   return trimmed.length > 0 ? Option.some(trimmed) : Option.none();
 }
 
@@ -29,5 +31,6 @@ export function resolveDesktopStateDir(input: {
 }): string {
   const useDevSubdir =
     input.isDevelopment && Option.isNone(normalizeConfiguredBaseDir(input.t3Home));
+
   return input.joinPath(input.baseDir, useDevSubdir ? "dev" : "userdata");
 }

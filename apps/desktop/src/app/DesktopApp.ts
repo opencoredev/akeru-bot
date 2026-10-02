@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import * as Cause from "effect/Cause";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
@@ -30,7 +31,9 @@ import * as DesktopUpdates from "../updates/DesktopUpdates.ts";
 import * as DesktopWslBackend from "../wsl/DesktopWslBackend.ts";
 
 const DEFAULT_DESKTOP_BACKEND_PORT = 3773;
+
 const MAX_TCP_PORT = 65_535;
+
 const DESKTOP_BACKEND_PORT_PROBE_HOSTS = ["127.0.0.1", "0.0.0.0", "::"] as const;
 
 const makeDesktopRunId = Crypto.Crypto.pipe(
@@ -61,10 +64,10 @@ export class DesktopDevelopmentBackendPortRequiredError extends Schema.TaggedErr
 }
 
 const { logInfo: logBootstrapInfo, logWarning: logBootstrapWarning } =
-  DesktopObservability.makeComponentLogger("desktop-bootstrap");
+  DesktopObservability.componentLogger("desktop-bootstrap");
 
 const { logInfo: logStartupInfo, logError: logStartupError } =
-  DesktopObservability.makeComponentLogger("desktop-startup");
+  DesktopObservability.componentLogger("desktop-startup");
 
 const resolveDesktopBackendPort = Effect.fn("resolveDesktopBackendPort")(function* (
   configuredPort: Option.Option<number>,
@@ -77,6 +80,7 @@ const resolveDesktopBackendPort = Effect.fn("resolveDesktopBackendPort")(functio
   }
 
   const net = yield* NetService.NetService;
+
   for (let port = DEFAULT_DESKTOP_BACKEND_PORT; port <= MAX_TCP_PORT; port += 1) {
     let availableOnEveryHost = true;
 
@@ -104,7 +108,7 @@ const resolveDesktopBackendPort = Effect.fn("resolveDesktopBackendPort")(functio
 
 const handleFatalStartupError = Effect.fn("desktop.startup.handleFatalStartupError")(function* (
   stage: string,
-  error: unknown,
+  cause: unknown,
 ): Effect.fn.Return<
   void,
   never,
@@ -117,21 +121,25 @@ const handleFatalStartupError = Effect.fn("desktop.startup.handleFatalStartupErr
   const state = yield* DesktopState.DesktopState;
   const electronApp = yield* ElectronApp.ElectronApp;
   const electronDialog = yield* ElectronDialog.ElectronDialog;
-  const message = error instanceof Error ? error.message : String(error);
+  const message = cause instanceof Error ? cause.message : String(cause);
+
   const detail =
-    error instanceof Error && typeof error.stack === "string" ? `\n${error.stack}` : "";
+    cause instanceof Error && Predicate.isString(cause.stack) ? `\n${cause.stack}` : "";
+
   yield* logStartupError("fatal startup error", {
     stage,
     message,
     ...(detail.length > 0 ? { detail } : {}),
   });
   const wasQuitting = yield* Ref.getAndSet(state.quitting, true);
+
   if (!wasQuitting) {
     yield* electronDialog.showErrorBox(
       "Akeru Bot failed to start",
       `Stage: ${stage}\n${message}${detail}`,
     );
   }
+
   yield* shutdown.request;
   yield* electronApp.quit;
 });
@@ -167,17 +175,21 @@ const bootstrap = Effect.gen(function* () {
   );
 
   const settings = yield* desktopSettings.get;
+
   if (settings.serverExposureMode !== environment.defaultDesktopSettings.serverExposureMode) {
     yield* logBootstrapInfo("bootstrap restoring persisted server exposure mode", {
       mode: settings.serverExposureMode,
     });
   }
+
   const serverExposureState = yield* serverExposure.configureFromSettings({ port: backendPort });
   const backendConfig = yield* serverExposure.backendConfig;
   const electronProtocol = yield* ElectronProtocol.ElectronProtocol;
+
   const rendererTarget = environment.isDevelopment
     ? Option.getOrThrow(environment.devServerUrl)
     : backendConfig.httpBaseUrl;
+
   yield* electronProtocol.registerDesktopProtocol({
     scheme: ElectronProtocol.getDesktopScheme(environment.isDevelopment),
     targetOrigin: rendererTarget,
@@ -186,6 +198,7 @@ const bootstrap = Effect.gen(function* () {
   yield* logBootstrapInfo("bootstrap resolved backend endpoint", {
     baseUrl: backendConfig.httpBaseUrl.href,
   });
+
   if (serverExposureState.endpointUrl) {
     yield* logBootstrapInfo("bootstrap enabled network access", {
       endpointUrl: serverExposureState.endpointUrl,
@@ -210,6 +223,7 @@ const bootstrap = Effect.gen(function* () {
     if (settings.wslOnly === true && settings.wslBackendEnabled === true) {
       yield* desktopWindow.showConnectingSplash;
     }
+
     yield* primaryBackend.start;
     yield* logBootstrapInfo("bootstrap backend start requested");
     // Bring up the WSL backend if the user previously enabled it. The
@@ -235,12 +249,15 @@ const startup = Effect.gen(function* () {
   const environment = yield* DesktopEnvironment.DesktopEnvironment;
 
   yield* shellEnvironment.installIntoProcess;
+
   const hasCommandLinePasswordStore =
     preReadyElectronOptions.linuxPasswordStoreCommandLine !== null;
+
   const linuxElectronOptions =
     environment.platform === "linux" && !hasCommandLinePasswordStore
       ? DesktopPreReadyPlatform.resolveEarlyLinuxElectronOptionsFromProcess()
       : preReadyElectronOptions.linux;
+
   if (linuxElectronOptions !== null && !hasCommandLinePasswordStore) {
     if (
       linuxElectronOptions.passwordStore !== null ||
@@ -248,6 +265,7 @@ const startup = Effect.gen(function* () {
     ) {
       yield* electronApp.removeCommandLineSwitch("password-store");
     }
+
     if (linuxElectronOptions.passwordStore !== null) {
       yield* electronApp.appendCommandLineSwitch(
         "password-store",
@@ -255,18 +273,23 @@ const startup = Effect.gen(function* () {
       );
     }
   }
+
   const userDataPath = yield* appIdentity.resolveUserDataPath;
   yield* electronApp.setPath("userData", userDataPath);
+
   if (!(yield* electronApp.requestSingleInstanceLock)) {
     yield* electronApp.quit;
+
     return yield* Effect.interrupt;
   }
+
   const context = yield* Effect.context<ElectronWindow.ElectronWindow>();
   const runPromise = Effect.runPromiseWith(context);
   yield* electronApp.on("second-instance", () => {
     void runPromise(
       Effect.gen(function* () {
         const mainWindow = yield* electronWindow.currentMainOrFirst;
+
         if (Option.isSome(mainWindow)) {
           yield* electronWindow.reveal(mainWindow.value);
         }
@@ -294,12 +317,14 @@ const startup = Effect.gen(function* () {
     Effect.catchCause((cause) => fatalStartupCause("whenReady", cause)),
   );
   yield* logStartupInfo("app ready");
+
   if (environment.platform === "linux") {
     const selectedBackend = yield* safeStorage.selectedStorageBackend;
     yield* logStartupInfo("safe storage ready", {
       backend: Option.getOrElse(selectedBackend, () => "unknown"),
     });
   }
+
   yield* appIdentity.configure;
   yield* applicationMenu.configure;
   yield* updates.configure;

@@ -1,0 +1,136 @@
+body {
+  /* Reference the theme token (not a literal stack) so the Settings ->
+     Appearance runtime override of --font-sans reaches all interface text. */
+  font-family: var(--font-sans);
+  margin: 0;
+  padding: 0;
+}
+
+html,
+body {
+  min-height: calc(100svh + env(safe-area-inset-top));
+  overscroll-behavior: none;
+}
+
+body {
+  height: 100%;
+  overflow: hidden;
+}
+
+#root {
+  height: 100%;
+  width: 100%;
+  max-width: 100%;
+  overflow-x: hidden;
+  overflow-x: clip;
+  overflow-y: hidden;
+  overscroll-behavior-y: none;
+  padding-top: max(env(safe-area-inset-top), 0px);
+  padding-right: var(--desktop-window-right-resize-inset);
+}
+
+.electron-windows {
+  --desktop-window-right-resize-inset: 6px;
+}
+
+/* App-chrome grain. Baked into each surface's own background (behind
+   content) rather than a fixed overlay on top: a full-viewport overlay
+   forces the compositor to re-blend every frame any animation produces,
+   which multiplied idle GPU cost. The overlay's 0.035 opacity lives in the
+   SVG rect instead. Surfaces that float over the body (e.g. the inset main
+   card) must opt in via the surface-grain utility, or they lose the
+   grain's subtle brightening and stand out against the body. */
+
+:root {
+  --surface-grain: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.035'/%3E%3C/svg%3E");
+  --surface-grain-size: 256px 256px;
+}
+
+/* Akeru Paper is the default theme. Its light mode is a neutral gray window
+   with white cards, so grain would only read as dirt on the rail. */
+
+html[data-theme-id="akeru-paper"] {
+  --surface-grain: none;
+
+  @variant dark {
+    --surface-grain: none;
+    --glass-opacity: 100%;
+    --glass-blur: 0px;
+    --glass-saturation: 1;
+  }
+}
+
+/* The live T3 Chat texture is a 128px grayscale tile with a constant 7/255
+   alpha. Keep our procedural texture cheap while matching that scale and
+   strength for the branded preset. */
+
+html[data-theme-id="akeru-chat"] {
+  --surface-grain: url("data:image/svg+xml,%3Csvg viewBox='0 0 128 128' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.02745'/%3E%3C/svg%3E");
+  --surface-grain-size: 128px 128px;
+}
+
+body {
+  background-image: var(--surface-grain);
+  background-repeat: repeat;
+  background-size: var(--surface-grain-size);
+}
+
+pre,
+code {
+  font-family: var(--font-mono);
+}
+
+/* Code blocks in chat carry the size preference. Scoped to chat markdown
+   rather than every pre: a global rule would beat text-size utilities and
+   inherited sizes on unrelated pre surfaces (terminal previews, approvals).
+   Inline code stays relative to its sentence so it never towers over prose;
+   diffs and file previews take the size through --diffs-font-size. */
+
+.chat-markdown .chat-markdown-shiki .shiki,
+.chat-markdown pre code {
+  font-size: var(--font-size-code, inherit);
+}
+
+/* @pierre/diffs surfaces (diffs, file previews, annotatable code, search
+   lines) render inside shadow roots but consult these hooks with their own
+   literal stacks as fallback. Custom properties inherit across the shadow
+   boundary, so defining them once here routes every code surface through the
+   appearance font tokens. */
+
+:root {
+  --diffs-font-family: var(--font-mono);
+  --diffs-header-font-family: var(--font-sans);
+}
+
+/* Window drag region (frameless titlebar) */
+
+.drag-region {
+  -webkit-app-region: drag;
+}
+
+.drag-region button,
+.drag-region input,
+.drag-region textarea,
+.drag-region select,
+.drag-region a {
+  -webkit-app-region: no-drag;
+}
+
+/* Scrollbar styling */
+
+::-webkit-scrollbar {
+  width: var(--app-scrollbar-width);
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--app-scrollbar-thumb);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--app-scrollbar-thumb-hover);
+}

@@ -1,0 +1,153 @@
+---
+
+
+const steps = [
+  {
+    number: "1",
+    title: "Connect a subscription",
+    body: "Sign in with Claude, Codex, Grok, Kimi For Coding, or OpenCode. Akeru Bot adds no account of its own.",
+  },
+  {
+    number: "2",
+    title: "Create a bot",
+    body: "Name it, pick a provider, and choose the tools it can reach.",
+  },
+  {
+    number: "3",
+    title: "Hand it work",
+    body: "Chat from the desktop app, any browser on your network, or your phone. Bots keep working while you are away.",
+  },
+];
+---
+  <section id="how-it-works" class="how">
+    <h2 class="section-title">Up and running in three steps</h2>
+    <p class="how-sub">
+      Your environment owns the chats, bot profiles, and memory. Run the environment on your
+      machine or connect it to a cloud sandbox that you control.
+    </p>
+    <p class="how-sub">
+      Looking for an <a href="/open-source-grok-bot">open-source Grok Bot alternative</a>?
+      See how Akeru works with your Grok subscription, or follow the{" "}
+      <a href="/guides/self-hosted-grok-bot">self-hosted Grok bot setup guide</a>.
+    </p>
+    <ol class="steps">
+      {
+        steps.map((step) => (
+          <li class="step">
+            <span class="step-number" aria-hidden="true">{step.number}</span>
+            <h3>{step.title}</h3>
+            <p>{step.body}</p>
+          </li>
+        ))
+      }
+    </ol>
+  </section>
+<style>
+
+
+  .section-title {
+    font-size: 46px;
+    font-weight: 600;
+    letter-spacing: -0.03em;
+    line-height: 52px;
+    text-align: center;
+  }
+
+  .how {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    border-top: 1px solid var(--color-border);
+    padding: 104px 64px 112px;
+  }
+
+  .how-sub {
+    max-width: 620px;
+    margin-top: 18px;
+    font-size: 16px;
+    line-height: 26px;
+    text-align: center;
+    color: var(--color-muted-foreground);
+  }
+
+  .how-sub a {
+    color: var(--color-foreground);
+    text-decoration: underline;
+    text-underline-offset: 4px;
+  }
+
+  .how-sub a:focus-visible {
+    outline: 2px solid var(--color-primary);
+    outline-offset: 4px;
+  }
+
+  .steps {
+    display: flex;
+    gap: 24px;
+    width: 100%;
+    margin-top: 56px;
+    list-style: none;
+  }
+
+  .step {
+    flex: 1 0 0;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding: 28px;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    background: var(--color-card);
+  }
+
+  .step-number {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 30px;
+    height: 30px;
+    margin-bottom: 6px;
+    border-radius: 50%;
+    background: var(--color-primary-surface);
+    color: var(--color-primary-foreground);
+    font-size: 14px;
+    font-weight: 600;
+  }
+
+  .step h3 {
+    font-size: 18px;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    line-height: 24px;
+  }
+
+  .step p {
+    font-size: 14px;
+    line-height: 23px;
+    color: var(--color-muted-foreground);
+  }
+
+  @media (max-width: 900px) {
+
+    .section-title {
+      font-size: 32px;
+      line-height: 38px;
+    }
+
+    .how {
+      padding: 64px 24px;
+    }
+
+    .how-sub {
+      font-size: 15px;
+      line-height: 24px;
+    }
+
+    .steps {
+      flex-direction: column;
+      margin-top: 32px;
+      gap: 12px;
+    }
+  }
+
+</style>

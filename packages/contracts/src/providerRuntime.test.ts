@@ -42,9 +42,11 @@ describe("ProviderRuntimeEvent", () => {
     });
 
     expect(parsed.type).toBe("turn.plan.updated");
+
     if (parsed.type !== "turn.plan.updated") {
       throw new Error("expected turn.plan.updated");
     }
+
     expect(parsed.payload.plan).toHaveLength(2);
     expect(parsed.payload.plan[1]?.status).toBe("inProgress");
   });
@@ -63,9 +65,11 @@ describe("ProviderRuntimeEvent", () => {
     });
 
     expect(parsed.type).toBe("turn.proposed.completed");
+
     if (parsed.type !== "turn.proposed.completed") {
       throw new Error("expected turn.proposed.completed");
     }
+
     expect(parsed.payload.planMarkdown).toBe("# Ship it");
   });
 
@@ -100,9 +104,11 @@ describe("ProviderRuntimeEvent", () => {
     });
 
     expect(parsed.type).toBe("user-input.requested");
+
     if (parsed.type !== "user-input.requested") {
       throw new Error("expected user-input.requested");
     }
+
     expect(parsed.payload.questions[0]?.id).toBe("sandbox_mode");
     expect(parsed.payload.questions[0]?.options).toHaveLength(2);
   });
@@ -124,9 +130,11 @@ describe("ProviderRuntimeEvent", () => {
     });
 
     expect(parsed.type).toBe("user-input.resolved");
+
     if (parsed.type !== "user-input.resolved") {
       throw new Error("expected user-input.resolved");
     }
+
     expect(parsed.payload.answers.sandbox_mode).toBe("workspace-write");
   });
 
@@ -175,9 +183,11 @@ describe("ProviderRuntimeEvent", () => {
     });
 
     expect(parsed.type).toBe("thread.token-usage.updated");
+
     if (parsed.type !== "thread.token-usage.updated") {
       throw new Error("expected thread.token-usage.updated");
     }
+
     expect(parsed.payload.usage.maxTokens).toBe(200000);
     expect(parsed.payload.usage.usedTokens).toBe(31251);
   });

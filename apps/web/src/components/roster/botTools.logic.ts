@@ -27,8 +27,10 @@ export function planBotToolToggle(
   enabled: boolean,
 ): readonly McpServerId[] {
   const next = new Set(disabledIds);
+
   if (enabled) next.delete(id);
   else next.add(id);
+
   return [...next];
 }
 
@@ -44,9 +46,12 @@ export function buildBotToolItems(
   catalog: readonly PluginDefinition[] = CATALOG,
 ): readonly BotToolItem[] {
   const serversById = new Map<string, McpServer>(servers.map((server) => [server.id, server]));
+
   const plugins = resolveCatalogInstallations(servers, catalog).flatMap((installation) => {
     const server = serversById.get(installation.serverId);
+
     if (!server?.enabled) return [];
+
     return installation.kind === "catalog"
       ? [
           {
@@ -69,15 +74,21 @@ export function buildBotToolItems(
           },
         ];
   });
-  const mcpServers = servers
-    .filter((server) => server.enabled && !isBuiltinMcpServer(server))
-    .map((server) => ({
-      id: server.id,
-      kind: "mcp" as const,
-      name: server.name,
-      description: mcpDescription(server),
-      workspaceEnabled: true,
-    }));
+
+  const mcpServers = servers.flatMap((server) =>
+    server.enabled && !isBuiltinMcpServer(server)
+      ? [
+          {
+            id: server.id,
+            kind: "mcp" as const,
+            name: server.name,
+            description: mcpDescription(server),
+            workspaceEnabled: true,
+          },
+        ]
+      : [],
+  );
+
   return [...plugins, ...mcpServers].toSorted(
     (left, right) => left.kind.localeCompare(right.kind) || left.name.localeCompare(right.name),
   );
@@ -104,7 +115,9 @@ export function botToolStatus(
       status.serverId === item.id ||
       (item.pluginId !== undefined && status.pluginId === item.pluginId),
   );
+
   if (!access) return null;
+
   switch (access.health) {
     case "healthy":
     case "recovered":

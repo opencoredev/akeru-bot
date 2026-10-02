@@ -2,11 +2,24 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test"
 import { captureVoiceUtterance, playVoiceAudio } from "./browserVoiceAudio";
 
 let level = 0;
+
 let failAnalyserSetup = false;
-let latestRecorder: TestRecorder;
+
 const closeContext = vi.fn(async () => {});
+
 const disconnectSource = vi.fn();
-class TestRecorder {
+
+function latestRecorder(): TestRecorder {
+  const recorder = TestRecorder.instances.at(-1);
+
+  if (!recorder) throw new Error("No recorder was constructed.");
+
+  return recorder;
+}
+
+class TestRecorder extends EventTarget {
+  /** Every recorder the capture code constructed, newest last, so tests can drive its callbacks. */
+  static readonly instances: TestRecorder[] = [];
   static isTypeSupported(type: string) {
     return type.startsWith("audio/webm");
   }
@@ -14,10 +27,10 @@ class TestRecorder {
   state = "inactive";
   ondataavailable: ((event: { data: Blob }) => void) | null = null;
   onstop: (() => void) | null = null;
-  onerror: (() => void) | null = null;
   starts = 0;
   constructor() {
-    latestRecorder = this;
+    super();
+    TestRecorder.instances.push(this);
   }
   start() {
     this.state = "recording";
@@ -29,8 +42,10 @@ class TestRecorder {
     this.onstop?.();
   }
 }
+
 const track = { enabled: false };
-const microphone = { getAudioTracks: () => [track] } as unknown as MediaStream;
+
+const microphone = { getAudioTracks: () => [track] } as MediaStream;
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -38,6 +53,7 @@ beforeEach(() => {
   failAnalyserSetup = false;
   track.enabled = false;
   vi.useFakeTimers({ toFake: ["setInterval", "clearInterval", "performance"] });
+  TestRecorder.instances.length = 0;
   vi.stubGlobal("MediaRecorder", TestRecorder);
   vi.stubGlobal(
     "AudioContext",
@@ -47,6 +63,7 @@ beforeEach(() => {
       }
       createAnalyser() {
         if (failAnalyserSetup) throw new Error("Could not analyze microphone audio.");
+
         return {
           fftSize: 2048,
           getFloatTimeDomainData(samples: Float32Array) {
@@ -59,6 +76,7 @@ beforeEach(() => {
     },
   );
 });
+
 afterEach(() => {
   vi.useRealTimers();
   vi.unstubAllGlobals();
@@ -84,7 +102,7 @@ describe("bounded browser voice capture", () => {
     const capture = captureVoiceUtterance(microphone, new AbortController().signal);
     vi.advanceTimersByTime(20_000);
     await expect(capture).resolves.toMatchObject({ mimeType: "audio/webm" });
-    expect(latestRecorder.state).toBe("inactive");
+    expect(latestRecorder().state).toBe("inactive");
   });
 
   it("discards bounded silence rather than sending empty recordings and cleans up on cancellation", async () => {
@@ -92,10 +110,10 @@ describe("bounded browser voice capture", () => {
     const capture = captureVoiceUtterance(microphone, controller.signal);
     const stopped = expect(capture).rejects.toMatchObject({ name: "AbortError" });
     vi.advanceTimersByTime(40_000);
-    expect(latestRecorder.starts).toBe(3);
+    expect(latestRecorder().starts).toBe(3);
     controller.abort();
     await stopped;
-    expect(latestRecorder.state).toBe("inactive");
+    expect(latestRecorder().state).toBe("inactive");
     expect(track.enabled).toBe(false);
     expect(vi.getTimerCount()).toBe(0);
   });
@@ -126,19 +144,24 @@ describe("browser voice playback", () => {
       pause = vi.fn();
       removeAttribute = vi.fn();
     }
+
     const speaker = new Speaker();
     const revoke = vi.spyOn(URL, "revokeObjectURL");
     const controller = new AbortController();
+
     const playing = playVoiceAudio(
-      speaker as unknown as HTMLAudioElement,
+      speaker,
       { audioBase64: "YQ==", mimeType: "audio/mpeg" },
       controller.signal,
     );
+
     const settled =
       completion === "abort"
         ? expect(playing).rejects.toMatchObject({ name: "AbortError" })
         : expect(playing).resolves.toBeUndefined();
+
     expect(speaker.pause).not.toHaveBeenCalled();
+
     if (completion === "abort") controller.abort();
     else speaker.dispatchEvent(new Event("ended"));
     await settled;
@@ -149,6 +172,7 @@ describe("browser voice playback", () => {
 
   it("ignores a previous play rejection after a new clip starts", async () => {
     let rejectFirst!: (error: Error) => void;
+
     class Speaker extends EventTarget {
       src = "";
       pause = vi.fn();
@@ -158,20 +182,25 @@ describe("browser voice playback", () => {
         .mockImplementationOnce(() => new Promise<void>((_, reject) => (rejectFirst = reject)))
         .mockResolvedValue(undefined);
     }
+
     const speaker = new Speaker();
     const firstController = new AbortController();
+
     const first = playVoiceAudio(
-      speaker as unknown as HTMLAudioElement,
+      speaker,
       { audioBase64: "YQ==", mimeType: "audio/mpeg" },
       firstController.signal,
     );
+
     firstController.abort();
     await expect(first).rejects.toMatchObject({ name: "AbortError" });
+
     const second = playVoiceAudio(
-      speaker as unknown as HTMLAudioElement,
+      speaker,
       { audioBase64: "Yg==", mimeType: "audio/mpeg" },
       new AbortController().signal,
     );
+
     const activeSource = speaker.src;
     rejectFirst(new Error("First clip was interrupted"));
     await Promise.resolve();

@@ -14,6 +14,7 @@ function trimTrailingPathSeparators(path: string): string {
 
 function basenameOfPath(path: string): string {
   const separatorIndex = Math.max(path.lastIndexOf("/"), path.lastIndexOf("\\"));
+
   return separatorIndex >= 0 ? path.slice(separatorIndex + 1) : path;
 }
 
@@ -29,10 +30,12 @@ export function formatWorkspaceRelativePath(
   const normalizedPath = canonicalizeWindowsDrivePath(normalizePathSeparators(path));
 
   let displayPath = normalizedPath;
+
   if (workspaceRoot) {
     const normalizedWorkspaceRoot = canonicalizeWindowsDrivePath(
       normalizePathSeparators(trimTrailingPathSeparators(workspaceRoot)),
     );
+
     const workspaceLabel = basenameOfPath(normalizedWorkspaceRoot);
     const pathForCompare = normalizedPath.toLowerCase();
     const workspaceForCompare = normalizedWorkspaceRoot.toLowerCase();
@@ -53,5 +56,6 @@ export function formatWorkspaceRelativePath(
   }
 
   if (!line) return displayPath;
+
   return `${displayPath}:${line}${column ? `:${column}` : ""}`;
 }

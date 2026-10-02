@@ -35,15 +35,18 @@ const pointsAtLinkedWorktree = (gitFileContents: string, path: Path.Path): boole
     .find((line) => line.startsWith("gitdir:"))
     ?.slice("gitdir:".length)
     .trim();
+
   if (gitdir === undefined || gitdir.length === 0) {
     return false;
   }
+
   // Compare as path segments so a directory merely named `…worktrees…` cannot
   // match as a substring. Trailing separators normalize away first.
   const segments = path
     .normalize(gitdir.replaceAll("\\", "/"))
     .split(/[/\\]/)
     .filter((segment) => segment.length > 0);
+
   // `<common-dir>/worktrees/<name>`: `worktrees` is the penultimate segment,
   // and something must precede it. This excludes `<git-dir>/modules/<name>`.
   return segments.length >= 3 && segments.at(-2) === "worktrees";
@@ -65,26 +68,33 @@ export const resolveGitWorktreePath = (
     const path = yield* Path.Path;
 
     let directory = path.resolve(cwd);
+
     for (;;) {
       const gitPath = path.join(directory, ".git");
       const info = yield* fileSystem.stat(gitPath).pipe(Effect.option);
+
       if (Option.isSome(info)) {
         // A directory means the main checkout. Stop either way: nesting one
         // repository inside another does not make the outer one this root.
         if (info.value.type !== "File") {
           return undefined;
         }
+
         // A submodule also has a `.git` file, but it is not a worktree of this
         // repository and gets no worktree-local home.
         const contents = yield* fileSystem
           .readFileString(gitPath)
           .pipe(Effect.orElseSucceed(() => ""));
+
         return pointsAtLinkedWorktree(contents, path) ? directory : undefined;
       }
+
       const parent = path.dirname(directory);
+
       if (parent === directory) {
         return undefined;
       }
+
       directory = parent;
     }
   });
@@ -99,9 +109,12 @@ export const resolveWorktreeT3Home = (
 ): Effect.Effect<string | undefined, never, FileSystem.FileSystem | Path.Path> =>
   Effect.gen(function* () {
     const worktreePath = yield* resolveGitWorktreePath(cwd);
+
     if (worktreePath === undefined) {
       return undefined;
     }
+
     const path = yield* Path.Path;
+
     return path.join(worktreePath, PRODUCT_HOME_DIRNAME);
   });

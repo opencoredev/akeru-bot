@@ -27,6 +27,7 @@ export function resolveHostedBrowserWebviewWrapperStyle(input: {
   readonly hiddenSize: HostedBrowserWebviewSize;
 }): HostedBrowserWebviewWrapperStyle {
   const { active, interactive, cornerRadius = 0, hiddenSize, rect, renderingActive } = input;
+
   if (active && rect) {
     return {
       left: rect.x,

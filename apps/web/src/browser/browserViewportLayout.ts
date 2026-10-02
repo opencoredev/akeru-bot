@@ -1,3 +1,5 @@
+import { ViewportSetting } from "./browserViewportSetting";
+import { hasTag } from "~/lib/taggedUnion";
 import {
   PREVIEW_VIEWPORT_MAX_AREA,
   PREVIEW_VIEWPORT_MAX_DIMENSION,
@@ -20,6 +22,7 @@ export interface BrowserViewportLayout {
 }
 
 export const BROWSER_DEVICE_TOOLBAR_HEIGHT = 32;
+
 export const BROWSER_VIEWPORT_RESIZE_RAIL_SIZE = 10;
 
 export type BrowserViewportResizeDirection =
@@ -33,9 +36,9 @@ export type BrowserViewportResizeDirection =
   | "northwest";
 
 export const browserViewportSettingKey = (setting: PreviewViewportSetting): string =>
-  setting._tag === "fill"
+  hasTag(setting, "fill")
     ? "fill"
-    : `${setting._tag}:${setting.width}:${setting.height}:${setting._tag === "preset" ? setting.presetId : ""}`;
+    : `${setting._tag}:${setting.width}:${setting.height}:${hasTag(setting, "preset") ? setting.presetId : ""}`;
 
 const normalizeZoomFactor = (zoomFactor: number): number =>
   Number.isFinite(zoomFactor) && zoomFactor > 0 ? zoomFactor : 1;
@@ -49,11 +52,11 @@ export function resolveFittedBrowserViewport(
   } | null,
   zoomFactor = 1,
 ): Exclude<PreviewViewportSetting, { readonly _tag: "fill" }> {
-  if (setting._tag !== "fill") return setting;
+  if (!hasTag(setting, "fill")) return setting;
   const normalizedZoomFactor = normalizeZoomFactor(zoomFactor);
+
   if (sourceContent) {
-    return {
-      _tag: "freeform",
+    return ViewportSetting.freeform({
       width: Math.max(
         1,
         Math.round(sourceContent.width / sourceContent.scale / normalizedZoomFactor),
@@ -62,9 +65,10 @@ export function resolveFittedBrowserViewport(
         1,
         Math.round(sourceContent.height / sourceContent.scale / normalizedZoomFactor),
       ),
-    };
+    });
   }
-  return { _tag: "freeform", width: 1280, height: 800 };
+
+  return ViewportSetting.freeform({ width: 1280, height: 800 });
 }
 
 export function resolveBrowserDeviceViewportArea(container: {
@@ -87,7 +91,8 @@ export function resolveBrowserViewportLayout(
 ): BrowserViewportLayout {
   const containerWidth = Math.max(1, Math.round(container.width));
   const containerHeight = Math.max(1, Math.round(container.height));
-  if (setting._tag === "fill") {
+
+  if (hasTag(setting, "fill")) {
     return {
       canvasWidth: containerWidth,
       canvasHeight: containerHeight,
@@ -99,16 +104,20 @@ export function resolveBrowserViewportLayout(
       fillsPanel: true,
     };
   }
+
   const normalizedZoomFactor = normalizeZoomFactor(zoomFactor);
   const renderedWidth = setting.width * normalizedZoomFactor;
   const renderedHeight = setting.height * normalizedZoomFactor;
+
   const viewportScale = Math.min(
     1,
     containerWidth / renderedWidth,
     containerHeight / renderedHeight,
   );
+
   const viewportWidth = renderedWidth * viewportScale;
   const viewportHeight = renderedHeight * viewportScale;
+
   return {
     canvasWidth: containerWidth,
     canvasHeight: containerHeight,
@@ -131,6 +140,7 @@ export function resolveBrowserDeviceViewportLayout(
     setting,
     zoomFactor,
   );
+
   return {
     ...layout,
     canvasWidth: Math.max(1, Math.round(container.width)),
@@ -155,6 +165,7 @@ function resizeAtAspectRatio(
     const minimum = Math.ceil(
       Math.max(PREVIEW_VIEWPORT_MIN_DIMENSION, PREVIEW_VIEWPORT_MIN_DIMENSION * aspectRatio),
     );
+
     const maximum = Math.floor(
       Math.min(
         PREVIEW_VIEWPORT_MAX_DIMENSION,
@@ -162,18 +173,22 @@ function resizeAtAspectRatio(
         Math.sqrt(PREVIEW_VIEWPORT_MAX_AREA * aspectRatio),
       ),
     );
+
     let width = Math.min(maximum, Math.max(minimum, Math.round(desired)));
     let height = Math.round(width / aspectRatio);
+
     while (width * height > PREVIEW_VIEWPORT_MAX_AREA && width > minimum) {
       width -= 1;
       height = Math.round(width / aspectRatio);
     }
+
     return { width, height };
   }
 
   const minimum = Math.ceil(
     Math.max(PREVIEW_VIEWPORT_MIN_DIMENSION, PREVIEW_VIEWPORT_MIN_DIMENSION / aspectRatio),
   );
+
   const maximum = Math.floor(
     Math.min(
       PREVIEW_VIEWPORT_MAX_DIMENSION,
@@ -181,12 +196,15 @@ function resizeAtAspectRatio(
       Math.sqrt(PREVIEW_VIEWPORT_MAX_AREA / aspectRatio),
     ),
   );
+
   let height = Math.min(maximum, Math.max(minimum, Math.round(desired)));
   let width = Math.round(height * aspectRatio);
+
   while (width * height > PREVIEW_VIEWPORT_MAX_AREA && height > minimum) {
     height -= 1;
     width = Math.round(height * aspectRatio);
   }
+
   return { width, height };
 }
 
@@ -198,21 +216,26 @@ export function resizeFreeformViewport(
   aspectRatio?: number,
 ): PreviewViewportSize {
   const normalizedZoomFactor = normalizeZoomFactor(zoomFactor);
+
   const horizontalDelta = direction.includes("east")
     ? delta.x
     : direction.includes("west")
       ? -delta.x
       : 0;
+
   const verticalDelta = direction.includes("south")
     ? delta.y
     : direction.includes("north")
       ? -delta.y
       : 0;
+
   const desiredWidth = start.width + horizontalDelta / normalizedZoomFactor;
   const desiredHeight = start.height + verticalDelta / normalizedZoomFactor;
+
   if (validAspectRatio(aspectRatio)) {
     const controlsWidth = horizontalDelta !== 0 || direction === "east" || direction === "west";
     const controlsHeight = verticalDelta !== 0 || direction === "north" || direction === "south";
+
     const primaryAxis =
       controlsWidth && !controlsHeight
         ? "width"
@@ -222,15 +245,19 @@ export function resizeFreeformViewport(
               Math.abs(desiredHeight - start.height) / start.height
             ? "width"
             : "height";
+
     return resizeAtAspectRatio(
       primaryAxis === "width" ? desiredWidth : desiredHeight,
       aspectRatio,
       primaryAxis,
     );
   }
+
   let width = clampViewportDimension(Math.round(desiredWidth));
   let height = clampViewportDimension(Math.round(desiredHeight));
+
   if (width * height <= PREVIEW_VIEWPORT_MAX_AREA) return { width, height };
+
   if (Math.abs(horizontalDelta) >= Math.abs(verticalDelta)) {
     width = Math.max(
       PREVIEW_VIEWPORT_MIN_DIMENSION,
@@ -242,23 +269,28 @@ export function resizeFreeformViewport(
       Math.floor(PREVIEW_VIEWPORT_MAX_AREA / width),
     );
   }
+
   return { width, height };
 }
 
 const resizeFromEndRail = (start: number, pointerDelta: number, available: number): number => {
   const startEdge = start < available ? (available + start) / 2 : start;
   const targetEdge = startEdge + pointerDelta;
+
   return targetEdge <= available ? targetEdge * 2 - available : targetEdge;
 };
 
 const resizeFromStartRail = (start: number, pointerDelta: number, available: number): number => {
   if (start > available) {
     const distanceToFit = start - available;
+
     return pointerDelta <= distanceToFit
       ? start - pointerDelta
       : available - (pointerDelta - distanceToFit) * 2;
   }
+
   const targetEdge = (available - start) / 2 + pointerDelta;
+
   return targetEdge >= 0 ? available - targetEdge * 2 : available - targetEdge;
 };
 
@@ -273,18 +305,22 @@ export function resizeBrowserViewportFromRail(
   const normalizedZoomFactor = normalizeZoomFactor(zoomFactor);
   const startWidth = start.width * normalizedZoomFactor;
   const startHeight = start.height * normalizedZoomFactor;
+
   const desiredWidth = direction.includes("east")
     ? resizeFromEndRail(startWidth, pointerDelta.x, available.width)
     : direction.includes("west")
       ? resizeFromStartRail(startWidth, pointerDelta.x, available.width)
       : startWidth;
+
   const desiredHeight = direction.includes("south")
     ? resizeFromEndRail(startHeight, pointerDelta.y, available.height)
     : direction.includes("north")
       ? resizeFromStartRail(startHeight, pointerDelta.y, available.height)
       : startHeight;
+
   const widthDelta = desiredWidth - startWidth;
   const heightDelta = desiredHeight - startHeight;
+
   return resizeFreeformViewport(
     start,
     {
@@ -303,6 +339,7 @@ export function resolveResponsiveBrowserViewportSize(
 ): PreviewViewportSize {
   const area = resolveBrowserDeviceViewportArea(container);
   const normalizedZoomFactor = normalizeZoomFactor(zoomFactor);
+
   return resizeFreeformViewport(
     {
       width: area.width / normalizedZoomFactor,

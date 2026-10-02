@@ -1,4 +1,5 @@
-// @ts-nocheck
+import type { ChartValue } from "./chartValue";
+import { Predicate } from "effect";
 import { Children, type ComponentType, isValidElement, type ReactNode } from "react";
 import {
   type ChartConfig,
@@ -13,11 +14,6 @@ import { cn } from "./lib";
 import type { StackType } from "./scales";
 import { useChartDimensions } from "./use-chart-dimensions";
 
-// `object` rather than `Record<string, unknown>`: interfaces don't get an
-// implicit index signature, so interface-typed rows failed to satisfy the
-// generic. Internal layers still index rows through their own Row type.
-type Row = object;
-
 const DEFAULT_MARGINS: Margins = {
   top: 10,
   right: 12,
@@ -25,7 +21,7 @@ const DEFAULT_MARGINS: Margins = {
   left: 36,
 };
 
-export type CartesianChartProps<TData extends Row> = {
+export type CartesianChartProps<TData extends Record<keyof TData, ChartValue>> = {
   data: TData[];
   config: ChartConfig;
   children: ReactNode;
@@ -55,8 +51,14 @@ export type CartesianChartProps<TData extends Row> = {
 
 /** Which render layer a composed part targets — defaults to the front SVG. */
 function layerOf(node: ReactNode): "back" | "dom" | "svg" {
-  if (!isValidElement(node) || typeof node.type === "string") return "svg";
-  return (node.type as { chartLayer?: "back" | "dom" }).chartLayer ?? "svg";
+  if (!isValidElement(node) || Predicate.isString(node.type)) return "svg";
+
+  if (!(Predicate.isObject(node.type) || Predicate.isFunction(node.type))) return "svg";
+
+  return "chartLayer" in node.type &&
+    (node.type.chartLayer === "back" || node.type.chartLayer === "dom")
+    ? node.type.chartLayer
+    : "svg";
 }
 
 /**
@@ -68,7 +70,7 @@ function layerOf(node: ReactNode): "back" | "dom" | "svg" {
  * `Canvas` prop supplies the family's painter (continuous for area/line, bars for
  * bar) — so each chart ships only its own canvas.
  */
-export function CartesianRoot<TData extends Row>({
+export function CartesianRoot<TData extends Record<keyof TData, ChartValue>>({
   chartType,
   Canvas,
   data,
@@ -97,8 +99,7 @@ export function CartesianRoot<TData extends Row>({
 
   const ctx = useChartController({
     chartType,
-    // Safe: the controller only reads row[key] for the configured series keys.
-    data: data as Record<string, unknown>[],
+    data,
     config,
     stackType,
     dimensions: size,
@@ -111,7 +112,7 @@ export function CartesianRoot<TData extends Row>({
     bloom,
     bloomOnHover,
     defaultSelectedDataKey,
-    onSelectionChange,
+    ...(onSelectionChange !== undefined ? { onSelectionChange } : {}),
   });
 
   const backChildren: ReactNode[] = [];
@@ -119,6 +120,7 @@ export function CartesianRoot<TData extends Row>({
   const domChildren: ReactNode[] = [];
   Children.forEach(children, (child) => {
     const layer = layerOf(child);
+
     if (layer === "back") backChildren.push(child);
     else if (layer === "dom") domChildren.push(child);
     else svgChildren.push(child);
@@ -126,6 +128,7 @@ export function CartesianRoot<TData extends Row>({
 
   const onMove = (clientX: number) => {
     const el = ref.current;
+
     if (!el) return;
     const rect = el.getBoundingClientRect();
     const px = clientX - rect.left - margins.left;
@@ -179,4 +182,5 @@ export function CartesianRoot<TData extends Row>({
   );
 }
 
-export type AreaChartProps<TData extends Row> = CartesianChartProps<TData>;
+export type AreaChartProps<TData extends Record<keyof TData, ChartValue>> =
+  CartesianChartProps<TData>;

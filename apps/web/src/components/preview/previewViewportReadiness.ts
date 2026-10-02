@@ -1,3 +1,4 @@
+import { isTagged } from "../tagged";
 import type { PreviewRenderedViewportSize, PreviewViewportSetting } from "@akeru/contracts";
 
 import { browserViewportSettingKey } from "~/browser/browserViewportLayout";
@@ -9,6 +10,7 @@ export function isPreviewViewportReady(input: {
   readonly renderedViewport: PreviewRenderedViewportSize | null;
 }): boolean {
   const { setting, appliedSettingKey, declaredViewport, renderedViewport } = input;
+
   if (
     appliedSettingKey !== browserViewportSettingKey(setting) ||
     declaredViewport === null ||
@@ -17,10 +19,12 @@ export function isPreviewViewportReady(input: {
     return false;
   }
 
-  const expectedViewport =
-    setting._tag === "fill" ? declaredViewport : { width: setting.width, height: setting.height };
+  const expectedViewport = isTagged(setting, "fill")
+    ? declaredViewport
+    : { width: setting.width, height: setting.height };
+
   if (
-    setting._tag !== "fill" &&
+    !isTagged(setting, "fill") &&
     (declaredViewport.width !== expectedViewport.width ||
       declaredViewport.height !== expectedViewport.height)
   ) {
@@ -30,6 +34,7 @@ export function isPreviewViewportReady(input: {
   // Electron rounds CSS pixels through the guest's fractional zoom/device scale,
   // so a successfully applied fixed viewport can measure one pixel either way.
   const tolerance = 1;
+
   return (
     Math.abs(renderedViewport.width - expectedViewport.width) <= tolerance &&
     Math.abs(renderedViewport.height - expectedViewport.height) <= tolerance

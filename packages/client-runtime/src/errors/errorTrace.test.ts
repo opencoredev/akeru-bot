@@ -18,7 +18,11 @@ describe("findErrorTraceId", () => {
   });
 
   it("terminates for cyclic causes", () => {
-    const error: { cause?: unknown } = {};
+    interface CyclicCause {
+      cause?: CyclicCause;
+    }
+
+    const error: CyclicCause = {};
     error.cause = error;
 
     expect(findErrorTraceId(error)).toBeNull();

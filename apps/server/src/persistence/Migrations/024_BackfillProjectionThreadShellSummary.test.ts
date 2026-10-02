@@ -189,6 +189,7 @@ layer("024_BackfillProjectionThreadShellSummary", (it) => {
         FROM projection_threads
         WHERE thread_id = 'thread-1'
       `;
+
       assert.deepStrictEqual(threadRows, [
         {
           latestUserMessageAt: "2026-02-24T00:01:00.000Z",
@@ -208,6 +209,7 @@ layer("024_BackfillProjectionThreadShellSummary", (it) => {
         FROM projection_pending_approvals
         WHERE request_id = 'approval-1'
       `;
+
       assert.deepStrictEqual(approvalRows, [
         {
           status: "resolved",

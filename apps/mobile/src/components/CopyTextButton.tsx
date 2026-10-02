@@ -9,7 +9,7 @@ const COPY_FEEDBACK_DURATION_MS = 1200;
 export const CopyTextButton = memo(function CopyTextButton(props: {
   readonly accessibilityLabel: string;
   readonly text: string;
-  readonly tintColor: ColorValue;
+  readonly tintColor: ColorValue | undefined;
   readonly copiedTintColor?: ColorValue;
   readonly backgroundColor?: ColorValue;
   readonly borderColor?: ColorValue;
@@ -37,9 +37,11 @@ export const CopyTextButton = memo(function CopyTextButton(props: {
       onPress={() => {
         copyTextWithHaptic(props.text);
         setCopied(true);
+
         if (resetTimeoutRef.current) {
           clearTimeout(resetTimeoutRef.current);
         }
+
         resetTimeoutRef.current = setTimeout(() => {
           setCopied(false);
           resetTimeoutRef.current = null;

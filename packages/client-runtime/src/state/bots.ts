@@ -82,11 +82,13 @@ export function createBotEnvironmentAtoms<R, E>(
   runtime: Atom.AtomRuntime<EnvironmentRegistry | Crypto.Crypto | R, E>,
 ) {
   const scheduler = createAtomCommandScheduler();
+
   const botConcurrency = {
     mode: "serial" as const,
     key: ({ environmentId, input }: { environmentId: string; input: { botId: string } }) =>
       JSON.stringify([environmentId, "bot", input.botId]),
   };
+
   const groupConcurrency = {
     mode: "serial" as const,
     key: ({ environmentId, input }: { environmentId: string; input: { groupId: string } }) =>

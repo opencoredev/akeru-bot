@@ -1,6 +1,7 @@
 import * as Schema from "effect/Schema";
 
 export const RemoteDiagnosticStatus = Schema.Literals(["pass", "warning", "fail"]);
+
 export type RemoteDiagnosticStatus = typeof RemoteDiagnosticStatus.Type;
 
 export const RemoteDiagnosticCheck = Schema.Struct({
@@ -10,6 +11,7 @@ export const RemoteDiagnosticCheck = Schema.Struct({
   repairable: Schema.Boolean,
   details: Schema.optional(Schema.Record(Schema.String, Schema.String)),
 });
+
 export type RemoteDiagnosticCheck = typeof RemoteDiagnosticCheck.Type;
 
 export const RemoteDoctorReport = Schema.Struct({
@@ -19,6 +21,7 @@ export const RemoteDoctorReport = Schema.Struct({
   checks: Schema.Array(RemoteDiagnosticCheck),
   repairsApplied: Schema.Array(Schema.String),
 });
+
 export type RemoteDoctorReport = typeof RemoteDoctorReport.Type;
 
 /**
@@ -29,11 +32,13 @@ export const RemoteDoctorStatus = Schema.Struct({
   applicable: Schema.Boolean,
   report: Schema.NullOr(RemoteDoctorReport),
 });
+
 export type RemoteDoctorStatus = typeof RemoteDoctorStatus.Type;
 
 export const RemoteDoctorRepairInput = Schema.Struct({
   checkIds: Schema.NonEmptyArray(Schema.String),
 });
+
 export type RemoteDoctorRepairInput = typeof RemoteDoctorRepairInput.Type;
 
 export class RemoteDoctorError extends Schema.TaggedErrorClass<RemoteDoctorError>()(

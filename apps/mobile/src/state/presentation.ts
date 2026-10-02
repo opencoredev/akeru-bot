@@ -19,11 +19,13 @@ const EMPTY_ENVIRONMENT_PRESENTATION_ATOM = Atom.make<EnvironmentPresentation | 
 
 export function useEnvironmentPresentation(environmentId: EnvironmentId | null) {
   const catalog = useAtomValue(environmentCatalog.catalogValueAtom);
+
   const presentation = useAtomValue(
     environmentId === null
       ? EMPTY_ENVIRONMENT_PRESENTATION_ATOM
       : environmentPresentations.presentationAtom(environmentId),
   );
+
   return {
     isReady: catalog.isReady,
     presentation,

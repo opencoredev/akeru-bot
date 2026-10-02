@@ -1,42 +1,50 @@
-// @effect-diagnostics nodeBuiltinImport:off - Source guard reads this module's renderer map.
 import * as NodeFS from "node:fs";
 
 import { EnvironmentId } from "@akeru/contracts";
+
 import { renderToStaticMarkup } from "react-dom/server";
+
 import { describe, expect, it, vi } from "vite-plus/test";
 
 vi.mock("@effect/atom-react", () => ({ useAtomValue: () => null }));
+
 vi.mock("../hooks/useTheme", () => ({ useTheme: () => ({ resolvedTheme: "dark" }) }));
+
 vi.mock("../state/use-atom-query-runner", () => ({ useAtomQueryRunner: () => vi.fn() }));
+
 vi.mock("../state/use-atom-command", () => ({ useAtomCommand: () => vi.fn() }));
+
 vi.mock("../state/session", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../state/session")>()),
   usePreparedConnection: () => ({ _tag: "Loading" }),
 }));
+
 vi.mock("../state/entities", () => ({
   readThreadShell: () => null,
   useProjects: () => [],
 }));
+
 vi.mock("../localShellAccess", () => ({
   useLocalShellAccess: () => ({ isLocal: true, isResolved: true }),
 }));
+
 vi.mock("../editorPreferences", () => ({
   useOpenInPreferredEditor: () => vi.fn(),
   usePreferredEditor: () => [null, vi.fn()],
 }));
 
-import ChatMarkdown, {
-  canUseMarkdownFileShellActions,
-  hasMarkdownFilePrimaryAction,
-  orderedListGutterStyle,
-  shouldUseMarkdownFileBrowserPrimaryAction,
-} from "./ChatMarkdown";
+import ChatMarkdown from "./ChatMarkdown";
 
 describe("ChatMarkdown streaming renderers", () => {
   it("keeps one renderer map instead of recreating types when text streams", () => {
     const source = NodeFS.readFileSync(new URL("./ChatMarkdown.tsx", import.meta.url), "utf8");
 
-    expect(source).toContain("const ChatMarkdownRendererContext");
+    const contextSource = NodeFS.readFileSync(
+      new URL("./markdown/MarkdownRendererContext.ts", import.meta.url),
+      "utf8",
+    );
+
+    expect(contextSource).toContain("const ChatMarkdownRendererContext");
     expect(source).toContain("const CHAT_MARKDOWN_COMPONENTS: Components");
     expect(source).toContain("components={CHAT_MARKDOWN_COMPONENTS}");
     expect(source).toContain("pre: function MarkdownPre");
@@ -46,6 +54,7 @@ describe("ChatMarkdown streaming renderers", () => {
 
   it("still renders streamed fences and details after extra trailing text", () => {
     const fence = ["```text", "First code block", "```", "", "Streaming reply"].join("\n");
+
     const html = renderToStaticMarkup(
       <ChatMarkdown cwd="/tmp/project" text={`${fence} 9`} isStreaming />,
     );
@@ -53,58 +62,6 @@ describe("ChatMarkdown streaming renderers", () => {
     expect(html).toContain('data-language="text"');
     expect(html).toContain("First code block");
     expect(html).toContain("Streaming reply 9");
-  });
-});
-
-describe("canUseMarkdownFileShellActions", () => {
-  const environmentId = EnvironmentId.make("environment-1");
-
-  it("allows editor and file manager actions for local environments", () => {
-    expect(canUseMarkdownFileShellActions(environmentId, { isLocal: true, isResolved: true })).toBe(
-      true,
-    );
-  });
-
-  it("hides shell actions until the environment mode is resolved", () => {
-    expect(
-      canUseMarkdownFileShellActions(environmentId, { isLocal: true, isResolved: false }),
-    ).toBe(false);
-  });
-
-  it("hides editor and file manager actions for remote environments", () => {
-    expect(
-      canUseMarkdownFileShellActions(environmentId, { isLocal: false, isResolved: true }),
-    ).toBe(false);
-  });
-
-  it("hides shell actions when no environment owns the markdown", () => {
-    expect(canUseMarkdownFileShellActions(null, { isLocal: true, isResolved: true })).toBe(false);
-  });
-});
-
-describe("hasMarkdownFilePrimaryAction", () => {
-  it("keeps the chip interactive when an editor or browser can open it", () => {
-    expect(
-      hasMarkdownFilePrimaryAction({
-        canOpenInEditor: true,
-        canOpenInBrowser: false,
-      }),
-    ).toBe(true);
-    expect(
-      hasMarkdownFilePrimaryAction({
-        canOpenInEditor: false,
-        canOpenInBrowser: true,
-      }),
-    ).toBe(true);
-  });
-
-  it("removes the link affordance when no primary action can open the file", () => {
-    expect(
-      hasMarkdownFilePrimaryAction({
-        canOpenInEditor: false,
-        canOpenInBrowser: false,
-      }),
-    ).toBe(false);
   });
 });
 
@@ -129,79 +86,6 @@ describe("ChatMarkdown settings chips", () => {
     expect(html).toContain("chat-markdown-settings-link");
     expect(html).toContain("Open Settings &gt; Advanced &gt; Bot inbox");
     expect(html).not.toContain('target="_blank"');
-  });
-});
-
-describe("shouldUseMarkdownFileBrowserPrimaryAction", () => {
-  it("uses the browser when it is the only available primary action", () => {
-    expect(
-      shouldUseMarkdownFileBrowserPrimaryAction({
-        iconPath: "/tmp/report.html",
-        canOpenInEditor: false,
-        canOpenInBrowser: true,
-      }),
-    ).toBe(true);
-  });
-
-  it("prefers the editor for HTML files when one is available", () => {
-    expect(
-      shouldUseMarkdownFileBrowserPrimaryAction({
-        iconPath: "/tmp/report.html",
-        canOpenInEditor: true,
-        canOpenInBrowser: true,
-      }),
-    ).toBe(false);
-  });
-
-  it("continues to open PDF files in the browser by default", () => {
-    expect(
-      shouldUseMarkdownFileBrowserPrimaryAction({
-        iconPath: "/tmp/report.pdf",
-        canOpenInEditor: true,
-        canOpenInBrowser: true,
-      }),
-    ).toBe(true);
-  });
-});
-
-describe("orderedListGutterStyle", () => {
-  it("leaves the default gutter alone for single-digit lists", () => {
-    expect(orderedListGutterStyle(9, undefined)).toBeUndefined();
-  });
-
-  it("leaves the default gutter alone for two-digit lists", () => {
-    expect(orderedListGutterStyle(99, undefined)).toBeUndefined();
-  });
-
-  it("leaves the default gutter alone for a two-digit list that starts above 1", () => {
-    // start=50 + 49 items => last marker is "98", still two digits.
-    expect(orderedListGutterStyle(49, 50)).toBeUndefined();
-  });
-
-  it("widens the gutter once the last marker reaches three digits", () => {
-    // item 100 is the bug from #6512: a 100-item list starting at 1.
-    expect(orderedListGutterStyle(100, undefined)).toEqual({ "--list-gutter": "4ch" });
-  });
-
-  it("accounts for a non-default start attribute", () => {
-    // start=95 + 9 items => last marker is "103", three digits.
-    expect(orderedListGutterStyle(9, 95)).toEqual({ "--list-gutter": "4ch" });
-    expect(orderedListGutterStyle(5, "999995")).toEqual({ "--list-gutter": "7ch" });
-  });
-
-  it("scales further for four-digit markers", () => {
-    expect(orderedListGutterStyle(1000, undefined)).toEqual({ "--list-gutter": "5ch" });
-  });
-
-  it("uses the widest marker and includes a negative start's minus sign", () => {
-    expect(orderedListGutterStyle(1001, -1000)).toEqual({ "--list-gutter": "6ch" });
-    expect(orderedListGutterStyle(3, -15)).toEqual({ "--list-gutter": "4ch" });
-    expect(orderedListGutterStyle(3, -5)).toBeUndefined();
-  });
-
-  it("treats a missing/zero item count as a single item", () => {
-    expect(orderedListGutterStyle(0, undefined)).toBeUndefined();
-    expect(orderedListGutterStyle(0, 100)).toEqual({ "--list-gutter": "4ch" });
   });
 });
 
@@ -317,6 +201,7 @@ describe("ChatMarkdown Windows file links", () => {
     "does not disambiguate the same file in links and inline code with parseRawHtml=%s",
     (parseRawHtml) => {
       const path = String.raw`C:\Users\shawn\project\src\main.ts`;
+
       const html = renderToStaticMarkup(
         <ChatMarkdown
           cwd="C:/Users/shawn/project"
@@ -373,6 +258,7 @@ describe("ChatMarkdown bot chat forms", () => {
 
   const TABLE = ["| File | State |", "| --- | --- |", "| src/output.ts | Ready |"].join("\n");
   const CHECKLIST = ["- [x] Render table", "- [ ] Review diff", "- [ ] Ship"].join("\n");
+
   const DIFF = [
     "```diff",
     "diff --git a/src/app.ts b/src/app.ts",
@@ -384,6 +270,7 @@ describe("ChatMarkdown bot chat forms", () => {
     "+run(2);",
     "```",
   ].join("\n");
+
   const ALL_FORMS = [
     "Summary with a [docs link](https://example.com/docs) and [Voice settings](grokbot://app/v1/settings?id=voice).",
     "",
@@ -423,6 +310,7 @@ describe("ChatMarkdown bot chat forms", () => {
     const html = render(
       ["- [x] Outer one", "  - [x] Inner one", "  - [ ] Inner two", "- [ ] Outer two"].join("\n"),
     );
+
     expect(html.match(/data-task-progress=/g)).toHaveLength(1);
     expect(html).toContain('data-task-progress="1/2"');
   });
@@ -461,6 +349,7 @@ describe("ChatMarkdown bot chat forms", () => {
         "```",
       ].join("\n"),
     );
+
     expect(html).toContain('data-language="patch"');
     expect(html).toContain("2 files");
     expect(html).toContain('aria-label="2 additions, 2 deletions"');
@@ -521,6 +410,7 @@ describe("ChatMarkdown bot chat forms", () => {
 
   it("never renders half a table while streaming", () => {
     const [header, delimiter] = TABLE.split("\n");
+
     for (const partial of [
       `Intro\n\n${header?.slice(0, 8)}`,
       `Intro\n\n${header}\n`,
@@ -531,6 +421,7 @@ describe("ChatMarkdown bot chat forms", () => {
       expect(html, partial).not.toContain("<table");
       expect(html, partial).toContain("Intro");
     }
+
     const withRowInFlight = render(`${header}\n${delimiter}\n| src/output.ts | Rea`, true);
     expect(withRowInFlight).toContain("<table");
     expect(withRowInFlight).not.toContain("src/output.ts");
@@ -542,6 +433,7 @@ describe("ChatMarkdown bot chat forms", () => {
       expect(html, partial).not.toContain("data-language");
       expect(html, partial).not.toMatch(/>[^<]*`/);
     }
+
     expect(render("Intro\n```diff\n+run(2);", true)).toContain('data-diff-line="add"');
   });
 
@@ -552,18 +444,22 @@ describe("ChatMarkdown bot chat forms", () => {
       // No bracket in rendered text; class names may contain brackets.
       expect(html, partial).not.toMatch(/>[^<]*\[/);
     }
+
     expect(render("Almost done\n-", true)).not.toContain("<h2");
   });
 
   it("keeps already streamed diff lines unchanged as the fence grows", () => {
     const settled = render(DIFF);
     const lines = DIFF.split("\n");
+
     for (let count = 2; count < lines.length - 1; count += 1) {
       const streamed = render(`${lines.slice(0, count).join("\n")}\n`, true);
       const kinds = [...streamed.matchAll(/data-diff-line="(\w+)"/g)].map((match) => match[1]);
+
       const settledKinds = [...settled.matchAll(/data-diff-line="(\w+)"/g)].map(
         (match) => match[1],
       );
+
       expect(kinds).toEqual(settledKinds.slice(0, kinds.length));
       expect(kinds).toHaveLength(count - 1);
     }

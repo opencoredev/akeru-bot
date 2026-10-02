@@ -6,13 +6,14 @@ const INLINE_CHIP_GEOMETRY_CLASS_NAME =
 
 const INLINE_CHIP_CLASS_NAME = `${INLINE_CHIP_GEOMETRY_CLASS_NAME} border border-border/70 bg-accent/40 text-foreground`;
 
-export const CHAT_INLINE_CHIP_CLASS_NAME = `${INLINE_CHIP_CLASS_NAME} text-[12px]`;
+export const CHAT_INLINE_CHIP_CLASS_NAME = `${INLINE_CHIP_CLASS_NAME} text-xs`;
 
 export const COMPOSER_INLINE_CHIP_CLASS_NAME = `${INLINE_CHIP_CLASS_NAME} text-[0.86em] select-none`;
 
 export const COMPOSER_INLINE_CHIP_DECORATOR_CLASS_NAME =
   "relative inline-flex align-[-0.125em] leading-none data-[composer-chip-selected]:after:pointer-events-none data-[composer-chip-selected]:after:absolute data-[composer-chip-selected]:after:inset-0 data-[composer-chip-selected]:after:rounded-[6px] data-[composer-chip-selected]:after:bg-[Highlight] data-[composer-chip-selected]:after:opacity-30 data-[composer-chip-selected]:after:content-['']";
 
+// AppIcon repeats this string for `fit="inline-chip"`; change both together.
 export const COMPOSER_INLINE_CHIP_ICON_CLASS_NAME =
   "block size-[1.17em] shrink-0 self-center opacity-85 [&>svg]:block";
 
@@ -27,11 +28,11 @@ export const COMPOSER_INLINE_CHIP_LABEL_CLASS_NAME =
 // font size differs. In the composer, 0.9em text in a 1.6em pill is about
 // 1.44em of the prompt font, still inside the leading-relaxed line box.
 const INLINE_SKILL_CHIP_CLASS_NAME =
-  "inline-flex h-[1.6em] max-w-full items-center gap-[0.35em] rounded-[0.45em] px-[0.5em] font-medium leading-none align-middle bg-fuchsia-500/14 text-fuchsia-700 dark:text-fuchsia-300";
+  "inline-flex h-[1.6em] max-w-full items-center gap-[0.35em] rounded-[0.45em] px-[0.5em] font-medium leading-none align-middle bg-skill/14 text-skill-foreground";
 
 export const COMPOSER_INLINE_SKILL_CHIP_CLASS_NAME = `${INLINE_SKILL_CHIP_CLASS_NAME} text-[0.9em] select-none`;
 
-export const CHAT_INLINE_SKILL_CHIP_CLASS_NAME = `${INLINE_SKILL_CHIP_CLASS_NAME} text-[12px]`;
+export const CHAT_INLINE_SKILL_CHIP_CLASS_NAME = `${INLINE_SKILL_CHIP_CLASS_NAME} text-xs`;
 
 // Holds either the skill's emoji or the fallback skill glyph at the same box
 // and full opacity, so adjacent chips with and without an emoji match.

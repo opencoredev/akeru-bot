@@ -24,6 +24,7 @@ interface SettingsSearchTargetContextValue {
 }
 
 const noop = () => undefined;
+
 const SettingsSearchTargetContext = createContext<SettingsSearchTargetContextValue>({
   targetId: null,
   onTargetHandled: noop,
@@ -39,15 +40,15 @@ export function SettingsSearchTargetProvider({
   children: ReactNode;
 }) {
   const value = useMemo(() => ({ targetId, onTargetHandled }), [onTargetHandled, targetId]);
+
   return <SettingsSearchTargetContext value={value}>{children}</SettingsSearchTargetContext>;
 }
 
 function scrollAndFocusSettingsTarget(target: HTMLElement): void {
   const prefersReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
   const scrollTarget =
-    target.tagName === "SECTION" && target.firstElementChild
-      ? (target.firstElementChild as HTMLElement)
-      : target;
+    target.tagName === "SECTION" && target.firstElementChild ? target.firstElementChild : target;
 
   scrollTarget.scrollIntoView({
     behavior: prefersReducedMotion ? "auto" : "smooth",
@@ -55,6 +56,7 @@ function scrollAndFocusSettingsTarget(target: HTMLElement): void {
   });
   target.focus({ preventScroll: true });
   target.classList.remove("settings-search-target-pulse");
+
   if (prefersReducedMotion) return;
   void target.offsetWidth;
   target.classList.add("settings-search-target-pulse");
@@ -73,6 +75,7 @@ export function useSettingsSearchTargetId(): string | null {
 function useSettingsSearchTarget<T extends HTMLElement>(id: string | undefined) {
   const { targetId, onTargetHandled } = useContext(SettingsSearchTargetContext);
   const isSearchTarget = id !== undefined && id === targetId;
+
   const targetRef = useCallback(
     (target: T | null) => {
       if (target && isSearchTarget) {
@@ -110,8 +113,10 @@ export function useRelativeTimeTick(intervalMs = 1_000) {
   const [nowMs, setNowMs] = useState(() => Date.now());
   useEffect(() => {
     const id = setInterval(() => setNowMs(Date.now()), intervalMs);
+
     return () => clearInterval(id);
   }, [intervalMs]);
+
   return nowMs;
 }
 
@@ -155,7 +160,7 @@ export function SettingsSection({
       className={cn("space-y-2", className)}
     >
       <div className="flex min-h-7 items-center justify-between gap-4 px-3 sm:px-4">
-        <h2 className="flex items-center gap-2 text-sm font-semibold tracking-[-0.01em] text-foreground">
+        <h2 className="flex items-center gap-2 text-sm font-semibold tracking-title-sm text-foreground">
           {icon}
           {title}
         </h2>
@@ -197,17 +202,17 @@ export function SettingsRow({
       data-settings-row=""
       className={cn("rounded-xl px-3 sm:px-4", children ? "pt-3 pb-1" : "py-3", className)}
     >
-      <div className="flex flex-col gap-3 sm:grid sm:grid-cols-[minmax(0,1fr)_minmax(10rem,auto)] sm:items-center sm:gap-8">
+      <div className="flex flex-col gap-3 sm:grid sm:grid-cols-1fr-10rem-auto sm:items-center sm:gap-8">
         <div className="min-w-0 flex-1 space-y-1">
           <div className="flex min-h-5 items-center gap-1.5">
-            <h3 className="text-sm font-medium tracking-[-0.005em] text-foreground">{title}</h3>
+            <h3 className="text-sm font-medium tracking-title-xs text-foreground">{title}</h3>
             <span className="inline-flex h-5 w-5 shrink-0 items-center justify-center">
               {resetAction}
             </span>
           </div>
           {/* A div, not a p: some descriptions carry paragraphs and disclosures. */}
           {description ? (
-            <div className="max-w-xl text-[13px] leading-[1.45] text-muted-foreground/80">
+            <div className="max-w-xl text-13px leading-copy text-muted-foreground/80">
               {description}
             </div>
           ) : null}
@@ -234,6 +239,7 @@ export function SettingResetButton({
   onClick: () => void;
 }) {
   const { t } = useI18n();
+
   return (
     <Tooltip>
       <TooltipTrigger
@@ -271,8 +277,10 @@ export function SettingsPageContainer({
   const dialogTargetId = useSettingsDialogStore((state) => state.targetId);
   const hashTargetId = hash.replace(/^#/, "") || null;
   const targetId = dialogTargetId ?? hashTargetId;
+
   const clearTargetHash = useCallback(() => {
     clearSettingsTarget();
+
     if (hashTargetId)
       void navigate({ hash: "", replace: true, resetScroll: false, hashScrollIntoView: false });
   }, [hashTargetId, navigate]);
@@ -280,7 +288,7 @@ export function SettingsPageContainer({
   return (
     <SettingsSearchTargetProvider targetId={targetId} onTargetHandled={clearTargetHash}>
       <div
-        className="topbar-scroll-fade scrollbar-gutter-both flex-1 overflow-y-auto [--topbar-scroll-fade-height:1.5rem] sm:[--topbar-scroll-fade-height:1.5rem]"
+        className="topbar-scroll-fade scrollbar-gutter-both flex-1 overflow-y-auto topbar-scroll-fade-compact"
         data-settings-page-scroll
       >
         <WorkspacePageContainer width={width} className={cn("gap-8 pt-3 pb-16 sm:pt-4", className)}>
@@ -293,7 +301,9 @@ export function SettingsPageContainer({
 
 export function scrollToSettingsTarget(targetId: string): boolean {
   const target = document.getElementById(targetId);
+
   if (!target) return false;
   scrollAndFocusSettingsTarget(target);
+
   return true;
 }

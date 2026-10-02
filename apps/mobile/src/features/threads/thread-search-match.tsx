@@ -10,6 +10,7 @@ function foldAsciiCase(value: string): string {
 function splitHighlightParts(text: string, query: string) {
   const normalizedText = foldAsciiCase(text);
   const normalizedQuery = foldAsciiCase(query.trim());
+
   if (normalizedQuery.length === 0) {
     return [{ text, highlighted: false, start: 0 }];
   }
@@ -19,13 +20,17 @@ function splitHighlightParts(text: string, query: string) {
     readonly highlighted: boolean;
     readonly start: number;
   }> = [];
+
   let cursor = 0;
+
   while (cursor < text.length) {
     const matchIndex = normalizedText.indexOf(normalizedQuery, cursor);
+
     if (matchIndex === -1) {
       parts.push({ text: text.slice(cursor), highlighted: false, start: cursor });
       break;
     }
+
     if (matchIndex > cursor) {
       parts.push({
         text: text.slice(cursor, matchIndex),
@@ -33,6 +38,7 @@ function splitHighlightParts(text: string, query: string) {
         start: cursor,
       });
     }
+
     parts.push({
       text: text.slice(matchIndex, matchIndex + normalizedQuery.length),
       highlighted: true,
@@ -40,6 +46,7 @@ function splitHighlightParts(text: string, query: string) {
     });
     cursor = matchIndex + normalizedQuery.length;
   }
+
   return parts;
 }
 
@@ -51,6 +58,7 @@ export function ThreadSearchMatchExcerpt(props: {
 }) {
   const isUser = props.match.source === "user";
   const parts = splitHighlightParts(props.match.snippet, props.query);
+
   return (
     <Text
       className={cn(

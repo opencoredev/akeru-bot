@@ -1,3 +1,4 @@
+import type * as NodeEvents from "node:events";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -6,6 +7,7 @@ import * as Scope from "effect/Scope";
 import * as Electron from "electron";
 
 export type ElectronThermalState = ReturnType<Electron.PowerMonitor["getCurrentThermalState"]>;
+
 export type ElectronIdleState = ReturnType<Electron.PowerMonitor["getSystemIdleState"]>;
 
 export class ElectronPowerMonitor extends Context.Service<
@@ -31,11 +33,13 @@ export class ElectronPowerMonitor extends Context.Service<
 const onSimpleEvent: ElectronPowerMonitor["Service"]["onSimpleEvent"] = (eventName, listener) =>
   Effect.acquireRelease(
     Effect.sync(() => {
-      Electron.powerMonitor.on(eventName as any, listener as any);
+      const powerEvents: NodeEvents.EventEmitter = Electron.powerMonitor;
+      powerEvents.on(eventName, listener);
     }),
     () =>
       Effect.sync(() => {
-        Electron.powerMonitor.removeListener(eventName as any, listener as any);
+        const powerEvents: NodeEvents.EventEmitter = Electron.powerMonitor;
+        powerEvents.removeListener(eventName, listener);
       }),
   ).pipe(Effect.asVoid);
 
@@ -47,6 +51,7 @@ const onThermalStateChange: ElectronPowerMonitor["Service"]["onThermalStateChang
   ): void => {
     listener(event.state);
   };
+
   return Effect.acquireRelease(
     Effect.sync(() => {
       Electron.powerMonitor.on("thermal-state-change", wrapped);
@@ -64,6 +69,7 @@ const onSpeedLimitChange: ElectronPowerMonitor["Service"]["onSpeedLimitChange"] 
   ): void => {
     listener(event.limit);
   };
+
   return Effect.acquireRelease(
     Effect.sync(() => {
       Electron.powerMonitor.on("speed-limit-change", wrapped);

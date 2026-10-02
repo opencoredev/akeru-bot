@@ -9,6 +9,7 @@ import type { EnvironmentShellState } from "./shell.ts";
 import { createEnvironmentServerConfigsAtom, createEnvironmentShellSummaryAtom } from "./shell.ts";
 
 const ENVIRONMENT_ID = EnvironmentId.make("environment-1");
+
 const OTHER_ENVIRONMENT_ID = EnvironmentId.make("environment-2");
 
 function environmentEntry(environmentId: EnvironmentId, label: string) {
@@ -62,9 +63,11 @@ function makeHarness() {
           }),
     ),
   );
+
   const configAtoms = Atom.family((_environmentId: EnvironmentId) =>
     Atom.make<ServerConfig | null>(null),
   );
+
   const catalogValueAtom = Atom.make({
     isReady: true,
     entries: new Map([
@@ -72,10 +75,12 @@ function makeHarness() {
       [OTHER_ENVIRONMENT_ID, environmentEntry(OTHER_ENVIRONMENT_ID, "Other environment")],
     ]),
   });
+
   const summaryAtom = createEnvironmentShellSummaryAtom({
     catalogValueAtom,
     shellStateValueAtom: shellStateAtoms,
   });
+
   const serverConfigsAtom = createEnvironmentServerConfigsAtom({
     catalogValueAtom,
     serverConfigValueAtom: configAtoms,

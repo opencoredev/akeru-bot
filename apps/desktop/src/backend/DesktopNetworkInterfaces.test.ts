@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import { assert, describe, it } from "@effect/vitest";
 import { HostProcessPlatform } from "@akeru/shared/hostProcess";
 import * as Cause from "effect/Cause";
@@ -34,6 +35,7 @@ describe("DesktopNetworkInterfaces", () => {
         },
       ],
     };
+
     networkInterfacesMock.mockReturnValueOnce(interfaces);
 
     return Effect.gen(function* () {
@@ -53,7 +55,8 @@ describe("DesktopNetworkInterfaces", () => {
       const exit = yield* Effect.exit(service.read);
 
       assert.equal(exit._tag, "Failure");
-      if (exit._tag === "Failure") {
+
+      if (Predicate.isTagged(exit, "Failure")) {
         const error = Cause.squash(exit.cause);
         assert.instanceOf(error, DesktopNetworkInterfaces.DesktopNetworkInterfacesReadError);
         assert.equal(error.platform, "linux");

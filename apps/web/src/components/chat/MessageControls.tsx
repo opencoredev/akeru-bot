@@ -10,6 +10,7 @@ import { toastManager } from "../ui/toast";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 
 export const MESSAGE_REACTION_OPTIONS = ["👍", "👎", "❤️", "😂", "🎉", "😮"] as const;
+
 export type MessageReactionOption = (typeof MESSAGE_REACTION_OPTIONS)[number];
 
 export interface MessageReplyTarget {
@@ -31,16 +32,19 @@ export function selectedReactionForPerson(
 ): MessageReactionOption | null {
   if (!personId) return null;
   const emoji = reactions?.find((reaction) => reaction.personId === personId)?.emoji;
+
   return MESSAGE_REACTION_OPTIONS.find((option) => option === emoji) ?? null;
 }
 
 export function buildReplyPrompt(reply: MessageReplyTarget | null, prompt: string): string {
   if (!reply) return prompt;
+
   const quoted = reply.text
     .trim()
     .split("\n")
     .map((line) => `> ${line}`)
     .join("\n");
+
   return `> Replying to ${reply.label}\n${quoted}\n\n${prompt}`.trimEnd();
 }
 
@@ -51,6 +55,7 @@ export interface ParsedReplyPrompt {
 }
 
 const REPLY_HEADER_PATTERN = /^> Replying to (\S.*)$/;
+
 const QUOTED_LINE_PATTERN = /^>(?: (.*))?$/;
 
 /**
@@ -63,16 +68,21 @@ const QUOTED_LINE_PATTERN = /^>(?: (.*))?$/;
 export function parseReplyPrompt(text: string): ParsedReplyPrompt | null {
   const lines = text.split("\n");
   const label = REPLY_HEADER_PATTERN.exec(lines[0] ?? "")?.[1]?.trim();
+
   if (!label) return null;
 
   const quotedLines: string[] = [];
   let index = 1;
+
   for (; index < lines.length; index += 1) {
     const match = QUOTED_LINE_PATTERN.exec(lines[index] ?? "");
+
     if (!match) break;
     quotedLines.push(match[1] ?? "");
   }
+
   if (quotedLines.length === 0) return null;
+
   if (index < lines.length && lines[index] !== "") return null;
 
   return {
@@ -88,10 +98,13 @@ export function findReplySourceMessageId(
   replyText: string,
 ): string | null {
   const reply = parseReplyPrompt(replyText);
+
   if (!reply) return null;
+
   const matches = messages
     .slice(0, replyIndex)
     .filter((message) => message.text.trim() === reply.quotedText);
+
   return matches.length === 1 ? matches[0]!.id : null;
 }
 
@@ -106,6 +119,7 @@ export function MessageControls(props: {
   readonly readAloud?: ReplyPlaybackControlsProps;
 }) {
   const { t } = useI18n();
+
   const { copyToClipboard, isCopied } = useCopyToClipboard({
     target: "message",
     timeout: 1200,
@@ -117,6 +131,7 @@ export function MessageControls(props: {
       });
     },
   });
+
   const chooseReaction = (next: MessageReactionOption) => {
     const value = props.selectedReaction === next ? null : next;
     props.onReactionChange?.(value);
@@ -129,7 +144,7 @@ export function MessageControls(props: {
         props.align === "end" && "justify-end",
         // Read aloud leads with an xs text button (8px to its icon); otherwise an
         // icon-xs button (6px, 5px from sm).
-        props.flushStart && (props.readAloud ? "-ms-2" : "-ms-1.5 sm:-ms-[5px]"),
+        props.flushStart && (props.readAloud ? "-ms-2" : "-ms-1.5 sm:-ms-1.25"),
       )}
       data-message-controls="true"
     >
@@ -193,9 +208,7 @@ export function MessageControls(props: {
               }
             >
               {props.selectedReaction ? (
-                <span className="text-xl [font-family:'Apple_Color_Emoji','Segoe_UI_Emoji',sans-serif]">
-                  {props.selectedReaction}
-                </span>
+                <span className="text-xl font-emoji">{props.selectedReaction}</span>
               ) : (
                 <SmilePlusIcon className="size-3.5" />
               )}
@@ -206,7 +219,8 @@ export function MessageControls(props: {
               being reacted to. Picking the selected emoji again removes the reaction. */}
           <MenuPopup
             align={props.align === "end" ? "end" : "start"}
-            className="min-w-0 p-1.5"
+            presentation="padded"
+            className="min-w-0"
             side="top"
             sideOffset={8}
           >
@@ -220,7 +234,8 @@ export function MessageControls(props: {
                       : t("React {emoji}", { emoji: option })
                   }
                   aria-pressed={props.selectedReaction === option}
-                  className="size-11 text-2xl sm:size-11 sm:text-2xl [font-family:'Apple_Color_Emoji','Segoe_UI_Emoji',sans-serif]"
+                  presentation="reaction-emoji"
+                  className="size-11 sm:size-11"
                   size="icon-sm"
                   variant={props.selectedReaction === option ? "secondary" : "ghost"}
                   onClick={() => chooseReaction(option)}

@@ -1,7 +1,6 @@
 import type { ThreadSilentRun } from "@akeru/client-runtime/silent-run";
 import { useMobileI18n } from "../../lib/i18n";
-import { type EnvironmentConnectionPhase } from "@akeru/client-runtime/connection";
-import { presentThreadError, type ThreadErrorContext } from "@akeru/client-runtime/errors";
+import type { EnvironmentConnectionPhase } from "@akeru/client-runtime/connection";
 import type { EnvironmentThreadStatus } from "@akeru/client-runtime/state/threads";
 import { useKeyboardChatComposerInset, useKeyboardScrollToEnd } from "@legendapp/list/keyboard";
 import type { LegendListRef } from "@legendapp/list/react-native";
@@ -13,7 +12,6 @@ import type {
   ModelSelection,
   OrchestrationBot,
   OrchestrationThreadShell,
-  ProviderApprovalDecision,
   RuntimeMode,
   ServerConfig as T3ServerConfig,
   ThreadId,
@@ -58,7 +56,6 @@ import Animated, {
 } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAtomValue } from "@effect/atom-react";
-
 import { ControlPill } from "../../components/ControlPill";
 import { useAppearancePreferences } from "../settings/appearance/AppearancePreferencesProvider";
 import type { ComposerEditorHandle } from "../../components/ComposerEditor";
@@ -91,6 +88,8 @@ import {
 import { ThreadFeed } from "./ThreadFeed";
 import type { ThreadContentPresentation } from "./threadContentPresentation";
 import { resolveThreadFeedSubmissionAnchor } from "./thread-feed-live-follow";
+import { useStreamingHaptics } from "./use-streaming-haptics";
+import { ResumeErrorSummary } from "./thread-detail-status";
 
 export interface ThreadDetailScreenProps {
   readonly selectedThread: OrchestrationThreadShell;
@@ -142,10 +141,9 @@ export interface ThreadDetailScreenProps {
   readonly onReconnectEnvironment: () => void;
   readonly onUpdateThreadModelSelection: (modelSelection: ModelSelection) => void;
   readonly onUpdateThreadRuntimeMode: (runtimeMode: RuntimeMode) => void;
-  readonly onRespondToApproval: (
-    requestId: ApprovalRequestId,
-    decision: ProviderApprovalDecision,
-  ) => Promise<unknown>;
+  readonly onRespondToApproval: ReturnType<
+    typeof import("../../state/use-selected-thread-requests").useSelectedThreadRequests
+  >["onRespondToApproval"];
   readonly onSelectUserInputOption: (
     requestId: ApprovalRequestId,
     question: UserInputQuestion,
@@ -156,30 +154,10 @@ export interface ThreadDetailScreenProps {
     questionId: string,
     customAnswer: string,
   ) => void;
-  readonly onSubmitUserInput: () => Promise<unknown>;
+  readonly onSubmitUserInput: ReturnType<
+    typeof import("../../state/use-selected-thread-requests").useSelectedThreadRequests
+  >["onSubmitUserInput"];
   readonly showContent?: boolean;
-}
-
-function latestStreamingAssistantMessage(
-  feed: ReadonlyArray<ThreadFeedEntry>,
-): { readonly id: string; readonly textLength: number } | null {
-  for (let index = feed.length - 1; index >= 0; index -= 1) {
-    const entry = feed[index];
-    if (entry?.type !== "message" || entry.message.role !== "assistant") {
-      continue;
-    }
-    // Only the newest assistant message can be streaming, so stop there
-    // instead of walking the whole history after a turn settles.
-    if (!entry.message.streaming) {
-      return null;
-    }
-    return {
-      id: entry.message.id,
-      textLength: entry.message.text.length,
-    };
-  }
-
-  return null;
 }
 
 /** Submitted messages land at the tail, so search newest-first. */
@@ -189,61 +167,13 @@ function feedHasMessageNearEnd(
 ): boolean {
   for (let index = feed.length - 1; index >= 0; index -= 1) {
     const entry = feed[index];
+
     if (entry?.type === "message" && entry.id === messageId) {
       return true;
     }
   }
+
   return false;
-}
-
-function useStreamingHaptics(threadId: ThreadId, feed: ReadonlyArray<ThreadFeedEntry>) {
-  const lastStreamingAssistantRef = useRef<{
-    readonly id: string;
-    readonly textLength: number;
-  } | null>(null);
-  const lastStreamHapticAtRef = useRef(0);
-  const hydratedRef = useRef(false);
-  const previousThreadIdRef = useRef(threadId);
-
-  useEffect(() => {
-    if (previousThreadIdRef.current !== threadId) {
-      previousThreadIdRef.current = threadId;
-      hydratedRef.current = false;
-    }
-
-    const latestStreamingMessage = latestStreamingAssistantMessage(feed);
-
-    if (!hydratedRef.current) {
-      hydratedRef.current = true;
-      lastStreamingAssistantRef.current = latestStreamingMessage;
-      return;
-    }
-
-    if (!latestStreamingMessage) {
-      lastStreamingAssistantRef.current = null;
-      return;
-    }
-
-    const previousStreamingMessage = lastStreamingAssistantRef.current;
-    lastStreamingAssistantRef.current = latestStreamingMessage;
-
-    const isNewStream = previousStreamingMessage?.id !== latestStreamingMessage.id;
-    const textGrew =
-      previousStreamingMessage?.id === latestStreamingMessage.id &&
-      latestStreamingMessage.textLength > previousStreamingMessage.textLength;
-
-    if (!isNewStream && !textGrew) {
-      return;
-    }
-
-    const now = Date.now();
-    if (!isNewStream && now - lastStreamHapticAtRef.current < 320) {
-      return;
-    }
-
-    lastStreamHapticAtRef.current = now;
-    void Haptics.selectionAsync();
-  }, [threadId, feed]);
 }
 
 const USER_INPUT_TOGGLE_TIMING = {
@@ -261,10 +191,12 @@ const ThreadDraftComposer = memo(function ThreadDraftComposer(
   },
 ) {
   const { threadId, ...composerProps } = props;
+
   const { draftMessage, draftAttachments } = useThreadDraftForThread({
     environmentId: props.environmentId,
     threadId,
   });
+
   return (
     <ThreadComposer
       {...composerProps}
@@ -279,12 +211,15 @@ export const ThreadDetailScreen = memo(function ThreadDetailScreen(props: Thread
   const insets = useSafeAreaInsets();
   const groups = useAtomValue(environmentGroupsAtom(props.environmentId));
   const groupId = props.selectedThread.groupId ?? null;
+
   const groupBossBotId =
     groupId === null ? null : (groups.find((group) => group.id === groupId)?.bossBotId ?? null);
+
   const speakerGroup = useMemo(
     () => (groupId === null ? null : { bossBotId: groupBossBotId }),
     [groupBossBotId, groupId],
   );
+
   const isKeyboardVisible = useKeyboardState((state) => state.isVisible);
   const liveKeyboardHeight = useKeyboardState((state) => state.height);
   // Android can swallow the IME hide callbacks when the app is backgrounded
@@ -301,11 +236,13 @@ export const ThreadDetailScreen = memo(function ThreadDetailScreen(props: Thread
     if (Platform.OS !== "android") {
       return;
     }
+
     const subscription = AppState.addEventListener("change", (state) => {
       if (state === "active") {
         setKeyboardStateSuspect(true);
       }
     });
+
     return () => {
       subscription.remove();
     };
@@ -313,11 +250,13 @@ export const ThreadDetailScreen = memo(function ThreadDetailScreen(props: Thread
   useEffect(() => {
     setKeyboardStateSuspect(false);
   }, [isKeyboardVisible, liveKeyboardHeight]);
+
   const handleOwnedInputFocusChange = useCallback((focused: boolean) => {
     if (focused) {
       setKeyboardStateSuspect(false);
     }
   }, []);
+
   const windowHeight = useWindowDimensions().height;
   const navigationHeaderHeight = useContext(HeaderHeightContext) || insets.top + IOS_NAV_BAR_HEIGHT;
   const agentLabel = `${props.selectedThread.modelSelection.instanceId} bot`;
@@ -332,6 +271,7 @@ export const ThreadDetailScreen = memo(function ThreadDetailScreen(props: Thread
   const [anchorMessageId, setAnchorMessageId] = useState<MessageId | null>(null);
   const [submittedMessageId, setSubmittedMessageId] = useState<MessageId | null>(null);
   const [endFollowEnabled, setEndFollowEnabled] = useState(true);
+
   // Android keys the safe-area padding on keyboard visibility (#5988): the
   // back gesture closes the keyboard while the editor stays focused, and a
   // focus-keyed inset would leave the toolbar under the gesture bar. iOS must
@@ -342,7 +282,9 @@ export const ThreadDetailScreen = memo(function ThreadDetailScreen(props: Thread
   const composerBottomInset = (Platform.OS === "android" ? isKeyboardVisible : composerExpanded)
     ? 0
     : Math.max(insets.bottom, 12);
+
   const contentPresentationKind = props.contentPresentation.kind;
+
   // The raw sync status enters "synchronizing" on every full fetch, cached or
   // not. Whether messages are already on screen decides the pill label: no
   // data yet → "Loading messages", cached data reconciling → "Syncing".
@@ -354,14 +296,17 @@ export const ThreadDetailScreen = memo(function ThreadDetailScreen(props: Thread
         if (contentPresentationKind === "ready") {
           return "syncing" as const;
         }
+
         return contentPresentationKind === "loading" ? ("loading" as const) : null;
       default:
         return null;
     }
   })();
+
   const selectedThreadFeed = props.selectedThreadFeed;
   const composerChrome = composerExpanded ? COMPOSER_EXPANDED_CHROME : COMPOSER_COLLAPSED_CHROME;
   const composerOverlapHeight = composerChrome + composerBottomInset;
+
   // While a user-input request is pending, the questionnaire owns the
   // composer slot outright: expanded it is the full card, collapsed it is a
   // composer-style bar in the same place (with its own stop control). The
@@ -370,9 +315,12 @@ export const ThreadDetailScreen = memo(function ThreadDetailScreen(props: Thread
   // new request re-expands automatically.
   const [collapsedUserInputRequestId, setCollapsedUserInputRequestId] =
     useState<ApprovalRequestId | null>(null);
+
   const activeUserInputRequestId = props.activePendingUserInput?.requestId ?? null;
+
   const userInputCollapsed =
     activeUserInputRequestId !== null && collapsedUserInputRequestId === activeUserInputRequestId;
+
   // The card's height RESERVES keyboard space at all times instead of
   // tracking the keyboard: transforms (the sticky translation) apply
   // same-frame on the UI thread while layout props lag a Yoga pass behind,
@@ -388,6 +336,7 @@ export const ThreadDetailScreen = memo(function ThreadDetailScreen(props: Thread
       setLastKnownKeyboardHeight(liveKeyboardHeight);
     }
   }, [lastKnownKeyboardHeight, liveKeyboardHeight]);
+
   const pendingUserInputMaxHeight = derivePendingUserInputMaxHeight({
     windowHeight,
     keyboardHeight:
@@ -397,7 +346,9 @@ export const ThreadDetailScreen = memo(function ThreadDetailScreen(props: Thread
     // bottom inset still overlaps.
     composerOverlapHeight: composerBottomInset,
   });
+
   const estimatedOverlayHeight = composerOverlapHeight;
+
   // The overlay's measured height includes the home-indicator inset (the
   // composer pads it), but contentInsetAdjustmentBehavior="automatic" makes
   // UIKit add the safe-area bottom to the content inset AGAIN — leaving a
@@ -407,12 +358,14 @@ export const ThreadDetailScreen = memo(function ThreadDetailScreen(props: Thread
   // its end-scroll math matches the real resting position.
   const nativeInsetOvercount =
     props.usesAutomaticContentInsets === true && Platform.OS === "ios" ? insets.bottom : 0;
+
   const { contentInsetEndAdjustment, onComposerLayout } = useKeyboardChatComposerInset(
     listRef,
     composerOverlayRef,
     Math.max(0, estimatedOverlayHeight - nativeInsetOvercount),
     -nativeInsetOvercount,
   );
+
   // The expanded questionnaire is an absolute overlay on iOS, so it never
   // changes the measured overlay height (that constancy is what keeps the
   // feed from snapping on collapse/expand). The toggle choreography runs on
@@ -429,9 +382,11 @@ export const ThreadDetailScreen = memo(function ThreadDetailScreen(props: Thread
   // overlay outside the bar's bounds), so its measured overlay height already
   // includes the card — the coverage extra is iOS-only.
   const userInputCoverageApplies = Platform.OS === "ios" && activeUserInputRequestId !== null;
+
   const combinedContentInsetEndAdjustment = useSharedValue(
     Math.max(0, estimatedOverlayHeight - nativeInsetOvercount),
   );
+
   useAnimatedReaction(
     () =>
       contentInsetEndAdjustment.value +
@@ -445,6 +400,7 @@ export const ThreadDetailScreen = memo(function ThreadDetailScreen(props: Thread
   const endFollowEnabledRef = useRef(true);
   endFollowEnabledRef.current = endFollowEnabled;
   const userInputRepinTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   // The list's own corrections for these inset changes drift on short
   // content (and the error compounds across toggles), so deterministically
   // re-pin the end once a toggle settles: a no-op when the resting position
@@ -456,11 +412,14 @@ export const ThreadDetailScreen = memo(function ThreadDetailScreen(props: Thread
       if (userInputRepinTimerRef.current !== null) {
         clearTimeout(userInputRepinTimerRef.current);
       }
+
       userInputRepinTimerRef.current = setTimeout(() => {
         userInputRepinTimerRef.current = null;
+
         if (!endFollowEnabledRef.current) {
           return;
         }
+
         void scrollMessageToEnd({ animated: false, closeKeyboard: false }).catch(() => {
           freeze.set(false);
         });
@@ -468,6 +427,7 @@ export const ThreadDetailScreen = memo(function ThreadDetailScreen(props: Thread
     },
     [freeze, scrollMessageToEnd],
   );
+
   useEffect(
     () => () => {
       if (userInputRepinTimerRef.current !== null) {
@@ -476,10 +436,12 @@ export const ThreadDetailScreen = memo(function ThreadDetailScreen(props: Thread
     },
     [],
   );
+
   const handleToggleUserInputCollapsed = useCallback(() => {
     if (activeUserInputRequestId === null) {
       return;
     }
+
     if (userInputCollapsed) {
       // Expanding: card and feed glide start NOW, on the UI thread.
       userInputCardProgress.value = withTiming(1, USER_INPUT_TOGGLE_TIMING);
@@ -505,6 +467,7 @@ export const ThreadDetailScreen = memo(function ThreadDetailScreen(props: Thread
     userInputCollapsed,
     userInputInsetProgress,
   ]);
+
   useEffect(() => {
     // A new request always arrives expanded.
     userInputCardProgress.value = 1;
@@ -516,15 +479,18 @@ export const ThreadDetailScreen = memo(function ThreadDetailScreen(props: Thread
   const contentMaxWidth = isSplitLayout ? CHAT_CONTENT_MAX_WIDTH : undefined;
   const selectedInstanceId = props.selectedThread.modelSelection.instanceId;
   useStreamingHaptics(props.selectedThread.id, props.selectedThreadFeed);
+
   const selectedProvider = props.serverConfig?.providers.find(
     (provider) => provider.instanceId === selectedInstanceId,
   );
+
   const selectedProviderName =
     selectedProvider?.displayName ??
     PROVIDER_DISPLAY_NAMES[
       selectedProvider?.driver ?? ProviderDriverKind.make(selectedInstanceId)
     ] ??
     selectedInstanceId;
+
   const selectedProviderSkills = useMemo(
     () =>
       props.serverConfig?.providers.find((provider) => provider.instanceId === selectedInstanceId)
@@ -555,10 +521,12 @@ export const ThreadDetailScreen = memo(function ThreadDetailScreen(props: Thread
     }
 
     const targetThreadKey = selectedThreadKey;
+
     const frame = requestAnimationFrame(() => {
       if (selectedThreadKeyRef.current !== targetThreadKey) {
         return;
       }
+
       lastScrolledSubmittedMessageIdRef.current = submittedMessageId;
       // Wait for the keyboard dismissal (started by blur() on send) to finish
       // before scrolling: scrollMessageToEnd freezes keyboard-driven inset
@@ -573,6 +541,7 @@ export const ThreadDetailScreen = memo(function ThreadDetailScreen(props: Thread
           ) {
             return;
           }
+
           return scrollMessageToEnd({ animated: true, closeKeyboard: false });
         })
         .catch(() => {
@@ -582,10 +551,12 @@ export const ThreadDetailScreen = memo(function ThreadDetailScreen(props: Thread
           ) {
             return;
           }
+
           lastScrolledSubmittedMessageIdRef.current = null;
           freeze.set(false);
         });
     });
+
     return () => cancelAnimationFrame(frame);
   }, [
     submittedMessageId,
@@ -605,10 +576,13 @@ export const ThreadDetailScreen = memo(function ThreadDetailScreen(props: Thread
 
   const handleSendMessage = useCallback(async () => {
     const targetThreadKey = selectedThreadKey;
+
     const hasUserMessage = selectedThreadFeedRef.current.some(
       (entry) => entry.type === "message" && entry.message.role === "user",
     );
+
     const messageId = await props.onSendMessage();
+
     if (messageId === null || selectedThreadKeyRef.current !== targetThreadKey) {
       return messageId;
     }
@@ -624,6 +598,7 @@ export const ThreadDetailScreen = memo(function ThreadDetailScreen(props: Thread
       }),
     );
     composerEditorRef.current?.blur();
+
     return messageId;
   }, [
     anchorMessageId,
@@ -657,11 +632,14 @@ export const ThreadDetailScreen = memo(function ThreadDetailScreen(props: Thread
 
   const handleFeedTouchMove = useCallback((event: GestureResponderEvent) => {
     const start = feedTouchStartRef.current;
+
     if (!start) {
       return;
     }
+
     const deltaX = event.nativeEvent.pageX - start.pageX;
     const deltaY = event.nativeEvent.pageY - start.pageY;
+
     if (Math.hypot(deltaX, deltaY) > 8) {
       feedTouchStartRef.current = null;
     }
@@ -671,6 +649,7 @@ export const ThreadDetailScreen = memo(function ThreadDetailScreen(props: Thread
     if (feedTouchStartRef.current) {
       collapseComposer();
     }
+
     feedTouchStartRef.current = null;
   }, [collapseComposer]);
 
@@ -896,24 +875,3 @@ export const ThreadDetailScreen = memo(function ThreadDetailScreen(props: Thread
     </View>
   );
 });
-
-function ResumeErrorSummary(props: {
-  readonly error: string | null;
-  readonly context: ThreadErrorContext;
-}) {
-  const { t } = useMobileI18n();
-  if (!props.error && !props.context.unavailability) {
-    return (
-      <Text className="min-w-0 flex-1 text-sm text-foreground">
-        {t("The request stopped before it could finish.")}
-      </Text>
-    );
-  }
-  const presentation = presentThreadError(props.error ?? "", props.context, t);
-  return (
-    <View className="min-w-0 flex-1 gap-0.5">
-      <Text className="text-sm font-semibold text-foreground">{presentation.title}</Text>
-      <Text className="text-sm text-foreground-muted">{presentation.description}</Text>
-    </View>
-  );
-}

@@ -1,4 +1,4 @@
-// @ts-nocheck
+import { cn } from "./lib";
 import { useChart } from "./chart-context";
 import { rgb, type Seed } from "./palette";
 import { useSeries } from "./series-context";
@@ -29,27 +29,20 @@ export function Dot({ variant = "border", r = 2 }: { variant?: DotVariant; r?: n
   const ctx = useChart();
   const { dataKey, seed } = useSeries("Dot");
   const band = ctx.bands[dataKey];
+
   if (!ctx.ready || !band) return null;
   const paint = dotPaint(variant, seed);
 
   return (
     // Fade in once the fill has drawn so dots don't float over the entrance.
-    <g
-      style={{
-        opacity: ctx.entranceDone ? 1 : 0,
-        transition: "opacity 300ms ease",
-      }}
-    >
-      {band.map((b, i) => (
-        <circle
-          {...paint}
-          // biome-ignore lint/suspicious/noArrayIndexKey: index is the stable x position
-          key={i}
-          cx={ctx.xCenter(i) ?? 0}
-          cy={ctx.y(b[1])}
-          r={r}
-        />
-      ))}
+    <g className={cn("transition-entrance-fade", ctx.entranceDone ? "opacity-100" : "opacity-0")}>
+      {ctx.dataMarks.map(({ index: i, key }) => {
+        const b = band[i];
+
+        if (!b) return null;
+
+        return <circle {...paint} key={key} cx={ctx.xCenter(i) ?? 0} cy={ctx.y(b[1])} r={r} />;
+      })}
     </g>
   );
 }
@@ -65,8 +58,10 @@ export function ActiveDot({
   const ctx = useChart();
   const { dataKey, seed } = useSeries("ActiveDot");
   const band = ctx.bands[dataKey];
+
   if (!ctx.ready || !band || ctx.hoverIndex == null || !ctx.entranceDone) return null;
   const b = band[ctx.hoverIndex];
+
   if (!b) return null;
   const paint = dotPaint(variant, seed);
   const cx = ctx.xCenter(ctx.hoverIndex);

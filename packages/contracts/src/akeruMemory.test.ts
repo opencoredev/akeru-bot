@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import { assert, describe, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
@@ -15,6 +16,28 @@ import {
   AkeruMemoryMutateInput,
   AkeruMemoryRevision,
 } from "./akeruMemory.ts";
+
+const decodeEffectAkeruMemoryRevision = Schema.decodeUnknownEffect(AkeruMemoryRevision);
+
+const decodeEffectAkeruMemoryCandidate = Schema.decodeUnknownEffect(AkeruMemoryCandidate);
+
+const decodeEffectAkeruMemoryCandidateDecision = Schema.decodeUnknownEffect(
+  AkeruMemoryCandidateDecision,
+);
+
+const decodeEffectAkeruMemoryExportInput = Schema.decodeUnknownEffect(AkeruMemoryExportInput);
+
+const decodeEffectAkeruMemoryImportPreviewInput = Schema.decodeUnknownEffect(
+  AkeruMemoryImportPreviewInput,
+);
+
+const decodeEffectAkeruMemoryDecisionReceipt = Schema.decodeUnknownEffect(
+  AkeruMemoryDecisionReceipt,
+);
+
+const decodeEffectAkeruMemoryPacket = Schema.decodeUnknownEffect(AkeruMemoryPacket);
+
+const decodeEffectAkeruMemoryMutateInput = Schema.decodeUnknownEffect(AkeruMemoryMutateInput);
 
 const revision = {
   id: "memory-1",
@@ -47,7 +70,7 @@ const revision = {
 describe("Akeru memory contracts", () => {
   it.effect("decodes a complete immutable memory revision", () =>
     Effect.gen(function* () {
-      const decoded = yield* Schema.decodeUnknownEffect(AkeruMemoryRevision)(revision);
+      const decoded = yield* decodeEffectAkeruMemoryRevision(revision);
       assert.equal(decoded.partition.scope, "bot-user");
       assert.equal(decoded.value.theme, "dark");
     }),
@@ -55,17 +78,18 @@ describe("Akeru memory contracts", () => {
 
   it.effect("rejects confidence outside the supported range", () =>
     Effect.gen(function* () {
-      const exit = yield* Schema.decodeUnknownEffect(AkeruMemoryRevision)({
+      const exit = yield* decodeEffectAkeruMemoryRevision({
         ...revision,
         confidence: 1.01,
       }).pipe(Effect.exit);
-      assert.isTrue(exit._tag === "Failure");
+
+      assert.isTrue(Predicate.isTagged(exit, "Failure"));
     }),
   );
 
   it.effect("types pending candidates and editable approval decisions", () =>
     Effect.gen(function* () {
-      const candidate = yield* Schema.decodeUnknownEffect(AkeruMemoryCandidate)({
+      const candidate = yield* decodeEffectAkeruMemoryCandidate({
         candidateId: "candidate-1",
         tenantId: "tenant-1",
         initiatingUserId: "user-1",
@@ -82,8 +106,10 @@ describe("Akeru memory contracts", () => {
         decidedAt: null,
         decidedMemoryRootId: null,
       });
+
       assert.isNull(candidate.pendingUpdate);
-      const decision = yield* Schema.decodeUnknownEffect(AkeruMemoryCandidateDecision)({
+
+      const decision = yield* decodeEffectAkeruMemoryCandidateDecision({
         candidateId: candidate.candidateId,
         decision: "approve",
         fact: "The project uses Bun 2.",
@@ -97,18 +123,19 @@ describe("Akeru memory contracts", () => {
 
   it.effect("accepts workspace memory archives", () =>
     Effect.gen(function* () {
-      const input = yield* Schema.decodeUnknownEffect(AkeruMemoryExportInput)({
+      const input = yield* decodeEffectAkeruMemoryExportInput({
         threadId: "thread-1",
         complete: true,
         target: "workspace",
       });
+
       assert.equal(input.target, "workspace");
     }),
   );
 
   it.effect("rejects version 1 import archives at the RPC boundary", () =>
     Effect.gen(function* () {
-      const result = yield* Schema.decodeUnknownEffect(AkeruMemoryImportPreviewInput)({
+      const result = yield* decodeEffectAkeruMemoryImportPreviewInput({
         threadId: "thread-1",
         target: "thread",
         archive: {
@@ -121,17 +148,18 @@ describe("Akeru memory contracts", () => {
         },
       }).pipe(Effect.exit);
 
-      assert.isTrue(result._tag === "Failure");
+      assert.isTrue(Predicate.isTagged(result, "Failure"));
     }),
   );
 
   it.effect("requires rejected decisions and durable receipts to identify the candidate", () =>
     Effect.gen(function* () {
-      const rejected = yield* Schema.decodeUnknownEffect(AkeruMemoryCandidateDecision)({
+      const rejected = yield* decodeEffectAkeruMemoryCandidateDecision({
         candidateId: "candidate-1",
         decision: "reject",
       });
-      const receipt = yield* Schema.decodeUnknownEffect(AkeruMemoryDecisionReceipt)({
+
+      const receipt = yield* decodeEffectAkeruMemoryDecisionReceipt({
         candidateId: "candidate-1",
         status: "rejected",
         fact: "Do not save this.",
@@ -158,19 +186,23 @@ describe("Akeru memory contracts", () => {
         confidence: 1,
         updatedAt: "2026-08-30T21:00:00.000Z",
       } as const;
-      const decode = Schema.decodeUnknownEffect(AkeruMemoryPacket);
+
+      const decode = decodeEffectAkeruMemoryPacket;
+
       const tooManyFacts = yield* decode({
         threadId: "thread-1",
         facts: Array.from({ length: AKERU_MEMORY_PACKET_MAX_FACTS + 1 }, () => fact),
         estimatedTokens: 1,
         rendered: "memory",
       }).pipe(Effect.exit);
+
       const tooManyTokens = yield* decode({
         threadId: "thread-1",
         facts: [fact],
         estimatedTokens: AKERU_MEMORY_PACKET_MAX_ESTIMATED_TOKENS + 1,
         rendered: "memory",
       }).pipe(Effect.exit);
+
       const tooManyChars = yield* decode({
         threadId: "thread-1",
         facts: [fact],
@@ -178,15 +210,16 @@ describe("Akeru memory contracts", () => {
         rendered: "x".repeat(AKERU_MEMORY_PACKET_MAX_CHARS + 1),
       }).pipe(Effect.exit);
 
-      assert.isTrue(tooManyFacts._tag === "Failure");
-      assert.isTrue(tooManyTokens._tag === "Failure");
-      assert.isTrue(tooManyChars._tag === "Failure");
+      assert.isTrue(Predicate.isTagged(tooManyFacts, "Failure"));
+      assert.isTrue(Predicate.isTagged(tooManyTokens, "Failure"));
+      assert.isTrue(Predicate.isTagged(tooManyChars, "Failure"));
     }),
   );
 
   it.effect("decodes allowlisted memory mutations and rejects extra fields", () =>
     Effect.gen(function* () {
-      const decode = Schema.decodeUnknownEffect(AkeruMemoryMutateInput);
+      const decode = decodeEffectAkeruMemoryMutateInput;
+
       const edit = yield* decode({
         threadId: "thread-1",
         mutation: {
@@ -196,18 +229,20 @@ describe("Akeru memory contracts", () => {
           fact: "The user prefers concise replies.",
         },
       });
+
       const arbitrary = yield* decode({
         threadId: "thread-1",
         mutation: { operation: "database.execute", sql: "DELETE FROM memory" },
       }).pipe(Effect.exit);
+
       const deleteWithoutRevision = yield* decode({
         threadId: "thread-1",
         mutation: { operation: "fact.delete", memoryId: "root-1" },
       }).pipe(Effect.exit);
 
       assert.equal(edit.mutation.operation, "fact.edit");
-      assert.isTrue(arbitrary._tag === "Failure");
-      assert.isTrue(deleteWithoutRevision._tag === "Failure");
+      assert.isTrue(Predicate.isTagged(arbitrary, "Failure"));
+      assert.isTrue(Predicate.isTagged(deleteWithoutRevision, "Failure"));
     }),
   );
 });

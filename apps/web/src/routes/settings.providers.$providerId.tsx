@@ -14,6 +14,8 @@ export const Route = createFileRoute("/settings/providers/$providerId")({
 function ProviderSettingsRoute() {
   const { providerId } = Route.useParams();
   const entry = providerCatalogEntry(providerId);
+
   if (!entry) return null;
+
   return <ProviderDetailPage key={entry.slug} entry={entry} />;
 }

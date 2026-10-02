@@ -38,7 +38,8 @@ export const ProviderModelPicker = memo(function ProviderModelPicker(props: {
   disabled?: boolean;
   open?: boolean;
   triggerVariant?: VariantProps<typeof buttonVariants>["variant"];
-  triggerClassName?: string;
+  /** Sizes the trigger for a settings row, or caps its width outside the composer. */
+  triggerFit?: "settings-row" | "capped";
   triggerAriaLabel?: string;
   onOpenChange?: (open: boolean) => void;
   getModelDisabledReason?: (instanceId: ProviderInstanceId, model: string) => string | null;
@@ -59,6 +60,7 @@ export const ProviderModelPicker = memo(function ProviderModelPicker(props: {
 
   const activeInstanceId = props.activeInstanceId;
   const selectedInstanceOptions = props.modelOptionsByInstance.get(activeInstanceId) ?? [];
+
   // If the current slug belongs to a different instance (for example after
   // a provider switch or disable), prefer the active instance's first
   // option so the trigger icon and label stay in sync instead of showing
@@ -66,7 +68,9 @@ export const ProviderModelPicker = memo(function ProviderModelPicker(props: {
   const selectedModel =
     selectedInstanceOptions.find((option) => option.slug === props.model) ??
     selectedInstanceOptions[0];
+
   const triggerTitle = selectedModel ? getTriggerDisplayModelName(selectedModel) : props.model;
+
   const triggerLabel = selectedModel?.unavailable
     ? t("{model} is no longer offered by this provider. Choose another model.", {
         model: triggerTitle,
@@ -74,7 +78,9 @@ export const ProviderModelPicker = memo(function ProviderModelPicker(props: {
     : selectedModel
       ? getTriggerDisplayModelLabel(selectedModel)
       : props.model;
+
   const { getModelDisabledReason } = props;
+
   const getDisabledReason = useCallback(
     (instanceId: ProviderInstanceId, model: string) =>
       getModelDisabledReason?.(instanceId, model) ??
@@ -85,11 +91,13 @@ export const ProviderModelPicker = memo(function ProviderModelPicker(props: {
         : null),
     [getModelDisabledReason, props.modelOptionsByInstance, t],
   );
+
   const showInstanceBadge =
     activeEntry !== null && shouldShowInstanceBadge(activeEntry, props.instanceEntries);
 
   const setIsMenuOpen = (open: boolean) => {
     props.onOpenChange?.(open);
+
     if (props.open === undefined) {
       setUncontrolledIsMenuOpen(open);
     }
@@ -108,6 +116,7 @@ export const ProviderModelPicker = memo(function ProviderModelPicker(props: {
 
     documentElement.style.overscrollBehavior = "contain";
     body.style.overflow = "hidden";
+
     if (scrollbarWidth > 0) {
       body.style.paddingRight = `${scrollbarWidth}px`;
     }
@@ -115,16 +124,20 @@ export const ProviderModelPicker = memo(function ProviderModelPicker(props: {
     const shouldAllowOverlayScroll = (target: EventTarget | null) => {
       return target instanceof Element && target.closest("[data-model-picker-content]");
     };
+
     const preventBackgroundWheel = (event: WheelEvent) => {
       if (shouldAllowOverlayScroll(event.target)) {
         return;
       }
+
       event.preventDefault();
     };
+
     const preventBackgroundTouchMove = (event: TouchEvent) => {
       if (shouldAllowOverlayScroll(event.target)) {
         return;
       }
+
       event.preventDefault();
     };
 
@@ -155,8 +168,10 @@ export const ProviderModelPicker = memo(function ProviderModelPicker(props: {
       onOpenChange={(open) => {
         if (props.disabled) {
           setIsMenuOpen(false);
+
           return;
         }
+
         setIsMenuOpen(open);
       }}
     >
@@ -165,11 +180,15 @@ export const ProviderModelPicker = memo(function ProviderModelPicker(props: {
           <ComposerControl
             aria-label={props.triggerAriaLabel}
             variant={props.triggerVariant ?? "ghost"}
+            presentation={
+              props.triggerFit === "settings-row" ? "composer-control-settings-row" : undefined
+            }
             data-chat-provider-model-picker="true"
             className={cn(
               "min-w-0 justify-between whitespace-nowrap",
               props.compact ? "max-w-42 shrink-0" : "max-w-48 shrink sm:max-w-56",
-              props.triggerClassName,
+              props.triggerFit === "settings-row" && "min-w-0 max-w-none shrink-0",
+              props.triggerFit === "capped" && "max-w-52",
             )}
             disabled={props.disabled}
           />
@@ -185,10 +204,7 @@ export const ProviderModelPicker = memo(function ProviderModelPicker(props: {
               className="size-4"
               iconClassName={cn("size-4", props.activeProviderIconClassName)}
               indicatorBackground="var(--contrast-input)"
-              badgeClassName={cn(
-                "right-[-0.125rem] bottom-[-0.125rem] h-3 min-w-3",
-                "px-0.5 text-[7px]",
-              )}
+              badgeClassName={cn("-right-0.5 -bottom-0.5 h-3 min-w-3", "px-0.5 text-7px")}
             />
           ) : null}
           <Tooltip>
@@ -202,11 +218,7 @@ export const ProviderModelPicker = memo(function ProviderModelPicker(props: {
           <ComposerControlChevron />
         </span>
       </PopoverTrigger>
-      <PopoverPopup
-        align="start"
-        className="before:hidden [--viewport-inline-padding:0]"
-        viewportClassName="!overflow-hidden rounded-[calc(var(--radius-lg)-1px)] p-0 [clip-path:inset(0_round_calc(var(--radius-lg)-1px))]"
-      >
+      <PopoverPopup align="start" variant="model-picker">
         <ModelPickerContent
           activeInstanceId={activeInstanceId}
           model={props.model}

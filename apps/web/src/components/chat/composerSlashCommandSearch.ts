@@ -1,3 +1,4 @@
+import { Match } from "effect";
 import {
   insertRankedSearchResult,
   normalizeSearchQuery,
@@ -17,16 +18,20 @@ function scoreSlashCommandItem(item: SlashSearchItem, query: string): number | n
     if (query === "skill") {
       return 0;
     }
+
     const skillQuery = query.startsWith("skill:") ? query.slice("skill:".length) : query;
     const skillScore = skillQuery ? scoreProviderSkill(item.skill, skillQuery) : 0;
+
     if (skillScore !== null) {
       return skillScore;
     }
+
     return "skill".startsWith(query) ? Number.MAX_SAFE_INTEGER : null;
   }
 
   const primaryValue =
     item.type === "slash-command" ? item.command.toLowerCase() : item.command.name.toLowerCase();
+
   const description = item.description.toLowerCase();
 
   const scores = [
@@ -57,11 +62,23 @@ function scoreSlashCommandItem(item: SlashSearchItem, query: string): number | n
   return Math.min(...scores);
 }
 
+function slashTieBreaker(item: SlashSearchItem) {
+  return Match.value(item).pipe(
+    Match.when({ type: "slash-command" }, (item) => `0\u0000${item.command}`),
+    Match.when(
+      { type: "provider-slash-command" },
+      (item) => `1\u0000${item.command.name}\u0000${item.provider}`,
+    ),
+    Match.orElse((item) => `2\u0000${item.skill.name}\u0000${item.provider}`),
+  );
+}
+
 export function searchSlashCommandItems<T extends SlashSearchItem>(
   items: ReadonlyArray<T>,
   query: string,
 ): T[] {
   const normalizedQuery = normalizeSearchQuery(query, { trimLeadingPattern: /^\/+/ });
+
   if (!normalizedQuery) {
     return [...items];
   }
@@ -74,6 +91,7 @@ export function searchSlashCommandItems<T extends SlashSearchItem>(
 
   for (const item of items) {
     const score = scoreSlashCommandItem(item, normalizedQuery);
+
     if (score === null) {
       continue;
     }
@@ -83,12 +101,7 @@ export function searchSlashCommandItems<T extends SlashSearchItem>(
       {
         item,
         score,
-        tieBreaker:
-          item.type === "slash-command"
-            ? `0\u0000${item.command}`
-            : item.type === "provider-slash-command"
-              ? `1\u0000${item.command.name}\u0000${item.provider}`
-              : `2\u0000${item.skill.name}\u0000${item.provider}`,
+        tieBreaker: slashTieBreaker(item),
       },
       Number.POSITIVE_INFINITY,
     );

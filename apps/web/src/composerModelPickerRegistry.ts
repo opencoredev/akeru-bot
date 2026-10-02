@@ -13,6 +13,7 @@ let activeHandle: ComposerModelPickerHandle | null = null;
 /** Returns a cleanup that only clears the registry when this handle is still the live one. */
 export function registerComposerModelPicker(handle: ComposerModelPickerHandle): () => void {
   activeHandle = handle;
+
   return () => {
     if (activeHandle === handle) activeHandle = null;
   };

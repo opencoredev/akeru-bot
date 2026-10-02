@@ -1,18 +1,9 @@
+import { Predicate } from "effect";
 import { useBotConversationMessageProjection } from "./botConversationMessageProjection";
 import { useAtomValue } from "@effect/atom-react";
 import { scopeThreadRef } from "@akeru/client-runtime/environment";
-import {
-  BotId,
-  type BotEngine,
-  type ApprovalRequestId,
-  EnvironmentId,
-  GroupId,
-  ProviderInstanceId,
-  ThreadId,
-  type ModelSelection,
-  type ScopedThreadRef,
-} from "@akeru/contracts";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { BotId, EnvironmentId, GroupId, ThreadId, type ScopedThreadRef } from "@akeru/contracts";
+import { useCallback, useMemo, useRef, useState } from "react";
 
 import { usePrimarySettings } from "../../hooks/useSettings";
 import { newMessageId, newThreadId } from "../../lib/utils";
@@ -36,12 +27,6 @@ import { usePrimaryEnvironmentId } from "../../state/environments";
 import { primaryServerProvidersAtom } from "../../state/server";
 import { threadEnvironment } from "../../state/threads";
 import { useAtomCommand } from "../../state/use-atom-command";
-import {
-  applyPendingUserInputSingleSelect,
-  buildPendingUserInputAnswers,
-  type PendingUserInputDraftAnswer,
-  togglePendingUserInputOptionSelection,
-} from "../../pendingUserInput";
 import { derivePendingUserInputs } from "../../session-logic";
 import { DEFAULT_INTERACTION_MODE } from "../../types";
 import { sortScopedProjectsForSidebar } from "../Sidebar.logic";
@@ -55,6 +40,9 @@ import {
 import { groupContainsBot } from "./roster.logic";
 import { useRosterStore } from "./rosterStore";
 import { resolveBotFileAttachment } from "./botFileAttachment";
+import { readThreadTurnAttachments, threadTitle } from "./threadRuntimeAttachments";
+import { useThreadPendingUserInput } from "./useThreadPendingUserInput";
+import { groupModelSelection } from "./groupThreadModel.logic";
 import {
   type BotThreadFailure,
   commandFailure,
@@ -62,46 +50,8 @@ import {
   localFailure,
 } from "./threadRuntimeWarning.logic";
 
+// SAFETY: the empty ID is an inactive-query sentinel; no environment request is sent for it.
 const NO_ENVIRONMENT = "" as EnvironmentId;
-
-function threadTitle(prompt: string, files: readonly File[]): string {
-  const seed = prompt || (files[0] ? `File: ${files[0].name}` : "New chat");
-  return seed.length > 80 ? `${seed.slice(0, 79)}…` : seed;
-}
-
-function readFileAsDataUrl(file: File, mimeType: string): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.addEventListener(
-      "error",
-      () => reject(reader.error ?? new Error(`Could not read ${file.name}.`)),
-      { once: true },
-    );
-    reader.addEventListener(
-      "load",
-      () =>
-        typeof reader.result === "string"
-          ? resolve(`data:${mimeType};base64,${reader.result.split(",", 2)[1] ?? ""}`)
-          : reject(new Error(`Could not read ${file.name}.`)),
-      { once: true },
-    );
-    reader.readAsDataURL(file);
-  });
-}
-
-function groupModelSelection(
-  engine: BotEngine | null | undefined,
-  projectDefault: ModelSelection | null | undefined,
-  appDefault: ModelSelection | null,
-): ModelSelection | null {
-  return engine
-    ? {
-        instanceId: ProviderInstanceId.make(engine.provider),
-        model: engine.model,
-        ...(engine.options ? { options: engine.options } : {}),
-      }
-    : (projectDefault ?? appDefault);
-}
 
 export function useGroupThreadRuntime(groupId: string) {
   const projects = useProjects();
@@ -111,14 +61,18 @@ export function useGroupThreadRuntime(groupId: string) {
   const bootstrapped = useAllEnvironmentShellsBootstrapped();
   const settings = usePrimarySettings();
   const providers = useAtomValue(primaryServerProvidersAtom);
+
   const providerEntries = useMemo(
     () => applyProviderInstanceSettings(deriveProviderInstanceEntries(providers), settings),
     [providers, settings],
   );
+
   const bots = useRosterStore((state) => state.bots);
+
   const group = useRosterStore((state) =>
     state.groups.find((candidate) => candidate.id === groupId),
   );
+
   const primaryThreadShells = useMemo(
     () =>
       primaryEnvironmentId
@@ -126,11 +80,14 @@ export function useGroupThreadRuntime(groupId: string) {
         : [],
     [primaryEnvironmentId, threadShells],
   );
+
   const serverTarget = primaryEnvironmentId
     ? findLatestGroupThreadTarget(groupId, primaryEnvironmentId, primaryThreadShells)
     : null;
+
   const targetEnvironmentId = serverTarget?.environmentId;
   const targetThreadId = serverTarget?.threadId;
+
   const rememberedThreadRef = useMemo<ScopedThreadRef | null>(
     () =>
       targetEnvironmentId && targetThreadId
@@ -138,28 +95,36 @@ export function useGroupThreadRuntime(groupId: string) {
         : null,
     [targetEnvironmentId, targetThreadId],
   );
+
   const rememberedThread = useThreadShell(rememberedThreadRef);
   const linkedThreadRef = rememberedThread ? rememberedThreadRef : null;
+
   const retainedThreadRef = useRef<RetainedChat>({
     ownerId: groupId,
     threadRef: null,
     linked: false,
   });
+
   // Chats created by queued sends, keyed by the retention state they were submitted from, so
   // sends queued together share one chat even after the user leaves the group.
   const createdChatsRef = useRef(new WeakMap<RetainedChat, ScopedThreadRef>());
+
   if (retainedThreadRef.current.ownerId !== groupId) {
     retainedThreadRef.current = { ownerId: groupId, threadRef: null, linked: false };
   }
+
   retainedThreadRef.current = nextRetainedChat(
     retainedThreadRef.current,
     linkedThreadRef,
     bootstrapped,
   );
+
   const { messages, lastMessageRole, lastUserMessageAt } =
     useBotConversationMessageProjection(linkedThreadRef);
+
   const activities = useThreadActivities(linkedThreadRef);
   const pendingUserInputs = useMemo(() => derivePendingUserInputs(activities), [activities]);
+
   const defaultProject = useMemo(
     () =>
       bootstrapped && primaryEnvironmentId
@@ -171,37 +136,42 @@ export function useGroupThreadRuntime(groupId: string) {
         : null,
     [bootstrapped, primaryEnvironmentId, primaryThreadShells, projects],
   );
+
   const activeProject =
     projects.find(
       (project) =>
         project.environmentId === rememberedThread?.environmentId &&
         project.id === rememberedThread.projectId,
     ) ?? defaultProject;
+
   const appDefaultModelSelection = useMemo(
     () => resolveAppModelSelectionState(settings, providers),
     [providers, settings],
   );
+
   const setRuntimeMode = useAtomCommand(threadEnvironment.setRuntimeMode, {
     reportFailure: false,
   });
+
   const startTurn = useAtomCommand(threadEnvironment.startTurn, { reportFailure: false });
   const resumeTurnCommand = useAtomCommand(threadEnvironment.resumeTurn, { reportFailure: false });
-  const respondToUserInputCommand = useAtomCommand(threadEnvironment.respondToUserInput, {
-    reportFailure: false,
-  });
   const groupReady = serverGroups.some((candidate) => candidate.id === groupId);
   const sendQueueRef = useRef(createBotTurnSubmissionQueue());
   const queuedSendCountRef = useRef(0);
   const [sending, setSending] = useState(false);
-  const [respondingRequestIds, setRespondingRequestIds] = useState<ApprovalRequestId[]>([]);
-  const respondingRequestIdsRef = useRef(new Set<ApprovalRequestId>());
-  const singleSelectInFlightRef = useRef<string | null>(null);
-  const [pendingUserInputAnswers, setPendingUserInputAnswers] = useState<
-    Record<string, PendingUserInputDraftAnswer>
-  >({});
-  const [pendingUserInputQuestionIndex, setPendingUserInputQuestionIndex] = useState(0);
   const [error, setError] = useState<BotThreadFailure | null>(null);
+
+  const {
+    pendingUserInputAnswers,
+    pendingUserInputQuestionIndex,
+    respondingRequestIds,
+    answerPendingUserInputWithPrompt,
+    selectPendingUserInputOption,
+    advancePendingUserInput,
+  } = useThreadPendingUserInput({ linkedThreadRef, pendingUserInputs, onFailure: setError });
+
   const [resuming, setResuming] = useState(false);
+
   const canResume =
     linkedThreadRef !== null &&
     (rememberedThread?.session?.status === "error" ||
@@ -210,102 +180,84 @@ export function useGroupThreadRuntime(groupId: string) {
     (rememberedThread?.latestTurn?.state === "error" ||
       rememberedThread?.latestTurn?.state === "interrupted" ||
       (rememberedThread?.latestTurn === null && lastMessageRole === "user"));
+
   const resume = useCallback(async (): Promise<boolean> => {
     if (!linkedThreadRef || !canResume || resuming) return false;
     setResuming(true);
     setError(null);
+
     const result = await resumeTurnCommand({
       environmentId: linkedThreadRef.environmentId,
       input: { threadId: linkedThreadRef.threadId },
     });
+
     setResuming(false);
-    if (result._tag === "Failure") {
+
+    if (Predicate.isTagged(result, "Failure")) {
       setError(commandFailure(result));
+
       return false;
     }
+
     return true;
   }, [canResume, linkedThreadRef, resumeTurnCommand, resuming]);
-
-  const submitPendingUserInput = useCallback(
-    async (
-      requestId: ApprovalRequestId,
-      answers: Record<string, string | string[]>,
-    ): Promise<boolean> => {
-      if (!linkedThreadRef || respondingRequestIdsRef.current.has(requestId)) return false;
-      respondingRequestIdsRef.current.add(requestId);
-      setRespondingRequestIds((current) =>
-        current.includes(requestId) ? current : [...current, requestId],
-      );
-      const result = await respondToUserInputCommand({
-        environmentId: linkedThreadRef.environmentId,
-        input: { threadId: linkedThreadRef.threadId, requestId, answers },
-      });
-      if (result._tag === "Failure") {
-        respondingRequestIdsRef.current.delete(requestId);
-        setRespondingRequestIds((current) => current.filter((id) => id !== requestId));
-        setError(commandFailure(result));
-        return false;
-      }
-      return true;
-    },
-    [linkedThreadRef, respondToUserInputCommand],
-  );
 
   const send = useCallback(
     async (prompt: string, files: readonly File[], requestedBotId?: string): Promise<boolean> => {
       const pendingUserInput = pendingUserInputs[0];
+
       if (pendingUserInput && linkedThreadRef && files.length === 0) {
-        if (respondingRequestIds.includes(pendingUserInput.requestId)) return false;
-        const question = pendingUserInput.questions[pendingUserInputQuestionIndex];
-        if (!question || !prompt.trim()) return false;
-        const nextAnswers = {
-          ...pendingUserInputAnswers,
-          [question.id]: { customAnswer: prompt.trim() },
-        };
-        setPendingUserInputAnswers(nextAnswers);
-        if (pendingUserInputQuestionIndex < pendingUserInput.questions.length - 1) {
-          setPendingUserInputQuestionIndex((index) => index + 1);
-          return true;
-        }
-        const answers = buildPendingUserInputAnswers(pendingUserInput.questions, nextAnswers);
-        if (!answers) return false;
-        return submitPendingUserInput(pendingUserInput.requestId, answers);
+        return answerPendingUserInputWithPrompt(pendingUserInput, prompt);
       }
+
       if (!groupReady || !group) {
         setError(localFailure("The group is still connecting."));
+
         return false;
       }
+
       if (!activeProject) {
         setError(localFailure("Your workspace is still loading. Try again in a moment."));
+
         return false;
       }
+
       const unsupported = files.find((file) => resolveBotFileAttachment(file) === null);
+
       if (unsupported) {
         setError(localFailure(`This file type is not supported: ${unsupported.name}`));
+
         return false;
       }
+
       if (
         files.some((file) => resolveBotFileAttachment(file)?.type === "file") &&
         !readEnvironmentSupportsFileAttachments(activeProject.environmentId)
       ) {
         setError(localFailure("Update the connected Akeru server to attach files."));
+
         return false;
       }
 
       const respondingBotId = requestedBotId ?? group.bossBotId;
+
       const respondingBot = bots.find(
         (bot) =>
           bot.id === respondingBotId && bot.archivedAt === null && groupContainsBot(group, bot.id),
       );
+
       if (!respondingBot) {
         setError(localFailure("Choose a current group member."));
+
         return false;
       }
+
       const modelSelection = groupModelSelection(
         respondingBot.engine,
         activeProject.defaultModelSelection,
         appDefaultModelSelection,
       );
+
       if (
         !modelSelection ||
         modelSelection.instanceId === NO_PROVIDER_MODEL_SELECTION.instanceId ||
@@ -320,6 +272,7 @@ export function useGroupThreadRuntime(groupId: string) {
             "Mention a group member with a connected provider, or connect the boss's provider.",
           ),
         );
+
         return false;
       }
 
@@ -330,43 +283,39 @@ export function useGroupThreadRuntime(groupId: string) {
       // switches groups.
       const queuedRetained = retainedThreadRef.current;
       const queuedThreadRef = queuedRetained.threadRef;
+
       return sendQueueRef.current.enqueue(async () => {
         setError(null);
         const createdAt = new Date().toISOString();
         // Leaving and returning to this group replaces the ref. A send queued before the
         // group had a chat joins the one an earlier send created there.
         const live = retainedThreadRef.current;
+
         const currentThreadRef =
           queuedThreadRef ??
           createdChatsRef.current.get(queuedRetained) ??
           (live.ownerId === groupId ? live.threadRef : null);
+
         const threadId = currentThreadRef?.threadId ?? newThreadId();
         const runtimeMode = respondingBot.runtimeMode;
 
         try {
-          const attachments = await Promise.all(
-            files.map(async (file) => {
-              const attachment = resolveBotFileAttachment(file);
-              if (!attachment) throw new Error(`This file type is not supported: ${file.name}`);
-              return {
-                ...attachment,
-                name: file.name,
-                sizeBytes: file.size,
-                dataUrl: await readFileAsDataUrl(file, attachment.mimeType),
-              };
-            }),
-          );
+          const attachments = await readThreadTurnAttachments(files);
           const environmentId = currentThreadRef?.environmentId ?? activeProject.environmentId;
+
           if (currentThreadRef && rememberedThread?.runtimeMode !== runtimeMode) {
             const modeResult = await setRuntimeMode({
               environmentId,
               input: { threadId, runtimeMode },
             });
-            if (modeResult._tag === "Failure") {
+
+            if (Predicate.isTagged(modeResult, "Failure")) {
               setError(commandFailure(modeResult));
+
               return false;
             }
           }
+
           const result = await startTurn({
             environmentId,
             input: buildGroupTurnStartInput({
@@ -388,15 +337,19 @@ export function useGroupThreadRuntime(groupId: string) {
               createThread: currentThreadRef === null,
             }),
           });
-          if (result._tag === "Failure") {
+
+          if (Predicate.isTagged(result, "Failure")) {
             setError(commandFailure(result));
+
             return false;
           }
+
           // Only a new chat restarts retention; a chat the shell list already showed stays
           // linked so archiving it releases it. Skip it if the user moved to another group.
           if (currentThreadRef === null) {
             const createdThreadRef = scopeThreadRef(environmentId, threadId);
             createdChatsRef.current.set(queuedRetained, createdThreadRef);
+
             if (retainedThreadRef.current.ownerId === groupId) {
               retainedThreadRef.current = {
                 ownerId: groupId,
@@ -405,14 +358,17 @@ export function useGroupThreadRuntime(groupId: string) {
               };
             }
           }
+
           return true;
         } catch (cause) {
           setError(
             localFailure(cause instanceof Error ? cause.message : "Could not send the message."),
           );
+
           return false;
         } finally {
           queuedSendCountRef.current -= 1;
+
           if (queuedSendCountRef.current === 0) setSending(false);
         }
       });
@@ -425,102 +381,27 @@ export function useGroupThreadRuntime(groupId: string) {
       groupId,
       groupReady,
       linkedThreadRef,
-      pendingUserInputAnswers,
-      pendingUserInputQuestionIndex,
+      answerPendingUserInputWithPrompt,
       pendingUserInputs,
       providerEntries,
       rememberedThread?.runtimeMode,
-      respondingRequestIds,
       settings.localExecutionMode,
       setRuntimeMode,
       startTurn,
-      submitPendingUserInput,
     ],
   );
-
-  useEffect(() => {
-    setPendingUserInputAnswers({});
-    setPendingUserInputQuestionIndex(0);
-    singleSelectInFlightRef.current = null;
-    const pendingIds = new Set(pendingUserInputs.map((pending) => pending.requestId));
-    for (const requestId of respondingRequestIdsRef.current) {
-      if (!pendingIds.has(requestId)) respondingRequestIdsRef.current.delete(requestId);
-    }
-    setRespondingRequestIds((current) => current.filter((requestId) => pendingIds.has(requestId)));
-  }, [pendingUserInputs[0]?.requestId]);
-
-  const selectPendingUserInputOption = useCallback(
-    (questionId: string, optionLabel: string) => {
-      const pending = pendingUserInputs[0];
-      const question = pending?.questions.find((entry) => entry.id === questionId);
-      if (!pending || !question) return;
-      if (!question.multiSelect) {
-        const selectionKey = `${pending.requestId}:${questionId}`;
-        if (singleSelectInFlightRef.current === selectionKey) return;
-        const selection = applyPendingUserInputSingleSelect(
-          pending.questions,
-          pendingUserInputAnswers,
-          pendingUserInputQuestionIndex,
-          questionId,
-          optionLabel,
-        );
-        if (!selection) return;
-        singleSelectInFlightRef.current = selectionKey;
-        setPendingUserInputAnswers(selection.draftAnswers);
-        if (!selection.answers) {
-          setPendingUserInputQuestionIndex(selection.questionIndex);
-          return;
-        }
-        void submitPendingUserInput(pending.requestId, selection.answers).then((submitted) => {
-          if (!submitted) singleSelectInFlightRef.current = null;
-        });
-        return;
-      }
-      setPendingUserInputAnswers((current) => ({
-        ...current,
-        [questionId]: togglePendingUserInputOptionSelection(
-          question,
-          current[questionId],
-          optionLabel,
-        ),
-      }));
-    },
-    [
-      pendingUserInputAnswers,
-      pendingUserInputQuestionIndex,
-      pendingUserInputs,
-      submitPendingUserInput,
-    ],
-  );
-
-  const advancePendingUserInput = useCallback(async () => {
-    const pending = pendingUserInputs[0];
-    if (!pending || !linkedThreadRef || respondingRequestIds.includes(pending.requestId)) return;
-    if (pendingUserInputQuestionIndex < pending.questions.length - 1) {
-      setPendingUserInputQuestionIndex((index) => index + 1);
-      return;
-    }
-    const answers = buildPendingUserInputAnswers(pending.questions, pendingUserInputAnswers);
-    if (!answers) return;
-    await submitPendingUserInput(pending.requestId, answers);
-  }, [
-    linkedThreadRef,
-    pendingUserInputAnswers,
-    pendingUserInputQuestionIndex,
-    pendingUserInputs,
-    respondingRequestIds,
-    submitPendingUserInput,
-  ]);
 
   const providerAvailable =
     group !== undefined &&
     bots.some((bot) => {
       if (bot.archivedAt !== null || !groupContainsBot(group, bot.id)) return false;
+
       const selection = groupModelSelection(
         bot.engine,
         activeProject?.defaultModelSelection,
         appDefaultModelSelection,
       );
+
       return (
         selection !== null &&
         selection.instanceId !== NO_PROVIDER_MODEL_SELECTION.instanceId &&
@@ -530,13 +411,16 @@ export function useGroupThreadRuntime(groupId: string) {
         )
       );
     });
+
   const session = rememberedThread?.session ?? null;
+
   const turnFailure = latestBotThreadFailure({
     activities,
     latestTurn: rememberedThread?.latestTurn ?? null,
     session,
     lastUserMessageAt,
   });
+
   const failure: BotThreadFailure | null =
     error ??
     turnFailure ??

@@ -13,10 +13,13 @@ export function useThreadListV2ShelfPreferences() {
   const preferencesResult = useAtomValue(mobilePreferencesAtom);
   const savePreferences = useAtomSet(updateMobilePreferencesAtom);
   const loaded = AsyncResult.isSuccess(preferencesResult);
+
   const snoozedShelfExpanded =
     loaded && preferencesResult.value.threadListV2SnoozedShelfExpanded === true;
+
   const settledShelfExpanded =
     !loaded || preferencesResult.value.threadListV2SettledShelfExpanded !== false;
+
   const snoozedShelfExpandedRef = useRef(snoozedShelfExpanded);
   const settledShelfExpandedRef = useRef(settledShelfExpanded);
   snoozedShelfExpandedRef.current = snoozedShelfExpanded;
@@ -28,6 +31,7 @@ export function useThreadListV2ShelfPreferences() {
     snoozedShelfExpandedRef.current = expanded;
     savePreferences({ threadListV2SnoozedShelfExpanded: expanded });
   }, [loaded, savePreferences]);
+
   const toggleSettledShelf = useCallback(() => {
     if (!loaded) return;
     const expanded = !settledShelfExpandedRef.current;

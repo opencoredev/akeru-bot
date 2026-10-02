@@ -11,9 +11,11 @@ export function normalizeSearchQuery(
   },
 ): string {
   const trimmed = input.trim();
+
   if (!trimmed) {
     return "";
   }
+
   return options?.trimLeadingPattern
     ? trimmed.replace(options.trimLeadingPattern, "").toLowerCase()
     : trimmed.toLowerCase();
@@ -35,15 +37,18 @@ export function scoreSubsequenceMatch(value: string, query: string): number | nu
     if (firstMatchIndex === -1) {
       firstMatchIndex = valueIndex;
     }
+
     if (previousMatchIndex !== -1) {
       gapPenalty += valueIndex - previousMatchIndex - 1;
     }
 
     previousMatchIndex = valueIndex;
     queryIndex += 1;
+
     if (queryIndex === query.length) {
       const spanPenalty = valueIndex - firstMatchIndex + 1 - query.length;
       const lengthPenalty = Math.min(64, value.length - query.length);
+
       return firstMatchIndex * 2 + gapPenalty * 3 + spanPenalty + lengthPenalty;
     }
   }
@@ -64,11 +69,13 @@ function findBoundaryMatchIndex(
 
   for (const marker of boundaryMarkers) {
     const index = value.indexOf(`${marker}${query}`);
+
     if (index === -1) {
       continue;
     }
 
     const matchIndex = index + marker.length;
+
     if (bestIndex === null || matchIndex < bestIndex) {
       bestIndex = matchIndex;
     }
@@ -113,6 +120,7 @@ export function scoreQueryMatch(input: {
       query,
       input.boundaryMarkers ?? [" ", "-", "_", "/"],
     );
+
     if (boundaryIndex !== null) {
       return input.boundaryBase + boundaryIndex * 2 + lengthPenalty(value, query);
     }
@@ -120,6 +128,7 @@ export function scoreQueryMatch(input: {
 
   if (input.includesBase !== undefined) {
     const includesIndex = value.indexOf(query);
+
     if (includesIndex !== -1) {
       return input.includesBase + includesIndex * 2 + lengthPenalty(value, query);
     }
@@ -127,6 +136,7 @@ export function scoreQueryMatch(input: {
 
   if (input.fuzzyBase !== undefined) {
     const fuzzyScore = scoreSubsequenceMatch(value, query);
+
     if (fuzzyScore !== null) {
       return input.fuzzyBase + fuzzyScore;
     }
@@ -140,7 +150,9 @@ export function compareRankedSearchResults<T>(
   right: RankedSearchResult<T>,
 ): number {
   const scoreDelta = left.score - right.score;
+
   if (scoreDelta !== 0) return scoreDelta;
+
   return left.tieBreaker.localeCompare(right.tieBreaker);
 }
 
@@ -154,6 +166,7 @@ function findInsertionIndex<T>(
   while (low < high) {
     const middle = low + Math.floor((high - low) / 2);
     const current = rankedEntries[middle];
+
     if (!current) {
       break;
     }
@@ -178,8 +191,10 @@ export function insertRankedSearchResult<T>(
   }
 
   const insertionIndex = findInsertionIndex(rankedEntries, candidate);
+
   if (rankedEntries.length < limit) {
     rankedEntries.splice(insertionIndex, 0, candidate);
+
     return;
   }
 

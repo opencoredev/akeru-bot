@@ -23,6 +23,7 @@ describe("ExecutionEnvironmentDescriptor", () => {
         threadPullRequestLinking: true,
       },
     });
+
     expect(decoded.capabilities).not.toHaveProperty("pullRequests");
     expect(decoded.capabilities).not.toHaveProperty("threadPullRequestLinking");
   });

@@ -13,12 +13,15 @@ const testState = vi.hoisted(() => ({
 vi.mock("~/hooks/useCopyToClipboard", () => ({
   useCopyToClipboard: () => ({ copyToClipboard: vi.fn() }),
 }));
+
 vi.mock("~/state/server", () => ({
   serverEnvironment: { updateServer: Symbol("updateServer") },
 }));
+
 vi.mock("~/state/use-atom-command", () => ({
   useAtomCommand: () => testState.updateServer,
 }));
+
 vi.mock("./ui/toast", () => ({
   toastManager: { add: testState.toast },
 }));

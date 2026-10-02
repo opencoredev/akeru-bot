@@ -28,6 +28,7 @@ const codexProvider: ServerProvider = {
 };
 
 const failedAt = "2026-09-30T12:00:00.000Z";
+
 const at = (offsetMs: number) => Date.parse(failedAt) + offsetMs;
 
 const preflightAfterFailure = (
@@ -180,6 +181,7 @@ describe("preflightProvider", () => {
       driver: ProviderDriverKind.make("kimi"),
       displayName: "Kimi",
     });
+
     const baseStatus = {
       provider: "kimi-for-coding" as const,
       connected: true,
@@ -188,6 +190,7 @@ describe("preflightProvider", () => {
       dependentBots: [],
       dependentRoutines: [],
     };
+
     for (const health of ["revoked", "expired"] as const) {
       expect(
         preflightProvider({
@@ -237,6 +240,7 @@ describe("preflightProvider", () => {
       availability: "unavailable",
       unavailability: "expired-login",
     });
+
     const status = {
       provider: "anthropic" as const,
       connected: true,
@@ -247,6 +251,7 @@ describe("preflightProvider", () => {
       dependentBots: [],
       dependentRoutines: [],
     };
+
     expect(
       preflightProvider({
         providers: [claude],
@@ -282,6 +287,7 @@ describe("preflightProvider", () => {
 
   it("uses the selected instance account instead of the revoked default account", () => {
     const workInstanceId = ProviderInstanceId.make("claude_work");
+
     const baseStatus = {
       provider: "anthropic" as const,
       connected: true,
@@ -291,10 +297,13 @@ describe("preflightProvider", () => {
       dependentBots: [],
       dependentRoutines: [],
     };
+
     const revoked = { ...baseStatus, health: "revoked" as const };
     const healthy = { ...baseStatus, health: "healthy" as const };
+
     const accountStatus = (_provider: string, instanceId: ProviderInstanceId) =>
       instanceId === workInstanceId ? healthy : revoked;
+
     expect(
       preflightProvider({
         providers: [provider({ instanceId: workInstanceId })],
@@ -325,6 +334,7 @@ describe("preflightProvider", () => {
         codex: { ...DEFAULT_SERVER_SETTINGS.providers.codex, homePath: "/tmp/codex-work" },
       },
     };
+
     const config = deriveProviderInstanceConfigMap(settings)[ProviderInstanceId.make("codex")];
     expect(config?.config).toMatchObject({ homePath: "/tmp/codex-work" });
     expect(
@@ -366,8 +376,10 @@ describe("preflightProvider", () => {
         },
       },
     };
+
     const config =
       deriveProviderInstanceConfigMap(settings)[ProviderInstanceId.make("claudeAgent")];
+
     expect(config?.config).toMatchObject({ homePath: "/tmp/claude-work" });
     expect(
       preflightProvider({

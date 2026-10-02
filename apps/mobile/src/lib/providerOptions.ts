@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 import type {
   ModelCapabilities,
   ProviderOptionDescriptor,
@@ -16,6 +17,7 @@ export function resolveProviderOptionDescriptors(input: {
   if (!input.capabilities) {
     return [];
   }
+
   return getProviderOptionDescriptors({
     caps: input.capabilities,
     selections: input.selections,
@@ -34,7 +36,9 @@ export function providerOptionValueLabels(
     if (descriptor.type === "boolean") {
       return descriptor.currentValue ? [descriptor.label] : [];
     }
+
     const label = getProviderOptionCurrentLabel(descriptor);
+
     return label ? [label] : [];
   });
 }
@@ -49,26 +53,33 @@ export function applyProviderOptionSelection(
   change: ProviderOptionSelection,
 ): ReadonlyArray<ProviderOptionSelection> | null {
   const descriptor = descriptors.find((candidate) => candidate.id === change.id);
+
   if (!descriptor) {
     return null;
   }
+
   if (
-    (descriptor.type === "boolean" && typeof change.value !== "boolean") ||
+    (descriptor.type === "boolean" && !Predicate.isBoolean(change.value)) ||
     (descriptor.type === "select" &&
-      (typeof change.value !== "string" ||
+      (!Predicate.isString(change.value) ||
         !descriptor.options.some((option) => option.id === change.value)))
   ) {
     return null;
   }
 
   const nextDescriptors = descriptors.map((candidate) =>
-    candidate.id === descriptor.id
-      ? {
-          ...candidate,
-          currentValue: change.value,
-        }
-      : candidate,
-  ) as ReadonlyArray<ProviderOptionDescriptor>;
+    candidate.id !== descriptor.id
+      ? candidate
+      : candidate.type === "boolean"
+        ? {
+            ...candidate,
+            currentValue: Predicate.isBoolean(change.value) ? change.value : candidate.currentValue,
+          }
+        : {
+            ...candidate,
+            currentValue: Predicate.isString(change.value) ? change.value : candidate.currentValue,
+          },
+  );
 
   return buildProviderOptionSelectionsFromDescriptors(nextDescriptors) ?? [];
 }

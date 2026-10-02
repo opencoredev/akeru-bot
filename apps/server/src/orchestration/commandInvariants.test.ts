@@ -140,6 +140,7 @@ describe("commandInvariants", () => {
         threadId: ThreadId.make("thread-1"),
       }),
     );
+
     expect(thread.id).toBe(ThreadId.make("thread-1"));
 
     await expect(

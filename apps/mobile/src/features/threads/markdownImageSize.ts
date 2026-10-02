@@ -1,4 +1,5 @@
 export const MARKDOWN_IMAGE_MAX_WIDTH = 480;
+
 export const MARKDOWN_IMAGE_MAX_HEIGHT = 480;
 
 export interface MarkdownImageDisplaySize {

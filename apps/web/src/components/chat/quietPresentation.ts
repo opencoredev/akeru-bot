@@ -31,25 +31,30 @@ export function quietFailureEntry(entry: WorkLogEntry): WorkLogEntry {
 
 export function applyQuietPresentation(entries: ReadonlyArray<TimelineEntry>): TimelineEntry[] {
   const result: TimelineEntry[] = [];
+
   for (const item of entries) {
     if (item.kind !== "work") {
       result.push(item);
       continue;
     }
+
     // Spawn CTA rows stay: they are navigation to child agents, not tool chrome.
     if (item.entry.agentSpawn !== undefined) {
       result.push(item);
       continue;
     }
+
     if (!workLogEntryIsToolLike(item.entry)) {
       result.push(item);
       continue;
     }
+
     if (workEntryDisplayIndicatesToolFailure(item.entry)) {
       result.push({ ...item, entry: quietFailureEntry(item.entry) });
     }
     // Successful, neutral, and in-progress tool rows are dropped.
   }
+
   return result;
 }
 
@@ -57,6 +62,7 @@ const DETAILED_STORAGE_PREFIX = "akeru.presentation.detailed:";
 
 function storageOrNull(storage?: Storage): Storage | null {
   if (storage) return storage;
+
   try {
     return globalThis.localStorage ?? null;
   } catch {
@@ -67,7 +73,9 @@ function storageOrNull(storage?: Storage): Storage | null {
 /** Quiet is the product default; storage only records the detailed opt-out. */
 export function readStoredPresentationMode(threadKey: string, storage?: Storage): PresentationMode {
   const store = storageOrNull(storage);
+
   if (!store) return "quiet";
+
   try {
     return store.getItem(DETAILED_STORAGE_PREFIX + threadKey) === "1" ? "detailed" : "quiet";
   } catch {
@@ -81,7 +89,9 @@ export function storePresentationMode(
   storage?: Storage,
 ): void {
   const store = storageOrNull(storage);
+
   if (!store) return;
+
   try {
     if (mode === "detailed") {
       store.setItem(DETAILED_STORAGE_PREFIX + threadKey, "1");

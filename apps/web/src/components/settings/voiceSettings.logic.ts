@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 import {
   VOICE_API_PROVIDERS,
   VOICE_PROVIDER_CAPABILITIES,
@@ -42,6 +43,7 @@ export const VOICE_TRANSCRIPTION_PROVIDERS = VOICE_API_PROVIDERS.filter(
   (provider): provider is VoiceTranscriptionProvider =>
     VOICE_PROVIDER_CAPABILITIES[provider].transcription,
 );
+
 export const VOICE_SYNTHESIS_PROVIDERS = VOICE_API_PROVIDERS.filter(
   (provider) => VOICE_PROVIDER_CAPABILITIES[provider].synthesis,
 );
@@ -49,21 +51,23 @@ export const VOICE_SYNTHESIS_PROVIDERS = VOICE_API_PROVIDERS.filter(
 /** Plain-language list of what a provider can do in Akeru voice calls. */
 export function voiceCapabilityLabel(provider: VoiceApiProvider): string {
   const capability = VOICE_PROVIDER_CAPABILITIES[provider];
+
   const parts = [
     capability.realtime ? "Live calls with interruption" : null,
     capability.transcription ? "Transcription" : null,
     capability.synthesis ? "Speech" : null,
   ].filter((part): part is string => part !== null);
+
   return parts.join(" · ");
 }
 
 /** True when a voice command failed because the provider refused the saved key. */
-export function voiceKeyWasRejected(error: unknown): boolean {
+export function voiceKeyWasRejected(cause: unknown): boolean {
   return (
-    typeof error === "object" &&
-    error !== null &&
-    "reason" in error &&
-    error.reason === "provider-auth"
+    Predicate.isObjectOrArray(cause) &&
+    cause !== null &&
+    "reason" in cause &&
+    cause.reason === "provider-auth"
   );
 }
 
@@ -72,9 +76,10 @@ export function voiceKeyWasRejected(error: unknown): boolean {
  * `failure` is null on success. Any success clears the verdict, including saving a
  * replacement key; only a key rejection sets it, so a network error keeps the last verdict.
  */
-export function nextVoiceKeyRejected(previous: boolean, failure: unknown): boolean {
-  if (failure === null) return false;
-  return voiceKeyWasRejected(failure) || previous;
+export function nextVoiceKeyRejected(previous: boolean, cause: unknown): boolean {
+  if (cause === null) return false;
+
+  return voiceKeyWasRejected(cause) || previous;
 }
 
 /** Explains why a call cannot start with these settings, or null when it can. */
@@ -84,19 +89,25 @@ export function voiceSetupProblem(
 ): string | null {
   if (connected === null) return null;
   const missing = voiceMissingApiProviders(settings, connected);
+
   if (missing.length > 0) {
     const names = missing.map((provider) => VOICE_API_PROVIDER_LABELS[provider]).join(" and ");
+
     return `Connect ${names} under API connections before starting a call. Akeru will not switch to another provider or billing source.`;
   }
+
   if (settings.provider === "composed" && selectedSynthesisVoice(settings) === undefined) {
     const provider = VOICE_API_PROVIDER_LABELS[settings.synthesisProvider ?? "openai"];
+
     return `Choose a voice for ${provider} before starting a call.`;
   }
+
   return null;
 }
 
 /** The synthesis voice a call will use. OpenAI falls back to Alloy, as the server does. */
 export function selectedSynthesisVoice(settings: VoiceSettings): string | undefined {
   const provider = settings.synthesisProvider ?? "openai";
+
   return settings.synthesisVoices?.[provider] ?? (provider === "openai" ? "alloy" : undefined);
 }

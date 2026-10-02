@@ -62,9 +62,11 @@ tags:
     }
 
     expect(Schema.isSchemaError(error)).toBe(true);
+
     if (!Schema.isSchemaError(error)) {
       throw new Error("Expected a schema error");
     }
+
     expect(error.message).toBe("Invalid YAML (code=BLOCK_AS_IMPLICIT_KEY, line=1, column=7).");
     expect(error.message).not.toContain(secret);
   });
@@ -85,9 +87,11 @@ tags:
     }
 
     expect(Schema.isSchemaError(error)).toBe(true);
+
     if (!Schema.isSchemaError(error)) {
       throw new Error("Expected a schema error");
     }
+
     expect(error.message).toBe("Failed to stringify YAML.");
     expect(error.message).not.toContain(secret);
   });

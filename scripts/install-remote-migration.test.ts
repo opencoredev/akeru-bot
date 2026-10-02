@@ -1,4 +1,3 @@
-// @effect-diagnostics nodeBuiltinImport:off
 import * as NodeFS from "node:fs";
 import * as NodeOS from "node:os";
 import * as NodePath from "node:path";
@@ -38,9 +37,11 @@ it("reads AKERU_HOME over an ambient T3CODE_HOME and refuses an incompatible ide
       NodePath.basename(payload),
     ]).status,
   ).toBe(0);
+
   const hash = NodeChildProcess.spawnSync("sha256sum", [archive], {
     encoding: "utf8",
   }).stdout.split(" ")[0];
+
   NodeFS.writeFileSync(
     NodePath.join(releases, "AKERU-REMOTE-MANIFEST.txt"),
     `${hash}  ${NodePath.basename(archive)}\n`,
@@ -68,6 +69,7 @@ cp "$RELEASES/$(basename "$source")" "$destination"
   );
   NodeFS.writeFileSync(NodePath.join(home, "userdata", "environment-id"), "existing-env\n");
   const originalTarget = NodeFS.readlinkSync(NodePath.join(binDir, "akeru"));
+
   const result = NodeChildProcess.spawnSync(
     "sh",
     [NodePath.join(import.meta.dirname, "install-remote.sh")],
@@ -85,6 +87,7 @@ cp "$RELEASES/$(basename "$source")" "$destination"
       encoding: "utf8",
     },
   );
+
   expect(result.status).toBe(1);
   expect(result.stderr).toContain("--migrate-environment-id");
   expect(NodeFS.readlinkSync(NodePath.join(binDir, "akeru"))).toBe(originalTarget);

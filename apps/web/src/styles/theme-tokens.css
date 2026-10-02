@@ -1,0 +1,341 @@
+:root {
+  color-scheme: light;
+  --radius: 0.625rem;
+  --background: var(--color-zinc-25);
+  --app-chrome-background: var(--background);
+  --toolbar-background: var(--app-chrome-background);
+  --toolbar-foreground: var(--foreground);
+  --toolbar-border: var(--border);
+  --toolbar-control: var(--popover);
+  --toolbar-control-foreground: var(--foreground);
+  --toolbar-control-hover: var(--accent);
+  --surface-raised: color-mix(in srgb, var(--card) 20%, transparent);
+  --foreground: var(--color-zinc-800);
+  --card: var(--color-white);
+  --card-foreground: var(--color-zinc-800);
+  --popover: var(--color-white);
+  --popover-foreground: var(--color-zinc-800);
+  --primary: oklch(0.488 0.217 264);
+  --primary-foreground: var(--color-white);
+  --secondary: var(--color-zinc-50);
+  --secondary-foreground: var(--color-zinc-800);
+  --muted: var(--color-zinc-50);
+  --muted-foreground: var(--color-zinc-500);
+  --placeholder: var(--muted-foreground);
+  --secondary-label: var(--muted-foreground);
+  --icon-muted: var(--muted-foreground);
+  --message-surface: var(--accent);
+  --message-foreground: var(--foreground);
+  --message-action: var(--primary);
+  --message-action-foreground: var(--primary-foreground);
+  --message-action-hover: color-mix(in srgb, var(--primary) 90%, var(--background));
+  --accent: var(--color-zinc-100);
+  --accent-foreground: var(--color-zinc-900);
+  --error: var(--color-red-500);
+  --error-foreground: var(--color-red-700);
+  --error-surface: color-mix(in srgb, var(--error) 8%, transparent);
+  --destructive: var(--error);
+  --border: var(--color-zinc-200);
+  --input: var(--color-zinc-300);
+  --ring: color-mix(in oklab, var(--foreground) 45%, transparent);
+  --destructive-foreground: var(--error-foreground);
+  --info: var(--color-blue-500);
+  --info-foreground: var(--color-blue-700);
+  /* Nominal alert and status colors preserve their original appearance. */
+  --markdown-note: var(--color-blue-500);
+  --markdown-note-foreground: var(--color-blue-600);
+  --markdown-tip: var(--color-emerald-500);
+  --markdown-tip-foreground: var(--color-emerald-600);
+  --markdown-important: var(--color-purple-500);
+  --markdown-important-foreground: var(--color-purple-600);
+  --markdown-warning: var(--color-amber-500);
+  --markdown-warning-foreground: var(--color-amber-600);
+  --markdown-caution: var(--color-red-500);
+  --markdown-caution-foreground: var(--color-red-600);
+  --computer-control-indicator: var(--color-amber-500);
+  --quit-prompt: var(--color-neutral-700);
+  --plugin-connected: var(--color-emerald-500);
+  --memory-approval-indicator: var(--color-amber-400);
+  --telemetry-status-foreground: var(--color-amber-700);
+  --success: var(--color-emerald-500);
+  --success-foreground: var(--color-emerald-700);
+  /* Small confirmation marks, such as a connected-provider check. */
+  --success-indicator-foreground: var(--color-emerald-600);
+  /* Bright status text for dark surfaces, used through `dark:` modifiers.
+     The same value applies in both modes. */
+  --success-bright-foreground: var(--color-emerald-300);
+  --warning-bright-foreground: var(--color-amber-300);
+  /* Favorite star on model rows. Same value in both modes. */
+  --favorite-foreground: var(--color-yellow-500);
+  --favorite-hover-foreground: var(--color-yellow-600);
+  /* Cautionary inline notices and stats that are not themeable warnings. */
+  --caution-foreground: var(--color-amber-600);
+  --telemetry-warning-foreground: var(--color-amber-600);
+  /* Resource telemetry I/O columns: reads and writes. */
+  --telemetry-read-foreground: var(--color-sky-700);
+  --telemetry-write-foreground: var(--color-amber-700);
+  /* Resource telemetry chart series. Nominal data colors, the same in both modes. */
+  --telemetry-read: var(--color-sky-500);
+  --telemetry-write: var(--color-amber-500);
+  --telemetry-monitor: var(--color-amber-500);
+  --telemetry-electron: var(--color-sky-500);
+  --telemetry-server: var(--color-violet-500);
+  --telemetry-server-total: var(--color-emerald-500);
+  --telemetry-child: var(--color-emerald-500);
+  /* Dark mat and scrim behind live browser media. Same value in both modes. */
+  --media-mat: var(--color-zinc-950);
+  --media-mat-foreground: var(--color-zinc-300);
+  /* Status dot for pending pairing links. Same value in both modes. */
+  --pending-indicator: var(--color-amber-400);
+  /* Status dot for a disabled provider. Same value in both modes. */
+  --disabled-indicator: var(--color-amber-400);
+  /* Pure ink toward the foreground: black in light mode, white in dark mode.
+     Use it with an opacity for hairlines and faint fills that should not
+     follow theme colors. */
+  --tint: var(--color-black);
+  /* Quiet inset well, such as the add-provider wizard track. */
+  --inset-surface: var(--color-zinc-25);
+  /* Black in both modes: scrims behind media, drop shadows, and outlines
+     around picker thumbs and color tracks. */
+  --shade: var(--color-black);
+  /* White in both modes: text, icons, and edges drawn on solid color fills,
+     imagery, and sidebar stage art. */
+  --on-solid: var(--color-white);
+  /* QR codes need a white quiet zone to scan in either mode. */
+  --qr-surface: var(--color-white);
+  /* Hover fill for light radio cards; dark mode styles its own hover. */
+  --option-hover: var(--color-zinc-50);
+  /* Skill chips and rows. The tint is the same in both modes. */
+  --skill: var(--color-fuchsia-500);
+  --skill-foreground: var(--color-fuchsia-700);
+  /* Grok mark, near-black on light and near-white on dark. */
+  --brand-grok: #0f0f0f;
+  /* Selected and disabled were previously spelled inline at each call site,
+     so "selected" drifted between accent, muted, and a raw zinc. Name them
+     once; themes override them through the roles they alias. */
+  --selected: var(--accent);
+  --selected-foreground: var(--accent-foreground);
+  --disabled-foreground: color-mix(in srgb, var(--foreground) 38%, transparent);
+  --warning: var(--color-amber-500);
+  --warning-foreground: var(--color-amber-700);
+  --warning-surface: color-mix(in srgb, var(--warning) 8%, transparent);
+  --update: var(--primary);
+  --update-foreground: var(--primary);
+  --update-surface: color-mix(in srgb, var(--update) 12%, transparent);
+  /* Keep every sidebar primitive on the same light surface hierarchy, including
+     portaled mobile sheets and settings navigation outside the app sidebar. */
+  --sidebar: var(--color-zinc-50);
+  --sidebar-foreground: var(--foreground);
+  --sidebar-muted-foreground: var(--muted-foreground);
+  --sidebar-control-surface: var(--color-zinc-100);
+  --sidebar-row-hover: var(--color-zinc-25);
+  --sidebar-row-active: var(--color-white);
+  --sidebar-row-selected: var(--color-white);
+  --sidebar-border: var(--border);
+  --sidebar-stage-fade: var(--sidebar);
+  --code-background: color-mix(in srgb, var(--card) 90%, var(--background));
+  --code-foreground: var(--foreground);
+  --terminal-background: var(--background);
+  --terminal-foreground: var(--foreground);
+  --terminal-cursor: rgb(38 56 78);
+  --terminal-selection-background: rgb(37 63 99 / 20%);
+
+  @variant dark {
+    color-scheme: dark;
+    /* Keep the workspace in the same neutral-black family as sidebar v2.
+       Surfaces lift from this base instead of starting from a milky gray. */
+    --background: var(--color-neutral-950);
+    --surface-raised: var(--secondary);
+    --foreground: var(--color-neutral-100);
+    --card: color-mix(in srgb, var(--background) 97%, var(--color-white));
+    --card-foreground: var(--color-neutral-100);
+    --popover: color-mix(in srgb, var(--background) 94%, var(--color-white));
+    --popover-foreground: var(--color-neutral-100);
+    --primary: oklch(0.571 0.21 264);
+    --secondary: --alpha(var(--color-white) / 4%);
+    --secondary-foreground: var(--color-neutral-100);
+    --muted: --alpha(var(--color-white) / 4%);
+    --muted-foreground: color-mix(in srgb, var(--color-neutral-500) 90%, var(--color-white));
+    --accent: --alpha(var(--color-white) / 4%);
+    --accent-foreground: var(--color-neutral-100);
+    --error: color-mix(in srgb, var(--color-red-500) 90%, var(--color-white));
+    --error-foreground: var(--color-red-400);
+    --error-surface: color-mix(in srgb, var(--error) 16%, transparent);
+    --border: --alpha(var(--color-white) / 6%);
+    --input: --alpha(var(--color-white) / 8%);
+    --info-foreground: var(--color-blue-400);
+    --markdown-note-foreground: var(--color-blue-400);
+    --markdown-tip-foreground: var(--color-emerald-400);
+    --markdown-important-foreground: var(--color-purple-400);
+    --markdown-warning-foreground: var(--color-amber-500);
+    --markdown-caution-foreground: var(--color-red-400);
+    --telemetry-status-foreground: var(--color-amber-300);
+    --success-foreground: var(--color-emerald-400);
+    --success-indicator-foreground: var(--color-emerald-400);
+    --warning-foreground: var(--color-amber-400);
+    --warning-surface: color-mix(in srgb, var(--warning) 16%, transparent);
+    --caution-foreground: var(--color-amber-400);
+    --tint: var(--color-white);
+    --inset-surface: --alpha(var(--color-white) / 4%);
+    --telemetry-warning-foreground: var(--color-amber-300);
+    --telemetry-read-foreground: var(--color-sky-300);
+    --telemetry-write-foreground: var(--color-amber-300);
+    --skill-foreground: var(--color-fuchsia-300);
+    --brand-grok: #f5f5f5;
+    --update-foreground: var(--color-blue-400);
+    --update-surface: color-mix(in srgb, var(--update) 18%, transparent);
+    --sidebar: var(--card);
+    --sidebar-control-surface: var(--muted);
+    --sidebar-row-hover: var(--accent);
+    --sidebar-row-active: var(--accent);
+    --sidebar-row-selected: var(--muted);
+    --sidebar-stage-fade: var(--card);
+    --terminal-cursor: rgb(180 203 255);
+    --terminal-selection-background: rgb(180 203 255 / 25%);
+  }
+}
+
+/* Settings surfaces. A grouped block of settings rows lifts off the page card
+   by mixing in a little foreground, so it tracks every theme's card in light
+   and dark. Controls (inputs, selects, secondary buttons) sit one step
+   further, which keeps them visible both on the card and inside a group. */
+
+:root {
+  --settings-surface: color-mix(in srgb, var(--card) 96.5%, var(--foreground));
+  --settings-control: color-mix(in srgb, var(--card) 93%, var(--foreground));
+
+  @variant dark {
+    --settings-surface: color-mix(in srgb, var(--card) 95.5%, var(--foreground));
+    --settings-control: color-mix(in srgb, var(--card) 91%, var(--foreground));
+  }
+}
+
+[data-settings-page-scroll] {
+  --secondary: var(--settings-control);
+}
+
+/* Keep both sidebar implementations (default and legacy) on the same quiet
+   zinc hierarchy: zinc-50 navigation, zinc-25 hover, and white selected/raised
+   surfaces. */
+
+[data-app-sidebar] {
+  --background: var(--color-zinc-25);
+  --foreground: var(--color-zinc-800);
+  --card: var(--color-white);
+  --card-foreground: var(--color-zinc-800);
+  --accent: var(--color-zinc-100);
+  --accent-foreground: var(--color-zinc-900);
+  --muted: var(--color-zinc-50);
+  --muted-foreground: var(--color-zinc-500);
+  --border: var(--color-zinc-200);
+  --input: var(--color-zinc-300);
+  --sidebar: var(--color-zinc-50);
+  --sidebar-foreground: var(--color-zinc-800);
+  --sidebar-muted-foreground: var(--color-zinc-500);
+  --sidebar-control-surface: var(--color-zinc-100);
+  --sidebar-row-hover: var(--color-zinc-25);
+  --sidebar-row-active: var(--color-white);
+  --sidebar-row-selected: var(--color-white);
+  --sidebar-border: var(--color-zinc-200);
+  --sidebar-stage-fade: var(--sidebar);
+
+  @variant dark {
+    --background: #000;
+    --foreground: #f1f3f7;
+    --card: #000;
+    --card-foreground: var(--foreground);
+    --accent: #191a1d;
+    --accent-foreground: #f7f9ff;
+    --muted: #0a0a0a;
+    --muted-foreground: #a3a3a3;
+    --border: rgb(255 255 255 / 8%);
+    --input: rgb(255 255 255 / 18%);
+    --sidebar: var(--card);
+    --sidebar-foreground: var(--foreground);
+    --sidebar-muted-foreground: var(--muted-foreground);
+    --sidebar-control-surface: var(--muted);
+    --sidebar-row-hover: color-mix(in srgb, var(--contrast-foreground) 8%, transparent);
+    --sidebar-row-active: color-mix(in srgb, var(--contrast-foreground) 11%, transparent);
+    --sidebar-row-selected: color-mix(in srgb, var(--contrast-foreground) 7%, transparent);
+    --sidebar-border: var(--border);
+    --sidebar-stage-fade: var(--card);
+  }
+}
+
+/* Theme files are expressed in app color roles and mapped to the existing
+   semantic surface tokens here. Keep this block after the sidebar-version
+   compatibility overrides so both navigation implementations receive the
+   same palette. Success, info, provider, and channel identity colors remain
+   independent; error, warning, and update roles are themeable below. */
+
+/* The non-empty marker adds enough specificity to outrank the generated root
+   dark variant without reintroducing raw `.dark` selectors. */
+
+html[data-theme-id]:not([data-theme-id=""]) {
+  --background: var(--app-theme-canvas);
+  --app-chrome-background: var(--app-theme-chrome);
+  --toolbar-background: var(--app-theme-toolbar);
+  --toolbar-foreground: var(--app-theme-toolbar-foreground);
+  --toolbar-border: var(--app-theme-toolbar-border);
+  --toolbar-control: var(--app-theme-toolbar-control);
+  --toolbar-control-foreground: var(--app-theme-toolbar-control-foreground);
+  --toolbar-control-hover: var(--app-theme-toolbar-control-hover);
+  --surface-raised: var(--app-theme-surface-raised);
+  --foreground: var(--app-theme-text);
+  --card: var(--app-theme-surface);
+  --card-foreground: var(--app-theme-text);
+  --popover: var(--app-theme-surface-overlay);
+  --popover-foreground: var(--app-theme-text);
+  /* Solid controls (CTAs, switches, sliders, the send button) all share the
+     theme's action color so every "act now" affordance reads consistently;
+     the accent keeps driving surfaces, selection, and focus. Palettes without
+     a distinct action color make these identical. */
+  --primary: var(--app-theme-message-action);
+  --primary-foreground: var(--app-theme-message-action-foreground);
+  --secondary: var(--app-theme-secondary);
+  --secondary-foreground: var(--app-theme-secondary-foreground);
+  --muted: var(--app-theme-muted);
+  --muted-foreground: var(--app-theme-muted-foreground);
+  --placeholder: var(--app-theme-placeholder);
+  --secondary-label: var(--app-theme-secondary-label);
+  --icon-muted: var(--app-theme-icon-muted);
+  --accent: var(--app-theme-accent-surface);
+  --accent-foreground: var(--app-theme-accent-surface-foreground);
+  --message-surface: var(--app-theme-message-surface);
+  --message-foreground: var(--app-theme-message-foreground);
+  --message-action: var(--app-theme-message-action);
+  --message-action-foreground: var(--app-theme-message-action-foreground);
+  --message-action-hover: var(--app-theme-message-action-hover);
+  --error: var(--app-theme-error);
+  --error-foreground: var(--app-theme-error-foreground);
+  --error-surface: var(--app-theme-error-surface);
+  --destructive: var(--error);
+  --destructive-foreground: var(--error-foreground);
+  --warning: var(--app-theme-warning);
+  --warning-foreground: var(--app-theme-warning-foreground);
+  --warning-surface: var(--app-theme-warning-surface);
+  --update: var(--app-theme-update);
+  --update-foreground: var(--app-theme-update-foreground);
+  --update-surface: var(--app-theme-update-surface);
+  --border: var(--app-theme-border);
+  --input: var(--app-theme-input);
+  /* Focus stays neutral so the theme accent never paints outlines. */
+  --ring: color-mix(in oklab, var(--app-theme-text) 45%, transparent);
+  --sidebar: var(--app-theme-sidebar);
+  --sidebar-foreground: var(--app-theme-sidebar-foreground);
+  --sidebar-muted-foreground: var(--app-theme-sidebar-muted-foreground);
+  --sidebar-control-surface: var(--app-theme-sidebar-control-surface);
+  --sidebar-row-hover: var(--app-theme-sidebar-row-hover);
+  --sidebar-row-active: var(--app-theme-sidebar-row-active);
+  --sidebar-row-selected: var(--app-theme-sidebar-row-selected);
+  --sidebar-border: var(--app-theme-sidebar-border);
+  --sidebar-stage-fade: var(--app-theme-sidebar);
+  --code-background: var(--app-theme-code-background);
+  --code-foreground: var(--app-theme-code-foreground);
+  --terminal-background: var(--app-theme-terminal-background);
+  --terminal-foreground: var(--app-theme-terminal-foreground);
+  --terminal-cursor: var(--app-theme-terminal-cursor);
+  --terminal-selection-background: var(--app-theme-terminal-selection-background);
+  --terminal-scrollbar: var(--app-theme-terminal-scrollbar);
+  --terminal-scrollbar-hover: var(--app-theme-terminal-scrollbar-hover);
+}

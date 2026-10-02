@@ -5,7 +5,9 @@ import { createEmptyReadModel } from "../orchestration/projector.ts";
 import { createAkeruBotStateRuntime } from "./AkeruBotStateRuntime.ts";
 
 const now = "2026-09-01T02:00:00.000Z";
+
 const botId = BotId.make("bot-self");
+
 const otherBotId = BotId.make("bot-other");
 
 function snapshot(archivedAt: string | null = null) {
@@ -59,10 +61,12 @@ function snapshot(archivedAt: string | null = null) {
 describe("AkeruBotStateRuntime", () => {
   it("updates only the session bot and returns an event-backed receipt", async () => {
     const commands: OrchestrationCommand[] = [];
+
     const runtime = createAkeruBotStateRuntime({
       readSnapshot: async () => snapshot(),
       dispatch: async (command) => {
         commands.push(command);
+
         return { sequence: 42 };
       },
       now: () => now,
@@ -98,10 +102,12 @@ describe("AkeruBotStateRuntime", () => {
 
   it("does not dispatch for a missing or archived session bot", async () => {
     const dispatch = vi.fn(async (_command: OrchestrationCommand) => ({ sequence: 1 }));
+
     const archived = createAkeruBotStateRuntime({
       readSnapshot: async () => snapshot(now),
       dispatch,
     });
+
     const missing = createAkeruBotStateRuntime({
       readSnapshot: async () => snapshot(),
       dispatch,

@@ -46,9 +46,13 @@ type DesktopSshEnvironmentRequestOperation =
 type DesktopSshEnvironmentRequestCause = RemoteEnvironmentAuthError | SshHttpBridgeError;
 
 const isEnvironmentAuthInvalidError = Schema.is(EnvironmentAuthInvalidError);
+
 const isEnvironmentInternalError = Schema.is(EnvironmentInternalError);
+
 const isEnvironmentOperationForbiddenError = Schema.is(EnvironmentOperationForbiddenError);
+
 const isEnvironmentRequestInvalidError = Schema.is(EnvironmentRequestInvalidError);
+
 const isEnvironmentScopeRequiredError = Schema.is(EnvironmentScopeRequiredError);
 
 function readSshHttpStatus(cause: DesktopSshEnvironmentRequestCause): number | null {
@@ -58,21 +62,27 @@ function readSshHttpStatus(cause: DesktopSshEnvironmentRequestCause): number | n
   ) {
     return cause.status ?? null;
   }
+
   if (isEnvironmentRequestInvalidError(cause)) {
     return 400;
   }
+
   if (isEnvironmentAuthInvalidError(cause)) {
     return 401;
   }
+
   if (isEnvironmentScopeRequiredError(cause)) {
     return 403;
   }
+
   if (isEnvironmentOperationForbiddenError(cause)) {
     return 403;
   }
+
   if (isEnvironmentInternalError(cause)) {
     return 500;
   }
+
   return null;
 }
 
@@ -85,6 +95,7 @@ export class DesktopSshEnvironmentRequestError extends Data.TaggedError(
 }> {
   override get message() {
     const prefix = this.sshHttpStatus === null ? "" : `[ssh_http:${this.sshHttpStatus}] `;
+
     return `${prefix}SSH remote API request failed during ${this.operation}.`;
   }
 }
@@ -107,17 +118,18 @@ const withLoopbackSshApi =
       ),
     );
 
-export const discoverSshHosts = DesktopIpc.makeIpcMethod({
+export const discoverSshHosts = DesktopIpc.defineIpcMethod({
   channel: IpcChannels.DISCOVER_SSH_HOSTS_CHANNEL,
   payload: Schema.Void,
   result: Schema.Array(DesktopDiscoveredSshHostSchema),
   handler: Effect.fn("desktop.ipc.sshEnvironment.discoverHosts")(function* () {
     const sshEnvironment = yield* DesktopSshEnvironment.DesktopSshEnvironment;
+
     return yield* sshEnvironment.discoverHosts();
   }),
 });
 
-export const ensureSshEnvironment = DesktopIpc.makeIpcMethod({
+export const ensureSshEnvironment = DesktopIpc.defineIpcMethod({
   channel: IpcChannels.ENSURE_SSH_ENVIRONMENT_CHANNEL,
   payload: DesktopSshEnvironmentEnsureInputSchema,
   result: DesktopSshEnvironmentEnsureResultSchema,
@@ -126,6 +138,7 @@ export const ensureSshEnvironment = DesktopIpc.makeIpcMethod({
     options,
   }) {
     const sshEnvironment = yield* DesktopSshEnvironment.DesktopSshEnvironment;
+
     return yield* sshEnvironment.ensureEnvironment(target, options).pipe(
       Effect.catch((error) =>
         DesktopSshEnvironment.isDesktopSshPasswordPromptCancellation(error)
@@ -139,7 +152,7 @@ export const ensureSshEnvironment = DesktopIpc.makeIpcMethod({
   }),
 });
 
-export const disconnectSshEnvironment = DesktopIpc.makeIpcMethod({
+export const disconnectSshEnvironment = DesktopIpc.defineIpcMethod({
   channel: IpcChannels.DISCONNECT_SSH_ENVIRONMENT_CHANNEL,
   payload: DesktopSshEnvironmentTargetSchema,
   result: Schema.Void,
@@ -149,7 +162,7 @@ export const disconnectSshEnvironment = DesktopIpc.makeIpcMethod({
   }),
 });
 
-export const fetchSshEnvironmentDescriptor = DesktopIpc.makeIpcMethod({
+export const fetchSshEnvironmentDescriptor = DesktopIpc.defineIpcMethod({
   channel: IpcChannels.FETCH_SSH_ENVIRONMENT_DESCRIPTOR_CHANNEL,
   payload: DesktopSshHttpBaseUrlInputSchema,
   result: ExecutionEnvironmentDescriptor,
@@ -160,7 +173,7 @@ export const fetchSshEnvironmentDescriptor = DesktopIpc.makeIpcMethod({
   }),
 });
 
-export const bootstrapSshBearerSession = DesktopIpc.makeIpcMethod({
+export const bootstrapSshBearerSession = DesktopIpc.defineIpcMethod({
   channel: IpcChannels.BOOTSTRAP_SSH_BEARER_SESSION_CHANNEL,
   payload: DesktopSshBearerBootstrapInputSchema,
   result: AuthAccessTokenResult,
@@ -177,7 +190,7 @@ export const bootstrapSshBearerSession = DesktopIpc.makeIpcMethod({
   }),
 });
 
-export const fetchSshSessionState = DesktopIpc.makeIpcMethod({
+export const fetchSshSessionState = DesktopIpc.defineIpcMethod({
   channel: IpcChannels.FETCH_SSH_SESSION_STATE_CHANNEL,
   payload: DesktopSshBearerRequestInputSchema,
   result: AuthSessionState,
@@ -194,7 +207,7 @@ export const fetchSshSessionState = DesktopIpc.makeIpcMethod({
   }),
 });
 
-export const issueSshWebSocketTicket = DesktopIpc.makeIpcMethod({
+export const issueSshWebSocketTicket = DesktopIpc.defineIpcMethod({
   channel: IpcChannels.ISSUE_SSH_WEBSOCKET_TOKEN_CHANNEL,
   payload: DesktopSshBearerRequestInputSchema,
   result: AuthWebSocketTicketResult,
@@ -211,7 +224,7 @@ export const issueSshWebSocketTicket = DesktopIpc.makeIpcMethod({
   }),
 });
 
-export const resolveSshPasswordPrompt = DesktopIpc.makeIpcMethod({
+export const resolveSshPasswordPrompt = DesktopIpc.defineIpcMethod({
   channel: IpcChannels.RESOLVE_SSH_PASSWORD_PROMPT_CHANNEL,
   payload: DesktopSshPasswordPromptResolutionInputSchema,
   result: Schema.Void,

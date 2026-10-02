@@ -18,6 +18,7 @@ export function formatUsageMeasurement(
   formatNumber: (value: number) => string = (value) => value.toLocaleString(),
 ): string {
   if (measurement.unavailableEntries === 0) return formatNumber(measurement.tokens);
+
   return measurement.tokens === 0 ? t("Unavailable") : `${formatNumber(measurement.tokens)}+`;
 }
 
@@ -29,6 +30,7 @@ export function BotUsageSection({
   readonly botId: string;
 }) {
   const { t, formatNumber } = useI18n();
+
   const usageAtom = useMemo(
     () =>
       environmentId
@@ -39,8 +41,10 @@ export function BotUsageSection({
         : null,
     [botId, environmentId],
   );
+
   const usage = useEnvironmentQuery(usageAtom);
   const snapshot = usage.data;
+
   const hasUnavailable = snapshot
     ? Object.values(snapshot.measurements).some((value) => value.unavailableEntries > 0)
     : false;

@@ -13,11 +13,13 @@ function mapsEqual<K, V>(left: ReadonlyMap<K, V>, right: ReadonlyMap<K, V>): boo
   if (left.size !== right.size) {
     return false;
   }
+
   for (const [key, value] of left) {
     if (right.get(key) !== value) {
       return false;
     }
   }
+
   return true;
 }
 
@@ -32,13 +34,16 @@ export function createEnvironmentPresentationAtoms<E>(input: {
   const presentationAtom = Atom.family((environmentId: EnvironmentId) =>
     Atom.make((get) => {
       const entry = get(input.catalogValueAtom).entries.get(environmentId);
+
       if (entry === undefined) {
         return null;
       }
+
       const state = Option.getOrElse(
         AsyncResult.value(get(input.stateAtom(environmentId))),
         () => AVAILABLE_CONNECTION_STATE,
       );
+
       return {
         entry,
         connection: presentEnvironmentConnection(state),
@@ -48,18 +53,24 @@ export function createEnvironmentPresentationAtoms<E>(input: {
   );
 
   let previous: ReadonlyMap<EnvironmentId, EnvironmentPresentation> = new Map();
+
   const presentationsAtom = Atom.make((get) => {
     const next = new Map<EnvironmentId, EnvironmentPresentation>();
+
     for (const environmentId of get(input.catalogValueAtom).entries.keys()) {
       const presentation = get(presentationAtom(environmentId));
+
       if (presentation !== null) {
         next.set(environmentId, presentation);
       }
     }
+
     if (mapsEqual(previous, next)) {
       return previous;
     }
+
     previous = next;
+
     return previous;
   }).pipe(Atom.withLabel("environment-presentations"));
 

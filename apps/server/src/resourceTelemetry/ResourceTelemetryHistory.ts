@@ -23,8 +23,9 @@ const MAX_HISTORY_WINDOW_MS = 60 * 60_000;
 export function normalizeResourceTelemetryHistoryInput(input: {
   readonly windowMs: number;
   readonly bucketMs: number;
-}): { readonly windowMs: number; readonly bucketMs: number } {
+}): NormalizeResourceTelemetryHistoryInputResult {
   const windowMs = Math.max(1_000, Math.min(MAX_HISTORY_WINDOW_MS, input.windowMs));
+
   return {
     windowMs,
     bucketMs: Math.max(1_000, Math.min(windowMs, input.bucketMs)),
@@ -68,11 +69,13 @@ function summarizeProcesses(
   samples: ReadonlyArray<ProcessSample>,
 ): ReadonlyArray<ResourceTelemetryProcessSummary> {
   const groups = new Map<string, ProcessSample[]>();
+
   for (const sample of samples) {
     const identityKey = processIdentityKey(
       sample.process.identity.pid,
       sample.process.identity.startTimeMs,
     );
+
     const current = groups.get(identityKey) ?? [];
     current.push(sample);
     groups.set(identityKey, current);
@@ -84,6 +87,7 @@ function summarizeProcesses(
       const first = sorted[0]!;
       const latest = sorted[sorted.length - 1]!;
       const cpuTotal = sorted.reduce((total, sample) => total + sample.process.cpuPercent, 0);
+
       return {
         identity: latest.process.identity,
         ppid: latest.process.ppid,
@@ -118,8 +122,10 @@ function buildBuckets(input: {
 }): ReadonlyArray<ResourceTelemetryHistoryBucket> {
   const windowStartMs = input.nowMs - input.windowMs;
   const buckets: ResourceTelemetryHistoryBucket[] = [];
+
   for (let startedAtMs = windowStartMs; startedAtMs < input.nowMs; startedAtMs += input.bucketMs) {
     const endedAtMs = Math.min(input.nowMs, startedAtMs + input.bucketMs);
+
     const samples = input.samples.filter(
       (sample) =>
         sample.sampledAtMs >= startedAtMs &&
@@ -127,6 +133,7 @@ function buildBuckets(input: {
           ? sample.sampledAtMs <= endedAtMs
           : sample.sampledAtMs < endedAtMs),
     );
+
     const cpuTotal = samples.reduce((total, sample) => total + sample.cpuPercent, 0);
     buckets.push({
       startedAt: DateTime.makeUnsafe(startedAtMs),
@@ -141,6 +148,7 @@ function buildBuckets(input: {
         samples.length === 0 ? 0 : Math.max(...samples.map((sample) => sample.processCount)),
     });
   }
+
   return buckets;
 }
 
@@ -152,18 +160,23 @@ export function buildResourceTelemetryHistory(
   const readAtMs = DateTime.toEpochMillis(input.readAt);
   const { windowMs, bucketMs } = normalizeResourceTelemetryHistoryInput(input);
   const windowStartMs = readAtMs - windowMs;
+
   const eligibleSnapshots = input.snapshots
     .filter((snapshot) => snapshot.sampledAtUnixMs <= readAtMs)
     .toSorted((left, right) => left.sampledAtUnixMs - right.sampledAtUnixMs);
+
   const snapshotsInWindow = eligibleSnapshots.filter(
     (snapshot) => snapshot.sampledAtUnixMs >= windowStartMs,
   );
+
   const precedingSnapshot = eligibleSnapshots.findLast(
     (snapshot) => snapshot.sampledAtUnixMs < windowStartMs,
   );
+
   const snapshots = precedingSnapshot
     ? [precedingSnapshot, ...snapshotsInWindow]
     : snapshotsInWindow;
+
   const aggregateSamples: AggregateSample[] = [];
   const legacyBackendAggregateSamples: AggregateSample[] = [];
   const processSamples: ProcessSample[] = [];
@@ -185,7 +198,9 @@ export function buildResourceTelemetryHistory(
             ),
           )
         : 1;
+
     previousSnapshotAtMs = snapshot.sampledAtUnixMs;
+
     const recordedExternalProcesses =
       snapshot.externalProcesses ??
       Option.match(input.desktopSnapshot, {
@@ -199,12 +214,15 @@ export function buildResourceTelemetryHistory(
           },
         ],
       });
+
     const electronRootPids = new Set(recordedExternalProcesses.map((process) => process.pid));
+
     const electronRootStartTimes = new Map(
       recordedExternalProcesses.flatMap((process) =>
         process.startTimeMs === undefined ? [] : [[process.pid, process.startTimeMs] as const],
       ),
     );
+
     const merged = mergeProcesses({
       serverPid: input.serverPid,
       sidecarPid: input.sidecarPid,
@@ -217,11 +235,14 @@ export function buildResourceTelemetryHistory(
       counters,
       updatePrevious: true,
     });
+
     previous = new Map([...previous, ...merged.previous]);
     counters = merged.counters;
+
     if (snapshot.sampledAtUnixMs < windowStartMs) {
       continue;
     }
+
     const deltas =
       deltaWindowFraction === 1
         ? merged.deltas
@@ -231,9 +252,11 @@ export function buildResourceTelemetryHistory(
             ioReadBytes: Math.round(delta.ioReadBytes * deltaWindowFraction),
             ioWriteBytes: Math.round(delta.ioWriteBytes * deltaWindowFraction),
           }));
+
     const deltasByIdentity = new Map(
       deltas.map((processDelta) => [processDelta.identityKey, processDelta]),
     );
+
     aggregateSamples.push({
       sampledAtMs: snapshot.sampledAtUnixMs,
       cpuPercent: merged.groups.allT3.currentCpuPercent,
@@ -242,6 +265,7 @@ export function buildResourceTelemetryHistory(
       ioReadBytes: deltas.reduce((total, process) => total + process.ioReadBytes, 0),
       ioWriteBytes: deltas.reduce((total, process) => total + process.ioWriteBytes, 0),
     });
+
     const backendDeltas = deltas.filter(
       (processDelta) =>
         processDelta.category === "server" ||
@@ -249,6 +273,7 @@ export function buildResourceTelemetryHistory(
         processDelta.category === "provider-root" ||
         processDelta.category === "terminal-root",
     );
+
     legacyBackendAggregateSamples.push({
       sampledAtMs: snapshot.sampledAtUnixMs,
       cpuPercent: merged.groups.backend.currentCpuPercent,
@@ -257,10 +282,12 @@ export function buildResourceTelemetryHistory(
       ioReadBytes: backendDeltas.reduce((total, process) => total + process.ioReadBytes, 0),
       ioWriteBytes: backendDeltas.reduce((total, process) => total + process.ioWriteBytes, 0),
     });
+
     for (const process of merged.processes) {
       const processDelta = deltasByIdentity.get(
         processIdentityKey(process.identity.pid, process.identity.startTimeMs),
       );
+
       processSamples.push({
         sampledAtMs: snapshot.sampledAtUnixMs,
         process,
@@ -288,3 +315,8 @@ export function buildResourceTelemetryHistory(
     health: input.health,
   };
 }
+
+type NormalizeResourceTelemetryHistoryInputResult = {
+  readonly windowMs: number;
+  readonly bucketMs: number;
+};

@@ -34,7 +34,9 @@ async function installDescriptorApi() {
   const testApi = await installEnvironmentHttpTest({
     descriptor: () => Effect.succeed(BASE_ENVIRONMENT),
   });
+
   disposeHttpTest = testApi.dispose;
+
   return testApi;
 }
 
@@ -47,12 +49,14 @@ function installTestBrowser(url: string) {
   });
 }
 
-function captureThrown(run: () => unknown): unknown {
+function captureThrown(run: () => void): Error {
   try {
     run();
-  } catch (error) {
-    return error;
+  } catch (cause) {
+    if (cause instanceof Error) return cause;
+    throw cause;
   }
+
   throw new Error("Expected the operation to throw.");
 }
 
@@ -216,9 +220,11 @@ describe("environmentBootstrap", () => {
     const error = captureThrown(readPrimaryEnvironmentTarget);
 
     expect(isPrimaryEnvironmentUrlInvalidError(error)).toBe(true);
+
     if (!isPrimaryEnvironmentUrlInvalidError(error)) {
       throw new Error("Expected a structured primary environment URL error.");
     }
+
     expect(error).toMatchObject({
       source: "configured",
       urlKind: "http-base-url",
@@ -247,9 +253,11 @@ describe("environmentBootstrap", () => {
     const error = captureThrown(readPrimaryEnvironmentTarget);
 
     expect(isDesktopEnvironmentBootstrapIncompleteError(error)).toBe(true);
+
     if (!isDesktopEnvironmentBootstrapIncompleteError(error)) {
       throw new Error("Expected a structured desktop bootstrap error.");
     }
+
     expect(error).toMatchObject({
       hasHttpBaseUrl: true,
       hasWsBaseUrl: false,
@@ -266,9 +274,11 @@ describe("environmentBootstrap", () => {
     const error = captureThrown(readPrimaryEnvironmentTarget);
 
     expect(isPrimaryEnvironmentProtocolUnsupportedError(error)).toBe(true);
+
     if (!isPrimaryEnvironmentProtocolUnsupportedError(error)) {
       throw new Error("Expected a structured primary environment protocol error.");
     }
+
     expect(error).toMatchObject({
       source: "window-origin",
       protocol: "file:",

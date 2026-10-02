@@ -13,11 +13,13 @@ vi.mock("@tanstack/react-router", () => ({
     select({ pathname: "/settings/general", hash: "" }),
   useNavigate: () => () => undefined,
 }));
+
 vi.mock("../../hooks/useSettings", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../../hooks/useSettings")>()),
   usePrimarySettings: () => DEFAULT_UNIFIED_SETTINGS,
   useUpdatePrimarySettings: () => () => undefined,
 }));
+
 vi.mock("../sidebar/SidebarChrome", () => ({ SidebarChromeHeader: () => null }));
 
 import { GeneralSettingsPanel } from "./GeneralSettingsPanel";
@@ -41,9 +43,11 @@ describe("settings in Simplified Chinese", () => {
         <SettingsSidebarNav />
       </SidebarProvider>,
     );
+
     for (const label of ["通用", "隐私与数据", "高级", "外观", "提供商", "返回聊天"]) {
       expect(html).toContain(label);
     }
+
     for (const label of ["Privacy &amp; data", "Appearance", "Back to chats"]) {
       expect(html).not.toContain(label);
     }
@@ -51,6 +55,7 @@ describe("settings in Simplified Chinese", () => {
 
   it("translates General row titles, descriptions, and select values", () => {
     const html = renderInChinese(<GeneralSettingsPanel />);
+
     for (const label of [
       "语言",
       "时间格式",
@@ -62,6 +67,7 @@ describe("settings in Simplified Chinese", () => {
     ]) {
       expect(html).toContain(label);
     }
+
     for (const label of [
       "Time format",
       "System default follows",
@@ -71,6 +77,7 @@ describe("settings in Simplified Chinese", () => {
     ]) {
       expect(html).not.toContain(label);
     }
+
     // Anchor ids stay stable for Settings search.
     expect(html).toContain('id="time-format"');
   });

@@ -17,6 +17,7 @@ export const subscribeBeforeSnapshot = Effect.fn("subscribeBeforeSnapshot")(func
     Effect.gen(function* () {
       const latest = yield* snapshot;
       const subscription = yield* PubSub.subscribe(changes);
+
       return {
         latest,
         changes: Stream.fromSubscription(subscription),
@@ -29,6 +30,7 @@ export const subscribeBeforeSnapshotWithoutMutex = Effect.fn("subscribeBeforeSna
   function* <A, E, R>(changes: PubSub.PubSub<A>, snapshot: Effect.Effect<A, E, R>) {
     const subscription = yield* PubSub.subscribe(changes);
     const latest = yield* snapshot;
+
     return {
       latest,
       changes: Stream.fromSubscription(subscription),

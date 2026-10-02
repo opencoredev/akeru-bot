@@ -1,6 +1,6 @@
 import { describe, expect, it } from "@effect/vitest";
 
-import { UsageAggregator } from "./usageAggregation.ts";
+import { makeDayFormatter, UsageAggregator } from "./usageAggregation.ts";
 import type { RateTable } from "./usagePricing.ts";
 import type { UsageRecord } from "./usageTranscripts.ts";
 
@@ -48,6 +48,7 @@ function aggregate(
           untilTimeMs: Date.parse("2026-08-07T04:37:00.000Z"),
         }
       : {};
+
   const aggregator = new UsageAggregator({
     timeZone,
     sinceDay: "2026-08-01",
@@ -56,7 +57,9 @@ function aggregate(
     ...hourlyBounds,
     rates,
   });
+
   for (const item of records) aggregator.add(item);
+
   return aggregator.finish();
 }
 
@@ -201,4 +204,24 @@ describe("UsageAggregator", () => {
 
     expect(result.buckets).toHaveLength(3);
   });
+});
+
+it("keeps day formatting identical across zones and timestamp boundaries", () => {
+  for (const timeZone of ["UTC", "America/New_York", "Asia/Kathmandu", "Pacific/Auckland"]) {
+    const original = new Intl.DateTimeFormat("en-CA", {
+      timeZone,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    });
+
+    const toDay = makeDayFormatter(timeZone);
+
+    for (const timestamp of [0, -0.9, -86_400_001, 1_793_512_799_999, 1_793_512_800_000]) {
+      expect(toDay(timestamp)).toBe(original.format(new Date(timestamp)));
+    }
+  }
+
+  expect(makeDayFormatter("not-a-time-zone")(0)).toBe("1970-01-01");
+  expect(() => makeDayFormatter("UTC")(Number.NaN)).toThrow(RangeError);
 });

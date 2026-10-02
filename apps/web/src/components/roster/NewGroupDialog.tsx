@@ -53,9 +53,11 @@ export function NewGroupDialog({
   const { t } = useI18n();
   const activeBots = useMemo(() => bots.filter((bot) => bot.archivedAt === null), [bots]);
   const [name, setName] = useState("");
+
   const [selectedIds, setSelectedIds] = useState<readonly string[]>(() =>
     activeBots.slice(0, 2).map((bot) => bot.id),
   );
+
   const [bossBotId, setBossBotId] = useState(selectedIds[0] ?? "");
   const selectedBots = activeBots.filter((bot) => selectedIds.includes(bot.id));
   const selectionHint = groupSelectionHint(selectedIds);
@@ -67,13 +69,14 @@ export function NewGroupDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogPopup
-        className="flex max-h-[calc(100dvh-2rem)] max-w-lg flex-col overflow-hidden"
+        className="flex max-h-(--spacing-dvh-2rem) max-w-lg flex-col overflow-hidden"
         bottomStickOnMobile={false}
       >
         <form
           className="flex min-h-0 flex-1 flex-col"
           onSubmit={(event) => {
             event.preventDefault();
+
             if (!canCreateGroup(name, selectedIds, bossBotId)) return;
             onCreate({
               name: name.trim(),
@@ -105,6 +108,7 @@ export function NewGroupDialog({
               <div className="max-h-56 space-y-1 overflow-y-auto rounded-lg border p-2">
                 {activeBots.map((bot) => {
                   const checked = selectedIds.includes(bot.id);
+
                   return (
                     <label
                       key={bot.id}

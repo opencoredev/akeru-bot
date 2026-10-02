@@ -4,9 +4,13 @@ import * as Schema from "effect/Schema";
 
 import { AkeruBotUsageSnapshot, AkeruStepUsageSnapshot } from "./akeruUsage.ts";
 
+const decodeEffectAkeruBotUsageSnapshot = Schema.decodeUnknownEffect(AkeruBotUsageSnapshot);
+
+const decodeEffectAkeruStepUsageSnapshot = Schema.decodeUnknownEffect(AkeruStepUsageSnapshot);
+
 it.effect("decodes bot usage with unavailable provider totals", () =>
   Effect.gen(function* () {
-    const snapshot = yield* Schema.decodeUnknownEffect(AkeruBotUsageSnapshot)({
+    const snapshot = yield* decodeEffectAkeruBotUsageSnapshot({
       botId: "bot-1",
       consumedTokens: 12,
       reservedTokens: 32,
@@ -29,7 +33,7 @@ it.effect("decodes bot usage with unavailable provider totals", () =>
 
 it.effect("decodes settled step usage with an estimated cost", () =>
   Effect.gen(function* () {
-    const snapshot = yield* Schema.decodeUnknownEffect(AkeruStepUsageSnapshot)({
+    const snapshot = yield* decodeEffectAkeruStepUsageSnapshot({
       botId: "bot-1",
       engine: { provider: "codex", model: "gpt-5.6-sol" },
       tokens: 1_500,

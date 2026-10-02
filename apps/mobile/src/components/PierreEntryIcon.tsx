@@ -13,6 +13,7 @@ export function PierreEntryIcon(props: {
 }) {
   const size = props.size ?? 16;
   const folderColor = useThemeColor("--color-icon-subtle");
+
   if (props.kind === "directory") {
     return <SymbolView name="folder" size={size} tintColor={folderColor} type="monochrome" />;
   }

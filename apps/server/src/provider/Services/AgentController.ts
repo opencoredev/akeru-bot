@@ -57,7 +57,9 @@ export type AgentControllerSendTurnInput = ProviderSendTurnInput & {
 export interface AgentControllerShape {
   readonly configurePluginRuntime?: (input: {
     readonly readSnapshot: () => Promise<OrchestrationReadModel>;
-    readonly dispatch: (command: OrchestrationCommand) => Promise<unknown>;
+    readonly dispatch: (
+      command: OrchestrationCommand,
+    ) => Promise<{ readonly sequence: number } | void>;
     readonly searchComposioToolkits?: (input: {
       readonly query?: string;
       readonly limit?: number;

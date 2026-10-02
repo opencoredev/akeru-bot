@@ -32,28 +32,35 @@ import {
 import { retryShowcaseOperation } from "./showcaseRetry";
 
 const SHOWCASE_ENABLED = process.env.EXPO_PUBLIC_SHOWCASE === "1";
+
 const SHOWCASE_THREAD_ID = "remote-command-center";
 
 type ShowcaseResetRoute = PartialState<NavigationState>["routes"][number];
 
 function sceneFromPathname(pathname: string): ShowcaseScene | null {
   const routePath = pathname.split(/[?#]/u, 1)[0] ?? pathname;
+
   if (routePath === "/settings" || routePath.endsWith("/settings/environments")) {
     return "environments";
   }
+
   if (routePath.startsWith("/threads/")) return "thread";
+
   if (routePath === "/") return "threads";
+
   return null;
 }
 
 export function ShowcaseCaptureCoordinator(props: { readonly pathname: string }) {
   const navigation = useNavigation();
   const { connectPairingUrl } = useConnectionController();
+
   const {
     isReady: appearancePreferencesReady,
     themeIds,
     setThemeIdForBothAppearances,
   } = useAppearancePreferences();
+
   const workspace = useWorkspaceState();
   const projects = useProjects();
   const threads = useThreadShells();
@@ -73,6 +80,7 @@ export function ShowcaseCaptureCoordinator(props: { readonly pathname: string })
 
     const readLaunchRequest = () => {
       const values = getNativeShowcasePairingUrls();
+
       if (values.length === 0) return;
       // The palette rides the same launch request as the pairing URLs, so
       // reading it here settles it without a timeout that could expire while
@@ -81,16 +89,20 @@ export function ShowcaseCaptureCoordinator(props: { readonly pathname: string })
       setThemeRequestSettled(true);
       setPairingUrls(values);
     };
+
     readLaunchRequest();
     const interval = setInterval(readLaunchRequest, 250);
+
     return () => clearInterval(interval);
   }, [pairingUrls.length]);
 
   useEffect(() => {
     if (!SHOWCASE_ENABLED || orientationSettled) return;
     const orientation = getNativeShowcaseOrientation();
+
     if (orientation === null) {
       setOrientationSettled(true);
+
       return;
     }
 
@@ -100,6 +112,7 @@ export function ShowcaseCaptureCoordinator(props: { readonly pathname: string })
     }).then((applied) => {
       if (!cancelled && applied) setOrientationSettled(true);
     });
+
     return () => {
       cancelled = true;
     };
@@ -110,12 +123,15 @@ export function ShowcaseCaptureCoordinator(props: { readonly pathname: string })
 
     const readRequestedScene = () => {
       const value = getNativeShowcaseScene();
+
       if (!value || requestedSceneRef.current === value) return;
       requestedSceneRef.current = value;
       setRequestedScene(value);
     };
+
     readRequestedScene();
     const interval = setInterval(readRequestedScene, 250);
+
     return () => clearInterval(interval);
   }, []);
 
@@ -136,6 +152,7 @@ export function ShowcaseCaptureCoordinator(props: { readonly pathname: string })
     ) {
       return;
     }
+
     setThemeIdForBothAppearances(requestedTheme);
   }, [appearancePreferencesReady, requestedTheme, setThemeIdForBothAppearances, themeApplied]);
 
@@ -146,25 +163,30 @@ export function ShowcaseCaptureCoordinator(props: { readonly pathname: string })
       await Promise.all(
         pairingUrls.map(async (pairingUrl) => {
           if (cancelled || attemptedPairingRef.current.has(pairingUrl)) return;
+
           const paired = await retryShowcaseOperation(
             async () => AsyncResult.isSuccess(await connectPairingUrl(pairingUrl)),
             { isCancelled: () => cancelled },
           );
+
           if (paired) attemptedPairingRef.current.add(pairingUrl);
         }),
       );
     })();
+
     return () => {
       cancelled = true;
     };
   }, [connectPairingUrl, pairingUrls]);
 
   const scene = sceneFromPathname(props.pathname);
+
   const hasServerFixture =
     workspace.state.hasReadyEnvironment &&
     workspace.environments.length >= 3 &&
     projects.length >= 3 &&
     threads.some((thread) => String(thread.id) === SHOWCASE_THREAD_ID);
+
   const hasFixture = hasServerFixture && pendingTasksReady;
   const showcaseThread = threads.find((thread) => String(thread.id) === SHOWCASE_THREAD_ID);
 
@@ -172,28 +194,37 @@ export function ShowcaseCaptureCoordinator(props: { readonly pathname: string })
     if (!SHOWCASE_ENABLED || !hasServerFixture || pendingTasksReady) return;
 
     const pendingTasks = buildShowcasePendingTasks(projects, Date.now());
+
     if (pendingTasks.length !== SHOWCASE_PENDING_TASK_DEFINITIONS.length) return;
 
     let cancelled = false;
+
     for (const task of pendingTasks) holdEditingQueuedMessage(task.messageId);
     void (async () => {
       const results = await Promise.all(
         pendingTasks.map(async (task) => {
           const messageId = String(task.messageId);
+
           if (seededPendingTaskIdsRef.current.has(messageId)) return true;
+
           const seeded = await retryShowcaseOperation(
             async () => {
               await enqueueThreadOutboxMessage(task);
+
               return true;
             },
             { isCancelled: () => cancelled },
           );
+
           if (seeded) seededPendingTaskIdsRef.current.add(messageId);
+
           return seeded;
         }),
       );
+
       if (!cancelled && results.every(Boolean)) setPendingTasksReady(true);
     })();
+
     return () => {
       cancelled = true;
     };
@@ -201,17 +232,22 @@ export function ShowcaseCaptureCoordinator(props: { readonly pathname: string })
 
   useEffect(() => {
     if (!SHOWCASE_ENABLED || requestedScene === null || !hasFixture || !showcaseThread) return;
+
     if (scene === requestedScene) return;
 
     const params = {
       environmentId: String(showcaseThread.environmentId),
       threadId: SHOWCASE_THREAD_ID,
     };
+
     if (requestedScene === "threads") {
       navigation.dispatch(StackActions.popToTop());
+
       return;
     }
+
     const routes: ShowcaseResetRoute[] = [{ name: "Home" }];
+
     if (requestedScene === "environments") {
       routes.push({
         name: "SettingsSheet",
@@ -231,6 +267,7 @@ export function ShowcaseCaptureCoordinator(props: { readonly pathname: string })
     } else {
       routes.push({ name: "Thread", params });
     }
+
     navigation.dispatch(
       CommonActions.reset({
         index: routes.length - 1,
@@ -253,10 +290,13 @@ export function ShowcaseCaptureCoordinator(props: { readonly pathname: string })
       !themeApplied
     ) {
       setReadyScene(null);
+
       return;
     }
+
     let renderFrame: number | null = null;
     let readyFrame: number | null = null;
+
     const settleTimer = setTimeout(() => {
       renderFrame = requestAnimationFrame(() => {
         readyFrame = requestAnimationFrame(() => {
@@ -265,9 +305,12 @@ export function ShowcaseCaptureCoordinator(props: { readonly pathname: string })
         });
       });
     }, 500);
+
     return () => {
       clearTimeout(settleTimer);
+
       if (renderFrame !== null) cancelAnimationFrame(renderFrame);
+
       if (readyFrame !== null) cancelAnimationFrame(readyFrame);
     };
   }, [hasFixture, orientationSettled, requestedScene, scene, themeApplied]);

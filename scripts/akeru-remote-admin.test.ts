@@ -1,4 +1,3 @@
-// @effect-diagnostics nodeBuiltinImport:off
 import * as NodeCrypto from "node:crypto";
 import * as NodeFS from "node:fs";
 import * as NodeHttp from "node:http";
@@ -9,13 +8,18 @@ import * as NodeChildProcess from "node:child_process";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
 const shell = NodeFS.readFileSync(new URL("./akeru-remote-admin.sh", import.meta.url), "utf8");
+
 const module = NodeFS.readFileSync(new URL("./akeru-remote-admin.mjs", import.meta.url), "utf8");
+
 const roots: string[] = [];
+
 const tempRoot = () => {
   const root = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "akeru-remote-admin-"));
   roots.push(root);
+
   return root;
 };
+
 afterEach(() => {
   for (const root of roots.splice(0)) NodeFS.rmSync(root, { recursive: true, force: true });
 });
@@ -48,11 +52,13 @@ describe("Akeru Remote administration", () => {
         mode: 0o755,
       },
     );
+
     const run = (env: Record<string, string>) =>
       NodeChildProcess.spawnSync("sh", [NodePath.join(root, "remote-admin"), "doctor"], {
         env: { PATH: process.env.PATH ?? "", HOME: root, ...env },
         encoding: "utf8",
       }).stdout;
+
     expect(run({ T3CODE_HOME: "/legacy/.t3" })).toBe(NodePath.join(root, ".akeru"));
     expect(run({ T3CODE_HOME: "/legacy/.t3", AKERU_HOME: "/srv/akeru" })).toBe("/srv/akeru");
   });
@@ -73,6 +79,7 @@ describe("Akeru Remote administration", () => {
         mode: 0o755,
       },
     );
+
     const logs = () =>
       NodeChildProcess.spawnSync("sh", [NodePath.join(root, "remote-admin"), "logs"], {
         env: {
@@ -99,6 +106,7 @@ describe("Akeru Remote administration", () => {
     NodeFS.writeFileSync(NodePath.join(root, "VERSION"), "1.2.3\n");
     const probe = NodePath.join(root, "probe.mjs");
     NodeFS.writeFileSync(probe, "process.stdout.write(process.env.T3CODE_HOME ?? '');\n");
+
     const run = (env: Record<string, string>) =>
       NodeChildProcess.spawnSync(
         process.execPath,
@@ -108,6 +116,7 @@ describe("Akeru Remote administration", () => {
           encoding: "utf8",
         },
       ).stdout;
+
     expect(run({ T3CODE_HOME: "/legacy/.t3" })).toBe(NodePath.join(root, ".akeru"));
     expect(run({ T3CODE_HOME: "/legacy/.t3", AKERU_HOME: "/srv/akeru" })).toBe("/srv/akeru");
   });
@@ -121,6 +130,7 @@ describe("Akeru Remote administration", () => {
     NodeFS.writeFileSync(NodePath.join(root, "VERSION"), "1.2.3\n");
     const probe = NodePath.join(root, "probe.mjs");
     NodeFS.writeFileSync(probe, "process.stdout.write(JSON.stringify(process.argv.slice(2)));\n");
+
     const result = NodeChildProcess.spawnSync(
       process.execPath,
       [
@@ -135,6 +145,7 @@ describe("Akeru Remote administration", () => {
         encoding: "utf8",
       },
     );
+
     expect(JSON.parse(result.stdout)).toEqual([
       "__remote-doctor",
       "--support-bundle",
@@ -142,9 +153,7 @@ describe("Akeru Remote administration", () => {
     ]);
   });
 
-  const runWindowsUninstall = (
-    schtasksScript: string,
-  ): { readonly status: number | null; readonly stderr: string; readonly calls: string[] } => {
+  const runWindowsUninstall = (schtasksScript: string) => {
     const root = tempRoot();
     NodeFS.copyFileSync(
       new URL("./akeru-remote-admin.mjs", import.meta.url),
@@ -164,6 +173,7 @@ describe("Akeru Remote administration", () => {
       probe,
       `import * as fs from "node:fs";\nfs.appendFileSync(${JSON.stringify(calls)}, "server\\n");\n`,
     );
+
     const result = NodeChildProcess.spawnSync(
       process.execPath,
       [NodePath.join(root, "remote-admin.mjs"), "remote", "uninstall"],
@@ -176,6 +186,7 @@ describe("Akeru Remote administration", () => {
         encoding: "utf8",
       },
     );
+
     return {
       status: result.status,
       stderr: result.stderr,
@@ -196,9 +207,11 @@ describe("Akeru Remote administration", () => {
 
   it("allows already removed tasks but reports every task Windows would not delete", () => {
     const listing = `if [ "$1" = /Query ]; then printf '"\\\\Akeru Remote","N/A","Ready"\\r\\n"\\\\Other","N/A","Ready"\\r\\n'; exit 0; fi\n`;
+
     const absent = runWindowsUninstall(
       `${listing}case "$*" in *"Akeru Remote Heartbeat"*) exit 1;; esac\n`,
     );
+
     expect(absent.status).toBe(0);
     expect(absent.calls.at(-1)).toBe("schtasks /Query /FO CSV /NH");
 
@@ -225,6 +238,7 @@ describe("Akeru Remote administration", () => {
       new URL("./akeru-release-manifest.pub", import.meta.url),
       "utf8",
     );
+
     expect(module).toContain(pinned.split("\n")[1]);
   });
 
@@ -271,24 +285,32 @@ describe("Akeru Remote administration", () => {
       NodeFS.writeFileSync(manifestKeyFile, publicKey.export({ type: "spki", format: "pem" }));
       const digest = NodeCrypto.createHash("sha256").update(archive).digest("hex");
       const manifest = Buffer.from(`${digest}  ${archiveName}\n`);
+
       const signature = NodeCrypto.sign(
         null,
         options.tamperSignature ? Buffer.from("forged") : manifest,
         privateKey,
       );
+
       const updateRequests: unknown[] = [];
+
       const server = NodeHttp.createServer((request, response) => {
         const origin = `http://127.0.0.1:${(server.address() as NodeNet.AddressInfo).port}`;
-        const files: Record<string, Buffer> = {
-          [`/download/${archiveName}`]: archive,
-          "/download/AKERU-REMOTE-MANIFEST.txt": manifest,
-          "/download/AKERU-REMOTE-MANIFEST.sig": signature,
-        };
+
+        const files = new Map<string, Buffer>(
+          Object.entries({
+            [`/download/${archiveName}`]: archive,
+            "/download/AKERU-REMOTE-MANIFEST.txt": manifest,
+            "/download/AKERU-REMOTE-MANIFEST.sig": signature,
+          }),
+        );
+
         if (request.url === "/repos/opencoredev/akeru-bot/releases/latest") {
-          const assets = Object.keys(files).map((file) => ({
+          const assets = Array.from(files.keys()).map((file) => ({
             name: file.slice("/download/".length),
             browser_download_url: `${origin}${file}`,
           }));
+
           response.end(JSON.stringify({ tag_name: "v1.1.0", assets }));
         } else if (request.url === "/api/remote/update" && request.method === "POST") {
           let body = "";
@@ -300,18 +322,20 @@ describe("Akeru Remote administration", () => {
             });
             response.writeHead(202).end(JSON.stringify({ targetVersion: "1.1.0" }));
           });
-        } else if (request.url && files[request.url]) {
-          response.end(files[request.url]);
+        } else if (request.url && files.get(request.url)) {
+          response.end(files.get(request.url));
         } else {
           response.writeHead(404).end();
         }
       });
+
       await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
       const port = (server.address() as NodeNet.AddressInfo).port;
       NodeFS.writeFileSync(
         NodePath.join(home, "userdata", "server-runtime.json"),
         JSON.stringify({ port }),
       );
+
       try {
         const result = await new Promise<{ code: number | null; stdout: string; stderr: string }>(
           (resolve) => {
@@ -339,6 +363,7 @@ describe("Akeru Remote administration", () => {
                 },
               },
             );
+
             let stdout = "";
             let stderr = "";
             child.stdout.on("data", (chunk) => (stdout += chunk));
@@ -346,6 +371,7 @@ describe("Akeru Remote administration", () => {
             child.on("close", (code) => resolve({ code, stdout, stderr }));
           },
         );
+
         return { result, installRoot, updateRequests };
       } finally {
         await new Promise((resolve) => server.close(resolve));

@@ -1,14 +1,29 @@
+import * as Schema from "effect/Schema";
+import * as Predicate from "effect/Predicate";
 import * as NodeOS from "node:os";
 
+const MockMessage = Schema.Struct({
+  id: Schema.optional(Schema.Union([Schema.String, Schema.Number])),
+  method: Schema.optional(Schema.String),
+  params: Schema.optional(Schema.Json),
+  result: Schema.optional(Schema.Json),
+});
+
+type MockMessage = typeof MockMessage.Type;
+
+const decodeMessage = Schema.decodeUnknownSync(Schema.fromJsonString(MockMessage));
+
 let nextServerRequestId = 10_000;
+
 let pendingSkillsListRequestId: number | string | null = null;
+
 let pendingUserInputRequestId: number | null = null;
 
-const writeMessage = (message: unknown) => {
+const writeMessage = (message: Schema.Json) => {
   process.stdout.write(`${JSON.stringify(message)}\n`);
 };
 
-const respond = (id: number | string, result: unknown) => {
+const respond = (id: number | string, result: Schema.Json) => {
   writeMessage({ id, result });
 };
 
@@ -22,23 +37,25 @@ const respondError = (id: number | string, code: number, message: string) => {
   });
 };
 
-const sendRequest = (method: string, params: unknown) => {
+const sendRequest = (method: string, params: Schema.Json) => {
   const id = nextServerRequestId++;
   writeMessage({ id, method, params });
+
   return id;
 };
 
-const handleMethod = (message: Record<string, unknown>) => {
+const handleMethod = (message: MockMessage) => {
   const method = message.method;
-  if (typeof method !== "string") {
+
+  if (!Predicate.isString(method)) {
     return;
   }
 
   switch (method) {
     case "initialize": {
-      // oxlint-disable-next-line akeru/no-global-process-runtime -- Standalone mock peer process has no Effect runtime.
       const platform = NodeOS.platform();
       const stderrBytes = Number(process.env.CODEX_APP_SERVER_TEST_STDERR_BYTES ?? 0);
+
       if (Number.isFinite(stderrBytes) && stderrBytes > 0) {
         process.stderr.write("x".repeat(stderrBytes), () => {
           respond(message.id as number | string, {
@@ -48,16 +65,20 @@ const handleMethod = (message: Record<string, unknown>) => {
             platformOs: platform === "darwin" ? "macos" : platform,
           });
         });
+
         return;
       }
+
       respond(message.id as number | string, {
         userAgent: "mock-codex-app-server",
         codexHome: process.cwd(),
         platformFamily: platform === "win32" ? "windows" : "unix",
         platformOs: platform === "darwin" ? "macos" : platform,
       });
+
       return;
     }
+
     case "initialized": {
       writeMessage({
         method: "item/agentMessage/delta",
@@ -68,8 +89,10 @@ const handleMethod = (message: Record<string, unknown>) => {
           turnId: "turn-1",
         },
       });
+
       return;
     }
+
     case "account/read": {
       respond(message.id as number | string, {
         account: {
@@ -79,8 +102,10 @@ const handleMethod = (message: Record<string, unknown>) => {
         },
         requiresOpenaiAuth: false,
       });
+
       return;
     }
+
     case "skills/list": {
       pendingSkillsListRequestId = message.id as number | string;
       pendingUserInputRequestId = sendRequest("item/tool/requestUserInput", {
@@ -101,8 +126,10 @@ const handleMethod = (message: Record<string, unknown>) => {
           },
         ],
       });
+
       return;
     }
+
     default: {
       if (message.id !== undefined) {
         respondError(message.id as number | string, -32601, `Unhandled request: ${method}`);
@@ -111,7 +138,7 @@ const handleMethod = (message: Record<string, unknown>) => {
   }
 };
 
-const handleResponse = (message: Record<string, unknown>) => {
+const handleResponse = (message: MockMessage) => {
   if (message.id !== pendingUserInputRequestId) {
     return;
   }
@@ -133,6 +160,7 @@ const handleResponse = (message: Record<string, unknown>) => {
 let remainder = "";
 
 process.stdin.setEncoding("utf8");
+
 process.stdin.on("data", (chunk) => {
   remainder += chunk;
   const lines = remainder.split("\n");
@@ -140,15 +168,18 @@ process.stdin.on("data", (chunk) => {
 
   for (const line of lines) {
     const trimmed = line.trim();
+
     if (trimmed.length === 0) {
       continue;
     }
 
-    const message = JSON.parse(trimmed) as Record<string, unknown>;
+    const message = decodeMessage(trimmed);
+
     if ("method" in message) {
       handleMethod(message);
       continue;
     }
+
     if ("id" in message) {
       handleResponse(message);
     }

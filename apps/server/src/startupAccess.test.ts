@@ -92,14 +92,17 @@ const remoteAccessInfo = {
 const announceWith = (sessions: Parameters<typeof hasPairedAdminClient>[0]) => {
   const printed: Array<string> = [];
   let issued = 0;
+
   const effect = announceRemoteStartup({
     listSessions: Effect.succeed(sessions),
     issueAccessInfo: Effect.sync(() => {
       issued += 1;
+
       return remoteAccessInfo;
     }),
     print: (text) => Effect.sync(() => void printed.push(text)),
   });
+
   return { effect, printed, issuedCount: () => issued };
 };
 
@@ -109,6 +112,7 @@ it.effect("prints one admin pairing link on a remote first boot", () =>
       // A CLI-issued bot token has admin scopes but is not a paired client.
       { scopes: [...AuthAdministrativeScopes], client: { deviceType: "bot" } },
     ]);
+
     yield* run.effect;
     assert.equal(run.issuedCount(), 1);
     assert.equal(run.printed.length, 1);
@@ -125,6 +129,7 @@ it.effect("prints no token once an admin client is paired", () =>
       { scopes: [...AuthStandardClientScopes], client: { deviceType: "mobile" } },
       { scopes: [...AuthAdministrativeScopes], client: { deviceType: "desktop" } },
     ]);
+
     yield* run.effect;
     assert.equal(run.issuedCount(), 0);
     assert.deepEqual(run.printed, [REMOTE_ALREADY_PAIRED_OUTPUT]);

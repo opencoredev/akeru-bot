@@ -4,7 +4,7 @@ import { createFileRoute, redirect } from "@tanstack/react-router";
 import { ChannelDetailPage } from "../components/settings/ChannelDetailPage";
 
 function isChannelProvider(value: string): value is ChannelProvider {
-  return (CHANNEL_PROVIDERS as ReadonlyArray<string>).includes(value);
+  return CHANNEL_PROVIDERS.some((channel) => channel === value);
 }
 
 export const Route = createFileRoute("/settings/channels/$channel")({
@@ -17,6 +17,8 @@ export const Route = createFileRoute("/settings/channels/$channel")({
 
 function ChannelSettingsRoute() {
   const { channel } = Route.useParams();
+
   if (!isChannelProvider(channel)) return null;
+
   return <ChannelDetailPage key={channel} provider={channel} />;
 }

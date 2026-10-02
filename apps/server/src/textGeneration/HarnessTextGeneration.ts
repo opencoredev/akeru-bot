@@ -1,5 +1,4 @@
-// @effect-diagnostics nodeBuiltinImport:off
-import * as NodePath from "node:path";
+import * as Path from "effect/Path";
 import { AuthStorage } from "@mastra/code-sdk/auth/storage";
 import { Agent } from "@mastra/core/agent";
 import {
@@ -36,9 +35,11 @@ import {
 const decodeServiceTier = Schema.decodeUnknownEffect(
   Schema.Literals(["auto", "default", "flex", "priority"]),
 );
+
 const decodeReasoningEffort = Schema.decodeUnknownEffect(
   Schema.Literals(["none", "minimal", "low", "medium", "high", "xhigh", "max"]),
 );
+
 const decodeClaudeEffort = Schema.decodeUnknownEffect(
   Schema.Literals(["low", "medium", "high", "xhigh", "max"]),
 );
@@ -52,7 +53,9 @@ export const makeHarnessTextGeneration = Effect.fn("makeHarnessTextGeneration")(
   const auth = yield* SubscriptionAuthService.forSecretsDir(input.secretsDir);
   const fileSystem = yield* FileSystem.FileSystem;
   const serverConfig = yield* ServerConfig;
-  const authStorage = new AuthStorage(NodePath.join(input.secretsDir, "subscription-auth.json"));
+  const path = yield* Path.Path;
+  const authStorage = new AuthStorage(path.join(input.secretsDir, "subscription-auth.json"));
+
   const generate = <Output>(
     operation: "generateBranchName" | "generateThreadTitle",
     modelSelection: ModelSelection,
@@ -62,6 +65,7 @@ export const makeHarnessTextGeneration = Effect.fn("makeHarnessTextGeneration")(
   ) =>
     Effect.gen(function* () {
       yield* auth.reload();
+
       const imageResults = yield* Effect.forEach(
         attachments.filter((attachment) => attachment.type === "image"),
         (attachment) =>
@@ -70,7 +74,9 @@ export const makeHarnessTextGeneration = Effect.fn("makeHarnessTextGeneration")(
               attachmentsDir: serverConfig.attachmentsDir,
               attachment,
             });
+
             if (path === null) return Option.none();
+
             return yield* fileSystem.readFile(path).pipe(
               Effect.map((bytes) => ({
                 type: "image" as const,
@@ -81,9 +87,12 @@ export const makeHarnessTextGeneration = Effect.fn("makeHarnessTextGeneration")(
             );
           }),
       );
+
       const images = imageResults.flatMap((image) => (Option.isSome(image) ? [image.value] : []));
+
       const selectedTier =
         input.driver === "codex" ? getCodexServiceTierOptionValue(modelSelection) : undefined;
+
       const serviceTier =
         selectedTier === undefined
           ? undefined
@@ -97,11 +106,13 @@ export const makeHarnessTextGeneration = Effect.fn("makeHarnessTextGeneration")(
                   }),
               ),
             );
+
       const selectedEffort =
         input.driver === "codex"
           ? (getModelSelectionStringOptionValue(modelSelection, "reasoningEffort") ??
             DEFAULT_TEXT_GENERATION_REASONING_EFFORT)
           : undefined;
+
       const reasoningEffort =
         selectedEffort === undefined
           ? undefined
@@ -115,12 +126,14 @@ export const makeHarnessTextGeneration = Effect.fn("makeHarnessTextGeneration")(
                   }),
               ),
             );
+
       const modelOptions = reasoningEffort
         ? {
             reasoningEffort: reasoningEffort === "none" ? "off" : reasoningEffort,
             ...(serviceTier ? { serviceTier } : {}),
           }
         : undefined;
+
       const selectedClaudeEffort =
         input.driver === "claudeAgent"
           ? normalizeClaudeCliEffort(
@@ -131,6 +144,7 @@ export const makeHarnessTextGeneration = Effect.fn("makeHarnessTextGeneration")(
               modelSelection.model,
             )
           : undefined;
+
       const claudeEffort =
         selectedClaudeEffort === undefined
           ? undefined
@@ -144,6 +158,7 @@ export const makeHarnessTextGeneration = Effect.fn("makeHarnessTextGeneration")(
                   }),
               ),
             );
+
       const text = yield* Effect.tryPromise({
         try: async (abortSignal) => {
           const resolved = resolveAkeruMastraModel(
@@ -162,12 +177,14 @@ export const makeHarnessTextGeneration = Effect.fn("makeHarnessTextGeneration")(
             (provider, instanceId) => auth.getOAuthCredential(provider, instanceId),
             (provider, instanceId) => auth.getAccessToken(provider, instanceId),
           );
+
           const agent = new Agent({
             id: `akeru-${operation}-${input.instanceId}`,
             name: "Akeru writing",
             instructions: "Return only the requested JSON object.",
             model: resolved,
           });
+
           const message =
             images.length === 0
               ? prompt
@@ -177,6 +194,7 @@ export const makeHarnessTextGeneration = Effect.fn("makeHarnessTextGeneration")(
                     content: [{ type: "text" as const, text: prompt }, ...images],
                   },
                 ];
+
           const runOptions = reasoningEffort
             ? {
                 providerOptions: {
@@ -189,7 +207,9 @@ export const makeHarnessTextGeneration = Effect.fn("makeHarnessTextGeneration")(
             : claudeEffort
               ? { providerOptions: { anthropic: { effort: claudeEffort } } }
               : {};
+
           const result = await agent.generate(message, { ...runOptions, abortSignal });
+
           return result.text;
         },
         catch: (cause) =>
@@ -199,6 +219,7 @@ export const makeHarnessTextGeneration = Effect.fn("makeHarnessTextGeneration")(
             cause,
           }),
       });
+
       return yield* Schema.decodeUnknownEffect(Schema.fromJsonString(outputSchema))(
         text.trim(),
       ).pipe(
@@ -220,9 +241,11 @@ export const makeHarnessTextGeneration = Effect.fn("makeHarnessTextGeneration")(
           ),
       }),
     );
+
   return {
     generateBranchName: (request) => {
       const { prompt, outputSchema } = buildBranchNamePrompt(request);
+
       return generate(
         "generateBranchName",
         request.modelSelection,
@@ -233,6 +256,7 @@ export const makeHarnessTextGeneration = Effect.fn("makeHarnessTextGeneration")(
     },
     generateThreadTitle: (request) => {
       const { prompt, outputSchema } = buildThreadTitlePrompt(request);
+
       return generate(
         "generateThreadTitle",
         request.modelSelection,

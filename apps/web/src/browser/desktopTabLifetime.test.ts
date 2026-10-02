@@ -27,6 +27,7 @@ const DEFAULT_TAB_STATE = {
   zoomFactor: DEFAULT_PREVIEW_ZOOM_FACTOR,
   colorScheme: DEFAULT_PREVIEW_APPEARANCE,
 };
+
 import { previewRuntimeTabId } from "./previewRuntimeTabId";
 
 describe("desktopTabLifetime", () => {
@@ -73,6 +74,7 @@ describe("desktopTabLifetime", () => {
   it("keeps identical server tab ids from two environments in separate desktop slots", async () => {
     vi.useFakeTimers();
     createTab.mockResolvedValue(undefined);
+
     const tabA = previewRuntimeTabId(
       {
         environmentId: EnvironmentId.make("environment-a"),
@@ -81,6 +83,7 @@ describe("desktopTabLifetime", () => {
       "epoch-a",
       "tab_1",
     );
+
     const tabB = previewRuntimeTabId(
       {
         environmentId: EnvironmentId.make("environment-b"),

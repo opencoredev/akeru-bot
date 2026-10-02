@@ -1,4 +1,3 @@
-// @ts-nocheck
 "use client";
 
 import { useChartPart } from "./chart-context";
@@ -21,6 +20,7 @@ export function ReferenceLine({
   className?: string;
 }) {
   const ctx = useChartPart("ReferenceLine");
+
   if (!ctx.ready) return null;
 
   const { width } = ctx.plot;
@@ -41,7 +41,7 @@ export function ReferenceLine({
           x={width - 2}
           y={py - 3}
           textAnchor="end"
-          className="fill-muted-foreground font-mono text-[10px]"
+          className="fill-muted-foreground font-mono text-10px"
         >
           {label}
         </text>

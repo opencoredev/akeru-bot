@@ -5,6 +5,7 @@ module.exports = function withoutIosPersonalTeamCapabilities(config) {
     delete modConfig.modResults["aps-environment"];
     delete modConfig.modResults["com.apple.developer.applesignin"];
     delete modConfig.modResults["com.apple.security.application-groups"];
+
     return modConfig;
   });
 };

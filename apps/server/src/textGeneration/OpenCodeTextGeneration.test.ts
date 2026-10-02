@@ -1,3 +1,4 @@
+import { createOpencodeClient } from "@opencode-ai/sdk/v2";
 import { OpenCodeSettings, ProviderInstanceId, TextGenerationError } from "@akeru/contracts";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { it } from "@effect/vitest";
@@ -8,7 +9,6 @@ import * as Schema from "effect/Schema";
 import * as TestClock from "effect/testing/TestClock";
 import * as NetService from "@akeru/shared/Net";
 import { beforeEach, expect } from "vite-plus/test";
-
 import * as ServerConfig from "../config.ts";
 import * as OpenCodeRuntime from "../provider/opencodeRuntime.ts";
 import * as OpenCodeTextGeneration from "./OpenCodeTextGeneration.ts";
@@ -52,6 +52,7 @@ const OpenCodeRuntimeTestDouble: OpenCodeRuntime.OpenCodeRuntimeShape = {
           runtimeMock.state.closeCalls.push(url);
         }),
       );
+
       return {
         url,
         exitCode: Effect.never,
@@ -65,39 +66,47 @@ const OpenCodeRuntimeTestDouble: OpenCodeRuntime.OpenCodeRuntimeShape = {
     }),
   runOpenCodeCommand: () => Effect.succeed({ stdout: "", stderr: "", code: 0 }),
   createOpenCodeSdkClient: ({ baseUrl, serverPassword }) =>
-    ({
-      session: {
-        create: async () => {
-          if (runtimeMock.state.sessionCreateError !== undefined) {
-            throw runtimeMock.state.sessionCreateError;
+    createOpencodeClient({
+      baseUrl,
+      throwOnError: true,
+      fetch: Object.assign(
+        async (request: Parameters<typeof fetch>[0]) => {
+          const url = new URL(request instanceof Request ? request.url : String(request));
+
+          if (url.pathname.endsWith("/session")) {
+            if (runtimeMock.state.sessionCreateError !== undefined)
+              throw runtimeMock.state.sessionCreateError;
+
+            return Response.json(
+              runtimeMock.state.sessionResult?.data ??
+                (runtimeMock.state.sessionResult === undefined
+                  ? { id: `${baseUrl}/session` }
+                  : null),
+            );
           }
-          return runtimeMock.state.sessionResult ?? { data: { id: `${baseUrl}/session` } };
-        },
-        prompt: async () => {
+
           runtimeMock.state.promptUrls.push(baseUrl);
           runtimeMock.state.authHeaders.push(
             serverPassword ? `Basic ${btoa(`opencode:${serverPassword}`)}` : null,
           );
-          if (runtimeMock.state.promptRequestError !== undefined) {
+
+          if (runtimeMock.state.promptRequestError !== undefined)
             throw runtimeMock.state.promptRequestError;
-          }
-          return (
-            runtimeMock.state.promptResult ?? {
-              data: {
-                parts: [
-                  {
-                    type: "text",
-                    text: JSON.stringify({
-                      title: "Improve OpenCode reuse",
-                    }),
-                  },
-                ],
-              },
-            }
+
+          return Response.json(
+            runtimeMock.state.promptResult?.data ??
+              (runtimeMock.state.promptResult === undefined
+                ? {
+                    parts: [
+                      { type: "text", text: JSON.stringify({ title: "Improve OpenCode reuse" }) },
+                    ],
+                  }
+                : null),
           );
         },
-      },
-    }) as unknown as ReturnType<OpenCodeRuntime.OpenCodeRuntimeShape["createOpenCodeSdkClient"]>,
+        { preconnect: () => undefined },
+      ),
+    }),
   loadOpenCodeInventory: () =>
     Effect.fail(
       new OpenCodeRuntime.OpenCodeRuntimeError({
@@ -120,6 +129,7 @@ const DEFAULT_TEST_MODEL_SELECTION = {
   instanceId: ProviderInstanceId.make("opencode"),
   model: "openai/gpt-5",
 };
+
 const DEFAULT_THREAD_TITLE_INPUT = {
   cwd: process.cwd(),
   message: "Add important change",
@@ -157,6 +167,7 @@ const OpenCodeTextGenerationExistingServerTestLayer = Layer.succeed(
 const DEFAULT_OPENCODE_SETTINGS = Schema.decodeSync(OpenCodeSettings)({
   binaryPath: "fake-opencode",
 });
+
 const EXISTING_SERVER_OPENCODE_SETTINGS = Schema.decodeSync(OpenCodeSettings)({
   binaryPath: "fake-opencode",
   serverUrl: "http://127.0.0.1:9999",
@@ -169,6 +180,7 @@ function withOpenCodeTextGeneration<A, E, R>(
 ) {
   return Effect.gen(function* () {
     const textGeneration = yield* OpenCodeTextGeneration.makeOpenCodeTextGeneration(settings);
+
     return yield* effectFn(textGeneration);
   }).pipe(Effect.scoped);
 }

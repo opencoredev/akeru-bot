@@ -30,6 +30,7 @@ export function mergeDictationDraft(
 ): DictationDraft {
   if (!sameDictationIdentity(original.identity, current.identity)) return current;
   const text = transcript.trim();
+
   if (!text) return current;
   const unchanged = original.text === current.text;
   let offset = unchanged ? original.selection.end : current.text.length;
@@ -39,7 +40,9 @@ export function mergeDictationDraft(
   offset = Math.trunc(offset);
   const selectionLow = Math.min(current.selection.start, current.selection.end);
   const selectionHigh = Math.max(current.selection.start, current.selection.end);
+
   if (offset > selectionLow && offset < selectionHigh) offset = current.text.length;
+
   // Do not split a UTF-16 surrogate pair.
   if (
     offset > 0 &&
@@ -50,6 +53,7 @@ export function mergeDictationDraft(
   const before = current.text.slice(0, offset);
   const after = current.text.slice(offset);
   const insertion = `${before && !/\s$/u.test(before) ? " " : ""}${text}${after && !/^\s/u.test(after) ? " " : ""}`;
+
   if (
     !Number.isSafeInteger(maxDraftCharacters) ||
     maxDraftCharacters < 1 ||
@@ -58,10 +62,12 @@ export function mergeDictationDraft(
     return current;
   const selection = current.selection;
   const collapsed = selection.start === selection.end;
+
   const shift = (position: number) =>
     position > offset || ((collapsed || selectionLow === offset) && position === offset)
       ? position + insertion.length
       : position;
+
   return {
     ...current,
     text: before + insertion + after,

@@ -1,3 +1,5 @@
+import { recordLookup } from "../recordLookup";
+import { Predicate, Schema, Option } from "effect";
 import {
   derivePendingApprovals,
   derivePendingUserInputs,
@@ -16,7 +18,7 @@ export interface BotActivity {
 
 // Keyed by the tool name the runtime reports. Names come from the Akeru tool
 // catalog, the routine and feedback contracts, and the memory tool.
-const TOOL_LABELS: Readonly<Record<string, string>> = {
+const TOOL_LABELS = {
   [AKERU_CREATE_ROUTINE_TOOL_NAME]: "Adding a routine",
   akeru_list_routines: "Checking routines",
   akeru_delete_routines: "Removing routines",
@@ -51,9 +53,9 @@ const TOOL_LABELS: Readonly<Record<string, string>> = {
   RestartMcpServers: "Restarting connections",
   UpdateBotProfile: "Updating profile",
   "Computer Use": "Using the computer",
-};
+} satisfies Readonly<Record<string, string>>;
 
-const ITEM_TYPE_LABELS: Readonly<Record<string, string>> = {
+const ITEM_TYPE_LABELS = {
   command_execution: "Running a command",
   file_change: "Editing files",
   web_search: "Searching the web",
@@ -61,21 +63,30 @@ const ITEM_TYPE_LABELS: Readonly<Record<string, string>> = {
   collab_agent_tool_call: "Starting a helper",
   mcp_tool_call: "Using a tool",
   dynamic_tool_call: "Using a tool",
-};
+} satisfies Readonly<Record<string, string>>;
 
-function asRecord(value: unknown): Record<string, unknown> | undefined {
-  return value !== null && typeof value === "object" && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
-    : undefined;
-}
+const decodeActivityPayload = Schema.decodeUnknownOption(
+  Schema.Struct({
+    toolCallId: Schema.optionalKey(Schema.Unknown),
+    itemType: Schema.optionalKey(Schema.Unknown),
+    data: Schema.optionalKey(Schema.Unknown),
+  }),
+);
 
-function payloadRecord(activity: OrchestrationThreadActivity): Record<string, unknown> | null {
-  return asRecord(activity.payload) ?? null;
+const decodeMemoryData = Schema.decodeUnknownOption(
+  Schema.Struct({
+    memoryOperationCount: Schema.optionalKey(Schema.Unknown),
+  }),
+);
+
+function payloadRecord(activity: OrchestrationThreadActivity) {
+  return Option.getOrNull(decodeActivityPayload(activity.payload));
 }
 
 function toolCallId(activity: OrchestrationThreadActivity): string {
   const id = payloadRecord(activity)?.toolCallId;
-  return typeof id === "string" ? id : activity.id;
+
+  return Predicate.isString(id) ? id : activity.id;
 }
 
 function toolName(activity: OrchestrationThreadActivity): string {
@@ -87,19 +98,29 @@ function toolName(activity: OrchestrationThreadActivity): string {
 const TASK_LIST_TOOLS = new Set(["task_write", "task_update", "TodoWrite"]);
 
 function memoryLabel(activity: OrchestrationThreadActivity): string {
-  const count = asRecord(payloadRecord(activity)?.data)?.memoryOperationCount;
-  return typeof count === "number" && count > 0 ? "Saving to memory" : "Reading memory";
+  const count = Option.getOrNull(
+    decodeMemoryData(payloadRecord(activity)?.data),
+  )?.memoryOperationCount;
+
+  return Predicate.isNumber(count) && count > 0 ? "Saving to memory" : "Reading memory";
 }
 
 /** Maps a `tool.started` activity to the label shown while that tool runs. */
 export function botToolActivityLabel(activity: OrchestrationThreadActivity): string {
   const name = toolName(activity);
+
   if (name === "memory") return memoryLabel(activity);
+
   if (name.startsWith("preview_")) return "Using the browser";
-  const known = TOOL_LABELS[name];
+  const known = recordLookup(TOOL_LABELS, name);
+
   if (known) return known;
   const itemType = payloadRecord(activity)?.itemType;
-  return (typeof itemType === "string" ? ITEM_TYPE_LABELS[itemType] : undefined) ?? "Using a tool";
+
+  return (
+    (Predicate.isString(itemType) ? recordLookup(ITEM_TYPE_LABELS, itemType) : undefined) ??
+    "Using a tool"
+  );
 }
 
 /**
@@ -113,12 +134,15 @@ export function deriveBotActivity(
 ): BotActivity {
   if (latestTurn?.state !== "running") return { label: "Starting" };
   const turnActivities = activities.filter((activity) => activity.turnId === latestTurn.turnId);
+
   if (derivePendingUserInputs(turnActivities).length > 0) {
     return { label: "Waiting for your answer" };
   }
+
   if (derivePendingApprovals(turnActivities).length > 0) return { label: "Waiting for approval" };
 
   const openTools = new Map<string, OrchestrationThreadActivity>();
+
   for (const activity of turnActivities) {
     if (activity.kind === "tool.started" && !TASK_LIST_TOOLS.has(toolName(activity))) {
       openTools.set(toolCallId(activity), activity);
@@ -126,6 +150,8 @@ export function deriveBotActivity(
       openTools.delete(toolCallId(activity));
     }
   }
+
   const openTool = [...openTools.values()].at(-1);
+
   return { label: openTool ? botToolActivityLabel(openTool) : "Working" };
 }

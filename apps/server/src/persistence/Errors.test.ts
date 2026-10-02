@@ -14,6 +14,7 @@ const decodeRuntimePayload = Schema.decodeUnknownEffect(
 
 it("keeps SQL operation context without a tautological detail", () => {
   const cause = new Error("database unavailable");
+
   const error = new PersistenceSqlError({
     operation: "AuthSessionRepository.list:query",
     cause,
@@ -28,6 +29,7 @@ it("keeps SQL operation context without a tautological detail", () => {
 it.effect("maps schema errors without copying rejected payloads into diagnostics", () =>
   Effect.gen(function* () {
     const rejectedPayload = "runtime-payload-secret-sentinel";
+
     const cause = yield* Effect.flip(
       decodeRuntimePayload({
         runtimePayload: {
@@ -35,6 +37,7 @@ it.effect("maps schema errors without copying rejected payloads into diagnostics
         },
       }),
     );
+
     const error = PersistenceDecodeError.fromSchemaError(
       "ProviderSessionRuntimeRepository.list:decodeRows",
       cause,

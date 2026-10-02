@@ -1,4 +1,3 @@
-// @effect-diagnostics nodeBuiltinImport:off - Regression coverage compares the sidebar component with its width contract.
 import * as NodeFS from "node:fs";
 
 import { describe, expect, it } from "vite-plus/test";
@@ -41,7 +40,7 @@ describe("thread sidebar width", () => {
       "utf8",
     );
 
-    expect(sidebarSource).toContain("grid-cols-[1fr_auto_1fr]");
+    expect(sidebarSource).toContain("grid-cols-grow-auto-grow");
     expect(sidebarSource).toContain("min-w-0 flex-1");
     expect(sidebarSource).toContain("group-data-[collapsible=icon]:hidden");
     expect(THREAD_SIDEBAR_MIN_WIDTH).toBe(13 * 16);

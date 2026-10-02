@@ -80,7 +80,7 @@ The most common defect in this repo is a change that works on the path you teste
 
 - **Entry points.** A behavior reachable from the chat view is usually also reachable from Settings, the command palette, and a keybinding. Fixing one is not fixing the feature.
 - **Clients.** Web, desktop (wraps web, adds Electron shell/IPC), and mobile (React Native, separate navigation). Shared logic lives in `packages/client-runtime`
-- **Providers.** Codex, Claude, Grok, Kimi For Coding, and OpenCode each need an explicit decision. Codex and Kimi use Akeru's Mastra controller. Claude, Grok, and OpenCode use the legacy adapter bridge.
+- **Providers.** Codex, Claude, Grok, Kimi For Coding, and OpenCode each need an explicit decision. Codex, Claude, Grok, Kimi For Coding, and OpenCode Go use Akeru's Mastra controller; standard OpenCode uses the legacy adapter bridge. See [provider routing](docs/internals/providers.md).
 - **Contracts.** Anything crossing the wire is typed in `packages/contracts`. Change the schema and the server, web, mobile, and desktop all follow.
 - **Reverse states.** If you added a way in, add the way out and the way to see it. Snooze needs unsnooze. Close needs reopen. A one-way door is a bug.
 - **Connection modes.** Local, remote/relay, and tunnel behave differently. Multi-device and multi-environment cases are real.
@@ -121,6 +121,14 @@ Choose meaningful test data. Use deterministic visual fixtures for repeatable UI
 - Backend behavior changes ship with focused tests for that behavior.
 - The server is event-sourced and its async flows emit typed receipts. Wait on receipts and worker drains, never on sleeps or polling. A test that needs a timeout to pass is wrong.
 - Implementation requests include focused verification in isolated local clients. Follow [the verification policy](docs/internals/verification.md) for authorization, coverage, evidence, and environment lifetime. Use `test-t3-app` for web or desktop and `test-t3-mobile` for native mobile. The primary agent performs the integrated pass; subagents do not launch dev servers.
+
+## Lint
+
+- Oxlint runs anti-slop, Effect, and shadcn design-system rules on top of the built-ins. Run `vp lint <paths>` on the files you touched and fix what it reports there. Do not lower a rule from `error` to `warn` to get a change through.
+- No suppressions. Never write `oxlint-disable`, `eslint-disable`, `@ts-ignore`, `@ts-expect-error`, `@ts-nocheck`, or `@effect-diagnostics`, and never reach for `any` or `as unknown as`. Fix the code: parse untrusted input with a schema, narrow with `Predicate`, fix the type at its source. If a rule is wrong for a whole category of code, change its configuration in `vite.config.ts` (lint) or the `overrides` in `tsconfig.base.json` (Effect diagnostics) and write down why. `akeru/no-lint-suppressions` and `scripts/check-lint-suppressions.ts` enforce this in CI.
+- Keep files under 800 lines. Split along real seams such as a component, a service, or a test fixture group, not at an arbitrary line.
+- New web UI uses the primitives in `apps/web/src/components/ui` and the theme tokens in `apps/web/src/index.css`. No raw palette colors, no arbitrary values such as `w-[13px]`, and no restyling a primitive through `className`. Pick a variant or size, or add one to the primitive.
+- Rule groups, the warn-to-error ratchet, and the shadcn contracts are in [docs/internals/lint.md](docs/internals/lint.md).
 
 ## Pull requests
 

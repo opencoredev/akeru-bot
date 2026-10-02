@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 import { LegendList, type LegendListRef } from "@legendapp/list/react";
 import { CheckIcon, ChevronDownIcon, SearchIcon } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
@@ -17,7 +18,8 @@ const DEFAULT_FONT_VALUE = "__default__";
 function supportsFontEnumeration(): boolean {
   return (
     typeof window !== "undefined" &&
-    typeof (window as { queryLocalFonts?: unknown }).queryLocalFonts === "function"
+    "queryLocalFonts" in window &&
+    Predicate.isFunction(window.queryLocalFonts)
   );
 }
 
@@ -32,10 +34,12 @@ type FontEnumerationState =
 let enumerationState: FontEnumerationState = supportsFontEnumeration()
   ? { status: "unknown" }
   : { status: "unavailable" };
+
 const enumerationListeners = new Set<() => void>();
 
 function subscribeToEnumeration(listener: () => void): () => void {
   enumerationListeners.add(listener);
+
   return () => enumerationListeners.delete(listener);
 }
 
@@ -54,6 +58,7 @@ export function discoverInstalledFonts(): void {
         ? { status: "granted", families: result.families }
         : { status: "unavailable" };
     enumerationLoad = null;
+
     for (const listener of enumerationListeners) listener();
   });
 }
@@ -72,7 +77,9 @@ function probeAlreadyGrantedPermission(): void {
   if (grantedProbeStarted || enumerationState.status !== "unknown") return;
   grantedProbeStarted = true;
   const permissions = typeof navigator !== "undefined" ? navigator.permissions : undefined;
-  if (typeof permissions?.query !== "function") return;
+
+  if (!Predicate.isFunction(permissions?.query)) return;
+  // SAFETY: Chromium supports the local-fonts permission even though lib.dom does not include it in PermissionName.
   permissions.query({ name: "local-fonts" as PermissionName }).then(
     (status) => {
       if (status.state === "granted") discoverInstalledFonts();
@@ -93,6 +100,7 @@ function probeAlreadyGrantedPermission(): void {
  */
 export function useFontEnumeration(): FontEnumerationState {
   useEffect(probeAlreadyGrantedPermission, []);
+
   return useSyncExternalStore(subscribeToEnumeration, readEnumerationState);
 }
 
@@ -135,23 +143,27 @@ export function FontFamilyPicker({
 
   const handleOpenChange = (nextOpen: boolean) => {
     setOpen(nextOpen);
+
     if (nextOpen) setQuery("");
   };
 
   const families = useMemo(() => {
     if (enumeration.status !== "granted") return [];
+
     return requireMonospace ? enumeration.families.filter(isMonospaceFamily) : enumeration.families;
   }, [enumeration, requireMonospace]);
 
   const items = useMemo(() => {
     const trimmedQuery = query.trim().toLowerCase();
     const result: string[] = [];
+
     if (trimmedQuery.length === 0) result.push(DEFAULT_FONT_VALUE);
     result.push(
       ...families.filter(
         (family) => trimmedQuery.length === 0 || family.toLowerCase().includes(trimmedQuery),
       ),
     );
+
     return result;
   }, [query, families]);
 
@@ -165,16 +177,18 @@ export function FontFamilyPicker({
   const renderItem = (item: string, index: number) => {
     const isDefault = item === DEFAULT_FONT_VALUE;
     const family = isDefault ? defaultFamily : item;
+
     return (
       <ComboboxItem hideIndicator index={index} key={item} value={item}>
         <div className="flex w-full min-w-0 items-center justify-between gap-2">
-          <span className="min-w-0 truncate" style={{ fontFamily: family }}>
+          <span
+            className="min-w-0 truncate font-(family-name:--font-preview)"
+            style={{ "--font-preview": family }}
+          >
             {family}
           </span>
           <span className="flex shrink-0 items-center gap-1.5">
-            {isDefault ? (
-              <span className="text-[10px] text-muted-foreground/60">default</span>
-            ) : null}
+            {isDefault ? <span className="text-10px text-muted-foreground/60">default</span> : null}
             {item === selectedValue ? (
               <CheckIcon className="size-3.5 text-muted-foreground" />
             ) : null}
@@ -194,7 +208,7 @@ export function FontFamilyPicker({
       onOpenChange={handleOpenChange}
       value={selectedValue}
       onValueChange={(next) => {
-        if (typeof next === "string") handlePick(next);
+        if (Predicate.isString(next)) handlePick(next);
       }}
       onItemHighlighted={(_value, eventDetails) => {
         // Keyboard highlights must pull the virtualized row into view, or
@@ -203,10 +217,7 @@ export function FontFamilyPicker({
         void listRef.current?.scrollIndexIntoView?.({ index: eventDetails.index, animated: false });
       }}
     >
-      <ComboboxTrigger
-        aria-label={ariaLabel}
-        className="relative inline-flex min-h-9 w-full min-w-36 cursor-pointer select-none items-center justify-between gap-2 rounded-lg border border-transparent bg-secondary px-[calc(--spacing(3)-1px)] text-left text-base text-foreground outline-none transition-[color,box-shadow] focus-visible:ring-2 focus-visible:ring-ring/70 sm:min-h-8 sm:text-sm"
-      >
+      <ComboboxTrigger aria-label={ariaLabel} presentation="font-family">
         <span className="min-w-0 truncate">
           {selectedFamily.length === 0 ? defaultFamily : selectedFamily}
         </span>
@@ -220,8 +231,7 @@ export function FontFamilyPicker({
               className="pointer-events-none absolute top-1.5 left-0 size-4 shrink-0 text-muted-foreground/55"
             />
             <ComboboxInput
-              className="[&_input]:h-6.5 [&_input]:ps-5 [&_input]:font-sans [&_input]:leading-6.5"
-              inputClassName="rounded-none bg-transparent text-sm"
+              presentation="font-search"
               placeholder="Search fonts…"
               showTrigger={false}
               size="sm"
@@ -233,16 +243,20 @@ export function FontFamilyPicker({
         </div>
         <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
           <ComboboxEmpty>No fonts found.</ComboboxEmpty>
-          <div className="relative min-h-0 max-h-72 w-full flex-1 overflow-hidden">
-            <ComboboxListVirtualized className="size-full min-w-0 p-0">
+          <div
+            className="relative min-h-0 max-h-72 w-full flex-1 overflow-hidden"
+            style={{ "--list-height": `${Math.min(items.length * 30, 288)}px` }}
+          >
+            <ComboboxListVirtualized presentation="font-family">
+              {/* Virtualized height depends on the filtered font count. */}
               <LegendList<string>
                 ref={listRef}
+                className="h-(--list-height)"
                 data={items}
                 keyExtractor={(item) => item}
                 renderItem={({ item, index }) => renderItem(item, index)}
                 estimatedItemSize={30}
                 drawDistance={360}
-                style={{ height: Math.min(items.length * 30, 288) }}
               />
             </ComboboxListVirtualized>
           </div>

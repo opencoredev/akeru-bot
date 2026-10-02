@@ -1,3 +1,4 @@
+import * as Match from "effect/Match";
 import { type ServerConfig, WS_METHODS } from "@akeru/contracts";
 import * as Context from "effect/Context";
 import * as Deferred from "effect/Deferred";
@@ -9,7 +10,7 @@ import * as RpcClient from "effect/unstable/rpc/RpcClient";
 import * as RpcSerialization from "effect/unstable/rpc/RpcSerialization";
 import * as Socket from "effect/unstable/socket/Socket";
 
-import { makeWsRpcProtocolClient, type WsRpcProtocolClient } from "./protocol.ts";
+import { wsRpcProtocolClient, type WsRpcProtocolClient } from "./protocol.ts";
 import type {
   ConnectionAttemptError,
   ConnectionTransientError,
@@ -42,27 +43,38 @@ export class RpcSessionFactory extends Context.Service<
 type InitialConfigError = Effect.Error<
   ReturnType<WsRpcProtocolClient[typeof WS_METHODS.serverGetConfig]>
 >;
+
 type ProbeError = Effect.Error<ReturnType<WsRpcProtocolClient[typeof WS_METHODS.serverProbe]>>;
 
 function mapSessionRpcError(error: InitialConfigError | ProbeError): ConnectionAttemptError {
-  switch (error._tag) {
-    case "EnvironmentAuthorizationError":
-      return new ConnectionBlockedError({
-        reason: "permission",
-        detail: error.message,
-      });
-    case "KeybindingsConfigParseError":
-    case "ServerSettingsError":
-      return new ConnectionTransientErrorClass({
-        reason: "remote-unavailable",
-        detail: error.message,
-      });
-    case "RpcClientError":
-      return new ConnectionTransientErrorClass({
-        reason: "transport",
-        detail: error.message,
-      });
-  }
+  return Match.value(error).pipe(
+    Match.tagsExhaustive({
+      EnvironmentAuthorizationError: (error) => {
+        return new ConnectionBlockedError({
+          reason: "permission",
+          detail: error.message,
+        });
+      },
+      KeybindingsConfigParseError: (error) => {
+        return new ConnectionTransientErrorClass({
+          reason: "remote-unavailable",
+          detail: error.message,
+        });
+      },
+      ServerSettingsError: (error) => {
+        return new ConnectionTransientErrorClass({
+          reason: "remote-unavailable",
+          detail: error.message,
+        });
+      },
+      RpcClientError: (error) => {
+        return new ConnectionTransientErrorClass({
+          reason: "transport",
+          detail: error.message,
+        });
+      },
+    }),
+  );
 }
 
 export const make = Effect.gen(function* () {
@@ -75,6 +87,7 @@ export const make = Effect.gen(function* () {
 
     const connected = yield* Deferred.make<void>();
     const disconnected = yield* Deferred.make<never, ConnectionTransientError>();
+
     const hooks = RpcClient.ConnectionHooks.of({
       onConnect: Deferred.succeed(connected, undefined).pipe(Effect.asVoid),
       onDisconnect: Deferred.isDone(connected).pipe(
@@ -92,9 +105,11 @@ export const make = Effect.gen(function* () {
         Effect.asVoid,
       ),
     });
+
     const socketLayer = Socket.layerWebSocket(connection.socketUrl, {
       openTimeout: SOCKET_OPEN_TIMEOUT,
     }).pipe(Layer.provide(Layer.succeed(Socket.WebSocketConstructor, webSocketConstructor)));
+
     const protocolLayer = Layer.effect(
       RpcClient.Protocol,
       RpcClient.makeProtocolSocket({
@@ -110,16 +125,20 @@ export const make = Effect.gen(function* () {
         ),
       ),
     );
+
     const protocolContext = yield* Layer.build(protocolLayer).pipe(
       Effect.withSpan("environment.websocket.connect"),
     );
-    const client = yield* makeWsRpcProtocolClient.pipe(Effect.provide(protocolContext));
+
+    const client = yield* wsRpcProtocolClient.pipe(Effect.provide(protocolContext));
+
     const initialConfig = yield* Effect.cached(
       client[WS_METHODS.serverGetConfig]({}).pipe(
         Effect.mapError(mapSessionRpcError),
         Effect.withSpan("environment.initialSync"),
       ),
     );
+
     const probe = initialConfig.pipe(
       Effect.flatMap((config) =>
         (config.environment.capabilities.connectionProbe === true

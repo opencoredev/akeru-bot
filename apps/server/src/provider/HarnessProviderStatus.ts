@@ -1,3 +1,4 @@
+import * as Match from "effect/Match";
 import {
   MODEL_SLUG_ALIASES_BY_PROVIDER,
   ProviderDriverKind,
@@ -59,24 +60,36 @@ export function harnessCredentialIssue(
   const environment = connection.useSavedCredential
     ? connection.environment
     : connection.instanceEnvironment;
-  const connected =
-    driver === "codex"
-      ? Boolean(environment.OPENAI_API_KEY?.trim())
-      : driver === "claudeAgent"
-        ? Boolean(
-            environment.ANTHROPIC_API_KEY?.trim() ||
-            environment.ANTHROPIC_AUTH_TOKEN?.trim() ||
-            environment.CLAUDE_CODE_OAUTH_TOKEN?.trim(),
-          )
-        : Boolean(environment.XAI_API_KEY?.trim());
+
+  const connected = Match.value(driver).pipe(
+    Match.when("codex", () => Boolean(environment.OPENAI_API_KEY?.trim())),
+    Match.when("claudeAgent", () =>
+      Boolean(
+        environment.ANTHROPIC_API_KEY?.trim() ||
+        environment.ANTHROPIC_AUTH_TOKEN?.trim() ||
+        environment.CLAUDE_CODE_OAUTH_TOKEN?.trim(),
+      ),
+    ),
+    Match.orElse(() => Boolean(environment.XAI_API_KEY?.trim())),
+  );
+
   if (connected || (connection.useSavedCredential && savedCredentialConnected)) return undefined;
+
   if (connection.useSavedCredential) {
-    const name = driver === "codex" ? "ChatGPT" : driver === "claudeAgent" ? "Claude" : "Grok";
+    const name = Match.value(driver).pipe(
+      Match.when("codex", () => "ChatGPT"),
+      Match.when("claudeAgent", () => "Claude"),
+      Match.orElse(() => "Grok"),
+    );
+
     return `Connect ${name} in Settings.`;
   }
+
   if (driver === "codex") return "This Codex instance needs OPENAI_API_KEY for the Akeru harness.";
+
   if (driver === "claudeAgent")
     return "This Claude instance needs an API key or auth token for the Akeru harness.";
+
   return "This Grok instance needs XAI_API_KEY for the Akeru harness.";
 }
 
@@ -90,17 +103,21 @@ export const makeHarnessProviderStatus = Effect.fn("makeHarnessProviderStatus")(
 }) {
   const auth = yield* SubscriptionAuthService.forSecretsDir(input.secretsDir);
   const manifest = yield* ModelManifest.ModelManifest;
-  return Effect.gen(function* () {
+
+  const checkProvider = Effect.gen(function* () {
     yield* auth.reload();
     yield* manifest.refreshInBackground;
     const current = yield* manifest.current;
     const { message: _draftMessage, ...draft } = yield* input.draft;
+
     const message = harnessCredentialIssue(
       input.driver,
       input.connection,
       auth.isConnected(input.provider, input.instanceId),
     );
+
     const currentModelIds = current.currentModels[input.driver];
+
     const modelIds =
       input.driver === "codex"
         ? codexHarnessModelIds(currentModelIds ?? [])
@@ -111,6 +128,7 @@ export const makeHarnessProviderStatus = Effect.fn("makeHarnessProviderStatus")(
               ...(input.driver === "grok" ? GROK_HARNESS_MODELS : []),
             ]),
           ];
+
     const models = [
       ...draft.models.filter((model) => !model.isCustom || !modelIds.includes(model.slug)),
       ...modelIds
@@ -122,40 +140,40 @@ export const makeHarnessProviderStatus = Effect.fn("makeHarnessProviderStatus")(
           ...(index === 0 && !draft.models.some((model) => !model.isCustom)
             ? { isDefault: true }
             : {}),
-          capabilities:
-            input.driver === "codex"
-              ? createModelCapabilities({
-                  optionDescriptors: [
-                    {
-                      id: "reasoningEffort",
-                      label: "Reasoning",
-                      type: "select",
-                      currentValue: "medium",
-                      options: getAvailableThinkingLevelsForModel(`openai/${slug}`).map(
-                        (level) => ({
-                          id: level,
-                          label: level[0]!.toUpperCase() + level.slice(1),
-                          ...(level === "medium" ? { isDefault: true } : {}),
-                        }),
-                      ),
-                    },
-                    {
-                      id: "serviceTier",
-                      label: "Service Tier",
-                      type: "select",
-                      currentValue: "default",
-                      options: [
-                        { id: "default", label: "Standard", isDefault: true },
-                        { id: "priority", label: "Fast" },
-                      ],
-                    },
-                  ],
-                })
-              : input.driver === "claudeAgent"
-                ? getClaudeModelCapabilities(slug)
-                : null,
+          capabilities: Match.value(input.driver).pipe(
+            Match.when("codex", () =>
+              createModelCapabilities({
+                optionDescriptors: [
+                  {
+                    id: "reasoningEffort",
+                    label: "Reasoning",
+                    type: "select",
+                    currentValue: "medium",
+                    options: getAvailableThinkingLevelsForModel(`openai/${slug}`).map((level) => ({
+                      id: level,
+                      label: level[0]!.toUpperCase() + level.slice(1),
+                      ...(level === "medium" ? { isDefault: true } : {}),
+                    })),
+                  },
+                  {
+                    id: "serviceTier",
+                    label: "Service Tier",
+                    type: "select",
+                    currentValue: "default",
+                    options: [
+                      { id: "default", label: "Standard", isDefault: true },
+                      { id: "priority", label: "Fast" },
+                    ],
+                  },
+                ],
+              }),
+            ),
+            Match.when("claudeAgent", () => getClaudeModelCapabilities(slug)),
+            Match.orElse(() => null),
+          ),
         })),
     ];
+
     return ModelManifest.applyModelManifest(
       {
         ...draft,
@@ -181,4 +199,6 @@ export const makeHarnessProviderStatus = Effect.fn("makeHarnessProviderStatus")(
       input.driver,
     );
   });
+
+  return { checkProvider };
 });

@@ -68,6 +68,7 @@ function joinSshAskpassPath(
   platform: NodeJS.Platform,
 ): string {
   const trimmed = directory.replace(/[\\/]+$/u, "");
+
   return platform === "win32" ? `${trimmed}\\${fileName}` : `${trimmed}/${fileName}`;
 }
 
@@ -104,6 +105,7 @@ export const getDefaultSshAskpassDirectory = Effect.fn("ssh/auth.getDefaultSshAs
     const fs = yield* FileSystem.FileSystem;
     const path = yield* Path.Path;
     const parentDirectory = yield* fs.makeTempDirectory({ prefix: "t3code-ssh-runtime-" });
+
     return path.join(parentDirectory, SSH_ASKPASS_DIR_NAME);
   },
 );
@@ -119,6 +121,7 @@ export const buildSshAskpassHelperDescriptor = Effect.fn(
 
   if (platform === "win32") {
     const powershellPath = joinSshAskpassPath(directory, "ssh-askpass.ps1", platform);
+
     return {
       launcherPath: joinSshAskpassPath(directory, "ssh-askpass.cmd", platform),
       files: [
@@ -160,9 +163,11 @@ export const ensureSshAskpassHelpers = Effect.fn("ssh/auth.ensureSshAskpassHelpe
     for (const file of descriptor.files) {
       const existing = yield* fs.exists(file.path);
       const current = existing ? yield* fs.readFileString(file.path) : null;
+
       if (current !== file.contents) {
         yield* fs.writeFileString(file.path, file.contents);
       }
+
       if (file.mode !== undefined && platform !== "win32") {
         yield* fs.chmod(file.path, file.mode);
       }
@@ -180,11 +185,13 @@ export const buildSshChildEnvironment = Effect.fn("ssh/auth.buildSshChildEnviron
   FileSystem.FileSystem | Path.Path
 > {
   const baseEnv = { ...input.baseEnv };
+
   if (!input.interactiveAuth) {
     return baseEnv;
   }
 
   const platform = yield* HostProcessPlatform;
+
   const hostDisplay = input.baseEnv
     ? input.baseEnv.DISPLAY
     : yield* Config.string("DISPLAY").pipe(
@@ -192,6 +199,7 @@ export const buildSshChildEnvironment = Effect.fn("ssh/auth.buildSshChildEnviron
         Effect.orElseSucceed(() => Option.none<string>()),
         Effect.map(Option.getOrUndefined),
       );
+
   const directory = input.askpassDirectory ?? (yield* getDefaultSshAskpassDirectory());
   const sshAskpass = yield* ensureSshAskpassHelpers({ directory });
 
@@ -204,9 +212,10 @@ export const buildSshChildEnvironment = Effect.fn("ssh/auth.buildSshChildEnviron
   };
 });
 
-export function isSshAuthFailure(error: unknown): boolean {
-  const message = error instanceof Error ? error.message : String(error);
+export function isSshAuthFailure(cause: unknown): boolean {
+  const message = cause instanceof Error ? cause.message : String(cause);
   const normalized = message.toLowerCase();
+
   return (
     /permission denied \((?:publickey|password|keyboard-interactive|hostbased|gssapi-with-mic)[^)]*\)/u.test(
       normalized,

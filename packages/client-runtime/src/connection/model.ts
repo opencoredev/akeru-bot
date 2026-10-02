@@ -36,12 +36,14 @@ export const ConnectionTarget = Schema.Union([
   BearerConnectionTarget,
   SshConnectionTarget,
 ]);
+
 export type ConnectionTarget = typeof ConnectionTarget.Type;
 
 export const PersistedConnectionTarget = Schema.Union([
   BearerConnectionTarget,
   SshConnectionTarget,
 ]);
+
 export type PersistedConnectionTarget = typeof PersistedConnectionTarget.Type;
 
 export type ConnectionTargetKind = ConnectionTarget["_tag"];
@@ -55,6 +57,7 @@ export const ConnectionTransientReason = Schema.Literals([
   "endpoint-unavailable",
   "remote-unavailable",
 ]);
+
 export type ConnectionTransientReason = typeof ConnectionTransientReason.Type;
 
 export const ConnectionBlockedReason = Schema.Literals([
@@ -63,6 +66,7 @@ export const ConnectionBlockedReason = Schema.Literals([
   "permission",
   "unsupported",
 ]);
+
 export type ConnectionBlockedReason = typeof ConnectionBlockedReason.Type;
 
 export class ConnectionTransientError extends Schema.TaggedErrorClass<ConnectionTransientError>()(

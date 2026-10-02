@@ -16,6 +16,7 @@ describe("HostPowerMonitor", () => {
   it.effect("publishes semantic power changes without idle-time heartbeat churn", () =>
     Effect.gen(function* () {
       const monitor = yield* HostPowerMonitor.make();
+
       const initial = {
         source: "electron-main",
         idle: "false",
@@ -28,6 +29,7 @@ describe("HostPowerMonitor", () => {
         stale: false,
         updatedAt: DateTime.makeUnsafe("2026-06-17T12:00:00.000Z"),
       } as const;
+
       yield* monitor.report(initial);
 
       const nextChange = yield* Stream.runHead(monitor.streamChanges).pipe(Effect.forkChild);
@@ -61,6 +63,7 @@ describe("HostPowerMonitor", () => {
         stale: false,
         updatedAt: DateTime.makeUnsafe("2026-06-17T12:00:00.000Z"),
       } as const;
+
       const monitor = yield* HostPowerMonitor.make(initial);
       const latestAt = DateTime.makeUnsafe("2026-06-17T12:00:02.000Z");
       yield* monitor.report({
@@ -84,10 +87,12 @@ describe("HostPowerMonitor", () => {
       const sampledAt = DateTime.makeUnsafe("2026-06-17T12:00:00.000Z");
       const desktopChanges = yield* PubSub.sliding<DesktopHostTelemetrySnapshot>(1);
       const diagnosticsDemandWrites = yield* Ref.make(0);
+
       const receiverLayer = DesktopTelemetryReceiver.layerTest({
         changes: Stream.fromPubSub(desktopChanges),
         setDiagnosticsDemand: () => Ref.update(diagnosticsDemandWrites, (count) => count + 1),
       });
+
       const layer = HostPowerMonitor.layer.pipe(Layer.provide(receiverLayer));
 
       yield* Effect.gen(function* () {
@@ -127,6 +132,7 @@ describe("HostPowerMonitor", () => {
     () =>
       Effect.gen(function* () {
         const sampledAt = DateTime.makeUnsafe("2026-06-17T12:00:00.000Z");
+
         const initial: DesktopHostTelemetrySnapshot = {
           version: 1,
           type: "desktopTelemetry",
@@ -148,6 +154,7 @@ describe("HostPowerMonitor", () => {
           speedLimitPercent: Option.none(),
           electronProcesses: [],
         };
+
         const updated: DesktopHostTelemetrySnapshot = {
           ...initial,
           sequence: 2,
@@ -157,23 +164,28 @@ describe("HostPowerMonitor", () => {
             updatedAt: DateTime.makeUnsafe("2026-06-17T12:00:01.000Z"),
           },
         };
+
         const desktopChanges = yield* PubSub.sliding<DesktopHostTelemetrySnapshot>(1);
+
         const receiverLayer = DesktopTelemetryReceiver.layerTest({
           latest: Effect.succeedSome(initial),
           changes: Stream.empty,
           subscribe: Effect.gen(function* () {
             const subscription = yield* PubSub.subscribe(desktopChanges);
             yield* PubSub.publish(desktopChanges, updated);
+
             return {
               latest: Option.some(initial),
               changes: Stream.fromSubscription(subscription),
             };
           }),
         });
+
         const layer = HostPowerMonitor.layer.pipe(Layer.provide(receiverLayer));
 
         yield* Effect.gen(function* () {
           const monitor = yield* HostPowerMonitor.HostPowerMonitor;
+
           for (
             let attempt = 0;
             attempt < 100 && (yield* monitor.snapshot).onBattery !== "true";
@@ -181,6 +193,7 @@ describe("HostPowerMonitor", () => {
           ) {
             yield* Effect.yieldNow;
           }
+
           expect((yield* monitor.snapshot).onBattery).toBe("true");
         }).pipe(Effect.provide(layer));
       }),

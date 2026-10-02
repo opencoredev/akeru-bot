@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import {
   BotId,
@@ -19,7 +20,7 @@ import * as SqlClient from "effect/unstable/sql/SqlClient";
 import { ServerConfig } from "../../config.ts";
 import { OrchestrationCommandReceiptRepositoryLive } from "../../persistence/Layers/OrchestrationCommandReceipts.ts";
 import { OrchestrationEventStoreLive } from "../../persistence/Layers/OrchestrationEventStore.ts";
-import { makeSqlitePersistenceLive } from "../../persistence/Layers/Sqlite.ts";
+import { sqlitePersistenceLayer } from "../../persistence/Layers/Sqlite.ts";
 import * as RepositoryIdentityResolver from "../../project/RepositoryIdentityResolver.ts";
 import * as ThreadBackgroundLiveness from "../ThreadBackgroundLiveness.ts";
 import * as ThreadPlanProgress from "../ThreadPlanProgress.ts";
@@ -34,9 +35,13 @@ import {
 import { OrchestrationProjectionSnapshotQueryLive } from "./ProjectionSnapshotQuery.ts";
 
 const NOW = "2026-08-31T12:00:00.000Z";
+
 const PARENT_BOT_ID = BotId.make("bot-parent");
+
 const CHILD_BOT_ID = BotId.make("bot-child");
+
 const PARENT_THREAD_ID = ThreadId.make("thread-parent");
+
 const CHILD_THREAD_ID = ThreadId.make("thread-child");
 
 const delegation: AkeruDelegationRecord = {
@@ -80,7 +85,7 @@ const makeLayer = (dbPath: string) =>
     Layer.provide(OrchestrationEventStoreLive),
     Layer.provide(OrchestrationCommandReceiptRepositoryLive),
     Layer.provide(RepositoryIdentityResolver.layer),
-    Layer.provideMerge(makeSqlitePersistenceLive(dbPath)),
+    Layer.provideMerge(sqlitePersistenceLayer(dbPath)),
   );
 
 it.effect("rebuilds the full delegation record after a restart", () =>
@@ -90,6 +95,7 @@ it.effect("rebuilds the full delegation record after a restart", () =>
     yield* Effect.gen(function* () {
       const engine = yield* OrchestrationEngineService;
       const projectId = ProjectId.make("project-1");
+
       for (const [id, name] of [
         [PARENT_BOT_ID, "Parent"],
         [CHILD_BOT_ID, "Child"],
@@ -109,6 +115,7 @@ it.effect("rebuilds the full delegation record after a restart", () =>
           createdAt: NOW,
         });
       }
+
       yield* engine.dispatch({
         type: "project.create",
         commandId: CommandId.make("command-project"),
@@ -173,6 +180,7 @@ const persistenceLayer = (prefix: string) =>
 const seedParentAndChild = Effect.gen(function* () {
   const engine = yield* OrchestrationEngineService;
   const projectId = ProjectId.make("project-1");
+
   for (const [id, name] of [
     [PARENT_BOT_ID, "Parent"],
     [CHILD_BOT_ID, "Child"],
@@ -192,6 +200,7 @@ const seedParentAndChild = Effect.gen(function* () {
       createdAt: NOW,
     });
   }
+
   yield* engine.dispatch({
     type: "project.create",
     commandId: CommandId.make("command-project"),
@@ -201,6 +210,7 @@ const seedParentAndChild = Effect.gen(function* () {
     defaultModelSelection: null,
     createdAt: NOW,
   });
+
   for (const [threadId, botId] of [
     [PARENT_THREAD_ID, PARENT_BOT_ID],
     [CHILD_THREAD_ID, CHILD_BOT_ID],
@@ -221,11 +231,13 @@ const seedParentAndChild = Effect.gen(function* () {
       createdAt: NOW,
     });
   }
+
   yield* engine.dispatch({
     type: "delegation.create",
     commandId: CommandId.make("command-delegation"),
     delegation,
   });
+
   const running: AkeruDelegationRecord = {
     ...delegation,
     phase: {
@@ -236,6 +248,7 @@ const seedParentAndChild = Effect.gen(function* () {
       progress: null,
     },
   };
+
   yield* engine.dispatch({
     type: "delegation.state.set",
     commandId: CommandId.make("command-running"),
@@ -283,11 +296,13 @@ const startParentTurn = (index: number) =>
       createdAt,
     });
     const events = yield* Stream.runCollect(engine.readEvents(0, 10_000));
+
     const requested = Array.from(events).findLast(
       (event) =>
         event.type === "thread.turn-start-requested" &&
         event.payload.messageId === `message-parent-${index}`,
     );
+
     return requested?.type === "thread.turn-start-requested"
       ? (requested.payload.acknowledgedDelegationIds ?? [])
       : undefined;
@@ -305,7 +320,9 @@ it.effect("delivers a finished child result to exactly one parent turn across a 
       const before = yield* snapshots.getCommandReadModel();
       assert.deepEqual(
         before.delegations.map((record) =>
-          record.phase._tag === "Completed" ? record.phase.acknowledgedAt : "not-completed",
+          Predicate.isTagged(record.phase, "Completed")
+            ? record.phase.acknowledgedAt
+            : "not-completed",
         ),
         [null],
       );
@@ -313,11 +330,13 @@ it.effect("delivers a finished child result to exactly one parent turn across a 
       const after = yield* snapshots.getCommandReadModel();
       const phase = after.delegations[0]?.phase;
       assert.equal(
-        phase?._tag === "Completed" ? phase.acknowledgedAt : null,
+        Predicate.isTagged(phase, "Completed") ? phase.acknowledgedAt : null,
         "2026-08-31T12:02:30.000Z",
       );
+
       return ids;
     }).pipe(Effect.provide(makeLayer(dbPath)));
+
     assert.deepEqual(first, [delegation.delegationId]);
 
     // A second restart, then another parent turn: the result is not repeated.
@@ -330,14 +349,19 @@ it.effect("keeps an unacknowledged result pending until a parent turn starts", (
   Effect.gen(function* () {
     const { dbPath } = yield* ServerConfig;
     yield* seedParentAndChild.pipe(Effect.provide(makeLayer(dbPath)));
+
     const pending = yield* Effect.gen(function* () {
       const snapshots = yield* ProjectionSnapshotQuery;
+
       return (yield* snapshots.getSnapshot()).delegations;
     }).pipe(Effect.provide(makeLayer(dbPath)));
+
     assert.equal(pending.length, 1);
     assert.equal(pending[0]?.phase._tag, "Completed");
     assert.equal(
-      pending[0]?.phase._tag === "Completed" ? pending[0].phase.acknowledgedAt : "missing",
+      Predicate.isTagged(pending[0]?.phase, "Completed")
+        ? pending[0].phase.acknowledgedAt
+        : "missing",
       null,
     );
   }).pipe(Effect.provide(persistenceLayer("t3-delegation-pending-test-"))),

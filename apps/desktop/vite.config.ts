@@ -46,6 +46,11 @@ export default defineConfig({
       sourcemap: true,
       outExtensions: () => ({ js: ".cjs" }),
       entry: ["src/preload.ts"],
+      deps: {
+        // Sandboxed preloads can require Electron only, so bundle the contract decoders.
+        alwaysBundle: (id) =>
+          id === "effect" || id.startsWith("effect/") || id.startsWith("@akeru/"),
+      },
     },
     {
       format: "cjs",
@@ -63,6 +68,11 @@ export default defineConfig({
       sourcemap: true,
       outExtensions: () => ({ js: ".cjs" }),
       entry: ["src/preview-pip-preload.ts"],
+      deps: {
+        // Sandboxed preloads can require Electron only, so bundle the contract decoders.
+        alwaysBundle: (id) =>
+          id === "effect" || id.startsWith("effect/") || id.startsWith("@akeru/"),
+      },
     },
   ],
 });

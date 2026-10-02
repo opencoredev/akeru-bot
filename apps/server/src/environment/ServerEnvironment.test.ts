@@ -61,21 +61,27 @@ it.layer(NodeServices.layer)("ServerEnvironmentLive", (it) => {
     Effect.gen(function* () {
       const fileSystem = yield* FileSystem.FileSystem;
       const crypto = yield* Crypto.Crypto;
+
       const baseDir = yield* fileSystem.makeTempDirectoryScoped({
         prefix: "t3-server-environment-concurrent-test-",
       });
+
       const serverConfig = yield* makeServerConfig(baseDir);
       yield* fileSystem.makeDirectory(serverConfig.stateDir, { recursive: true });
+
       if (content !== undefined) {
         yield* fileSystem.writeFileString(serverConfig.environmentIdPath, content);
       }
+
       const bothGenerated = yield* Deferred.make<void>();
       const bothReadEmpty = yield* Deferred.make<void>();
       const firstInitialized = yield* Deferred.make<void>();
       let remaining = 2;
       let emptyReads = 0;
+
       const readIdentity = Effect.gen(function* () {
         const identity = yield* ServerEnvironment.ServerEnvironmentIdentity;
+
         return yield* identity.getEnvironmentId;
       }).pipe(
         Effect.tap(() => Deferred.succeed(firstInitialized, undefined)),
@@ -90,6 +96,7 @@ it.layer(NodeServices.layer)("ServerEnvironmentLive", (it) => {
                   if (path !== serverConfig.environmentIdPath || remaining > 0 || value.trim()) {
                     return;
                   }
+
                   // Both observe the empty file, but one repairs it after the other has finished.
                   if (++emptyReads === 2) {
                     yield* Deferred.succeed(bothReadEmpty, undefined);
@@ -105,10 +112,13 @@ it.layer(NodeServices.layer)("ServerEnvironmentLive", (it) => {
           ...crypto,
           randomUUIDv4: Effect.gen(function* () {
             const id = yield* crypto.randomUUIDv4;
+
             if (--remaining === 0) {
               yield* Deferred.succeed(bothGenerated, undefined);
             }
+
             yield* Deferred.await(bothGenerated);
+
             return id;
           }),
         }),
@@ -117,6 +127,7 @@ it.layer(NodeServices.layer)("ServerEnvironmentLive", (it) => {
       const [first, second] = yield* Effect.all([readIdentity, readIdentity], {
         concurrency: "unbounded",
       });
+
       const persisted = yield* fileSystem.readFileString(serverConfig.environmentIdPath);
 
       expect(first).toBe(second);
@@ -127,16 +138,20 @@ it.layer(NodeServices.layer)("ServerEnvironmentLive", (it) => {
   it.effect("persists the environment id across service restarts", () =>
     Effect.gen(function* () {
       const fileSystem = yield* FileSystem.FileSystem;
+
       const baseDir = yield* fileSystem.makeTempDirectoryScoped({
         prefix: "t3-server-environment-test-",
       });
 
       const first = yield* Effect.gen(function* () {
         const serverEnvironment = yield* ServerEnvironment.ServerEnvironment;
+
         return yield* serverEnvironment.getDescriptor;
       }).pipe(Effect.provide(makeServerEnvironmentLayer(baseDir)));
+
       const second = yield* Effect.gen(function* () {
         const serverEnvironment = yield* ServerEnvironment.ServerEnvironment;
+
         return yield* serverEnvironment.getDescriptor;
       }).pipe(Effect.provide(makeServerEnvironmentLayer(baseDir)));
 
@@ -152,12 +167,15 @@ it.layer(NodeServices.layer)("ServerEnvironmentLive", (it) => {
   it.effect("structures persisted environment id filesystem failures", () =>
     Effect.gen(function* () {
       const fileSystem = yield* FileSystem.FileSystem;
+
       const baseDir = yield* fileSystem.makeTempDirectoryScoped({
         prefix: "t3-server-environment-error-test-",
       });
+
       const serverConfig = yield* makeServerConfig(baseDir);
       const environmentIdPath = serverConfig.environmentIdPath;
       const tempPath = `${environmentIdPath}.tmp`;
+
       const methodByOperation = {
         check: "exists",
         read: "readFileString",
@@ -166,6 +184,7 @@ it.layer(NodeServices.layer)("ServerEnvironmentLive", (it) => {
 
       for (const operation of ["check", "read", "write"] as const) {
         const writeAttempts: string[] = [];
+
         const cause = PlatformError.systemError({
           _tag: "PermissionDenied",
           module: "FileSystem",
@@ -173,6 +192,7 @@ it.layer(NodeServices.layer)("ServerEnvironmentLive", (it) => {
           description: "permission denied",
           pathOrDescriptor: environmentIdPath,
         });
+
         const failingFileSystemLayer = FileSystem.layerNoop({
           exists: () =>
             operation === "check" ? Effect.fail(cause) : Effect.succeed(operation === "read"),
@@ -180,12 +200,14 @@ it.layer(NodeServices.layer)("ServerEnvironmentLive", (it) => {
           makeTempFileScoped: () => Effect.succeed(tempPath),
           writeFileString: (path) => {
             writeAttempts.push(path);
+
             return Effect.fail(cause);
           },
         });
 
         const error = yield* Effect.gen(function* () {
           const serverEnvironment = yield* ServerEnvironment.ServerEnvironment;
+
           return yield* serverEnvironment.getDescriptor;
         }).pipe(
           Effect.provide(
@@ -197,9 +219,11 @@ it.layer(NodeServices.layer)("ServerEnvironmentLive", (it) => {
         );
 
         expect(isServerEnvironmentIdPersistenceError(error)).toBe(true);
+
         if (!isServerEnvironmentIdPersistenceError(error)) {
           throw error;
         }
+
         expect(error.operation).toBe(operation);
         expect(error.environmentIdPath).toBe(environmentIdPath);
         expect(error.cause).toBe(cause);

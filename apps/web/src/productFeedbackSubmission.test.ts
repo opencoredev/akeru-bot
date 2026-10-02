@@ -32,6 +32,7 @@ describe("product feedback submission", () => {
         element: null,
       },
     });
+
     expect(payload).not.toHaveProperty("thread");
     expect(payload).not.toHaveProperty("conversation");
     expect(payload).not.toHaveProperty("category");
@@ -72,6 +73,7 @@ describe("product feedback submission", () => {
       "fetch",
       vi.fn(async () => Promise.reject(new Error("secret endpoint"))),
     );
+
     const result = await submitProductFeedback("https://feedback.example.test", {
       ...buildProductFeedbackSubmission({
         draft: {
@@ -80,6 +82,7 @@ describe("product feedback submission", () => {
         },
       }),
     });
+
     expect(result).toEqual({
       ok: false,
       rejection: {

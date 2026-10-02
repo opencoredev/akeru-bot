@@ -1,3 +1,4 @@
+import { Data } from "effect";
 import type { ServerConfigStreamEvent } from "@akeru/contracts";
 
 export const KEYBINDINGS_SUCCESS_TOAST_COOLDOWN_MS = 2_000;
@@ -5,6 +6,8 @@ export const KEYBINDINGS_SUCCESS_TOAST_COOLDOWN_MS = 2_000;
 export type KeybindingsUpdateToastDecision =
   | { readonly _tag: "Success" }
   | { readonly _tag: "InvalidConfiguration"; readonly message: string };
+
+const ToastDecision = Data.taggedEnum<KeybindingsUpdateToastDecision>();
 
 export interface KeybindingsUpdateToastController {
   readonly handle: (event: ServerConfigStreamEvent | null) => KeybindingsUpdateToastDecision | null;
@@ -23,14 +26,13 @@ export function createKeybindingsUpdateToastController(input: {
       }
 
       const issue = event.payload.issues.find((entry) => entry.kind.startsWith("keybindings."));
+
       if (issue) {
-        return {
-          _tag: "InvalidConfiguration",
-          message: issue.message,
-        };
+        return ToastDecision.InvalidConfiguration({ message: issue.message });
       }
 
       const currentTime = now();
+
       if (
         lastSuccessToastAt !== null &&
         currentTime - lastSuccessToastAt < KEYBINDINGS_SUCCESS_TOAST_COOLDOWN_MS
@@ -39,7 +41,8 @@ export function createKeybindingsUpdateToastController(input: {
       }
 
       lastSuccessToastAt = currentTime;
-      return { _tag: "Success" };
+
+      return ToastDecision.Success();
     },
   };
 }

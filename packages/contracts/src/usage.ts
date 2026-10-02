@@ -23,6 +23,7 @@ import { SubscriptionProviderId } from "./subscriptionAuth.ts";
 export const USAGE_CONTRACT_VERSION = 5 as const;
 
 export const UsageProviderKind = Schema.Literals(["claude", "codex", "grok", "kimi", "opencode"]);
+
 export type UsageProviderKind = typeof UsageProviderKind.Type;
 
 /**
@@ -36,9 +37,11 @@ const USAGE_DAY_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 export const UsageDay = TrimmedNonEmptyString.check(Schema.isPattern(USAGE_DAY_PATTERN)).pipe(
   Schema.brand("UsageDay"),
 );
+
 export type UsageDay = typeof UsageDay.Type;
 
 export const UsageResolution = Schema.Literals(["day", "hour"]);
+
 export type UsageResolution = typeof UsageResolution.Type;
 
 /**
@@ -50,6 +53,7 @@ export type UsageResolution = typeof UsageResolution.Type;
  *   from cost.
  */
 export const UsageCostSource = Schema.Literals(["providerReported", "modelPriced", "unpriced"]);
+
 export type UsageCostSource = typeof UsageCostSource.Type;
 
 /**
@@ -67,6 +71,7 @@ export const UsageTokenTotals = Schema.Struct({
   outputTokens: NonNegativeInt,
   reasoningTokens: NonNegativeInt,
 });
+
 export type UsageTokenTotals = typeof UsageTokenTotals.Type;
 
 /**
@@ -98,6 +103,7 @@ export const UsageBucket = Schema.Struct({
   /** Distinct Akeru chats that contributed to this cell. */
   sessions: NonNegativeInt,
 });
+
 export type UsageBucket = typeof UsageBucket.Type;
 
 /**
@@ -119,9 +125,11 @@ export const UsageSourceFingerprint = Schema.Struct({
    */
   volumeId: Schema.String,
 });
+
 export type UsageSourceFingerprint = typeof UsageSourceFingerprint.Type;
 
 export const UsageSourceStatus = Schema.Literals(["ok", "missing", "partial", "failed"]);
+
 export type UsageSourceStatus = typeof UsageSourceStatus.Type;
 
 export const UsageSource = Schema.Struct({
@@ -139,9 +147,11 @@ export const UsageSource = Schema.Struct({
   distinctSessions: NonNegativeInt,
   message: Schema.NullOr(TrimmedNonEmptyString),
 });
+
 export type UsageSource = typeof UsageSource.Type;
 
 export const UsagePricingStatus = Schema.Literals(["fresh", "cached", "unavailable"]);
+
 export type UsagePricingStatus = typeof UsagePricingStatus.Type;
 
 /**
@@ -154,9 +164,11 @@ export const UsagePricing = Schema.Struct({
   fetchedAt: Schema.NullOr(Schema.String),
   knownModels: NonNegativeInt,
 });
+
 export type UsagePricing = typeof UsagePricing.Type;
 
 export const UsagePlanWindowKind = Schema.Literals(["session", "weekly", "model"]);
+
 export type UsagePlanWindowKind = typeof UsagePlanWindowKind.Type;
 
 /** One subscription window, as a percent used of that cap. */
@@ -166,9 +178,11 @@ export const UsagePlanWindow = Schema.Struct({
   usedPercent: Schema.Number,
   resetsAt: Schema.NullOr(Schema.String),
 });
+
 export type UsagePlanWindow = typeof UsagePlanWindow.Type;
 
 export const UsagePlanLimitsStatus = Schema.Literals(["ok", "failed"]);
+
 export type UsagePlanLimitsStatus = typeof UsagePlanLimitsStatus.Type;
 
 /** Live plan meters for one Settings → Providers login. */
@@ -179,6 +193,7 @@ export const UsageProviderPlanLimits = Schema.Struct({
   message: Schema.NullOr(TrimmedNonEmptyString),
   windows: Schema.Array(UsagePlanWindow),
 });
+
 export type UsageProviderPlanLimits = typeof UsageProviderPlanLimits.Type;
 
 export const UsageSummaryInput = Schema.Struct({
@@ -198,6 +213,7 @@ export const UsageSummaryInput = Schema.Struct({
   /** Exclusive UTC instant for an hourly rolling window. */
   untilTime: Schema.optional(TrimmedNonEmptyString),
 });
+
 export type UsageSummaryInput = typeof UsageSummaryInput.Type;
 
 export const UsageSummary = Schema.Struct({
@@ -219,6 +235,7 @@ export const UsageSummary = Schema.Struct({
   /** Settings -> Providers connections that may contribute usage. Absent on older servers. */
   connectedProviders: Schema.optional(ForwardCompatibleArray(SubscriptionProviderId)),
 });
+
 export type UsageSummary = typeof UsageSummary.Type;
 
 export class UsageReadError extends Schema.TaggedErrorClass<UsageReadError>()("UsageReadError", {

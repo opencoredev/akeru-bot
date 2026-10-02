@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import * as NodeOS from "node:os";
 
 import type { AuthClientSession } from "@akeru/contracts";
@@ -57,9 +58,11 @@ export const resolveHeadlessConnectionHost = (
   }
 
   const interfaceEntries = Object.values(interfaces).flatMap((entries) => entries ?? []);
+
   const externalIpv4 = interfaceEntries.find(
     (entry) => !entry.internal && isIpv4Family(entry.family),
   );
+
   if (externalIpv4) {
     return externalIpv4.address;
   }
@@ -67,6 +70,7 @@ export const resolveHeadlessConnectionHost = (
   const externalIpv6 = interfaceEntries.find(
     (entry) => !entry.internal && isIpv6Family(entry.family),
   );
+
   return externalIpv6 ? normalizeHost(externalIpv6.address) : "localhost";
 };
 
@@ -76,18 +80,23 @@ export const resolveHeadlessConnectionString = (
   interfaces: NetworkInterfacesMap = NodeOS.networkInterfaces(),
 ): string => {
   const connectionHost = resolveHeadlessConnectionHost(host, interfaces);
+
   return `http://${formatHostForUrl(connectionHost)}:${port}`;
 };
 
-export const resolveListeningPort = (address: unknown, fallbackPort: number): number => {
+export const resolveListeningPort = (
+  address: HttpServer.Address | { readonly port?: number } | string | null,
+  fallbackPort: number,
+): number => {
   if (
-    typeof address === "object" &&
+    Predicate.isObjectOrArray(address) &&
     address !== null &&
     "port" in address &&
-    typeof address.port === "number"
+    Predicate.isNumber(address.port)
   ) {
     return address.port;
   }
+
   return fallbackPort;
 };
 
@@ -96,12 +105,14 @@ export const buildPairingUrl = (connectionString: string, token: string): string
   url.pathname = "/pair";
   url.searchParams.delete("token");
   url.hash = new URLSearchParams([["token", token]]).toString();
+
   return url.toString();
 };
 
 export const renderTerminalQrCode = (value: string, margin = 2): string => {
   const qrCode = QrCode.encodeText(value, QrCode.Ecc.MEDIUM);
   const rows: Array<string> = [];
+
   const isDark = (x: number, y: number): boolean =>
     x >= 0 && x < qrCode.size && y >= 0 && y < qrCode.size && qrCode.getModule(x, y);
 
@@ -169,6 +180,7 @@ export const announceRemoteStartup = <E1, E2, R1, R2>(input: {
     if (hasPairedAdminClient(yield* input.listSessions)) {
       return yield* input.print(REMOTE_ALREADY_PAIRED_OUTPUT);
     }
+
     const accessInfo = yield* input.issueAccessInfo;
     yield* input.print(formatRemoteFirstBootOutput(accessInfo));
   });
@@ -177,10 +189,12 @@ export const issueHeadlessServeAccessInfo = Effect.fn("issueHeadlessServeAccessI
   const serverConfig = yield* ServerConfig;
   const httpServer = yield* HttpServer.HttpServer;
   const serverAuth = yield* EnvironmentAuth.EnvironmentAuth;
+
   const connectionString = resolveHeadlessConnectionString(
     serverConfig.host,
     resolveListeningPort(httpServer.address, serverConfig.port),
   );
+
   const issued = yield* serverAuth.issueStartupPairingCredential();
 
   return {

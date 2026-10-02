@@ -1,4 +1,4 @@
-// @effect-diagnostics nodeBuiltinImport:off
+import * as Predicate from "effect/Predicate";
 import * as NodeFS from "node:fs";
 import * as NodePath from "node:path";
 import * as NodeChildProcess from "node:child_process";
@@ -25,16 +25,19 @@ const openSyncInterceptor = vi.hoisted(() => ({
   failPath: null as string | null,
   errorCode: "ENXIO",
 }));
+
 const fstatSyncInterceptor = vi.hoisted(() => ({ failFd: null as number | null }));
 
 vi.mock("node:fs", async (importOriginal) => {
   const actual = await importOriginal<typeof import("node:fs")>();
+
   return {
     ...actual,
     openSync: (...args: Parameters<typeof actual.openSync>) => {
       const [filePath, flags] = args;
+
       if (
-        typeof filePath === "string" &&
+        Predicate.isString(filePath) &&
         filePath === openSyncInterceptor.failPath &&
         flags === "r"
       ) {
@@ -42,6 +45,7 @@ vi.mock("node:fs", async (importOriginal) => {
         Object.assign(error, { code: openSyncInterceptor.errorCode });
         throw error;
       }
+
       return (actual.openSync as (...a: typeof args) => number)(...args);
     },
     fstatSync: (...args: Parameters<typeof actual.fstatSync>) => {
@@ -50,12 +54,14 @@ vi.mock("node:fs", async (importOriginal) => {
         Object.assign(error, { code: "EACCES" });
         throw error;
       }
+
       return (actual.fstatSync as (...a: typeof args) => NodeFS.Stats)(...args);
     },
   };
 });
 
 const TestEnvelopeSchema = Schema.Struct({ mode: Schema.String });
+
 const encodeTestEnvelopeSchema = Schema.encodeEffect(Schema.fromJsonString(TestEnvelopeSchema));
 
 it.layer(NodeServices.layer)("readBootstrapEnvelope", (it) => {
@@ -98,10 +104,12 @@ it.layer(NodeServices.layer)("readBootstrapEnvelope", (it) => {
       const fd = NodeFS.openSync(filePath, "r");
 
       openSyncInterceptor.failPath = `/proc/self/fd/${fd}`;
+
       try {
         const payload = yield* readBootstrapEnvelope(TestEnvelopeSchema, fd, {
           timeoutMs: 100,
         }).pipe(Effect.provideService(HostProcessPlatform, "linux"));
+
         assertSome(payload, {
           mode: "desktop",
         });
@@ -115,14 +123,17 @@ it.layer(NodeServices.layer)("readBootstrapEnvelope", (it) => {
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
       const filePath = yield* fs.makeTempFileScoped({ prefix: "t3-bootstrap-", suffix: ".ndjson" });
+
       const fd = yield* Effect.acquireRelease(
         Effect.sync(() => NodeFS.openSync(filePath, "r")),
         (fd) => Effect.sync(() => NodeFS.closeSync(fd)),
       );
+
       const fdPath = `/proc/self/fd/${fd}`;
 
       openSyncInterceptor.failPath = fdPath;
       openSyncInterceptor.errorCode = "EIO";
+
       try {
         const error = yield* readBootstrapEnvelope(TestEnvelopeSchema, fd, {
           timeoutMs: 100,
@@ -162,6 +173,7 @@ it.layer(NodeServices.layer)("readBootstrapEnvelope", (it) => {
       );
 
       fstatSyncInterceptor.failFd = fd;
+
       try {
         const error = yield* readBootstrapEnvelope(TestEnvelopeSchema, fd, {
           timeoutMs: 100,
@@ -187,6 +199,7 @@ it.layer(NodeServices.layer)("readBootstrapEnvelope", (it) => {
         Effect.sync(() => NodeFS.openSync(filePath, "r")),
         (fd) => Effect.sync(() => NodeFS.closeSync(fd)),
       );
+
       const error = yield* readBootstrapEnvelope(TestEnvelopeSchema, fd, {
         timeoutMs: 100,
       }).pipe(Effect.flip);

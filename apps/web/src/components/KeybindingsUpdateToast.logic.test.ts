@@ -23,6 +23,7 @@ function keybindingsEvent(
 describe("keybindings update toast policy", () => {
   it("coalesces repeated successful reload notifications during the cooldown", () => {
     let now = 1_000;
+
     const controller = createKeybindingsUpdateToastController({
       now: () => now,
     });

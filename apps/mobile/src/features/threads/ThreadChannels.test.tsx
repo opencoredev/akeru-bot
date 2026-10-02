@@ -11,32 +11,42 @@ const state = vi.hoisted(() => ({
   changeProject: vi.fn(),
   alert: vi.fn(),
 }));
+
 vi.mock("@effect/atom-react", () => ({
   useAtomValue: (atom: string) => (atom === "session-state" ? state.session : state.snapshot),
 }));
+
 vi.mock("../../state/shell", () => ({ environmentSnapshotAtom: (id: string) => id }));
+
 vi.mock("../../state/session", () => ({
   environmentSession: { sessionStateAtom: () => "session-state" },
 }));
+
 vi.mock("../../state/bots", () => ({
   botEnvironment: { channels: { changeProject: "change-project" } },
 }));
+
 vi.mock("../../state/use-atom-command", () => ({
   useAtomCommand: (command: string) => (command === "change-project" ? state.changeProject : null),
 }));
+
 vi.mock("../../lib/i18n", async () => {
   const { createTranslator } = await import("@akeru/client-runtime/i18n");
   const translator = createTranslator("en");
+
   return { useMobileI18n: () => ({ ...translator, t: translator.translate }) };
 });
+
 vi.mock("react-native", async () => {
   const { createElement } = await import("react");
+
   return {
     Text: "span",
     View: "div",
     Alert: { alert: state.alert },
     Pressable: (props: { onPress: () => void; disabled?: boolean; children: ReactNode }) => {
       state.pressables.push(props);
+
       return createElement("button", null, props.children);
     },
   };
@@ -45,8 +55,11 @@ vi.mock("react-native", async () => {
 import { ThreadChannels } from "./ThreadChannels";
 
 const botId = BotId.make("bot-1");
+
 const projectId = ProjectId.make("project-1");
+
 const environmentId = EnvironmentId.make("environment-1");
+
 const binding: ChannelBinding = {
   botId,
   projectId,

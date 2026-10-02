@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, describe, it } from "@effect/vitest";
 import * as Deferred from "effect/Deferred";
@@ -125,6 +126,7 @@ describe("DesktopApplicationMenu", () => {
   it.effect("installs the native menu and routes Settings through DesktopWindow", () =>
     Effect.gen(function* () {
       const selectedAction = yield* Deferred.make<string>();
+
       const applicationMenuTemplate =
         yield* Deferred.make<readonly Electron.MenuItemConstructorOptions[]>();
 
@@ -133,13 +135,16 @@ describe("DesktopApplicationMenu", () => {
       const template = yield* Deferred.await(applicationMenuTemplate);
       const fileMenu = template.find((item) => item.label === "File");
       assert.isDefined(fileMenu);
+
       if (!Array.isArray(fileMenu.submenu)) {
         throw new Error("Expected File menu submenu to be an array.");
       }
+
       const settingsItem = fileMenu.submenu.find((item) => item.label === "Settings...");
       assert.isDefined(settingsItem);
       const settingsClick = settingsItem.click;
-      if (typeof settingsClick !== "function") {
+
+      if (!Predicate.isFunction(settingsClick)) {
         throw new Error("Expected Settings menu item to have a click handler.");
       }
 
@@ -151,6 +156,7 @@ describe("DesktopApplicationMenu", () => {
   it.effect("routes Help feedback through DesktopWindow", () =>
     Effect.gen(function* () {
       const selectedAction = yield* Deferred.make<string>();
+
       const applicationMenuTemplate =
         yield* Deferred.make<readonly Electron.MenuItemConstructorOptions[]>();
 
@@ -159,12 +165,15 @@ describe("DesktopApplicationMenu", () => {
       const template = yield* Deferred.await(applicationMenuTemplate);
       const helpMenu = template.find((item) => item.role === "help");
       assert.isDefined(helpMenu);
+
       if (!Array.isArray(helpMenu.submenu)) {
         throw new Error("Expected Help menu submenu to be an array.");
       }
+
       const feedbackItem = helpMenu.submenu.find((item) => item.label === "Send Feedback...");
       assert.isDefined(feedbackItem);
-      if (typeof feedbackItem.click !== "function") {
+
+      if (!Predicate.isFunction(feedbackItem.click)) {
         throw new Error("Expected feedback menu item to have a click handler.");
       }
 
@@ -183,6 +192,7 @@ describe("DesktopApplicationMenu", () => {
   it.effect("routes View menu zoom to the main window instead of zoom roles", () =>
     Effect.gen(function* () {
       const selectedAction = yield* Deferred.make<string>();
+
       const applicationMenuTemplate =
         yield* Deferred.make<readonly Electron.MenuItemConstructorOptions[]>();
 
@@ -191,6 +201,7 @@ describe("DesktopApplicationMenu", () => {
       const template = yield* Deferred.await(applicationMenuTemplate);
       const viewMenu = template.find((item) => item.label === "View");
       assert.isDefined(viewMenu);
+
       if (!Array.isArray(viewMenu.submenu)) {
         throw new Error("Expected View menu submenu to be an array.");
       }
@@ -202,7 +213,8 @@ describe("DesktopApplicationMenu", () => {
       const zoomIn = viewMenu.submenu.find((item) => item.label === "Zoom In");
       assert.isDefined(zoomIn);
       assert.equal(zoomIn.accelerator, "CmdOrCtrl+=");
-      if (typeof zoomIn.click !== "function") {
+
+      if (!Predicate.isFunction(zoomIn.click)) {
         throw new Error("Expected Zoom In menu item to have a click handler.");
       }
 

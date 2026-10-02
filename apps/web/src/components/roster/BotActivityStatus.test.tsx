@@ -59,6 +59,7 @@ describe("bot activity status", () => {
 
   it("turns the latest unfinished action into a short status update", () => {
     const turnId = TurnId.make("turn-1");
+
     const activities = [
       { turnId, kind: "tool.completed", tone: "tool", summary: "Browser navigate completed" },
       { turnId, kind: "tool.started", tone: "tool", summary: "Browser snapshot started" },
@@ -72,10 +73,12 @@ describe("bot activity status", () => {
 
   it("falls back to plain working between completed actions and after a question", () => {
     const turnId = TurnId.make("turn-1");
+
     const settled = [
       { turnId, kind: "tool.started", tone: "tool", summary: "Browser snapshot started" },
       { turnId, kind: "tool.completed", tone: "tool", summary: "Browser snapshot completed" },
     ] as OrchestrationThreadActivity[];
+
     const answered = [
       { turnId, kind: "item.completed", tone: "tool", summary: "Akeru ask user completed" },
     ] as OrchestrationThreadActivity[];
@@ -86,6 +89,7 @@ describe("bot activity status", () => {
 
   it("keeps an unrecognized tool honest instead of dropping it", () => {
     const turnId = TurnId.make("turn-1");
+
     const activities = [
       { turnId, kind: "tool.started", tone: "tool", summary: "render_invoice started" },
     ] as OrchestrationThreadActivity[];

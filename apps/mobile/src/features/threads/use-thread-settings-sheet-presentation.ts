@@ -1,6 +1,6 @@
+import { StackActions, useFocusEffect, useNavigation } from "@react-navigation/native";
 import { useCallback, useEffect, useRef, useState, type RefObject } from "react";
 import { KeyboardController } from "react-native-keyboard-controller";
-
 import type { ComposerEditorHandle } from "../../components/ComposerEditor";
 
 type PresentationPhase = "closed" | "opening" | "visible";
@@ -58,6 +58,7 @@ export function useThreadSettingsSheetPresentation(input: {
   const restorePendingRef = useRef(false);
   const lastStackTransitionFinishedAtRef = useRef(0);
   const dismissRestoreTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   const clearDismissRestoreTimer = useCallback(() => {
     if (dismissRestoreTimerRef.current !== null) {
       clearTimeout(dismissRestoreTimerRef.current);
@@ -73,6 +74,7 @@ export function useThreadSettingsSheetPresentation(input: {
     // React Strict Mode and Fast Refresh both run an effect cleanup/setup
     // cycle without recreating refs. Re-arm the mounted guard on every setup.
     isMountedRef.current = true;
+
     return () => {
       isMountedRef.current = false;
       isActiveRef.current = false;
@@ -107,6 +109,7 @@ export function useThreadSettingsSheetPresentation(input: {
       if (!isMountedRef.current || !isActiveRef.current || openingIdRef.current !== openingId) {
         return;
       }
+
       setPhase("visible");
     });
   }, [clearDismissRestoreTimer, input.editorRef, input.isEditorFocused]);
@@ -133,6 +136,7 @@ export function useThreadSettingsSheetPresentation(input: {
       input.editorRef.current?.focus();
       setTimeout(restoreFocus, 50);
     };
+
     requestAnimationFrame(restoreFocus);
   }, [input.editorRef]);
 
@@ -141,12 +145,15 @@ export function useThreadSettingsSheetPresentation(input: {
     if (!restorePendingRef.current) {
       return;
     }
+
     restorePendingRef.current = false;
     clearDismissRestoreTimer();
+
     // A reopened sheet owns focus again; drop the stale restore request.
     if (!isMountedRef.current || isActiveRef.current) {
       return;
     }
+
     restoreEditorFocus();
   }, [clearDismissRestoreTimer, restoreEditorFocus]);
 
@@ -162,16 +169,20 @@ export function useThreadSettingsSheetPresentation(input: {
     if (!restoreFocusAfterDismissRef.current) {
       return;
     }
+
     restoreFocusAfterDismissRef.current = false;
     restorePendingRef.current = true;
     clearDismissRestoreTimer();
+
     if (Date.now() - lastStackTransitionFinishedAtRef.current <= NATIVE_DISMISSAL_ECHO_WINDOW_MS) {
       // A stack transition finished just before this pop reached JS: the pop
       // is the state echo of a gesture-driven dismissal whose animation has
       // already completed. The sheet is gone — bring the keyboard back now.
       runPendingDismissalRestore();
+
       return;
     }
+
     dismissRestoreTimerRef.current = setTimeout(() => {
       dismissRestoreTimerRef.current = null;
       runPendingDismissalRestore();
@@ -191,4 +202,62 @@ export function useThreadSettingsSheetPresentation(input: {
     onDismissed,
     onStackTransitionsFinished,
   } as const;
+}
+
+/**
+ * The presentation above, bound to its native settings route: pushes
+ * `routeName` once the sheet is visible, treats the host screen regaining focus
+ * as the dismissal (then calls `onDismissed`), and forwards the navigator's
+ * UIKit completion event so the queued keyboard restore runs on landing.
+ */
+export function useThreadSettingsSheetRoute(input: {
+  readonly editorRef: RefObject<ComposerEditorHandle | null>;
+  readonly isEditorFocused: boolean;
+  readonly routeName: string;
+  readonly onDismissed?: () => void;
+}) {
+  const navigation = useNavigation();
+
+  const presentation = useThreadSettingsSheetPresentation({
+    editorRef: input.editorRef,
+    isEditorFocused: input.isEditorFocused,
+  });
+
+  const { routeName, onDismissed } = input;
+  const routePresentedRef = useRef(false);
+
+  useEffect(() => {
+    if (!presentation.isVisible || routePresentedRef.current) {
+      return;
+    }
+
+    routePresentedRef.current = true;
+    navigation.dispatch(StackActions.push(routeName));
+  }, [navigation, presentation.isVisible, routeName]);
+
+  useFocusEffect(
+    useCallback(() => {
+      if (!routePresentedRef.current) {
+        return;
+      }
+
+      routePresentedRef.current = false;
+      presentation.onDismissed();
+      onDismissed?.();
+    }, [onDismissed, presentation.onDismissed]),
+  );
+
+  useEffect(
+    () =>
+      // UIKit's completion callback for the sheet dismissal, surfaced by the
+      // native-stack patch. This is when the queued keyboard restore runs.
+      // SAFETY: The bundled native-stack patch emits finishTransitioning with this listener signature.
+      (navigation as NavigationWithFinishTransitioning).addListener(
+        "finishTransitioning",
+        presentation.onStackTransitionsFinished,
+      ),
+    [navigation, presentation.onStackTransitionsFinished],
+  );
+
+  return presentation;
 }

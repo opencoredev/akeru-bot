@@ -10,12 +10,15 @@ import { threadOutboxManager } from "./thread-outbox";
 const threadOutboxShellStatusesAtom = Atom.make(
   (get): ReadonlyMap<EnvironmentId, EnvironmentShellStatus> => {
     const statuses = new Map<EnvironmentId, EnvironmentShellStatus>();
+
     for (const queue of Object.values(get(threadOutboxManager.queuedMessagesByThreadKeyAtom))) {
       const environmentId = queue[0]?.environmentId;
+
       if (environmentId !== undefined && !statuses.has(environmentId)) {
         statuses.set(environmentId, get(environmentShell.stateValueAtom(environmentId)).status);
       }
     }
+
     return statuses;
   },
 ).pipe(Atom.withLabel("mobile:thread-outbox:shell-statuses"));
@@ -33,17 +36,21 @@ export const editingQueuedMessageIdsAtom = Atom.make<Readonly<Record<MessageId, 
 
 export function holdEditingQueuedMessage(messageId: MessageId): void {
   const current = appAtomRegistry.get(editingQueuedMessageIdsAtom);
+
   if (current[messageId]) {
     return;
   }
+
   appAtomRegistry.set(editingQueuedMessageIdsAtom, { ...current, [messageId]: true });
 }
 
 export function releaseEditingQueuedMessage(messageId: MessageId): void {
   const current = appAtomRegistry.get(editingQueuedMessageIdsAtom);
+
   if (!current[messageId]) {
     return;
   }
+
   const next = { ...current };
   delete next[messageId];
   appAtomRegistry.set(editingQueuedMessageIdsAtom, next);

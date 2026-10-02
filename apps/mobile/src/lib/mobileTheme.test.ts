@@ -25,12 +25,14 @@ function relativeLuminance(hex: string): number {
     .match(/.{2}/g)!
     .map((channel) => Number.parseInt(channel, 16) / 255)
     .map((channel) => (channel <= 0.04045 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4));
+
   return 0.2126 * channels[0]! + 0.7152 * channels[1]! + 0.0722 * channels[2]!;
 }
 
 function contrastRatio(first: string, second: string): number {
   const firstLuminance = relativeLuminance(first);
   const secondLuminance = relativeLuminance(second);
+
   return (
     (Math.max(firstLuminance, secondLuminance) + 0.05) /
     (Math.min(firstLuminance, secondLuminance) + 0.05)
@@ -39,20 +41,25 @@ function contrastRatio(first: string, second: string): number {
 
 function compositeOver(overlay: string, background: string): string {
   const overlayMatch = /^rgba\((\d+), (\d+), (\d+), ([\d.]+)\)$/.exec(overlay)!;
+
   const backgroundChannels = background
     .slice(1)
     .match(/.{2}/g)!
     .map((channel) => Number.parseInt(channel, 16));
+
   const alpha = Number(overlayMatch[4]);
+
   const channels = [1, 2, 3].map((index) =>
     Math.round(Number(overlayMatch[index]) * alpha + backgroundChannels[index - 1]! * (1 - alpha)),
   );
+
   return `#${channels.map((channel) => channel.toString(16).padStart(2, "0")).join("")}`;
 }
 
 describe("mobile themes", () => {
   it("declares every runtime theme variable in the static stylesheet", () => {
     const stylesheet = NodeFS.readFileSync(new URL("../../global.css", import.meta.url), "utf8");
+
     const stylesheetVariables = new Set(
       Array.from(stylesheet.matchAll(/--color-[a-z0-9-]+/g), ([variable]) => variable),
     );
@@ -62,9 +69,41 @@ describe("mobile themes", () => {
     );
   });
 
+  it.each([
+    ["light", "#171717", "#525252", "rgba(229, 229, 229, 0.8)"],
+    ["dark", "#f5f5f5", "#d4d4d4", "rgba(255, 255, 255, 0.08)"],
+  ] as const)(
+    "preserves channel, fold, and dictation colors in %s",
+    (appearance, heading, detail, separator) => {
+      const variables = getMobileThemeVariables(DEFAULT_MOBILE_THEME_ID, appearance);
+      expect(variables["--color-channel-heading"]).toBe(heading);
+      expect(variables["--color-channel-detail"]).toBe(detail);
+      expect(variables["--color-work-fold-separator"]).toBe(separator);
+      expect(variables["--color-dictation-send-icon"]).toBe("#ffffff");
+    },
+  );
+
+  it("uses the channel palette for headings, detail, and message-origin captions", () => {
+    const channels = NodeFS.readFileSync(
+      new URL("../features/threads/ThreadChannels.tsx", import.meta.url),
+      "utf8",
+    );
+
+    const rows = NodeFS.readFileSync(
+      new URL("../features/threads/thread-feed-rows.tsx", import.meta.url),
+      "utf8",
+    );
+
+    expect(channels).toContain('className="font-t3-medium text-sm text-channel-heading"');
+    expect(channels.match(/text-channel-heading/g)).toHaveLength(3);
+    expect(channels.match(/text-channel-detail/g)).toHaveLength(4);
+    expect(rows).toContain('className="font-t3-medium text-[11px] text-channel-detail"');
+  });
+
   it("shares all built-in desktop palettes", () => {
     expect(BUILT_IN_THEME_IDS).toContain("akeru-paper");
     expect(BUILT_IN_THEMES.map((theme) => theme.id)).toEqual(BUILT_IN_THEME_IDS);
+
     for (const themeId of BUILT_IN_THEME_IDS) {
       expect(getMobileThemeVariables(themeId, "light")["--color-screen"]).toMatch(/^#/);
       expect(getMobileThemeVariables(themeId, "dark")["--color-screen"]).toMatch(/^#/);
@@ -170,7 +209,9 @@ describe("mobile themes", () => {
 
   it("maps semantic palette roles onto every mobile color variable", () => {
     const variables = createMobileThemeVariables(BUILT_IN_THEMES[0].colors, "light");
-    expect(Object.keys(variables)).toHaveLength(65);
+    expect(Object.keys(variables).sort()).toEqual(
+      Object.keys(DEFAULT_MOBILE_THEME_VARIABLES.light).sort(),
+    );
     expect(variables["--color-sheet-solid"]).toBe(
       themeColorToNativeColor(BUILT_IN_THEMES[0].colors.chrome),
     );
@@ -224,10 +265,12 @@ describe("mobile themes", () => {
         expect(variables["--color-user-bubble-skill-foreground"]).not.toBe(
           variables["--color-user-bubble-foreground"],
         );
+
         const fenceSurface = compositeOver(
           variables["--color-md-user-fence-bg"],
           variables["--color-user-bubble"],
         );
+
         expect(fenceSurface).not.toBe(variables["--color-user-bubble"]);
         expect(
           contrastRatio(variables["--color-md-user-fence-text"], fenceSurface),

@@ -22,6 +22,7 @@ const ProjectionThreadDbRow = ProjectionThread.mapFields(
     linkedPullRequest: Schema.NullOr(Schema.fromJsonString(ThreadLinkedPullRequest)),
   }),
 );
+
 type ProjectionThreadDbRow = typeof ProjectionThreadDbRow.Type;
 
 const makeProjectionThreadRepository = Effect.gen(function* () {

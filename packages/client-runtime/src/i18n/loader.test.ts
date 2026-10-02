@@ -78,6 +78,7 @@ describe("lazy catalog loader", () => {
       .fn<() => Promise<TranslationCatalog>>()
       .mockRejectedValueOnce(new Error("offline"))
       .mockResolvedValueOnce(fixture);
+
     const loader = createCatalogLoader({ fr: load });
     await loader.selectLocale("fr");
     expect(loader.getSnapshot().status).toBe("error");
@@ -100,25 +101,31 @@ describe("lazy catalog loader", () => {
 describe("repeated label cost", () => {
   it("does not construct Intl formatters for translation and reuses number formatters", () => {
     const NumberFormat = Intl.NumberFormat;
+
     const numbers = vi.spyOn(Intl, "NumberFormat").mockImplementation(function (locale, options) {
       return new NumberFormat(locale, options);
     });
+
     const dates = vi.spyOn(Intl, "DateTimeFormat");
     const plurals = vi.spyOn(Intl, "PluralRules");
+
     try {
       for (let index = 0; index < 100; index++) translate("en", "Settings");
       expect(numbers).not.toHaveBeenCalled();
       expect(dates).not.toHaveBeenCalled();
       expect(plurals).not.toHaveBeenCalled();
+
       for (let index = 0; index < 100; index++)
         formatNumber("en-NZ", index, { minimumFractionDigits: 3 });
       expect(numbers).toHaveBeenCalledTimes(1);
+
       for (let index = 0; index < 40; index++) {
         formatNumber("en-NZ", index, {
           minimumFractionDigits: index % 20,
           useGrouping: index < 20,
         });
       }
+
       formatNumber("en-NZ", 1, { minimumFractionDigits: 3 });
       expect(numbers).toHaveBeenCalledTimes(42);
     } finally {

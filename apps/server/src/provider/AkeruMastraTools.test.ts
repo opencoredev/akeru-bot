@@ -1,16 +1,18 @@
+import { probeTool } from "./test-support/toolProbe.ts";
+import { toolRuntimeFixture } from "./test-support/toolRuntimeFixture.ts";
 import { AKERU_TOOL_CATALOG } from "@akeru/contracts";
 import { describe, expect, it, vi } from "vite-plus/test";
 
-import { createAkeruToolRuntime, type AkeruToolRuntime } from "./AkeruToolRuntime.ts";
+import { createAkeruToolRuntime } from "./AkeruToolRuntime.ts";
 import { createAkeruMastraTools } from "./AkeruMastraTools.ts";
 
 describe("createAkeruMastraTools", () => {
   it("builds every registered Akeru tool schema", () => {
-    const runtime = {
+    const runtime = toolRuntimeFixture({
       toolsForThread: () => AKERU_TOOL_CATALOG,
       requiresApproval: vi.fn(async () => false),
       execute: vi.fn(async () => ({ ok: true })),
-    } as unknown as AkeruToolRuntime;
+    });
 
     const tools = createAkeruMastraTools("thread-all-tools", runtime);
 
@@ -19,14 +21,15 @@ describe("createAkeruMastraTools", () => {
 
   it("passes an exact call identity and approval mode to the runtime", async () => {
     const execute = vi.fn(async () => ({ ok: true }));
-    const runtime = {
+
+    const runtime = toolRuntimeFixture({
       toolsForThread: () => [AKERU_TOOL_CATALOG[0]!],
       requiresApproval: vi.fn(async () => true),
       execute,
-    } as unknown as AkeruToolRuntime;
-    const shell = createAkeruMastraTools("thread-1", runtime).Shell as {
-      readonly execute?: (input: unknown, context: unknown) => Promise<unknown>;
-    };
+    });
+
+    const shell = probeTool(createAkeruMastraTools("thread-1", runtime).Shell);
+
     if (!shell?.execute) throw new Error("Shell tool is unavailable.");
 
     await expect(
@@ -54,9 +57,9 @@ describe("createAkeruMastraTools", () => {
         memory: memoryHandler,
       },
     });
-    const memory = createAkeruMastraTools("thread-memory", runtime).memory as {
-      readonly execute?: (input: unknown, context: unknown) => Promise<unknown>;
-    };
+
+    const memory = probeTool(createAkeruMastraTools("thread-memory", runtime).memory);
+
     if (!memory?.execute) throw new Error("Memory tool is unavailable.");
 
     await expect(

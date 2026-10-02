@@ -58,8 +58,11 @@ interface UpdateReleasePackageVersionsOptions {
 }
 
 const PackageJsonSchema = Schema.Record(Schema.String, Schema.Unknown);
+
 const PackageJsonPrettyJson = fromJsonStringPretty(PackageJsonSchema);
+
 const decodePackageJson = Schema.decodeUnknownEffect(PackageJsonPrettyJson);
+
 const encodePackageJson = Schema.encodeEffect(PackageJsonPrettyJson);
 
 export const updateReleasePackageVersions = Effect.fn("updateReleasePackageVersions")(function* (
@@ -73,6 +76,7 @@ export const updateReleasePackageVersions = Effect.fn("updateReleasePackageVersi
 
   for (const relativePath of releasePackageFiles) {
     const filePath = path.join(rootDir, relativePath);
+
     const packageJsonText = yield* fs.readFileString(filePath).pipe(
       Effect.mapError(
         (cause) =>
@@ -83,6 +87,7 @@ export const updateReleasePackageVersions = Effect.fn("updateReleasePackageVersi
           }),
       ),
     );
+
     const packageJson = yield* decodePackageJson(packageJsonText).pipe(
       Effect.mapError(
         (cause) =>
@@ -93,6 +98,7 @@ export const updateReleasePackageVersions = Effect.fn("updateReleasePackageVersi
           }),
       ),
     );
+
     if (packageJson.version === version) {
       continue;
     }
@@ -107,6 +113,7 @@ export const updateReleasePackageVersions = Effect.fn("updateReleasePackageVersi
           }),
       ),
     );
+
     yield* fs.writeFileString(filePath, `${packageJsonString}\n`).pipe(
       Effect.mapError(
         (cause) =>
@@ -125,6 +132,7 @@ export const updateReleasePackageVersions = Effect.fn("updateReleasePackageVersi
 
 const writeGithubOutput = Effect.fn("writeGithubOutput")(function* (changed: boolean) {
   const fs = yield* FileSystem.FileSystem;
+
   const githubOutputPath = yield* Config.nonEmptyString("GITHUB_OUTPUT").pipe(
     Effect.mapError(
       (cause) =>
@@ -133,6 +141,7 @@ const writeGithubOutput = Effect.fn("writeGithubOutput")(function* (changed: boo
         }),
     ),
   );
+
   yield* fs.writeFileString(githubOutputPath, `changed=${changed}\n`, { flag: "a" }).pipe(
     Effect.mapError(
       (cause) =>

@@ -1,4 +1,4 @@
-import type { ServerSettings, ServerSettingsError } from "@akeru/contracts";
+import type { ServerSettings } from "@akeru/contracts";
 import * as Effect from "effect/Effect";
 import * as Equal from "effect/Equal";
 import * as Stream from "effect/Stream";
@@ -27,15 +27,13 @@ export function haveProviderSnapshotSettingsChanged<Settings>(
   return !Equal.equals(previous, next);
 }
 
-export function makeProviderSnapshotSettingsSource<Settings>(
+export function providerSnapshotSettingsSource<Settings>(
   provider: Settings,
   serverSettings: ServerSettingsModule.ServerSettingsService["Service"],
-): {
-  readonly getSettings: Effect.Effect<ProviderSnapshotSettings<Settings>, ServerSettingsError>;
-  readonly streamSettings: Stream.Stream<ProviderSnapshotSettings<Settings>>;
-} {
+) {
   const mapSettings = (settings: ServerSettings) =>
     makeProviderSnapshotSettings(provider, settings);
+
   return {
     getSettings: serverSettings.getSettings.pipe(Effect.map(mapSettings)),
     streamSettings: serverSettings.streamChanges.pipe(Stream.map(mapSettings)),

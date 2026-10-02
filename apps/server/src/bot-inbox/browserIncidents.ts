@@ -1,4 +1,3 @@
-// @effect-diagnostics nodeBuiltinImport:off
 import * as NodeCrypto from "node:crypto";
 import type { BotId } from "@akeru/contracts";
 
@@ -14,6 +13,7 @@ export interface BrowserIncidentInput {
 
 export function browserIncidentKey(botId: BotId, resourceKey: string): string {
   const resourceId = NodeCrypto.createHash("sha256").update(resourceKey).digest("hex").slice(0, 16);
+
   return `browser:${botId}:${resourceId}`;
 }
 

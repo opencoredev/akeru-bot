@@ -1,3 +1,4 @@
+import { hasTag } from "~/lib/taggedUnion";
 import { useAtomValue } from "@effect/atom-react";
 import {
   BotId,
@@ -35,6 +36,7 @@ import { primaryServerProvidersAtom } from "../state/server";
 import { environmentSnapshotAtom } from "../state/shell";
 import { useAtomCommand } from "../state/use-atom-command";
 
+// SAFETY: This sentinel is used only while the environment query is disabled and is never sent to a server.
 const NO_ENVIRONMENT = "" as EnvironmentId;
 
 function BotThreadRouteView() {
@@ -67,6 +69,7 @@ function BotThreadRouteView() {
   const threadRef = useBotThreadRef(botId);
   // A remembered chat that no longer loads cannot take a routine.
   const routineThreadRef = useThreadShell(threadRef) ? threadRef : null;
+
   // A routine can hand its work to any other active bot in this environment.
   // Bots whose provider cannot take handed-off work stay listed but disabled.
   const delegateOptions = useMemo(
@@ -74,10 +77,12 @@ function BotThreadRouteView() {
       bot ? routineDelegateOptions(bot.id, bots, deriveProviderInstanceEntries(providers)) : [],
     [bot, bots, providers],
   );
+
   const botAssignments = useMemo(
     () => (snapshot?.skillAssignments ?? []).filter((assignment) => assignment.botId === botId),
     [botId, snapshot?.skillAssignments],
   );
+
   const providerSkills = useMemo(
     () =>
       providers
@@ -86,6 +91,7 @@ function BotThreadRouteView() {
         .filter((skill) => skill.enabled),
     [bot?.engine?.provider, providers],
   );
+
   const skillOptions = useMemo(
     () =>
       [
@@ -96,23 +102,26 @@ function BotThreadRouteView() {
       ].sort(),
     [botAssignments, providerSkills],
   );
+
   const routinesView = useMemo(() => botRoutinesView(snapshot, botId), [botId, snapshot]);
   const routines = routinesView.kind === "ready" ? routinesView.routines : [];
 
   const requireSuccess = (result: { readonly _tag: string }, message: string) => {
-    if (result._tag === "Success") return;
+    if (hasTag(result, "Success")) return;
     toastManager.add({ type: "error", title: message });
     throw new Error(message);
   };
 
   const withBusy = async (routineId: string, action: () => Promise<void>) => {
     setBusyRoutineId(routineId);
+
     try {
       await action();
     } finally {
       setBusyRoutineId(null);
     }
   };
+
   const startBusy = (routineId: string, action: () => Promise<void>) => {
     void withBusy(routineId, action).catch(() => undefined);
   };
@@ -120,14 +129,18 @@ function BotThreadRouteView() {
   const skillAssignmentIds = async (draft: RoutineAdapterDraft) => {
     if (!environmentId || !bot) throw new Error("The routine environment is unavailable.");
     const ids: SkillAssignmentId[] = [];
+
     for (const name of draft.skills) {
       const existing = botAssignments.find((assignment) => assignment.name === name);
+
       if (existing) {
         ids.push(existing.id);
         continue;
       }
+
       const assignmentId = SkillAssignmentId.make(randomUUID());
       const metadata = providerSkills.find((skill) => skill.name === name);
+
       const result = await assignSkill({
         environmentId,
         input: {
@@ -139,9 +152,11 @@ function BotThreadRouteView() {
           createdAt: new Date().toISOString(),
         },
       });
+
       requireSuccess(result, t("Could not assign {name}", { name }));
       ids.push(assignmentId);
     }
+
     return ids;
   };
 
@@ -154,6 +169,7 @@ function BotThreadRouteView() {
     skillAssignmentIds: await skillAssignmentIds(draft),
     connectorDependencies: draft.connectors.flatMap((name) => {
       const server = snapshot?.mcpServers?.find((candidate) => candidate.name === name);
+
       return server ? [McpServerId.make(server.id)] : [];
     }),
     projectId: ProjectId.make(draft.projectId),
@@ -204,6 +220,7 @@ function BotThreadRouteView() {
                           createdAt: new Date().toISOString(),
                         },
                       });
+
                       requireSuccess(result, t("Could not create routine"));
                       toastManager.add({ type: "success", title: t("Routine draft created") });
                     });
@@ -213,6 +230,7 @@ function BotThreadRouteView() {
             onUpdate: async (routineId, draft) => {
               if (!environmentId) throw new Error("The routine environment is unavailable.");
               const current = snapshot?.routines?.find((routine) => routine.id === routineId);
+
               if (!current) throw new Error("The routine no longer exists.");
               await withBusy(routineId, async () => {
                 const result = await draftRoutine({
@@ -225,12 +243,14 @@ function BotThreadRouteView() {
                     createdAt: new Date().toISOString(),
                   },
                 });
+
                 requireSuccess(result, t("Could not save routine"));
                 toastManager.add({ type: "success", title: t("Routine draft saved") });
               });
             },
             onApproveProcedure: (routineId) => {
               const current = snapshot?.routines?.find((routine) => routine.id === routineId);
+
               if (!environmentId || !current) return;
               startBusy(routineId, async () => {
                 const result = await approveRoutine({
@@ -241,6 +261,7 @@ function BotThreadRouteView() {
                     createdAt: new Date().toISOString(),
                   },
                 });
+
                 requireSuccess(result, t("Could not approve procedure"));
               });
             },
@@ -256,6 +277,7 @@ function BotThreadRouteView() {
                     createdAt: new Date().toISOString(),
                   },
                 });
+
                 requireSuccess(result, t("Could not start dry run"));
               });
             },
@@ -271,6 +293,7 @@ function BotThreadRouteView() {
                     createdAt: new Date().toISOString(),
                   },
                 });
+
                 requireSuccess(result, t("Could not start routine"));
               });
             },
@@ -278,6 +301,7 @@ function BotThreadRouteView() {
               if (!environmentId) return;
               startBusy(routineId, async () => {
                 const createdAt = new Date().toISOString();
+
                 const result = enabled
                   ? await enableRoutine({
                       environmentId,
@@ -291,6 +315,7 @@ function BotThreadRouteView() {
                         createdAt,
                       },
                     });
+
                 requireSuccess(
                   result,
                   enabled ? t("Could not enable routine") : t("Could not pause routine"),
@@ -301,6 +326,7 @@ function BotThreadRouteView() {
               if (!environmentId) return;
               startBusy(routineId, async () => {
                 const createdAt = new Date().toISOString();
+
                 const result = paused
                   ? await pauseRoutine({
                       environmentId,
@@ -314,6 +340,7 @@ function BotThreadRouteView() {
                       environmentId,
                       input: { routineId: RoutineId.make(routineId), createdAt },
                     });
+
                 requireSuccess(
                   result,
                   paused ? t("Could not pause routine") : t("Could not resume routine"),
@@ -330,6 +357,7 @@ function BotThreadRouteView() {
                     createdAt: new Date().toISOString(),
                   },
                 });
+
                 requireSuccess(result, t("Could not delete routine"));
               });
             },

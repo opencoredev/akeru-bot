@@ -37,7 +37,9 @@ export const DEFAULT_KEYBINDINGS: ReadonlyArray<KeybindingRule> = [
 
 function normalizeKeyToken(token: string): string {
   if (token === "space") return " ";
+
   if (token === "esc") return "escape";
+
   return token;
 }
 
@@ -46,18 +48,23 @@ export function parseKeybindingShortcut(value: string): KeybindingShortcut | nul
     .toLowerCase()
     .split("+")
     .map((token) => token.trim());
+
   const tokens = [...rawTokens];
   let trailingEmptyCount = 0;
+
   while (tokens[tokens.length - 1] === "") {
     trailingEmptyCount += 1;
     tokens.pop();
   }
+
   if (trailingEmptyCount > 0) {
     tokens.push("+");
   }
+
   if (tokens.some((token) => token.length === 0)) {
     return null;
   }
+
   if (tokens.length === 0) return null;
 
   let key: string | null = null;
@@ -95,6 +102,7 @@ export function parseKeybindingShortcut(value: string): KeybindingShortcut | nul
   }
 
   if (key === null) return null;
+
   return {
     key,
     metaKey,
@@ -111,32 +119,38 @@ function tokenizeWhenExpression(expression: string): WhenToken[] | null {
 
   while (index < expression.length) {
     const current = expression[index];
+
     if (!current) break;
 
     if (/\s/.test(current)) {
       index += 1;
       continue;
     }
+
     if (expression.startsWith("&&", index)) {
       tokens.push({ type: "and" });
       index += 2;
       continue;
     }
+
     if (expression.startsWith("||", index)) {
       tokens.push({ type: "or" });
       index += 2;
       continue;
     }
+
     if (current === "!") {
       tokens.push({ type: "not" });
       index += 1;
       continue;
     }
+
     if (current === "(") {
       tokens.push({ type: "lparen" });
       index += 1;
       continue;
     }
+
     if (current === ")") {
       tokens.push({ type: "rparen" });
       index += 1;
@@ -144,9 +158,11 @@ function tokenizeWhenExpression(expression: string): WhenToken[] | null {
     }
 
     const identifier = /^[A-Za-z_][A-Za-z0-9_.-]*/.exec(expression.slice(index));
+
     if (!identifier) {
       return null;
     }
+
     tokens.push({ type: "identifier", value: identifier[0] });
     index += identifier[0].length;
   }
@@ -156,6 +172,7 @@ function tokenizeWhenExpression(expression: string): WhenToken[] | null {
 
 export function parseKeybindingWhenExpression(expression: string): KeybindingWhenNode | null {
   const tokens = tokenizeWhenExpression(expression);
+
   if (!tokens || tokens.length === 0) return null;
   let index = 0;
 
@@ -163,11 +180,14 @@ export function parseKeybindingWhenExpression(expression: string): KeybindingWhe
     if (depth > MAX_WHEN_EXPRESSION_DEPTH) {
       return null;
     }
+
     const token = tokens[index];
+
     if (!token) return null;
 
     if (token.type === "identifier") {
       index += 1;
+
       return { type: "identifier", name: token.value };
     }
 
@@ -175,10 +195,13 @@ export function parseKeybindingWhenExpression(expression: string): KeybindingWhe
       index += 1;
       const expressionNode = parseOr(depth + 1);
       const closeToken = tokens[index];
+
       if (!expressionNode || !closeToken || closeToken.type !== "rparen") {
         return null;
       }
+
       index += 1;
+
       return expressionNode;
     }
 
@@ -187,15 +210,18 @@ export function parseKeybindingWhenExpression(expression: string): KeybindingWhe
 
   const parseUnary = (depth: number): KeybindingWhenNode | null => {
     let notCount = 0;
+
     while (tokens[index]?.type === "not") {
       index += 1;
       notCount += 1;
+
       if (notCount > MAX_WHEN_EXPRESSION_DEPTH) {
         return null;
       }
     }
 
     let node = parsePrimary(depth);
+
     if (!node) return null;
 
     while (notCount > 0) {
@@ -208,11 +234,13 @@ export function parseKeybindingWhenExpression(expression: string): KeybindingWhe
 
   const parseAnd = (depth: number): KeybindingWhenNode | null => {
     let left = parseUnary(depth);
+
     if (!left) return null;
 
     while (tokens[index]?.type === "and") {
       index += 1;
       const right = parseUnary(depth);
+
       if (!right) return null;
       left = { type: "and", left, right };
     }
@@ -222,11 +250,13 @@ export function parseKeybindingWhenExpression(expression: string): KeybindingWhe
 
   const parseOr = (depth: number): KeybindingWhenNode | null => {
     let left = parseAnd(depth);
+
     if (!left) return null;
 
     while (tokens[index]?.type === "or") {
       index += 1;
       const right = parseAnd(depth);
+
       if (!right) return null;
       left = { type: "or", left, right };
     }
@@ -235,17 +265,22 @@ export function parseKeybindingWhenExpression(expression: string): KeybindingWhe
   };
 
   const ast = parseOr(0);
+
   if (!ast || index !== tokens.length) return null;
+
   return ast;
 }
 
 export function compileResolvedKeybindingRule(rule: KeybindingRule): ResolvedKeybindingRule | null {
   const shortcut = parseKeybindingShortcut(rule.key);
+
   if (!shortcut) return null;
 
   if (rule.when !== undefined) {
     const whenAst = parseKeybindingWhenExpression(rule.when);
+
     if (!whenAst) return null;
+
     return {
       command: rule.command,
       shortcut,
@@ -263,12 +298,15 @@ export function compileResolvedKeybindingsConfig(
   config: ReadonlyArray<KeybindingRule>,
 ): ResolvedKeybindingsConfig {
   const compiled: ResolvedKeybindingRule[] = [];
+
   for (const rule of config) {
     const result = compileResolvedKeybindingRule(rule);
+
     if (result) {
       compiled.push(result);
     }
   }
+
   return compiled.slice(-MAX_KEYBINDINGS_COUNT);
 }
 

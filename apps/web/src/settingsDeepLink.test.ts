@@ -43,6 +43,7 @@ describe("settings deep links", () => {
         (id) => parseSettingsDeepLink(`grokbot://app/v1/settings?id=${id}`)?.section,
       ),
     );
+
     expect([...SETTINGS_SECTIONS].filter((section) => !reached.has(section))).toEqual([]);
   });
 

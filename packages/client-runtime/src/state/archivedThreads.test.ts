@@ -19,6 +19,7 @@ it("round-trips environment keys in sorted order", () => {
 
 it("does not expose an archived snapshot failure message", () => {
   const environmentId = EnvironmentId.make("env-sensitive");
+
   const snapshotsAtom = createArchivedThreadSnapshotsAtomFamily<Error>({
     getSnapshotAtom: () =>
       Atom.make(
@@ -28,6 +29,7 @@ it("does not expose an archived snapshot failure message", () => {
       ),
     labelPrefix: "test:archived-thread-snapshots",
   });
+
   const registry = AtomRegistry.make();
 
   expect(registry.get(snapshotsAtom(makeArchivedThreadsEnvironmentKey([environmentId])))).toEqual({

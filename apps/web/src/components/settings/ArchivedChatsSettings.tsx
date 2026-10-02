@@ -1,3 +1,4 @@
+import { Match } from "effect";
 import { useAtomValue } from "@effect/atom-react";
 import { scopeThreadRef } from "@akeru/client-runtime/environment";
 import type { EnvironmentId } from "@akeru/contracts";
@@ -18,6 +19,7 @@ import { SettingsPageContainer, SettingsRow, SettingsSection } from "./settingsL
 export function ArchivedChatsSettingsPanel() {
   const { t } = useI18n();
   const environmentId = useSettingsEnvironmentId();
+
   return (
     <SettingsPageContainer>
       {environmentId === null ? (
@@ -42,6 +44,7 @@ function ArchivedChatsContent({ environmentId }: { readonly environmentId: Envir
   const bots = useAtomValue(environmentBotsAtom(environmentId));
   const groups = useAtomValue(environmentGroupsAtom(environmentId));
   const [busyThreadId, setBusyThreadId] = useState<string | null>(null);
+
   const sections = useMemo(
     () =>
       buildArchivedChatSections({
@@ -57,6 +60,7 @@ function ArchivedChatsContent({ environmentId }: { readonly environmentId: Envir
   const run = async (chat: ArchivedChat, action: "unarchive" | "delete") => {
     const threadRef = scopeThreadRef(chat.environmentId, chat.threadId);
     setBusyThreadId(chat.threadId);
+
     try {
       if (action === "unarchive") await actions.unarchive(threadRef);
       else await actions.delete(threadRef);
@@ -105,19 +109,21 @@ function ArchivedChatsContent({ environmentId }: { readonly environmentId: Envir
       id={index === 0 ? "archived-chats" : undefined}
       title={
         section.name ??
-        (section.kind === "group"
-          ? t("Deleted group")
-          : section.kind === "bot"
-            ? t("Removed bot")
-            : t("Other chats"))
+        Match.value(section).pipe(
+          Match.when({ kind: "group" }, () => t("Deleted group")),
+          Match.when({ kind: "bot" }, () => t("Removed bot")),
+          Match.orElse(() => t("Other chats")),
+        )
       }
     >
       {section.chats.map((chat) => {
         const busy = busyThreadId === chat.threadId;
+
         const archivedAt = formatDate(new Date(chat.archivedAt), {
           dateStyle: "medium",
           timeStyle: "short",
         });
+
         return (
           <SettingsRow
             key={chat.threadId}

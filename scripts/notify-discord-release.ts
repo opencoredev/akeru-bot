@@ -48,7 +48,9 @@ interface DiscordWebhookPayload {
 }
 
 const DISCORD_RELEASE_TARGETS = ["latest"] as const;
+
 const DiscordRoleIdSchema = Schema.String.check(Schema.isPattern(/^\d+$/));
+
 const DiscordWebhookUrl = Config.url("DISCORD_WEBHOOK_URL");
 
 const discordReleaseErrorContext = {
@@ -94,7 +96,9 @@ export const DiscordReleaseAnnouncementError = Schema.Union([
   DiscordReleaseWebhookRequestError,
   DiscordReleaseWebhookResponseError,
 ]);
+
 export type DiscordReleaseAnnouncementError = typeof DiscordReleaseAnnouncementError.Type;
+
 export const isDiscordReleaseAnnouncementError = Schema.is(DiscordReleaseAnnouncementError);
 
 const targetLabels = {
@@ -256,6 +260,7 @@ export const notifyDiscordReleaseCommand = Command.make(
 
       const webhookUrl = yield* DiscordWebhookUrl;
       const timestamp = DateTime.formatIso(yield* DateTime.now);
+
       const announcement = {
         target,
         roleId,
@@ -265,6 +270,7 @@ export const notifyDiscordReleaseCommand = Command.make(
         releaseUrl,
         timestamp,
       } satisfies DiscordReleaseAnnouncementOptions;
+
       const payload = buildDiscordReleaseAnnouncement(announcement);
 
       yield* Effect.logInfo("discord release announcement payload built").pipe(

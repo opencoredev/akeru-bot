@@ -4,6 +4,7 @@ import { SourceControlProviderInfo } from "./sourceControl.ts";
 import { VcsDriverKind } from "./vcs.ts";
 
 const TrimmedNonEmptyStringSchema = TrimmedNonEmptyString;
+
 const GIT_LIST_BRANCHES_MAX_LIMIT = 200;
 
 // Domain Types
@@ -16,6 +17,7 @@ export const VcsRef = Schema.Struct({
   isDefault: Schema.Boolean,
   worktreePath: TrimmedNonEmptyStringSchema.pipe(Schema.NullOr),
 });
+
 export type VcsRef = typeof VcsRef.Type;
 
 const VcsWorktree = Schema.Struct({
@@ -28,11 +30,13 @@ const VcsWorktree = Schema.Struct({
 export const VcsStatusInput = Schema.Struct({
   cwd: TrimmedNonEmptyStringSchema,
 });
+
 export type VcsStatusInput = typeof VcsStatusInput.Type;
 
 export const VcsPullInput = Schema.Struct({
   cwd: TrimmedNonEmptyStringSchema,
 });
+
 export type VcsPullInput = typeof VcsPullInput.Type;
 
 export const VcsListRefsInput = Schema.Struct({
@@ -46,6 +50,7 @@ export const VcsListRefsInput = Schema.Struct({
     PositiveInt.check(Schema.isLessThanOrEqualTo(GIT_LIST_BRANCHES_MAX_LIMIT)),
   ),
 });
+
 export type VcsListRefsInput = typeof VcsListRefsInput.Type;
 
 export const VcsCreateWorktreeInput = Schema.Struct({
@@ -55,6 +60,7 @@ export const VcsCreateWorktreeInput = Schema.Struct({
   baseRefName: Schema.optional(TrimmedNonEmptyStringSchema),
   path: Schema.NullOr(TrimmedNonEmptyStringSchema),
 });
+
 export type VcsCreateWorktreeInput = typeof VcsCreateWorktreeInput.Type;
 
 export const VcsRemoveWorktreeInput = Schema.Struct({
@@ -62,6 +68,7 @@ export const VcsRemoveWorktreeInput = Schema.Struct({
   path: TrimmedNonEmptyStringSchema,
   force: Schema.optional(Schema.Boolean),
 });
+
 export type VcsRemoveWorktreeInput = typeof VcsRemoveWorktreeInput.Type;
 
 export const VcsCreateRefInput = Schema.Struct({
@@ -69,23 +76,27 @@ export const VcsCreateRefInput = Schema.Struct({
   refName: TrimmedNonEmptyStringSchema,
   switchRef: Schema.optional(Schema.Boolean),
 });
+
 export type VcsCreateRefInput = typeof VcsCreateRefInput.Type;
 
 export const VcsCreateRefResult = Schema.Struct({
   refName: TrimmedNonEmptyStringSchema,
 });
+
 export type VcsCreateRefResult = typeof VcsCreateRefResult.Type;
 
 export const VcsSwitchRefInput = Schema.Struct({
   cwd: TrimmedNonEmptyStringSchema,
   refName: TrimmedNonEmptyStringSchema,
 });
+
 export type VcsSwitchRefInput = typeof VcsSwitchRefInput.Type;
 
 export const VcsInitInput = Schema.Struct({
   cwd: TrimmedNonEmptyStringSchema,
   kind: Schema.optional(VcsDriverKind),
 });
+
 export type VcsInitInput = typeof VcsInitInput.Type;
 
 // RPC Results
@@ -118,15 +129,18 @@ const VcsStatusRemoteShape = {
 };
 
 export const VcsStatusLocalResult = Schema.Struct(VcsStatusLocalShape);
+
 export type VcsStatusLocalResult = typeof VcsStatusLocalResult.Type;
 
 export const VcsStatusRemoteResult = Schema.Struct(VcsStatusRemoteShape);
+
 export type VcsStatusRemoteResult = typeof VcsStatusRemoteResult.Type;
 
 export const VcsStatusResult = Schema.Struct({
   ...VcsStatusLocalShape,
   ...VcsStatusRemoteShape,
 });
+
 export type VcsStatusResult = typeof VcsStatusResult.Type;
 
 export const VcsStatusStreamEvent = Schema.Union([
@@ -141,6 +155,7 @@ export const VcsStatusStreamEvent = Schema.Union([
     remote: Schema.NullOr(VcsStatusRemoteResult),
   }),
 ]);
+
 export type VcsStatusStreamEvent = typeof VcsStatusStreamEvent.Type;
 
 export const VcsListRefsResult = Schema.Struct({
@@ -150,16 +165,19 @@ export const VcsListRefsResult = Schema.Struct({
   nextCursor: NonNegativeInt.pipe(Schema.NullOr),
   totalCount: NonNegativeInt,
 });
+
 export type VcsListRefsResult = typeof VcsListRefsResult.Type;
 
 export const VcsCreateWorktreeResult = Schema.Struct({
   worktree: VcsWorktree,
 });
+
 export type VcsCreateWorktreeResult = typeof VcsCreateWorktreeResult.Type;
 
 export const VcsSwitchRefResult = Schema.Struct({
   refName: Schema.NullOr(TrimmedNonEmptyStringSchema),
 });
+
 export type VcsSwitchRefResult = typeof VcsSwitchRefResult.Type;
 
 export const VcsPullResult = Schema.Struct({
@@ -167,6 +185,7 @@ export const VcsPullResult = Schema.Struct({
   refName: TrimmedNonEmptyStringSchema,
   upstreamRef: TrimmedNonEmptyStringSchema.pipe(Schema.NullOr),
 });
+
 export type VcsPullResult = typeof VcsPullResult.Type;
 
 // RPC / domain errors
@@ -216,4 +235,5 @@ export const GitManagerServiceError = Schema.Union([
   GitCommandError,
   TextGenerationError,
 ]);
+
 export type GitManagerServiceError = typeof GitManagerServiceError.Type;

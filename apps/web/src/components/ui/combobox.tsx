@@ -1,5 +1,7 @@
 "use client";
 
+import { Predicate } from "effect";
+
 import { Combobox as ComboboxPrimitive } from "@base-ui/react/combobox";
 import { ChevronsUpDownIcon, XIcon } from "lucide-react";
 import * as React from "react";
@@ -9,7 +11,7 @@ import { Input } from "~/components/ui/input";
 import { ScrollArea } from "~/components/ui/scroll-area";
 
 const ComboboxContext = React.createContext<{
-  chipsRef: React.RefObject<Element | null> | null;
+  chipsRef: React.RefObject<HTMLDivElement | null> | null;
   multiple: boolean;
 }>({
   chipsRef: null,
@@ -19,8 +21,9 @@ const ComboboxContext = React.createContext<{
 function Combobox<Value, Multiple extends boolean | undefined = false>(
   props: ComboboxPrimitive.Root.Props<Value, Multiple>,
 ) {
-  const chipsRef = React.useRef<Element | null>(null);
+  const chipsRef = React.useRef<HTMLDivElement | null>(null);
   const value = React.useMemo(() => ({ chipsRef, multiple: !!props.multiple }), [props.multiple]);
+
   return (
     <ComboboxContext value={value}>
       <ComboboxPrimitive.Root {...props} />
@@ -36,7 +39,7 @@ function ComboboxChipsInput({
   size?: "sm" | "default" | "lg" | number;
   ref?: React.Ref<HTMLInputElement>;
 }) {
-  const sizeValue = (size ?? "default") as "sm" | "default" | "lg" | number;
+  const sizeValue = size ?? "default";
 
   return (
     <ComboboxPrimitive.Input
@@ -45,9 +48,9 @@ function ComboboxChipsInput({
         sizeValue === "sm" ? "ps-1.5" : "ps-2",
         className,
       )}
-      data-size={typeof sizeValue === "string" ? sizeValue : undefined}
+      data-size={Predicate.isString(sizeValue) ? sizeValue : undefined}
       data-slot="combobox-chips-input"
-      size={typeof sizeValue === "number" ? sizeValue : undefined}
+      size={Predicate.isNumber(sizeValue) ? sizeValue : undefined}
       {...props}
     />
   );
@@ -56,6 +59,7 @@ function ComboboxChipsInput({
 function ComboboxInput({
   className,
   inputClassName,
+  presentation,
   showTrigger = true,
   showClear = false,
   startAddon,
@@ -64,6 +68,7 @@ function ComboboxInput({
   ...props
 }: Omit<ComboboxPrimitive.Input.Props, "size"> & {
   inputClassName?: string;
+  presentation?: "font-search" | "model-search";
   showTrigger?: boolean;
   showClear?: boolean;
   startAddon?: React.ReactNode;
@@ -71,7 +76,7 @@ function ComboboxInput({
   unstyled?: boolean;
   ref?: React.Ref<HTMLInputElement>;
 }) {
-  const sizeValue = (size ?? "default") as "sm" | "default" | "lg" | number;
+  const sizeValue = size ?? "default";
 
   return (
     <div className="relative not-has-[>*.w-full]:w-fit w-full text-foreground has-disabled:opacity-64">
@@ -91,12 +96,21 @@ function ComboboxInput({
           sizeValue === "sm"
             ? "has-[+[data-slot=combobox-trigger],+[data-slot=combobox-clear]]:*:data-[slot=combobox-input]:pe-6.5"
             : "has-[+[data-slot=combobox-trigger],+[data-slot=combobox-clear]]:*:data-[slot=combobox-input]:pe-7",
+          presentation === "font-search" &&
+            "[&_input]:h-6.5 [&_input]:ps-5 [&_input]:font-sans [&_input]:leading-6.5",
+          presentation === "model-search" &&
+            "[&_input]:h-6.5 [&_input]:font-sans [&_input]:leading-6.5",
           className,
         )}
         data-slot="combobox-input"
         render={
           <Input
-            className={cn("has-disabled:opacity-100", inputClassName)}
+            className={cn(
+              "has-disabled:opacity-100",
+              (presentation === "font-search" || presentation === "model-search") &&
+                "rounded-none bg-transparent text-sm",
+              inputClassName,
+            )}
             nativeInput
             size={sizeValue}
             unstyled={unstyled}
@@ -130,9 +144,22 @@ function ComboboxInput({
   );
 }
 
-function ComboboxTrigger({ className, children, ...props }: ComboboxPrimitive.Trigger.Props) {
+function ComboboxTrigger({
+  className,
+  children,
+  presentation,
+  ...props
+}: ComboboxPrimitive.Trigger.Props & { presentation?: "font-family" }) {
   return (
-    <ComboboxPrimitive.Trigger className={className} data-slot="combobox-trigger" {...props}>
+    <ComboboxPrimitive.Trigger
+      className={cn(
+        presentation === "font-family" &&
+          "relative inline-flex min-h-9 w-full min-w-36 cursor-pointer select-none items-center justify-between gap-2 rounded-lg border border-transparent bg-secondary px-[calc(--spacing(3)-1px)] text-left text-base text-foreground outline-none transition-[color,box-shadow] focus-visible:ring-2 focus-visible:ring-ring/70 sm:min-h-8 sm:text-sm",
+        className,
+      )}
+      data-slot="combobox-trigger"
+      {...props}
+    >
       {children}
     </ComboboxPrimitive.Trigger>
   );
@@ -187,20 +214,37 @@ function ComboboxPopup({
   );
 }
 
+const MODEL_OPTION_ITEM_CLASSES =
+  "rounded-md px-2 py-2 transition-bg-color-shadow hover:bg-popover-highlight data-highlighted:bg-popover-highlight data-selected:bg-foreground/[0.08] data-selected:text-foreground data-selected:ring-0 [&[data-highlighted][data-selected]]:bg-popover-highlight";
+
+// Roomier picker rows. `model-option` adds the picker's own highlight fill.
+const COMBOBOX_ITEM_VARIANTS = {
+  default: { item: undefined, content: undefined },
+  "model-row": { item: "rounded-md px-2 py-2", content: "gap-3" },
+  "model-option": { item: MODEL_OPTION_ITEM_CLASSES, content: "gap-3" },
+  "model-option-disabled": {
+    item: `${MODEL_OPTION_ITEM_CLASSES} data-disabled:hover:bg-transparent`,
+    content: "gap-3",
+  },
+} as const;
+
 function ComboboxItem({
   className,
   contentClassName,
   children,
   hideIndicator: _hideIndicator = false,
+  variant = "default",
   ...props
 }: ComboboxPrimitive.Item.Props & {
   contentClassName?: string;
   hideIndicator?: boolean;
+  variant?: keyof typeof COMBOBOX_ITEM_VARIANTS;
 }) {
   return (
     <ComboboxPrimitive.Item
       className={cn(
         "flex min-h-8 in-data-[side=none]:min-w-[calc(var(--anchor-width)+1.25rem)] cursor-pointer items-center rounded-sm px-2 py-1 text-base outline-none hover:bg-accent data-disabled:pointer-events-none data-disabled:cursor-not-allowed data-selected:bg-foreground/[0.08] data-selected:text-foreground data-highlighted:bg-accent data-highlighted:text-accent-foreground [&[data-highlighted][data-selected]]:bg-accent [&[data-highlighted][data-selected]]:text-accent-foreground data-disabled:opacity-64 sm:min-h-7 sm:text-sm [&_svg:not([class*='size-'])]:size-4.5 sm:[&_svg:not([class*='size-'])]:size-4 [&_svg]:pointer-events-none [&_svg]:shrink-0",
+        COMBOBOX_ITEM_VARIANTS[variant].item,
         className,
       )}
       data-slot="combobox-item"
@@ -209,6 +253,7 @@ function ComboboxItem({
       <div
         className={cn(
           "min-w-0 flex-1 [&_svg:not([class*='text-'])]:text-muted-foreground",
+          COMBOBOX_ITEM_VARIANTS[variant].content,
           contentClassName,
         )}
         data-slot="combobox-item-content"
@@ -286,10 +331,19 @@ function ComboboxList({ className, ...props }: ComboboxPrimitive.List.Props) {
  * A variant of `ComboboxList` without `ScrollArea`, for use when
  * an external virtualizer (e.g. LegendList) owns the scroll container.
  */
-function ComboboxListVirtualized({ className, ...props }: ComboboxPrimitive.List.Props) {
+function ComboboxListVirtualized({
+  className,
+  presentation,
+  ...props
+}: ComboboxPrimitive.List.Props & { presentation?: "font-family" | "model-list" }) {
   return (
     <ComboboxPrimitive.List
-      className={cn("not-empty:px-1 not-empty:py-1", className)}
+      className={cn(
+        "not-empty:px-1 not-empty:py-1",
+        presentation === "font-family" && "size-full min-w-0 p-0",
+        presentation === "model-list" && "size-full min-w-0 p-0 not-empty:p-0",
+        className,
+      )}
       data-slot="combobox-list"
       {...props}
     />
@@ -334,7 +388,7 @@ function ComboboxChips({
         className,
       )}
       data-slot="combobox-chips"
-      ref={chipsRef as React.Ref<HTMLDivElement> | null}
+      ref={chipsRef}
       {...props}
     >
       {startAddon && (

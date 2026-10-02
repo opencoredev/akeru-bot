@@ -18,9 +18,13 @@ export function resolveBotBrowserPreviewStatus(input: {
   readonly failed: boolean;
 }): BotBrowserPreviewStatus {
   if (!input.supported) return "unsupported";
+
   if (!input.hasThread || !input.hasSession) return "waiting";
+
   if (input.failed) return "failed";
+
   if (input.loading || !input.hasWebContents) return "loading";
+
   return "ready";
 }
 

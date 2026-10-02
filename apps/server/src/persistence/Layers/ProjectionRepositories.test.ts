@@ -47,14 +47,15 @@ projectionRepositoriesLayer("Projection repositories", (it) => {
         FROM projection_projects
         WHERE project_id = 'project-null-options'
       `;
+
       const row = rows[0];
+
       if (!row) {
         return yield* Effect.die("Expected projection_projects row to exist.");
       }
 
       assert.strictEqual(
         row.defaultModelSelection,
-        // @effect-diagnostics-next-line preferSchemaOverJson:off
         JSON.stringify({
           instanceId: ProviderInstanceId.make("codex"),
           model: "gpt-5.4",
@@ -64,6 +65,7 @@ projectionRepositoriesLayer("Projection repositories", (it) => {
       const persisted = yield* projects.getById({
         projectId: ProjectId.make("project-null-options"),
       });
+
       assert.deepStrictEqual(Option.getOrNull(persisted)?.defaultModelSelection, {
         instanceId: ProviderInstanceId.make("codex"),
         model: "gpt-5.4",
@@ -112,14 +114,15 @@ projectionRepositoriesLayer("Projection repositories", (it) => {
         FROM projection_threads
         WHERE thread_id = 'thread-null-options'
       `;
+
       const row = rows[0];
+
       if (!row) {
         return yield* Effect.die("Expected projection_threads row to exist.");
       }
 
       assert.strictEqual(
         row.modelSelection,
-        // @effect-diagnostics-next-line preferSchemaOverJson:off
         JSON.stringify({
           instanceId: ProviderInstanceId.make("claudeAgent"),
           model: "claude-opus-4-6",
@@ -129,6 +132,7 @@ projectionRepositoriesLayer("Projection repositories", (it) => {
       const persisted = yield* threads.getById({
         threadId: ThreadId.make("thread-null-options"),
       });
+
       assert.deepStrictEqual(Option.getOrNull(persisted)?.modelSelection, {
         instanceId: ProviderInstanceId.make("claudeAgent"),
         model: "claude-opus-4-6",
@@ -172,10 +176,13 @@ projectionRepositoriesLayer("Projection repositories", (it) => {
       const persisted = yield* threads.getById({
         threadId: ThreadId.make("thread-settled"),
       });
+
       const row = Option.getOrNull(persisted);
+
       if (!row) {
         return yield* Effect.die("Expected settled projection_threads row to exist.");
       }
+
       assert.strictEqual(row.settledOverride, "settled");
       assert.strictEqual(row.settledAt, "2026-03-25T00:00:00.000Z");
       assert.strictEqual(row.snoozedUntil, "2026-03-26T09:00:00.000Z");
@@ -193,9 +200,11 @@ projectionRepositoriesLayer("Projection repositories", (it) => {
         snoozedAt: null,
         pinnedAt: null,
       });
+
       const repersisted = yield* threads.getById({
         threadId: ThreadId.make("thread-settled"),
       });
+
       const updated = Option.getOrNull(repersisted);
       assert.strictEqual(updated?.settledOverride, "active");
       assert.strictEqual(updated?.settledAt, null);
@@ -209,6 +218,7 @@ projectionRepositoriesLayer("Projection repositories", (it) => {
   it.effect("round-trips a linked pull request through the thread row", () =>
     Effect.gen(function* () {
       const threads = yield* ProjectionThreadRepository;
+
       const linkedPullRequest = {
         projectId: ProjectId.make("project-linked-pr"),
         repository: "pingdotgg/t3code",
@@ -250,6 +260,7 @@ projectionRepositoriesLayer("Projection repositories", (it) => {
       assert.deepStrictEqual(Option.getOrNull(persisted)?.linkedPullRequest, linkedPullRequest);
 
       const row = Option.getOrNull(persisted);
+
       if (row === null) return yield* Effect.die("Expected linked thread row to exist.");
       yield* threads.upsert({ ...row, linkedPullRequest: null });
 

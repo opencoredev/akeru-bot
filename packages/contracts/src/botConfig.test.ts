@@ -4,7 +4,9 @@ import { describe, expect, it } from "vite-plus/test";
 import { BotCreatedPayload, BotPersonalityTone, BotUsageCap } from "./orchestration.ts";
 
 const decodeUsageCap = Schema.decodeUnknownSync(BotUsageCap);
+
 const decodeCreated = Schema.decodeUnknownSync(BotCreatedPayload);
+
 const decodePersonalityTone = Schema.decodeUnknownSync(BotPersonalityTone);
 
 describe("BotUsageCap", () => {
@@ -13,6 +15,7 @@ describe("BotUsageCap", () => {
       unit: "tokens",
       limit: 50_000,
     });
+
     for (const limit of [0, -1, 1.5, Number.NaN, Number.POSITIVE_INFINITY]) {
       expect(() => decodeUsageCap({ unit: "tokens", limit })).toThrow();
     }
@@ -71,6 +74,7 @@ describe("BotUsageCap", () => {
 describe("BotPersonalityTone", () => {
   it("accepts the slider range and rejects values outside it", () => {
     for (const tone of [0, 40, 50, 100]) expect(decodePersonalityTone(tone)).toBe(tone);
+
     for (const tone of [-1, 101, 49.5, Number.NaN]) {
       expect(() => decodePersonalityTone(tone)).toThrow();
     }

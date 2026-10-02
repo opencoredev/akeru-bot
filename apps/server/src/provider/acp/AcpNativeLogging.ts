@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import type { ProviderDriverKind, ThreadId } from "@akeru/contracts";
 import { causeErrorTag, errorTag } from "@akeru/shared/observability";
 import * as Cause from "effect/Cause";
@@ -6,7 +7,7 @@ import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import type * as EffectAcpProtocol from "effect-acp/protocol";
 
-import type { EventNdjsonLogger } from "../Layers/EventNdjsonLogger.ts";
+import type { EventNdjsonLogger } from "../Layers/logging/EventLogTypes.ts";
 import type * as AcpSessionRuntime from "./AcpSessionRuntime.ts";
 
 const transientProtocolUpdates = new Set(["agent_message_chunk", "agent_thought_chunk"]);
@@ -15,28 +16,45 @@ function structuralMethod(value: string): string {
   return value.length <= 128 && /^[A-Za-z][A-Za-z0-9._:/-]*$/.test(value) ? value : "unknown";
 }
 
-function summarizePayload(payload: unknown): Readonly<Record<string, unknown>> {
+function summarizePayload<Payload>(payload: Payload) {
   if (payload === null) return { valueType: "null" };
-  if (typeof payload === "string") {
+
+  if (Predicate.isString(payload)) {
     return { valueType: "string", byteLength: new TextEncoder().encode(payload).byteLength };
   }
+
   if (payload instanceof Uint8Array) {
     return { valueType: "bytes", byteLength: payload.byteLength };
   }
+
   if (Array.isArray(payload)) {
     return { valueType: "array", itemCount: payload.length };
   }
-  if (typeof payload !== "object") {
-    return { valueType: typeof payload };
+
+  if (!Predicate.isObject(payload)) {
+    const valueType = Predicate.isUndefined(payload)
+      ? "undefined"
+      : Predicate.isBoolean(payload)
+        ? "boolean"
+        : Predicate.isNumber(payload)
+          ? "number"
+          : Predicate.isBigInt(payload)
+            ? "bigint"
+            : Predicate.isSymbol(payload)
+              ? "symbol"
+              : "function";
+
+    return { valueType };
   }
 
   try {
-    const record = payload as Record<string, unknown>;
+    const record = payload;
+
     return {
       valueType: "object",
       fieldCount: Object.keys(record).length,
-      ...(typeof record._tag === "string" ? { messageTag: errorTag(record) } : {}),
-      ...(typeof record.tag === "string" ? { method: structuralMethod(record.tag) } : {}),
+      ...(Predicate.isString(record._tag) ? { messageTag: errorTag(record) } : {}),
+      ...(Predicate.isString(record.tag) ? { method: structuralMethod(record.tag) } : {}),
     };
   } catch {
     return { valueType: "object" };
@@ -66,33 +84,46 @@ function formatProtocolLogPayload(event: EffectAcpProtocol.AcpProtocolLogEvent) 
   };
 }
 
-function isTransientProtocolMessage(message: unknown): boolean {
-  if (typeof message !== "object" || message === null) return false;
-  const method = Reflect.get(message, "tag") ?? Reflect.get(message, "method");
+function isTransientProtocolMessage<Message>(message: Message): boolean {
+  if (!Predicate.isObjectOrArray(message) || message === null) return false;
+
+  const method =
+    ("tag" in message ? message.tag : undefined) ??
+    ("method" in message ? message.method : undefined);
+
   if (method !== "session/update") return false;
 
-  const payload = Reflect.get(message, "payload") ?? Reflect.get(message, "params");
-  if (typeof payload !== "object" || payload === null) return false;
-  const update = Reflect.get(payload, "update");
-  if (typeof update !== "object" || update === null) return false;
-  const updateType = Reflect.get(update, "sessionUpdate");
-  return typeof updateType === "string" && transientProtocolUpdates.has(updateType);
+  const payload =
+    ("payload" in message ? message.payload : undefined) ??
+    ("params" in message ? message.params : undefined);
+
+  if (!Predicate.isObjectOrArray(payload) || payload === null) return false;
+  const update = "update" in payload ? payload.update : undefined;
+
+  if (!Predicate.isObjectOrArray(update) || update === null) return false;
+  const updateType = "sessionUpdate" in update ? update.sessionUpdate : undefined;
+
+  return Predicate.isString(updateType) && transientProtocolUpdates.has(updateType);
 }
 
 function rawChunkContainsOnlyTransientMessages(payload: string): boolean {
   const lines = payload.split("\n");
   const remainder = lines.pop() ?? "";
+
   if (remainder.trim().length > 0) return false;
 
   const messages: Array<unknown> = [];
+
   for (const line of lines) {
     if (line.trim().length === 0) continue;
+
     try {
       messages.push(JSON.parse(line));
     } catch {
       return false;
     }
   }
+
   return messages.length > 0 && messages.every(isTransientProtocolMessage);
 }
 
@@ -101,30 +132,33 @@ function filterTransientProtocolLog(
 ): EffectAcpProtocol.AcpProtocolLogEvent | undefined {
   if (event.direction !== "incoming") return event;
 
-  if (event.stage === "raw" && typeof event.payload === "string") {
+  if (event.stage === "raw" && Predicate.isString(event.payload)) {
     return rawChunkContainsOnlyTransientMessages(event.payload) ? undefined : event;
   }
 
   if (event.stage !== "decoded") return event;
+
   if (!Array.isArray(event.payload)) {
     return isTransientProtocolMessage(event.payload) ? undefined : event;
   }
 
   const payload = event.payload.filter((message) => !isTransientProtocolMessage(message));
+
   return payload.length === 0 ? undefined : { ...event, payload };
 }
 
 export const makeAcpNativeLoggerFactory = Effect.fn("makeAcpNativeLoggerFactory")(function* () {
   const crypto = yield* Crypto.Crypto;
+
   return (input: {
     readonly nativeEventLogger: EventNdjsonLogger | undefined;
     readonly provider: ProviderDriverKind;
     readonly threadId: ThreadId;
     readonly verboseProtocolLogging?: boolean;
   }): Pick<AcpSessionRuntime.AcpSessionRuntimeOptions, "requestLogger" | "protocolLogging"> => {
-    const writeNativeAcpLog = (logInput: {
+    const writeNativeAcpLog = <Payload>(logInput: {
       readonly kind: "request" | "protocol";
-      readonly payload: unknown;
+      readonly payload: Payload;
     }) =>
       Effect.gen(function* () {
         if (!input.nativeEventLogger) return;
@@ -169,6 +203,7 @@ export const makeAcpNativeLoggerFactory = Effect.fn("makeAcpNativeLoggerFactory"
               logOutgoing: true,
               logger: (event: EffectAcpProtocol.AcpProtocolLogEvent) => {
                 const filtered = filterTransientProtocolLog(event);
+
                 return filtered
                   ? writeNativeAcpLog({
                       kind: "protocol",

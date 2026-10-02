@@ -1,88 +1,29 @@
-// @effect-diagnostics nodeBuiltinImport:off
-import * as NodeFS from "node:fs";
-import * as NodePath from "node:path";
-
 import { TOOL_NAME_OVERRIDES } from "@mastra/code-sdk/tool-names";
-import {
-  type CommandResult,
-  type ExecuteCommandOptions,
-  LocalFilesystem,
-  LocalSandbox,
-  MastraSandbox,
-  type ProviderStatus,
-  Workspace,
-} from "@mastra/core/workspace";
+import { LocalFilesystem, LocalSandbox, Workspace } from "@mastra/core/workspace";
 import type { BotSandbox } from "@akeru/contracts";
 import { BotWorkspaceFilesystem } from "./botWorkspaceFilesystem.ts";
-import { DaytonaComputer } from "./daytonaComputer.ts";
-import { WorkspaceComputer } from "./workspaceComputer.ts";
-
-export const REMOTE_BOT_SANDBOXES = [
-  "e2b",
-  "daytona",
-  "vercel",
-  "upstash",
-  "ascii",
-  "railway",
-  "tenki",
-] as const;
-export type RemoteBotSandbox = (typeof REMOTE_BOT_SANDBOXES)[number];
-export type AkeruWorkspaceState = "running" | "sleeping" | "missing";
-
-export interface AkeruBrowserEndpoint {
-  readonly url: string;
-  readonly requestHeaders: Readonly<Record<string, string>>;
-}
-
-export interface AkeruBotWorkspace {
-  readonly id: string;
-  readonly provider: BotSandbox;
-  readonly providerId?: string;
-  readonly computer?: WorkspaceComputer;
-  readonly workspace: Workspace;
-  readonly browserEndpoint?: (port: number) => Promise<AkeruBrowserEndpoint>;
-  readonly inspect: () => Promise<AkeruWorkspaceState>;
-  readonly wake: () => Promise<void>;
-  readonly sleep: () => Promise<void>;
-  readonly destroy: () => Promise<void>;
-}
-
-export interface AkeruRemoteSession {
-  readonly providerId: string;
-  readonly computer?: WorkspaceComputer;
-  readonly inspect: () => Promise<AkeruWorkspaceState>;
-  readonly run: (
-    command: string,
-    args: readonly string[],
-    options?: { cwd?: string; env?: Record<string, string>; timeout?: number },
-  ) => Promise<{ exitCode: number; stdout: string; stderr: string }>;
-  readonly browserEndpoint: (port: number) => Promise<AkeruBrowserEndpoint>;
-  readonly wake: () => Promise<void>;
-  readonly sleep: () => Promise<void>;
-  readonly destroy: () => Promise<void>;
-}
-
-export interface CreateRemoteBotWorkspaceInput {
-  readonly threadId: string;
-  readonly sandbox: RemoteBotSandbox;
-  readonly identityFile?: string;
-  readonly workspaceId?: string;
-  readonly environment?: Readonly<Record<string, string>>;
-  readonly openSession?: (providerId?: string) => Promise<AkeruRemoteSession>;
-}
-
-export interface CreateBotWorkspaceInput {
-  readonly threadId: string;
-  readonly cwd?: string;
-  readonly identityFile?: string;
-  readonly localRoot?: string;
-  readonly sandbox?: BotSandbox | null;
-  readonly workspaceId?: string;
-  readonly environment?: Readonly<Record<string, string>>;
-  readonly makeRemoteWorkspace?: (
-    input: CreateRemoteBotWorkspaceInput,
-  ) => Promise<AkeruBotWorkspace | Workspace>;
-}
+import {
+  type RemoteBotSandbox,
+  REMOTE_BOT_SANDBOXES,
+  type CreateBotWorkspaceInput,
+  type AkeruBotWorkspace,
+  type CreateRemoteBotWorkspaceInput,
+  type AkeruRemoteSession,
+} from "./workspace/BotWorkspaceTypes.ts";
+import {
+  wrap,
+  readIdentity,
+  writeIdentity,
+  credential,
+} from "./workspace/BotWorkspaceLifecycle.ts";
+import { RemoteSandbox } from "./workspace/RemoteSandbox.ts";
+import { ascii } from "./workspace/adapters/Ascii.ts";
+import { e2b } from "./workspace/adapters/E2b.ts";
+import { daytona } from "./workspace/adapters/Daytona.ts";
+import { vercel } from "./workspace/adapters/Vercel.ts";
+import { railway, railwayCredentials } from "./workspace/adapters/Railway.ts";
+import { tenki } from "./workspace/adapters/Tenki.ts";
+import { upstash } from "./workspace/adapters/Upstash.ts";
 
 export function isRemoteBotSandbox(
   value: BotSandbox | null | undefined,
@@ -95,17 +36,22 @@ export async function createBotWorkspace(
 ): Promise<AkeruBotWorkspace | undefined> {
   if (isRemoteBotSandbox(input.sandbox)) {
     const remote = await (input.makeRemoteWorkspace ?? createRemoteBotWorkspace)({
+      io: input.io,
       threadId: input.threadId,
       sandbox: input.sandbox,
       ...(input.identityFile ? { identityFile: input.identityFile } : {}),
       ...(input.workspaceId ? { workspaceId: input.workspaceId } : {}),
       ...(input.environment ? { environment: input.environment } : {}),
     });
+
     return remote instanceof Workspace ? wrap(remote, input.sandbox) : remote;
   }
+
   const root = input.localRoot ?? input.cwd;
+
   if (!root) return undefined;
-  await NodeFS.promises.mkdir(root, { recursive: true, mode: 0o700 });
+  await input.io.mkdir(root);
+
   const workspace = new Workspace({
     id: input.workspaceId ?? `akeru-${input.threadId}`,
     name: `Akeru ${input.threadId}`,
@@ -113,6 +59,7 @@ export async function createBotWorkspace(
     sandbox: new LocalSandbox({ workingDirectory: root }),
     tools: TOOL_NAME_OVERRIDES,
   });
+
   return wrap(workspace, "local");
 }
 
@@ -122,12 +69,14 @@ export async function createRemoteBotWorkspace(
   if (!input.identityFile || !input.workspaceId)
     throw new Error(`Remote sandbox '${input.sandbox}' needs a stable workspace identity.`);
   const identityFile = input.identityFile;
-  const persisted = await readIdentity(identityFile);
+  const persisted = await readIdentity(input.io, identityFile);
+
   if (persisted && persisted.provider !== input.sandbox)
     throw new Error(
       `Workspace '${input.workspaceId}' belongs to '${persisted.provider}', not '${input.sandbox}'.`,
     );
   let session: AkeruRemoteSession;
+
   try {
     session = input.openSession
       ? await input.openSession(persisted?.providerId)
@@ -141,9 +90,10 @@ export async function createRemoteBotWorkspace(
       { cause },
     );
   }
+
   if (!persisted || persisted.providerId !== session.providerId) {
     try {
-      await writeIdentity(identityFile, {
+      await writeIdentity(input.io, identityFile, {
         provider: input.sandbox,
         providerId: session.providerId,
       });
@@ -152,6 +102,7 @@ export async function createRemoteBotWorkspace(
       throw cause;
     }
   }
+
   const workspace = new Workspace({
     id: input.workspaceId,
     name: `Akeru ${input.workspaceId}`,
@@ -159,6 +110,7 @@ export async function createRemoteBotWorkspace(
     sandbox: new RemoteSandbox(input.workspaceId, input.sandbox, session),
     tools: TOOL_NAME_OVERRIDES,
   });
+
   return {
     id: input.workspaceId,
     provider: input.sandbox,
@@ -175,166 +127,9 @@ export async function createRemoteBotWorkspace(
     destroy: async () => {
       await session.computer?.close();
       await workspace.destroy();
-      await NodeFS.promises.rm(identityFile, { force: true });
+      await input.io.remove(identityFile);
     },
   };
-}
-
-function wrap(workspace: Workspace, provider: "local" | RemoteBotSandbox): AkeruBotWorkspace {
-  return {
-    id: workspace.id,
-    provider,
-    workspace,
-    inspect: async () =>
-      workspace.status === "destroyed"
-        ? "missing"
-        : workspace.status === "paused"
-          ? "sleeping"
-          : "running",
-    wake: () => workspace.init(),
-    sleep: () => workspace.stop(),
-    destroy: () => workspace.destroy(),
-  };
-}
-
-class RemoteSandbox extends MastraSandbox {
-  readonly name: string;
-  readonly provider: string;
-  readonly id: string;
-  private readonly session: AkeruRemoteSession;
-  status: ProviderStatus = "pending";
-  constructor(id: string, provider: RemoteBotSandbox, session: AkeruRemoteSession) {
-    super({ name: `Akeru ${provider}` });
-    this.id = id;
-    this.name = `Akeru ${provider}`;
-    this.provider = provider;
-    this.session = session;
-  }
-  override async start() {
-    await this.session.wake();
-    return { outcome: "connected" as const };
-  }
-  override stop() {
-    return this.session.sleep();
-  }
-  override destroy() {
-    return this.session.destroy();
-  }
-  override async executeCommand(
-    command: string,
-    args: string[] = [],
-    options?: ExecuteCommandOptions,
-  ): Promise<CommandResult> {
-    const startedAt = performance.now();
-    const env = options?.env
-      ? Object.fromEntries(
-          Object.entries(options.env).filter(
-            (entry): entry is [string, string] => entry[1] !== undefined,
-          ),
-        )
-      : undefined;
-    const result = await this.session.run(command, args, {
-      ...(options?.cwd ? { cwd: options.cwd } : {}),
-      ...(env ? { env } : {}),
-      ...(options?.timeout !== undefined ? { timeout: options.timeout } : {}),
-    });
-    return {
-      ...result,
-      success: result.exitCode === 0,
-      executionTimeMs: performance.now() - startedAt,
-    };
-  }
-}
-
-async function readIdentity(path: string) {
-  try {
-    const value = JSON.parse(await NodeFS.promises.readFile(path, "utf8")) as {
-      provider?: unknown;
-      providerId?: unknown;
-    };
-    if (
-      !REMOTE_BOT_SANDBOXES.includes(value.provider as RemoteBotSandbox) ||
-      typeof value.providerId !== "string" ||
-      !value.providerId
-    )
-      throw new Error(`Workspace identity file '${path}' is invalid.`);
-    return { provider: value.provider as RemoteBotSandbox, providerId: value.providerId };
-  } catch (cause) {
-    if ((cause as NodeJS.ErrnoException).code === "ENOENT") return undefined;
-    throw cause;
-  }
-}
-
-async function writeIdentity(
-  path: string,
-  identity: { provider: RemoteBotSandbox; providerId: string },
-) {
-  await NodeFS.promises.mkdir(NodePath.dirname(path), { recursive: true, mode: 0o700 });
-  const temporary = `${path}.${process.pid}.tmp`;
-  await NodeFS.promises.writeFile(temporary, `${JSON.stringify(identity)}\n`, { mode: 0o600 });
-  await NodeFS.promises.rename(temporary, path);
-}
-
-const quote = (value: string) => `'${value.replaceAll("'", `'\\''`)}'`;
-const commandLine = (command: string, args: readonly string[]) =>
-  [command, ...args].map(quote).join(" ");
-
-function railwayCredentials(environment: Readonly<Record<string, string>>) {
-  return {
-    token: credential(environment, "RAILWAY_API_TOKEN"),
-    environmentId: credential(environment, "RAILWAY_ENVIRONMENT_ID"),
-  };
-}
-
-export function railway(sandbox: import("railway").Sandbox): AkeruRemoteSession {
-  const inspect = async (): Promise<AkeruWorkspaceState> => {
-    const { SandboxNotFoundError } = await import("railway");
-    try {
-      await sandbox.refresh();
-    } catch (cause) {
-      if (cause instanceof SandboxNotFoundError) return "missing";
-      throw cause;
-    }
-    return railwayWorkspaceState(sandbox.status);
-  };
-  return {
-    providerId: sandbox.id,
-    inspect,
-    run: async (command, args, options) => {
-      const result = await sandbox.exec(commandLine(command, args), {
-        ...(options?.cwd ? { cwd: options.cwd } : {}),
-        ...(options?.env ? { env: options.env } : {}),
-        ...(options?.timeout ? { timeoutSec: Math.ceil(options.timeout / 1000) } : {}),
-      });
-      return { exitCode: result.exitCode ?? 1, stdout: result.stdout, stderr: result.stderr };
-    },
-    browserEndpoint: async () => {
-      throw new Error(
-        "Railway previews require a Railway CLI tunnel. Automatic bot browser routing is not supported; private VM addresses are not browser endpoints.",
-      );
-    },
-    wake: async () => {
-      if ((await inspect()) !== "running")
-        throw new Error(`Railway workspace '${sandbox.id}' is not running.`);
-    },
-    // Railway has no pause/resume API; idle preserves the durable VM and its identity.
-    sleep: async () => undefined,
-    destroy: () => sandbox.destroy(),
-  };
-}
-
-export function railwayWorkspaceState(
-  status: import("railway").SandboxStatus,
-): AkeruWorkspaceState {
-  if (status === "RUNNING") return "running";
-  if (status === "CREATING") return "sleeping";
-  return "missing";
-}
-
-function credential(environment: Readonly<Record<string, string>>, name: string): string {
-  const value = environment[name]?.trim();
-  if (!value) throw new Error(`Remote sandbox credential '${name}' is missing.`);
-  return value;
 }
 
 async function create(
@@ -344,15 +139,20 @@ async function create(
 ): Promise<AkeruRemoteSession> {
   if (provider === "ascii") {
     const { BoxApi, Configuration } = await import("@asciidev/box-sdk");
+
     const client = new BoxApi(
       new Configuration({ accessToken: credential(environment, "BOX_API_KEY") }),
     );
+
     const { box } = await client.create({ createBoxRequest: { ttlSeconds: null, noEnv: true } });
+
     return ascii(client, box.id);
   }
+
   if (provider === "e2b") {
     const { Sandbox } = await import("e2b");
     const apiKey = credential(environment, "E2B_API_KEY");
+
     return e2b(
       await Sandbox.create({
         apiKey,
@@ -362,13 +162,17 @@ async function create(
       apiKey,
     );
   }
+
   if (provider === "daytona") {
     const { Daytona } = await import("@daytona/sdk");
     const client = new Daytona({ apiKey: credential(environment, "DAYTONA_API_KEY") });
+
     return daytona(client, await client.create({ name: id }));
   }
+
   if (provider === "vercel") {
     const { Sandbox } = await import("@vercel/sandbox");
+
     return vercel(
       await Sandbox.create({
         name: id,
@@ -380,17 +184,23 @@ async function create(
       environment,
     );
   }
+
   if (provider === "railway") {
     const { Sandbox } = await import("railway");
+
     return railway(await Sandbox.create(railwayCredentials(environment)));
   }
+
   if (provider === "tenki") {
     const { TenkiSandbox } = await import("@tenkicloud/sandbox");
     const client = new TenkiSandbox({ apiKey: credential(environment, "TENKI_API_KEY") });
+
     // Persist the VM identity before wake waits for readiness, which can fail transiently.
     return tenki(await client.create({ name: id, sticky: true, waitReady: false }));
   }
+
   const { Box } = await import("@upstash/box");
+
   return upstash(await Box.create({ apiKey: credential(environment, "UPSTASH_BOX_API_KEY") }));
 }
 
@@ -401,31 +211,41 @@ async function open(
 ): Promise<AkeruRemoteSession> {
   if (provider === "ascii") {
     const { BoxApi, Configuration, ResponseError } = await import("@asciidev/box-sdk");
+
     const client = new BoxApi(
       new Configuration({ accessToken: credential(environment, "BOX_API_KEY") }),
     );
+
     try {
       await client.get({ boxId: id });
     } catch (cause) {
       if (!(cause instanceof ResponseError) || cause.response.status !== 404) throw cause;
       // A timed-out deletion can finish later; only confirmed absence permits replacement.
       const { box } = await client.create({ createBoxRequest: { ttlSeconds: null, noEnv: true } });
+
       return ascii(client, box.id);
     }
+
     return ascii(client, id);
   }
+
   if (provider === "e2b") {
     const { Sandbox } = await import("e2b");
     const apiKey = credential(environment, "E2B_API_KEY");
+
     return e2b(await Sandbox.connect(id, { apiKey }), apiKey);
   }
+
   if (provider === "daytona") {
     const { Daytona } = await import("@daytona/sdk");
     const client = new Daytona({ apiKey: credential(environment, "DAYTONA_API_KEY") });
+
     return daytona(client, await client.get(id));
   }
+
   if (provider === "vercel") {
     const { Sandbox } = await import("@vercel/sandbox");
+
     return vercel(
       await Sandbox.get({
         name: id,
@@ -437,394 +257,48 @@ async function open(
       environment,
     );
   }
+
   if (provider === "railway") {
     const { Sandbox } = await import("railway");
     const session = railway(await Sandbox.connect(id, railwayCredentials(environment)));
     await session.wake();
+
     return session;
   }
+
   if (provider === "tenki") {
     const { TenkiSandbox } = await import("@tenkicloud/sandbox");
     const client = new TenkiSandbox({ apiKey: credential(environment, "TENKI_API_KEY") });
+
     return tenki(await client.get(id));
   }
+
   const { Box } = await import("@upstash/box");
+
   return upstash(await Box.get(id, { apiKey: credential(environment, "UPSTASH_BOX_API_KEY") }));
 }
 
-export function ascii(
-  client: import("@asciidev/box-sdk").BoxApi,
-  boxId: string,
-): AkeruRemoteSession {
-  const waitUntilArchived = async () => {
-    const deadline = performance.now() + 300_000;
-    while (true) {
-      const { box } = await client.get({ boxId });
-      if (box.state === "archived") return;
-      if (box.state === "error") throw new Error("Ascii Box snapshot archival failed.");
-      if (performance.now() >= deadline) throw new Error("Ascii Box snapshot archival timed out.");
-      // The SDK lifecycle is promise-based; polling does not own an Effect runtime.
-      // @effect-diagnostics-next-line globalTimers:off
-      await new Promise<void>((resolve) => setTimeout(resolve, 2_000));
-    }
-  };
-  return {
-    providerId: boxId,
-    inspect: async () => {
-      try {
-        const { box } = await client.get({ boxId });
-        if (["ready", "idle", "running"].includes(box.state)) return "running";
-        return box.state === "error" ? "missing" : "sleeping";
-      } catch (cause) {
-        const { ResponseError } = await import("@asciidev/box-sdk");
-        if (cause instanceof ResponseError && cause.response.status === 404) return "missing";
-        throw cause;
-      }
-    },
-    wake: async () => {
-      const { box } = await client.get({ boxId });
-      if (box.state === "archiving") await waitUntilArchived();
-      if (box.state === "archived" || box.state === "archiving")
-        await client.resume({ boxId, resumeRequest: { ttlSeconds: null } });
-      const { waitUntilReady } = await import("@asciidev/box-sdk");
-      await waitUntilReady(client, boxId, { timeoutMs: 300_000 });
-    },
-    // Stop takes a native lifecycle snapshot; never force-stop and discard VM changes.
-    sleep: async () => {
-      await client.stop({ boxId });
-      await waitUntilArchived();
-    },
-    destroy: async () => {
-      let result = await client.deleteBox({ boxId, xAsciiConfirmDelete: boxId });
-      const deadline = performance.now() + 300_000;
-      while (result.operation.status !== "completed") {
-        if (result.operation.status === "blocked")
-          throw new Error("Ascii Box deletion is blocked.");
-        if (performance.now() >= deadline) throw new Error("Ascii Box deletion timed out.");
-        // The SDK lifecycle is promise-based, like the archival wait above.
-        // @effect-diagnostics-next-line globalTimers:off
-        await new Promise<void>((resolve) => setTimeout(resolve, 2_000));
-        result = await client.getDeletionOperation({ operationId: result.operation.id });
-      }
-    },
-    run: async (command, args, options) => {
-      const timeout = options?.timeout ?? 600_000;
-      if (!Number.isFinite(timeout) || timeout <= 0 || timeout > 600_000)
-        throw new Error("Ascii Box command timeout must be greater than 0 and at most 600000 ms.");
-      const env = Object.entries(options?.env ?? {}).map(([key, value]) =>
-        quote(`${key}=${value}`),
-      );
-      const invocation = `${env.length ? `env ${env.join(" ")} ` : ""}${commandLine(command, args)}`;
-      const result = await client.command({
-        boxId,
-        commandRequest: {
-          command: options?.cwd ? `cd ${quote(options.cwd)} && ${invocation}` : invocation,
-          timeoutSeconds: Math.ceil(timeout / 1_000),
-        },
-      });
-      if (result.type !== "command.finished")
-        throw new Error("Ascii Box command did not finish in the foreground.");
-      return {
-        exitCode: result.timedOut ? 124 : (result.exitCode ?? (result.success ? 0 : 1)),
-        stdout: result.stdout,
-        stderr: result.stderr,
-      };
-    },
-    browserEndpoint: async (port) => {
-      const result = await client.hostPort({ boxId, hostPortRequest: { port, _public: false } });
-      if (!result.url || result.success === false)
-        throw new Error("Ascii Box workspace did not return a preview URL.");
-      if (result.isProtected !== true || !new URL(result.url).searchParams.get("_token"))
-        throw new Error("Ascii Box workspace did not return a protected browser endpoint.");
-      return { url: result.url, requestHeaders: {} };
-    },
-  };
-}
+export {
+  REMOTE_BOT_SANDBOXES,
+  type RemoteBotSandbox,
+  type AkeruWorkspaceState,
+  type AkeruBrowserEndpoint,
+  type AkeruBotWorkspace,
+  type AkeruRemoteSession,
+  type CreateRemoteBotWorkspaceInput,
+  type CreateBotWorkspaceInput,
+} from "./workspace/BotWorkspaceTypes.ts";
 
-export function tenki(session: import("@tenkicloud/sandbox").Session): AkeruRemoteSession {
-  return {
-    providerId: session.id,
-    inspect: async () => {
-      await session.refresh();
-      return tenkiWorkspaceState(session.state);
-    },
-    run: async (command, args, options) => {
-      const result = await session.exec([command, ...args], {
-        ...(options?.cwd ? { cwd: options.cwd } : {}),
-        ...(options?.env ? { env: options.env } : {}),
-        ...(options?.timeout !== undefined ? { timeoutMs: options.timeout } : {}),
-      });
-      return {
-        stdout: new TextDecoder().decode(result.stdout),
-        stderr: new TextDecoder().decode(result.stderr),
-        exitCode: result.exitCode,
-      };
-    },
-    browserEndpoint: async () => {
-      // Public application previews must not expose the browser's unauthenticated MCP server.
-      throw new Error(
-        "Tenki sandbox browser requires an authenticated endpoint; public previews are not supported for browser control.",
-      );
-    },
-    wake: async () => {
-      await session.refresh();
-      if (session.state === "PAUSING") await session.waitPaused();
-      if (session.state === "PAUSED" || session.state === "USER_SHUTDOWN") {
-        await session.resume();
-        await session.waitResumed();
-      } else if (session.state === "RESUMING") {
-        await session.waitResumed();
-      } else {
-        await session.waitReady();
-      }
-    },
-    sleep: async () => {
-      await session.pause();
-      await session.waitPaused();
-    },
-    destroy: () => session.close(),
-  };
-}
+export { railway, railwayWorkspaceState } from "./workspace/adapters/Railway.ts";
 
-export function tenkiWorkspaceState(
-  state: import("@tenkicloud/sandbox").SessionState,
-): AkeruWorkspaceState {
-  switch (state) {
-    case "RUNNING":
-      return "running";
-    case "CREATING":
-    case "PAUSED":
-    case "USER_SHUTDOWN":
-    case "PAUSING":
-    case "RESUMING":
-      return "sleeping";
-    default:
-      return "missing";
-  }
-}
+export { ascii } from "./workspace/adapters/Ascii.ts";
 
-export function e2b(initial: import("e2b").Sandbox, apiKey?: string): AkeruRemoteSession {
-  let sandbox = initial;
-  const providerId = sandbox.sandboxId;
-  const options = apiKey ? { apiKey } : {};
-  return {
-    providerId,
-    inspect: async () => {
-      const { Sandbox } = await import("e2b");
-      const info = await Sandbox.getInfo(providerId, options);
-      return info.state === "paused" ? "sleeping" : "running";
-    },
-    run: async (command, args, options) => {
-      const result = await sandbox.commands.run(commandLine(command, args), {
-        ...(options?.cwd ? { cwd: options.cwd } : {}),
-        ...(options?.env ? { envs: options.env } : {}),
-        ...(options?.timeout ? { timeoutMs: options.timeout } : {}),
-      });
-      return { exitCode: result.exitCode, stdout: result.stdout, stderr: result.stderr };
-    },
-    browserEndpoint: async (port) => {
-      const token = sandbox.trafficAccessToken?.trim();
-      if (!token) throw new Error(`E2B workspace '${providerId}' has no traffic access token.`);
-      return {
-        url: `https://${sandbox.getHost(port)}`,
-        requestHeaders: { "e2b-traffic-access-token": token },
-      };
-    },
-    wake: async () => {
-      const { Sandbox } = await import("e2b");
-      sandbox = await Sandbox.connect(providerId, options);
-    },
-    sleep: async () => {
-      await sandbox.pause();
-    },
-    destroy: async () => {
-      await sandbox.kill();
-    },
-  };
-}
+export { tenki, tenkiWorkspaceState } from "./workspace/adapters/Tenki.ts";
 
-export function daytona(
-  client: import("@daytona/sdk").Daytona,
-  sandbox: import("@daytona/sdk").Sandbox,
-): AkeruRemoteSession {
-  const inspect = async (): Promise<AkeruWorkspaceState> => {
-    await sandbox.refreshData();
-    const current = String(sandbox.state);
-    return current === "destroyed" ? "missing" : current === "started" ? "running" : "sleeping";
-  };
-  const computer = new WorkspaceComputer(
-    sandbox.id,
-    new DaytonaComputer(sandbox),
-    // Chromium survives reconnects and some wakes; reuse it instead of starting
-    // a second browser on the same profile and debugging port.
-    async () => {
-      const result = await sandbox.process.executeCommand(
-        "sh -c 'command -v chromium >/dev/null || command -v chromium-browser >/dev/null || exit 1; profile=/tmp/akeru-chromium; command -v pgrep >/dev/null && pgrep -f \"[-]-user-data-dir=$profile\" >/dev/null && exit 0; mkdir -p $profile; nohup ${CHROMIUM_BIN:-$(command -v chromium || command -v chromium-browser)} --no-sandbox --disable-dev-shm-usage --remote-debugging-address=0.0.0.0 --remote-debugging-port=9222 --user-data-dir=$profile about:blank >/dev/null 2>&1 </dev/null &'",
-        undefined,
-        { DISPLAY: ":1" },
-      );
-      if (result.exitCode !== 0) throw new Error("Daytona graphical Chromium is unavailable.");
-    },
-    async () => {
-      const preview = await sandbox.getPreviewLink(9222);
-      if (!preview.url || !preview.token)
-        throw new Error("Daytona browser endpoint is unavailable.");
-      return { url: preview.url, requestHeaders: { "x-daytona-preview-token": preview.token } };
-    },
-    inspect,
-  );
-  return {
-    providerId: sandbox.id,
-    computer,
-    inspect,
-    run: async (command, args, options) => {
-      const result = await sandbox.process.executeCommand(
-        commandLine(command, args),
-        options?.cwd,
-        options?.env,
-        options?.timeout ? Math.ceil(options.timeout / 1000) : undefined,
-      );
-      return { exitCode: result.exitCode, stdout: result.result, stderr: "" };
-    },
-    browserEndpoint: async (port) => {
-      const preview = await sandbox.getPreviewLink(port);
-      const token = preview.token?.trim();
-      if (!preview.url || !token) {
-        throw new Error(`Daytona workspace '${sandbox.id}' has no authenticated preview URL.`);
-      }
-      const url = new URL(preview.url);
-      url.searchParams.set("DAYTONA_SANDBOX_AUTH_KEY", token);
-      return { url: url.toString(), requestHeaders: {} };
-    },
-    wake: async () => {
-      if ((await sandbox.refreshData(), String(sandbox.state)) !== "started") {
-        await sandbox.start();
-      }
-    },
-    sleep: () => sandbox.pause(),
-    destroy: async () => {
-      await sandbox.delete(undefined, true);
-      await client[Symbol.asyncDispose]();
-    },
-  };
-}
+export { e2b } from "./workspace/adapters/E2b.ts";
 
-export function vercelWorkspaceState(
-  status: import("@vercel/sandbox").Sandbox["status"],
-): AkeruWorkspaceState {
-  if (status === "running") return "running";
-  if (status === "failed" || status === "aborted") return "missing";
-  return "sleeping";
-}
+export { daytona } from "./workspace/adapters/Daytona.ts";
 
-export function vercel(
-  initial: import("@vercel/sandbox").Sandbox,
-  environment: Readonly<Record<string, string>> = {},
-): AkeruRemoteSession {
-  let sandbox = initial;
-  return {
-    providerId: sandbox.name,
-    inspect: async () => {
-      const { Sandbox } = await import("@vercel/sandbox");
-      sandbox = await Sandbox.get({
-        name: sandbox.name,
-        resume: false,
-        token: credential(environment, "VERCEL_TOKEN"),
-        teamId: credential(environment, "VERCEL_TEAM_ID"),
-        projectId: credential(environment, "VERCEL_PROJECT_ID"),
-      });
-      return vercelWorkspaceState(sandbox.status);
-    },
-    run: async (command, args, options) => {
-      const result = await sandbox.runCommand({
-        cmd: command,
-        args: [...args],
-        ...(options?.cwd ? { cwd: options.cwd } : {}),
-        ...(options?.env ? { env: options.env } : {}),
-        ...(options?.timeout ? { timeoutMs: options.timeout } : {}),
-      });
-      return {
-        exitCode: result.exitCode,
-        stdout: await result.stdout(),
-        stderr: await result.stderr(),
-      };
-    },
-    browserEndpoint: async (port) => {
-      if (!sandbox.routes.some((route) => route.port === port)) {
-        await sandbox.update({ ports: [...sandbox.routes.map((route) => route.port), port] });
-      }
-      return { url: sandbox.domain(port), requestHeaders: {} };
-    },
-    wake: async () => {
-      const { Sandbox } = await import("@vercel/sandbox");
-      sandbox = await Sandbox.get({
-        name: sandbox.name,
-        resume: true,
-        token: credential(environment, "VERCEL_TOKEN"),
-        teamId: credential(environment, "VERCEL_TEAM_ID"),
-        projectId: credential(environment, "VERCEL_PROJECT_ID"),
-      });
-    },
-    sleep: async () => {
-      await sandbox.stop();
-    },
-    destroy: async () => {
-      await sandbox.delete();
-    },
-  };
-}
+export { vercelWorkspaceState, vercel } from "./workspace/adapters/Vercel.ts";
 
-export function upstash(box: import("@upstash/box").Box): AkeruRemoteSession {
-  const inspect = async () => {
-    const status = (await box.getStatus()).status;
-    return upstashWorkspaceState(status);
-  };
-  return {
-    providerId: box.id,
-    inspect,
-    run: async (command, args, options) => {
-      const assignments = Object.entries(options?.env ?? {}).map(
-        ([key, value]) => `${key}=${value}`,
-      );
-      let line =
-        assignments.length > 0
-          ? commandLine("env", ["--", ...assignments, command, ...args])
-          : commandLine(command, args);
-      if (options?.timeout !== undefined) {
-        line = commandLine("timeout", [`${options.timeout / 1_000}s`, "sh", "-lc", line]);
-      }
-      const result = await box.exec.command(
-        `${options?.cwd ? `cd ${quote(options.cwd)} && ` : ""}${line}`,
-      );
-      return { exitCode: result.exitCode ?? 1, stdout: result.result, stderr: "" };
-    },
-    browserEndpoint: async (port) => {
-      const preview = await box.getPublicURL(port, { bearerToken: true });
-      const token = preview.token?.trim();
-      if (!preview.url || !token) {
-        throw new Error(`Upstash workspace '${box.id}' has no authenticated public URL.`);
-      }
-      return {
-        url: preview.url,
-        requestHeaders: { authorization: `Bearer ${token}` },
-      };
-    },
-    wake: async () => {
-      const current = await inspect();
-      if (current === "missing") {
-        throw new Error(`Upstash workspace '${box.id}' is missing.`);
-      }
-      if (current === "sleeping") {
-        await box.resume();
-      }
-    },
-    sleep: () => box.pause(),
-    destroy: () => box.delete(),
-  };
-}
-
-export function upstashWorkspaceState(status: string): AkeruWorkspaceState {
-  if (status === "running" || status === "idle") return "running";
-  if (status === "error" || status === "deleted") return "missing";
-  return "sleeping";
-}
+export { upstash, upstashWorkspaceState } from "./workspace/adapters/Upstash.ts";

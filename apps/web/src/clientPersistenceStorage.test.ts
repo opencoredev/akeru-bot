@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
 function createLocalStorageStub(): Storage {
   const store = new Map<string, string>();
+
   return {
     getItem: (key) => store.get(key) ?? null,
     setItem: (key, value) => {
@@ -23,11 +24,14 @@ function createLocalStorageStub(): Storage {
 
 function getTestWindow(): Window & typeof globalThis {
   const localStorage = createLocalStorageStub();
+
   const testWindow = {
     localStorage,
   } as Window & typeof globalThis;
+
   vi.stubGlobal("window", testWindow);
   vi.stubGlobal("localStorage", localStorage);
+
   return testWindow;
 }
 
@@ -40,8 +44,10 @@ afterEach(() => {
 describe("clientPersistenceStorage", () => {
   it("persists client settings in browser storage", async () => {
     getTestWindow();
+
     const { readBrowserClientSettings, writeBrowserClientSettings } =
       await import("./clientPersistenceStorage");
+
     const settings = {
       ...DEFAULT_CLIENT_SETTINGS,
       reviewedPrivacyPolicyVersion: "2026-08-31",

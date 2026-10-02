@@ -1,3 +1,4 @@
+import * as Match from "effect/Match";
 import * as NodeCrypto from "node:crypto";
 
 import {
@@ -46,7 +47,9 @@ const workspacePartitions = (input: AkeruMemoryThreadAccess) => {
     deriveAkeruWorkspaceId(input.projectId),
     "shared",
   );
+
   if (input.legacyWorkspaceOwnerProjectId !== input.projectId) return [canonical];
+
   return [
     canonical,
     partition(
@@ -63,6 +66,7 @@ export function resolveAuthorizedMemoryPartitions(
 ): Effect.Effect<ReadonlyArray<AuthorizedMemoryPartition>, AkeruMemoryAccessDenied> {
   if (input.groupId !== null) {
     const respondingBotId = input.respondingBotId ?? input.botId;
+
     if (
       respondingBotId === null ||
       !input.groupMemberBotIds.some((memberBotId) => memberBotId === respondingBotId)
@@ -73,6 +77,7 @@ export function resolveAuthorizedMemoryPartitions(
         }),
       );
     }
+
     return Effect.succeed([
       partition(input, "group", input.groupId, "shared"),
       partition(input, "project", input.projectId, "shared"),
@@ -105,18 +110,22 @@ export function resolveMemoryArchivePartitions(
 ): Effect.Effect<ReadonlyArray<AuthorizedMemoryPartition>, AkeruMemoryAccessDenied> {
   return resolveAuthorizedMemoryPartitions(input).pipe(
     Effect.flatMap((partitions) => {
-      const selected =
-        target === "all"
-          ? partitions
-          : target === "thread"
-            ? partitions.filter((candidate) => candidate.scope === "thread")
-            : target === "project"
-              ? partitions.filter((candidate) => candidate.scope === "project")
-              : target === "workspace"
-                ? partitions.filter((candidate) => candidate.scope === "workspace")
-                : partitions.filter(
-                    (candidate) => candidate.scope === "bot-user" || candidate.scope === "bot",
-                  );
+      const selected = Match.value(target).pipe(
+        Match.when("all", () => partitions),
+        Match.when("thread", () => partitions.filter((candidate) => candidate.scope === "thread")),
+        Match.when("project", () =>
+          partitions.filter((candidate) => candidate.scope === "project"),
+        ),
+        Match.when("workspace", () =>
+          partitions.filter((candidate) => candidate.scope === "workspace"),
+        ),
+        Match.orElse(() =>
+          partitions.filter(
+            (candidate) => candidate.scope === "bot-user" || candidate.scope === "bot",
+          ),
+        ),
+      );
+
       return selected.length > 0
         ? Effect.succeed(selected)
         : Effect.fail(

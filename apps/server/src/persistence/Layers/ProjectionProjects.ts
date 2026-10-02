@@ -21,6 +21,7 @@ const ProjectionProjectDbRow = ProjectionProject.mapFields(
     scripts: Schema.fromJsonString(Schema.Array(ProjectScript)),
   }),
 );
+
 type ProjectionProjectDbRow = typeof ProjectionProjectDbRow.Type;
 
 const makeProjectionProjectRepository = Effect.gen(function* () {

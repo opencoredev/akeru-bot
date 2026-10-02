@@ -29,7 +29,7 @@ import { ProviderDriverError } from "../Errors.ts";
 import { makeOpenCodeAdapter } from "../Layers/OpenCodeAdapter.ts";
 import {
   checkOpenCodeProviderStatus,
-  makePendingOpenCodeProvider,
+  pendingOpenCodeProvider,
 } from "../Layers/OpenCodeProvider.ts";
 import { ProviderEventLoggers } from "../Layers/ProviderEventLoggers.ts";
 import { makeManagedServerProvider } from "../makeManagedServerProvider.ts";
@@ -43,28 +43,30 @@ import type { ServerProviderDraft } from "../providerSnapshot.ts";
 import { mergeSubscriptionInstanceEnvironment } from "../../subscription-auth/runtime.ts";
 import {
   enrichProviderSnapshotWithVersionAdvisory,
-  makePackageManagedProviderMaintenanceResolver,
+  packageManagedProviderMaintenanceResolver,
   normalizeCommandPath,
   resolveProviderMaintenanceCapabilitiesEffect,
 } from "../providerMaintenance.ts";
 import {
   haveProviderSnapshotSettingsChanged,
-  makeProviderSnapshotSettingsSource,
+  providerSnapshotSettingsSource,
   type ProviderSnapshotSettings,
 } from "../providerUpdateSettings.ts";
+
 const decodeOpenCodeSettings = Schema.decodeSync(OpenCodeSettings);
 
 const DRIVER_KIND = ProviderDriverKind.make("opencode");
 
 function isOpenCodeNativeCommandPath(commandPath: string): boolean {
   const normalized = normalizeCommandPath(commandPath);
+
   return (
     normalized.endsWith("/.opencode/bin/opencode") ||
     normalized.endsWith("/.opencode/bin/opencode.exe")
   );
 }
 
-const UPDATE = makePackageManagedProviderMaintenanceResolver({
+const UPDATE = packageManagedProviderMaintenanceResolver({
   provider: DRIVER_KIND,
   npmPackageName: "opencode-ai",
   homebrewFormula: "anomalyco/tap/opencode",
@@ -120,17 +122,21 @@ export const OpenCodeDriver: ProviderDriver<OpenCodeSettings, OpenCodeDriverEnv>
       const serverSettings = yield* ServerSettingsService;
       const eventLoggers = yield* ProviderEventLoggers;
       const processEnv = mergeSubscriptionInstanceEnvironment(environment);
+
       const continuationIdentity = defaultProviderContinuationIdentity({
         driverKind: DRIVER_KIND,
         instanceId,
       });
+
       const stampIdentity = withInstanceIdentity({
         instanceId,
         displayName,
         accentColor,
         continuationGroupKey: continuationIdentity.continuationKey,
       });
+
       const effectiveConfig = { ...config, enabled } satisfies OpenCodeSettings;
+
       const maintenanceCapabilities = yield* resolveProviderMaintenanceCapabilitiesEffect(UPDATE, {
         binaryPath: effectiveConfig.binaryPath,
         env: processEnv,
@@ -141,6 +147,7 @@ export const OpenCodeDriver: ProviderDriver<OpenCodeSettings, OpenCodeDriverEnv>
         environment: processEnv,
         ...(eventLoggers.native ? { nativeEventLogger: eventLoggers.native } : {}),
       });
+
       const textGeneration = yield* makeOpenCodeTextGeneration(
         effectiveConfig,
         processEnv,
@@ -153,7 +160,8 @@ export const OpenCodeDriver: ProviderDriver<OpenCodeSettings, OpenCodeDriverEnv>
         processEnv,
       ).pipe(Effect.map(stampIdentity), Effect.provideService(OpenCodeRuntime, openCodeRuntime));
 
-      const snapshotSettings = makeProviderSnapshotSettingsSource(effectiveConfig, serverSettings);
+      const snapshotSettings = providerSnapshotSettingsSource(effectiveConfig, serverSettings);
+
       const snapshot = yield* makeManagedServerProvider<ProviderSnapshotSettings<OpenCodeSettings>>(
         {
           maintenanceCapabilities,
@@ -161,7 +169,7 @@ export const OpenCodeDriver: ProviderDriver<OpenCodeSettings, OpenCodeDriverEnv>
           streamSettings: snapshotSettings.streamSettings,
           haveSettingsChanged: haveProviderSnapshotSettingsChanged,
           initialSnapshot: (settings) =>
-            makePendingOpenCodeProvider(settings.provider).pipe(Effect.map(stampIdentity)),
+            pendingOpenCodeProvider(settings.provider).pipe(Effect.map(stampIdentity)),
           checkProvider,
           enrichSnapshot: ({ settings, snapshot, publishSnapshot }) =>
             enrichProviderSnapshotWithVersionAdvisory(snapshot, maintenanceCapabilities, {

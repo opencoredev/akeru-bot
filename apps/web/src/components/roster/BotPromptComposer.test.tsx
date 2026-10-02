@@ -6,8 +6,10 @@ import { visitElements } from "../../test/reactElementTree";
 vi.mock("../../i18n", async () => {
   const { createTranslator } = await import("@akeru/client-runtime/i18n");
   const translator = createTranslator("en");
+
   return { useI18n: () => ({ ...translator, t: translator.translate }) };
 });
+
 import {
   BotPromptAttachments,
   buildBotPromptAttachmentPreview,
@@ -62,6 +64,7 @@ describe("bot prompt composer", () => {
   it("opens the $ and / pickers when no provider catalog is connected", () => {
     const open = (draft: string, commandCatalog: null | undefined, readOnly = false) =>
       botPromptCommandMenuTrigger({ draft, caret: draft.length, readOnly, commandCatalog })?.kind;
+
     expect(open("$", null)).toBe("skill");
     expect(open("hi $", null)).toBe("skill");
     expect(open("/", null)).toBe("slash-command");
@@ -102,6 +105,7 @@ describe("bot prompt composer", () => {
       { id: "boss", name: "Akeru" },
       { id: "mori", name: "Mori" },
     ];
+
     expect(resolveBotMention("Thanks @Leo, can you check this?", groupBots)).toEqual({
       kind: "none",
     });
@@ -115,6 +119,7 @@ describe("bot prompt composer", () => {
     const mori = { id: "mori-claude", name: "Mori" };
     const otherMori = { id: "mori-grok", name: "Mori" };
     const akeru = { id: "boss", name: "Akeru" };
+
     for (const bots of [
       [akeru, mori, otherMori],
       [otherMori, akeru, mori],
@@ -126,6 +131,7 @@ describe("bot prompt composer", () => {
       );
       expect(resolveBotMention("@Mori then @Akeru", bots)).toEqual({ kind: "bot", botId: "boss" });
     }
+
     expect(botMentionHint({ kind: "bot", botId: "boss" })).toBeNull();
   });
 
@@ -134,14 +140,18 @@ describe("bot prompt composer", () => {
       { id: "mika-claude", name: "Mika", title: "Designer" },
       { id: "mika-grok", name: "Mika", title: "Reviewer" },
     ];
+
     const trigger = botPromptMentionTrigger("@mika", 5)!;
+
     const rows = buildBotPromptMentionItems({
       query: trigger.query,
       browserAvailable: false,
       bots: mikas,
       threads: [],
     });
+
     expect(rows).toHaveLength(2);
+
     for (const [index, bot] of mikas.entries()) {
       const picked = applyBotPromptMention("@mika", trigger, rows[index]!).text;
       const draft = `${picked}please review`;
@@ -185,7 +195,7 @@ describe("bot prompt composer", () => {
       <BotPromptComposer botName="Akeru" disabled={false} onSubmit={vi.fn(async () => true)} />,
     );
 
-    expect(markup).toContain("px-[max(1rem,calc((100%-48rem)/2))]");
+    expect(markup).toContain("px-gutter-48rem");
   });
 
   it("attaches a pending question above the custom answer field", () => {
@@ -209,6 +219,7 @@ describe("bot prompt composer", () => {
     const withoutApproval = renderToStaticMarkup(
       <BotPromptComposer botName="Akeru" disabled={false} onSubmit={vi.fn(async () => true)} />,
     );
+
     const withApproval = renderToStaticMarkup(
       <BotPromptComposer
         botName="Akeru"
@@ -228,6 +239,7 @@ describe("bot prompt composer", () => {
     const markup = renderToStaticMarkup(
       <BotPromptComposer botName="Mori" disabled={false} onSubmit={async () => true} />,
     );
+
     expect(markup).toContain("data-bot-prompt-dictation");
     expect(markup).toContain('aria-label="Start dictation"');
     expect(markup).toContain("lucide-mic");
@@ -238,6 +250,7 @@ describe("bot prompt composer", () => {
     const markup = renderToStaticMarkup(
       <BotPromptComposer botName="Mori" disabled readOnly onSubmit={async () => true} />,
     );
+
     expect(markup).not.toContain("data-bot-prompt-dictation");
     expect(markup).toContain('aria-label="Send message"');
   });
@@ -294,10 +307,12 @@ describe("bot prompt composer", () => {
   it("creates stable previews in file order and releases their object URLs", () => {
     const first = imageFile("same-name.png");
     const second = imageFile("same-name.png");
+
     const createObjectURL = vi
       .spyOn(URL, "createObjectURL")
       .mockReturnValueOnce("blob:first")
       .mockReturnValueOnce("blob:second");
+
     const revokeObjectURL = vi.spyOn(URL, "revokeObjectURL").mockImplementation(() => {});
 
     const attachments = createBotPromptAttachments([first, second]);
@@ -331,26 +346,32 @@ describe("bot prompt composer", () => {
     const onExpand = vi.fn();
     const onPreviewError = vi.fn();
     const onRemove = vi.fn();
+
     const attachment: BotPromptAttachment = {
       id: "attachment-1",
       file: imageFile("preview.png"),
       previewUrl: "blob:preview",
     };
+
     const tree = BotPromptAttachments({
       attachments: [attachment],
       onExpand,
       onPreviewError,
       onRemove,
     });
+
     const markup = renderToStaticMarkup(tree);
+
     const preview = visitElements(
       tree,
       (element) => element.props["aria-label"] === "Preview preview.png",
     );
+
     const remove = visitElements(
       tree,
       (element) => element.props["aria-label"] === "Remove preview.png",
     );
+
     const image = visitElements(tree, (element) => element.props.alt === "preview.png");
 
     expect(markup).toContain('src="blob:preview"');
@@ -369,11 +390,13 @@ describe("bot prompt composer", () => {
 
     const removeAttribute = vi.fn();
     const setAttribute = vi.fn();
+
     const currentTarget = {
       hidden: false,
       nextElementSibling: { removeAttribute },
       closest: () => ({ setAttribute }),
     };
+
     (
       image?.props.onError as ((event: { currentTarget: typeof currentTarget }) => void) | undefined
     )?.({ currentTarget });

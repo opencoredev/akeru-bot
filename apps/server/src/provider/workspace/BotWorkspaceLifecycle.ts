@@ -1,0 +1,69 @@
+import * as Option from "effect/Option";
+import * as Schema from "effect/Schema";
+import * as Match from "effect/Match";
+import type { BotWorkspaceIO } from "./BotWorkspaceIO.ts";
+import { Workspace } from "@mastra/core/workspace";
+import {
+  type RemoteBotSandbox,
+  type AkeruBotWorkspace,
+  REMOTE_BOT_SANDBOXES,
+} from "./BotWorkspaceTypes.ts";
+
+export function wrap(
+  workspace: Workspace,
+  provider: "local" | RemoteBotSandbox,
+): AkeruBotWorkspace {
+  return {
+    id: workspace.id,
+    provider,
+    workspace,
+    inspect: async () =>
+      Match.value(workspace.status).pipe(
+        Match.when("destroyed", () => "missing" as const),
+        Match.when("paused", () => "sleeping" as const),
+        Match.orElse(() => "running" as const),
+      ),
+    wake: () => workspace.init(),
+    sleep: () => workspace.stop(),
+    destroy: () => workspace.destroy(),
+  };
+}
+
+const decodeIdentity = Schema.decodeUnknownOption(
+  Schema.Struct({ provider: Schema.Literals(REMOTE_BOT_SANDBOXES), providerId: Schema.String }),
+);
+
+export async function readIdentity(io: BotWorkspaceIO, path: string) {
+  const content = await io.readIdentity(path);
+
+  if (content === undefined) return undefined;
+  const value = Option.getOrUndefined(decodeIdentity(JSON.parse(content)));
+
+  if (!value || !value.providerId) throw new Error(`Workspace identity file '${path}' is invalid.`);
+
+  return value;
+}
+
+export async function writeIdentity(
+  io: BotWorkspaceIO,
+  path: string,
+  identity: { provider: RemoteBotSandbox; providerId: string },
+) {
+  await io.mkdir(io.path.dirname(path));
+  const temporary = `${path}.${process.pid}.tmp`;
+  await io.writeIdentity(temporary, `${JSON.stringify(identity)}\n`);
+  await io.rename(temporary, path);
+}
+
+export const quote = (value: string) => `'${value.replaceAll("'", `'\\''`)}'`;
+
+export const commandLine = (command: string, args: readonly string[]) =>
+  [command, ...args].map(quote).join(" ");
+
+export function credential(environment: Readonly<Record<string, string>>, name: string): string {
+  const value = environment[name]?.trim();
+
+  if (!value) throw new Error(`Remote sandbox credential '${name}' is missing.`);
+
+  return value;
+}

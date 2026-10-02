@@ -32,16 +32,19 @@ export const ProjectionProject = Schema.Struct({
   updatedAt: IsoDateTime,
   deletedAt: Schema.NullOr(IsoDateTime),
 });
+
 export type ProjectionProject = typeof ProjectionProject.Type;
 
 export const GetProjectionProjectInput = Schema.Struct({
   projectId: ProjectId,
 });
+
 export type GetProjectionProjectInput = typeof GetProjectionProjectInput.Type;
 
 export const DeleteProjectionProjectInput = Schema.Struct({
   projectId: ProjectId,
 });
+
 export type DeleteProjectionProjectInput = typeof DeleteProjectionProjectInput.Type;
 
 /**

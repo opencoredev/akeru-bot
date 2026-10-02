@@ -137,6 +137,7 @@ describe("formatDayAwareTimestamp", () => {
   // calendar-day boundaries hold in any test timezone or locale.
   const iso = (y: number, monthIndex: number, d: number, h: number, mi: number) =>
     new Date(y, monthIndex, d, h, mi).toISOString();
+
   const now = new Date(2026, 7, 14, 12, 0).getTime();
   const time = (isoDate: string) => formatShortTimestamp(isoDate, "12-hour");
 
@@ -155,10 +156,12 @@ describe("formatDayAwareTimestamp", () => {
 
   it("prefixes older same-year messages with the numeric date", () => {
     const messageAt = iso(2026, 7, 12, 12, 34);
+
     const datePart = new Intl.DateTimeFormat(undefined, {
       month: "numeric",
       day: "numeric",
     }).format(new Date(messageAt));
+
     expect(formatDayAwareTimestamp(messageAt, "12-hour", now)).toBe(
       `${datePart} ${time(messageAt)}`,
     );
@@ -166,11 +169,13 @@ describe("formatDayAwareTimestamp", () => {
 
   it("includes the year once the calendar year differs", () => {
     const messageAt = iso(2025, 11, 31, 18, 0);
+
     const datePart = new Intl.DateTimeFormat(undefined, {
       month: "numeric",
       day: "numeric",
       year: "numeric",
     }).format(new Date(messageAt));
+
     expect(formatDayAwareTimestamp(messageAt, "12-hour", now)).toBe(
       `${datePart} ${time(messageAt)}`,
     );

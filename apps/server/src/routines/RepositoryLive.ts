@@ -1,4 +1,18 @@
-import { BotId, McpServerId, ProjectId, ThreadId } from "@akeru/contracts";
+import { flow } from "effect/Function";
+import {
+  BotId,
+  McpServerId,
+  ProjectId,
+  ThreadId,
+  RoutineId,
+  RoutineRunId,
+  SkillAssignmentId,
+  SkillId,
+  RoutineSandbox,
+  RoutineApprovalPolicy,
+  RoutineFailureKind,
+  RoutineRun,
+} from "@akeru/contracts";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
@@ -6,10 +20,9 @@ import * as SqlClient from "effect/unstable/sql/SqlClient";
 
 import { toPersistenceSqlError } from "../persistence/Errors.ts";
 import { RoutineRepository, type RoutineClaim, type RoutineRepositoryShape } from "./Repository.ts";
-import type { Routine, RoutineRun } from "./types.ts";
 
 const RoutineRow = Schema.Struct({
-  id: Schema.String,
+  id: RoutineId,
   botId: BotId,
   targetThreadId: ThreadId,
   projectId: ProjectId,
@@ -38,10 +51,10 @@ const RoutineRow = Schema.Struct({
     ]),
   ),
   timezone: Schema.String,
-  skillAssignmentIds: Schema.fromJsonString(Schema.Array(Schema.String)),
+  skillAssignmentIds: Schema.fromJsonString(Schema.Array(SkillAssignmentId)),
   connectorDependencies: Schema.fromJsonString(Schema.Array(McpServerId)),
-  sandbox: Schema.String,
-  approvalPolicy: Schema.String,
+  sandbox: RoutineSandbox,
+  approvalPolicy: RoutineApprovalPolicy,
   delegateToBotId: Schema.NullOr(BotId),
   enabled: Schema.Number,
   lifecycle: Schema.Literals([
@@ -59,7 +72,7 @@ const RoutineRow = Schema.Struct({
   lastRunAt: Schema.NullOr(Schema.String),
   latestResult: Schema.NullOr(Schema.fromJsonString(Schema.Struct({ summary: Schema.String }))),
   latestFailure: Schema.NullOr(
-    Schema.fromJsonString(Schema.Struct({ kind: Schema.String, message: Schema.String })),
+    Schema.fromJsonString(Schema.Struct({ kind: RoutineFailureKind, message: Schema.String })),
   ),
   createdAt: Schema.String,
   updatedAt: Schema.String,
@@ -67,8 +80,8 @@ const RoutineRow = Schema.Struct({
 });
 
 const RoutineRunRow = Schema.Struct({
-  id: Schema.String,
-  routineId: Schema.String,
+  id: RoutineRunId,
+  routineId: RoutineId,
   procedureVersion: Schema.Number,
   trigger: Schema.Literals(["dry-run", "manual", "scheduled", "missed"]),
   scheduledFor: Schema.NullOr(Schema.String),
@@ -84,7 +97,7 @@ const RoutineRunRow = Schema.Struct({
   threadRef: Schema.NullOr(ThreadId),
   result: Schema.NullOr(Schema.fromJsonString(Schema.Struct({ summary: Schema.String }))),
   failure: Schema.NullOr(
-    Schema.fromJsonString(Schema.Struct({ kind: Schema.String, message: Schema.String })),
+    Schema.fromJsonString(Schema.Struct({ kind: RoutineFailureKind, message: Schema.String })),
   ),
   usageRef: Schema.NullOr(Schema.String),
   startedAt: Schema.NullOr(Schema.String),
@@ -94,9 +107,9 @@ const RoutineRunRow = Schema.Struct({
 });
 
 const SkillAssignmentRow = Schema.Struct({
-  id: Schema.String,
+  id: SkillAssignmentId,
   botId: BotId,
-  skillId: Schema.String,
+  skillId: SkillId,
   name: Schema.String,
   description: Schema.NullOr(Schema.String),
   createdAt: Schema.String,
@@ -104,7 +117,12 @@ const SkillAssignmentRow = Schema.Struct({
 });
 
 const decodeRoutine = Schema.decodeUnknownSync(RoutineRow);
-const decodeRun = Schema.decodeUnknownSync(RoutineRunRow);
+
+const decodeRun = flow(
+  Schema.decodeUnknownSync(RoutineRunRow),
+  Schema.decodeUnknownSync(RoutineRun),
+);
+
 const decodeSkillAssignment = Schema.decodeUnknownSync(SkillAssignmentRow);
 
 const make = Effect.gen(function* () {
@@ -112,7 +130,7 @@ const make = Effect.gen(function* () {
 
   const readRoutines = (parameter?: string) =>
     parameter === undefined
-      ? sql<Record<string, unknown>>`
+      ? sql<typeof RoutineRow.Encoded>`
           SELECT routine_id AS id, bot_id AS "botId", target_thread_id AS "targetThreadId",
             project_id AS "projectId", job,
             procedure, procedure_version AS "procedureVersion",
@@ -126,7 +144,7 @@ const make = Effect.gen(function* () {
             created_at AS "createdAt", updated_at AS "updatedAt", deleted_at AS "deletedAt"
           FROM projection_routines ORDER BY created_at, routine_id
         `
-      : sql<Record<string, unknown>>`
+      : sql<typeof RoutineRow.Encoded>`
           SELECT routine_id AS id, bot_id AS "botId", target_thread_id AS "targetThreadId",
             project_id AS "projectId", job,
             procedure, procedure_version AS "procedureVersion",
@@ -145,7 +163,8 @@ const make = Effect.gen(function* () {
     Effect.map((rows) =>
       rows.map((row) => {
         const decoded = decodeRoutine(row);
-        return { ...decoded, enabled: decoded.enabled === 1 } as Routine;
+
+        return { ...decoded, enabled: decoded.enabled === 1 };
       }),
     ),
     Effect.mapError(toPersistenceSqlError("RoutineRepository.listAll")),
@@ -160,13 +179,14 @@ const make = Effect.gen(function* () {
       Effect.map((rows) => {
         if (rows[0] === undefined) return null;
         const decoded = decodeRoutine(rows[0]);
-        return { ...decoded, enabled: decoded.enabled === 1 } as Routine;
+
+        return { ...decoded, enabled: decoded.enabled === 1 };
       }),
       Effect.mapError(toPersistenceSqlError("RoutineRepository.getById")),
     );
 
   const listRuns: RoutineRepositoryShape["listRuns"] = (routineId) =>
-    sql<Record<string, unknown>>`
+    sql<typeof RoutineRunRow.Encoded>`
       SELECT run_id AS id, routine_id AS "routineId", procedure_version AS "procedureVersion",
         trigger, scheduled_for AS "scheduledFor", status, thread_ref AS "threadRef",
         result_json AS result, failure_json AS failure, usage_ref AS "usageRef",
@@ -176,12 +196,12 @@ const make = Effect.gen(function* () {
       WHERE routine_id = ${routineId}
       ORDER BY scheduled_for DESC, run_id DESC
     `.pipe(
-      Effect.map((rows) => rows.map((row) => decodeRun(row) as RoutineRun)),
+      Effect.map((rows) => rows.map((row) => decodeRun(row))),
       Effect.mapError(toPersistenceSqlError("RoutineRepository.listRuns")),
     );
 
   const listThreadRuns: RoutineRepositoryShape["listThreadRuns"] = (threadId, beforeRunId) =>
-    sql<Record<string, unknown>>`
+    sql<typeof RoutineRunRow.Encoded>`
       SELECT run.run_id AS id, run.routine_id AS "routineId",
         run.procedure_version AS "procedureVersion", run.trigger,
         run.scheduled_for AS "scheduledFor", run.status, run.thread_ref AS "threadRef",
@@ -201,13 +221,14 @@ const make = Effect.gen(function* () {
       LIMIT 101
     `.pipe(
       Effect.map((rows) => {
-        const runs = rows.slice(0, 100).map((row) => decodeRun(row) as RoutineRun);
+        const runs = rows.slice(0, 100).map((row) => decodeRun(row));
+
         return { runs, nextCursor: rows.length > 100 ? (runs[99]?.id ?? null) : null };
       }),
       Effect.mapError(toPersistenceSqlError("RoutineRepository.listThreadRuns")),
     );
 
-  const listAllRuns: RoutineRepositoryShape["listAllRuns"] = sql<Record<string, unknown>>`
+  const listAllRuns: RoutineRepositoryShape["listAllRuns"] = sql<typeof RoutineRunRow.Encoded>`
     SELECT run_id AS id, routine_id AS "routineId", procedure_version AS "procedureVersion",
       trigger, scheduled_for AS "scheduledFor", status, thread_ref AS "threadRef",
       result_json AS result, failure_json AS failure, usage_ref AS "usageRef",
@@ -225,7 +246,7 @@ const make = Effect.gen(function* () {
     )
     ORDER BY created_at, run_id
   `.pipe(
-    Effect.map((rows) => rows.map((row) => decodeRun(row) as RoutineRun)),
+    Effect.map((rows) => rows.map((row) => decodeRun(row))),
     Effect.mapError(toPersistenceSqlError("RoutineRepository.listAllRuns")),
   );
 
@@ -233,7 +254,7 @@ const make = Effect.gen(function* () {
     threadRef,
     turnId = null,
   ) =>
-    sql<Record<string, unknown>>`
+    sql<typeof RoutineRunRow.Encoded>`
         SELECT run_id AS id, routine_id AS "routineId", procedure_version AS "procedureVersion",
           trigger, scheduled_for AS "scheduledFor", status, thread_ref AS "threadRef",
           result_json AS result, failure_json AS failure, usage_ref AS "usageRef",
@@ -251,19 +272,19 @@ const make = Effect.gen(function* () {
           )
         ORDER BY updated_at DESC LIMIT 1
       `.pipe(
-      Effect.map((rows) => (rows[0] === undefined ? null : (decodeRun(rows[0]) as RoutineRun))),
+      Effect.map((rows) => (rows[0] === undefined ? null : decodeRun(rows[0]))),
       Effect.mapError(toPersistenceSqlError("RoutineRepository.getActiveRunByThreadRef")),
     );
 
   const listSkillAssignments: RoutineRepositoryShape["listSkillAssignments"] = sql<
-    Record<string, unknown>
+    typeof SkillAssignmentRow.Encoded
   >`
     SELECT assignment_id AS id, bot_id AS "botId", skill_id AS "skillId", name,
       description, created_at AS "createdAt", updated_at AS "updatedAt"
     FROM projection_routine_skill_assignments
     ORDER BY created_at, assignment_id
   `.pipe(
-    Effect.map((rows) => rows.map((row) => decodeSkillAssignment(row)) as never),
+    Effect.map((rows) => rows.map((row) => decodeSkillAssignment(row))),
     Effect.mapError(toPersistenceSqlError("RoutineRepository.listSkillAssignments")),
   );
 
@@ -307,26 +328,7 @@ const make = Effect.gen(function* () {
       WHERE run_id = ${runId}
     `.pipe(Effect.asVoid, Effect.mapError(toPersistenceSqlError("RoutineRepository.markSettled")));
 
-  const listRecoverable: RoutineRepositoryShape["listRecoverable"] = sql<{
-    readonly runId: string;
-    readonly routineId: string;
-    readonly trigger: "dry-run" | "manual" | "scheduled" | "missed";
-    readonly scheduledFor: string | null;
-    readonly claimedAt: string;
-    readonly status: "claimed" | "dispatched";
-    readonly threadRef: string | null;
-    readonly terminalState: "completed" | "error" | "interrupted" | null;
-    readonly terminalAt: string | null;
-    readonly sessionState:
-      | "ready"
-      | "starting"
-      | "running"
-      | "error"
-      | "interrupted"
-      | "stopped"
-      | null;
-    readonly sessionUpdatedAt: string | null;
-  }>`
+  const listRecoverable: RoutineRepositoryShape["listRecoverable"] = sql<RoutineClaim>`
     SELECT run_id AS "runId", routine_id AS "routineId", trigger,
       scheduled_for AS "scheduledFor", claimed_at AS "claimedAt", claims.status,
       claims.thread_id AS "threadRef", turns.state AS "terminalState",
@@ -342,10 +344,7 @@ const make = Effect.gen(function* () {
     LEFT JOIN projection_thread_sessions AS sessions ON sessions.thread_id = claims.thread_id
     WHERE claims.status IN ('claimed', 'dispatched')
     ORDER BY claimed_at, run_id
-  `.pipe(
-    Effect.map((rows) => rows as ReadonlyArray<RoutineClaim>),
-    Effect.mapError(toPersistenceSqlError("RoutineRepository.listRecoverable")),
-  );
+  `.pipe(Effect.mapError(toPersistenceSqlError("RoutineRepository.listRecoverable")));
 
   return {
     listAll,

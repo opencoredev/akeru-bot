@@ -23,6 +23,7 @@ export function ChannelProjectSelect({
   readonly size?: "xs" | "sm" | "default";
 }) {
   const { t } = useI18n();
+
   if (projects.length === 0) {
     return (
       <p role="status" className="text-xs text-muted-foreground">
@@ -30,7 +31,9 @@ export function ChannelProjectSelect({
       </p>
     );
   }
+
   const selected = projects.find((project) => project.id === value);
+
   return (
     <div className="flex w-full min-w-0 flex-col gap-1 sm:w-auto">
       <span className="text-xs font-medium text-muted-foreground">{t("Project")}</span>
@@ -38,6 +41,7 @@ export function ChannelProjectSelect({
         value={selected?.id ?? null}
         onValueChange={(next) => {
           const project = projects.find((candidate) => candidate.id === next);
+
           if (project) onChange(project.id);
         }}
       >

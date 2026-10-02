@@ -66,27 +66,20 @@ export function botImageProviderFromSelectValue(value: string | null): ImageProv
   return value !== null && isImageProviderId(value) ? value : null;
 }
 
-export function parseBotUsageCapInput(input: string): {
-  readonly valid: boolean;
-  readonly value: Bot["usageCap"];
-} {
+export function parseBotUsageCapInput(input: string) {
   if (input.trim().length === 0) return { valid: true, value: null };
   const limit = Number(input);
+
   if (!Number.isSafeInteger(limit) || limit <= 0) return { valid: false, value: null };
-  return { valid: true, value: { unit: "tokens", limit } };
+
+  return { valid: true, value: { unit: "tokens" as const, limit } };
 }
 
-export function resolveBotUsageCapForProvider(
-  input: string,
-  providerDriver?: string,
-): {
-  readonly available: boolean;
-  readonly valid: boolean;
-  readonly value: Bot["usageCap"];
-} {
+export function resolveBotUsageCapForProvider(input: string, providerDriver?: string) {
   if (providerDriver === "grok") {
     return { available: false, valid: true, value: null };
   }
+
   return { available: true, ...parseBotUsageCapInput(input) };
 }
 
@@ -108,16 +101,21 @@ export function useBotProfileDraft(
   const [description, setDescription] = useState(bot.description ?? "");
   const [usageCap, setUsageCap] = useState(() => bot.usageCap?.limit.toString() ?? "");
   const [sandbox, setSandbox] = useState<BotSandboxChoice>(() => botSandboxChoice(bot.sandbox));
+
   const [personalityTone, setPersonalityTone] = useState(() =>
     canonicalizeBotPersonalityTone(bot.personalityTone),
   );
+
   const [voiceEnabled, setVoiceEnabled] = useState(bot.voiceEnabled);
+
   const [imageProvider, setImageProvider] = useState<ImageProviderId | null>(
     bot.imageProvider ?? null,
   );
+
   const [disabledMcpServerIds, setDisabledMcpServerIds] = useState<readonly McpServerId[]>(
     bot.disabledMcpServerIds,
   );
+
   const [engineChanged, setEngineChanged] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -130,11 +128,14 @@ export function useBotProfileDraft(
       ),
     [providers, settings],
   );
+
   const defaultSelection = useMemo(
     () => resolveAppModelSelectionState(settings, providers),
     [providers, settings],
   );
+
   const [provider, setProvider] = useState(bot.engine?.provider ?? defaultSelection.instanceId);
+
   // The saved instance wins even when it cannot run, so the picker keeps showing
   // the bot's real choice; `engineUnavailability` says why it is blocked.
   const activeEntry = useMemo(
@@ -145,10 +146,12 @@ export function useBotProfileDraft(
         : undefined),
     [bot.engine, engineChanged, instanceEntries, provider],
   );
+
   const providerInstanceId =
     bot.engine === null && !engineChanged && activeEntry
       ? activeEntry.instanceId
       : ProviderInstanceId.make(provider);
+
   const [model, setModel] = useState<string>(
     () =>
       bot.engine?.model ??
@@ -157,6 +160,7 @@ export function useBotProfileDraft(
         : null) ??
       defaultSelection.model,
   );
+
   const [modelOptions, setModelOptions] = useState<BotModelOptions>(
     () =>
       bot.engine?.options ??
@@ -165,6 +169,7 @@ export function useBotProfileDraft(
         ? defaultSelection.options
         : undefined),
   );
+
   const modelOptionsByInstance = useMemo(
     () =>
       getCustomModelOptionsByInstance(
@@ -175,6 +180,7 @@ export function useBotProfileDraft(
       ),
     [model, provider, providers, settings],
   );
+
   const engineUnavailability = useMemo(
     () =>
       botEngineUnavailability(
@@ -188,6 +194,7 @@ export function useBotProfileDraft(
   useEffect(() => {
     if (engineChanged) return;
     setProvider(bot.engine?.provider ?? defaultSelection.instanceId);
+
     if (bot.engine?.model) setModel(bot.engine.model);
     setModelOptions(
       bot.engine?.options ??
@@ -201,6 +208,7 @@ export function useBotProfileDraft(
   useEffect(() => {
     const previous = previousBot.current;
     previousBot.current = bot;
+
     if (previous.id !== bot.id) return;
 
     setName((current) => rebaseUneditedValue(current, previous.name, bot.name));
@@ -250,10 +258,12 @@ export function useBotProfileDraft(
   const normalizedLabel = label.trim() || null;
   const normalizedDescription = description.trim() || null;
   const savedTone = canonicalizeBotPersonalityTone(bot.personalityTone);
+
   const nextEngine: Bot["engine"] =
     engineChanged && model
       ? { provider, model, ...(modelOptions ? { options: modelOptions } : {}) }
       : bot.engine;
+
   const showModelOptions =
     activeEntry !== undefined &&
     model.length > 0 &&
@@ -265,12 +275,17 @@ export function useBotProfileDraft(
       modelOptions,
       allowPromptInjectedEffort: false,
     });
+
   const resolvedUsageCap = resolveBotUsageCapForProvider(usageCap, activeEntry?.driverKind);
+
   const usageCapDirty =
     !resolvedUsageCap.valid || resolvedUsageCap.value?.limit !== bot.usageCap?.limit;
+
   const toolOverridesDirty =
     mcpServerIdsKey(disabledMcpServerIds) !== mcpServerIdsKey(bot.disabledMcpServerIds);
+
   const sandboxDirty = sandbox !== botSandboxChoice(bot.sandbox);
+
   const dirty =
     name.trim() !== bot.name ||
     normalizedLabel !== bot.label ||
@@ -282,6 +297,7 @@ export function useBotProfileDraft(
     voiceEnabled !== bot.voiceEnabled ||
     imageProvider !== (bot.imageProvider ?? null) ||
     toolOverridesDirty;
+
   const canSave = Boolean(onSave) && dirty && name.trim().length > 0 && resolvedUsageCap.valid;
 
   return {
@@ -357,8 +373,11 @@ export function useBotProfileDraft(
       }).then((success) => {
         setSaving(false);
         setSaved(success);
+
         if (success) setEngineChanged(false);
       });
     },
   };
 }
+
+export type BotProfileDraft = ReturnType<typeof useBotProfileDraft>;

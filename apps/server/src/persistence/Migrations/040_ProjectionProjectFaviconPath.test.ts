@@ -19,6 +19,7 @@ layer("040_ProjectionProjectFaviconPath", (it) => {
       const columns = yield* sql<{ readonly name: string; readonly notnull: number }>`
         PRAGMA table_info(projection_projects)
       `;
+
       const faviconPath = columns.find((column) => column.name === "favicon_path");
 
       assert.equal(faviconPath?.name, "favicon_path");

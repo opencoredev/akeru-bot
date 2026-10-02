@@ -1,9 +1,11 @@
+import { flow } from "effect/Function";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 
 export const USAGE_3H_COUNTER_MAX = 1_000_000;
+
 export const USAGE_BASE_COUNTER_KEYS = [
   "new_installations",
   "bots_created",
@@ -109,16 +111,21 @@ export const USAGE_PLUGIN_IDS = [
 export const USAGE_PROVIDER_COUNTER_KEYS = USAGE_PROVIDER_IDS.map(
   (id) => `provider_turns_${id}` as const,
 );
+
 export const USAGE_SANDBOX_COUNTER_KEYS = USAGE_SANDBOX_IDS.map(
   (id) => `sandbox_turns_${id}` as const,
 );
+
 export const USAGE_TOOL_COUNTER_KEYS = USAGE_TOOL_IDS.map((id) => `tool_calls_${id}` as const);
+
 export const USAGE_BROWSER_PROVIDER_COUNTER_KEYS = USAGE_BROWSER_PROVIDER_IDS.map(
   (id) => `browser_searches_${id}` as const,
 );
+
 export const USAGE_PLUGIN_COUNTER_KEYS = USAGE_PLUGIN_IDS.map(
   (id) => `plugin_enabled_${id}` as const,
 );
+
 export const USAGE_3H_COUNTER_KEYS = [
   ...USAGE_BASE_COUNTER_KEYS,
   ...USAGE_PROVIDER_COUNTER_KEYS,
@@ -127,29 +134,36 @@ export const USAGE_3H_COUNTER_KEYS = [
   ...USAGE_BROWSER_PROVIDER_COUNTER_KEYS,
   ...USAGE_PLUGIN_COUNTER_KEYS,
 ] as const;
+
 export type UsageCounterKey = (typeof USAGE_3H_COUNTER_KEYS)[number];
 
 const UsageCounter = Schema.Int.check(
   Schema.isBetween({ minimum: 0, maximum: USAGE_3H_COUNTER_MAX }),
 );
+
 const AppVersion = Schema.String.check(
   Schema.isMaxLength(64),
   Schema.isPattern(
     /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-(?:0|[1-9]\d*|[a-zA-Z-][0-9a-zA-Z-]*)(?:\.(?:0|[1-9]\d*|[a-zA-Z-][0-9a-zA-Z-]*))*)?(?:\+[0-9a-zA-Z-]+(?:\.[0-9a-zA-Z-]+)*)?$/,
   ),
 );
+
 const ThreeHourUtcBucket = Schema.String.check(
   Schema.isPattern(/^\d{4}-\d{2}-\d{2}T(?:00|03|06|09|12|15|18|21):00:00\.000Z$/),
 );
+
 const InsertId = Schema.String.check(Schema.isPattern(/^[0-9a-f]{64}$/));
 
 export const UsageOperatingSystem = Schema.Literals(["darwin", "linux", "win32", "other"]);
+
 export type UsageOperatingSystem = typeof UsageOperatingSystem.Type;
 
 export const UsageArchitecture = Schema.Literals(["x64", "arm64", "arm", "ia32", "other"]);
+
 export type UsageArchitecture = typeof UsageArchitecture.Type;
 
 export const UsageClientType = Schema.Literals(["none", "web", "desktop", "mobile", "mixed"]);
+
 export type UsageClientType = typeof UsageClientType.Type;
 
 export const UsageAnalyticsProvider = Schema.Literals([
@@ -162,6 +176,7 @@ export const UsageAnalyticsProvider = Schema.Literals([
   "mixed",
   "other",
 ]);
+
 export type UsageAnalyticsProvider = typeof UsageAnalyticsProvider.Type;
 
 export const UsageSandboxProvider = Schema.Literals([
@@ -177,6 +192,7 @@ export const UsageSandboxProvider = Schema.Literals([
   "mixed",
   "other",
 ]);
+
 export type UsageSandboxProvider = typeof UsageSandboxProvider.Type;
 
 const UsageCounters = Schema.Struct({
@@ -203,6 +219,7 @@ export const Usage3hProperties = Schema.Struct({
   $ip: Schema.Literal("0.0.0.0"),
   $insert_id: InsertId,
 });
+
 export type Usage3hProperties = typeof Usage3hProperties.Type &
   Readonly<Record<UsageCounterKey, number>>;
 
@@ -215,6 +232,7 @@ export const Usage3hEvent = Schema.Struct({
   Schema.makeFilter(
     ({ properties, timestamp }) => {
       const bucketStart = DateTime.make(properties.bucket_start);
+
       return (
         Option.isSome(bucketStart) &&
         DateTime.formatIso(bucketStart.value) === properties.bucket_start &&
@@ -226,6 +244,7 @@ export const Usage3hEvent = Schema.Struct({
     },
   ),
 );
+
 export type Usage3hEvent = Omit<typeof Usage3hEvent.Type, "properties"> & {
   readonly properties: Usage3hProperties;
 };
@@ -234,6 +253,7 @@ const decodeUsage3hEventUnknown = Schema.decodeUnknownSync(Usage3hEvent, {
   onExcessProperty: "error",
 });
 
-export function decodeUsage3hEvent(input: unknown): Usage3hEvent {
-  return decodeUsage3hEventUnknown(input) as Usage3hEvent;
-}
+export const decodeUsage3hEvent = flow(decodeUsage3hEventUnknown, (event): Usage3hEvent => {
+  // SAFETY: The properties codec validates UsageCounters.fields; its spread erases the key-to-counter relationship from the inferred type.
+  return event as Usage3hEvent;
+});

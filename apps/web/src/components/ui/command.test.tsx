@@ -10,6 +10,7 @@ describe("command compact geometry", () => {
         <CommandInput placeholder="Search commands" />
       </Command>,
     );
+
     const shellClass = html.match(/class="([^"]*px-\[var\(--command-shell-inset\)[^"]*)"/)?.[1];
     const inputClass = html.match(/class="([^"]*has-focus-visible:ring-0[^"]*)"/)?.[1];
 

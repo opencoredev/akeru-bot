@@ -1,4 +1,3 @@
-// @effect-diagnostics nodeBuiltinImport:off
 import * as NodeFS from "node:fs";
 import * as NodeOS from "node:os";
 import * as NodePath from "node:path";
@@ -9,6 +8,7 @@ function fixture(run: (root: string, worktree: string) => void) {
   const root = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "akeru-setup-"));
   const worktree = NodePath.join(root, "worktree with spaces");
   NodeFS.mkdirSync(worktree);
+
   try {
     run(root, worktree);
   } finally {

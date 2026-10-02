@@ -18,14 +18,17 @@ const PROVIDER_ACCENT_SWATCHES = [
   "#0891b2",
 ] as const;
 
-const FALLBACK_ACCENT_COLOR = PROVIDER_ACCENT_SWATCHES[0];
+/** The stored accent as a hex color, or the first swatch when none is valid. */
+function resolveAccentColor(value: string | undefined): string {
+  return normalizeProviderAccentColor(value) ?? PROVIDER_ACCENT_SWATCHES[0];
+}
 
 function clamp(value: number, min = 0, max = 1) {
   return Math.min(max, Math.max(min, value));
 }
 
 function hexToHsv(hex: string) {
-  const normalized = normalizeProviderAccentColor(hex) ?? FALLBACK_ACCENT_COLOR;
+  const normalized = resolveAccentColor(hex);
   const numeric = Number.parseInt(normalized.slice(1), 16);
   const red = ((numeric >> 16) & 255) / 255;
   const green = ((numeric >> 8) & 255) / 255;
@@ -35,6 +38,7 @@ function hexToHsv(hex: string) {
   const delta = max - min;
 
   let hue = 0;
+
   if (delta !== 0) {
     if (max === red) {
       hue = ((green - blue) / delta) % 6;
@@ -43,7 +47,9 @@ function hexToHsv(hex: string) {
     } else {
       hue = (red - green) / delta + 4;
     }
+
     hue *= 60;
+
     if (hue < 0) hue += 360;
   }
 
@@ -58,6 +64,7 @@ function hsvToHex(hue: number, saturation: number, value: number) {
   const chroma = value * saturation;
   const x = chroma * (1 - Math.abs(((hue / 60) % 2) - 1));
   const match = value - chroma;
+
   const [red, green, blue] =
     hue < 60
       ? [chroma, x, 0]
@@ -125,12 +132,8 @@ function ProviderCustomColorPanel(props: {
   return (
     <div className="w-56 bg-popover">
       <div
-        className="relative h-36 cursor-crosshair touch-none"
-        style={{
-          backgroundColor: `hsl(${hsv.h} 100% 50%)`,
-          backgroundImage:
-            "linear-gradient(to top, #000, transparent), linear-gradient(to right, #fff, transparent)",
-        }}
+        className="relative h-36 cursor-crosshair touch-none bg-pure-hue bg-saturation-value-plane"
+        style={{ "--hue": String(hsv.h) }}
         onPointerDown={handlePointerDown(updateFromPlane)}
         onPointerMove={(event) => {
           if (event.currentTarget.hasPointerCapture(event.pointerId)) {
@@ -139,16 +142,13 @@ function ProviderCustomColorPanel(props: {
         }}
       >
         <span
-          className="pointer-events-none absolute size-3 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white shadow-[0_0_0_1px_rgb(0_0_0/0.35)]"
-          style={{ left: `${hsv.s * 100}%`, top: `${(1 - hsv.v) * 100}%` }}
+          className="pointer-events-none absolute top-(--thumb-top) left-(--thumb-left) size-3 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-on-solid ring-1 ring-shade/35"
+          style={{ "--thumb-left": `${hsv.s * 100}%`, "--thumb-top": `${(1 - hsv.v) * 100}%` }}
         />
       </div>
       <div className="grid gap-3 p-3">
         <div
-          className="relative h-3 cursor-pointer touch-none rounded-full"
-          style={{
-            background: "linear-gradient(to right, #f00, #ff0, #0f0, #0ff, #00f, #f0f, #f00)",
-          }}
+          className="relative h-3 cursor-pointer touch-none rounded-full bg-hue-spectrum"
           onPointerDown={handlePointerDown(updateFromHue)}
           onPointerMove={(event) => {
             if (event.currentTarget.hasPointerCapture(event.pointerId)) {
@@ -157,14 +157,15 @@ function ProviderCustomColorPanel(props: {
           }}
         >
           <span
-            className="pointer-events-none absolute top-1/2 size-4 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white shadow-[0_0_0_1px_rgb(0_0_0/0.35)]"
-            style={{ left: `${(hsv.h / 360) * 100}%`, backgroundColor: currentColor }}
+            className="pointer-events-none absolute top-1/2 left-(--thumb-left) size-4 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-on-solid ring-1 ring-shade/35 swatch-fill"
+            style={{ "--thumb-left": `${(hsv.h / 360) * 100}%`, "--swatch": currentColor }}
           />
         </div>
         <input
           value={currentColor}
           onChange={(event) => {
             const nextColor = event.currentTarget.value;
+
             if (!/^#[\da-f]{6}$/i.test(nextColor)) return;
             setHsv(hexToHsv(nextColor));
             props.onCommit(nextColor);
@@ -184,7 +185,7 @@ function ProviderCustomColorPicker(props: {
   readonly selected: boolean;
   readonly onCommit: (value: string) => void;
 }) {
-  const normalized = normalizeProviderAccentColor(props.value) ?? FALLBACK_ACCENT_COLOR;
+  const normalized = resolveAccentColor(props.value);
 
   return (
     <Popover>
@@ -193,17 +194,12 @@ function ProviderCustomColorPicker(props: {
           <button
             type="button"
             className={cn(
-              "flex size-6 cursor-pointer items-center justify-center rounded-full text-white transition-transform duration-200 active:scale-90",
+              "flex size-6 cursor-pointer items-center justify-center rounded-full swatch-fill text-on-solid transition-transform duration-200 active:scale-90",
               "hover:scale-105",
+              // The trigger wears the user's custom accent; selected adds a ring in that color.
+              props.selected && "swatch-ring",
             )}
-            style={{
-              backgroundColor: normalized,
-              ...(props.selected
-                ? {
-                    boxShadow: `inset 0 0 0 2px var(--card), 0 0 0 2px ${normalized}`,
-                  }
-                : {}),
-            }}
+            style={{ "--swatch": normalized }}
             aria-label={`Choose custom accent color for ${props.displayName}`}
           >
             <PipetteIcon className="size-3 text-foreground/25" aria-hidden />
@@ -214,7 +210,8 @@ function ProviderCustomColorPicker(props: {
         side="bottom"
         align="start"
         sideOffset={6}
-        className="overflow-hidden rounded-md p-0 [--viewport-inline-padding:0px] [&_[data-slot=popover-viewport]]:p-0"
+        className="overflow-hidden"
+        variant="accent-picker"
       >
         <ProviderCustomColorPanel value={normalized} onCommit={props.onCommit} />
       </PopoverPopup>
@@ -249,7 +246,9 @@ export function ProviderAccentColorPicker(props: {
       if (commitTimeoutRef.current !== null) {
         clearTimeout(commitTimeoutRef.current);
       }
+
       const pendingCommit = pendingCommitRef.current;
+
       if (pendingCommit !== null) {
         onCommitRef.current(pendingCommit);
       }
@@ -263,22 +262,28 @@ export function ProviderAccentColorPicker(props: {
 
       if (commitDelayMs <= 0) {
         pendingCommitRef.current = null;
+
         if (commitTimeoutRef.current !== null) {
           clearTimeout(commitTimeoutRef.current);
           commitTimeoutRef.current = null;
         }
+
         onCommit(normalizedValue);
+
         return;
       }
 
       pendingCommitRef.current = normalizedValue;
+
       if (commitTimeoutRef.current !== null) {
         clearTimeout(commitTimeoutRef.current);
       }
+
       commitTimeoutRef.current = setTimeout(() => {
         commitTimeoutRef.current = null;
         const pendingCommit = pendingCommitRef.current;
         pendingCommitRef.current = null;
+
         if (pendingCommit !== null) {
           onCommitRef.current(pendingCommit);
         }
@@ -288,11 +293,12 @@ export function ProviderAccentColorPicker(props: {
   );
 
   const normalized = normalizeProviderAccentColor(optimisticValue);
+
   const selectedValue =
-    normalized &&
-    PROVIDER_ACCENT_SWATCHES.includes(normalized as (typeof PROVIDER_ACCENT_SWATCHES)[number])
+    normalized && PROVIDER_ACCENT_SWATCHES.some((swatch) => swatch === normalized)
       ? normalized
       : "";
+
   const customSelected = Boolean(normalized && selectedValue === "");
 
   return (
@@ -316,11 +322,8 @@ export function ProviderAccentColorPicker(props: {
         <Button
           type="button"
           size="icon"
-          variant="ghost"
-          className={cn(
-            "size-7 shrink-0 text-muted-foreground transition-opacity",
-            normalized ? "opacity-100" : "pointer-events-none opacity-0",
-          )}
+          variant="ghost-fade"
+          className="size-7 shrink-0"
           onClick={() => commitAccentColor("")}
           aria-label={`Clear accent color for ${displayName}`}
           aria-hidden={!normalized}

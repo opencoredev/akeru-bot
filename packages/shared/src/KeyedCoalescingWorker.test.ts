@@ -74,6 +74,7 @@ describe("makeKeyedCoalescingWorker", () => {
               if (value === "first") {
                 yield* Deferred.succeed(firstStarted, undefined).pipe(Effect.orDie);
                 yield* Deferred.await(releaseFailure);
+
                 return yield* Effect.fail("boom");
               }
 

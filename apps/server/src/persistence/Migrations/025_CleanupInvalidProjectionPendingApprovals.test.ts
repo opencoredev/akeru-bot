@@ -165,6 +165,7 @@ layer("025_CleanupInvalidProjectionPendingApprovals", (it) => {
         FROM projection_pending_approvals
         ORDER BY request_id ASC
       `;
+
       assert.deepStrictEqual(approvalRows, [
         {
           requestId: "approval-valid",
@@ -182,6 +183,7 @@ layer("025_CleanupInvalidProjectionPendingApprovals", (it) => {
         FROM projection_threads
         ORDER BY thread_id ASC
       `;
+
       assert.deepStrictEqual(threadCounts, [
         {
           threadId: "thread-invalid",

@@ -1,3 +1,5 @@
+import { makeShellSnapshot } from "../test-support/fixtures";
+import { Match } from "effect";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import {
@@ -27,19 +29,24 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("@tanstack/react-router", () => ({ useNavigate: () => vi.fn() }));
+
 vi.mock("../../hooks/useSettings", () => ({ usePrimarySettings: () => ({}) }));
+
 vi.mock("../../modelSelection", () => ({
   getCustomModelOptionsByInstance: () => new Map(),
   resolveAppModelSelectionState: () => null,
 }));
+
 vi.mock("../../providerInstances", () => ({
   applyProviderInstanceSettings: () => [],
   deriveProviderInstanceEntries: () => [],
   sortProviderInstanceEntries: () => [],
 }));
+
 vi.mock("../../state/session", () => ({
   useEnvironmentSessionState: () => ({ data: null, isPending: false }),
 }));
+
 vi.mock("./useBotEngineAvailability", () => ({
   useBotEngineAvailability: () => ({
     instanceEntries: [],
@@ -48,57 +55,72 @@ vi.mock("./useBotEngineAvailability", () => ({
     blocked: false,
   }),
 }));
+
 vi.mock("./useServerRoster", () => ({
   useRosterLoadState: () => mocks.rosterLoadState,
   useEnableBotAutoReview: () => vi.fn(),
 }));
+
 vi.mock("@effect/atom-react", () => ({
-  useAtomValue: (atom: unknown) =>
-    atom === "people"
-      ? { current: null, host: null }
-      : atom === "snapshot"
-        ? mocks.snapshot
-        : atom === "bots"
-          ? []
-          : null,
+  useAtomValue: (atom: string) =>
+    Match.value(atom).pipe(
+      Match.when("people", () => ({ current: null, host: null })),
+      Match.when("snapshot", () => mocks.snapshot),
+      Match.when("bots", () => []),
+      Match.orElse(() => null),
+    ),
 }));
+
 vi.mock("../../state/bots", () => ({
   environmentPeopleAtom: () => "people",
   environmentBotsAtom: () => "bots",
   botEnvironment: { update: null },
 }));
+
 vi.mock("../../state/environments", () => ({
   usePrimaryEnvironmentId: () => EnvironmentId.make("environment-1"),
   useEnvironmentConnectionState: () => ({ data: null }),
 }));
+
 vi.mock("./detailsPanelOpen", () => ({
   useBotDetailsOpen: () => [false, () => undefined],
   useGroupDetailsOpen: () => [false, () => undefined],
 }));
+
 vi.mock("../chat/ChatActionsMenu", () => ({
   ChatActionsMenu: () => null,
   useMarkChatVisited: () => undefined,
 }));
+
 vi.mock("../../state/entities", () => ({ useThreadActivities: () => [] }));
+
 vi.mock("../../state/query", () => ({
   useEnvironmentQuery: () => ({ data: mocks.queryData, refresh: mocks.refreshHistory }),
 }));
+
 vi.mock("../../state/server", () => ({
   primaryServerProvidersAtom: null,
   serverEnvironment: { subscriptionAuth: () => null, routineThreadRuns: () => null },
 }));
+
 vi.mock("../../state/shell", () => ({ environmentSnapshotAtom: () => "snapshot" }));
+
 vi.mock("../../state/threads", () => ({ threadEnvironment: { setMessageReaction: null } }));
+
 vi.mock("../../state/use-atom-command", () => ({ useAtomCommand: () => vi.fn() }));
+
 vi.mock("../../settingsDialogStore", () => ({ openSettings: vi.fn() }));
+
 vi.mock("../voice/VoiceCall", () => ({
   BotVoiceCallButton: () => null,
   useVoiceCall: () => ({ activeCall: mocks.mediaBlocked, startingBotId: null }),
   useOptionalVoiceCall: () => ({ activeCall: mocks.mediaBlocked, startingBotId: null }),
   voiceEnvironmentConnectionLost: () => false,
 }));
+
 vi.mock("../chat/ReplyPlaybackProvider", () => {
   const synthesis = { provider: "test-provider", voice: "test-voice" };
+
   const session = {
     synthesisFor: () => synthesis,
     subscribeSynthesis: () => () => {},
@@ -108,25 +130,35 @@ vi.mock("../chat/ReplyPlaybackProvider", () => {
     observe: mocks.observe,
     actionFor: () => undefined,
   };
+
   return { useOptionalReplyPlayback: () => session };
 });
+
 vi.mock("../ui/sidebar", () => ({
-  SidebarInset: (props: unknown) => {
+  SidebarInset: (
+    props: import("react").ComponentProps<typeof import("../ui/sidebar").SidebarInset>,
+  ) => {
     mocks.landing(props);
+
     return null;
   },
 }));
+
 vi.mock("./botPresence", () => ({
   useBotPresence: () => "idle",
   useGroupPresence: () => "idle",
 }));
+
 vi.mock("./rosterStore", () => {
-  const useRosterStore = (
-    selector: (state: { groups: Group[]; bots: Bot[]; environmentId: string }) => unknown,
+  const useRosterStore = <T,>(
+    selector: (state: { groups: Group[]; bots: Bot[]; environmentId: string }) => T,
   ) => selector({ groups: mocks.groups, bots: mocks.bots, environmentId: "environment-1" });
+
   useRosterStore.getState = () => ({ selectBot: vi.fn() });
+
   return { useRosterStore };
 });
+
 vi.mock("./useBotThreadRuntime", () => ({
   useBotThreadRuntime: () => ({
     sending: false,
@@ -145,9 +177,11 @@ vi.mock("./useBotThreadRuntime", () => ({
     send: vi.fn(),
   }),
 }));
+
 vi.mock("./useRosterPendingApproval", () => ({
   useRosterPendingApproval: () => ({ pendingApproval: null }),
 }));
+
 vi.mock("./useGroupThreadRuntime", () => ({
   useGroupThreadRuntime: () => ({
     sending: false,
@@ -192,16 +226,19 @@ class TestNode {
   appendChild(child: TestNode) {
     child.parentNode = this;
     this.childNodes.push(child);
+
     return child;
   }
   removeChild(child: TestNode) {
     this.childNodes.splice(this.childNodes.indexOf(child), 1);
     child.parentNode = null;
+
     return child;
   }
   insertBefore(child: TestNode, before: TestNode) {
     child.parentNode = this;
     this.childNodes.splice(this.childNodes.indexOf(before), 0, child);
+
     return child;
   }
   createElement(name: string) {
@@ -227,6 +264,7 @@ const group: Group = {
   createdAt: "2026-09-08T00:00:00.000Z",
   updatedAt: "2026-09-08T00:00:00.000Z",
 };
+
 const bot: Bot = {
   id: "bot-1",
   name: "Akeru",
@@ -246,6 +284,7 @@ const bot: Bot = {
   createdAt: group.createdAt,
   updatedAt: group.updatedAt,
 };
+
 const message: OrchestrationMessage = {
   id: MessageId.make("reply-1"),
   role: "assistant",
@@ -255,6 +294,7 @@ const message: OrchestrationMessage = {
   createdAt: "2026-09-08T00:00:00.000Z",
   updatedAt: "2026-09-08T00:00:00.000Z",
 };
+
 let root: Root;
 
 beforeEach(() => {
@@ -274,7 +314,7 @@ beforeEach(() => {
     removeEventListener() {},
   });
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
-  root = createRoot(document.createElement("div") as unknown as Element);
+  root = createRoot(globalThis.document.createElement("div"));
 });
 
 afterEach(async () => {
@@ -289,24 +329,28 @@ async function render() {
 describe("thread landing reply playback hook order", () => {
   it("refreshes routine history when an open chat receives a new run", async () => {
     mocks.bots = [bot];
+
     const source = {
       id: RoutineId.make("routine-1"),
       targetThreadId: ThreadId.make("thread-bot"),
       job: "Daily report",
       createdAt: "2026-09-29T09:00:00.000Z",
     };
-    mocks.snapshot = {
+
+    mocks.snapshot = makeShellSnapshot({
       routineReceiptSources: [source],
       routineRuns: [],
       delegations: [],
-    } as unknown as OrchestrationShellSnapshot;
+    });
+
     const renderBot = async () => {
       await act(async () => root.render(<BotThreadLanding botId={bot.id} />));
     };
+
     await renderBot();
     expect(mocks.refreshHistory).not.toHaveBeenCalled();
 
-    mocks.snapshot = {
+    mocks.snapshot = makeShellSnapshot({
       routineReceiptSources: [source],
       delegations: [],
       routineRuns: [
@@ -318,7 +362,7 @@ describe("thread landing reply playback hook order", () => {
           updatedAt: "2026-09-29T09:01:00.000Z",
         },
       ],
-    } as unknown as OrchestrationShellSnapshot;
+    });
     await renderBot();
     expect(mocks.refreshHistory).toHaveBeenCalledTimes(1);
   });
@@ -329,9 +373,11 @@ describe("thread landing reply playback hook order", () => {
       const unavailableBots = state === "missing" ? [] : [{ ...bot, archivedAt: bot.updatedAt }];
       mocks.bots = unavailableBots;
       mocks.messages = [message];
+
       const renderBot = async () => {
         await act(async () => root.render(<BotThreadLanding botId={bot.id} />));
       };
+
       await renderBot();
       expect(mocks.landing).not.toHaveBeenCalled();
       expect(mocks.setContext).toHaveBeenLastCalledWith(null);

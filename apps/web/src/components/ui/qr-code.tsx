@@ -32,6 +32,7 @@ function buildQrPathData(qrCode: ReturnType<typeof QrCode.encodeText>, marginSiz
         if (runStart === -1) {
           runStart = x;
         }
+
         continue;
       }
 

@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import {
   createDictationSession,
   type DictationDependencies,
@@ -15,6 +16,7 @@ export function createBrowserDictationSession(
     {
       ...dependencies,
       schedule: (callback, milliseconds) => globalThis.setTimeout(callback, milliseconds),
+      // SAFETY: The dictation controller returns the opaque handle created by this same setTimeout scheduler.
       cancelSchedule: (timer) => globalThis.clearTimeout(timer as ReturnType<typeof setTimeout>),
       capture: async ({ signal, limits, onError }) => {
         const capture = await startDictationCapture(
@@ -25,12 +27,15 @@ export function createBrowserDictationSession(
           },
           captureDependencies,
         );
+
         void capture.result.catch(onError);
         const startedAt = performance.now();
+
         return {
           stop: async () => {
             const stoppedAt = performance.now();
             const blob = await capture.release();
+
             return {
               bytes: new Uint8Array(await blob.arrayBuffer()),
               mediaType: blob.type,
@@ -51,13 +56,15 @@ export function browserDictationCaptureReason(
     readonly isSecureContext?: boolean;
     readonly navigator?: { readonly mediaDevices?: { readonly getUserMedia?: unknown } };
     readonly MediaRecorder?: unknown;
-  } = globalThis as never,
+  } = globalThis,
 ): string | null {
   if (scope.isSecureContext === false) {
     return "The browser only opens the microphone on HTTPS pages. Open this page over HTTPS.";
   }
-  if (typeof scope.navigator?.mediaDevices?.getUserMedia !== "function" || !scope.MediaRecorder) {
+
+  if (!Predicate.isFunction(scope.navigator?.mediaDevices?.getUserMedia) || !scope.MediaRecorder) {
     return "This browser can't record audio.";
   }
+
   return null;
 }

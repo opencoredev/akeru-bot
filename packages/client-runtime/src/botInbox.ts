@@ -16,6 +16,7 @@ export function selectOpenBotInboxItems(
 }
 
 export type BotInboxRepairDestination = "providers" | "plugins";
+
 export type BotInboxRowAction = BotInboxRepairDestination | "resolve" | "memory-approval";
 
 /**
@@ -24,9 +25,11 @@ export type BotInboxRowAction = BotInboxRepairDestination | "resolve" | "memory-
  */
 export function botInboxRepairDestination(item: BotInboxItem): BotInboxRepairDestination | null {
   if (item.incidentKey.startsWith("access:mcp-")) return "plugins";
+
   if (item.incidentKey.startsWith("connector:") || item.incidentKey.startsWith("access:")) {
     return "providers";
   }
+
   return null;
 }
 
@@ -37,6 +40,7 @@ export function botInboxRepairDestination(item: BotInboxItem): BotInboxRepairDes
  */
 export function botInboxRowAction(item: BotInboxItem): BotInboxRowAction {
   if (item.memoryApproval) return "memory-approval";
+
   return botInboxRepairDestination(item) ?? "resolve";
 }
 
@@ -63,16 +67,19 @@ export function botInboxKindLabel(kind: BotInboxItem["kind"]): MessageKey {
  * and names the fact once. The server's English prose in lastFailure and nextAction stays
  * for older clients. `sensitive` is null unless the fact always needs approval.
  */
-export function botInboxItemCopy(
-  item: BotInboxItem,
-  t: (message: MessageKey, params?: TranslationParams) => string,
-): {
+type BotInboxItemCopyResult = {
   readonly kind: string;
   readonly detail: string;
   readonly nextAction: string;
   readonly sensitive: string | null;
-} {
+};
+
+export function botInboxItemCopy(
+  item: BotInboxItem,
+  t: (message: MessageKey, params?: TranslationParams) => string,
+): BotInboxItemCopyResult {
   const approval = item.memoryApproval;
+
   if (approval) {
     return {
       kind: t("Memory approval"),
@@ -81,6 +88,7 @@ export function botInboxItemCopy(
       sensitive: approval.sensitive ? t("Sensitive, always needs approval") : null,
     };
   }
+
   return {
     kind: t(botInboxKindLabel(item.kind)),
     detail: item.lastFailure,

@@ -8,10 +8,12 @@ import { useEnvironments } from "./environments";
 export function useWorkspaceState() {
   const { isReady, networkStatus, environments } = useEnvironments();
   const shellSummary = useAtomValue(environmentShellSummaryAtom);
+
   const projectedEnvironments = useMemo(
     () => environments.map(projectWorkspaceEnvironment),
     [environments],
   );
+
   const state = useMemo(
     () =>
       projectWorkspaceState({

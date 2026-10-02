@@ -44,6 +44,7 @@ describe("shouldLiveRefresh", () => {
     const hour = 60 * 60_000;
     let lastRefreshedAt = 0;
     let reads = 0;
+
     const tick = (now: number, visible: boolean) => {
       if (!at(now, lastRefreshedAt, visible)) return;
       lastRefreshedAt = now;
@@ -53,6 +54,7 @@ describe("shouldLiveRefresh", () => {
     for (let now = LIVE_REFRESH_INTERVAL_MS; now < hour; now += LIVE_REFRESH_INTERVAL_MS) {
       tick(now, false);
     }
+
     // Coming back raises a visibility change and a focus event, one straight after the other.
     tick(hour, true);
     tick(hour, true);

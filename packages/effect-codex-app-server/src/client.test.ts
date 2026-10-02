@@ -16,12 +16,15 @@ import * as CodexClient from "./client.ts";
 import { makeInMemoryStdio } from "./_internal/stdio.ts";
 
 const encodeJson = Schema.encodeUnknownSync(Schema.fromJsonString(Schema.Unknown));
+
 const decodeJson = Schema.decodeEffect(Schema.fromJsonString(Schema.Unknown));
+
 const encoder = new TextEncoder();
 
 const mockPeerPath = Effect.map(Effect.service(Path.Path), (path) =>
   path.join(import.meta.dirname, "../test/fixtures/codex-app-server-mock-peer.ts"),
 );
+
 const mockPeerArgs = (path: string) => [path];
 
 it.layer(NodeServices.layer)("effect-codex-app-server client", (it) => {
@@ -35,10 +38,12 @@ it.layer(NodeServices.layer)("effect-codex-app-server client", (it) => {
       () =>
         Effect.gen(function* () {
           const { stdio, input, output } = yield* makeInMemoryStdio();
+
           const client = yield* CodexClient.make(stdio, {
             rawNotificationBufferSize,
             rawRequestBufferSize,
           });
+
           let notifications = 0;
           let requests = 0;
           yield* client.handleUnknownServerNotification(() =>
@@ -49,9 +54,11 @@ it.layer(NodeServices.layer)("effect-codex-app-server client", (it) => {
           yield* client.handleUnknownServerRequest(() =>
             Effect.sync(() => {
               requests++;
+
               return { ok: true };
             }),
           );
+
           for (const index of [0, 1, 2]) {
             yield* Queue.offer(
               input,
@@ -66,17 +73,22 @@ it.layer(NodeServices.layer)("effect-codex-app-server client", (it) => {
               result: { ok: true },
             });
           }
+
           const notificationCount =
             rawNotificationBufferSize === "unbounded" ? 3 : rawNotificationBufferSize;
+
           const requestCount = rawRequestBufferSize === "unbounded" ? 3 : rawRequestBufferSize;
+
           const rawNotifications = yield* client.raw.notifications.pipe(
             Stream.take(notificationCount),
             Stream.runCollect,
           );
+
           const rawRequests = yield* client.raw.requests.pipe(
             Stream.take(requestCount),
             Stream.runCollect,
           );
+
           assert.deepEqual(
             rawNotifications.map((notification) => notification.params),
             [0, 1, 2].slice(3 - notificationCount),
@@ -96,10 +108,12 @@ it.layer(NodeServices.layer)("effect-codex-app-server client", (it) => {
       const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
       const path = yield* Path.Path;
       const peerCwd = path.join(import.meta.dirname, "..");
+
       const command = ChildProcess.make(process.execPath, mockPeerArgs(yield* mockPeerPath), {
         cwd: peerCwd,
         ...(env ? { env: { ...process.env, ...env } } : {}),
       });
+
       return yield* spawner.spawn(command);
     });
 
@@ -142,6 +156,7 @@ it.layer(NodeServices.layer)("effect-codex-app-server client", (it) => {
             optOutNotificationMethods: null,
           },
         });
+
         assert.equal(initialized.userAgent, "mock-codex-app-server");
 
         yield* client.notify("initialized", undefined);
@@ -204,12 +219,14 @@ it.layer(NodeServices.layer)("effect-codex-app-server client", (it) => {
       const handle = yield* makeHandle({
         CODEX_APP_SERVER_TEST_STDERR_BYTES: String(512 * 1024),
       });
+
       const scope = yield* Scope.make();
       const clientLayer = CodexClient.layerChildProcess(handle);
       const context = yield* Layer.buildWithScope(clientLayer, scope);
 
       const initialized = yield* Effect.gen(function* () {
         const client = yield* CodexClient.CodexAppServerClient;
+
         return yield* client.request("initialize", {
           clientInfo: {
             name: "effect-codex-app-server-test",

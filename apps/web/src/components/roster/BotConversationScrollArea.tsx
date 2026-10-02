@@ -48,9 +48,11 @@ export function BotConversationScrollArea({
   useEffect(() => {
     const viewport = viewportRef.current;
     const content = contentRef.current;
+
     if (!viewport || !content) return;
 
     let lastMetrics = readMetrics(viewport);
+
     const updateScrollState = () => {
       const metrics = readMetrics(viewport);
       const nextIsAtEnd = isConversationAtEnd(metrics);
@@ -69,6 +71,7 @@ export function BotConversationScrollArea({
       if (followStateRef.current.followingEnd) {
         viewport.scrollTop = viewport.scrollHeight;
       }
+
       updateScrollState();
     };
 
@@ -87,6 +90,7 @@ export function BotConversationScrollArea({
 
   useEffect(() => {
     const viewport = viewportRef.current;
+
     if (!followKey || !viewport) return;
     dispatch({ type: "scroll-to-end" });
     viewport.scrollTop = viewport.scrollHeight;
@@ -94,6 +98,7 @@ export function BotConversationScrollArea({
 
   const scrollToEnd = () => {
     const viewport = viewportRef.current;
+
     if (!viewport) return;
     dispatch({ type: "scroll-to-end" });
     viewport.scrollTo({ top: viewport.scrollHeight, behavior: "smooth" });
@@ -103,7 +108,7 @@ export function BotConversationScrollArea({
     <div className="flex min-h-0 flex-1 flex-col" data-testid="bot-conversation-scroll-area">
       <div
         ref={viewportRef}
-        className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pt-6 pb-1 [scrollbar-gutter:stable_both-edges] sm:px-6"
+        className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pt-6 pb-1 scrollbar-gutter-stable-both sm:px-6"
         data-testid="bot-conversation-viewport"
         onWheel={(event) => {
           if (event.deltaY < 0) dispatch({ type: "user-navigation" });
@@ -121,10 +126,9 @@ export function BotConversationScrollArea({
         {!isAtEnd ? (
           <Button
             type="button"
-            variant="outline"
+            variant="outline-pill-muted"
             size="icon-sm"
             aria-label={t("Scroll to latest message")}
-            className="rounded-full text-muted-foreground shadow-xs hover:text-foreground"
             onClick={scrollToEnd}
           >
             <ArrowDownIcon className="size-4" />

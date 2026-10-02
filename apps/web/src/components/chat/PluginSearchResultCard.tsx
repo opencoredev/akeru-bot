@@ -17,6 +17,7 @@ function recommendationActionLabel(
   t: (key: MessageKey) => string,
 ): string {
   if (recommendation.action === "install") return t("Install");
+
   if (
     recommendation.action === "connect" &&
     recommendationUsesComposio(recommendation) &&
@@ -24,17 +25,23 @@ function recommendationActionLabel(
   ) {
     return t("Set up");
   }
+
   if (recommendation.action === "connect") return t("Connect");
+
   if (recommendation.action === "unavailable") return t("Unavailable");
+
   return t("Manage");
 }
 
 function recommendationLogo(recommendation: AkeruPluginRecommendation): string | undefined {
   if (recommendation.logoUrl) return recommendation.logoUrl;
+
   if (recommendation.source === "composio") {
     const slug = recommendation.id.replace(/^composio:/, "");
+
     return `https://logos.composio.dev/api/${encodeURIComponent(slug)}`;
   }
+
   return recommendation.source === "directory"
     ? DIRECTORY_PLUGINS.get(recommendation.id)?.logo.src
     : undefined;
@@ -43,6 +50,7 @@ function recommendationLogo(recommendation: AkeruPluginRecommendation): string |
 function recommendationProviderLabel(recommendation: AkeruPluginRecommendation): string {
   if (recommendation.source === "composio") return "Composio";
   const plugin = DIRECTORY_PLUGINS.get(recommendation.id);
+
   return plugin?.connection.type === "brokered" ? plugin.connection.broker.name : "Akeru";
 }
 
@@ -59,15 +67,18 @@ export const PluginSearchResultCard = memo(function PluginSearchResultCard({
 }) {
   const { t } = useI18n();
   const recommendation = result.recommendations[0];
+
   if (!recommendation) return null;
 
   const logo = recommendationLogo(recommendation);
   const action = recommendationActionLabel(recommendation, result.sources.composio, t);
   const connected = recommendation.action === "open";
+
   const setupRequired =
     recommendation.action === "connect" &&
     recommendationUsesComposio(recommendation) &&
     result.sources.composio === "setup-required";
+
   return (
     <section
       aria-label={t("{name} plugin", { name: recommendation.name })}
@@ -86,12 +97,12 @@ export const PluginSearchResultCard = memo(function PluginSearchResultCard({
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
           <p className="truncate text-sm font-medium">{recommendation.name}</p>
-          <span className="shrink-0 text-[11px] text-muted-foreground">
+          <span className="shrink-0 text-11px text-muted-foreground">
             {recommendationProviderLabel(recommendation)}
           </span>
         </div>
         {connected ? (
-          <p className="flex items-center gap-1 text-xs text-emerald-500">
+          <p className="flex items-center gap-1 text-xs text-plugin-connected">
             <CheckCircle2Icon aria-hidden="true" className="size-3" />
             {t("Connected")}
           </p>
@@ -103,7 +114,8 @@ export const PluginSearchResultCard = memo(function PluginSearchResultCard({
       </div>
       <Button
         aria-label={t("{action} {name}", { action, name: recommendation.name })}
-        className="h-8 rounded-full px-3.5 text-xs"
+        presentation="plugin-action"
+        className="h-8"
         disabled={recommendation.action === "unavailable"}
         size="sm"
         variant="secondary"

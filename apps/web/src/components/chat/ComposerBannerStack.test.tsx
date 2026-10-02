@@ -24,8 +24,8 @@ describe("ComposerBannerStack", () => {
       /<div data-composer-banner-stack-expanded-items="true" class="([^"]+)">/,
     );
 
-    expect(expandedItems?.[1]).toContain("grid-rows-[0fr]");
-    expect(expandedItems?.[1]).toContain("group-hover/banner-stack:grid-rows-[1fr]");
+    expect(expandedItems?.[1]).toContain("grid-rows-collapsed");
+    expect(expandedItems?.[1]).toContain("group-hover/banner-stack:grid-rows-expanded");
     expect(expandedItems?.[1]).toContain("z-20");
     expect(expandedItems?.[1]).not.toContain("absolute");
     expect(markup.indexOf("front warning")).toBeLessThan(markup.indexOf("stacked warning"));
@@ -37,6 +37,7 @@ describe("ComposerBannerStack", () => {
     const neutralBehind = renderToStaticMarkup(
       <ComposerBannerStack items={[banner("front", "default"), banner("stacked", "default")]} />,
     );
+
     expect(neutralBehind).toContain("chat-composer-banner-stack-cap");
     expect(neutralBehind).toContain("border-[var(--chat-composer-attached-outline)]");
     expect(neutralBehind).not.toContain("border-border");
@@ -45,6 +46,7 @@ describe("ComposerBannerStack", () => {
     const warningBehind = renderToStaticMarkup(
       <ComposerBannerStack items={[banner("front", "default"), banner("stacked", "warning")]} />,
     );
+
     expect(warningBehind).toContain("border-warning/24");
   });
 
@@ -53,7 +55,7 @@ describe("ComposerBannerStack", () => {
     const successRoot = renderToStaticMarkup(<ComposerBanner.Root variant="success" />);
 
     for (const markup of [infoRoot, successRoot]) {
-      expect(markup).toContain("--chat-composer-attached-outline:var(--chat-composer-outline");
+      expect(markup).toContain("composer-banner-outline-neutral");
       expect(markup).not.toContain("--chat-composer-attached-tint:color-mix");
     }
 
@@ -61,6 +63,7 @@ describe("ComposerBannerStack", () => {
       const stack = renderToStaticMarkup(
         <ComposerBannerStack items={[banner(variant, variant)]} />,
       );
+
       expect(stack).toContain('data-variant="default"');
       expect(stack).not.toContain(`border-${variant}/32`);
       expect(stack).not.toContain(`bg-${variant}/4`);
@@ -77,27 +80,9 @@ describe("ComposerBannerStack", () => {
     expect(markup).toContain("text-xs");
     expect(markup).toContain('data-composer-banner-drawer="true"');
     expect(markup).toContain('data-variant="warning"');
-    expect(markup).toContain("transform:none");
+    expect(markup).toContain("transform-none");
     expect(markup).not.toContain("will-change:transform");
   });
-  it("applies item-specific surface and action layout classes", () => {
-    const markup = renderToStaticMarkup(
-      <ComposerBannerStack
-        items={[
-          {
-            ...banner("branch"),
-            className: "branch-surface",
-            actionClassName: "branch-actions",
-            actions: <button type="button">Repair</button>,
-          },
-        ]}
-      />,
-    );
-
-    expect(markup).toContain("branch-surface");
-    expect(markup).toContain("branch-actions");
-  });
-
   it("renders a disabled compaction action on the shared accessible banner surface", () => {
     const markup = renderToStaticMarkup(
       <ComposerBannerStack

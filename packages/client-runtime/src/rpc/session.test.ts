@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import {
   DEFAULT_SERVER_SETTINGS,
   EnvironmentId,
@@ -21,40 +22,43 @@ import {
 import * as RpcSession from "./session.ts";
 
 type SocketEventType = "open" | "message" | "close" | "error";
+
 type SocketEvent = {
   readonly code?: number;
   readonly data?: unknown;
   readonly reason?: string;
   readonly type: SocketEventType;
 };
-type SocketListener = (event: SocketEvent) => void;
 
-class TestWebSocket {
+class TestWebSocket extends EventTarget implements WebSocket {
   static readonly CONNECTING = 0;
   static readonly OPEN = 1;
   static readonly CLOSING = 2;
   static readonly CLOSED = 3;
 
-  readyState = TestWebSocket.CONNECTING;
+  readyState: WebSocket["readyState"] = TestWebSocket.CONNECTING;
   readonly sent: string[] = [];
   readonly url: string;
-  private readonly listeners = new Map<SocketEventType, Set<SocketListener>>();
+  readonly CONNECTING = 0;
+  readonly OPEN = 1;
+  readonly CLOSING = 2;
+  readonly CLOSED = 3;
+  readonly bufferedAmount = 0;
+  readonly extensions = "";
+  readonly protocol = "";
+  binaryType: BinaryType = "arraybuffer";
+  onopen: WebSocket["onopen"] = null;
+  onclose: WebSocket["onclose"] = null;
+  onerror: WebSocket["onerror"] = null;
+  onmessage: WebSocket["onmessage"] = null;
 
   constructor(url: string) {
+    super();
     this.url = url;
   }
 
-  addEventListener(type: SocketEventType, listener: SocketListener) {
-    const listeners = this.listeners.get(type) ?? new Set<SocketListener>();
-    listeners.add(listener);
-    this.listeners.set(type, listeners);
-  }
-
-  removeEventListener(type: SocketEventType, listener: SocketListener) {
-    this.listeners.get(type)?.delete(listener);
-  }
-
-  send(data: string) {
+  send(data: Parameters<WebSocket["send"]>[0]) {
+    if (!Predicate.isString(data)) throw new Error("The RPC fixture expects text frames.");
     this.sent.push(data);
   }
 
@@ -62,6 +66,7 @@ class TestWebSocket {
     if (this.readyState === TestWebSocket.CLOSED) {
       return;
     }
+
     this.readyState = TestWebSocket.CLOSED;
     this.emit("close", { code, reason, type: "close" });
   }
@@ -76,9 +81,8 @@ class TestWebSocket {
   }
 
   private emit(type: SocketEventType, event: SocketEvent) {
-    for (const listener of this.listeners.get(type) ?? []) {
-      listener(event);
-    }
+    const { type: _type, ...fields } = event;
+    this.dispatchEvent(Object.assign(new Event(type), fields));
   }
 }
 
@@ -138,11 +142,17 @@ const RpcRequest = Schema.TaggedStruct("Request", {
   payload: Schema.Unknown,
   tag: Schema.String,
 });
+
 const decodeJson = Schema.decodeUnknownSync(Schema.fromJsonString(Schema.Unknown));
+
 const decodeRpcRequest = Schema.decodeUnknownSync(RpcRequest);
+
 const encodeJson = Schema.encodeUnknownSync(Schema.fromJsonString(Schema.Unknown));
+
 const encodeServerConfig = Schema.encodeSync(ServerConfig);
+
 const ENCODED_SERVER_CONFIG = encodeServerConfig(SERVER_CONFIG);
+
 const LEGACY_SERVER_CONFIG = {
   ...ENCODED_SERVER_CONFIG,
   environment: {
@@ -155,13 +165,17 @@ const LEGACY_SERVER_CONFIG = {
 
 const makeFactory = Effect.fn("TestRpcSessionFactory.make")(function* () {
   const sockets: TestWebSocket[] = [];
+
   const constructorLayer = Layer.succeed(Socket.WebSocketConstructor, (url) => {
     const socket = new TestWebSocket(url);
     sockets.push(socket);
-    return socket as unknown as globalThis.WebSocket;
+
+    return socket;
   });
+
   const layer = RpcSession.layer.pipe(Layer.provide(constructorLayer));
   const factory = yield* RpcSession.RpcSessionFactory.pipe(Effect.provide(layer));
+
   return { factory, sockets };
 });
 
@@ -170,11 +184,14 @@ const awaitSocket = Effect.fn("TestRpcSessionFactory.awaitSocket")(function* (
 ) {
   for (let attempt = 0; attempt < 100; attempt += 1) {
     const socket = sockets[0];
+
     if (socket) {
       return socket;
     }
+
     yield* Effect.yieldNow;
   }
+
   return yield* Effect.die(new Error("Expected the RPC protocol to create a websocket."));
 });
 
@@ -184,17 +201,20 @@ const awaitRequest = Effect.fn("TestRpcSessionFactory.awaitRequest")(function* (
 ) {
   for (let attempt = 0; attempt < 100; attempt += 1) {
     const request = socket.sent[index];
+
     if (request) {
       return decodeRpcRequest(decodeJson(request));
     }
+
     yield* Effect.yieldNow;
   }
+
   return yield* Effect.die(new Error("Expected the RPC protocol to send a request."));
 });
 
 const completeInitialConfig = Effect.fn("TestRpcSessionFactory.completeInitialConfig")(function* (
   socket: TestWebSocket,
-  config: unknown = ENCODED_SERVER_CONFIG,
+  config: Parameters<typeof encodeJson>[0] = ENCODED_SERVER_CONFIG,
 ) {
   const request = yield* awaitRequest(socket);
   expect(request).toMatchObject({
@@ -330,6 +350,7 @@ describe("RpcSessionFactory", () => {
         altKey: false,
         modKey: true,
       };
+
       yield* completeInitialConfig(socket, {
         ...ENCODED_SERVER_CONFIG,
         keybindings: [
@@ -398,6 +419,7 @@ describe("RpcSessionFactory", () => {
           yield* awaitSocket(sockets);
 
           yield* TestClock.adjust("15 seconds");
+
           return yield* Fiber.join(readyFiber);
         }),
       );

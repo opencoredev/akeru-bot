@@ -26,22 +26,29 @@ export function shouldShowWorkspaceConnectionStatus(state: WorkspaceState): bool
 
 export function workspaceConnectionStatusLabel(state: WorkspaceState, t: TranslateMessage): string {
   if (state.networkStatus === "offline") return t("You are offline");
+
   // A connected environment's sync outranks another environment reconnecting.
   if (state.hasPendingShellSnapshot && state.hasReadyEnvironment) {
     return shellSyncLabel(state, t);
   }
+
   const connectingCount = state.connectingEnvironments.length;
+
   if (connectingCount === 1) {
     return t("Reconnecting to {environment}…", {
       environment: state.connectingEnvironments[0]!.environmentLabel,
     });
   }
+
   if (connectingCount > 1) {
     return t("Reconnecting {count} environments…", { count: connectingCount });
   }
+
   // A syncing shell outranks an error that may belong to another environment.
   if (state.hasPendingShellSnapshot) return shellSyncLabel(state, t);
+
   if (state.connectionError !== null) return state.connectionError;
+
   return t("Not connected");
 }
 
@@ -55,6 +62,7 @@ export function workspaceConnectionStatusPresentation(
   t: TranslateMessage,
 ): WorkspaceConnectionStatusPresentation | null {
   if (!shouldShowWorkspaceConnectionStatus(state)) return null;
+
   return {
     label: workspaceConnectionStatusLabel(state, t),
     showsProgress:

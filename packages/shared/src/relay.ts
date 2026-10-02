@@ -21,9 +21,11 @@ const equalSecret = (left: string, right: string): boolean => {
   const rightBytes = utf8.encode(right);
   const length = Math.max(leftBytes.length, rightBytes.length);
   let difference = leftBytes.length ^ rightBytes.length;
+
   for (let index = 0; index < length; index += 1) {
     difference |= (leftBytes[index] ?? 0) ^ (rightBytes[index] ?? 0);
   }
+
   return difference === 0;
 };
 
@@ -37,12 +39,15 @@ export const validateRelayRouteBinding = (input: {
   if (input.offered.protocolVersion !== input.expected.protocolVersion) {
     return { ok: false, reason: "unsupported-protocol" };
   }
+
   if (input.offered.routeId !== input.expected.routeId) {
     return { ok: false, reason: "route-mismatch" };
   }
+
   if (input.offered.environmentId !== input.expected.environmentId) {
     return { ok: false, reason: "environment-mismatch" };
   }
+
   return { ok: true };
 };
 
@@ -57,6 +62,7 @@ export const validateRelayEnrollmentSecret = (input: {
   if (!input.provided?.trim()) {
     return { ok: false, reason: "missing-enrollment-secret" };
   }
+
   return equalSecret(input.provided, input.expected)
     ? { ok: true }
     : { ok: false, reason: "enrollment-secret-mismatch" };
@@ -70,7 +76,9 @@ export const validateRelayAttachment = (input: {
   readonly expectedEnrollmentSecret: string;
 }): RelayAttachmentValidation => {
   const binding = validateRelayRouteBinding(input);
+
   if (!binding.ok) return binding;
+
   return validateRelayEnrollmentSecret({
     provided: input.enrollmentSecret,
     expected: input.expectedEnrollmentSecret,

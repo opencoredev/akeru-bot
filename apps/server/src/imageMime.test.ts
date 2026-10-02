@@ -75,8 +75,10 @@ describe("imageMime", () => {
     // stack, so a ~10 MB image parsed inside fiber execution threw
     // "RangeError: Maximum call stack size exceeded".
     const dataUrl = `data:image/png;base64,${"A".repeat(14_000_000)}`;
+
     const atDepth = (depth: number): ReturnType<typeof parseBase64DataUrl> =>
       depth === 0 ? parseBase64DataUrl(dataUrl) : atDepth(depth - 1);
+
     const findMaxDepth = (depth: number): number => {
       try {
         return findMaxDepth(depth + 1);
@@ -84,6 +86,7 @@ describe("imageMime", () => {
         return depth;
       }
     };
+
     const result = atDepth(Math.floor(findMaxDepth(0) * 0.85));
     expect(result?.mimeType).toBe("image/png");
     expect(result?.base64.length).toBe(14_000_000);

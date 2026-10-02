@@ -6,5 +6,6 @@ export function replyReadoutMessageAction(
   message: Pick<OrchestrationMessage, "role" | "streaming" | "text">,
 ) {
   if (message.role !== "assistant" || message.streaming) return null;
+
   return replyMarkdownToSpokenText(message.text);
 }

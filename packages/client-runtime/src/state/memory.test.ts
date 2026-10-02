@@ -1,3 +1,4 @@
+import { testRpcClient, testEnvironmentRegistry } from "../test-support/services.ts";
 import { EnvironmentId, ThreadId, WS_METHODS } from "@akeru/contracts";
 import { expect, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
@@ -15,7 +16,7 @@ import {
 } from "../connection/model.ts";
 import * as EnvironmentRegistry from "../connection/registry.ts";
 import * as EnvironmentSupervisor from "../connection/supervisor.ts";
-import type { WsRpcProtocolClient } from "../rpc/protocol.ts";
+
 import type { RpcSession } from "../rpc/session.ts";
 import { createMemoryEnvironmentAtoms } from "./memory.ts";
 
@@ -25,7 +26,8 @@ it.effect("routes memory commands and refreshes inspection after changes", () =>
   Effect.scoped(
     Effect.gen(function* () {
       const calls: string[] = [];
-      const client = {
+
+      const client = testRpcClient({
         [WS_METHODS.memoryExport]: () =>
           Effect.sync(() => calls.push(WS_METHODS.memoryExport)).pipe(
             Effect.as({ schemaVersion: 2 } as never),
@@ -39,7 +41,8 @@ it.effect("routes memory commands and refreshes inspection after changes", () =>
           Effect.sync(() => calls.push(WS_METHODS.memoryObservationsClear)).pipe(
             Effect.as(undefined as never),
           ),
-      } as unknown as WsRpcProtocolClient;
+      });
+
       const session: RpcSession = {
         client,
         initialConfig: Effect.never,
@@ -47,6 +50,7 @@ it.effect("routes memory commands and refreshes inspection after changes", () =>
         probe: Effect.void,
         closed: Effect.never,
       };
+
       const supervisor = EnvironmentSupervisor.EnvironmentSupervisor.of({
         target: new PrimaryConnectionTarget({
           environmentId,
@@ -69,30 +73,36 @@ it.effect("routes memory commands and refreshes inspection after changes", () =>
         retryNow: Effect.void,
         retryIfDesired: Effect.void,
       } satisfies EnvironmentSupervisor.EnvironmentSupervisor["Service"]);
+
       const run: EnvironmentRegistry.EnvironmentRegistry["Service"]["run"] = (_id, effect) =>
         Effect.provideService(effect, EnvironmentSupervisor.EnvironmentSupervisor, supervisor);
+
       const atoms = createMemoryEnvironmentAtoms(
         Atom.runtime(
           Layer.succeed(
             EnvironmentRegistry.EnvironmentRegistry,
-            EnvironmentRegistry.EnvironmentRegistry.of({
+            testEnvironmentRegistry({
               run,
-            } as unknown as EnvironmentRegistry.EnvironmentRegistry["Service"]),
+            }),
           ),
         ),
       );
+
       const registry = yield* Effect.acquireRelease(Effect.sync(AtomRegistry.make), (value) =>
         Effect.sync(() => value.dispose()),
       );
+
       const refresh = vi.spyOn(registry, "refresh");
       const threadId = ThreadId.make("thread-memory");
 
       // Another chat's mounted list shares bot and project facts with this chat.
       const otherThreadId = ThreadId.make("thread-memory-other");
+
       const otherProjectList = atoms.listFacts({
         environmentId,
         input: { threadId: otherThreadId, target: "project" },
       });
+
       const unmount = registry.mount(otherProjectList);
       yield* Effect.addFinalizer(() => Effect.sync(unmount));
       const unmountedOtherThreadId = ThreadId.make("thread-memory-unmounted");
@@ -107,6 +117,7 @@ it.effect("routes memory commands and refreshes inspection after changes", () =>
           input: { threadId, target: "thread", complete: true },
         }),
       );
+
       const cleared = yield* Effect.promise(() =>
         atoms.clearObservations.run(registry, {
           environmentId,
@@ -136,12 +147,14 @@ it.effect("routes memory commands and refreshes inspection after changes", () =>
         WS_METHODS.memoryObservationsClear,
         WS_METHODS.memoryFactMutate,
       ]);
+
       // A mutation can move a fact between scopes, so every listed scope refreshes.
       for (const target of ["thread", "bot", "project"] as const) {
         expect(refresh).toHaveBeenCalledWith(
           atoms.listFacts({ environmentId, input: { threadId, target } }),
         );
       }
+
       expect(refresh).toHaveBeenCalledWith(otherProjectList);
       expect(refresh).not.toHaveBeenCalledWith(
         atoms.listFacts({

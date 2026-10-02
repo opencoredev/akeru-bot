@@ -2,6 +2,7 @@ import type { McpServer } from "@akeru/contracts";
 import type * as EffectAcpSchema from "effect-acp/schema";
 
 const runtimeHeaders = new WeakMap<McpServer, Readonly<Record<string, string>>>();
+
 const BROWSER_ATTACHMENT_CONNECTORS: ReadonlySet<string> = new Set([
   "builtin-executor",
   "builtin-tinyfish",
@@ -23,6 +24,7 @@ export function withMcpRuntimeHeaders<T extends McpServer>(
   headers: Readonly<Record<string, string>>,
 ): T {
   runtimeHeaders.set(server, headers);
+
   return server;
 }
 
@@ -33,13 +35,16 @@ export function getMcpRuntimeHeaders(server: McpServer): Readonly<Record<string,
 function sameHeaders(left: McpServer, right: McpServer): boolean {
   const leftHeaders = getMcpRuntimeHeaders(left);
   const rightHeaders = getMcpRuntimeHeaders(right);
+
   // HTTP field names are case-insensitive. OAuth refreshes can return the same
   // credential under a different casing without changing the MCP connection.
   const normalize = (headers: Readonly<Record<string, string>>) =>
     new Map(Object.entries(headers).map(([name, value]) => [name.toLowerCase(), value]));
+
   const normalizedLeft = normalize(leftHeaders);
   const normalizedRight = normalize(rightHeaders);
   const names = [...normalizedLeft.keys()];
+
   return (
     names.length === normalizedRight.size &&
     names.every((name) => normalizedLeft.get(name) === normalizedRight.get(name))
@@ -55,10 +60,13 @@ function sameServer(left: McpServer, right: McpServer): boolean {
   ) {
     return false;
   }
+
   if (left.transport === "url" && right.transport === "url") return left.url === right.url;
+
   if (left.transport !== "stdio" || right.transport !== "stdio") return false;
   const leftArgs = left.args ?? [];
   const rightArgs = right.args ?? [];
+
   return (
     left.command === right.command &&
     leftArgs.length === rightArgs.length &&
@@ -71,8 +79,10 @@ export function sameMcpServerConfigurations(
   right: readonly McpServer[],
 ): boolean {
   if (left.length !== right.length) return false;
+
   return left.every((server) => {
     const other = right.find((candidate) => candidate.id === server.id);
+
     return other !== undefined && sameServer(server, other);
   });
 }
@@ -87,6 +97,7 @@ export function formatMcpServerInstructions(servers: readonly McpServer[]): stri
       ? [`- ${server.name} (${server.id}): ${server.instructions.trim()}`]
       : [],
   );
+
   return lines.length > 0 ? ["MCP server guidance:", ...lines].join("\n") : "";
 }
 

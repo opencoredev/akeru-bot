@@ -35,12 +35,14 @@ it.layer(NodeServices.layer)("t3-sqlite-state", (it) => {
         sql: "SELECT 1",
         file: "fixture.sql",
       }).pipe(Effect.flip);
+
       assert.equal(multipleSources._tag, "SqliteStateMultipleSqlSourcesError");
       assert.equal(multipleSources.message, "Provide only one of --sql or --file.");
 
       const missingSource = yield* runSqliteState({ operation: "query", baseDir }).pipe(
         Effect.flip,
       );
+
       assert.equal(missingSource._tag, "SqliteStateMissingSqlSourceError");
       assert.equal(missingSource.message, "Provide one of --sql or --file.");
 
@@ -49,6 +51,7 @@ it.layer(NodeServices.layer)("t3-sqlite-state", (it) => {
         baseDir,
         sql: "   ",
       }).pipe(Effect.flip);
+
       assert.equal(emptySql._tag, "SqliteStateEmptySqlError");
       assert.equal(emptySql.message, "SQL input is empty.");
     }),
@@ -67,6 +70,7 @@ it.layer(NodeServices.layer)("t3-sqlite-state", (it) => {
       });
 
       assert.equal(result.operation, "query");
+
       if (result.operation === "query") {
         assert.deepStrictEqual(result.rows, [{ id: 1, label: "existing" }]);
       }
@@ -85,7 +89,9 @@ it.layer(NodeServices.layer)("t3-sqlite-state", (it) => {
         baseDir,
         sql: "INSERT INTO fixtures (id, label) VALUES (2, 'seeded')",
       });
+
       assert.equal(mutation.operation, "exec");
+
       if (mutation.operation === "exec") {
         assert.equal((yield* fs.stat(mutation.backup)).mode & 0o777, 0o600);
       }
@@ -98,13 +104,16 @@ it.layer(NodeServices.layer)("t3-sqlite-state", (it) => {
         },
         { sharedHome: baseDir },
       ).pipe(Effect.flip);
+
       assert.equal(error._tag, "SqliteStateSharedHomeMutationError");
 
       const aliasParent = yield* fs.makeTempDirectoryScoped({
         prefix: "t3-sqlite-state-alias-",
       });
+
       const aliasBaseDir = path.join(aliasParent, "shared-home-alias");
       yield* fs.symlink(baseDir, aliasBaseDir);
+
       const aliasError = yield* runSqliteState(
         {
           operation: "exec",
@@ -113,6 +122,7 @@ it.layer(NodeServices.layer)("t3-sqlite-state", (it) => {
         },
         { sharedHome: baseDir },
       ).pipe(Effect.flip);
+
       assert.equal(aliasError._tag, "SqliteStateSharedHomeMutationError");
     }),
   );

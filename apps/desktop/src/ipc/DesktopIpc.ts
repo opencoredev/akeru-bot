@@ -1,3 +1,4 @@
+import type * as Electron from "electron";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -10,10 +11,7 @@ export interface DesktopIpcSyncEvent {
   returnValue: unknown;
 }
 
-export type DesktopIpcHandleListener = (
-  event: DesktopIpcInvokeEvent,
-  raw: unknown,
-) => unknown | Promise<unknown>;
+export type DesktopIpcHandleListener = Parameters<Electron.IpcMain["handle"]>[1];
 
 export type DesktopIpcSyncListener = (event: DesktopIpcSyncEvent) => void;
 
@@ -54,12 +52,14 @@ export const DesktopIpcError = Schema.Union([
   DesktopIpcRegistrationError,
   DesktopIpcUnregistrationError,
 ]);
+
 export type DesktopIpcError = typeof DesktopIpcError.Type;
+
 export const isDesktopIpcError = Schema.is(DesktopIpcError);
 
 export interface DesktopIpcMethod<E, R> {
   readonly channel: string;
-  readonly handler: (raw: unknown) => Effect.Effect<unknown, E, R>;
+  readonly handler: <Payload>(raw: Payload) => Effect.Effect<unknown, E, R>;
 }
 
 export interface DesktopSyncIpcMethod<E, R> {
@@ -97,6 +97,7 @@ export const make = (ipcMain: DesktopIpcMain): DesktopIpc["Service"] =>
               runPromise(
                 Effect.gen(function* () {
                   yield* Effect.annotateCurrentSpan({ channel });
+
                   return yield* handler(raw);
                 }).pipe(Effect.annotateLogs({ channel }), Effect.withSpan("desktop.ipc.invoke")),
               ),
@@ -130,6 +131,7 @@ export const make = (ipcMain: DesktopIpcMain): DesktopIpc["Service"] =>
               event.returnValue = runSync(
                 Effect.gen(function* () {
                   yield* Effect.annotateCurrentSpan({ channel });
+
                   return yield* handler();
                 }).pipe(
                   Effect.annotateLogs({ channel }),
@@ -185,7 +187,7 @@ export interface DesktopIpcMethodRegistration<
   readonly handler: (input: Payload) => Effect.Effect<Result, E, R>;
 }
 
-export const makeIpcMethod = <
+export const defineIpcMethod = <
   Payload,
   EncodedPayload,
   Result,

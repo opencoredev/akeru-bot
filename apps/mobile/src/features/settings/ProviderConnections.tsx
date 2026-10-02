@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 import { useAtomValue } from "@effect/atom-react";
 import { useMobileI18n } from "../../lib/i18n";
 import { useCallback, useEffect, useState } from "react";
@@ -39,8 +40,9 @@ function commandError(
   result: AtomCommandResult<unknown, unknown>,
   t: (message: string) => string,
 ): string {
-  if (result._tag !== "Failure") return t("The request failed.");
+  if (!Predicate.isTagged(result, "Failure")) return t("The request failed.");
   const error = squashAtomCommandFailure(result);
+
   return error instanceof Error ? error.message : t("The request failed.");
 }
 
@@ -68,14 +70,18 @@ function Action({
 
 export function ProviderConnections({ environmentId }: { readonly environmentId: EnvironmentId }) {
   const { t } = useMobileI18n();
+
   const query = useEnvironmentQuery(
     serverEnvironment.subscriptionAuth({ environmentId, input: {} }),
   );
+
   const serverProviders = useAtomValue(serverEnvironment.configValueAtom(environmentId))?.providers;
   const start = useAtomCommand(serverEnvironment.startSubscriptionAuth, { reportFailure: false });
+
   const complete = useAtomCommand(serverEnvironment.completeSubscriptionAuth, {
     reportFailure: false,
   });
+
   const poll = useAtomCommand(serverEnvironment.pollSubscriptionAuth, { reportFailure: false });
   const cancel = useAtomCommand(serverEnvironment.cancelSubscriptionAuth, { reportFailure: false });
   const logout = useAtomCommand(serverEnvironment.logoutSubscriptionAuth, { reportFailure: false });
@@ -96,9 +102,12 @@ export function ProviderConnections({ environmentId }: { readonly environmentId:
         setCode("");
         setActiveInstanceId(undefined);
         query.refresh();
+
         return true;
       }
+
       if (progress.status === "failed") setError(progress.error);
+
       return progress.status !== "pending";
     },
     [query],
@@ -109,6 +118,7 @@ export function ProviderConnections({ environmentId }: { readonly environmentId:
   useEffect(() => {
     if (!anyProviderHealthChecking(query.data?.providers)) return;
     const timer = setTimeout(() => query.refresh(), HEALTH_CHECK_REFRESH_MS);
+
     return () => clearTimeout(timer);
   }, [query, query.data]);
 
@@ -117,27 +127,37 @@ export function ProviderConnections({ environmentId }: { readonly environmentId:
     let cancelled = false;
     let pollFailed = false;
     let timer: ReturnType<typeof setTimeout>;
+
     const check = async () => {
       const result = await poll({ environmentId, input: { loginId: flow.loginId } });
+
       if (cancelled) return;
-      if (result._tag !== "Success") {
+
+      if (!Predicate.isTagged(result, "Success")) {
         // A dropped request must not end the login; the next check picks up the approval.
-        if (result._tag === "Failure") {
+        if (Predicate.isTagged(result, "Failure")) {
           pollFailed = true;
           setError(commandError(result, t));
         }
+
         timer = setTimeout(check, RETRY_POLL_MS);
+
         return;
       }
+
       if (pollFailed) {
         pollFailed = false;
         setError(null);
       }
+
       if (settle(result.value)) return;
+
       if (result.value.status === "pending")
         timer = setTimeout(check, Math.max(1000, result.value.nextPollMs));
     };
+
     timer = setTimeout(check, 1000);
+
     return () => {
       cancelled = true;
       clearTimeout(timer);
@@ -172,24 +192,32 @@ export function ProviderConnections({ environmentId }: { readonly environmentId:
   const connect = async (provider: SubscriptionProviderId, instanceId?: ProviderInstanceId) => {
     if (provider === "opencode-go") {
       openKey(provider, instanceId);
+
       return;
     }
+
     setError(null);
     setCode("");
     setActiveInstanceId(instanceId);
     setBusy(true);
+
     const result = await start({
       environmentId,
       input: { provider, ...(instanceId ? { instanceId } : {}) },
     });
+
     setBusy(false);
-    if (result._tag === "Failure") {
+
+    if (Predicate.isTagged(result, "Failure")) {
       setError(commandError(result, t));
+
       return;
     }
-    if (result._tag !== "Success") return;
+
+    if (!Predicate.isTagged(result, "Success")) return;
     setCopyState("idle");
     setFlow(result.value);
+
     if (result.value.url) await openUrl(result.value.url);
   };
 
@@ -197,8 +225,10 @@ export function ProviderConnections({ environmentId }: { readonly environmentId:
     if (!keyProvider || busy) return;
     const validation = apiKeyValidationError(code, baseUrl);
     setError(validation);
+
     if (validation) return;
     setBusy(true);
+
     const started = await start({
       environmentId,
       input: {
@@ -206,25 +236,31 @@ export function ProviderConnections({ environmentId }: { readonly environmentId:
         ...(activeInstanceId ? { instanceId: activeInstanceId } : {}),
       },
     });
-    if (started._tag !== "Success") {
+
+    if (!Predicate.isTagged(started, "Success")) {
       setBusy(false);
-      if (started._tag === "Failure") setError(commandError(started, t));
+
+      if (Predicate.isTagged(started, "Failure")) setError(commandError(started, t));
+
       return;
     }
+
     const result = await complete({
       environmentId,
       input: { loginId: started.value.loginId, code: code.trim() },
     });
+
     setBusy(false);
-    if (result._tag === "Success" && result.value.status === "connected") {
+
+    if (Predicate.isTagged(result, "Success") && result.value.status === "connected") {
       setKeyProvider(null);
       setCode("");
       setBaseUrl("");
       setActiveInstanceId(undefined);
       query.refresh();
     } else {
-      if (result._tag === "Failure") setError(commandError(result, t));
-      else if (result._tag === "Success")
+      if (Predicate.isTagged(result, "Failure")) setError(commandError(result, t));
+      else if (Predicate.isTagged(result, "Success"))
         setError(
           result.value.status === "failed"
             ? result.value.error
@@ -240,8 +276,9 @@ export function ProviderConnections({ environmentId }: { readonly environmentId:
     setBusy(true);
     const result = await complete({ environmentId, input: { loginId: flow.loginId, code } });
     setBusy(false);
-    if (result._tag === "Success") settle(result.value);
-    else if (result._tag === "Failure") setError(commandError(result, t));
+
+    if (Predicate.isTagged(result, "Success")) settle(result.value);
+    else if (Predicate.isTagged(result, "Failure")) setError(commandError(result, t));
   };
 
   const cancelLogin = async () => {
@@ -252,9 +289,11 @@ export function ProviderConnections({ environmentId }: { readonly environmentId:
     setBaseUrl("");
     setActiveInstanceId(undefined);
     setError(null);
+
     if (login) {
       const result = await cancel({ environmentId, input: { loginId: login.loginId } });
-      if (result._tag === "Failure") setError(commandError(result, t));
+
+      if (Predicate.isTagged(result, "Failure")) setError(commandError(result, t));
     }
   };
 
@@ -265,17 +304,21 @@ export function ProviderConnections({ environmentId }: { readonly environmentId:
   ) => {
     setError(null);
     setBusy(true);
+
     const result = await (action === "disconnect" ? logout : test)({
       environmentId,
       input: { provider, ...(instanceId ? { instanceId } : {}) },
     });
+
     setBusy(false);
-    if (result._tag === "Success") query.refresh();
-    else if (result._tag === "Failure") setError(commandError(result, t));
+
+    if (Predicate.isTagged(result, "Success")) query.refresh();
+    else if (Predicate.isTagged(result, "Failure")) setError(commandError(result, t));
   };
 
   const activeProvider = keyProvider ?? flow?.provider;
   const label = PROVIDER_CONNECTIONS.find((provider) => provider.id === activeProvider)?.label;
+
   return (
     <SettingsSection
       title={
@@ -356,6 +399,7 @@ export function ProviderConnections({ environmentId }: { readonly environmentId:
                   label={copyState === "copied" ? t("Code copied") : t("Copy code")}
                   onPress={() => {
                     const userCode = flow.userCode;
+
                     if (!userCode) return;
                     void copySignInCode(userCode).then((copied) =>
                       setCopyState(copied ? "copied" : "failed"),
@@ -401,13 +445,14 @@ export function ProviderConnections({ environmentId }: { readonly environmentId:
               {
                 provider,
                 status: query.data?.providers.find((entry) => entry.provider === provider.id),
-                instanceId: undefined as ProviderInstanceId | undefined,
+                instanceId: undefined,
               },
               ...(query.data?.accounts
                 .filter((entry) => entry.provider === provider.id)
                 .map((status) => ({ provider, status, instanceId: status.instanceId })) ?? []),
             ]).map(({ provider, status, instanceId }) => {
               const apiKey = providerUsesApiKey(status);
+
               return (
                 <View
                   key={`${provider.id}:${instanceId ?? "default"}`}

@@ -23,6 +23,7 @@ function ToggleGroup({
   ...props
 }: ToggleGroupPrimitive.Props & VariantProps<typeof toggleVariants>) {
   const value = React.useMemo(() => ({ size, variant }), [size, variant]);
+
   return (
     <ToggleGroupPrimitive
       className={cn(

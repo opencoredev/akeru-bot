@@ -1,4 +1,5 @@
-// @effect-diagnostics nodeBuiltinImport:off
+import { workspaceIO } from "./test-support/workspaceIO.ts";
+import { partialSdkFixture } from "./test-support/partialSdkFixture.ts";
 import * as NodeFS from "node:fs";
 import * as NodeOS from "node:os";
 import * as NodePath from "node:path";
@@ -8,9 +9,12 @@ import { createRemoteBotWorkspace, tenki, tenkiWorkspaceState } from "./botWorks
 import { BotWorkspacePool } from "./botWorkspacePool.ts";
 
 const sdk = vi.hoisted(() => ({ create: vi.fn(), get: vi.fn(), constructor: vi.fn() }));
+
 vi.mock("@tenkicloud/sandbox", () => ({
   TenkiSandbox: class {
-    constructor(options: unknown) {
+    constructor(
+      options: ConstructorParameters<typeof import("@tenkicloud/sandbox").TenkiSandbox>[0],
+    ) {
       sdk.constructor(options);
     }
     create = sdk.create;
@@ -44,7 +48,8 @@ function mockSession(state: SessionState = "RUNNING") {
       exitCode: 7,
     })),
   };
-  return { session, adapter: tenki(session as unknown as Session) };
+
+  return { session, adapter: tenki(partialSdkFixture<Session>(session)) };
 }
 
 describe("Tenki workspace", () => {
@@ -54,13 +59,16 @@ describe("Tenki workspace", () => {
     const { session } = mockSession();
     sdk.create.mockClear().mockResolvedValue(session);
     sdk.get.mockClear().mockResolvedValue(session);
+
     const input = {
+      io: workspaceIO,
       sandbox: "tenki" as const,
       threadId: "thread-tenki",
       workspaceId: "bot-tenki",
       identityFile,
       environment: { TENKI_API_KEY: " test-key " },
     };
+
     try {
       const first = await createRemoteBotWorkspace(input);
       expect(sdk.constructor).toHaveBeenLastCalledWith({ apiKey: "test-key" });
@@ -93,14 +101,17 @@ describe("Tenki workspace", () => {
     sdk.get.mockClear().mockResolvedValue(session);
     session.waitReady.mockRejectedValueOnce(new Error("readiness unavailable"));
     const pool = new BotWorkspacePool();
+
     const create = () =>
       createRemoteBotWorkspace({
+        io: workspaceIO,
         sandbox: "tenki",
         threadId: "thread",
         workspaceId: "bot",
         identityFile,
         environment: { TENKI_API_KEY: "key" },
       });
+
     try {
       await expect(pool.acquire("tenki", create)).rejects.toThrow("readiness unavailable");
       expect(JSON.parse(NodeFS.readFileSync(identityFile, "utf8"))).toEqual({
@@ -123,12 +134,15 @@ describe("Tenki workspace", () => {
   it("fails closed for a missing saved VM and requires credentials", async () => {
     const root = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "akeru-tenki-"));
     const identityFile = NodePath.join(root, "identity.json");
+
     const input = {
+      io: workspaceIO,
       sandbox: "tenki" as const,
       threadId: "thread",
       workspaceId: "bot",
       identityFile,
     };
+
     try {
       await expect(createRemoteBotWorkspace(input)).rejects.toThrow("TENKI_API_KEY");
       NodeFS.writeFileSync(
@@ -138,7 +152,10 @@ describe("Tenki workspace", () => {
       sdk.create.mockClear();
       sdk.get.mockRejectedValueOnce(new Error("not found"));
       await expect(
-        createRemoteBotWorkspace({ ...input, environment: { TENKI_API_KEY: "key" } }),
+        createRemoteBotWorkspace({
+          ...input,
+          environment: { TENKI_API_KEY: "key" },
+        }),
       ).rejects.toThrow("missing");
       expect(sdk.create).not.toHaveBeenCalled();
       expect(NodeFS.existsSync(identityFile)).toBe(true);
@@ -153,6 +170,7 @@ describe("Tenki workspace", () => {
       const { adapter, session } = mockSession(state);
       await adapter.wake();
       expect(session.refresh).toHaveBeenCalledOnce();
+
       if (state === "RUNNING") {
         expect(session.waitReady).toHaveBeenCalledOnce();
         expect(session.resume).not.toHaveBeenCalled();
@@ -160,6 +178,7 @@ describe("Tenki workspace", () => {
         expect(session.waitResumed).toHaveBeenCalledOnce();
         expect(session.resume).toHaveBeenCalledTimes(state === "RESUMING" ? 0 : 1);
       }
+
       if (state === "PAUSING") expect(session.waitPaused).toHaveBeenCalledOnce();
     },
   );

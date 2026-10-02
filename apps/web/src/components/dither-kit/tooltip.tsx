@@ -1,4 +1,3 @@
-// @ts-nocheck
 "use client";
 
 import { AnimatePresence, motion } from "motion/react";
@@ -34,9 +33,11 @@ export function Tooltip({
   // Retain the last hovered index so the card keeps its content while fading
   // out — adjust-state-during-render (no refs in render).
   const [lastIndex, setLastIndex] = useState(0);
+
   if (chart.hoverIndex != null && chart.hoverIndex !== lastIndex) {
     setLastIndex(chart.hoverIndex);
   }
+
   const index = chart.hoverIndex ?? lastIndex;
 
   const heading = chart.heading(index, labelKey);
@@ -74,18 +75,20 @@ export function Tooltip({
           )}
         >
           {heading && (
-            <div className="mb-0.5 font-mono text-[10px] text-muted-foreground">{heading}</div>
+            <div className="mb-0.5 font-mono text-10px text-muted-foreground">{heading}</div>
           )}
           <div className="flex flex-col gap-0.5">
             {items.map((item) => (
               <div
                 key={item.name}
-                className="flex items-center gap-1.5 font-mono text-[11px] text-popover-foreground tabular-nums"
-                style={{ opacity: item.dimmed ? 0.4 : 1 }}
+                className={cn(
+                  "flex items-center gap-1.5 font-mono text-11px text-popover-foreground tabular-nums",
+                  item.dimmed ? "opacity-40" : "opacity-100",
+                )}
               >
                 <span
-                  className="size-2 rounded-[1px]"
-                  style={{ backgroundColor: rgb(item.seed.fill) }}
+                  className="size-2 rounded-1px swatch-fill"
+                  style={{ "--swatch": rgb(item.seed.fill) }}
                 />
                 <span className="text-muted-foreground">{item.label}</span>
                 <span className="ml-auto pl-2 text-foreground">

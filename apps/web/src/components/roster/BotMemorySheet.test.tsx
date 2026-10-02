@@ -1,4 +1,3 @@
-// @effect-diagnostics nodeBuiltinImport:off - The component contract reads its source.
 import * as NodeFS from "node:fs";
 
 import { EnvironmentId, ThreadId } from "@akeru/contracts";
@@ -50,6 +49,7 @@ describe("BotMemorySheet", () => {
       new URL("./BotMemoryTransfer.tsx", import.meta.url),
       "utf8",
     );
+
     expect(transfer).toContain("onClick={() => fileInputRef.current?.click()}");
     expect(transfer).toMatch(/>\s*\{t\("Import memory archive"\)\}\s*</);
     expect(transfer).toMatch(/<input\s+ref=\{fileInputRef\}\s+className="sr-only"/);
@@ -66,6 +66,7 @@ describe("BotMemorySheet", () => {
       new URL("../../routes/_chat.bots.$botId.tsx", import.meta.url),
       "utf8",
     );
+
     expect(route).toContain("useBotThreadRef(botId)");
     expect(route).toContain("threadRef={threadRef}");
   });
@@ -98,10 +99,12 @@ describe("BotMemorySheet", () => {
     ).toMatchObject({ threadId: ThreadId.make("thread-selected") });
 
     expect(EnvironmentId.make("env-1")).toBe("env-1");
+
     const runtime = NodeFS.readFileSync(
       new URL("./useBotThreadRuntime.ts", import.meta.url),
       "utf8",
     );
+
     expect(runtime).toContain("resolveBotThreadTarget(");
   });
 });

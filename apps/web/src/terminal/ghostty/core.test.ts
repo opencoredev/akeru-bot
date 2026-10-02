@@ -5,6 +5,7 @@ import { ghosttyCellText } from "./core";
 function codepointView(codepoints: ReadonlyArray<number>): DataView {
   const view = new DataView(new ArrayBuffer(codepoints.length * 4));
   codepoints.forEach((codepoint, index) => view.setUint32(index * 4, codepoint, true));
+
   return view;
 }
 
@@ -15,9 +16,11 @@ describe("ghosttyCellText", () => {
     // many arguments into String.fromCodePoint once overflows the call stack.
     const graphemeLength = 130_000;
     const view = new DataView(new ArrayBuffer(graphemeLength * 4));
+
     for (let index = 0; index < graphemeLength; index += 1) {
       view.setUint32(index * 4, index === 0 ? "a".codePointAt(0)! : 0x301, true);
     }
+
     const text = ghosttyCellText(view, graphemeLength);
     expect(text.length).toBe(graphemeLength);
     expect(text.codePointAt(0)).toBe("a".codePointAt(0));

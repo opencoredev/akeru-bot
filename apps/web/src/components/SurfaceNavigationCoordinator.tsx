@@ -24,6 +24,7 @@ export function SurfaceNavigationCoordinator() {
       // A channel target, such as a repair link, opens that provider's own page.
       const channel =
         settingsSection === "channels" ? channelProviderFromSettingsTarget(settingsTarget) : null;
+
       void (channel
         ? navigate({ to: "/settings/channels/$channel", params: { channel } })
         : navigate({
@@ -32,8 +33,10 @@ export function SurfaceNavigationCoordinator() {
             hash: settingsTarget ?? "",
           }));
       acknowledgeSettingsNavigation();
+
       return;
     }
+
     if (!pathname.startsWith("/settings")) clearSettingsEnvironment();
   }, [navigate, pathname, settingsSection, settingsTarget]);
 

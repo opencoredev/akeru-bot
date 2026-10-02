@@ -90,6 +90,7 @@ describe("providerAvailabilityReason", () => {
       availability: "unavailable",
       unavailability: "missing-login",
     });
+
     const reason = providerAvailabilityReason(snapshot);
     expect(reason).toBe("missing-login");
     expect(
@@ -121,16 +122,19 @@ describe("presentProviderUnavailability", () => {
 
   it("gives every reason distinct copy without em dashes or thread wording", () => {
     const titles = new Set<string>();
+
     for (const reason of reasons) {
       const presentation = presentProviderUnavailability({
         reason,
         providerName: "Claude",
         modelName: "Claude Sonnet",
       });
+
       titles.add(presentation.title);
       const copy = `${presentation.title} ${presentation.description}`;
       expect(copy).not.toMatch(/—|\bthread\b/i);
     }
+
     expect(titles.size).toBe(reasons.length);
   });
 
@@ -149,6 +153,7 @@ describe("presentProviderUnavailability", () => {
 
   it("renders every reason in the active interface language", () => {
     const zh = createTranslator("zh-CN", zhCNCatalog).t;
+
     for (const reason of reasons) {
       const english = presentProviderUnavailability({ reason, providerName: "Claude" });
       const presentation = presentProviderUnavailability({ reason, providerName: "Claude" }, zh);

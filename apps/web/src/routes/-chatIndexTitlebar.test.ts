@@ -1,4 +1,3 @@
-// @effect-diagnostics nodeBuiltinImport:off
 // Regression coverage compares the empty workspace header with the shared titlebar contract.
 import * as NodeFS from "node:fs";
 
@@ -22,8 +21,9 @@ describe("empty bot workspace header", () => {
       new URL("../components/WorkspacePageHeader.tsx", import.meta.url),
       "utf8",
     );
-    expect(headerSource).toContain("h-[var(--workspace-topbar-height)]");
-    expect(headerSource).toContain("min-h-[var(--workspace-topbar-height)]");
+
+    expect(headerSource).toContain("h-(--workspace-topbar-height)");
+    expect(headerSource).toContain("min-h-(--workspace-topbar-height)");
     expect(headerSource).toContain("COLLAPSED_SIDEBAR_TITLEBAR_INSET_CLASS");
   });
 });

@@ -1,0 +1,109 @@
+:root {
+  --app-scrollbar-width: 6px;
+  --appearance-contrast-base: 100%;
+  --appearance-contrast-boost: 0%;
+  --appearance-contrast-border-boost: 0%;
+  --appearance-contrast-target: black;
+  --app-scrollbar-thumb: rgb(217 217 217);
+  --app-scrollbar-thumb-hover: rgb(191 191 191);
+  --terminal-scrollbar: var(--app-scrollbar-thumb);
+  --terminal-scrollbar-hover: var(--app-scrollbar-thumb-hover);
+  /*
+   * Compact UI geometry. Keep these values semantic so sidebar, palette,
+   * tooltip, and toolbar controls cannot quietly drift apart.
+   */
+  --control-radius: 0.5rem;
+  --sidebar-content-inset: 0.5rem;
+  --sidebar-control-gap: 0.5rem;
+  --sidebar-icon-color: color-mix(
+    in srgb,
+    var(--contrast-sidebar-muted-foreground) 60%,
+    var(--sidebar)
+  );
+  --sidebar-row-content-inset: 0.625rem;
+  --command-shell-inset: 0.5rem;
+  --command-content-inset: 1rem;
+  --floating-content-inset: 0.75rem;
+  /*
+   * Motion. Restrained by design: these describe state changes that have
+   * already happened (a panel opening, a row selecting), never ambient
+   * movement. Nothing here loops: a continuously repainting animation pegs
+   * the GPU on high-refresh displays, and our users sit in this app all day.
+   * The working meter follows the same rule and plays once per step change.
+   * The .bot-status-shimmer label still loops and is tracked separately.
+   * Reduced motion collapses every duration to zero below.
+   */
+  --motion-duration-fast: 120ms;
+  --motion-ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --glass-blur: 12px;
+  --glass-opacity: 80%;
+  --glass-saturation: 1.14;
+  --desktop-window-right-resize-inset: 0px;
+  --workspace-topbar-height: 52px;
+  --workspace-controls-top: 0px;
+  --workspace-controls-left: calc(env(safe-area-inset-left) + 0.75rem);
+  --workspace-controls-right: calc(env(safe-area-inset-right) + 0.75rem);
+  --workspace-native-controls-inset: 0px;
+  --workspace-titlebar-control-size: 1.75rem;
+  --workspace-titlebar-control-gap: 0.75rem;
+  /*
+   * Motion scale (transitions.dev). Use these instead of literal durations.
+   * --ease-out and --ease-in-out already come from Tailwind's theme, so they
+   * are not redefined here.
+   */
+  --duration-stagger: 40ms;
+  --duration-micro: 80ms;
+  --duration-quick: 150ms;
+  --duration-fast: 250ms;
+  --duration-medium: 350ms;
+  --duration-slow: 400ms;
+  --duration-very-slow: 500ms;
+  --ease-smooth-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-linear: linear;
+  --ease-bounce: cubic-bezier(0.34, 1.36, 0.64, 1);
+  --ease-bounce-strong: cubic-bezier(0.34, 3.85, 0.64, 1);
+  --distance-micro: 4px;
+  --distance-small: 6px;
+  --distance-base: 8px;
+  --distance-medium: 12px;
+  --distance-large: 30px;
+  --scale-large: 0.96;
+  --scale-medium: 0.97;
+  --scale-small: 0.98;
+  --scale-tiny: 0.99;
+  --blur-small: 2px;
+  --blur-medium: 3px;
+  --blur-large: 8px;
+
+  @variant dark {
+    --appearance-contrast-target: white;
+    --app-scrollbar-thumb: rgb(255 255 255 / 8%);
+    --app-scrollbar-thumb-hover: rgb(255 255 255 / 12%);
+    --glass-blur: 16px;
+    --glass-saturation: 1.08;
+  }
+}
+
+@utility terminal-scrollbar-thumb {
+  position: absolute;
+  inset-inline: 1px;
+  top: 0;
+  border-radius: 3px;
+  background: var(--app-scrollbar-thumb);
+  transition: background-color 120ms ease-out;
+
+  .group:hover &,
+  .group:focus-visible & {
+    background: var(--app-scrollbar-thumb-hover);
+  }
+}
+
+/* Honor the OS preference at the token, so a transition written against these
+   durations becomes an instant state change rather than each call site having
+   to remember its own reduced-motion branch. */
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --motion-duration-fast: 0ms;
+  }
+}

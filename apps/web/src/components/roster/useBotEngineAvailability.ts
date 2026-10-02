@@ -26,11 +26,14 @@ export function useBotEngineAvailability(engine: BotEngine | null) {
   const settings = usePrimarySettings();
   const providers = useAtomValue(primaryServerProvidersAtom);
   const { t } = useI18n();
+
   return useMemo(() => {
     const instanceEntries = sortProviderInstanceEntries(
       applyProviderInstanceSettings(deriveProviderInstanceEntries(providers), settings),
     );
+
     const defaultSelection = resolveAppModelSelectionState(settings, providers);
+
     const selection = resolveStickyBotEngine({
       engine,
       instanceEntries,
@@ -38,7 +41,9 @@ export function useBotEngineAvailability(engine: BotEngine | null) {
       providers,
       defaultSelection,
     });
+
     const unavailability = botEngineUnavailability(selection, instanceEntries, t);
+
     return {
       instanceEntries,
       selection,

@@ -10,6 +10,7 @@ const HEX_COLOR = /^#?([\da-f]{6})$/i;
 
 export function hexToHsv(value: string): HsvColor | null {
   const hex = HEX_COLOR.exec(value.trim())?.[1];
+
   if (!hex) return null;
 
   const numeric = Number.parseInt(hex, 16);
@@ -21,6 +22,7 @@ export function hexToHsv(value: string): HsvColor | null {
   const delta = max - min;
 
   let hue = 0;
+
   if (delta !== 0) {
     if (max === red) hue = ((green - blue) / delta) % 6;
     else if (max === green) hue = (blue - red) / delta + 2;
@@ -35,6 +37,7 @@ export function hsvToHex({ h, s, v }: HsvColor): string {
   const channel = (offset: number) => {
     const k = (offset + h / 60) % 6;
     const value = v - v * s * Math.max(0, Math.min(k, 4 - k, 1));
+
     return Math.round(value * 255)
       .toString(16)
       .padStart(2, "0");

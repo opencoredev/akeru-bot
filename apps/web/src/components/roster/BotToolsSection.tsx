@@ -53,6 +53,7 @@ export function BotToggleRow({
   readonly onCheckedChange: (checked: boolean) => void;
 }) {
   const { t } = useI18n();
+
   return (
     <SettingsRow
       title={
@@ -90,6 +91,7 @@ export function BotToggleRow({
 
 function ToolIcon({ item }: { readonly item: BotToolItem }) {
   if (!item.logo) return <ServerIcon className="size-4" />;
+
   return (
     <picture>
       {item.logo.darkSrc ? (

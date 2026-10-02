@@ -23,9 +23,11 @@ it.layer(Layer.mergeAll(NodeSqliteClient.layerMemory()))("056_AkeruBotUsageLedge
           ('reservation-1', 'shared-key', 'bot-1', 'thread-1', NULL, 'turn', 'reserved', 10, 10, '2026-08-30T20:00:00.000Z'),
           ('reservation-2', 'shared-key', 'bot-2', 'thread-2', NULL, 'turn', 'reserved', 10, 10, '2026-08-30T20:00:00.000Z')
       `;
+
       const rows = yield* sql<{ readonly count: number }>`
         SELECT COUNT(*) AS count FROM akeru_bot_usage_entries
       `;
+
       assert.equal(rows[0]?.count, 2);
 
       const invalid = yield* sql`
@@ -33,6 +35,7 @@ it.layer(Layer.mergeAll(NodeSqliteClient.layerMemory()))("056_AkeruBotUsageLedge
           reservation_id, source_key, bot_id, category, state, reserved_tokens, created_at
         ) VALUES ('invalid', 'invalid', 'bot-1', 'unknown', 'reserved', 0, '2026-08-30T20:00:00.000Z')
       `.pipe(Effect.exit);
+
       assert.equal(invalid._tag, "Failure");
     }),
   );

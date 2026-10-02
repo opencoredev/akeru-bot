@@ -24,12 +24,14 @@ it("ignores directory sync errors only from filesystems that cannot sync a direc
     sync: () => Promise.reject(Object.assign(new Error(code), { code })),
     close: () => Promise.resolve(),
   });
+
   for (const code of ["EISDIR", "EPERM", "EINVAL", "ENOTSUP"]) {
     await syncDirectory("/state", failingOpen(code));
   }
+
   let rejected: unknown;
-  await syncDirectory("/state", failingOpen("EIO")).catch((error: unknown) => {
-    rejected = error;
+  await syncDirectory("/state", failingOpen("EIO")).catch((cause: unknown) => {
+    rejected = cause;
   });
   assert.strictEqual((rejected as NodeJS.ErrnoException | undefined)?.code, "EIO");
 });
@@ -38,6 +40,7 @@ it("accepts only exact semantic versions", () => {
   for (const version of ["0.0.0", "1.2.3", "1.2.3-alpha.1", "1.2.3-0", "1.2.3+001"]) {
     assert.isTrue(isExactServiceVersion(version), version);
   }
+
   for (const version of ["latest", "01.2.3", "1.2.3-01", "1.2.3-alpha..1", "1.2.3+."]) {
     assert.isFalse(isExactServiceVersion(version), version);
   }
@@ -119,6 +122,7 @@ it.layer(NodeServices.layer)("service state persistence", (it) => {
       const path = yield* Path.Path;
       const root = yield* fs.makeTempDirectoryScoped({ prefix: "t3-service-launcher-test-" });
       const statePath = path.join(root, "runtime", "service-state.json");
+
       const state = {
         protocol: SERVICE_LAUNCHER_PROTOCOL,
         activeVersion: "0.0.31",
@@ -168,8 +172,8 @@ it.layer(NodeServices.layer)("service state persistence", (it) => {
       const databasePath = path.join(root, "userdata", "state.sqlite");
       yield* fs.makeDirectory(path.dirname(databasePath), { recursive: true });
       yield* fs.writeFileString(databasePath, "before trial");
-      // @effect-diagnostics-next-line preferSchemaOverJson:off - embeds a path in fake child source.
       const encodedDatabasePath = JSON.stringify(databasePath);
+
       const childSource = `
 const context = JSON.parse(process.env.T3_SERVICE_LAUNCHER_CONTEXT);
 if (context.update?.status === "pending") {
@@ -184,6 +188,7 @@ if (context.update?.status === "pending") {
   process.exit(0);
 }
 `;
+
       for (const version of ["1.0.0", "1.1.0"]) {
         const versionDir = path.join(root, "runtime", "versions", version);
         const entryPath = path.join(versionDir, "node_modules", "akeru-bot", "dist", "bin.mjs");
@@ -191,6 +196,7 @@ if (context.update?.status === "pending") {
         yield* fs.writeFileString(entryPath, childSource);
         yield* fs.writeFileString(path.join(versionDir, ".install-complete"), `${version}\n`);
       }
+
       yield* Effect.promise(() =>
         writeServiceState(statePath, {
           protocol: SERVICE_LAUNCHER_PROTOCOL,
@@ -221,8 +227,8 @@ if (context.update?.status === "pending") {
       const databasePath = path.join(root, "userdata", "state.sqlite");
       yield* fs.makeDirectory(path.dirname(databasePath), { recursive: true });
       yield* fs.writeFileString(databasePath, "before trial");
-      // @effect-diagnostics-next-line preferSchemaOverJson:off - embeds a path in fake child source.
       const encodedDatabasePath = JSON.stringify(databasePath);
+
       const childSource = `
 const context = JSON.parse(process.env.T3_SERVICE_LAUNCHER_CONTEXT);
 if (context.update?.status === "pending") {
@@ -234,6 +240,7 @@ if (context.update?.status === "pending") {
   process.exit(0);
 }
 `;
+
       for (const version of ["1.0.0", "1.1.0"]) {
         const versionDir = path.join(root, "runtime", "versions", version);
         const entryPath = path.join(versionDir, "node_modules", "akeru-bot", "dist", "bin.mjs");
@@ -241,6 +248,7 @@ if (context.update?.status === "pending") {
         yield* fs.writeFileString(entryPath, childSource);
         yield* fs.writeFileString(path.join(versionDir, ".install-complete"), `${version}\n`);
       }
+
       yield* Effect.promise(() =>
         writeServiceState(statePath, {
           protocol: SERVICE_LAUNCHER_PROTOCOL,
@@ -276,8 +284,8 @@ if (context.update?.status === "pending") {
       const original = "database before migration";
       yield* fs.makeDirectory(path.dirname(databasePath), { recursive: true });
       yield* fs.writeFileString(databasePath, original);
-      // @effect-diagnostics-next-line preferSchemaOverJson:off - embeds a path in fake child source.
       const encodedDatabasePath = JSON.stringify(databasePath);
+
       const childSource = `
 import { writeFileSync } from "node:fs";
 const context = JSON.parse(process.env.T3_SERVICE_LAUNCHER_CONTEXT);
@@ -293,6 +301,7 @@ if (context.update?.status === "pending") {
   process.exit(0);
 }
 `;
+
       for (const version of ["1.0.0", "1.1.0"]) {
         const versionDir = path.join(root, "runtime", "versions", version);
         const entryPath = path.join(versionDir, "node_modules", "akeru-bot", "dist", "bin.mjs");
@@ -300,6 +309,7 @@ if (context.update?.status === "pending") {
         yield* fs.writeFileString(entryPath, childSource);
         yield* fs.writeFileString(path.join(versionDir, ".install-complete"), `${version}\n`);
       }
+
       yield* Effect.promise(() =>
         writeServiceState(statePath, {
           protocol: SERVICE_LAUNCHER_PROTOCOL,

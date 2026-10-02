@@ -2,7 +2,7 @@ import * as NodeEvents from "node:events";
 import * as NodePath from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const mocks = vi.hoisted(() => ({
+const mocks = {
   spawn: vi.fn(),
   spawnSync: vi.fn(() => ({ status: 0 })),
   mkdtempSync: vi.fn(),
@@ -12,23 +12,24 @@ const mocks = vi.hoisted(() => ({
   accessSync: vi.fn(),
   platform: vi.fn(),
   resolve: vi.fn(),
-}));
-vi.mock("node:child_process", () => ({ spawn: mocks.spawn, spawnSync: mocks.spawnSync }));
-vi.mock("node:fs", () => ({ ...mocks, constants: { X_OK: 1 } }));
-vi.mock("node:os", () => ({ platform: mocks.platform, tmpdir: () => "/tmp" }));
-vi.mock("node:module", () => ({ createRequire: () => ({ resolve: mocks.resolve }) }));
+  tmpdir: () => "/tmp",
+};
 
 import { createSmokeEnvironment, resolveSmokeElectronPath, runSmokeTest } from "./smoke-test.mjs";
 
 const root = "/tmp/akeru-desktop-smoke-owned";
+
 const ready = "[desktop-window] backend ready\n[desktop-window] main window created\n";
+
 let app;
+
 let kill;
+
 let signals;
 
 function launch() {
   // Attach rejection handling before advancing fake time.
-  return runSmokeTest({ timeoutMs: 100, shutdownMs: 10 }).then(
+  return runSmokeTest({ timeoutMs: 100, shutdownMs: 10, runtime: mocks }).then(
     (message) => ({ message }),
     (error) => ({ error }),
   );
@@ -52,16 +53,19 @@ beforeEach(() => {
   app.stderr = new NodeEvents.EventEmitter();
   app.kill = vi.fn(() => {
     close();
+
     return true;
   });
   mocks.spawn.mockReturnValue(app);
   kill = vi.spyOn(process, "kill").mockImplementation(() => {
     close();
+
     return true;
   });
   signals = new Map();
   vi.spyOn(process, "once").mockImplementation((signal, listener) => {
     signals.set(signal, listener);
+
     return process;
   });
   vi.spyOn(process, "removeListener").mockReturnValue(process);
@@ -101,7 +105,9 @@ describe("desktop smoke isolation", () => {
       NODE_PATH: "/live/modules",
       PATH: "/bin",
     };
+
     const env = createSmokeEnvironment(root, inherited);
+
     for (const key of [
       "HOME",
       "USERPROFILE",
@@ -119,6 +125,7 @@ describe("desktop smoke isolation", () => {
     ]) {
       expect(env[key].startsWith(`${root}/`)).toBe(true);
     }
+
     for (const key of [
       "T3CODE_PORT",
       "T3CODE_DESKTOP_LAN_HOST",
@@ -156,7 +163,7 @@ describe("desktop smoke isolation", () => {
     "rejects invalid runtime path %j before creating state",
     (path) => {
       mocks.readFileSync.mockReturnValue(path);
-      expect(() => resolveSmokeElectronPath()).toThrow("Invalid installed");
+      expect(() => resolveSmokeElectronPath(mocks)).toThrow("Invalid installed");
       expect(mocks.mkdtempSync).not.toHaveBeenCalled();
       expect(mocks.spawn).not.toHaveBeenCalled();
     },
@@ -249,6 +256,7 @@ describe("desktop startup evidence and cleanup", () => {
   it("escalates only the captured group and waits for close before deleting state", async () => {
     kill.mockImplementation((_pid, signal) => {
       if (signal === "SIGKILL") close();
+
       return true;
     });
     const result = launch();

@@ -31,7 +31,9 @@ export function buildBotChatRows(input: {
   const newestId = input.chats[0]?.id ?? null;
   const shown = input.chats.slice(0, limit);
   const current = input.chats.find((chat) => chat.id === input.currentThreadId);
+
   if (current && !shown.includes(current)) shown.splice(limit - 1, 1, current);
+
   return shown.map((chat) => ({
     threadId: chat.id,
     title: chat.title === PLACEHOLDER_THREAD_TITLE || chat.title.trim() === "" ? null : chat.title,

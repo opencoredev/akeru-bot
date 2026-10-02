@@ -1,3 +1,4 @@
+import * as Match from "effect/Match";
 import {
   type ClientOrchestrationCommand,
   OrchestrationDispatchCommandError,
@@ -27,24 +28,30 @@ export const executeChannelCommand = (
   runtime: ChannelRuntimeShape,
   command: ChannelCommand,
 ): Effect.Effect<{ readonly sequence: number }, ChannelOperationError> =>
-  (command.type === "channel.connect"
-    ? runtime.connect(command)
-    : command.type === "channel.connection.save"
-      ? runtime.saveConnection(command)
-      : command.type === "channel.connection.delete"
-        ? runtime.deleteConnection(command.connectionId)
-        : command.type === "channel.attach"
-          ? runtime.attach(command.botId, command.connectionId, command.projectId, command.provider)
-          : command.type === "channel.change-project"
-            ? runtime.changeProject(command.botId, command.provider, command.projectId)
-            : command.type === "channel.disconnect"
-              ? runtime.disconnect(command.botId, command.provider)
-              : command.type === "channel.detach"
-                ? runtime.detach(command.botId, command.provider)
-                : command.type === "channel.reconnect"
-                  ? runtime.reconnect(command.botId, command.provider)
-                  : runtime.sendChannelMessage(command)
-  ).pipe(Effect.map((sequence) => ({ sequence })));
+  Match.value(command).pipe(
+    Match.when({ type: "channel.connect" }, (command) => runtime.connect(command)),
+    Match.when({ type: "channel.connection.save" }, (command) => runtime.saveConnection(command)),
+    Match.when({ type: "channel.connection.delete" }, (command) =>
+      runtime.deleteConnection(command.connectionId),
+    ),
+    Match.when({ type: "channel.attach" }, (command) =>
+      runtime.attach(command.botId, command.connectionId, command.projectId, command.provider),
+    ),
+    Match.when({ type: "channel.change-project" }, (command) =>
+      runtime.changeProject(command.botId, command.provider, command.projectId),
+    ),
+    Match.when({ type: "channel.disconnect" }, (command) =>
+      runtime.disconnect(command.botId, command.provider),
+    ),
+    Match.when({ type: "channel.detach" }, (command) =>
+      runtime.detach(command.botId, command.provider),
+    ),
+    Match.when({ type: "channel.reconnect" }, (command) =>
+      runtime.reconnect(command.botId, command.provider),
+    ),
+    Match.orElse((command) => runtime.sendChannelMessage(command)),
+    Effect.map((sequence) => ({ sequence })),
+  );
 
 /**
  * The only way a channel command failure leaves the server. Returns fixed, client-safe text
@@ -55,18 +62,22 @@ export const channelCommandFailure = (
   cause: Cause.Cause<unknown>,
 ): Effect.Effect<ChannelFailurePresentation> => {
   const error = Cause.hasInterruptsOnly(cause) ? undefined : Cause.squash(cause);
+
   const presented =
     error === undefined
       ? { message: "Channel command was interrupted. Try again." }
       : channelFailurePresentation(error);
+
   // A provider error after a reply post began is ambiguous: the message may have been delivered.
   // A definite rejection, or a check that failed before posting, keeps its own category.
   const deliveryUnknown = channelFailureMessage("delivery-unknown");
+
   const failure: ChannelFailurePresentation =
     command.type === "channel.send" &&
     (isChannelTransportError(error) || presented.message === deliveryUnknown)
       ? { message: deliveryUnknown, category: "delivery-unknown" }
       : presented;
+
   return Effect.logWarning("channel command failed", {
     commandType: command.type,
     category: failure.category ?? "internal",

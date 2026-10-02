@@ -1,3 +1,5 @@
+import type { TestProps, TestValue } from "../test-support/reactTree";
+import { Predicate } from "effect";
 import type { ReactElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import {
@@ -34,6 +36,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock("react", async (importOriginal) => {
   const actual = await importOriginal<typeof import("react")>();
+
   return {
     ...actual,
     useMemo: <T,>(factory: () => T) => factory(),
@@ -46,35 +49,46 @@ vi.mock("react", async (importOriginal) => {
       getSnapshot: () => T,
     ) => {
       mocks.clockCleanups?.push(subscribe(() => undefined));
+
       return getSnapshot();
     },
   };
 });
+
 vi.mock("@tanstack/react-router", () => ({ useNavigate: () => mocks.navigate }));
+
 vi.mock("../../i18n", async () => {
   const { createTranslator } = await import("@akeru/client-runtime/i18n");
   const translator = createTranslator("en");
+
   return { useI18n: () => ({ ...translator, t: translator.translate }) };
 });
+
 vi.mock("../../state/environments", () => ({
   usePrimaryEnvironmentId: () => EnvironmentId.make("environment-1"),
 }));
+
 vi.mock("../../state/entities", () => ({
   useThreadActivities: () => mocks.activities,
   useThreadMessages: () => [],
   useThreadShell: () => mocks.thread,
 }));
+
 vi.mock("../ChatMarkdown", () => ({ default: ({ text }: { text: string }) => text }));
+
 vi.mock("../../state/orchestration", () => ({
   orchestrationEnvironment: {
     cancelDelegation: "cancelDelegation",
     retryDelegation: "retryDelegation",
   },
 }));
+
 vi.mock("../../state/use-atom-command", () => ({
   useAtomCommand: (command: string) => (command === "retryDelegation" ? mocks.retry : mocks.cancel),
 }));
+
 vi.mock("../ui/toast", () => ({ toastManager: { add: mocks.toast } }));
+
 vi.mock("./rosterStore", () => ({
   useRosterStore: { getState: () => ({ recordChatPath: mocks.recordChatPath }) },
 }));
@@ -82,7 +96,7 @@ vi.mock("./rosterStore", () => ({
 import { DelegationCard, delegationUsageTokens } from "./DelegationCard";
 import { DelegationDetail } from "./DelegationDetail";
 import { delegationClockState } from "./delegationClock";
-import { visitElements } from "../../test/reactElementTree";
+import { visitElements } from "../test-support/reactTree";
 import type { Bot } from "./types";
 
 const decodeDelegationRecord = Schema.decodeUnknownSync(AkeruDelegationRecord);
@@ -157,6 +171,7 @@ const CHILD_RUN = {
   childTurnId: "turn-child",
   startedAt: "2026-08-31T00:00:10.000Z",
 };
+
 const FINISHED_AT = "2026-08-31T00:01:00.000Z";
 
 function phaseFor(state: AkeruDelegationState) {
@@ -192,7 +207,7 @@ function phaseFor(state: AkeruDelegationState) {
   }
 }
 
-function delegation(state: AkeruDelegationState, overrides: Record<string, unknown> = {}) {
+function delegation(state: AkeruDelegationState, overrides: TestProps = {}) {
   return decodeDelegationRecord({
     delegationId: `delegation-${state}`,
     parentDelegationId: null,
@@ -257,23 +272,28 @@ function cardElement(state: AkeruDelegationState, bot: Bot | null = childBot) {
     delegations: [],
     childBot: bot,
     parentBot,
-  }) as ReactElement<Record<string, unknown>>;
+  }) as ReactElement<TestProps>;
 }
 
 /** Finds an element by aria-label, calling nested function components on the way. */
-function findByLabel(node: unknown, label: string): ReactElement<Record<string, unknown>> | null {
-  let found: ReactElement<Record<string, unknown>> | null = null;
+function findByLabel(node: TestValue, label: string): ReactElement<TestProps> | null {
+  let found: ReactElement<TestProps> | null = null;
   visitElements(node, (element) => {
     if (found) return true;
+
     if (element.props["aria-label"] === label) {
       found = element;
+
       return true;
     }
-    if (typeof element.type === "function" && element.type.name.startsWith("Delegation")) {
-      found = findByLabel((element.type as (props: unknown) => unknown)(element.props), label);
+
+    if (Predicate.isFunction(element.type) && element.type.name.startsWith("Delegation")) {
+      found = findByLabel((element.type as (props: TestProps) => TestValue)(element.props), label);
     }
+
     return found !== null;
   });
+
   return found;
 }
 
@@ -329,7 +349,9 @@ describe("DelegationCard", () => {
     expect(renderCard("canceled")).not.toContain("Result");
 
     const completed = delegation("completed");
-    if (completed.phase._tag !== "Completed") throw new Error("Expected a completed delegation");
+
+    if (!Predicate.isTagged(completed.phase, "Completed"))
+      throw new Error("Expected a completed delegation");
     expect(
       renderToStaticMarkup(
         <DelegationCard
@@ -348,9 +370,14 @@ describe("DelegationCard", () => {
   it("shows fallback text when terminal details are missing", () => {
     const completed = delegation("completed");
     const failed = delegation("failed");
-    if (completed.phase._tag !== "Completed" || failed.phase._tag !== "Failed") {
+
+    if (
+      !Predicate.isTagged(completed.phase, "Completed") ||
+      !Predicate.isTagged(failed.phase, "Failed")
+    ) {
       throw new Error("Expected completed and failed delegations");
     }
+
     expect(
       renderToStaticMarkup(
         <DelegationCard
@@ -375,9 +402,13 @@ describe("DelegationCard", () => {
 
   it("shows a start failure as the bot-named readable line", () => {
     const failed = delegation("failed");
-    if (failed.phase._tag !== "Failed") throw new Error("Expected a failed delegation");
+
+    if (!Predicate.isTagged(failed.phase, "Failed"))
+      throw new Error("Expected a failed delegation");
+
     const message =
       "Ren could not start: Provider instance 'codex' is disabled in Akeru Bot settings.";
+
     const markup = renderToStaticMarkup(
       <DelegationCard
         delegation={{
@@ -406,6 +437,7 @@ describe("DelegationCard", () => {
 
   it("shows hours for work that ran an hour or more", () => {
     const completed = delegation("completed");
+
     const markup = renderToStaticMarkup(
       <DelegationCard
         delegation={{
@@ -420,6 +452,7 @@ describe("DelegationCard", () => {
         parentBot={parentBot}
       />,
     );
+
     expect(markup).toContain(">7h 48m</span>");
   });
 
@@ -475,6 +508,7 @@ describe("DelegationCard", () => {
         parentBot={parentBot}
       />,
     );
+
     expect(markup).not.toContain("Let Mori finish the work");
     expect(markup).toContain('aria-label="Cancel delegation to Mori"');
   });
@@ -492,10 +526,12 @@ describe("DelegationCard", () => {
 
   it("offers no try again once another card retries the work", () => {
     const failed = delegation("failed");
+
     const retry = delegation("running", {
       delegationId: "delegation-retry",
       retryOfDelegationId: failed.delegationId,
     });
+
     const markup = renderToStaticMarkup(
       <DelegationCard
         delegation={failed}
@@ -504,6 +540,7 @@ describe("DelegationCard", () => {
         parentBot={parentBot}
       />,
     );
+
     expect(markup).not.toContain("Ask Mori to try again");
     expect(markup).toContain('aria-label="View Mori&#x27;s work"');
   });
@@ -598,6 +635,7 @@ describe("DelegationCard", () => {
         parentBot={parentBot}
       />,
     );
+
     const [face, details] = markup.split("<details");
     expect(face).not.toContain("ExternalShell");
     expect(face).not.toContain("MCP servers");
@@ -616,6 +654,7 @@ describe("DelegationCard", () => {
         variant="group"
       />,
     );
+
     expect(group).toContain("Mira asked Mori");
     expect(renderCard("running")).not.toContain("asked");
     expect(
@@ -633,6 +672,7 @@ describe("DelegationCard", () => {
 
   it("labels scheduled and retried work", () => {
     expect(renderCard("running")).not.toMatch(/>Scheduled<|>Retried</);
+
     const markup = renderToStaticMarkup(
       <DelegationCard
         delegation={delegation("running", {
@@ -644,6 +684,7 @@ describe("DelegationCard", () => {
         parentBot={parentBot}
       />,
     );
+
     expect(markup).toContain(">Scheduled</span>");
     expect(markup).toContain(">Retried</span>");
   });
@@ -658,6 +699,7 @@ describe("DelegationCard", () => {
         actions={<button type="button">Let it finish</button>}
       />,
     );
+
     expect(markup).toContain("Let it finish");
     expect(markup).not.toContain("Cancel delegation to Mori");
     expect(markup).toContain('aria-label="View Mori&#x27;s work"');
@@ -667,16 +709,19 @@ describe("DelegationCard", () => {
     const setInterval = vi.spyOn(globalThis, "setInterval");
     const cleanups: Array<() => void> = [];
     mocks.clockCleanups = cleanups;
+
     try {
       for (const state of ["running", "queued", "blocked", "completed", "failed"] as const) {
         renderCard(state);
       }
+
       expect(delegationClockState()).toEqual({ subscribers: 3, ticking: true });
       expect(setInterval).toHaveBeenCalledTimes(1);
     } finally {
       for (const cleanup of cleanups) cleanup();
       setInterval.mockRestore();
     }
+
     expect(delegationClockState()).toEqual({ subscribers: 0, ticking: false });
   });
 });

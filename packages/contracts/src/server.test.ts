@@ -9,8 +9,11 @@ import {
 } from "./server.ts";
 
 const decodeServerProvider = Schema.decodeUnknownSync(ServerProvider);
+
 const decodeServerProviders = Schema.decodeUnknownSync(ServerProviders);
+
 const decodeUpsertKeybindingResult = Schema.decodeUnknownSync(ServerUpsertKeybindingResult);
+
 const decodeAvailableEditors = Schema.decodeUnknownSync(ServerConfig.fields.availableEditors);
 
 const baseProviderSnapshot = {
@@ -102,10 +105,12 @@ describe("ServerProvider", () => {
       shortDescription: "Fix CI failures.",
       description: "Debug a failing CI run.",
     };
+
     const parsed = decodeServerProvider({
       ...baseProviderSnapshot,
       skills: [preIconSkill],
     });
+
     expect(parsed.skills[0]?.name).toBe("gh-fix-ci");
     expect(parsed.skills[0]?.icon).toBeUndefined();
     expect(parsed.skills[0]?.displayName).toBe("CI Debug");
@@ -115,6 +120,7 @@ describe("ServerProvider", () => {
       ...baseProviderSnapshot,
       skills: [{ ...preIconSkill, icon: "🔧" }],
     });
+
     expect(withIcon.skills[0]?.icon).toBe("🔧");
   });
 

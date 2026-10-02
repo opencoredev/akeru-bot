@@ -20,10 +20,13 @@ function stashEntrySnippet(
   plural: ReturnType<typeof useI18n>["plural"],
 ): string {
   const trimmed = entry.prompt.trim().replace(/\s+/g, " ");
+
   if (trimmed.length > 0) {
     return trimmed.length > SNIPPET_MAX_CHARS ? `${trimmed.slice(0, SNIPPET_MAX_CHARS)}…` : trimmed;
   }
+
   const imageCount = entry.attachments.length + entry.droppedImageNames.length;
+
   return imageCount > 0
     ? plural(imageCount, { one: "({count} image)", other: "({count} images)" })
     : t("(empty)");
@@ -53,6 +56,7 @@ export const ComposerStashMenu = memo(function ComposerStashMenu(props: {
   useEffect(() => {
     const closeOnOutsidePointer = (event: PointerEvent) => {
       const drawer = drawerRef.current;
+
       if (
         (drawer && event.composedPath().includes(drawer)) ||
         (event.target instanceof Element &&
@@ -60,9 +64,12 @@ export const ComposerStashMenu = memo(function ComposerStashMenu(props: {
       ) {
         return;
       }
+
       onClose();
     };
+
     document.addEventListener("pointerdown", closeOnOutsidePointer, true);
+
     return () => document.removeEventListener("pointerdown", closeOnOutsidePointer, true);
   }, [onClose]);
 
@@ -72,8 +79,10 @@ export const ComposerStashMenu = memo(function ComposerStashMenu(props: {
         event.preventDefault();
         event.stopPropagation();
         onClose();
+
         return;
       }
+
       if (event.key === "ArrowDown" || event.key === "ArrowUp") {
         if (entries.length === 0) return;
         event.preventDefault();
@@ -83,26 +92,34 @@ export const ComposerStashMenu = memo(function ComposerStashMenu(props: {
         const normalizedIndex = currentIndex >= 0 ? currentIndex : offset === 1 ? -1 : 0;
         const nextIndex = (normalizedIndex + offset + entries.length) % entries.length;
         setHighlightedId(entries[nextIndex]?.id ?? null);
+
         const nextButton =
           drawerRef.current?.querySelectorAll<HTMLButtonElement>("[data-stash-restore]")[nextIndex];
+
         nextButton?.scrollIntoView({ block: "nearest" });
+
         if (drawerRef.current?.contains(document.activeElement)) {
           nextButton?.focus({ preventScroll: true });
         }
+
         return;
       }
+
       if (event.key === "Enter") {
         // A focused control inside the row (the delete button) owns its own
         // activation; swallowing Enter here would restore instead of delete.
         if (event.target instanceof HTMLElement && event.target.closest("button[aria-label]")) {
           return;
         }
+
         if (!highlightedEntry) return;
         event.preventDefault();
         event.stopPropagation();
         onRestore(highlightedEntry);
+
         return;
       }
+
       if (event.key === "Backspace" && (event.metaKey || event.ctrlKey)) {
         if (!highlightedEntry) return;
         event.preventDefault();
@@ -110,7 +127,9 @@ export const ComposerStashMenu = memo(function ComposerStashMenu(props: {
         onDelete(highlightedEntry);
       }
     };
+
     window.addEventListener("keydown", handler, true);
+
     return () => window.removeEventListener("keydown", handler, true);
   }, [entries, highlightedEntry, onClose, onDelete, onRestore]);
 

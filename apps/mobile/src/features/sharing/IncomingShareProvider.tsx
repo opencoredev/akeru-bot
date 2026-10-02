@@ -44,9 +44,11 @@ function receiveSharingEnabled(): boolean {
   if (Platform.OS === "android") {
     return true;
   }
+
   if (Platform.OS !== "ios") {
     return false;
   }
+
   return Constants.expoConfig?.extra?.iosPersonalTeamBuild !== true;
 }
 
@@ -64,6 +66,7 @@ async function resolvedPayloadsForImages(): Promise<ReadonlyArray<ResolvedShareP
     // private cache file; its modern File API can still read the raw URI when
     // resolution fails.
     console.warn("[incoming-share] could not resolve shared file metadata", error);
+
     return [];
   }
 }
@@ -76,12 +79,15 @@ async function incomingShareIdForPayloads(payloads: ReadonlyArray<SharePayload>)
       value: payload.value,
     })),
   );
+
   const digest = await Crypto.digestStringAsync(Crypto.CryptoDigestAlgorithm.SHA256, fingerprint);
+
   return `share-${digest}`;
 }
 
 async function readBase64(uri: string): Promise<string> {
   const { File } = await import("expo-file-system");
+
   return new File(uri).base64();
 }
 
@@ -89,9 +95,11 @@ async function removeOwnedFile(uri: string): Promise<void> {
   if (!uri.startsWith("file:")) {
     return;
   }
+
   try {
     const { File } = await import("expo-file-system");
     const file = new File(uri);
+
     if (file.exists) {
       file.delete();
     }
@@ -104,20 +112,25 @@ async function removeReplayedImagePayloadFiles(
   payloads: ReadonlyArray<SharePayload>,
 ): Promise<void> {
   const uris = new Set<string>();
+
   for (const payload of payloads) {
     if (payload.shareType === "image") {
       uris.add(payload.value);
     }
   }
+
   if (uris.size === 0) {
     return;
   }
+
   const resolvedPayloads = await resolvedPayloadsForImages();
+
   for (const payload of resolvedPayloads) {
     if (payload.shareType === "image" && payload.contentUri) {
       uris.add(payload.contentUri);
     }
   }
+
   await Promise.all([...uris].map(removeOwnedFile));
 }
 
@@ -132,9 +145,11 @@ const incomingShareInbox = new IncomingShareInbox({
   clearPayloads: clearSharedPayloads,
   buildDraft: async ({ payloads, id, createdAt }) => {
     const cleanupUris = new Set<string>();
+
     const resolvedPayloads = payloads.some((payload) => payload.shareType === "image")
       ? await resolvedPayloadsForImages()
       : [];
+
     const draft = await buildIncomingShareDraft({
       payloads,
       resolvedPayloads,
@@ -147,6 +162,7 @@ const incomingShareInbox = new IncomingShareInbox({
       id,
       createdAt,
     });
+
     return {
       draft,
       cleanup: async () => {
@@ -176,6 +192,7 @@ export function IncomingShareProvider(props: React.PropsWithChildren) {
 
   useEffect(() => {
     mountedRef.current = true;
+
     return () => {
       mountedRef.current = false;
     };
@@ -189,6 +206,7 @@ export function IncomingShareProvider(props: React.PropsWithChildren) {
     const operation = (async () => {
       try {
         const snapshot = await incomingShareInbox.refresh({ ingestNative: enabled });
+
         if (mountedRef.current) {
           setDrafts(snapshot);
           setError(null);
@@ -197,10 +215,12 @@ export function IncomingShareProvider(props: React.PropsWithChildren) {
         const persisted = await incomingShareInbox
           .refresh({ ingestNative: false })
           .catch(() => null);
+
         if (mountedRef.current) {
           if (persisted) {
             setDrafts(persisted);
           }
+
           setError(cause instanceof Error ? cause : new Error("Could not import shared content."));
         }
       }
@@ -209,6 +229,7 @@ export function IncomingShareProvider(props: React.PropsWithChildren) {
     });
 
     refreshPromiseRef.current = operation;
+
     return operation;
   }, [enabled]);
 
@@ -228,11 +249,13 @@ export function IncomingShareProvider(props: React.PropsWithChildren) {
     if (!enabled) {
       return;
     }
+
     const subscription = AppState.addEventListener("change", (state) => {
       if (state === "active") {
         refreshOnAppActive();
       }
     });
+
     return () => subscription.remove();
   }, [enabled]);
 
@@ -240,6 +263,7 @@ export function IncomingShareProvider(props: React.PropsWithChildren) {
     if (!error) {
       return;
     }
+
     Alert.alert(t("Could not import shared content"), error.message, [
       { text: t("Dismiss"), style: "cancel", onPress: () => setError(null) },
       {
@@ -254,28 +278,34 @@ export function IncomingShareProvider(props: React.PropsWithChildren) {
 
   const consumeShare = useCallback(async (shareId: string) => {
     const snapshot = await incomingShareInbox.consume(shareId);
+
     if (mountedRef.current) {
       setDrafts(snapshot);
     }
   }, []);
+
   const reserveShare = useCallback(
     async (shareId: string, destination: IncomingShareDestination) => {
       const snapshot = await incomingShareInbox.reserve(shareId, destination);
+
       if (mountedRef.current) {
         setDrafts(snapshot);
       }
     },
     [],
   );
+
   const releaseShareReservation = useCallback(
     async (shareId: string, expectedDestination: IncomingShareDestination) => {
       const snapshot = await incomingShareInbox.releaseReservation(shareId, expectedDestination);
+
       if (mountedRef.current) {
         setDrafts(snapshot);
       }
     },
     [],
   );
+
   const getShare = useCallback(
     (shareId: string) => drafts.find((draft) => draft.id === shareId) ?? null,
     [drafts],
@@ -311,8 +341,10 @@ export function IncomingShareProvider(props: React.PropsWithChildren) {
 
 export function useIncomingShare(): IncomingShareContextValue {
   const value = React.use(IncomingShareContext);
+
   if (value === null) {
     throw new Error("useIncomingShare must be used within IncomingShareProvider.");
   }
+
   return value;
 }

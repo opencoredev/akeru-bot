@@ -25,6 +25,7 @@ layer("029_ProjectionThreadDetailOrderingIndexes", (it) => {
       }>`
         PRAGMA index_list(projection_thread_activities)
       `;
+
       assert.ok(
         activityIndexes.some(
           (index) => index.name === "idx_projection_thread_activities_thread_sequence_created_id",
@@ -38,6 +39,7 @@ layer("029_ProjectionThreadDetailOrderingIndexes", (it) => {
       }>`
         PRAGMA index_info('idx_projection_thread_activities_thread_sequence_created_id')
       `;
+
       assert.deepStrictEqual(
         activityIndexColumns.map((column) => column.name),
         ["thread_id", "sequence", "created_at", "activity_id"],
@@ -52,6 +54,7 @@ layer("029_ProjectionThreadDetailOrderingIndexes", (it) => {
       }>`
         PRAGMA index_list(projection_thread_messages)
       `;
+
       assert.ok(
         messageIndexes.some(
           (index) => index.name === "idx_projection_thread_messages_thread_created_id",
@@ -65,6 +68,7 @@ layer("029_ProjectionThreadDetailOrderingIndexes", (it) => {
       }>`
         PRAGMA index_info('idx_projection_thread_messages_thread_created_id')
       `;
+
       assert.deepStrictEqual(
         messageIndexColumns.map((column) => column.name),
         ["thread_id", "created_at", "message_id"],

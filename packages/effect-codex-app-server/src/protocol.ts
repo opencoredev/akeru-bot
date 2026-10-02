@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import * as Cause from "effect/Cause";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
@@ -9,9 +10,10 @@ import * as Stdio from "effect/Stdio";
 import * as Stream from "effect/Stream";
 
 import * as CodexError from "./errors.ts";
-import { JsonRpcId, JsonRpcResponseEnvelope } from "./_internal/shared.ts";
-const isJsonRpcId = Schema.is(JsonRpcId);
+import { JsonRpcResponseEnvelope, JsonRpcRequestEnvelope } from "./_internal/shared.ts";
+
 const isJsonRpcResponseEnvelope = Schema.is(JsonRpcResponseEnvelope);
+
 const isCodexAppServerError = Schema.is(CodexError.CodexAppServerError);
 
 export interface CodexAppServerProtocolLogEvent {
@@ -54,7 +56,7 @@ export interface CodexAppServerPatchedProtocolOptions {
   ) => Effect.Effect<void, never>;
   readonly onRequest?: (
     request: CodexAppServerIncomingRequest,
-  ) => Effect.Effect<unknown, CodexError.CodexAppServerError>;
+  ) => Effect.Effect<JsonRpcResponseEnvelope["result"], CodexError.CodexAppServerError>;
   readonly onTermination?: (error: CodexError.CodexAppServerError) => Effect.Effect<void, never>;
 }
 
@@ -71,15 +73,15 @@ export interface CodexAppServerPatchedProtocol {
   readonly incomingRequests: Stream.Stream<CodexAppServerIncomingRequest>;
   readonly request: (
     method: string,
-    payload?: unknown,
-  ) => Effect.Effect<unknown, CodexError.CodexAppServerError>;
+    payload?: JsonRpcRequestEnvelope["params"],
+  ) => Effect.Effect<JsonRpcResponseEnvelope["result"], CodexError.CodexAppServerError>;
   readonly notify: (
     method: string,
-    payload?: unknown,
+    payload?: JsonRpcRequestEnvelope["params"],
   ) => Effect.Effect<void, CodexError.CodexAppServerError>;
   readonly respond: (
     requestId: string | number,
-    result: unknown,
+    result: JsonRpcResponseEnvelope["result"],
   ) => Effect.Effect<void, CodexError.CodexAppServerError>;
   readonly respondError: (
     requestId: string | number,
@@ -87,44 +89,53 @@ export interface CodexAppServerPatchedProtocol {
   ) => Effect.Effect<void, CodexError.CodexAppServerError>;
 }
 
+interface OutgoingMessage {
+  readonly id?: string | number;
+  readonly method?: string;
+  readonly params?: JsonRpcRequestEnvelope["params"];
+  readonly result?: JsonRpcResponseEnvelope["result"];
+  readonly error?: CodexError.CodexAppServerProtocolErrorShape;
+}
+
 interface CodexAppServerPendingRequest {
-  readonly deferred: Deferred.Deferred<unknown, CodexError.CodexAppServerError>;
+  readonly deferred: Deferred.Deferred<
+    JsonRpcResponseEnvelope["result"],
+    CodexError.CodexAppServerError
+  >;
   readonly method: string;
 }
 
-function isObject(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
+const isIncomingRequest = Schema.is(JsonRpcRequestEnvelope);
+
+const isNotificationShape = Schema.is(
+  Schema.Struct({ method: Schema.String, params: Schema.optional(Schema.Unknown) }),
+);
+
+function isIncomingNotification(
+  value: JsonRpcRequestEnvelope["params"],
+): value is CodexAppServerIncomingNotification {
+  return isNotificationShape(value) && !("id" in value);
 }
 
-function isIncomingRequest(value: unknown): value is CodexAppServerIncomingRequest {
-  if (!isObject(value) || typeof value.method !== "string") {
-    return false;
-  }
-  return isJsonRpcId(value.id);
-}
-
-function isIncomingNotification(value: unknown): value is CodexAppServerIncomingNotification {
-  return isObject(value) && typeof value.method === "string" && !("id" in value);
-}
-
-function isIncomingResponse(value: unknown): value is typeof JsonRpcResponseEnvelope.Type {
-  return isJsonRpcResponseEnvelope(value);
-}
+const isIncomingResponse = isJsonRpcResponseEnvelope;
 
 const encodeJsonString = Schema.encodeUnknownEffect(Schema.fromJsonString(Schema.Unknown));
+
 const decodeJsonString = Schema.decodeUnknownEffect(Schema.fromJsonString(Schema.Unknown));
 
 const encodeWireMessage = (
-  message: Record<string, unknown>,
+  message: OutgoingMessage,
 ): Effect.Effect<string, CodexError.CodexAppServerProtocolParseError> =>
   encodeJsonString(message).pipe(
     Effect.map((encoded) => `${encoded}\n`),
     Effect.mapError((cause) => {
-      const method = typeof message.method === "string" ? message.method : undefined;
+      const method = Predicate.isString(message.method) ? message.method : undefined;
+
       const requestId =
-        typeof message.id === "string" || typeof message.id === "number"
+        Predicate.isString(message.id) || Predicate.isNumber(message.id)
           ? String(message.id)
           : undefined;
+
       return CodexError.CodexAppServerProtocolParseError.fromSchemaError(
         "encode-wire-message",
         cause,
@@ -138,7 +149,7 @@ const encodeWireMessage = (
 
 const decodeWireMessage = (
   line: string,
-): Effect.Effect<unknown, CodexError.CodexAppServerProtocolParseError> =>
+): Effect.Effect<JsonRpcRequestEnvelope["params"], CodexError.CodexAppServerProtocolParseError> =>
   decodeJsonString(line).pipe(
     Effect.mapError((cause) =>
       CodexError.CodexAppServerProtocolParseError.fromSchemaError("decode-wire-message", cause),
@@ -146,14 +157,14 @@ const decodeWireMessage = (
   );
 
 const normalizeIncomingError = (
-  error: unknown,
+  cause: unknown,
   operation: CodexError.CodexAppServerTransportOperation,
 ): CodexError.CodexAppServerError =>
-  isCodexAppServerError(error)
-    ? error
+  isCodexAppServerError(cause)
+    ? cause
     : new CodexError.CodexAppServerTransportError({
         operation,
-        cause: error,
+        cause: cause,
       });
 
 const toProtocolMessage = (
@@ -162,7 +173,7 @@ const toProtocolMessage = (
     readonly result?: unknown;
     readonly error?: CodexError.CodexAppServerProtocolErrorShape;
   },
-): { readonly [key: string]: unknown } => ({
+) => ({
   id: requestId,
   ...(fields.result !== undefined ? { result: fields.result } : {}),
   ...(fields.error !== undefined ? { error: fields.error } : {}),
@@ -172,11 +183,13 @@ const makeRawQueue = Effect.fn("makeRawQueue")(function* <A>(bufferSize: number 
   if (bufferSize === 0) {
     return undefined;
   }
+
   if (bufferSize !== "unbounded" && (!Number.isSafeInteger(bufferSize) || bufferSize < 0)) {
     return yield* Effect.die(
       new RangeError("Raw buffer size must be a non-negative safe integer or 'unbounded'."),
     );
   }
+
   return yield* Effect.acquireRelease(
     Queue.sliding<A, Cause.Done<void>>(
       bufferSize === "unbounded" ? Number.POSITIVE_INFINITY : bufferSize,
@@ -190,12 +203,15 @@ export const makeCodexAppServerPatchedProtocol = Effect.fn("makeCodexAppServerPa
     options: CodexAppServerPatchedProtocolOptions,
   ): Effect.fn.Return<CodexAppServerPatchedProtocol, never, Scope.Scope> {
     const outgoing = yield* Queue.unbounded<string, Cause.Done<void>>();
+
     const incomingNotifications = yield* makeRawQueue<CodexAppServerIncomingNotification>(
       options.rawNotificationBufferSize,
     );
+
     const incomingRequests = yield* makeRawQueue<CodexAppServerIncomingRequest>(
       options.rawRequestBufferSize,
     );
+
     const pending = yield* Ref.make(new Map<string, CodexAppServerPendingRequest>());
     const nextRequestId = yield* Ref.make(1);
     const remainder: Array<string> = [];
@@ -205,9 +221,11 @@ export const makeCodexAppServerPatchedProtocol = Effect.fn("makeCodexAppServerPa
       if (event.direction === "incoming" && !options.logIncoming) {
         return Effect.void;
       }
+
       if (event.direction === "outgoing" && !options.logOutgoing) {
         return Effect.void;
       }
+
       return (
         options.logger?.(event) ??
         Effect.logDebug("Codex App Server protocol event").pipe(Effect.annotateLogs({ event }))
@@ -229,17 +247,21 @@ export const makeCodexAppServerPatchedProtocol = Effect.fn("makeCodexAppServerPa
         if (handled) {
           return [Effect.void, true] as const;
         }
+
         return [
           Effect.gen(function* () {
             if (incomingNotifications) {
               yield* Queue.end(incomingNotifications);
             }
+
             if (incomingRequests) {
               yield* Queue.end(incomingRequests);
             }
+
             const error = yield* classify();
             yield* failAllPending(error);
             yield* Queue.end(outgoing);
+
             if (options.onTermination) {
               yield* options.onTermination(error);
             }
@@ -248,7 +270,7 @@ export const makeCodexAppServerPatchedProtocol = Effect.fn("makeCodexAppServerPa
         ] as const;
       }).pipe(Effect.flatten);
 
-    const offerOutgoing = (message: Record<string, unknown>) =>
+    const offerOutgoing = (message: OutgoingMessage) =>
       Effect.gen(function* () {
         yield* logProtocol({
           direction: "outgoing",
@@ -269,8 +291,10 @@ export const makeCodexAppServerPatchedProtocol = Effect.fn("makeCodexAppServerPa
         if (!current.has(requestId)) {
           return current;
         }
+
         const next = new Map(current);
         next.delete(requestId);
+
         return next;
       });
 
@@ -280,15 +304,18 @@ export const makeCodexAppServerPatchedProtocol = Effect.fn("makeCodexAppServerPa
     ) =>
       Ref.modify(pending, (current) => {
         const pendingRequest = current.get(requestId);
+
         if (!pendingRequest) {
           return [Effect.void, current] as const;
         }
+
         const next = new Map(current);
         next.delete(requestId);
+
         return [handler(pendingRequest), next] as const;
       }).pipe(Effect.flatten);
 
-    const respond = (requestId: string | number, result: unknown) =>
+    const respond = (requestId: string | number, result: JsonRpcResponseEnvelope["result"]) =>
       offerOutgoing(toProtocolMessage(requestId, { result }));
 
     const respondError = (
@@ -296,9 +323,10 @@ export const makeCodexAppServerPatchedProtocol = Effect.fn("makeCodexAppServerPa
       error: CodexError.CodexAppServerRequestError,
     ) => offerOutgoing(toProtocolMessage(requestId, { error: error.toProtocolError() }));
 
-    const handleResponse = (response: typeof JsonRpcResponseEnvelope.Type) => {
+    const handleResponse = (response: JsonRpcResponseEnvelope) => {
       const requestId = String(response.id);
       const protocolError = response.error;
+
       if (protocolError !== undefined) {
         return resolvePending(requestId, ({ deferred, method }) =>
           Deferred.fail(
@@ -311,6 +339,7 @@ export const makeCodexAppServerPatchedProtocol = Effect.fn("makeCodexAppServerPa
           ),
         );
       }
+
       return resolvePending(requestId, ({ deferred }) =>
         Deferred.succeed(deferred, response.result),
       );
@@ -344,18 +373,19 @@ export const makeCodexAppServerPatchedProtocol = Effect.fn("makeCodexAppServerPa
         Effect.asVoid,
       );
 
-    const routeMessage = (
-      message: unknown,
-    ): Effect.Effect<void, CodexError.CodexAppServerError> => {
+    const routeMessage = (message: JsonRpcRequestEnvelope["params"]) => {
       if (isIncomingRequest(message)) {
         return handleRequest(message);
       }
+
       if (isIncomingNotification(message)) {
         return handleNotification(message);
       }
+
       if (isIncomingResponse(message)) {
         return handleResponse(message);
       }
+
       return Effect.fail(
         CodexError.CodexAppServerProtocolParseError.fromUnroutableMessage(message),
       );
@@ -365,6 +395,7 @@ export const makeCodexAppServerPatchedProtocol = Effect.fn("makeCodexAppServerPa
       if (line.trim().length === 0) {
         return Effect.void;
       }
+
       return logProtocol({
         direction: "incoming",
         stage: "raw",
@@ -404,6 +435,7 @@ export const makeCodexAppServerPatchedProtocol = Effect.fn("makeCodexAppServerPa
         Effect.sync(() => {
           const lines: Array<string> = [];
           let start = 0;
+
           for (
             let newline = chunk.indexOf("\n");
             newline !== -1;
@@ -414,10 +446,12 @@ export const makeCodexAppServerPatchedProtocol = Effect.fn("makeCodexAppServerPa
             remainder.length = 0;
             start = newline + 1;
           }
+
           // Keep unfinished lines in fragments so each chunk is scanned only once.
           if (start < chunk.length) {
             remainder.push(chunk.slice(start));
           }
+
           return lines;
         }).pipe(Effect.flatMap((lines) => Effect.forEach(lines, handleLine, { discard: true }))),
       ),
@@ -430,6 +464,7 @@ export const makeCodexAppServerPatchedProtocol = Effect.fn("makeCodexAppServerPa
           Effect.sync(() => {
             const line = remainder.join("");
             remainder.length = 0;
+
             return line;
           }).pipe(
             Effect.flatMap(handleLine),
@@ -449,12 +484,13 @@ export const makeCodexAppServerPatchedProtocol = Effect.fn("makeCodexAppServerPa
 
     yield* Stream.fromQueue(outgoing).pipe(Stream.run(options.stdio.stdout()), Effect.forkScoped);
 
-    const request = (method: string, payload?: unknown) =>
+    const request = (method: string, payload?: JsonRpcRequestEnvelope["params"]) =>
       Effect.gen(function* () {
         const requestId = yield* Ref.modify(
           nextRequestId,
           (current) => [current, current + 1] as const,
         );
+
         const deferred = yield* Deferred.make<unknown, CodexError.CodexAppServerError>();
         yield* Ref.update(pending, (current) =>
           new Map(current).set(String(requestId), { deferred, method }),
@@ -464,12 +500,13 @@ export const makeCodexAppServerPatchedProtocol = Effect.fn("makeCodexAppServerPa
           method,
           ...(payload !== undefined ? { params: payload } : {}),
         }).pipe(Effect.tapError(() => removePending(String(requestId))));
+
         return yield* Deferred.await(deferred).pipe(
           Effect.onInterrupt(() => removePending(String(requestId))),
         );
       });
 
-    const notify = (method: string, payload?: unknown) =>
+    const notify = (method: string, payload?: JsonRpcRequestEnvelope["params"]) =>
       offerOutgoing({
         method,
         ...(payload !== undefined ? { params: payload } : {}),

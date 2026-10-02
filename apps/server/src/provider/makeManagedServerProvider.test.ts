@@ -22,7 +22,9 @@ import { ServerSettingsService } from "../serverSettings.ts";
 import { makeManagedServerProvider } from "./makeManagedServerProvider.ts";
 
 const emptyCapabilities = createModelCapabilities({ optionDescriptors: [] });
+
 const TEST_EPOCH = DateTime.makeUnsafe("1970-01-01T00:00:00.000Z");
+
 const fastModeCapabilities = createModelCapabilities({
   optionDescriptors: [
     {
@@ -131,9 +133,13 @@ function makeBackgroundPolicyLayer(shouldRunScopeWork: boolean) {
 }
 
 const BackgroundPolicyAlwaysRunLayer = makeBackgroundPolicyLayer(true);
+
 const BackgroundPolicyNeverRunLayer = makeBackgroundPolicyLayer(false);
+
 const ServerSettingsTestLayer = ServerSettingsService.layerTest();
+
 const AlwaysRunTestLayer = Layer.merge(BackgroundPolicyAlwaysRunLayer, ServerSettingsTestLayer);
+
 const NeverRunTestLayer = Layer.merge(BackgroundPolicyNeverRunLayer, ServerSettingsTestLayer);
 
 const enrichedSnapshotSecond: ServerProvider = {
@@ -157,6 +163,7 @@ describe("makeManagedServerProvider", () => {
         Effect.gen(function* () {
           const checkCalls = yield* Ref.make(0);
           const releaseCheck = yield* Deferred.make<void>();
+
           const provider = yield* makeManagedServerProvider<TestSettings>({
             maintenanceCapabilities,
             getSettings: Effect.succeed({ enabled: true }),
@@ -177,6 +184,7 @@ describe("makeManagedServerProvider", () => {
             Stream.runCollect,
             Effect.forkChild,
           );
+
           yield* Effect.yieldNow;
           assert.strictEqual(yield* Ref.get(checkCalls), 1);
 
@@ -257,8 +265,10 @@ describe("makeManagedServerProvider", () => {
           ...DEFAULT_SERVER_SETTINGS,
           providerHealthRefreshInterval: Duration.hours(1),
         };
+
         const serverSettingsRef = yield* Ref.make(initialServerSettings);
         const serverSettingsChanges = yield* PubSub.unbounded<typeof initialServerSettings>();
+
         const serverSettingsLayer = Layer.succeed(
           ServerSettingsService,
           ServerSettingsService.of({
@@ -272,6 +282,7 @@ describe("makeManagedServerProvider", () => {
             ),
           }),
         );
+
         const checkCalls = yield* Ref.make(0);
         const initialCheckDone = yield* Deferred.make<void>();
         const periodicCheckDone = yield* Deferred.make<void>();
@@ -293,10 +304,12 @@ describe("makeManagedServerProvider", () => {
         }).pipe(Effect.provide(Layer.merge(BackgroundPolicyAlwaysRunLayer, serverSettingsLayer)));
 
         yield* Deferred.await(initialCheckDone);
+
         const nextServerSettings = {
           ...initialServerSettings,
           providerHealthRefreshInterval: Duration.seconds(1),
         };
+
         yield* Ref.set(serverSettingsRef, nextServerSettings);
         yield* PubSub.publish(serverSettingsChanges, nextServerSettings);
         yield* Effect.yieldNow;
@@ -318,6 +331,7 @@ describe("makeManagedServerProvider", () => {
         const checkCalls = yield* Ref.make(0);
         const releaseInitialCheck = yield* Deferred.make<void>();
         const releaseSettingsCheck = yield* Deferred.make<void>();
+
         const provider = yield* makeManagedServerProvider<TestSettings>({
           maintenanceCapabilities,
           getSettings: Ref.get(settingsRef),
@@ -338,6 +352,7 @@ describe("makeManagedServerProvider", () => {
           Stream.runCollect,
           Effect.forkChild,
         );
+
         yield* Effect.yieldNow;
 
         yield* Deferred.succeed(releaseInitialCheck, undefined);
@@ -360,6 +375,7 @@ describe("makeManagedServerProvider", () => {
       Effect.gen(function* () {
         const releaseEnrichment = yield* Deferred.make<void>();
         const releaseCheck = yield* Deferred.make<void>();
+
         const provider = yield* makeManagedServerProvider<TestSettings>({
           maintenanceCapabilities,
           getSettings: Effect.succeed({ enabled: true }),
@@ -378,6 +394,7 @@ describe("makeManagedServerProvider", () => {
           Stream.runCollect,
           Effect.forkChild,
         );
+
         yield* Effect.yieldNow;
 
         yield* Deferred.succeed(releaseCheck, undefined);
@@ -401,6 +418,7 @@ describe("makeManagedServerProvider", () => {
         const firstCallbackReady = yield* Deferred.make<void>();
         const secondCallbackReady = yield* Deferred.make<void>();
         const allowFirstRefresh = yield* Deferred.make<void>();
+
         const provider = yield* makeManagedServerProvider<TestSettings>({
           maintenanceCapabilities,
           getSettings: Effect.succeed({ enabled: true }),
@@ -417,6 +435,7 @@ describe("makeManagedServerProvider", () => {
           enrichSnapshot: ({ publishSnapshot }) =>
             Effect.gen(function* () {
               publishCallbacks.push(publishSnapshot);
+
               if (publishCallbacks.length === 1) {
                 yield* Deferred.succeed(firstCallbackReady, undefined).pipe(Effect.ignore);
               } else if (publishCallbacks.length === 2) {
@@ -430,6 +449,7 @@ describe("makeManagedServerProvider", () => {
           Stream.runCollect,
           Effect.forkChild,
         );
+
         yield* Effect.yieldNow;
 
         yield* Deferred.succeed(allowFirstRefresh, undefined);

@@ -1,6 +1,7 @@
 import { matchers, routes, type VercelConfig } from "@vercel/config/v1";
 
 const ROUTER_HOST = "app.t3.codes";
+
 const LATEST_ORIGIN = "https://latest.app.t3.codes";
 
 export const config: VercelConfig = {

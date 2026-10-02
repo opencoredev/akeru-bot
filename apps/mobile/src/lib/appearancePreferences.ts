@@ -1,8 +1,12 @@
+import { Predicate } from "effect";
 import { MOBILE_TYPOGRAPHY } from "./typography";
 
 export const DEFAULT_BASE_FONT_SIZE = MOBILE_TYPOGRAPHY.body.fontSize;
+
 export const MIN_BASE_FONT_SIZE = 11;
+
 export const MAX_BASE_FONT_SIZE = 22;
+
 export const BASE_FONT_SIZE_STEP = 1;
 
 /** User-configurable appearance preferences as stored. */
@@ -36,7 +40,7 @@ export interface NativeMarkdownTypography {
 }
 
 export function normalizeBaseFontSize(value: number | null | undefined): number {
-  if (typeof value !== "number" || !Number.isFinite(value)) {
+  if (!Predicate.isNumber(value) || !Number.isFinite(value)) {
     return DEFAULT_BASE_FONT_SIZE;
   }
 
@@ -102,7 +106,7 @@ const TEXT_SCALE_VARIABLE_ROLES = {
  * pass to `Uniwind.updateCSSVariables`. All className-based text (`text-sm`,
  * `text-base`, ...) re-resolves live when these are injected.
  */
-export function resolveTextScaleVariables(baseFontSize: number): Record<string, number> {
+export function resolveTextScaleVariables(baseFontSize: number) {
   const scale = normalizeBaseFontSize(baseFontSize) / DEFAULT_BASE_FONT_SIZE;
   const variables: Record<string, number> = {};
 
@@ -126,11 +130,13 @@ export function scaledTypographyLineHeight(
   baseFontSize: number,
 ): number {
   const scale = normalizeBaseFontSize(baseFontSize) / DEFAULT_BASE_FONT_SIZE;
+
   return Math.max(10, Math.round(role.lineHeight * scale));
 }
 
 export function resolveNativeMarkdownTypography(baseFontSize: number): NativeMarkdownTypography {
   const fontSizes = resolveMarkdownFontSizes(baseFontSize);
+
   return {
     fontSize: fontSizes.m,
     lineHeight: fontSizes.bodyLineHeight,
@@ -147,5 +153,6 @@ export function resolveNativeMarkdownTypography(baseFontSize: number): NativeMar
 
 export function stepBaseFontSize(current: number, direction: -1 | 1): number {
   const next = direction === -1 ? current - BASE_FONT_SIZE_STEP : current + BASE_FONT_SIZE_STEP;
+
   return normalizeBaseFontSize(next);
 }

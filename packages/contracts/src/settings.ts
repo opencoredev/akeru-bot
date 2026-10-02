@@ -1,300 +1,5 @@
-import * as Effect from "effect/Effect";
-import * as Duration from "effect/Duration";
-import * as Schema from "effect/Schema";
-import * as SchemaTransformation from "effect/SchemaTransformation";
-import * as Struct from "effect/Struct";
-import { ChannelConnectionId, TrimmedNonEmptyString, TrimmedString } from "./baseSchemas.ts";
-import { ThreadEnvMode } from "./environment.ts";
-import {
-  DEFAULT_TEXT_GENERATION_MODEL,
-  DEFAULT_TEXT_GENERATION_REASONING_EFFORT,
-  ProviderOptionSelections,
-} from "./model.ts";
-import {
-  BotSandbox,
-  BotSandboxBrowserSharing,
-  DEFAULT_BOT_SANDBOX_BROWSER_SHARING,
-  DEFAULT_LOCAL_EXECUTION_MODE,
-  ChannelProvider,
-  LocalExecutionMode,
-  ModelSelection,
-} from "./orchestration.ts";
-import {
-  DEFAULT_PREVIEW_APPEARANCE,
-  DEFAULT_PREVIEW_ZOOM_FACTOR,
-  FILL_PREVIEW_VIEWPORT,
-  PreviewAppearancePreference,
-  PreviewViewportSetting,
-  PreviewZoomFactor,
-} from "./preview.ts";
-import {
-  VoiceProvider,
-  ChatGptRealtimeVoice,
-  VoiceSettings,
-  VoiceApiProvider,
-  VoiceTranscriptionProvider,
-  VoiceSynthesisVoices,
-} from "./voiceCall.ts";
-import { ImageGenerationSettings, ImageGenerationSettingsPatch } from "./imageGeneration.ts";
-import {
-  ProviderInstanceConfig,
-  ProviderInstanceEnvironmentVariable,
-  ProviderInstanceId,
-  type ProviderDriverKind,
-} from "./providerInstance.ts";
-
-// ── Client Settings (local-only) ───────────────────────────────
-
-export const TimestampFormat = Schema.Literals(["locale", "12-hour", "24-hour"]);
-export type TimestampFormat = typeof TimestampFormat.Type;
-export const DEFAULT_TIMESTAMP_FORMAT: TimestampFormat = "locale";
-
-export const MIN_USAGE_REFRESH_MINUTES = 1;
-export const MAX_USAGE_REFRESH_MINUTES = 60;
-export const DEFAULT_USAGE_REFRESH_MINUTES = 5;
-export const UsageRefreshMinutes = Schema.Int.check(
-  Schema.isBetween({
-    minimum: MIN_USAGE_REFRESH_MINUTES,
-    maximum: MAX_USAGE_REFRESH_MINUTES,
-  }),
-);
-export type UsageRefreshMinutes = typeof UsageRefreshMinutes.Type;
-
-export const SidebarProjectSortOrder = Schema.Literals(["updated_at", "created_at", "manual"]);
-export type SidebarProjectSortOrder = typeof SidebarProjectSortOrder.Type;
-export const DEFAULT_SIDEBAR_PROJECT_SORT_ORDER: SidebarProjectSortOrder = "updated_at";
-
-export const SidebarThreadSortOrder = Schema.Literals(["updated_at", "created_at"]);
-export type SidebarThreadSortOrder = typeof SidebarThreadSortOrder.Type;
-export const DEFAULT_SIDEBAR_THREAD_SORT_ORDER: SidebarThreadSortOrder = "updated_at";
-
-export const SidebarProjectGroupingMode = Schema.Literals([
-  "repository",
-  "repository_path",
-  "separate",
-]);
-export type SidebarProjectGroupingMode = typeof SidebarProjectGroupingMode.Type;
-export const DEFAULT_SIDEBAR_PROJECT_GROUPING_MODE: SidebarProjectGroupingMode = "repository";
-export const MIN_SIDEBAR_THREAD_PREVIEW_COUNT = 1;
-export const MAX_SIDEBAR_THREAD_PREVIEW_COUNT = 15;
-export const SidebarThreadPreviewCount = Schema.Int.check(
-  Schema.isBetween({
-    minimum: MIN_SIDEBAR_THREAD_PREVIEW_COUNT,
-    maximum: MAX_SIDEBAR_THREAD_PREVIEW_COUNT,
-  }),
-);
-export type SidebarThreadPreviewCount = typeof SidebarThreadPreviewCount.Type;
-export const DEFAULT_SIDEBAR_THREAD_PREVIEW_COUNT: SidebarThreadPreviewCount = 6;
-export const MIN_GLASS_OPACITY = 40;
-export const MAX_GLASS_OPACITY = 100;
-export const GlassOpacity = Schema.Int.check(
-  Schema.isBetween({
-    minimum: MIN_GLASS_OPACITY,
-    maximum: MAX_GLASS_OPACITY,
-  }),
-);
-export type GlassOpacity = typeof GlassOpacity.Type;
-export const DEFAULT_GLASS_OPACITY: GlassOpacity = 80;
-
-export const MIN_APPEARANCE_CONTRAST = 50;
-export const MAX_APPEARANCE_CONTRAST = 200;
-export const AppearanceContrast = Schema.Int.check(
-  Schema.isBetween({ minimum: MIN_APPEARANCE_CONTRAST, maximum: MAX_APPEARANCE_CONTRAST }),
-);
-export type AppearanceContrast = typeof AppearanceContrast.Type;
-export const DEFAULT_APPEARANCE_CONTRAST: AppearanceContrast = 100;
-/**
- * Font size preferences, in CSS pixels. The ranges are deliberately narrow:
- * the interface size scales every rem-based dimension in the app, so the
- * bounds keep layouts intact rather than offering unusable extremes.
- */
-export const MIN_INTERFACE_FONT_SIZE = 12;
-export const MAX_INTERFACE_FONT_SIZE = 20;
-export const InterfaceFontSize = Schema.Int.check(
-  Schema.isBetween({ minimum: MIN_INTERFACE_FONT_SIZE, maximum: MAX_INTERFACE_FONT_SIZE }),
-);
-export type InterfaceFontSize = typeof InterfaceFontSize.Type;
-export const DEFAULT_INTERFACE_FONT_SIZE: InterfaceFontSize = 16;
-
-export const MIN_PROMPT_FONT_SIZE = 12;
-export const MAX_PROMPT_FONT_SIZE = 20;
-export const PromptFontSize = Schema.Int.check(
-  Schema.isBetween({ minimum: MIN_PROMPT_FONT_SIZE, maximum: MAX_PROMPT_FONT_SIZE }),
-);
-export type PromptFontSize = typeof PromptFontSize.Type;
-export const DEFAULT_PROMPT_FONT_SIZE: PromptFontSize = 14;
-
-export const MIN_CODE_FONT_SIZE = 10;
-export const MAX_CODE_FONT_SIZE = 18;
-export const CodeFontSize = Schema.Int.check(
-  Schema.isBetween({ minimum: MIN_CODE_FONT_SIZE, maximum: MAX_CODE_FONT_SIZE }),
-);
-export type CodeFontSize = typeof CodeFontSize.Type;
-export const DEFAULT_CODE_FONT_SIZE: CodeFontSize = 13;
-
-export const MIN_TERMINAL_FONT_SIZE = 8;
-export const MAX_TERMINAL_FONT_SIZE = 20;
-export const TerminalFontSize = Schema.Int.check(
-  Schema.isBetween({ minimum: MIN_TERMINAL_FONT_SIZE, maximum: MAX_TERMINAL_FONT_SIZE }),
-);
-export type TerminalFontSize = typeof TerminalFontSize.Type;
-export const DEFAULT_TERMINAL_FONT_SIZE: TerminalFontSize = 12;
-
-export const EnvironmentIdentificationMode = Schema.Literals(["artwork", "pill", "none"]);
-export type EnvironmentIdentificationMode = typeof EnvironmentIdentificationMode.Type;
-export const DEFAULT_ENVIRONMENT_IDENTIFICATION_MODE: EnvironmentIdentificationMode = "artwork";
-
-export const QuitConfirmationMode = Schema.Literals(["direct", "hold", "double-click"]);
-export type QuitConfirmationMode = typeof QuitConfirmationMode.Type;
-export const DEFAULT_QUIT_CONFIRMATION_MODE: QuitConfirmationMode = "hold";
-
-const LegacyConfirmQuit = Schema.Boolean.pipe(
-  Schema.decodeTo(
-    QuitConfirmationMode,
-    SchemaTransformation.transform({
-      decode: (confirmQuit): QuitConfirmationMode => (confirmQuit ? "hold" : "direct"),
-      encode: (mode) => mode === "hold",
-    }),
-  ),
-);
-
-const QuitConfirmationModeSetting = Schema.Union([QuitConfirmationMode, LegacyConfirmQuit]);
-
-/**
- * A user-chosen font family (a single name or a comma-separated list). Empty
- * means "use the app default"; clients compose their own fallback stacks.
- */
-export const FontFamilyPreference = Schema.String.check(Schema.isMaxLength(200));
-export type FontFamilyPreference = typeof FontFamilyPreference.Type;
-
-// The Worker in infra/feedback. akeru-bot.com is on Vercel DNS, so the Worker
-// cannot bind a custom hostname there and clients post to workers.dev directly.
-export const DEFAULT_PRODUCT_FEEDBACK_ENDPOINT =
-  "https://akeru-feedback.leoisadev.workers.dev/v1/feedback";
-export const AKERU_MARKETING_SITE_URL = "https://akeru.bot";
-export const AKERU_PRIVACY_POLICY_VERSION = "2026-08-31";
-export const AKERU_TERMS_VERSION = "2026-08-31";
-export const ProductFeedbackEndpoint = TrimmedNonEmptyString.check(
-  Schema.isMaxLength(2_048),
-  Schema.isPattern(
-    /^(?:https:\/\/[a-z0-9.-]+(?::\d+)?|http:\/\/(?:localhost|127(?:\.\d{1,3}){3}|\[::1\])(?::\d+)?)(?:\/[^\s]*)?$/i,
-  ),
-);
-export type ProductFeedbackEndpoint = typeof ProductFeedbackEndpoint.Type;
-
-/**
- * Defaults for the in-app preview browser, applied whenever a tab is opened
- * without an explicit viewport/zoom/appearance — by the user opening a browser
- * tab, or by an agent calling `preview_open` with no size. Client-local
- * because the Chromium guest they configure is desktop-local.
- */
-export const DEFAULT_BROWSER_VIEWPORT: PreviewViewportSetting = FILL_PREVIEW_VIEWPORT;
-
-export const ClientSettingsSchema = Schema.Struct({
-  language: TrimmedString.pipe(Schema.withDecodingDefault(Effect.succeed("system"))),
-  reviewedPrivacyPolicyVersion: TrimmedString.pipe(Schema.withDecodingDefault(Effect.succeed(""))),
-  reviewedTermsVersion: TrimmedString.pipe(Schema.withDecodingDefault(Effect.succeed(""))),
-  appearanceContrast: AppearanceContrast.pipe(
-    Schema.withDecodingDefault(Effect.succeed(DEFAULT_APPEARANCE_CONTRAST)),
-  ),
-  browserDefaultViewport: PreviewViewportSetting.pipe(
-    Schema.withDecodingDefault(Effect.succeed(DEFAULT_BROWSER_VIEWPORT)),
-  ),
-  browserDefaultZoomFactor: PreviewZoomFactor.pipe(
-    Schema.withDecodingDefault(Effect.succeed(DEFAULT_PREVIEW_ZOOM_FACTOR)),
-  ),
-  browserDefaultAppearance: PreviewAppearancePreference.pipe(
-    Schema.withDecodingDefault(Effect.succeed(DEFAULT_PREVIEW_APPEARANCE)),
-  ),
-  // Desktop-only. Boolean values from older settings files decode to their
-  // equivalent mode and encode back as the canonical string value.
-  confirmQuit: QuitConfirmationModeSetting.pipe(
-    Schema.withDecodingDefault(Effect.succeed(DEFAULT_QUIT_CONFIRMATION_MODE)),
-  ),
-  confirmThreadArchive: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
-  confirmThreadDelete: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
-  dismissedProviderUpdateNotificationKeys: Schema.Array(TrimmedNonEmptyString).pipe(
-    Schema.withDecodingDefault(Effect.succeed([])),
-  ),
-  diffIgnoreWhitespace: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
-  environmentIdentificationMode: EnvironmentIdentificationMode.pipe(
-    Schema.withDecodingDefault(Effect.succeed(DEFAULT_ENVIRONMENT_IDENTIFICATION_MODE)),
-  ),
-  glassOpacity: GlassOpacity.pipe(
-    Schema.withDecodingDefault(Effect.succeed(DEFAULT_GLASS_OPACITY)),
-  ),
-  fontSizeInterface: InterfaceFontSize.pipe(
-    Schema.withDecodingDefault(Effect.succeed(DEFAULT_INTERFACE_FONT_SIZE)),
-  ),
-  fontSizePrompt: PromptFontSize.pipe(
-    Schema.withDecodingDefault(Effect.succeed(DEFAULT_PROMPT_FONT_SIZE)),
-  ),
-  fontSizeCode: CodeFontSize.pipe(
-    Schema.withDecodingDefault(Effect.succeed(DEFAULT_CODE_FONT_SIZE)),
-  ),
-  fontSizeTerminal: TerminalFontSize.pipe(
-    Schema.withDecodingDefault(Effect.succeed(DEFAULT_TERMINAL_FONT_SIZE)),
-  ),
-  fontFamilyCode: FontFamilyPreference.pipe(Schema.withDecodingDefault(Effect.succeed(""))),
-  fontFamilyComposer: FontFamilyPreference.pipe(Schema.withDecodingDefault(Effect.succeed(""))),
-  fontFamilySans: FontFamilyPreference.pipe(Schema.withDecodingDefault(Effect.succeed(""))),
-  fontFamilyTerminal: FontFamilyPreference.pipe(Schema.withDecodingDefault(Effect.succeed(""))),
-  // Grayscale `-webkit-font-smoothing: antialiased` (thinner strokes);
-  // disabling restores the platform's heavier default. No effect off macOS.
-  fontSmoothing: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
-  // Model favorites. Historically keyed by provider kind, now
-  // widened to `ProviderInstanceId` so users can favorite a specific model
-  // on a custom provider instance (e.g. "Codex Personal · gpt-5") without
-  // the UI collapsing it into the same bucket as the default Codex. The
-  // widening is backward-compatible by construction: prior provider-kind
-  // strings satisfy the `ProviderInstanceId` slug schema, so previously
-  // persisted favorites decode unchanged and continue to point at the
-  // default instance for their kind (because `defaultInstanceIdForDriver(kind)`
-  // uses the same slug). The field name is kept as `provider` for storage
-  // stability; new call sites should treat the value as an instance id.
-  favorites: Schema.Array(
-    Schema.Struct({
-      provider: ProviderInstanceId,
-      model: TrimmedNonEmptyString,
-    }),
-  ).pipe(Schema.withDecodingDefault(Effect.succeed([]))),
-  providerModelPreferences: Schema.Record(
-    ProviderInstanceId,
-    Schema.Struct({
-      hiddenModels: Schema.Array(Schema.String).pipe(
-        Schema.withDecodingDefault(Effect.succeed([])),
-      ),
-      modelOrder: Schema.Array(Schema.String).pipe(Schema.withDecodingDefault(Effect.succeed([]))),
-    }),
-  ).pipe(Schema.withDecodingDefault(Effect.succeed({}))),
-  showSkillsInSlashMenu: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
-  sidebarProjectGroupingMode: SidebarProjectGroupingMode.pipe(
-    Schema.withDecodingDefault(Effect.succeed(DEFAULT_SIDEBAR_PROJECT_GROUPING_MODE)),
-  ),
-  sidebarProjectGroupingOverrides: Schema.Record(
-    TrimmedNonEmptyString,
-    SidebarProjectGroupingMode,
-  ).pipe(Schema.withDecodingDefault(Effect.succeed({}))),
-  sidebarProjectSortOrder: SidebarProjectSortOrder.pipe(
-    Schema.withDecodingDefault(Effect.succeed(DEFAULT_SIDEBAR_PROJECT_SORT_ORDER)),
-  ),
-  sidebarThreadSortOrder: SidebarThreadSortOrder.pipe(
-    Schema.withDecodingDefault(Effect.succeed(DEFAULT_SIDEBAR_THREAD_SORT_ORDER)),
-  ),
-  sidebarThreadPreviewCount: SidebarThreadPreviewCount.pipe(
-    Schema.withDecodingDefault(Effect.succeed(DEFAULT_SIDEBAR_THREAD_PREVIEW_COUNT)),
-  ),
-  timestampFormat: TimestampFormat.pipe(
-    Schema.withDecodingDefault(Effect.succeed(DEFAULT_TIMESTAMP_FORMAT)),
-  ),
-  usageRefreshMinutes: UsageRefreshMinutes.pipe(
-    Schema.withDecodingDefault(Effect.succeed(DEFAULT_USAGE_REFRESH_MINUTES)),
-  ),
-  wordWrap: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
-});
-export type ClientSettings = typeof ClientSettingsSchema.Type;
-
-export const DEFAULT_CLIENT_SETTINGS: ClientSettings = Schema.decodeSync(ClientSettingsSchema)({});
+import { type ClientSettings, DEFAULT_CLIENT_SETTINGS } from "./settings/client.ts";
+import { ServerSettings, DEFAULT_SERVER_SETTINGS } from "./settings/server.ts";
 
 // ── Server Settings (server-authoritative) ────────────────────
 
@@ -302,919 +7,127 @@ export const DEFAULT_CLIENT_SETTINGS: ClientSettings = Schema.decodeSync(ClientS
 // import cycle; re-exported here for compatibility with deep imports.
 export { ThreadEnvMode } from "./environment.ts";
 
-const makeBinaryPathSetting = (fallback: string) =>
-  TrimmedString.pipe(
-    Schema.decodeTo(
-      Schema.String,
-      SchemaTransformation.transformOrFail({
-        decode: (value) => Effect.succeed(value || fallback),
-        encode: (value) => Effect.succeed(value),
-      }),
-    ),
-    Schema.withDecodingDefault(Effect.succeed(fallback)),
-  );
-
-export type ProviderSettingsFormControl = "text" | "password" | "textarea" | "switch";
-
-export interface ProviderSettingsFormAnnotation {
-  readonly control?: ProviderSettingsFormControl | undefined;
-  readonly placeholder?: string | undefined;
-  readonly hidden?: boolean | undefined;
-  readonly clearWhenEmpty?: "omit" | "persist" | undefined;
-}
-
-export interface ProviderSettingsFormSchemaAnnotation {
-  readonly order?: readonly string[] | undefined;
-}
-
-declare module "effect/Schema" {
-  namespace Annotations {
-    interface Annotations {
-      readonly providerSettingsForm?: ProviderSettingsFormAnnotation | undefined;
-      readonly providerSettingsFormSchema?: ProviderSettingsFormSchemaAnnotation | undefined;
-    }
-  }
-}
-
-export type ProviderSettingsOrder<Fields extends Schema.Struct.Fields> = readonly Extract<
-  keyof Fields,
-  string
->[];
-
-export function makeProviderSettingsSchema<const Fields extends Schema.Struct.Fields>(
-  fields: Fields,
-  options?: {
-    readonly order?: ProviderSettingsOrder<Fields> | undefined;
-  },
-): Schema.Struct<Fields> {
-  return Schema.Struct(fields).pipe(
-    Schema.annotate({
-      providerSettingsFormSchema:
-        options?.order === undefined ? undefined : { order: options.order },
-    }),
-  );
-}
-
-export const CodexSettings = makeProviderSettingsSchema(
-  {
-    enabled: Schema.Boolean.pipe(
-      Schema.withDecodingDefault(Effect.succeed(true)),
-      Schema.annotateKey({ providerSettingsForm: { hidden: true } }),
-    ),
-    binaryPath: makeBinaryPathSetting("codex").pipe(
-      Schema.annotateKey({
-        title: "Binary path",
-        description: "Path to the Codex binary used by this instance.",
-        providerSettingsForm: { placeholder: "codex", clearWhenEmpty: "omit" },
-      }),
-    ),
-    homePath: TrimmedString.pipe(
-      Schema.withDecodingDefault(Effect.succeed("")),
-      Schema.annotateKey({
-        title: "CODEX_HOME path",
-        description: "Custom Codex home and config directory.",
-        providerSettingsForm: {
-          placeholder: "~/.codex",
-          clearWhenEmpty: "omit",
-        },
-      }),
-    ),
-    shadowHomePath: TrimmedString.pipe(
-      Schema.withDecodingDefault(Effect.succeed("")),
-      Schema.annotateKey({
-        title: "Shadow home path",
-        description:
-          "Account-specific Codex home. Keeps auth.json separate while sharing state from CODEX_HOME.",
-        providerSettingsForm: {
-          placeholder: "~/.codex-akeru/personal",
-          clearWhenEmpty: "omit",
-        },
-      }),
-    ),
-    launchArgs: TrimmedString.pipe(
-      Schema.withDecodingDefault(Effect.succeed("")),
-      Schema.annotateKey({
-        title: "Launch arguments",
-        description: "Additional CLI arguments passed to codex app-server on session start.",
-      }),
-    ),
-    customModels: Schema.Array(Schema.String).pipe(
-      Schema.withDecodingDefault(Effect.succeed([])),
-      Schema.annotateKey({ providerSettingsForm: { hidden: true } }),
-    ),
-  },
-  {
-    order: ["binaryPath", "homePath", "shadowHomePath", "launchArgs"],
-  },
-);
-export type CodexSettings = typeof CodexSettings.Type;
-
-// Empty, or an integer from 100,000 to 1,000,000. Shared by the full
-// Claude settings schema and its patch so an out-of-range value fails at
-// the update that introduced it.
-const CLAUDE_AUTO_COMPACT_WINDOW_PATTERN = /^(?:|[1-9]\d{5}|1000000)$/;
-
-export const ClaudeSettings = makeProviderSettingsSchema(
-  {
-    enabled: Schema.Boolean.pipe(
-      Schema.withDecodingDefault(Effect.succeed(true)),
-      Schema.annotateKey({ providerSettingsForm: { hidden: true } }),
-    ),
-    binaryPath: makeBinaryPathSetting("claude").pipe(
-      Schema.annotateKey({
-        title: "Binary path",
-        description: "Path to the Claude binary used by this instance.",
-        providerSettingsForm: { placeholder: "claude", clearWhenEmpty: "omit" },
-      }),
-    ),
-    homePath: TrimmedString.pipe(
-      Schema.withDecodingDefault(Effect.succeed("")),
-      Schema.annotateKey({
-        title: "CLAUDE_CONFIG_DIR path",
-        description:
-          "Custom Claude home and config directory. Keeps .claude.json and .claude separate.",
-        providerSettingsForm: { placeholder: "~/.claude", clearWhenEmpty: "omit" },
-      }),
-    ),
-    customModels: Schema.Array(Schema.String).pipe(
-      Schema.withDecodingDefault(Effect.succeed([])),
-      Schema.annotateKey({ providerSettingsForm: { hidden: true } }),
-    ),
-    launchArgs: Schema.String.pipe(
-      Schema.withDecodingDefault(Effect.succeed("")),
-      Schema.annotateKey({
-        title: "Launch arguments",
-        description: "Additional CLI arguments passed on session start.",
-        providerSettingsForm: {
-          placeholder: "e.g. --chrome",
-          clearWhenEmpty: "omit",
-        },
-      }),
-    ),
-    autoCompactWindow: TrimmedString.check(
-      Schema.isPattern(CLAUDE_AUTO_COMPACT_WINDOW_PATTERN),
-    ).pipe(
-      Schema.withDecodingDefault(Effect.succeed("")),
-      Schema.annotateKey({
-        title: "Auto-compact after",
-        description:
-          "Compact after 100,000 to 1,000,000 tokens. Leave empty to use Claude's default.",
-        providerSettingsForm: {
-          placeholder: "e.g. 300000",
-          clearWhenEmpty: "omit",
-        },
-      }),
-    ),
-  },
-  {
-    order: ["binaryPath", "homePath", "autoCompactWindow", "launchArgs"],
-  },
-);
-export type ClaudeSettings = typeof ClaudeSettings.Type;
-
-export const GrokSettings = makeProviderSettingsSchema(
-  {
-    // Off by default: the binding is not yet
-    // stable enough to probe on every install. Users opt in from Settings.
-    enabled: Schema.Boolean.pipe(
-      Schema.withDecodingDefault(Effect.succeed(false)),
-      Schema.annotateKey({ providerSettingsForm: { hidden: true } }),
-    ),
-    binaryPath: makeBinaryPathSetting("grok").pipe(
-      Schema.annotateKey({
-        title: "Binary path",
-        description: "Path to the Grok CLI binary.",
-        providerSettingsForm: { placeholder: "grok", clearWhenEmpty: "omit" },
-      }),
-    ),
-    customModels: Schema.Array(Schema.String).pipe(
-      Schema.withDecodingDefault(Effect.succeed([])),
-      Schema.annotateKey({ providerSettingsForm: { hidden: true } }),
-    ),
-    verboseProtocolLogging: Schema.Boolean.pipe(
-      Schema.withDecodingDefault(Effect.succeed(false)),
-      Schema.annotateKey({
-        title: "Verbose protocol logging",
-        description: "Record full ACP protocol diagnostics in provider event logs.",
-        providerSettingsForm: { control: "switch" },
-      }),
-    ),
-  },
-  {
-    order: ["binaryPath", "verboseProtocolLogging"],
-  },
-);
-export type GrokSettings = typeof GrokSettings.Type;
-
-export const KimiSettings = makeProviderSettingsSchema({
-  enabled: Schema.Boolean.pipe(
-    Schema.withDecodingDefault(Effect.succeed(true)),
-    Schema.annotateKey({ providerSettingsForm: { hidden: true } }),
-  ),
-  customModels: Schema.Array(Schema.String).pipe(
-    Schema.withDecodingDefault(Effect.succeed([])),
-    Schema.annotateKey({ providerSettingsForm: { hidden: true } }),
-  ),
-});
-export type KimiSettings = typeof KimiSettings.Type;
-
-export const OpenCodeGoSettings = makeProviderSettingsSchema({
-  enabled: Schema.Boolean.pipe(
-    Schema.withDecodingDefault(Effect.succeed(true)),
-    Schema.annotateKey({ providerSettingsForm: { hidden: true } }),
-  ),
-  customModels: Schema.Array(Schema.String).pipe(
-    Schema.withDecodingDefault(Effect.succeed([])),
-    Schema.annotateKey({ providerSettingsForm: { hidden: true } }),
-  ),
-});
-export type OpenCodeGoSettings = typeof OpenCodeGoSettings.Type;
-
-/**
- * Any OpenAI-compatible HTTP endpoint: a base URL plus a user-authored model
- * list. There is no account to sign in to, and no secret here: the API key is
- * an instance environment variable (`CUSTOM_OPENAI_API_KEY`), because only
- * sensitive environment variables are kept in the secret store and redacted
- * before settings reach a client.
- */
-export const CustomOpenaiSettings = makeProviderSettingsSchema(
-  {
-    enabled: Schema.Boolean.pipe(
-      Schema.withDecodingDefault(Effect.succeed(true)),
-      Schema.annotateKey({ providerSettingsForm: { hidden: true } }),
-    ),
-    baseUrl: TrimmedString.pipe(
-      Schema.withDecodingDefault(Effect.succeed("")),
-      Schema.annotateKey({
-        title: "Base URL",
-        description:
-          "OpenAI-compatible API root, e.g. https://api.openai.com/v1 or http://localhost:11434/v1. Add CUSTOM_OPENAI_API_KEY as a sensitive environment variable when the endpoint needs a key.",
-        providerSettingsForm: {
-          placeholder: "https://api.openai.com/v1",
-          clearWhenEmpty: "omit",
-        },
-      }),
-    ),
-    customModels: Schema.Array(Schema.String).pipe(
-      Schema.withDecodingDefault(Effect.succeed([])),
-      Schema.annotateKey({ providerSettingsForm: { hidden: true } }),
-    ),
-  },
-  { order: ["baseUrl"] },
-);
-export type CustomOpenaiSettings = typeof CustomOpenaiSettings.Type;
-
-export const OpenCodeSettings = makeProviderSettingsSchema(
-  {
-    // Off by default: the binding is not yet stable
-    // enough to probe on every install. Users opt in from Settings.
-    enabled: Schema.Boolean.pipe(
-      Schema.withDecodingDefault(Effect.succeed(false)),
-      Schema.annotateKey({ providerSettingsForm: { hidden: true } }),
-    ),
-    binaryPath: makeBinaryPathSetting("opencode").pipe(
-      Schema.annotateKey({
-        title: "Binary path",
-        description: "Path to the OpenCode binary.",
-        providerSettingsForm: {
-          placeholder: "opencode",
-          clearWhenEmpty: "omit",
-        },
-      }),
-    ),
-    serverUrl: TrimmedString.pipe(
-      Schema.withDecodingDefault(Effect.succeed("")),
-      Schema.annotateKey({
-        title: "Server URL",
-        description: "Leave blank to let Akeru Bot spawn the server when needed.",
-        providerSettingsForm: {
-          placeholder: "http://127.0.0.1:4096",
-          clearWhenEmpty: "omit",
-        },
-      }),
-    ),
-    serverPassword: TrimmedString.pipe(
-      Schema.withDecodingDefault(Effect.succeed("")),
-      Schema.annotateKey({
-        title: "Server password",
-        description: "Stored in plain text on disk.",
-        providerSettingsForm: {
-          control: "password",
-          placeholder: "Optional",
-          clearWhenEmpty: "omit",
-        },
-      }),
-    ),
-    customModels: Schema.Array(Schema.String).pipe(
-      Schema.withDecodingDefault(Effect.succeed([])),
-      Schema.annotateKey({ providerSettingsForm: { hidden: true } }),
-    ),
-  },
-  {
-    order: ["binaryPath", "serverUrl", "serverPassword"],
-  },
-);
-export type OpenCodeSettings = typeof OpenCodeSettings.Type;
-
-export const ObservabilitySettings = Schema.Struct({
-  otlpTracesUrl: TrimmedString.pipe(Schema.withDecodingDefault(Effect.succeed(""))),
-  otlpMetricsUrl: TrimmedString.pipe(Schema.withDecodingDefault(Effect.succeed(""))),
-});
-export type ObservabilitySettings = typeof ObservabilitySettings.Type;
-
-export const SourceControlWritingStyleMode = Schema.Literals([
-  "repo_conventions",
-  "conventional_commits",
-  "custom",
-]);
-export type SourceControlWritingStyleMode = typeof SourceControlWritingStyleMode.Type;
-
-export const SourceControlWritingStyleSettings = Schema.Struct({
-  mode: SourceControlWritingStyleMode.pipe(
-    Schema.withDecodingDefault(Effect.succeed("repo_conventions" as const)),
-  ),
-  customInstructions: TrimmedString.pipe(Schema.withDecodingDefault(Effect.succeed(""))),
-  followChangeRequestTemplates: Schema.Boolean.pipe(
-    Schema.withDecodingDefault(Effect.succeed(true)),
-  ),
-});
-export type SourceControlWritingStyleSettings = typeof SourceControlWritingStyleSettings.Type;
-
-export const DEFAULT_AUTOMATIC_GIT_FETCH_INTERVAL = Duration.seconds(30);
-export const DEFAULT_PROVIDER_HEALTH_REFRESH_INTERVAL = Duration.minutes(5);
-
-export const BackgroundActivityProfile = Schema.Literals([
-  "balanced",
-  "performance",
-  "battery-saver",
-]);
-export type BackgroundActivityProfile = typeof BackgroundActivityProfile.Type;
-export const DEFAULT_BACKGROUND_ACTIVITY_PROFILE: BackgroundActivityProfile = "balanced";
-
-export const BackgroundActivityProfileSelection = Schema.Literals([
-  "balanced",
-  "performance",
-  "battery-saver",
-  "custom",
-]);
-export type BackgroundActivityProfileSelection = typeof BackgroundActivityProfileSelection.Type;
-
-export const BackgroundActivityOverrides = Schema.Struct({
-  automaticGitFetchInterval: Schema.optionalKey(Schema.DurationFromMillis),
-  providerHealthRefreshInterval: Schema.optionalKey(Schema.DurationFromMillis),
-  hostPowerMonitorActiveInterval: Schema.optionalKey(Schema.DurationFromMillis),
-  hostPowerMonitorIdleInterval: Schema.optionalKey(Schema.DurationFromMillis),
-  idleClientTtl: Schema.optionalKey(Schema.DurationFromMillis),
-  pauseWhenHostLocked: Schema.optionalKey(Schema.Boolean),
-  pauseWhenHostLowPower: Schema.optionalKey(Schema.Boolean),
-  pauseWhenClientLowPower: Schema.optionalKey(Schema.Boolean),
-  pauseWhenOnBattery: Schema.optionalKey(Schema.Boolean),
-});
-export type BackgroundActivityOverrides = typeof BackgroundActivityOverrides.Type;
-
-export const BackgroundActivitySettings = Schema.Struct({
-  schemaVersion: Schema.Literal(1).pipe(Schema.withDecodingDefault(Effect.succeed(1 as const))),
-  profile: BackgroundActivityProfileSelection.pipe(
-    Schema.withDecodingDefault(Effect.succeed(DEFAULT_BACKGROUND_ACTIVITY_PROFILE)),
-  ),
-  baseProfile: Schema.optionalKey(BackgroundActivityProfile),
-  overrides: BackgroundActivityOverrides.pipe(Schema.withDecodingDefault(Effect.succeed({}))),
-}).pipe(Schema.withDecodingDefault(Effect.succeed({})));
-export type BackgroundActivitySettings = typeof BackgroundActivitySettings.Type;
-
-export const ChannelConnectionProfile = Schema.Struct({
-  id: ChannelConnectionId,
-  provider: ChannelProvider,
-  adapter: Schema.Literals(["telegram", "photon", "whatsapp", "slack", "discord"]),
-  name: TrimmedNonEmptyString,
-  externalIdentity: Schema.optional(TrimmedNonEmptyString),
-  managementUrl: Schema.optional(TrimmedNonEmptyString),
-  /** Server-built inbound webhook URL for providers that push events (WhatsApp). */
-  webhookUrl: Schema.optional(TrimmedNonEmptyString),
-});
-export type ChannelConnectionProfile = typeof ChannelConnectionProfile.Type;
-
-export const SandboxProvider = BotSandbox;
-export type SandboxProvider = BotSandbox;
-export type CloudSandboxProvider = Exclude<SandboxProvider, "local">;
-
-export const CLOUD_SANDBOX_PROVIDERS = [
-  "e2b",
-  "daytona",
-  "vercel",
-  "upstash",
-  "ascii",
-  "railway",
-  "tenki",
-] as const;
-export const SANDBOX_PROVIDER_CREDENTIALS = {
-  e2b: [{ name: "E2B_API_KEY", sensitive: true }],
-  daytona: [{ name: "DAYTONA_API_KEY", sensitive: true }],
-  vercel: [
-    { name: "VERCEL_TOKEN", sensitive: true },
-    { name: "VERCEL_TEAM_ID", sensitive: false },
-    { name: "VERCEL_PROJECT_ID", sensitive: false },
-  ],
-  upstash: [{ name: "UPSTASH_BOX_API_KEY", sensitive: true }],
-  ascii: [{ name: "BOX_API_KEY", sensitive: true }],
-  railway: [
-    { name: "RAILWAY_API_TOKEN", sensitive: true },
-    { name: "RAILWAY_ENVIRONMENT_ID", sensitive: false },
-  ],
-  tenki: [{ name: "TENKI_API_KEY", sensitive: true }],
-} as const satisfies Readonly<
-  Record<
-    CloudSandboxProvider,
-    ReadonlyArray<{ readonly name: string; readonly sensitive: boolean }>
-  >
->;
-
-export const SandboxProviderConnection = Schema.Struct({
-  environment: Schema.Array(ProviderInstanceEnvironmentVariable).pipe(
-    Schema.withDecodingDefault(Effect.succeed([])),
-  ),
-}).pipe(Schema.withDecodingDefault(Effect.succeed({})));
-export type SandboxProviderConnection = typeof SandboxProviderConnection.Type;
-
-export const SandboxSettings = Schema.Struct({
-  defaultProvider: SandboxProvider.pipe(
-    Schema.withDecodingDefault(Effect.succeed("local" as const)),
-  ),
-  autoIdle: Schema.Literal(true).pipe(Schema.withDecodingDefault(Effect.succeed(true as const))),
-  providers: Schema.Struct({
-    e2b: SandboxProviderConnection,
-    daytona: SandboxProviderConnection,
-    vercel: SandboxProviderConnection,
-    upstash: SandboxProviderConnection,
-    ascii: SandboxProviderConnection,
-    railway: SandboxProviderConnection,
-    tenki: SandboxProviderConnection,
-  }).pipe(Schema.withDecodingDefault(Effect.succeed({}))),
-}).pipe(Schema.withDecodingDefault(Effect.succeed({})));
-export type SandboxSettings = typeof SandboxSettings.Type;
-
-/**
- * How a durable fact saved to a shared project scope enters the store.
- * "ask" lands it pending approval until the user approves it; "auto" saves it
- * approved.
- */
-export const SharedProjectMemorySaveMode = Schema.Literals(["ask", "auto"]);
-export type SharedProjectMemorySaveMode = typeof SharedProjectMemorySaveMode.Type;
-export const DEFAULT_SHARED_PROJECT_MEMORY_SAVE_MODE: SharedProjectMemorySaveMode = "ask";
-
-/**
- * Server-authoritative durable memory switches. Durable facts are written and
- * read through `EntityMemoryRepository`, which needs these values on any
- * client surface, so they live on the server rather than in client-local
- * settings. There is deliberately no model or embedding configuration here:
- * durable memory is not a model feature.
- */
-export const MemorySettings = Schema.Struct({
-  enabled: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
-  privateBotMemory: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
-  sharedProjectMemory: SharedProjectMemorySaveMode.pipe(
-    Schema.withDecodingDefault(Effect.succeed(DEFAULT_SHARED_PROJECT_MEMORY_SAVE_MODE)),
-  ),
-}).pipe(Schema.withDecodingDefault(Effect.succeed({})));
-export type MemorySettings = typeof MemorySettings.Type;
-
-export const MemorySettingsPatch = Schema.Struct({
-  enabled: Schema.optionalKey(Schema.Boolean),
-  privateBotMemory: Schema.optionalKey(Schema.Boolean),
-  sharedProjectMemory: Schema.optionalKey(SharedProjectMemorySaveMode),
-});
-export type MemorySettingsPatch = typeof MemorySettingsPatch.Type;
-
-export const BrowserProviderSettings = Schema.Struct({
-  enabled: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
-  browserbaseApiKey: TrimmedString.pipe(Schema.withDecodingDefault(Effect.succeed(""))),
-  browserbaseApiKeyRedacted: Schema.optionalKey(Schema.Boolean),
-}).pipe(Schema.withDecodingDefault(Effect.succeed({})));
-export type BrowserProviderSettings = typeof BrowserProviderSettings.Type;
-
-export const ServerSettings = Schema.Struct({
-  // Legacy token-by-token assistant output. Deliberately a fresh key (was
-  // `enableAssistantStreaming`): decoding drops the old key, so everyone,
-  // including prior opt-ins, resets to the buffered default.
-  enableLegacyTokenStreaming: Schema.Boolean.pipe(
-    Schema.withDecodingDefault(Effect.succeed(false)),
-  ),
-  enableProviderUpdateChecks: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
-  analyticsEnabled: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
-  productFeedbackEnabled: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
-  productFeedbackEndpoint: ProductFeedbackEndpoint.pipe(
-    Schema.withDecodingDefault(Effect.succeed(DEFAULT_PRODUCT_FEEDBACK_ENDPOINT)),
-  ),
-  botSandboxBrowserSharing: BotSandboxBrowserSharing.pipe(
-    Schema.withDecodingDefault(Effect.succeed(DEFAULT_BOT_SANDBOX_BROWSER_SHARING)),
-  ),
-  localExecutionMode: LocalExecutionMode.pipe(
-    Schema.withDecodingDefault(Effect.succeed(DEFAULT_LOCAL_EXECUTION_MODE)),
-  ),
-  /**
-   * Whether agents may drive the in-app preview browser. Turning this off
-   * withholds the MCP credential, so the `akeru` server (and with it every
-   * `preview_*` tool) is never attached to a provider session, and the prompt
-   * text describing those tools is dropped along with them. The user's own
-   * browser panel is unaffected — this gates agent access only.
-   *
-   * Server-authoritative rather than client-local: tool injection and prompt
-   * construction both happen on the server, and the answer must not differ
-   * between a desktop window and a phone attached to the same server.
-   */
-  enableAgentBrowserAccess: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
-  browserProvider: BrowserProviderSettings,
-  voice: VoiceSettings,
-  imageGeneration: ImageGenerationSettings,
-  backgroundActivity: BackgroundActivitySettings,
-  // Legacy flat fields retained for old settings files and old clients. New
-  // consumers should resolve `backgroundActivity` instead.
-  automaticGitFetchInterval: Schema.DurationFromMillis.pipe(
-    Schema.withDecodingDefault(
-      Effect.succeed(Duration.toMillis(DEFAULT_AUTOMATIC_GIT_FETCH_INTERVAL)),
-    ),
-  ),
-  providerHealthRefreshInterval: Schema.DurationFromMillis.pipe(
-    Schema.withDecodingDefault(
-      Effect.succeed(Duration.toMillis(DEFAULT_PROVIDER_HEALTH_REFRESH_INTERVAL)),
-    ),
-  ),
-  backgroundActivityProfile: BackgroundActivityProfile.pipe(
-    Schema.withDecodingDefault(Effect.succeed(DEFAULT_BACKGROUND_ACTIVITY_PROFILE)),
-  ),
-  defaultThreadEnvMode: ThreadEnvMode.pipe(
-    Schema.withDecodingDefault(Effect.succeed("local" as const satisfies ThreadEnvMode)),
-  ),
-  newWorktreesStartFromOrigin: Schema.Boolean.pipe(
-    Schema.withDecodingDefault(Effect.succeed(true)),
-  ),
-  addProjectBaseDirectory: TrimmedString.pipe(Schema.withDecodingDefault(Effect.succeed(""))),
-  textGenerationModelSelection: ModelSelection.pipe(
-    Schema.withDecodingDefault(
-      Effect.succeed({
-        instanceId: ProviderInstanceId.make("codex"),
-        model: DEFAULT_TEXT_GENERATION_MODEL,
-        options: [
-          {
-            id: "reasoningEffort",
-            value: DEFAULT_TEXT_GENERATION_REASONING_EFFORT,
-          },
-        ],
-      }),
-    ),
-  ),
-  sourceControlWritingStyle: SourceControlWritingStyleSettings.pipe(
-    Schema.withDecodingDefault(Effect.succeed({})),
-  ),
-  sourceControlWriterModelSelection: Schema.NullOr(ModelSelection).pipe(
-    Schema.withDecodingDefault(Effect.succeed(null)),
-  ),
-
-  // Legacy single-instance-per-driver settings. Continues to be the source
-  // of truth until `providerInstances` (below) lands per-driver migration
-  // shims and the server starts hydrating instances from it. Driver-specific
-  // schemas live here for the duration of the migration; once each driver
-  // owns its config in its own package, this struct shrinks to nothing and
-  // is removed entirely.
-  providers: Schema.Struct({
-    codex: CodexSettings.pipe(Schema.withDecodingDefault(Effect.succeed({}))),
-    claudeAgent: ClaudeSettings.pipe(Schema.withDecodingDefault(Effect.succeed({}))),
-    grok: GrokSettings.pipe(Schema.withDecodingDefault(Effect.succeed({}))),
-    kimi: KimiSettings.pipe(Schema.withDecodingDefault(Effect.succeed({}))),
-    opencode: OpenCodeSettings.pipe(Schema.withDecodingDefault(Effect.succeed({}))),
-    opencodeGo: OpenCodeGoSettings.pipe(Schema.withDecodingDefault(Effect.succeed({}))),
-    customOpenai: CustomOpenaiSettings.pipe(Schema.withDecodingDefault(Effect.succeed({}))),
-  }).pipe(Schema.withDecodingDefault(Effect.succeed({}))),
-  // New driver-agnostic instance map. Keyed by `ProviderInstanceId`; values
-  // are `ProviderInstanceConfig` envelopes. The driver-specific config blob
-  // is `Schema.Unknown` at this layer so envelopes with unknown drivers
-  // (forks, downgrades, in-flight PR branches) round-trip without loss.
-  // See providerInstance.ts for the forward/backward compatibility invariant.
-  providerInstances: Schema.Record(ProviderInstanceId, ProviderInstanceConfig).pipe(
-    Schema.withDecodingDefault(Effect.succeed({})),
-  ),
-  channelConnections: Schema.Array(ChannelConnectionProfile).pipe(
-    Schema.withDecodingDefault(Effect.succeed([])),
-  ),
-  sandbox: SandboxSettings,
-  observability: ObservabilitySettings.pipe(Schema.withDecodingDefault(Effect.succeed({}))),
-  memory: MemorySettings,
-});
-export type ServerSettings = typeof ServerSettings.Type;
-
-export const DEFAULT_SERVER_SETTINGS: ServerSettings = Schema.decodeSync(ServerSettings)({});
-
-/**
- * Read the legacy `enabled` flag embedded in a provider instance config
- * blob. The envelope-level `ProviderInstanceConfig.enabled` is the single
- * flag going forward; this reader exists for legacy `providers.<kind>`
- * blobs and old settings files that still carry the flag in-config.
- */
-export const providerInstanceConfigEnabledFlag = (config: unknown): boolean | undefined => {
-  if (config === null || typeof config !== "object" || Array.isArray(config)) {
-    return undefined;
-  }
-  const enabled = (config as { readonly enabled?: unknown }).enabled;
-  return typeof enabled === "boolean" ? enabled : undefined;
-};
-
-/**
- * Default enabled state for a built-in driver when neither the envelope nor
- * the config blob carries a flag. Derived from the driver's settings schema
- * through `DEFAULT_SERVER_SETTINGS`, so the schema's decoding default stays
- * the single source of truth. Unknown (fork) drivers default to enabled.
- */
-export const defaultEnabledForDriver = (driver: ProviderDriverKind): boolean => {
-  const legacyDefaults = DEFAULT_SERVER_SETTINGS.providers as Record<
-    string,
-    { readonly enabled?: boolean } | undefined
-  >;
-  return legacyDefaults[driver]?.enabled ?? true;
-};
-
-/**
- * Resolve whether a configured provider instance is enabled. An explicit
- * false on either the envelope or the in-config flag wins (most
- * restrictive), so a user's disable is never silently undone by the other
- * flag. Otherwise: envelope, then config, then the driver's default.
- */
-export const resolveProviderInstanceEnabled = (
-  instance: Pick<ProviderInstanceConfig, "driver" | "enabled" | "config">,
-): boolean => {
-  const configEnabled = providerInstanceConfigEnabledFlag(instance.config);
-  if (instance.enabled === false || configEnabled === false) {
-    return false;
-  }
-  return instance.enabled ?? configEnabled ?? defaultEnabledForDriver(instance.driver);
-};
-
-export const ServerSettingsOperation = Schema.Literals([
-  "normalize",
-  "check-exists",
-  "read-file",
-  "read-provider-history",
-  "read-secret",
-  "remove-secret",
-  "remove-stale-secret",
-  "remove-analytics-state",
-  "rollback-secret",
-  "write-secret",
-  "validate-sandbox",
-  "write-file",
-  "prepare-directory",
-]);
-export type ServerSettingsOperation = typeof ServerSettingsOperation.Type;
-
-export class ServerSettingsError extends Schema.TaggedErrorClass<ServerSettingsError>()(
-  "ServerSettingsError",
-  {
-    settingsPath: Schema.String,
-    operation: ServerSettingsOperation,
-    providerInstanceId: Schema.optional(Schema.String),
-    environmentVariable: Schema.optional(Schema.String),
-    cause: Schema.Defect(),
-  },
-) {
-  override get message(): string {
-    const provider =
-      this.providerInstanceId === undefined ? "" : ` for provider ${this.providerInstanceId}`;
-    const variable =
-      this.environmentVariable === undefined
-        ? ""
-        : ` and environment variable ${this.environmentVariable}`;
-    return `Server settings ${this.operation} failed${provider}${variable} at ${this.settingsPath}.`;
-  }
-}
-
 // ── Unified type ─────────────────────────────────────────────────────
 
 export type UnifiedSettings = ServerSettings & ClientSettings;
+
 export const DEFAULT_UNIFIED_SETTINGS: UnifiedSettings = {
   ...DEFAULT_SERVER_SETTINGS,
   ...DEFAULT_CLIENT_SETTINGS,
 };
 
-// ── Server Settings Patch (replace with a Schema.deepPartial if available) ──────────────────────────────────────────
+export {
+  TimestampFormat,
+  DEFAULT_TIMESTAMP_FORMAT,
+  MIN_USAGE_REFRESH_MINUTES,
+  MAX_USAGE_REFRESH_MINUTES,
+  DEFAULT_USAGE_REFRESH_MINUTES,
+  UsageRefreshMinutes,
+  SidebarProjectSortOrder,
+  DEFAULT_SIDEBAR_PROJECT_SORT_ORDER,
+  SidebarThreadSortOrder,
+  DEFAULT_SIDEBAR_THREAD_SORT_ORDER,
+  SidebarProjectGroupingMode,
+  DEFAULT_SIDEBAR_PROJECT_GROUPING_MODE,
+  MIN_SIDEBAR_THREAD_PREVIEW_COUNT,
+  MAX_SIDEBAR_THREAD_PREVIEW_COUNT,
+  SidebarThreadPreviewCount,
+  DEFAULT_SIDEBAR_THREAD_PREVIEW_COUNT,
+  MIN_GLASS_OPACITY,
+  MAX_GLASS_OPACITY,
+  GlassOpacity,
+  DEFAULT_GLASS_OPACITY,
+  MIN_APPEARANCE_CONTRAST,
+  MAX_APPEARANCE_CONTRAST,
+  AppearanceContrast,
+  DEFAULT_APPEARANCE_CONTRAST,
+  MIN_INTERFACE_FONT_SIZE,
+  MAX_INTERFACE_FONT_SIZE,
+  InterfaceFontSize,
+  DEFAULT_INTERFACE_FONT_SIZE,
+  MIN_PROMPT_FONT_SIZE,
+  MAX_PROMPT_FONT_SIZE,
+  PromptFontSize,
+  DEFAULT_PROMPT_FONT_SIZE,
+  MIN_CODE_FONT_SIZE,
+  MAX_CODE_FONT_SIZE,
+  CodeFontSize,
+  DEFAULT_CODE_FONT_SIZE,
+  MIN_TERMINAL_FONT_SIZE,
+  MAX_TERMINAL_FONT_SIZE,
+  TerminalFontSize,
+  DEFAULT_TERMINAL_FONT_SIZE,
+  EnvironmentIdentificationMode,
+  DEFAULT_ENVIRONMENT_IDENTIFICATION_MODE,
+  QuitConfirmationMode,
+  DEFAULT_QUIT_CONFIRMATION_MODE,
+  FontFamilyPreference,
+  DEFAULT_PRODUCT_FEEDBACK_ENDPOINT,
+  AKERU_MARKETING_SITE_URL,
+  AKERU_PRIVACY_POLICY_VERSION,
+  AKERU_TERMS_VERSION,
+  ProductFeedbackEndpoint,
+  DEFAULT_BROWSER_VIEWPORT,
+  ClientSettingsSchema,
+  type ClientSettings,
+  DEFAULT_CLIENT_SETTINGS,
+  ClientSettingsPatch,
+} from "./settings/client.ts";
 
-const ModelSelectionPatch = Schema.Struct({
-  instanceId: Schema.optionalKey(ProviderInstanceId),
-  model: Schema.optionalKey(TrimmedNonEmptyString),
-  options: Schema.optionalKey(ProviderOptionSelections),
-});
+export {
+  type ProviderSettingsFormControl,
+  type ProviderSettingsFormAnnotation,
+  type ProviderSettingsFormSchemaAnnotation,
+  type ProviderSettingsOrder,
+  providerSettingsSchema,
+} from "./settings/providerForms.ts";
 
-const CodexSettingsPatch = Schema.Struct({
-  enabled: Schema.optionalKey(Schema.Boolean),
-  binaryPath: Schema.optionalKey(TrimmedString),
-  homePath: Schema.optionalKey(TrimmedString),
-  shadowHomePath: Schema.optionalKey(TrimmedString),
-  launchArgs: Schema.optionalKey(TrimmedString),
-  customModels: Schema.optionalKey(Schema.Array(Schema.String)),
-});
+export {
+  CodexSettings,
+  ClaudeSettings,
+  GrokSettings,
+  KimiSettings,
+  OpenCodeGoSettings,
+  CustomOpenaiSettings,
+  OpenCodeSettings,
+  providerInstanceConfigEnabledFlag,
+} from "./settings/providers.ts";
 
-const ClaudeSettingsPatch = Schema.Struct({
-  enabled: Schema.optionalKey(Schema.Boolean),
-  binaryPath: Schema.optionalKey(TrimmedString),
-  homePath: Schema.optionalKey(TrimmedString),
-  customModels: Schema.optionalKey(Schema.Array(Schema.String)),
-  launchArgs: Schema.optionalKey(TrimmedString),
-  // Validated at the patch boundary so a typo fails the one update with a
-  // schema error instead of a generic whole-settings failure.
-  autoCompactWindow: Schema.optionalKey(
-    TrimmedString.check(Schema.isPattern(CLAUDE_AUTO_COMPACT_WINDOW_PATTERN)),
-  ),
-});
+export {
+  defaultEnabledForDriver,
+  resolveProviderInstanceEnabled,
+  ObservabilitySettings,
+  SourceControlWritingStyleMode,
+  SourceControlWritingStyleSettings,
+  DEFAULT_AUTOMATIC_GIT_FETCH_INTERVAL,
+  DEFAULT_PROVIDER_HEALTH_REFRESH_INTERVAL,
+  BackgroundActivityProfile,
+  DEFAULT_BACKGROUND_ACTIVITY_PROFILE,
+  BackgroundActivityProfileSelection,
+  BackgroundActivityOverrides,
+  BackgroundActivitySettings,
+  ChannelConnectionProfile,
+  ServerSettings,
+  DEFAULT_SERVER_SETTINGS,
+  ServerSettingsOperation,
+  ServerSettingsError,
+  ServerSettingsPatch,
+  ServerSettingsRpcPatch,
+} from "./settings/server.ts";
 
-const GrokSettingsPatch = Schema.Struct({
-  enabled: Schema.optionalKey(Schema.Boolean),
-  binaryPath: Schema.optionalKey(TrimmedString),
-  customModels: Schema.optionalKey(Schema.Array(Schema.String)),
-  verboseProtocolLogging: Schema.optionalKey(Schema.Boolean),
-});
+export {
+  SandboxProvider,
+  type CloudSandboxProvider,
+  CLOUD_SANDBOX_PROVIDERS,
+  SANDBOX_PROVIDER_CREDENTIALS,
+  SandboxProviderConnection,
+  SandboxSettings,
+  BrowserProviderSettings,
+} from "./settings/sandbox.ts";
 
-const KimiSettingsPatch = Schema.Struct({
-  enabled: Schema.optionalKey(Schema.Boolean),
-  customModels: Schema.optionalKey(Schema.Array(Schema.String)),
-});
-
-const OpenCodeGoSettingsPatch = Schema.Struct({
-  enabled: Schema.optionalKey(Schema.Boolean),
-  customModels: Schema.optionalKey(Schema.Array(Schema.String)),
-});
-
-const CustomOpenaiSettingsPatch = Schema.Struct({
-  enabled: Schema.optionalKey(Schema.Boolean),
-  baseUrl: Schema.optionalKey(TrimmedString),
-  customModels: Schema.optionalKey(Schema.Array(Schema.String)),
-});
-
-const OpenCodeSettingsPatch = Schema.Struct({
-  enabled: Schema.optionalKey(Schema.Boolean),
-  binaryPath: Schema.optionalKey(TrimmedString),
-  serverUrl: Schema.optionalKey(TrimmedString),
-  serverPassword: Schema.optionalKey(TrimmedString),
-  customModels: Schema.optionalKey(Schema.Array(Schema.String)),
-});
-
-const SandboxProviderConnectionPatch = Schema.Struct({
-  environment: Schema.optionalKey(Schema.Array(ProviderInstanceEnvironmentVariable)),
-});
-
-const SandboxSettingsPatch = Schema.Struct({
-  defaultProvider: Schema.optionalKey(SandboxProvider),
-  autoIdle: Schema.optionalKey(Schema.Literal(true)),
-  providers: Schema.optionalKey(
-    Schema.Struct({
-      e2b: Schema.optionalKey(SandboxProviderConnectionPatch),
-      daytona: Schema.optionalKey(SandboxProviderConnectionPatch),
-      vercel: Schema.optionalKey(SandboxProviderConnectionPatch),
-      upstash: Schema.optionalKey(SandboxProviderConnectionPatch),
-      ascii: Schema.optionalKey(SandboxProviderConnectionPatch),
-      railway: Schema.optionalKey(SandboxProviderConnectionPatch),
-      tenki: Schema.optionalKey(SandboxProviderConnectionPatch),
-    }),
-  ),
-});
-
-const ServerSettingsPatchFields = {
-  // Server settings
-  enableLegacyTokenStreaming: Schema.optionalKey(Schema.Boolean),
-  enableProviderUpdateChecks: Schema.optionalKey(Schema.Boolean),
-  analyticsEnabled: Schema.optionalKey(Schema.Boolean),
-  localExecutionMode: Schema.optionalKey(LocalExecutionMode),
-  productFeedbackEnabled: Schema.optionalKey(Schema.Boolean),
-  productFeedbackEndpoint: Schema.optionalKey(ProductFeedbackEndpoint),
-  botSandboxBrowserSharing: Schema.optionalKey(BotSandboxBrowserSharing),
-  enableAgentBrowserAccess: Schema.optionalKey(Schema.Boolean),
-  browserProvider: Schema.optionalKey(
-    Schema.Struct({
-      enabled: Schema.optionalKey(Schema.Boolean),
-      browserbaseApiKey: Schema.optionalKey(TrimmedString),
-      browserbaseApiKeyRedacted: Schema.optionalKey(Schema.Boolean),
-    }),
-  ),
-  voice: Schema.optionalKey(
-    Schema.Struct({
-      enabled: Schema.optionalKey(Schema.Boolean),
-      provider: Schema.optionalKey(VoiceProvider),
-      voice: Schema.optionalKey(ChatGptRealtimeVoice),
-      openaiVoice: Schema.optionalKey(ChatGptRealtimeVoice),
-      transcriptionProvider: Schema.optionalKey(VoiceTranscriptionProvider),
-      synthesisProvider: Schema.optionalKey(VoiceApiProvider),
-      synthesisVoices: Schema.optionalKey(VoiceSynthesisVoices),
-    }),
-  ),
-  imageGeneration: Schema.optionalKey(ImageGenerationSettingsPatch),
-  backgroundActivity: Schema.optionalKey(
-    Schema.Struct({
-      schemaVersion: Schema.optionalKey(Schema.Literal(1)),
-      profile: Schema.optionalKey(BackgroundActivityProfileSelection),
-      baseProfile: Schema.optionalKey(BackgroundActivityProfile),
-      overrides: Schema.optionalKey(BackgroundActivityOverrides),
-    }),
-  ),
-  automaticGitFetchInterval: Schema.optionalKey(Schema.DurationFromMillis),
-  providerHealthRefreshInterval: Schema.optionalKey(Schema.DurationFromMillis),
-  backgroundActivityProfile: Schema.optionalKey(BackgroundActivityProfile),
-  defaultThreadEnvMode: Schema.optionalKey(ThreadEnvMode),
-  newWorktreesStartFromOrigin: Schema.optionalKey(Schema.Boolean),
-  addProjectBaseDirectory: Schema.optionalKey(TrimmedString),
-  textGenerationModelSelection: Schema.optionalKey(ModelSelectionPatch),
-  sourceControlWritingStyle: Schema.optionalKey(
-    Schema.Struct({
-      mode: Schema.optionalKey(SourceControlWritingStyleMode),
-      customInstructions: Schema.optionalKey(TrimmedString),
-      followChangeRequestTemplates: Schema.optionalKey(Schema.Boolean),
-    }),
-  ),
-  sourceControlWriterModelSelection: Schema.optionalKey(Schema.NullOr(ModelSelection)),
-  sandbox: Schema.optionalKey(SandboxSettingsPatch),
-  memory: Schema.optionalKey(MemorySettingsPatch),
-  observability: Schema.optionalKey(
-    Schema.Struct({
-      otlpTracesUrl: Schema.optionalKey(TrimmedString),
-      otlpMetricsUrl: Schema.optionalKey(TrimmedString),
-    }),
-  ),
-  providers: Schema.optionalKey(
-    Schema.Struct({
-      codex: Schema.optionalKey(CodexSettingsPatch),
-      claudeAgent: Schema.optionalKey(ClaudeSettingsPatch),
-      grok: Schema.optionalKey(GrokSettingsPatch),
-      kimi: Schema.optionalKey(KimiSettingsPatch),
-      opencode: Schema.optionalKey(OpenCodeSettingsPatch),
-      opencodeGo: Schema.optionalKey(OpenCodeGoSettingsPatch),
-      customOpenai: Schema.optionalKey(CustomOpenaiSettingsPatch),
-    }),
-  ),
-  // Whole-map replacement for the new instance config. Patching individual
-  // entries is intentionally out of scope: the map is small, and partial
-  // patches risk leaving driver-specific config in a half-merged state.
-  // The web UI sends a fully-formed map every time it edits this field.
-  providerInstances: Schema.optionalKey(Schema.Record(ProviderInstanceId, ProviderInstanceConfig)),
-  channelConnections: Schema.optionalKey(Schema.Array(ChannelConnectionProfile)),
-} as const;
-export const ServerSettingsPatch = Schema.Struct(ServerSettingsPatchFields);
-export type ServerSettingsPatch = typeof ServerSettingsPatch.Type;
-
-export const ServerSettingsRpcPatch = Schema.Struct(
-  Struct.omit(ServerSettingsPatchFields, ["channelConnections"]),
-);
-export type ServerSettingsRpcPatch = typeof ServerSettingsRpcPatch.Type;
-
-export const ClientSettingsPatch = Schema.Struct({
-  language: Schema.optionalKey(TrimmedString),
-  reviewedPrivacyPolicyVersion: Schema.optionalKey(TrimmedString),
-  reviewedTermsVersion: Schema.optionalKey(TrimmedString),
-  appearanceContrast: Schema.optionalKey(AppearanceContrast),
-  browserDefaultViewport: Schema.optionalKey(PreviewViewportSetting),
-  browserDefaultZoomFactor: Schema.optionalKey(PreviewZoomFactor),
-  browserDefaultAppearance: Schema.optionalKey(PreviewAppearancePreference),
-  confirmQuit: Schema.optionalKey(QuitConfirmationMode),
-  confirmThreadArchive: Schema.optionalKey(Schema.Boolean),
-  confirmThreadDelete: Schema.optionalKey(Schema.Boolean),
-  diffIgnoreWhitespace: Schema.optionalKey(Schema.Boolean),
-  environmentIdentificationMode: Schema.optionalKey(EnvironmentIdentificationMode),
-  glassOpacity: Schema.optionalKey(GlassOpacity),
-  fontSizeInterface: Schema.optionalKey(InterfaceFontSize),
-  fontSizePrompt: Schema.optionalKey(PromptFontSize),
-  fontSizeCode: Schema.optionalKey(CodeFontSize),
-  fontSizeTerminal: Schema.optionalKey(TerminalFontSize),
-  fontFamilyCode: Schema.optionalKey(FontFamilyPreference),
-  fontFamilyComposer: Schema.optionalKey(FontFamilyPreference),
-  fontFamilySans: Schema.optionalKey(FontFamilyPreference),
-  fontFamilyTerminal: Schema.optionalKey(FontFamilyPreference),
-  fontSmoothing: Schema.optionalKey(Schema.Boolean),
-  favorites: Schema.optionalKey(
-    Schema.Array(
-      Schema.Struct({
-        provider: ProviderInstanceId,
-        model: TrimmedNonEmptyString,
-      }),
-    ),
-  ),
-  providerModelPreferences: Schema.optionalKey(
-    Schema.Record(
-      ProviderInstanceId,
-      Schema.Struct({
-        hiddenModels: Schema.Array(Schema.String).pipe(
-          Schema.withDecodingDefault(Effect.succeed([])),
-        ),
-        modelOrder: Schema.Array(Schema.String).pipe(
-          Schema.withDecodingDefault(Effect.succeed([])),
-        ),
-      }),
-    ),
-  ),
-  showSkillsInSlashMenu: Schema.optionalKey(Schema.Boolean),
-  sidebarProjectGroupingMode: Schema.optionalKey(SidebarProjectGroupingMode),
-  sidebarProjectGroupingOverrides: Schema.optionalKey(
-    Schema.Record(TrimmedNonEmptyString, SidebarProjectGroupingMode),
-  ),
-  sidebarProjectSortOrder: Schema.optionalKey(SidebarProjectSortOrder),
-  sidebarThreadSortOrder: Schema.optionalKey(SidebarThreadSortOrder),
-  sidebarThreadPreviewCount: Schema.optionalKey(SidebarThreadPreviewCount),
-  timestampFormat: Schema.optionalKey(TimestampFormat),
-  usageRefreshMinutes: Schema.optionalKey(UsageRefreshMinutes),
-  wordWrap: Schema.optionalKey(Schema.Boolean),
-});
-export type ClientSettingsPatch = typeof ClientSettingsPatch.Type;
+export {
+  SharedProjectMemorySaveMode,
+  DEFAULT_SHARED_PROJECT_MEMORY_SAVE_MODE,
+  MemorySettings,
+  MemorySettingsPatch,
+} from "./settings/memory.ts";

@@ -57,6 +57,7 @@ describe("mergeEnvironmentSettings", () => {
         },
       },
     };
+
     const clientSettings = {
       ...DEFAULT_CLIENT_SETTINGS,
       favorites: [

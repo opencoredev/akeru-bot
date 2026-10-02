@@ -1,5 +1,7 @@
 "use client";
 
+import { Predicate } from "effect";
+
 import {
   ArchiveIcon,
   BotIcon,
@@ -65,6 +67,7 @@ export function CommandPalette({ children }: { children: ReactNode }) {
   useEffect(() => {
     const onKeyDown = (event: globalThis.KeyboardEvent) => {
       if (event.defaultPrevented) return;
+
       // Resolve with the focus context so customized bindings using a
       // documented `when` condition (e.g. previewFocus) still work.
       const command = resolveShortcutCommand(event, keybindings, {
@@ -72,6 +75,7 @@ export function CommandPalette({ children }: { children: ReactNode }) {
           previewFocus: isPreviewFocused(),
         },
       });
+
       if (command === "themeEditor.toggle") {
         event.preventDefault();
         event.stopPropagation();
@@ -80,14 +84,18 @@ export function CommandPalette({ children }: { children: ReactNode }) {
           themeHalves,
           initialAppearance: resolvedTheme,
         });
+
         return;
       }
+
       if (command !== "commandPalette.toggle") return;
       event.preventDefault();
       event.stopPropagation();
       setOpen((current) => !current);
     };
+
     window.addEventListener("keydown", onKeyDown);
+
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [keybindings, resolvedTheme, theme, themeHalves]);
 
@@ -101,10 +109,12 @@ export function CommandPalette({ children }: { children: ReactNode }) {
 
 function CommandPaletteDialog(props: { readonly setOpen: (open: boolean) => void }) {
   const { t } = useI18n();
+
   return (
     <CommandDialogPopup
       aria-label={t("Command palette")}
-      className="overflow-hidden p-0"
+      variant="palette"
+      className="overflow-hidden"
       data-command-palette="true"
       data-testid="command-palette"
       finalFocus={false}
@@ -127,8 +137,10 @@ function OpenCommandPaletteDialog(props: { readonly setOpen: (open: boolean) => 
 
   // Names the mode you would switch to, so the row reads as a verb.
   const nextAppearance = resolvedTheme === "dark" ? "light" : "dark";
+
   const appearanceTitle =
     nextAppearance === "dark" ? t("Switch to dark mode") : t("Switch to light mode");
+
   const actionItems: CommandPaletteActionItem[] = [
     {
       value: "action:toggle-appearance",
@@ -241,6 +253,7 @@ function OpenCommandPaletteDialog(props: { readonly setOpen: (open: boolean) => 
       },
     },
   ];
+
   // Read once per open: the palette mounts fresh each time it opens.
   const [chatItems] = useState(() =>
     buildChatCommandPaletteItems({
@@ -248,13 +261,16 @@ function OpenCommandPaletteDialog(props: { readonly setOpen: (open: boolean) => 
       icon: <MessagesSquareIcon className={ITEM_ICON_CLASS} />,
     }),
   );
+
   const groups: CommandPaletteGroup[] = [
     ...(chatItems.length > 0 ? [{ value: "chat", label: t("This chat"), items: chatItems }] : []),
     { value: "actions", label: t("Actions"), items: actionItems },
   ];
+
   // Rows follow the query the input shows, so Enter never runs a row from an
   // earlier query. Message search debounces its own RPC.
   const chatSearch = useChatSearchItems(query);
+
   const filteredGroups = [
     ...filterCommandPaletteGroups({ groups, query }),
     ...(chatSearch.items.length > 0
@@ -265,12 +281,12 @@ function OpenCommandPaletteDialog(props: { readonly setOpen: (open: boolean) => 
   function executeItem(item: CommandPaletteActionItem): void {
     if (item.disabled) return;
     setOpen(false);
-    void item.run().catch((error: unknown) => {
+    void item.run().catch((cause: unknown) => {
       toastManager.add(
         stackedThreadToast({
           type: "error",
           title: t("Unable to run command"),
-          description: error instanceof Error ? error.message : t("An unexpected error occurred."),
+          description: cause instanceof Error ? cause.message : t("An unexpected error occurred."),
         }),
       );
     });
@@ -284,13 +300,12 @@ function OpenCommandPaletteDialog(props: { readonly setOpen: (open: boolean) => 
       inputProps={{ placeholder: t("Search commands and chats...") }}
       mode="none"
       onItemHighlighted={(value) => {
-        setHighlightedItemValue(typeof value === "string" ? value : null);
+        setHighlightedItemValue(Predicate.isString(value) ? value : null);
       }}
       onValueChange={(nextQuery: string) => {
         setHighlightedItemValue(null);
         setQuery(nextQuery);
       }}
-      panelClassName="max-h-[min(28rem,70vh)]"
       value={query}
     >
       <CommandPaletteResults
@@ -310,10 +325,7 @@ function OpenCommandPaletteDialog(props: { readonly setOpen: (open: boolean) => 
  * in the bot's view; a group opens its chat. Chats outside the environment this
  * client shows are listed but cannot be opened here.
  */
-function useChatSearchItems(query: string): {
-  readonly items: CommandPaletteActionItem[];
-  readonly isPending: boolean;
-} {
+function useChatSearchItems(query: string) {
   const { t } = useI18n();
   const navigate = useNavigate();
   const { environments } = useEnvironments();
@@ -323,24 +335,29 @@ function useChatSearchItems(query: string): {
   const groups = useRosterStore((state) => state.groups);
   const rosters = useAtomValue(allEnvironmentRostersAtom);
   const searchQuery = query.startsWith(">") ? "" : query;
+
   const connectedEnvironmentIds = useMemo(
     () =>
-      environments
-        .filter((environment) => environment.connection.phase === "connected")
-        .map((environment) => environment.environmentId),
+      environments.flatMap((environment) =>
+        environment.connection.phase === "connected" ? [environment.environmentId] : [],
+      ),
     [environments],
   );
+
   const search = useThreadSearch(connectedEnvironmentIds, searchQuery);
 
   const chats = useMemo((): CommandPaletteChat[] => {
     const connected = new Set<string>(connectedEnvironmentIds);
+
     const labelById = new Map<string, string>(
       environments.map((environment) => [environment.environmentId, environment.label] as const),
     );
+
     const botById = new Map(bots.map((bot) => [bot.id, bot] as const));
     const groupById = new Map(groups.map((group) => [group.id, group] as const));
     const latestGroupThreadIds = findLatestGroupThreadIds(shells);
     const ownerNameIn = buildEnvironmentOwnerNames(rosters);
+
     return shells.flatMap((shell): CommandPaletteChat[] => {
       if (
         shell.archivedAt !== null ||
@@ -349,14 +366,17 @@ function useChatSearchItems(query: string): {
       ) {
         return [];
       }
+
       const base = {
         environmentId: shell.environmentId,
         threadId: shell.id,
         title: shell.title,
         updatedAt: shell.updatedAt,
       };
+
       if (shell.environmentId !== primaryEnvironmentId) {
         if (shell.botId == null && shell.groupId == null) return [];
+
         return [
           {
             ...base,
@@ -365,18 +385,23 @@ function useChatSearchItems(query: string): {
           },
         ];
       }
+
       const bot = shell.botId ? botById.get(shell.botId) : undefined;
+
       if (bot && bot.archivedAt === null) {
         return [{ ...base, ownerName: bot.name, unavailableIn: null }];
       }
+
       // A group shows only its newest chat, so older group chats cannot be opened.
       const group = shell.groupId ? groupById.get(shell.groupId) : undefined;
+
       if (
         group &&
         latestGroupThreadIds.get(latestGroupThreadKey(shell.environmentId, group.id)) === shell.id
       ) {
         return [{ ...base, ownerName: group.name, unavailableIn: null }];
       }
+
       return [];
     });
   }, [bots, connectedEnvironmentIds, environments, groups, primaryEnvironmentId, rosters, shells]);
@@ -393,6 +418,7 @@ function useChatSearchItems(query: string): {
         (candidate) =>
           candidate.environmentId === chat.environmentId && candidate.id === chat.threadId,
       );
+
       if (shell?.botId) {
         const botId = shell.botId;
         const newest = findLatestBotThreadTarget(botId, chat.environmentId, shells);
@@ -409,5 +435,6 @@ function useChatSearchItems(query: string): {
       }
     },
   });
+
   return { items, isPending: search.isPending };
 }

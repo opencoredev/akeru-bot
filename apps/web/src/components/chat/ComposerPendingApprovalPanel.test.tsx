@@ -7,6 +7,7 @@ import { ComposerPendingApprovalPanel } from "./ComposerPendingApprovalPanel";
 describe("ComposerPendingApprovalPanel", () => {
   it("shows the complete command without a duplicate disclosure", () => {
     const detail = `bun run release -- ${"x".repeat(500)}\nsecond line`;
+
     const markup = renderToStaticMarkup(
       <ComposerPendingApprovalPanel
         approval={{
@@ -27,7 +28,7 @@ describe("ComposerPendingApprovalPanel", () => {
     expect(markup).toContain("max-h-28");
     expect(markup).toContain("overflow-auto");
     expect(markup).toContain("whitespace-pre-wrap");
-    expect(markup).toContain("[scrollbar-width:thin]");
+    expect(markup).toContain("scrollbar-thin");
     expect(markup).toContain("[&amp;::-webkit-scrollbar]:h-1.5");
     expect(markup).toContain("break-words");
     expect(markup).not.toContain("line-clamp");
@@ -122,6 +123,7 @@ describe("ComposerPendingApprovalPanel", () => {
   it("limits long app names so the complete approval message stays readable", () => {
     const appName = "A".repeat(200);
     const detail = "Allow ChatGPT to access the selected application?";
+
     const markup = renderToStaticMarkup(
       <ComposerPendingApprovalPanel
         approval={{

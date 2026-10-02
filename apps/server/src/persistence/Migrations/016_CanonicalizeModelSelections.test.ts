@@ -217,6 +217,7 @@ layer("016_CanonicalizeModelSelections", (it) => {
         FROM projection_projects
         ORDER BY project_id
       `;
+
           assert.deepStrictEqual(projectRows, [
             {
               projectId: "project-claude",
@@ -239,6 +240,7 @@ layer("016_CanonicalizeModelSelections", (it) => {
         FROM projection_threads
         ORDER BY thread_id
       `;
+
           assert.deepStrictEqual(threadRows, [
             {
               threadId: "thread-claude",
@@ -265,7 +267,7 @@ layer("016_CanonicalizeModelSelections", (it) => {
         FROM orchestration_events
         ORDER BY rowid ASC
       `;
-          // @effect-diagnostics-next-line preferSchemaOverJson:off
+
           assert.deepStrictEqual(JSON.parse(eventRows[0]!.payloadJson), {
             projectId: "project-1",
             title: "Project",
@@ -281,7 +283,6 @@ layer("016_CanonicalizeModelSelections", (it) => {
             createdAt: "2026-01-01T00:00:00.000Z",
             updatedAt: "2026-01-01T00:00:00.000Z",
           });
-          // @effect-diagnostics-next-line preferSchemaOverJson:off
           assert.deepStrictEqual(JSON.parse(eventRows[1]!.payloadJson), {
             projectId: "project-2",
             title: "Fallback Project",
@@ -297,7 +298,6 @@ layer("016_CanonicalizeModelSelections", (it) => {
             createdAt: "2026-01-01T00:00:00.000Z",
             updatedAt: "2026-01-01T00:00:00.000Z",
           });
-          // @effect-diagnostics-next-line preferSchemaOverJson:off
           assert.deepStrictEqual(JSON.parse(eventRows[2]!.payloadJson), {
             projectId: "project-3",
             title: "Null Model Project",
@@ -307,7 +307,6 @@ layer("016_CanonicalizeModelSelections", (it) => {
             createdAt: "2026-01-01T00:00:00.000Z",
             updatedAt: "2026-01-01T00:00:00.000Z",
           });
-          // @effect-diagnostics-next-line preferSchemaOverJson:off
           assert.deepStrictEqual(JSON.parse(eventRows[3]!.payloadJson), {
             threadId: "thread-1",
             projectId: "project-1",
@@ -327,7 +326,6 @@ layer("016_CanonicalizeModelSelections", (it) => {
             createdAt: "2026-01-01T00:00:00.000Z",
             updatedAt: "2026-01-01T00:00:00.000Z",
           });
-          // @effect-diagnostics-next-line preferSchemaOverJson:off
           assert.deepStrictEqual(JSON.parse(eventRows[4]!.payloadJson), {
             threadId: "thread-2",
             projectId: "project-1",
@@ -346,7 +344,6 @@ layer("016_CanonicalizeModelSelections", (it) => {
             createdAt: "2026-01-01T00:00:00.000Z",
             updatedAt: "2026-01-01T00:00:00.000Z",
           });
-          // @effect-diagnostics-next-line preferSchemaOverJson:off
           assert.deepStrictEqual(JSON.parse(eventRows[5]!.payloadJson), {
             threadId: "thread-1",
             turnId: "turn-1",
@@ -360,7 +357,6 @@ layer("016_CanonicalizeModelSelections", (it) => {
             },
             deliveryMode: "buffered",
           });
-          // @effect-diagnostics-next-line preferSchemaOverJson:off
           assert.deepStrictEqual(JSON.parse(eventRows[6]!.payloadJson), {
             threadId: "thread-3",
             projectId: "project-1",

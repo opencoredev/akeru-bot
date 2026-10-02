@@ -11,6 +11,7 @@ const settingsHooks = vi.hoisted(() => ({
 vi.mock("react", async (importOriginal) => {
   const actual = await importOriginal<typeof import("react")>();
   const { reactHookHarness } = await import("../../test/reactHookHarness");
+
   return {
     ...actual,
     useMemo: reactHookHarness.useMemo,
@@ -20,6 +21,7 @@ vi.mock("react", async (importOriginal) => {
 
 vi.mock("react/compiler-runtime", async () => {
   const { reactHookHarness } = await import("../../test/reactHookHarness");
+
   return { c: reactHookHarness.useMemoCache };
 });
 

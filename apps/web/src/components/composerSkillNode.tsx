@@ -39,10 +39,13 @@ function resolveSkillDescription(
   skill: Pick<ServerProviderSkill, "shortDescription" | "description">,
 ): string | null {
   const shortDescription = skill.shortDescription?.trim();
+
   if (shortDescription) {
     return shortDescription;
   }
+
   const description = skill.description?.trim();
+
   return description || null;
 }
 
@@ -101,7 +104,7 @@ function ComposerSkillDecorator(props: {
   return (
     <Tooltip>
       <TooltipTrigger render={chip} />
-      <TooltipPopup side="top" className="max-w-120 whitespace-normal leading-tight">
+      <TooltipPopup side="top" variant="tight" className="max-w-120 whitespace-normal">
         {props.skillDescription}
       </TooltipPopup>
     </Tooltip>
@@ -169,6 +172,7 @@ export class ComposerSkillNode extends DecoratorNode<React.ReactElement> {
   override createDOM(): HTMLElement {
     const dom = document.createElement("span");
     dom.className = COMPOSER_INLINE_CHIP_DECORATOR_CLASS_NAME;
+
     return dom;
   }
 

@@ -1,3 +1,5 @@
+import { Predicate } from "effect";
+import { Match } from "effect";
 import {
   boundedRunHistory,
   botRoutinesView,
@@ -49,6 +51,7 @@ function ActionButton(props: {
   readonly tone?: "primary" | "plain" | "destructive";
 }) {
   const tone = props.tone ?? "plain";
+
   return (
     <Pressable
       accessibilityRole="button"
@@ -61,13 +64,11 @@ function ActionButton(props: {
       onPress={props.onPress}
     >
       <Text
-        className={
-          tone === "primary"
-            ? "text-sm font-t3-bold text-accent-foreground"
-            : tone === "destructive"
-              ? "text-sm font-t3-medium text-danger"
-              : "text-sm font-t3-medium text-foreground"
-        }
+        className={Match.value(tone).pipe(
+          Match.when("primary", () => "text-sm font-t3-bold text-accent-foreground"),
+          Match.when("destructive", () => "text-sm font-t3-medium text-danger"),
+          Match.orElse(() => "text-sm font-t3-medium text-foreground"),
+        )}
       >
         {props.label}
       </Text>
@@ -134,6 +135,7 @@ function RoutineCard(props: {
           <Text className="text-xs font-t3-medium text-foreground-muted">{t("Latest run")}</Text>
           {history.map((run) => {
             const tone = runStatusTone(run.status);
+
             return (
               <View key={run.id} className="flex-row items-start gap-2">
                 <Text className={`text-xs font-t3-medium ${TONE_TEXT_CLASS[tone.variant]}`}>
@@ -163,13 +165,11 @@ function RoutineCard(props: {
         {lifecycle ? (
           <ActionButton
             disabled={disabled}
-            label={
-              lifecycle === "resume"
-                ? t("Resume")
-                : lifecycle === "pause"
-                  ? t("Pause")
-                  : t("Enable")
-            }
+            label={Match.value(lifecycle).pipe(
+              Match.when("resume", () => t("Resume")),
+              Match.when("pause", () => t("Pause")),
+              Match.orElse(() => t("Enable")),
+            )}
             onPress={() => props.onLifecycle(lifecycle)}
           />
         ) : null}
@@ -221,9 +221,11 @@ export function ThreadRoutinesScreen() {
     if (busyRoutineId) return;
     setBusyRoutineId(routineId);
     setFailure(null);
+
     try {
       const result = await action();
-      if (result._tag === "Failure") {
+
+      if (Predicate.isTagged(result, "Failure")) {
         // Server errors can be technical English, so the card shows only translated copy.
         setFailure({ routineId, message: fallback });
       }
@@ -265,6 +267,7 @@ export function ThreadRoutinesScreen() {
       ) : (
         view.routines.map((routine) => {
           const routineId = RoutineId.make(routine.id);
+
           return (
             <RoutineCard
               key={routine.id}
@@ -280,6 +283,7 @@ export function ThreadRoutinesScreen() {
               routine={routine}
               onApprove={() => {
                 const current = snapshot?.routines?.find((item) => item.id === routine.id);
+
                 if (!current) return;
                 void perform(
                   routine.id,
@@ -306,11 +310,11 @@ export function ThreadRoutinesScreen() {
                           input: { routineId, reason: "Paused by the user.", createdAt },
                         })
                       : enable({ environmentId, input: { routineId, createdAt } }),
-                  action === "pause"
-                    ? t("Could not pause routine")
-                    : action === "resume"
-                      ? t("Could not resume routine")
-                      : t("Could not enable routine"),
+                  Match.value(action).pipe(
+                    Match.when("pause", () => t("Could not pause routine")),
+                    Match.when("resume", () => t("Could not resume routine")),
+                    Match.orElse(() => t("Could not enable routine")),
+                  ),
                 );
               }}
               onRun={(trigger) =>

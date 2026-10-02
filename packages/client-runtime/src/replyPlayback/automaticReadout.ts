@@ -17,6 +17,7 @@ export function createAutomaticReadoutTracker() {
   let cursor = -1;
   let enabled = false;
   const completed = new Set<string>();
+
   return {
     setEnabled: (next: boolean) => {
       enabled = next;
@@ -33,10 +34,13 @@ export function createAutomaticReadoutTracker() {
       if (eventScope !== scope || !Number.isSafeInteger(sequence) || sequence <= cursor)
         return null;
       cursor = sequence;
+
       if (completed.has(reply.messageId)) return null;
+
       // Stop automatic reading rather than evict identities and risk replaying old replies.
       if (completed.size >= 2048) return null;
       completed.add(reply.messageId);
+
       return enabled && reply.successful && reply.text.trim() ? reply : null;
     },
   };

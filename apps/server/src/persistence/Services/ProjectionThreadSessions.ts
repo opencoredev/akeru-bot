@@ -33,16 +33,19 @@ export const ProjectionThreadSession = Schema.Struct({
   lastError: Schema.NullOr(Schema.String),
   updatedAt: IsoDateTime,
 });
+
 export type ProjectionThreadSession = typeof ProjectionThreadSession.Type;
 
 export const GetProjectionThreadSessionInput = Schema.Struct({
   threadId: ThreadId,
 });
+
 export type GetProjectionThreadSessionInput = typeof GetProjectionThreadSessionInput.Type;
 
 export const DeleteProjectionThreadSessionInput = Schema.Struct({
   threadId: ThreadId,
 });
+
 export type DeleteProjectionThreadSessionInput = typeof DeleteProjectionThreadSessionInput.Type;
 
 /**

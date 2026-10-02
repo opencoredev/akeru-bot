@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import {
   type KeybindingCommand,
   type KeybindingShortcut,
@@ -42,7 +43,7 @@ interface ResolvedShortcutLabelOptions extends ShortcutMatchOptions {
   platform?: string;
 }
 
-const EVENT_CODE_KEY_ALIASES: Readonly<Record<string, readonly string[]>> = {
+const EVENT_CODE_KEY_ALIASES = {
   BracketLeft: ["["],
   BracketRight: ["]"],
   Digit0: ["0"],
@@ -57,9 +58,13 @@ const EVENT_CODE_KEY_ALIASES: Readonly<Record<string, readonly string[]>> = {
   Digit9: ["9"],
 };
 
+const EVENT_CODE_KEY_ALIASES_LOOKUP = new Map(Object.entries(EVENT_CODE_KEY_ALIASES));
+
 function normalizeEventKey(key: string): string {
   const normalized = key.toLowerCase();
+
   if (normalized === "esc") return "escape";
+
   return normalized;
 }
 
@@ -72,15 +77,19 @@ function resolveEventKeys(event: ShortcutEventLike): Set<string> {
   // otherwise a remapped physical key triggers shortcuts for two different
   // letters at once and shadows system shortcuts on non-QWERTY layouts.
   const letterCode = event.code?.match(/^Key([A-Z])$/)?.[1];
+
   if (letterCode && !/^[a-z]$/.test(layoutKey)) {
     keys.add(letterCode.toLowerCase());
   }
-  const aliases = event.code ? EVENT_CODE_KEY_ALIASES[event.code] : undefined;
+
+  const aliases = event.code ? EVENT_CODE_KEY_ALIASES_LOOKUP.get(event.code) : undefined;
+
   if (!aliases) return keys;
 
   for (const alias of aliases) {
     keys.add(alias);
   }
+
   return keys;
 }
 
@@ -92,6 +101,7 @@ function matchesShortcutModifiers(
   const useMetaForMod = isMacPlatform(platform);
   const expectedMeta = shortcut.metaKey || (shortcut.modKey && useMetaForMod);
   const expectedCtrl = shortcut.ctrlKey || (shortcut.modKey && !useMetaForMod);
+
   return (
     event.metaKey === expectedMeta &&
     event.ctrlKey === expectedCtrl &&
@@ -106,6 +116,7 @@ function matchesShortcut(
   platform = navigator.platform,
 ): boolean {
   if (!matchesShortcutModifiers(event, shortcut, platform)) return false;
+
   return resolveEventKeys(event).has(shortcut.key);
 }
 
@@ -125,7 +136,9 @@ function evaluateWhenNode(node: KeybindingWhenNode, context: ShortcutMatchContex
   switch (node.type) {
     case "identifier":
       if (node.name === "true") return true;
+
       if (node.name === "false") return false;
+
       return Boolean(context[node.name]);
     case "not":
       return !evaluateWhenNode(node.node, context);
@@ -141,6 +154,7 @@ function matchesWhenClause(
   context: ShortcutMatchContext,
 ): boolean {
   if (!whenAst) return true;
+
   return evaluateWhenNode(whenAst, context);
 }
 
@@ -169,15 +183,19 @@ function findEffectiveShortcutForCommand(
 
   for (let index = keybindings.length - 1; index >= 0; index -= 1) {
     const binding = keybindings[index];
+
     if (!binding) continue;
+
     if (!matchesWhenClause(binding.whenAst, context)) continue;
 
     const conflictKey = shortcutConflictKey(binding.shortcut, platform);
+
     if (claimedShortcuts.has(conflictKey)) {
       continue;
     }
 
     claimedShortcuts.add(conflictKey);
+
     if (binding.command === command) {
       return binding.shortcut;
     }
@@ -196,22 +214,34 @@ export function resolveShortcutCommand(
 
   for (let index = keybindings.length - 1; index >= 0; index -= 1) {
     const binding = keybindings[index];
+
     if (!binding) continue;
+
     if (!matchesWhenClause(binding.whenAst, context)) continue;
+
     if (!matchesShortcut(event, binding.shortcut, platform)) continue;
+
     return binding.command;
   }
+
   return null;
 }
 
 function formatShortcutKeyLabel(key: string): string {
   if (key === " ") return "Space";
+
   if (key.length === 1) return key.toUpperCase();
+
   if (key === "escape") return "Esc";
+
   if (key === "arrowup") return "Up";
+
   if (key === "arrowdown") return "Down";
+
   if (key === "arrowleft") return "Left";
+
   if (key === "arrowright") return "Right";
+
   return key.slice(0, 1).toUpperCase() + key.slice(1);
 }
 
@@ -231,11 +261,16 @@ export function formatShortcutLabel(
   }
 
   const parts: string[] = [];
+
   if (showCtrl) parts.push("Ctrl");
+
   if (showAlt) parts.push("Alt");
+
   if (showShift) parts.push("Shift");
+
   if (showMeta) parts.push("Meta");
   parts.push(keyLabel);
+
   return parts.join("+");
 }
 
@@ -244,12 +279,13 @@ export function shortcutLabelForCommand(
   command: KeybindingCommand,
   options?: string | ResolvedShortcutLabelOptions,
 ): string | null {
-  const resolvedOptions =
-    typeof options === "string"
-      ? ({ platform: options } satisfies ResolvedShortcutLabelOptions)
-      : options;
+  const resolvedOptions = Predicate.isString(options)
+    ? ({ platform: options } satisfies ResolvedShortcutLabelOptions)
+    : options;
+
   const platform = resolvePlatform(resolvedOptions);
   const shortcut = findEffectiveShortcutForCommand(keybindings, command, resolvedOptions);
+
   return shortcut ? formatShortcutLabel(shortcut, platform) : null;
 }
 
@@ -258,7 +294,8 @@ export function threadJumpCommandForIndex(index: number): ThreadJumpKeybindingCo
 }
 
 export function threadJumpIndexFromCommand(command: string): number | null {
-  const index = THREAD_JUMP_KEYBINDING_COMMANDS.indexOf(command as ThreadJumpKeybindingCommand);
+  const index = THREAD_JUMP_KEYBINDING_COMMANDS.findIndex((candidate) => candidate === command);
+
   return index === -1 ? null : index;
 }
 
@@ -279,7 +316,9 @@ export function shouldShowThreadJumpHintsForModifiers(
 
   for (const command of THREAD_JUMP_KEYBINDING_COMMANDS) {
     const shortcut = findEffectiveShortcutForCommand(keybindings, command, options);
+
     if (!shortcut) continue;
+
     if (matchesShortcutModifiers(modifiers, shortcut, platform)) {
       return true;
     }
@@ -295,9 +334,10 @@ export function modelPickerJumpCommandForIndex(
 }
 
 export function modelPickerJumpIndexFromCommand(command: string): number | null {
-  const index = MODEL_PICKER_JUMP_KEYBINDING_COMMANDS.indexOf(
-    command as ModelPickerJumpKeybindingCommand,
+  const index = MODEL_PICKER_JUMP_KEYBINDING_COMMANDS.findIndex(
+    (candidate) => candidate === command,
   );
+
   return index === -1 ? null : index;
 }
 
@@ -318,7 +358,9 @@ export function shouldShowModelPickerJumpHintsForModifiers(
 
   for (const command of MODEL_PICKER_JUMP_KEYBINDING_COMMANDS) {
     const shortcut = findEffectiveShortcutForCommand(keybindings, command, options);
+
     if (!shortcut) continue;
+
     if (matchesShortcutModifiers(modifiers, shortcut, platform)) {
       return true;
     }

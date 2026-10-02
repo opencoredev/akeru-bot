@@ -38,14 +38,17 @@ export function resolveConfirmDialogCopy(
 
   if (questionLineIndex >= 0) {
     const title = lines[questionLineIndex]!.trim();
+
     const description = lines
       .filter((_, index) => index !== questionLineIndex)
       .join("\n")
       .trim();
+
     return { title, description: description || null };
   }
 
   const questionMarkIndex = normalizedMessage.search(/[?？]/);
+
   if (questionMarkIndex >= 0) {
     return {
       title: normalizedMessage.slice(0, questionMarkIndex + 1).trim(),
@@ -61,6 +64,7 @@ export function resolveConfirmDialogCopy(
 
 export function ConfirmDialogHost() {
   const { t } = useI18n();
+
   const state = useSyncExternalStore(
     subscribeConfirmDialog,
     readConfirmDialogState,
@@ -73,6 +77,7 @@ export function ConfirmDialogHost() {
     title: t("Confirm action"),
     description: t("This action requires your confirmation."),
   });
+
   const confirmVariant = state.status === "idle" ? "default" : state.variant;
   const confirmLabel = state.status === "idle" ? null : state.confirmLabel;
   const onCancel = () => respondToConfirmDialog(false);

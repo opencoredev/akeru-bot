@@ -56,9 +56,11 @@ describe("mobile language preferences", () => {
 
   it("falls back to English if device locale is unavailable", () => {
     expect(resolveMobileLanguage(undefined, [])).toEqual({ preference: "system", locale: "en" });
+
     const formatter = vi.spyOn(Intl, "DateTimeFormat").mockImplementation(() => {
       throw new Error("Intl unavailable");
     });
+
     try {
       expect(readDeviceLocales()).toEqual([]);
     } finally {

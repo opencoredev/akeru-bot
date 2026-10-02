@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import * as HostProcess from "@akeru/shared/hostProcess";
 import { assert, it } from "@effect/vitest";
@@ -69,9 +70,10 @@ it.effect("preserves process spawn context and the exact cause", () => {
       Effect.flip,
     );
 
-    if (error._tag !== "NativeStaticCheckProcessError") {
+    if (!Predicate.isTagged(error, "NativeStaticCheckProcessError")) {
       return assert.fail(`Unexpected error: ${error._tag}`);
     }
+
     assert.equal(error.operation, "spawn");
     assert.equal(error.command, "swiftlint");
     assert.equal(error.argumentCount, 2);
@@ -100,9 +102,10 @@ it.effect("preserves process wait context and the exact cause", () => {
       Effect.flip,
     );
 
-    if (error._tag !== "NativeStaticCheckProcessError") {
+    if (!Predicate.isTagged(error, "NativeStaticCheckProcessError")) {
       return assert.fail(`Unexpected error: ${error._tag}`);
     }
+
     assert.equal(error.operation, "wait-for-exit");
     assert.equal(error.command, "swiftlint");
     assert.equal(error.argumentCount, 2);
@@ -128,9 +131,10 @@ it.effect("reports non-zero exits without manufacturing a cause", () =>
       Effect.flip,
     );
 
-    if (error._tag !== "NativeStaticCheckCommandError") {
+    if (!Predicate.isTagged(error, "NativeStaticCheckCommandError")) {
       return assert.fail(`Unexpected error: ${error._tag}`);
     }
+
     assert.equal(error.command, "swiftlint");
     assert.equal(error.argumentCount, 2);
     assert.equal(error.cwd, "/repo/apps/mobile");

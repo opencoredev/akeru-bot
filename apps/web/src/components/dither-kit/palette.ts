@@ -1,4 +1,5 @@
-// @ts-nocheck
+import { Predicate } from "effect";
+
 export type Rgb = [number, number, number];
 
 export type DitherColor = "green" | "blue" | "purple" | "pink" | "orange" | "red" | "grey";
@@ -31,4 +32,4 @@ export const rgb = ([r, g, b]: Rgb, k = 1, a = 1) =>
 export const seedOfColor = (color: DitherColor): Seed => PALETTE[color];
 
 export const isDitherColor = (value: unknown): value is DitherColor =>
-  typeof value === "string" && value in PALETTE;
+  Predicate.isString(value) && value in PALETTE;

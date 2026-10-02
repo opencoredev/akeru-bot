@@ -15,7 +15,9 @@ import { buildSshChildEnvironment, type SshAuthOptions } from "./auth.ts";
 import { SshCommandError, SshInvalidTargetError } from "./errors.ts";
 
 const PUBLISHABLE_T3_VERSION_PATTERN = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/u;
+
 const DEFAULT_SSH_COMMAND_TIMEOUT_MS = 60_000;
+
 const MAX_SSH_ERROR_OUTPUT_LENGTH = 4_000;
 
 /**
@@ -44,15 +46,20 @@ export interface RunSshCommandOptions extends SshAuthOptions {
 
 export function parseSshResolveOutput(alias: string, stdout: string): DesktopSshEnvironmentTarget {
   const values = new Map<string, string>();
+
   for (const line of stdout.split(/\r?\n/u)) {
     const trimmed = line.trim();
+
     if (trimmed.length === 0) {
       continue;
     }
+
     const [key, ...rest] = trimmed.split(/\s+/u);
+
     if (!key || rest.length === 0 || values.has(key)) {
       continue;
     }
+
     values.set(key, rest.join(" ").trim());
   }
 
@@ -82,9 +89,11 @@ export function remoteStateKey(target: DesktopSshEnvironmentTarget): string {
 
 export function buildSshHostSpec(target: DesktopSshEnvironmentTarget): string {
   const destination = target.alias.trim() || target.hostname.trim();
+
   if (destination.length === 0) {
     throw new Error("SSH target is missing its alias/hostname.");
   }
+
   return target.username ? `${target.username}@${destination}` : destination;
 }
 
@@ -114,6 +123,7 @@ export function baseSshArgs(
 
 export function getLastNonEmptyOutputLine(stdout: string): string | null {
   const trimmed = stdout.trim();
+
   return trimmed.slice(trimmed.lastIndexOf("\n") + 1).trim() || null;
 }
 
@@ -133,6 +143,7 @@ function redactSshErrorOutput(output: string): string {
     /("(?:access_token|bearerToken|credential|pairingToken|token)"\s*:\s*")[^"]+(")/giu,
     "$1[redacted]$2",
   );
+
   return redacted.length > MAX_SSH_ERROR_OUTPUT_LENGTH
     ? `${redacted.slice(0, MAX_SSH_ERROR_OUTPUT_LENGTH)}\n[truncated]`
     : redacted;
@@ -144,11 +155,13 @@ function normalizeSshErrorMessage(input: {
   readonly fallbackMessage: string;
 }): string {
   const cleanedStderr = input.stderr.trim();
+
   if (cleanedStderr.length > 0) {
     return cleanedStderr;
   }
 
   const cleanedStdout = input.stdout?.trim() ?? "";
+
   return cleanedStdout.length > 0 ? cleanedStdout : input.fallbackMessage;
 }
 
@@ -175,6 +188,7 @@ const runSshCommandInScope = Effect.fn("ssh/command.runSshCommand.inScope")(func
   ChildProcessSpawner.ChildProcessSpawner | FileSystem.FileSystem | Path.Path
 > {
   const hostSpec = yield* buildSshHostSpecEffect(target);
+
   const environment = yield* buildSshChildEnvironment({
     ...(input.interactiveAuth === undefined ? {} : { interactiveAuth: input.interactiveAuth }),
     ...(input.authSecret === undefined ? {} : { authSecret: input.authSecret }),
@@ -190,6 +204,7 @@ const runSshCommandInScope = Effect.fn("ssh/command.runSshCommand.inScope")(func
         }),
     ),
   );
+
   const args = [
     ...baseSshArgs(target, {
       batchMode: input.batchMode ?? (input.interactiveAuth ? "no" : "yes"),
@@ -198,6 +213,7 @@ const runSshCommandInScope = Effect.fn("ssh/command.runSshCommand.inScope")(func
     hostSpec,
     ...(input.remoteCommandArgs ?? []),
   ];
+
   const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
   const sshCommand = yield* resolveSshCommand;
   yield* Effect.logDebug("ssh.command.start", {
@@ -206,6 +222,7 @@ const runSshCommandInScope = Effect.fn("ssh/command.runSshCommand.inScope")(func
     hasStdin: input.stdin !== undefined,
     timeoutMs: input.timeoutMs ?? DEFAULT_SSH_COMMAND_TIMEOUT_MS,
   });
+
   const child = yield* spawner
     .spawn(
       ChildProcess.make(sshCommand, args, {
@@ -264,6 +281,7 @@ const runSshCommandInScope = Effect.fn("ssh/command.runSshCommand.inScope")(func
       stdout: diagnosticStdout,
       stderr,
     });
+
     return yield* new SshCommandError({
       command: ["ssh", ...args],
       exitCode,
@@ -281,6 +299,7 @@ const runSshCommandInScope = Effect.fn("ssh/command.runSshCommand.inScope")(func
     ...sshTargetLogFields(target),
     command: ["ssh", ...args],
   });
+
   return { stdout, stderr };
 });
 
@@ -308,6 +327,7 @@ export const runSshCommand = Effect.fn("ssh/command.runSshCommand")(function* (
               preHostArgs: input.preHostArgs ?? [],
               hasStdin: input.stdin !== undefined,
             });
+
             return yield* new SshCommandError({
               command: ["ssh"],
               exitCode: null,
@@ -328,11 +348,13 @@ export const resolveSshTarget = Effect.fn("ssh/command.resolveSshTarget")(functi
   ChildProcessSpawner.ChildProcessSpawner | FileSystem.FileSystem | Path.Path
 > {
   const trimmedAlias = alias.trim();
+
   if (trimmedAlias.length === 0) {
     return yield* new SshInvalidTargetError({ message: "SSH host alias is required." });
   }
 
   yield* Effect.logDebug("ssh.target.resolve.start", { alias: trimmedAlias });
+
   return yield* runSshCommand(
     {
       alias: trimmedAlias,
@@ -365,6 +387,7 @@ export function resolveRemoteT3CliPackageSpec(input: {
   readonly isDevelopment?: boolean;
 }): string {
   const appVersion = input.appVersion.trim();
+
   if (!input.isDevelopment && PUBLISHABLE_T3_VERSION_PATTERN.test(appVersion)) {
     return `akeru-bot@${appVersion}`;
   }

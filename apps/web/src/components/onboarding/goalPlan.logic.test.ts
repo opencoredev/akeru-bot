@@ -67,6 +67,7 @@ describe("goal plan", () => {
       const plan = desktopOnboardingGoalPlan(ANSWERS[topic]);
       expect(plan.topic).toBe(topic);
       expect(plan.steps).toHaveLength(3);
+
       for (const step of plan.steps) expect(step.trim().length).toBeGreaterThan(0);
       expect(plan.deferred).toMatch(/^I'll ask/);
     }
@@ -76,9 +77,11 @@ describe("goal plan", () => {
     const leads = new Set(
       TOPICS.map((topic) => desktopOnboardingGoalPlan(ANSWERS[topic]).steps[0]),
     );
+
     const deferrals = new Set(
       TOPICS.map((topic) => desktopOnboardingGoalPlan(ANSWERS[topic]).deferred),
     );
+
     expect(leads.size).toBe(TOPICS.length);
     expect(deferrals.size).toBe(TOPICS.length);
   });
@@ -141,6 +144,7 @@ describe("goal plan", () => {
       "admin",
       "planning",
     ]);
+
     for (const example of DESKTOP_ONBOARDING_GOAL_EXAMPLES) {
       expect(desktopOnboardingGoalPlan(example.goal).topic).toBe(example.topic);
     }
@@ -192,6 +196,7 @@ describe("first message", () => {
   it("writes out the same plan the user just agreed to", () => {
     const goal = "Write my LinkedIn posts every week";
     const brief = desktopOnboardingBotBrief(goal);
+
     for (const step of desktopOnboardingGoalPlan(goal).steps) {
       expect(brief.prompt).toContain(`- ${step}`);
     }
@@ -221,6 +226,7 @@ describe("goal thinking beat", () => {
 
   it("stays short enough that nobody waits on it", () => {
     expect(DESKTOP_ONBOARDING_GOAL_THINKING_MS).toBeLessThanOrEqual(1_200);
+
     for (const beat of DESKTOP_ONBOARDING_GOAL_THINKING_BEATS) {
       expect(beat.atMs).toBeLessThan(DESKTOP_ONBOARDING_GOAL_THINKING_MS);
     }

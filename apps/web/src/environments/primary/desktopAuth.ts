@@ -4,7 +4,9 @@ export function readDesktopPrimaryBearerToken(): Promise<string | null> {
   if (typeof window === "undefined") {
     return Promise.resolve(null);
   }
+
   const bridge = window.desktopBridge;
+
   if (!bridge) {
     return Promise.resolve(null);
   }
@@ -13,6 +15,7 @@ export function readDesktopPrimaryBearerToken(): Promise<string | null> {
     desktopBearerTokenPromise = null;
     throw error;
   });
+
   return desktopBearerTokenPromise;
 }
 

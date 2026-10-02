@@ -35,8 +35,10 @@ export function ThemeEditorHost() {
               description: "Browser storage is unavailable, so the change was not kept.",
             }),
           );
+
           return false;
         }
+
         toastManager.add(
           stackedThreadToast({
             type: "success",
@@ -44,8 +46,10 @@ export function ThemeEditorHost() {
             description: `Its ${mergedAppearance} palette was added.`,
           }),
         );
+
         return true;
       }
+
       if (!created) {
         // The edited theme may be showing through the base preference or either
         // half of the mix; the preference itself is untouched (a setTheme here
@@ -54,6 +58,7 @@ export function ThemeEditorHost() {
           getThemeDefinition(theme)?.id === savedTheme.id ||
           themeHalves?.light === savedTheme.id ||
           themeHalves?.dark === savedTheme.id;
+
         if (wasActive) refreshTheme();
         toastManager.add(
           stackedThreadToast({
@@ -62,6 +67,7 @@ export function ThemeEditorHost() {
             description: wasActive ? "Your changes are now active." : "Your changes are saved.",
           }),
         );
+
         return true;
       }
 
@@ -73,8 +79,10 @@ export function ThemeEditorHost() {
             description: "Browser storage is unavailable, so the change was not kept.",
           }),
         );
+
         return false;
       }
+
       toastManager.add(
         stackedThreadToast({
           type: "success",
@@ -82,6 +90,7 @@ export function ThemeEditorHost() {
           description: "It’s now active.",
         }),
       );
+
       return true;
     },
     [refreshTheme, setTheme, theme, themeHalves],
@@ -94,6 +103,7 @@ export function ThemeEditorHost() {
   const editingTheme = session.editingThemeId
     ? (getThemeDefinition(session.editingThemeId) ?? null)
     : null;
+
   const seedTheme = session.seedThemeId ? (getThemeDefinition(session.seedThemeId) ?? null) : null;
 
   return (

@@ -37,15 +37,19 @@ describe("preview favicon image", () => {
 
   it("uses a stored project icon or falls back to the browser mockup", () => {
     mocks.favicon = null;
+
     const html = renderToStaticMarkup(
       <PreviewFaviconIcon threadRef={threadRef} url="http://localhost:3000/" />,
     );
+
     expect(html).not.toContain("<img");
-    expect(html).toContain("rounded-[5px]");
+    expect(html).toContain("rounded-5px");
     mocks.favicon = "data:image/png;base64,AAAA";
+
     const faviconHtml = renderToStaticMarkup(
       <PreviewFaviconIcon threadRef={threadRef} url="http://localhost:3000/" />,
     );
+
     expect(faviconHtml).toContain('src="data:image/png;base64,AAAA"');
   });
 });

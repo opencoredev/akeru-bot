@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
@@ -24,10 +25,13 @@ export function scriptedHttpClient(
   reply: (request: RecordedRequest, index: number) => Response | Effect.Effect<Response>,
 ) {
   const requests: Array<RecordedRequest> = [];
+
   const client = HttpClient.make((request) =>
     Effect.suspend(() => {
-      const body =
-        request.body._tag === "Uint8Array" ? new TextDecoder().decode(request.body.body) : "";
+      const body = Predicate.isTagged(request.body, "Uint8Array")
+        ? new TextDecoder().decode(request.body.body)
+        : "";
+
       const recorded: RecordedRequest = {
         method: request.method,
         url: request.url,
@@ -35,18 +39,22 @@ export function scriptedHttpClient(
         body,
         json: Option.getOrUndefined(decodeJson(body)),
       };
+
       requests.push(recorded);
       const response = reply(recorded, requests.length - 1);
+
       return (Effect.isEffect(response) ? response : Effect.succeed(response)).pipe(
         Effect.map((web) => HttpClientResponse.fromWeb(request, web)),
       );
     }),
   );
+
   return { client, requests };
 }
 
 /** Build an unsigned JWT whose payload is `claims`. */
-export function fakeJwt(claims: Record<string, unknown>): string {
-  const encode = (value: unknown) => Buffer.from(JSON.stringify(value)).toString("base64url");
+export function fakeJwt(claims: Schema.JsonObject): string {
+  const encode = <Value>(value: Value) => Buffer.from(JSON.stringify(value)).toString("base64url");
+
   return `${encode({ alg: "none" })}.${encode(claims)}.signature`;
 }

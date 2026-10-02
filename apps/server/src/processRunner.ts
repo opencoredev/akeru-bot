@@ -59,6 +59,7 @@ const formatProcessInvocation = (input: {
   readonly spawnCwd?: string | undefined;
 }): string => {
   const executionCwd = input.spawnCwd ?? input.cwd;
+
   return executionCwd === undefined
     ? `'${input.command}'`
     : `'${input.command}' in '${executionCwd}'`;
@@ -138,6 +139,7 @@ export const ProcessRunError = Schema.Union([
   ProcessReadError,
   ProcessTimeoutError,
 ]);
+
 export type ProcessRunError = typeof ProcessRunError.Type;
 
 export class ProcessRunner extends Context.Service<
@@ -148,6 +150,7 @@ export class ProcessRunner extends Context.Service<
 >()("akeru-bot/processRunner") {}
 
 const DEFAULT_TIMEOUT = "60 seconds";
+
 const DEFAULT_MAX_OUTPUT_BYTES = 8 * 1024 * 1024;
 
 const WINDOWS_COMMAND_NOT_FOUND_PATTERNS = [
@@ -166,8 +169,11 @@ function hasWindowsCommandNotFoundMessage(output: string): boolean {
 export const isWindowsCommandNotFound = Effect.fn("processRunner.isWindowsCommandNotFound")(
   function* (code: number | null, stderr: string) {
     const platform = yield* HostProcessPlatform;
+
     if (platform !== "win32") return false;
+
     if (code === 9009) return true;
+
     return hasWindowsCommandNotFoundMessage(stderr);
   },
 );
@@ -218,6 +224,7 @@ const collectText = Effect.fn("processRunner.collectText")(function* (input: {
       () => ({ chunks: [], bytes: 0 }),
       (state, chunk) => {
         const remainingBytes = input.maxOutputBytes - state.bytes;
+
         if (chunk.byteLength > remainingBytes) {
           return Effect.fail(
             new ProcessOutputLimitError({
@@ -233,6 +240,7 @@ const collectText = Effect.fn("processRunner.collectText")(function* (input: {
         }
 
         state.chunks.push(chunk);
+
         return Effect.succeed({
           chunks: state.chunks,
           bytes: state.bytes + chunk.byteLength,
@@ -263,6 +271,7 @@ function finalizeRunProcess<R>(
       if (Option.isSome(result)) {
         return Effect.succeed(result.value);
       }
+
       if (timeoutBehavior === "timedOutResult") {
         return Effect.succeed({
           stdout: "",
@@ -275,6 +284,7 @@ function finalizeRunProcess<R>(
           stderrInvalidUtf8: false,
         } satisfies ProcessRunOutput);
       }
+
       return Effect.fail(
         new ProcessTimeoutError({
           command: input.command,
@@ -296,6 +306,7 @@ const runProcessCore = Effect.fn("processRunner.runProcessCore")(function* (
   const outputMode = input.outputMode ?? "error";
   const truncatedMarker = input.truncatedMarker ?? "";
   const extendEnv = input.env !== undefined;
+
   const spawnCommand = yield* resolveSpawnCommand(
     input.command,
     input.args,
@@ -332,6 +343,7 @@ const runProcessCore = Effect.fn("processRunner.runProcessCore")(function* (
     );
 
   const stdin = input.stdin;
+
   const writeStdin =
     stdin === undefined
       ? Effect.void

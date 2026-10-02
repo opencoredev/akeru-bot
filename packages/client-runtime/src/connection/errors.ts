@@ -1,3 +1,4 @@
+import * as Match from "effect/Match";
 import type { EnvironmentId } from "@akeru/contracts";
 import type { RemoteEnvironmentAuthError } from "../authorization/remote.ts";
 import {
@@ -33,56 +34,74 @@ export function environmentMismatchError(input: {
 export function mapRemoteEnvironmentError(
   error: RemoteEnvironmentAuthError,
 ): ConnectionAttemptError {
-  switch (error._tag) {
-    case "EnvironmentAuthInvalidError":
-      return new ConnectionBlockedError({
-        reason: "authentication",
-        detail: "The environment credential is invalid.",
-        traceId: error.traceId,
-      });
-    case "EnvironmentScopeRequiredError":
-    case "EnvironmentOperationForbiddenError":
-      return new ConnectionBlockedError({
-        reason: "permission",
-        detail: "The environment credential does not grant the required access.",
-        traceId: error.traceId,
-      });
-    case "EnvironmentRequestInvalidError":
-      return new ConnectionBlockedError({
-        reason: "configuration",
-        detail: "The environment rejected the authentication request.",
-        traceId: error.traceId,
-      });
-    case "EnvironmentResourceNotFoundError":
-      // Not expected during connection authorization, but the shared request
-      // error type now includes it (used by resource fetches like the thread
-      // snapshot). Treat it as a configuration issue with the endpoint.
-      return new ConnectionBlockedError({
-        reason: "configuration",
-        detail: "The environment endpoint could not be found.",
-        traceId: error.traceId,
-      });
-    case "RemoteEnvironmentAuthTimeoutError":
-      return new ConnectionTransientError({
-        reason: "timeout",
-        detail: error.message,
-      });
-    case "RemoteEnvironmentAuthFetchError":
-      return new ConnectionTransientError({
-        reason: "network",
-        detail: error.message,
-      });
-    case "EnvironmentInternalError":
-      return new ConnectionTransientError({
-        reason: "remote-unavailable",
-        detail: "The environment could not authorize the connection.",
-        traceId: error.traceId,
-      });
-    case "RemoteEnvironmentAuthInvalidJsonError":
-    case "RemoteEnvironmentAuthUndeclaredStatusError":
-      return new ConnectionTransientError({
-        reason: "remote-unavailable",
-        detail: error.message,
-      });
-  }
+  return Match.value(error).pipe(
+    Match.tagsExhaustive({
+      EnvironmentAuthInvalidError: (error) => {
+        return new ConnectionBlockedError({
+          reason: "authentication",
+          detail: "The environment credential is invalid.",
+          traceId: error.traceId,
+        });
+      },
+      EnvironmentScopeRequiredError: (error) => {
+        return new ConnectionBlockedError({
+          reason: "permission",
+          detail: "The environment credential does not grant the required access.",
+          traceId: error.traceId,
+        });
+      },
+      EnvironmentOperationForbiddenError: (error) => {
+        return new ConnectionBlockedError({
+          reason: "permission",
+          detail: "The environment credential does not grant the required access.",
+          traceId: error.traceId,
+        });
+      },
+      EnvironmentRequestInvalidError: (error) => {
+        return new ConnectionBlockedError({
+          reason: "configuration",
+          detail: "The environment rejected the authentication request.",
+          traceId: error.traceId,
+        });
+      },
+      EnvironmentResourceNotFoundError: (error) => {
+        return new ConnectionBlockedError({
+          reason: "configuration",
+          detail: "The environment endpoint could not be found.",
+          traceId: error.traceId,
+        });
+      },
+      RemoteEnvironmentAuthTimeoutError: (error) => {
+        return new ConnectionTransientError({
+          reason: "timeout",
+          detail: error.message,
+        });
+      },
+      RemoteEnvironmentAuthFetchError: (error) => {
+        return new ConnectionTransientError({
+          reason: "network",
+          detail: error.message,
+        });
+      },
+      EnvironmentInternalError: (error) => {
+        return new ConnectionTransientError({
+          reason: "remote-unavailable",
+          detail: "The environment could not authorize the connection.",
+          traceId: error.traceId,
+        });
+      },
+      RemoteEnvironmentAuthInvalidJsonError: (error) => {
+        return new ConnectionTransientError({
+          reason: "remote-unavailable",
+          detail: error.message,
+        });
+      },
+      RemoteEnvironmentAuthUndeclaredStatusError: (error) => {
+        return new ConnectionTransientError({
+          reason: "remote-unavailable",
+          detail: error.message,
+        });
+      },
+    }),
+  );
 }

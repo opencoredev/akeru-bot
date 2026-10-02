@@ -178,9 +178,9 @@ export const migrationManifest = migrationEntries.map(([id, name]) => [id, name]
 export const makeMigrationLoader = (throughId?: number) =>
   Migrator.fromRecord(
     Object.fromEntries(
-      migrationEntries
-        .filter(([id]) => throughId === undefined || id <= throughId)
-        .map(([id, name, migration]) => [`${id}_${name}`, migration]),
+      migrationEntries.flatMap(([id, name, migration]) =>
+        throughId === undefined || id <= throughId ? [[`${id}_${name}`, migration]] : [],
+      ),
     ),
   );
 
@@ -212,6 +212,7 @@ export const runMigrations = Effect.fn("runMigrations")(function* ({
   yield* migrations.length === 0
     ? Effect.logDebug("Database schema is current")
     : Effect.log("Migrations ran successfully").pipe(Effect.annotateLogs({ migrations }));
+
   return executedMigrations;
 });
 

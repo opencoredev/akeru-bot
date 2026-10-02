@@ -34,6 +34,7 @@ describe("replyMarkdownToSpokenText", () => {
     const result = replyMarkdownToSpokenText(
       "- Parent\n    - Child\n\nA paragraph\n    continued. Use `first\nsecond` here.",
     );
+
     expect(result.text).toBe("Parent\nChild\n\nA paragraph\ncontinued. Use first second here.");
     expect(result.skipped.codeBlocks).toBe(0);
   });
@@ -115,6 +116,7 @@ describe("replyMarkdownToSpokenText", () => {
     const result = replyMarkdownToSpokenText(
       "Safe.\n> ````js\n> ```\n> Still code.\n> ![hidden](x)",
     );
+
     expect(result.text).toBe("Safe.");
     expect(result.skipped).toEqual({ codeBlocks: 1, images: 0 });
   });
@@ -152,6 +154,7 @@ describe("replyMarkdownToSpokenText", () => {
     const result = replyMarkdownToSpokenText(
       "Keep [label](unfinished and ![missing][unknown] and `unclosed.",
     );
+
     expect(result.text).toBe("Keep [label](unfinished and ![missing][unknown] and `unclosed.");
     expect(result.skipped.images).toBe(0);
   });
@@ -194,6 +197,7 @@ describe("replyMarkdownToSpokenText", () => {
 
   it("refuses excessive nesting without exposing partial speech", () => {
     let markdown = "label";
+
     for (let index = 0; index < 35; index++) markdown = `[${markdown}](url)`;
     expect(replyMarkdownToSpokenText(markdown)).toMatchObject({
       text: "",

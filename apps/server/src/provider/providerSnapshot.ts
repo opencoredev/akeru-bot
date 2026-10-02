@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import type {
   ProviderDriverKind,
   ModelCapabilities,
@@ -20,6 +21,7 @@ import { createProviderVersionAdvisory } from "./providerMaintenance.ts";
 import { collectUint8StreamText } from "../stream/collectUint8StreamText.ts";
 
 export const DEFAULT_TIMEOUT_MS = 4_000;
+
 // Auth status checks involve disk/network lookups and can be slow on first run (especially Windows)
 export const AUTH_PROBE_TIMEOUT_MS = 10_000;
 
@@ -59,56 +61,60 @@ export function providerUnavailabilityFromDetail(
   detail: string,
 ): ServerProviderUnavailability {
   const text = detail.toLowerCase();
-  const mappings: Record<string, ReadonlyArray<readonly [RegExp, ServerProviderUnavailability]>> = {
-    codex: [
-      [/refresh token|token expired|login expired/, "expired-login"],
-      [
-        /not logged in|not authenticated|authentication required|unauthorized|api key/,
-        "missing-login",
+
+  const mappings = new Map<string, ReadonlyArray<readonly [RegExp, ServerProviderUnavailability]>>(
+    Object.entries({
+      codex: [
+        [/refresh token|token expired|login expired/, "expired-login"],
+        [
+          /not logged in|not authenticated|authentication required|unauthorized|api key/,
+          "missing-login",
+        ],
+        [/model .*not found|unknown model|invalid model/, "unsupported-model"],
+        [/usage cap|spending limit|budget exceeded/, "usage-cap"],
+        [/rate limit|too many requests|quota/, "limit-reached"],
       ],
-      [/model .*not found|unknown model|invalid model/, "unsupported-model"],
-      [/usage cap|spending limit|budget exceeded/, "usage-cap"],
-      [/rate limit|too many requests|quota/, "limit-reached"],
-    ],
-    claudeAgent: [
-      [/oauth token.*expired|token expired|session expired/, "expired-login"],
-      [/please run.*login|not authenticated|authentication required/, "missing-login"],
-      [/model.*not found|invalid model/, "unsupported-model"],
-      [/max usage|spending limit|budget exceeded/, "usage-cap"],
-      [/rate limit|overloaded|too many requests/, "limit-reached"],
-    ],
-    grok: [
-      [/expired|login expired|oauth.*invalid/, "expired-login"],
-      [/unauthorized|authentication|api key/, "missing-login"],
-      [/unknown model|model.*not found|invalid model/, "unsupported-model"],
-      [/usage cap|billing limit|budget exceeded/, "usage-cap"],
-      [/rate limit|too many requests|capacity/, "limit-reached"],
-    ],
-    kimi: [
-      [/token expired|session expired|login expired/, "expired-login"],
-      [/unauthorized|please login|authentication required|api key/, "missing-login"],
-      [/model.*not found|unsupported model|invalid model/, "unsupported-model"],
-      [/usage cap|quota exceeded|spending limit/, "usage-cap"],
-      [/rate limit|too many requests/, "limit-reached"],
-    ],
-    opencodeGo: [
-      [/session expired|token expired|re-authenticate/, "expired-login"],
-      [/not authenticated|unauthorized|sign in|api key/, "missing-login"],
-      [/model.*not found|unknown model|unsupported model/, "unsupported-model"],
-      [/usage cap|spending limit|budget exceeded/, "usage-cap"],
-      [/rate limit|too many requests|capacity/, "limit-reached"],
-    ],
-    // OpenCode's adapter reports the driver as `opencode`; keep this alias
-    // alongside the subscription-flavoured `opencodeGo` instance id.
-    opencode: [
-      [/session expired|token expired|re-authenticate|authentication expired/, "expired-login"],
-      [/not authenticated|unauthorized|sign in|api key/, "missing-login"],
-      [/model.*not found|unknown model|unsupported model/, "unsupported-model"],
-      [/usage cap|spending limit|budget exceeded/, "usage-cap"],
-      [/rate limit|too many requests|capacity/, "limit-reached"],
-    ],
-  };
-  return mappings[driver]?.find(([pattern]) => pattern.test(text))?.[1] ?? "temporary-failure";
+      claudeAgent: [
+        [/oauth token.*expired|token expired|session expired/, "expired-login"],
+        [/please run.*login|not authenticated|authentication required/, "missing-login"],
+        [/model.*not found|invalid model/, "unsupported-model"],
+        [/max usage|spending limit|budget exceeded/, "usage-cap"],
+        [/rate limit|overloaded|too many requests/, "limit-reached"],
+      ],
+      grok: [
+        [/expired|login expired|oauth.*invalid/, "expired-login"],
+        [/unauthorized|authentication|api key/, "missing-login"],
+        [/unknown model|model.*not found|invalid model/, "unsupported-model"],
+        [/usage cap|billing limit|budget exceeded/, "usage-cap"],
+        [/rate limit|too many requests|capacity/, "limit-reached"],
+      ],
+      kimi: [
+        [/token expired|session expired|login expired/, "expired-login"],
+        [/unauthorized|please login|authentication required|api key/, "missing-login"],
+        [/model.*not found|unsupported model|invalid model/, "unsupported-model"],
+        [/usage cap|quota exceeded|spending limit/, "usage-cap"],
+        [/rate limit|too many requests/, "limit-reached"],
+      ],
+      opencodeGo: [
+        [/session expired|token expired|re-authenticate/, "expired-login"],
+        [/not authenticated|unauthorized|sign in|api key/, "missing-login"],
+        [/model.*not found|unknown model|unsupported model/, "unsupported-model"],
+        [/usage cap|spending limit|budget exceeded/, "usage-cap"],
+        [/rate limit|too many requests|capacity/, "limit-reached"],
+      ],
+      // OpenCode's adapter reports the driver as `opencode`; keep this alias
+      // alongside the subscription-flavoured `opencodeGo` instance id.
+      opencode: [
+        [/session expired|token expired|re-authenticate|authentication expired/, "expired-login"],
+        [/not authenticated|unauthorized|sign in|api key/, "missing-login"],
+        [/model.*not found|unknown model|unsupported model/, "unsupported-model"],
+        [/usage cap|spending limit|budget exceeded/, "usage-cap"],
+        [/rate limit|too many requests|capacity/, "limit-reached"],
+      ],
+    } satisfies Record<string, ReadonlyArray<readonly [RegExp, ServerProviderUnavailability]>>),
+  );
+
+  return mappings.get(driver)?.find(([pattern]) => pattern.test(text))?.[1] ?? "temporary-failure";
 }
 
 export interface ServerProviderPresentation {
@@ -123,18 +129,23 @@ export type ServerProviderDraft = Omit<ServerProvider, "instanceId" | "driver">;
 export function nonEmptyTrimmed(value: string | undefined): string | undefined {
   if (!value) return undefined;
   const trimmed = value.trim();
+
   return trimmed.length > 0 ? trimmed : undefined;
 }
 
-export function isCommandMissingCause(error: unknown): boolean {
-  if (isProviderCommandNotFoundError(error)) return true;
-  return error instanceof PlatformError.PlatformError && error.reason._tag === "NotFound";
+export function isCommandMissingCause(cause: unknown): boolean {
+  if (isProviderCommandNotFoundError(cause)) return true;
+
+  return (
+    cause instanceof PlatformError.PlatformError && Predicate.isTagged(cause.reason, "NotFound")
+  );
 }
 
 export const spawnAndCollect = (binaryPath: string, command: ChildProcess.Command) =>
   Effect.gen(function* () {
     const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
     const child = yield* spawner.spawn(command);
+
     const [stdout, stderr, exitCode] = yield* Effect.all(
       [
         collectStreamAsString(child.stdout),
@@ -145,6 +156,7 @@ export const spawnAndCollect = (binaryPath: string, command: ChildProcess.Comman
     );
 
     const result: CommandResult = { stdout, stderr, code: exitCode };
+
     if (yield* isWindowsCommandNotFound(exitCode, stderr)) {
       return yield* new ProviderCommandNotFoundError({
         binaryPath,
@@ -153,33 +165,13 @@ export const spawnAndCollect = (binaryPath: string, command: ChildProcess.Comman
         stderrLength: stderr.length,
       });
     }
+
     return result;
   }).pipe(Effect.scoped);
 
-export function extractAuthBoolean(value: unknown): boolean | undefined {
-  if (globalThis.Array.isArray(value)) {
-    for (const entry of value) {
-      const nested = extractAuthBoolean(entry);
-      if (nested !== undefined) return nested;
-    }
-    return undefined;
-  }
-
-  if (!value || typeof value !== "object") return undefined;
-
-  const record = value as Record<string, unknown>;
-  for (const key of ["authenticated", "isAuthenticated", "loggedIn", "isLoggedIn"] as const) {
-    if (typeof record[key] === "boolean") return record[key];
-  }
-  for (const key of ["auth", "status", "session", "account"] as const) {
-    const nested = extractAuthBoolean(record[key]);
-    if (nested !== undefined) return nested;
-  }
-  return undefined;
-}
-
 export function parseGenericCliVersion(output: string): string | null {
   const match = output.match(/\b(\d+\.\d+\.\d+)\b/);
+
   return match?.[1] ?? null;
 }
 
@@ -194,9 +186,11 @@ export function providerModelsFromSettings(
 
   for (const candidate of customModels) {
     const normalized = normalizeCustomModelSlug(candidate);
+
     if (!normalized || seen.has(normalized)) {
       continue;
     }
+
     seen.add(normalized);
     customEntries.push({
       slug: normalized,
@@ -229,7 +223,9 @@ export function buildSelectOptionDescriptor(input: {
     ...(option.description ? { description: option.description } : {}),
     ...(option.isDefault ? { isDefault: true } : {}),
   }));
+
   const currentValue = options.find((option) => option.isDefault)?.id;
+
   return {
     id: input.id,
     label: input.label,
@@ -254,7 +250,7 @@ export function buildBooleanOptionDescriptor(input: {
     label: input.label,
     type: "boolean" as const,
     ...(input.description ? { description: input.description } : {}),
-    ...(typeof input.currentValue === "boolean" ? { currentValue: input.currentValue } : {}),
+    ...(Predicate.isBoolean(input.currentValue) ? { currentValue: input.currentValue } : {}),
   };
 }
 
@@ -265,8 +261,10 @@ export function buildBooleanOptionDescriptor(input: {
 function probeUnavailability(driver: string, probe: ProviderProbeResult) {
   if (probe.message && probe.status !== "ready") {
     const category = providerUnavailabilityFromDetail(driver, probe.message);
+
     if (probe.status === "error" || category !== "temporary-failure") return category;
   }
+
   return probe.auth.status === "unauthenticated" ? ("missing-login" as const) : undefined;
 }
 
@@ -287,14 +285,16 @@ export function buildServerProvider(input: {
         checkedAt: input.checkedAt,
       })
     : undefined;
+
   const unavailability = probeUnavailability(input.driver ?? "unknown", input.probe);
+
   return {
     displayName: input.presentation.displayName,
     ...(input.presentation.badgeLabel ? { badgeLabel: input.presentation.badgeLabel } : {}),
-    ...(typeof input.presentation.showInteractionModeToggle === "boolean"
+    ...(Predicate.isBoolean(input.presentation.showInteractionModeToggle)
       ? { showInteractionModeToggle: input.presentation.showInteractionModeToggle }
       : {}),
-    ...(typeof input.presentation.requiresNewThreadForModelChange === "boolean"
+    ...(Predicate.isBoolean(input.presentation.requiresNewThreadForModelChange)
       ? { requiresNewThreadForModelChange: input.presentation.requiresNewThreadForModelChange }
       : {}),
     enabled: input.enabled,

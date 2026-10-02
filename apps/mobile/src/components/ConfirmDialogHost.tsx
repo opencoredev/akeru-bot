@@ -41,6 +41,7 @@ export function ConfirmDialogHost() {
 
   useEffect(() => {
     presentRequest = setRequest;
+
     return () => {
       presentRequest = null;
     };

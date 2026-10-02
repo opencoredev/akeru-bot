@@ -1,3 +1,4 @@
+import { ProviderDriverKind } from "@akeru/contracts";
 import { it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as PubSub from "effect/PubSub";
@@ -27,9 +28,9 @@ const makeStubInstance = (
 ): ProviderInstance =>
   ({
     instanceId,
-    driverKind: instanceId as unknown as ProviderInstance["driverKind"],
+    driverKind: ProviderDriverKind.make(instanceId),
     continuationIdentity: {
-      driverKind: instanceId as unknown as ProviderInstance["driverKind"],
+      driverKind: ProviderDriverKind.make(instanceId),
       continuationKey: `${instanceId}:test`,
     },
     displayName: undefined,
@@ -43,6 +44,7 @@ const makeStubRegistry = (
   instances: ReadonlyArray<ProviderInstance>,
 ): ProviderInstanceRegistry.ProviderInstanceRegistry["Service"] => {
   const byId = new Map(instances.map((instance) => [instance.instanceId, instance] as const));
+
   return {
     getInstance: (id) => Effect.succeed(byId.get(id)),
     dispatchIfEnabled: (id, dispatch) =>
@@ -67,17 +69,20 @@ describe("makeTextGenerationFromRegistry", () => {
     Effect.gen(function* () {
       const personalId = ProviderInstanceId.make("codex_personal");
       const personalCalls: string[] = [];
+
       const personal = makeStubInstance(
         personalId,
         makeStubTextGeneration({
           generateBranchName: (input) => {
             personalCalls.push(input.message);
+
             return Effect.succeed({ branch: "personal-branch" });
           },
         }),
       );
 
       const workId = ProviderInstanceId.make("codex_work");
+
       const work = makeStubInstance(
         workId,
         makeStubTextGeneration({
@@ -114,6 +119,7 @@ describe("makeTextGenerationFromRegistry", () => {
         .pipe(Effect.result);
 
       expect(Result.isFailure(result)).toBe(true);
+
       if (Result.isFailure(result)) {
         expect(result.failure._tag).toBe("TextGenerationError");
         expect(result.failure.operation).toBe("generateBranchName");

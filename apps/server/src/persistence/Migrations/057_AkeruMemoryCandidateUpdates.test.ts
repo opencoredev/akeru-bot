@@ -24,11 +24,13 @@ it.layer(Layer.mergeAll(NodeSqliteClient.layerMemory()))(
           )
         `;
         yield* runMigrations({ toMigrationInclusive: 57 });
+
         const existing = yield* sql<{ readonly pendingUpdate: string | null }>`
           SELECT pending_update_json AS pendingUpdate
           FROM akeru_memory_candidates
           WHERE candidate_id = 'candidate-existing'
         `;
+
         assert.deepEqual(existing, [{ pendingUpdate: null }]);
 
         yield* sql`
@@ -51,6 +53,7 @@ it.layer(Layer.mergeAll(NodeSqliteClient.layerMemory()))(
           FROM akeru_memory_candidates
           WHERE candidate_id = 'candidate-update'
         `;
+
         assert.deepEqual(rows, [{ pendingUpdate: '{"rootId":"root-1","expectedRevision":3}' }]);
       }),
     );

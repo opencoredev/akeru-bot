@@ -15,6 +15,7 @@ function cacheId(environmentId: EnvironmentId, kind: ClientCacheKind, cacheKey: 
 function makeDatabase() {
   const values = new Map<string, string>();
   const removed: Array<string> = [];
+
   const database = MobileDatabase.of({
     loadCache: (environmentId, kind, cacheKey) =>
       Effect.succeed(Option.fromUndefinedOr(values.get(cacheId(environmentId, kind, cacheKey)))),
@@ -45,6 +46,7 @@ function makeDatabase() {
     loadPreferencesJson: Effect.succeed(Option.none()),
     savePreferencesJson: () => Effect.void,
   });
+
   return { database, removed, values };
 }
 

@@ -18,6 +18,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock("./useDiscoveredLocalServers", () => ({
   useDiscoveredLocalServers: () => mocks.servers,
 }));
+
 vi.mock("./PreviewFaviconIcon", () => ({
   PreviewFaviconIcon: () => <span data-favicon-icon />,
 }));
@@ -25,6 +26,7 @@ vi.mock("./PreviewFaviconIcon", () => ({
 import { PreviewEmptyState } from "./PreviewEmptyState";
 
 const environmentId = EnvironmentId.make("env-1");
+
 const threadRef = { environmentId, threadId: ThreadId.make("thread-1") };
 
 function server(port: number) {
@@ -55,10 +57,12 @@ function render(recentEntries: Array<{ url: string; lastVisitedAt: number; title
 describe("PreviewEmptyState", () => {
   it("renders a history entry in both groups when its host:port matches a live server", () => {
     mocks.servers = [server(5173)];
+
     const html = render([
       { url: "https://myapp.test/admin#users", lastVisitedAt: Date.now(), title: "Admin" },
       { url: "http://localhost:5173/", lastVisitedAt: Date.now(), title: "Recent Local" },
     ]);
+
     expect(html).toContain("Recently used");
     expect(html).toContain("Local servers");
     expect(html).toContain("myapp.test/admin#users");

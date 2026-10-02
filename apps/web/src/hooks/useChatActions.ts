@@ -1,3 +1,4 @@
+import { hasTag } from "~/lib/taggedUnion";
 import { scopedThreadKey } from "@akeru/client-runtime/environment";
 import {
   type AtomCommandResult,
@@ -32,11 +33,15 @@ function topOfPinnedRunOrderKey(
   environmentId: ScopedThreadRef["environmentId"],
 ): string | undefined {
   let firstKey: string | null = null;
+
   for (const shell of readThreadShells()) {
     if (shell.environmentId !== environmentId) continue;
+
     if (shell.pinnedAt == null || shell.pinOrderKey == null) continue;
+
     if (firstKey === null || shell.pinOrderKey < firstKey) firstKey = shell.pinOrderKey;
   }
+
   return pinOrderKeyBetween(null, firstKey) ?? undefined;
 }
 
@@ -51,9 +56,11 @@ function input(threadRef: ScopedThreadRef) {
  */
 function chatPathForgetter(threadRef: ScopedThreadRef): () => void {
   const botId = readThreadShell(threadRef)?.botId;
+
   return () => {
     if (!botId) return;
     const roster = useRosterStore.getState();
+
     if (shouldForgetChatPath(roster.chatPathByBotId[botId], threadRef)) {
       roster.forgetChatPath(botId);
     }
@@ -77,9 +84,11 @@ export function useChatActions() {
   const unsnooze = useAtomCommand(threadEnvironment.unsnooze, { reportFailure: false });
   const pin = useAtomCommand(threadEnvironment.pin, { reportFailure: false });
   const unpin = useAtomCommand(threadEnvironment.unpin, { reportFailure: false });
+
   const updateMetadata = useAtomCommand(threadEnvironment.updateMetadata, {
     reportFailure: false,
   });
+
   const stopSession = useAtomCommand(threadEnvironment.stopSession, { reportFailure: false });
   const markThreadUnread = useUiStateStore((state) => state.markThreadUnread);
   const confirmThreadDelete = useClientSettings((settings) => settings.confirmThreadDelete);
@@ -90,7 +99,9 @@ export function useChatActions() {
       run: () => Promise<AtomCommandResult<unknown, unknown>>,
     ): Promise<boolean> => {
       const result = await run();
-      if (result._tag === "Success") return true;
+
+      if (hasTag(result, "Success")) return true;
+
       if (!isAtomCommandInterrupted(result)) {
         const error = squashAtomCommandFailure(result);
         toastManager.add({
@@ -99,6 +110,7 @@ export function useChatActions() {
           description: error instanceof Error ? error.message : t("An unexpected error occurred."),
         });
       }
+
       return false;
     },
     [t],
@@ -124,6 +136,7 @@ export function useChatActions() {
         const orderKey = readEnvironmentSupportsPinReorder(threadRef.environmentId)
           ? topOfPinnedRunOrderKey(threadRef.environmentId)
           : undefined;
+
         return report(t("Could not pin chat"), () =>
           pin({
             environmentId: threadRef.environmentId,
@@ -166,17 +179,21 @@ export function useChatActions() {
       archive: async (threadRef: ScopedThreadRef) => {
         const forgetChatPath = chatPathForgetter(threadRef);
         const archived = await report(t("Could not archive chat"), () => archive(input(threadRef)));
+
         if (archived) {
           forgetChatPath();
           refreshArchivedThreadsForEnvironment(threadRef.environmentId);
         }
+
         return archived;
       },
       unarchive: async (threadRef: ScopedThreadRef) => {
         const restored = await report(t("Could not unarchive chat"), () =>
           unarchive(input(threadRef)),
         );
+
         if (restored) refreshArchivedThreadsForEnvironment(threadRef.environmentId);
+
         return restored;
       },
       /** Asks first unless the user turned delete confirmation off. */
@@ -186,22 +203,29 @@ export function useChatActions() {
             t("Delete this chat? This permanently clears the conversation history."),
             { variant: "destructive", confirmLabel: t("Delete chat") },
           );
+
           if (!confirmed) return false;
         }
+
         const shell = readThreadShell(threadRef);
+
         if (shell?.session && shell.session.status !== "stopped") {
           // A session that did not stop would keep running without its chat.
           const stopped = await report(t("Could not delete chat"), () =>
             stopSession(input(threadRef)),
           );
+
           if (!stopped) return false;
         }
+
         const forgetChatPath = chatPathForgetter(threadRef);
         const deleted = await report(t("Could not delete chat"), () => remove(input(threadRef)));
+
         if (deleted) {
           forgetChatPath();
           refreshArchivedThreadsForEnvironment(threadRef.environmentId);
         }
+
         return deleted;
       },
     }),

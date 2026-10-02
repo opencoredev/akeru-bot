@@ -1,6 +1,6 @@
 import { scopeThreadRef } from "@akeru/client-runtime/environment";
-import type { EnvironmentId, ScopedThreadRef, ThreadId } from "@akeru/contracts";
-import type { DraftId } from "./composerDraftStore";
+import { EnvironmentId, type ScopedThreadRef, ThreadId } from "@akeru/contracts";
+import { DraftId } from "./composerDraftStore";
 
 export type ThreadRouteTarget =
   | {
@@ -30,28 +30,26 @@ export function resolveThreadRouteRenderState(input: {
   if (!input.bootstrapComplete) {
     return "loading";
   }
+
   if (input.serverThreadDetailExists || input.draftThreadExists) {
     return "ready";
   }
+
   if (input.serverThreadDetailDeleted) {
     return "missing";
   }
+
   return input.serverThreadShellExists ? "loading" : "missing";
 }
 
-export function buildThreadRouteParams(ref: ScopedThreadRef): {
-  environmentId: EnvironmentId;
-  threadId: ThreadId;
-} {
+export function buildThreadRouteParams(ref: ScopedThreadRef) {
   return {
     environmentId: ref.environmentId,
     threadId: ref.threadId,
   };
 }
 
-export function buildDraftThreadRouteParams(draftId: DraftId): {
-  draftId: DraftId;
-} {
+export function buildDraftThreadRouteParams(draftId: DraftId) {
   return { draftId };
 }
 
@@ -62,7 +60,7 @@ export function resolveThreadRouteRef(
     return null;
   }
 
-  return scopeThreadRef(params.environmentId as EnvironmentId, params.threadId as ThreadId);
+  return scopeThreadRef(EnvironmentId.make(params.environmentId), ThreadId.make(params.threadId));
 }
 
 export function resolveThreadRouteTarget(
@@ -71,7 +69,10 @@ export function resolveThreadRouteTarget(
   if (params.environmentId && params.threadId) {
     return {
       kind: "server",
-      threadRef: scopeThreadRef(params.environmentId as EnvironmentId, params.threadId as ThreadId),
+      threadRef: scopeThreadRef(
+        EnvironmentId.make(params.environmentId),
+        ThreadId.make(params.threadId),
+      ),
     };
   }
 
@@ -81,7 +82,7 @@ export function resolveThreadRouteTarget(
 
   return {
     kind: "draft",
-    draftId: params.draftId as DraftId,
+    draftId: DraftId.make(params.draftId),
   };
 }
 
@@ -96,8 +97,10 @@ export function resolveActiveThreadRouteRef(
   if (target?.kind === "server") {
     return target.threadRef;
   }
+
   if (target?.kind !== "draft" || !draftThread?.promotedTo) {
     return null;
   }
+
   return draftThread.promotedTo;
 }

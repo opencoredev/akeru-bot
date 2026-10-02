@@ -7,6 +7,7 @@ import * as Option from "effect/Option";
  * and scripts keep working. The `AKERU_` name wins when both are set.
  */
 export const AKERU_ENV_PREFIX = "AKERU_";
+
 export const LEGACY_ENV_PREFIX = "T3CODE_";
 
 /** Reads `AKERU_<suffix>`, falling back to `T3CODE_<suffix>`. */
@@ -26,7 +27,9 @@ export function readAliasedEnv(
   suffix: string,
 ): string | undefined {
   const primary = env[`${AKERU_ENV_PREFIX}${suffix}`]?.trim();
+
   if (primary) return primary;
   const legacy = env[`${LEGACY_ENV_PREFIX}${suffix}`]?.trim();
+
   return legacy || undefined;
 }

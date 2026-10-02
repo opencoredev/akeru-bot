@@ -82,6 +82,7 @@ const makeAssetsLayer = (png: Option.Option<string>) =>
 
 const makeEnvironmentLayer = (overrides: TestEnvironmentInput = {}) => {
   const { env, ...environmentOverrides } = overrides;
+
   return DesktopEnvironment.layer({
     ...defaultEnvironmentInput,
     ...environmentOverrides,
@@ -170,6 +171,7 @@ describe("DesktopAppIdentity", () => {
 
   it.effect("preserves failures while inspecting the legacy userData path", () => {
     const legacyPath = "/Users/alice/Library/Application Support/Akeru Bot (Alpha)";
+
     const cause = PlatformError.systemError({
       _tag: "PermissionDenied",
       module: "FileSystem",

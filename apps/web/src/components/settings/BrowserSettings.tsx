@@ -47,6 +47,7 @@ export function BrowserSettingsSection() {
           onSubmit={(event) => {
             event.preventDefault();
             const nextApiKey = apiKey.trim();
+
             if (!nextApiKey) return;
             updateSettings({
               browserProvider: {

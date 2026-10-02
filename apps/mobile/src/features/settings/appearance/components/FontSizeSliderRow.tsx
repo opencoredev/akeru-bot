@@ -17,11 +17,14 @@ import { useThemeColor } from "../../../../lib/useThemeColor";
 type SymbolName = ComponentProps<typeof SymbolView>["name"];
 
 const THUMB_SIZE = 26;
+
 const TRACK_HEIGHT = 4;
+
 const SNAP_ANIMATION = { duration: 120 } as const;
 
 function clampFraction(value: number): number {
   "worklet";
+
   return Math.min(1, Math.max(0, value));
 }
 
@@ -61,6 +64,7 @@ export function FontSizeSliderRow(props: {
     if (next === latest.current.value) {
       return;
     }
+
     Haptics.selectionAsync().catch(() => undefined);
     latest.current.onChange(next);
   }, []);
@@ -69,22 +73,30 @@ export function FontSizeSliderRow(props: {
     const snapValue = (raw: number): number => {
       "worklet";
       const stepped = Math.round((raw - min) / step) * step + min;
+
       return Math.min(max, Math.max(min, stepped));
     };
+
     const fractionAt = (x: number): number => {
       "worklet";
       const usable = trackWidth.value - THUMB_SIZE;
+
       if (usable <= 0) {
         return 0;
       }
+
       return clampFraction((x - THUMB_SIZE / 2) / usable);
     };
+
     const valueAtFraction = (f: number): number => {
       "worklet";
+
       return snapValue(min + f * (max - min));
     };
+
     const fractionOfValue = (v: number): number => {
       "worklet";
+
       return clampFraction((v - min) / (max - min));
     };
 
@@ -102,6 +114,7 @@ export function FontSizeSliderRow(props: {
         if (!dragging.value) {
           return;
         }
+
         dragging.value = false;
         progress.value = withTiming(
           fractionOfValue(valueAtFraction(progress.value)),
@@ -123,6 +136,7 @@ export function FontSizeSliderRow(props: {
   const fillStyle = useAnimatedStyle(() => ({
     width: THUMB_SIZE / 2 + progress.value * Math.max(0, trackWidth.value - THUMB_SIZE),
   }));
+
   const thumbStyle = useAnimatedStyle(() => ({
     transform: [{ translateX: progress.value * Math.max(0, trackWidth.value - THUMB_SIZE) }],
   }));

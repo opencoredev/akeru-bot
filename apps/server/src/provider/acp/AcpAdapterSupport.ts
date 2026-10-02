@@ -11,6 +11,7 @@ import {
   ProviderAdapterSessionClosedError,
   type ProviderAdapterError,
 } from "../Errors.ts";
+
 const isAcpProcessExitedError = Schema.is(EffectAcpErrors.AcpProcessExitedError);
 
 export function mapAcpToAdapterError(
@@ -26,6 +27,7 @@ export function mapAcpToAdapterError(
       cause: error,
     });
   }
+
   return new ProviderAdapterRequestError({
     provider,
     method,

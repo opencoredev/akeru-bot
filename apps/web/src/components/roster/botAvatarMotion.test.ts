@@ -6,9 +6,11 @@ const rest: MotionInput = { working: false, hovered: false, pointer: null, reduc
 
 function run(motion: BotMotion, input: MotionInput, seconds: number) {
   let result = motion.tick(1 / 60, input);
+
   for (let elapsed = 1 / 60; elapsed < seconds; elapsed += 1 / 60) {
     result = motion.tick(1 / 60, input);
   }
+
   return result;
 }
 
@@ -34,13 +36,16 @@ describe("BotMotion", () => {
     const motion = new BotMotion(0.3);
     const working = { ...rest, working: true };
     let sawSpin = false;
+
     for (let frame = 0; frame < 60 * 8 && !sawSpin; frame++) {
       const { frame: pose } = motion.tick(1 / 60, working);
+
       if (pose.spin !== 0) {
         sawSpin = true;
         expect(motion.spinning).toBe(true);
       }
     }
+
     expect(sawSpin).toBe(true);
     run(motion, rest, 6);
     expect(motion.spinning).toBe(false);
@@ -62,11 +67,13 @@ describe("BotMotion", () => {
 
   it("holds still under reduced motion", () => {
     const motion = new BotMotion(0.3);
+
     const { frame, active } = motion.tick(1 / 60, {
       ...rest,
       working: true,
       reducedMotion: true,
     });
+
     expect(active).toBe(false);
     expect(frame.roll).toBe(0);
   });

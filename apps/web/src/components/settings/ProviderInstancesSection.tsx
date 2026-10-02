@@ -1,3 +1,5 @@
+import { recordLookup } from "../recordLookup";
+import { Predicate } from "effect";
 import { useAtomValue } from "@effect/atom-react";
 import { safeErrorLogAttributes } from "@akeru/client-runtime/errors";
 import {
@@ -10,7 +12,7 @@ import {
   PROVIDER_DISPLAY_NAMES,
   type ProviderDriverKind,
   type ProviderInstanceConfig,
-  type ProviderInstanceId,
+  ProviderInstanceId,
   resolveProviderInstanceEnabled,
   type ServerProvider,
 } from "@akeru/contracts";
@@ -49,8 +51,9 @@ function withoutProviderInstanceKey<V>(
   record: Readonly<Record<ProviderInstanceId, V>> | undefined,
   key: ProviderInstanceId,
 ): Record<ProviderInstanceId, V> {
-  const next = { ...record } as Record<ProviderInstanceId, V>;
+  const next = { ...record };
   delete next[key];
+
   return next;
 }
 
@@ -63,8 +66,6 @@ interface InstanceRow {
 }
 
 type EnvironmentSettings = UnifiedSettings;
-type LegacyProviderSettings =
-  EnvironmentSettings["providers"][keyof EnvironmentSettings["providers"]];
 
 /**
  * The instances that run a set of drivers: the built-in default slot first
@@ -75,25 +76,27 @@ function instanceRowsForDrivers(
   settings: EnvironmentSettings,
   drivers: ReadonlyArray<ProviderDriverKind>,
 ): InstanceRow[] {
-  const legacyProviders = settings.providers as Record<string, LegacyProviderSettings | undefined>;
-  const defaultLegacyProviders = DEFAULT_UNIFIED_SETTINGS.providers as Record<
-    string,
-    LegacyProviderSettings | undefined
-  >;
+  const legacyProviders = settings.providers;
+
+  const defaultLegacyProviders = DEFAULT_UNIFIED_SETTINGS.providers;
+
   const rows: InstanceRow[] = [];
+
   for (const driver of drivers) {
     const defaultInstanceId = defaultInstanceIdForDriver(driver);
     const explicitInstance = settings.providerInstances?.[defaultInstanceId];
     // A remote environment may run a server whose settings predate this
     // driver, so the legacy blob can be missing too.
-    const legacyConfig = legacyProviders[driver];
+    const legacyConfig = recordLookup(legacyProviders, driver);
     let defaultInstance: ProviderInstanceConfig | undefined = explicitInstance;
+
     if (defaultInstance === undefined && legacyConfig !== undefined) {
       // The envelope owns `enabled`. Leaving the legacy flag inside the
       // config would let it override the Switch forever.
       const { enabled, ...config } = legacyConfig;
       defaultInstance = { driver, enabled, config };
     }
+
     if (defaultInstance !== undefined) {
       rows.push({
         instanceId: defaultInstanceId,
@@ -102,15 +105,18 @@ function instanceRowsForDrivers(
         isDefault: true,
         isDirty:
           explicitInstance !== undefined ||
-          !Equal.equals(legacyConfig, defaultLegacyProviders[driver]),
+          !Equal.equals(legacyConfig, recordLookup(defaultLegacyProviders, driver)),
       });
     }
+
     for (const [rawId, instance] of Object.entries(settings.providerInstances ?? {})) {
-      const id = rawId as ProviderInstanceId;
+      const id = ProviderInstanceId.make(rawId);
+
       if (instance.driver !== driver || id === defaultInstanceId) continue;
       rows.push({ instanceId: id, instance, driver, isDefault: false, isDirty: false });
     }
   }
+
   return rows;
 }
 
@@ -134,24 +140,31 @@ export function ProviderInstancesSection({
   const environment = useEnvironment(environmentId);
   const settings = useEnvironmentSettings(environmentId);
   const updateSettings = useUpdateEnvironmentSettings(environmentId);
+
   const serverProviders =
     useAtomValue(serverEnvironment.providersValueAtom(environmentId)) ?? EMPTY_SERVER_PROVIDERS;
+
   const refreshServerProviders = useAtomCommand(serverEnvironment.refreshProviders, {
     reportFailure: false,
   });
+
   const updateProvider = useAtomCommand(serverEnvironment.updateProvider, {
     reportFailure: false,
   });
+
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
+
   const [updatingDrivers, setUpdatingDrivers] = useState<ReadonlySet<ProviderDriverKind>>(
     () => new Set(),
   );
+
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const refreshingRef = useRef(false);
   const updatingDriversRef = useRef<Set<ProviderDriverKind>>(new Set());
 
   const rows = instanceRowsForDrivers(settings, drivers);
+
   const updateCandidateByInstanceId = useMemo(
     () =>
       new Map(
@@ -162,6 +175,7 @@ export function ProviderInstancesSection({
       ),
     [serverProviders],
   );
+
   const textGenInstanceId = resolveAppModelSelectionState(settings, serverProviders).instanceId;
 
   const refreshProviders = useCallback(() => {
@@ -172,7 +186,8 @@ export function ProviderInstancesSection({
       const result = await refreshServerProviders({ environmentId, input: {} });
       refreshingRef.current = false;
       setIsRefreshing(false);
-      if (result._tag === "Failure" && !isAtomCommandInterrupted(result)) {
+
+      if (Predicate.isTagged(result, "Failure") && !isAtomCommandInterrupted(result)) {
         console.warn("Failed to refresh providers", {
           operation: "refresh-providers",
           environmentId,
@@ -188,11 +203,13 @@ export function ProviderInstancesSection({
       if (updatingDriversRef.current.has(candidate.driver)) return;
       updatingDriversRef.current.add(candidate.driver);
       setUpdatingDrivers((previous) => new Set(previous).add(candidate.driver));
+
       const result = await updateProvider({
         environmentId,
         input: { provider: candidate.driver, instanceId: candidate.instanceId },
       });
-      if (result._tag === "Failure" && !isAtomCommandInterrupted(result)) {
+
+      if (Predicate.isTagged(result, "Failure") && !isAtomCommandInterrupted(result)) {
         const error = squashAtomCommandFailure(result);
         toastManager.add(
           stackedThreadToast({
@@ -207,11 +224,13 @@ export function ProviderInstancesSection({
           }),
         );
       }
+
       updatingDriversRef.current.delete(candidate.driver);
       setUpdatingDrivers((previous) => {
         if (!previous.has(candidate.driver)) return previous;
         const next = new Set(previous);
         next.delete(candidate.driver);
+
         return next;
       });
     },
@@ -225,6 +244,7 @@ export function ProviderInstancesSection({
       next.enabled === false &&
       resolveProviderInstanceEnabled(row.instance) &&
       textGenInstanceId === row.instanceId;
+
     updateSettings(
       buildProviderInstanceUpdatePatch({
         settings,
@@ -246,12 +266,11 @@ export function ProviderInstancesSection({
   };
 
   const resetDefaultInstance = (driver: ProviderDriverKind) => {
-    const defaultLegacy = (
-      DEFAULT_UNIFIED_SETTINGS.providers as Record<string, LegacyProviderSettings | undefined>
-    )[driver];
+    const defaultLegacy = recordLookup(DEFAULT_UNIFIED_SETTINGS.providers, driver);
+
     if (defaultLegacy === undefined) return;
     updateSettings({
-      providers: { ...settings.providers, [driver]: defaultLegacy } as typeof settings.providers,
+      providers: { ...settings.providers, [driver]: defaultLegacy },
       providerInstances: withoutProviderInstanceKey(
         settings.providerInstances,
         defaultInstanceIdForDriver(driver),
@@ -285,10 +304,12 @@ export function ProviderInstancesSection({
       ...new Set(
         Arr.filterMap(nextFavorites, (slug) => {
           const trimmed = slug.trim();
+
           return trimmed.length > 0 ? Result.succeed(trimmed) : Result.failVoid;
         }),
       ),
     ];
+
     updateSettings({
       favorites: [
         ...(settings.favorites ?? []).filter((favorite) => favorite.provider !== instanceId),
@@ -338,16 +359,20 @@ export function ProviderInstancesSection({
         ) : (
           rows.map((row) => {
             const liveProvider = liveProviderFor(row.instanceId);
+
             const updateCandidate = liveProvider
               ? updateCandidateByInstanceId.get(liveProvider.instanceId)
               : undefined;
+
             const showUpdate =
               updateCandidate !== undefined &&
               hasOneClickUpdateProviderCandidate(updateCandidate, serverProviders);
+
             const canUpdate =
               updateCandidate !== undefined &&
               canOneClickUpdateProviderCandidate(updateCandidate, serverProviders) &&
               !updatingDrivers.has(updateCandidate.driver);
+
             const isUpdating =
               updateCandidate !== undefined &&
               (updatingDrivers.has(updateCandidate.driver) ||
@@ -355,16 +380,20 @@ export function ProviderInstancesSection({
                   (provider) =>
                     provider.driver === updateCandidate.driver && isProviderUpdateActive(provider),
                 ));
+
             const preferences = settings.providerModelPreferences?.[row.instanceId] ?? {
               hiddenModels: [],
               modelOrder: [],
             };
+
             const favoriteModels = Arr.filterMap(settings.favorites ?? [], (favorite) =>
               favorite.provider === row.instanceId
                 ? Result.succeed(favorite.model)
                 : Result.failVoid,
             );
+
             const driverOption = getDriverOption(row.driver);
+
             return (
               <ProviderInstanceCard
                 key={row.instanceId}

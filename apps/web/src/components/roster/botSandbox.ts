@@ -38,6 +38,7 @@ export function botSandboxLabel(
 ): string {
   if (sandbox === "default") return t("Default sandbox");
   const option = BOT_SANDBOX_OPTIONS.find((candidate) => candidate.value === sandbox);
+
   return !option || option.value === "local" ? t("Local") : option.label;
 }
 

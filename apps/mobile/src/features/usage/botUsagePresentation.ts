@@ -42,6 +42,7 @@ export type BotUsageView =
  */
 export function formatUsageMeasurement(measurement: UsageMeasurement): string {
   if (measurement.unavailableEntries === 0) return measurement.tokens.toLocaleString();
+
   return measurement.tokens === 0 ? "Unavailable" : `${measurement.tokens.toLocaleString()}+`;
 }
 
@@ -71,7 +72,9 @@ export function formatEstimatedCost(cost: AkeruBotUsageSnapshot["estimatedCost"]
  */
 export function formatSubscriptionPool(pool: AkeruBotUsageSnapshot["subscriptionPool"]): string {
   if (pool.status === "unavailable") return "Unavailable";
+
   if (pool.unit === "percent") return `${pool.used.toLocaleString()}% of pool`;
+
   return `${pool.used.toLocaleString()} / ${pool.limit.toLocaleString()} ${pool.unit}`;
 }
 
@@ -84,8 +87,10 @@ export function formatUsageCap(snapshot: AkeruBotUsageSnapshot): string {
 /** Where the cap is changed. Mobile has no bot editor; chat settings owns it. */
 export const BOT_USAGE_CAP_EDIT_CAPTION =
   "Change the cap in a chat with this bot, under chat settings.";
+
 export const BOT_USAGE_COST_CAPTION =
   "Estimated from model rates. Not subscription spend, and not an amount billed.";
+
 export const BOT_USAGE_PARTIAL_NOTICE = "Some provider usage is unavailable.";
 
 export function buildBotUsageRows(snapshot: AkeruBotUsageSnapshot): ReadonlyArray<BotUsageRow> {
@@ -115,6 +120,7 @@ export function buildBotUsageRows(snapshot: AkeruBotUsageSnapshot): ReadonlyArra
       unavailable: snapshot.subscriptionPool.status === "unavailable",
     },
   ];
+
   // Nothing reserved is not a measurement worth a row, and web hides it too.
   if (snapshot.reservedTokens > 0) {
     rows.push({
@@ -124,6 +130,7 @@ export function buildBotUsageRows(snapshot: AkeruBotUsageSnapshot): ReadonlyArra
       unavailable: false,
     });
   }
+
   return rows;
 }
 
@@ -138,13 +145,17 @@ export function botUsageView(query: {
   readonly isPending: boolean;
 }): BotUsageView {
   if (query.error !== null) return { kind: "error", message: "Usage unavailable" };
+
   if (query.data === null) {
     return query.isPending ? { kind: "loading" } : { kind: "empty", message: "No usage" };
   }
+
   const snapshot = query.data;
+
   const hasUnavailable = Object.values(snapshot.measurements).some((measurement) =>
     isMeasurementUnavailable(measurement),
   );
+
   return {
     kind: "ready",
     rows: buildBotUsageRows(snapshot),

@@ -11,11 +11,13 @@ import {
 
 function deferred<T>() {
   let resolve!: (value: T) => void;
-  let reject!: (reason: unknown) => void;
+  let reject!: (cause: unknown) => void;
+
   const promise = new Promise<T>((yes, no) => {
     resolve = yes;
     reject = no;
   });
+
   return { promise, resolve, reject };
 }
 
@@ -25,22 +27,28 @@ function setup(options: Partial<DictationLimits> = {}) {
     text: "hello",
     selection: { start: 5, end: 5 },
   };
+
   const audio: DictationAudio = {
     bytes: new Uint8Array([1, 2]),
     durationMs: 10,
     mediaType: "audio/webm",
   };
+
   const recording = { stop: vi.fn(async () => audio), dispose: vi.fn() };
   const transcription = deferred<string>();
   const invoked = deferred<void>();
   const capture = vi.fn<DictationDependencies["capture"]>(async () => recording);
+
   const transcribe = vi.fn<DictationDependencies["transcribe"]>(() => {
     invoked.resolve();
+
     return transcription.promise;
   });
+
   const updateDraft = vi.fn<DictationDependencies["updateDraft"]>((update) => {
     draft = update(draft);
   });
+
   const session = createDictationSession(
     {
       capture,
@@ -51,6 +59,7 @@ function setup(options: Partial<DictationLimits> = {}) {
     },
     options,
   );
+
   return {
     session,
     capture,
@@ -305,12 +314,15 @@ describe("isolated dictation lifecycle", () => {
     async (reason) => {
       const h = setup();
       await h.session.start(h.draft);
+
       const listener = vi.fn(() => {
         expect(h.session.status).toBe("cancelled");
         expect(h.recording.dispose).toHaveBeenCalledTimes(1);
         expect(h.capture.mock.calls[0]?.[0].signal.aborted).toBe(true);
       });
+
       h.session.subscribe(listener);
+
       if (reason === "navigation")
         h.session.updateContext({ ...h.draft.identity, threadId: "other" }, true);
       else if (reason === "disconnect") h.session.updateContext(h.draft.identity, false);
@@ -332,6 +344,7 @@ describe("isolated dictation lifecycle", () => {
       });
       await h.session.start(h.draft);
       const finish = phase === "transcribing" ? h.session.finish() : undefined;
+
       if (finish) await h.invoked.promise;
       await vi.advanceTimersByTimeAsync(phase === "transcribing" ? 50 : 100);
       expect(await failure.promise).toEqual(new Error("Dictation time limit exceeded"));
@@ -363,6 +376,7 @@ describe("isolated dictation lifecycle", () => {
     const cause = new Error("capture interrupted");
     h.capture.mockImplementationOnce(async ({ onError }) => {
       onError(cause);
+
       return h.recording;
     });
     await h.session.start(h.draft);
@@ -396,8 +410,10 @@ describe("isolated dictation lifecycle", () => {
         if (h.session.status === phase) h.session.cancel();
       });
       await h.session.start(h.draft);
+
       if (phase === "transcribing") await h.session.finish();
       expect(h.session.status).toBe("cancelled");
+
       if (phase === "starting") expect(h.capture).not.toHaveBeenCalled();
       expect(h.recording.stop).not.toHaveBeenCalled();
       expect(h.transcribe).not.toHaveBeenCalled();

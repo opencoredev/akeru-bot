@@ -10,12 +10,15 @@ export {
   type PluginLogo,
   type PluginSkill,
 } from "./catalog";
+
 export { integrationsShListing, isListedIntegration } from "./integrationsSh";
+
 export {
   isInstallableManifest,
   loadManifestCatalog,
   type CatalogManifestModules,
 } from "./manifestCatalog";
+
 export {
   PLUGIN_APPROVAL_CLASSES,
   PLUGIN_CATEGORIES,
@@ -23,6 +26,7 @@ export {
   type PluginApprovalClass,
   type PluginCategory,
 } from "./categories";
+
 export {
   parsePluginManifest,
   parsePluginManifestJson,

@@ -48,6 +48,7 @@ describe("OAuth scopes", () => {
       encodeOAuthScope(["access:read", "invalid scope", "access:read"]);
     } catch (error) {
       expect(error).toBeInstanceOf(OAuthScopeEncodingError);
+
       if (!isOAuthScopeEncodingError(error)) return;
 
       expect(error.scopes).toEqual(["access:read", "invalid scope", "access:read"]);

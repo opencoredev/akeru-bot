@@ -4,6 +4,7 @@ import * as Result from "effect/Result";
 import { type ReactNode } from "react";
 
 export const ITEM_ICON_CLASS = "size-4 text-icon-muted";
+
 export const COMMAND_PALETTE_INPUT_PLACEHOLDER = "Search commands and chats...";
 
 export interface CommandPaletteActionItem {
@@ -58,6 +59,7 @@ export function buildLanguageCommandPaletteAction(input: {
   readonly icon: ReactNode;
 }): CommandPaletteActionItem {
   const title = input.translate("Change language");
+
   return {
     value: "action:language",
     searchTerms: [
@@ -144,14 +146,18 @@ export function buildEnvironmentOwnerNames(
   },
 ) => string | null {
   const names = new Map<string, string>();
+
   const key = (environmentId: string, kind: "bot" | "group", id: string) =>
     `${environmentId}\u0000${kind}\u0000${id}`;
+
   for (const roster of rosters) {
     for (const bot of roster.bots) names.set(key(roster.environmentId, "bot", bot.id), bot.name);
+
     for (const group of roster.groups) {
       names.set(key(roster.environmentId, "group", group.id), group.name);
     }
   }
+
   return (environmentId, owner) =>
     (owner.botId ? names.get(key(environmentId, "bot", owner.botId)) : undefined) ??
     (owner.groupId ? names.get(key(environmentId, "group", owner.groupId)) : undefined) ??
@@ -178,15 +184,20 @@ export function buildChatSearchCommandPaletteItems(input: {
 }): CommandPaletteActionItem[] {
   if (input.query.startsWith(">")) return [];
   const normalizedQuery = normalizeSearchText(input.query);
+
   if (normalizedQuery.length === 0) return [];
   const limit = input.limit ?? COMMAND_PALETTE_CHAT_LIMIT;
+
   const chatKey = (chat: { readonly environmentId: string; readonly threadId: string }) =>
     `${chat.environmentId}:${chat.threadId}`;
+
   const chatsByKey = new Map(input.chats.map((chat) => [chatKey(chat), chat] as const));
 
   // A placeholder title says nothing about the chat, so only its messages can match.
   const titleOf = (chat: CommandPaletteChat) =>
     chat.title === PLACEHOLDER_THREAD_TITLE ? "" : chat.title.trim();
+
+  // SAFETY: title-only matches have no snippet; the shared result list also accepts message snippets.
   const titleMatches = input.chats
     .map((chat, index) => ({
       chat,
@@ -201,15 +212,20 @@ export function buildChatSearchCommandPaletteItems(input: {
         left.index - right.index,
     )
     .map((entry) => ({ chat: entry.chat, snippet: null as string | null }));
+
   const seen = new Set(titleMatches.map((entry) => chatKey(entry.chat)));
+
   const messageMatches = input.matches.flatMap((match) => {
     const chat = chatsByKey.get(chatKey(match));
+
     if (!chat || seen.has(chatKey(chat))) return [];
     seen.add(chatKey(chat));
+
     return [{ chat, snippet: match.snippet.trim() || null }];
   });
 
   const ranked = [...titleMatches, ...messageMatches];
+
   return [
     ...ranked.filter((entry) => entry.chat.unavailableIn === null),
     ...ranked.filter((entry) => entry.chat.unavailableIn !== null),
@@ -223,6 +239,7 @@ export function buildChatSearchCommandPaletteItems(input: {
       ]
         .filter((part): part is string => part !== null && part.length > 0)
         .join(" · ");
+
       return {
         value: `chat-search:${chatKey(chat)}`,
         searchTerms: [titleOf(chat), snippet ?? ""],
@@ -243,15 +260,19 @@ export function normalizeSearchText(value: string): string {
 
 function rankSearchFieldMatch(field: string, normalizedQuery: string): number {
   const normalizedField = normalizeSearchText(field);
+
   if (normalizedField.length === 0 || !normalizedField.includes(normalizedQuery)) {
     return Number.NEGATIVE_INFINITY;
   }
+
   if (normalizedField === normalizedQuery) {
     return 3;
   }
+
   if (normalizedField.startsWith(normalizedQuery)) {
     return 2;
   }
+
   return 1;
 }
 
@@ -260,12 +281,15 @@ function rankCommandPaletteItemMatch(
   normalizedQuery: string,
 ): number {
   const terms = item.searchTerms.filter((term) => term.length > 0);
+
   for (const [index, field] of terms.entries()) {
     const fieldRank = rankSearchFieldMatch(field, normalizedQuery);
+
     if (fieldRank !== Number.NEGATIVE_INFINITY) {
       return 1_000 - index * 100 + fieldRank;
     }
   }
+
   return 0;
 }
 
@@ -280,6 +304,7 @@ export function filterCommandPaletteGroups(input: {
 }): CommandPaletteGroup[] {
   const searchQuery = input.query.startsWith(">") ? input.query.slice(1) : input.query;
   const normalizedQuery = normalizeSearchText(searchQuery);
+
   if (normalizedQuery.length === 0) {
     return [...input.groups];
   }
@@ -287,9 +312,11 @@ export function filterCommandPaletteGroups(input: {
   return input.groups.flatMap((group) => {
     const items = Arr.filterMap(group.items, (item, index) => {
       const haystack = normalizeSearchText(item.searchTerms.join(" "));
+
       if (!haystack.includes(normalizedQuery)) {
         return Result.failVoid;
       }
+
       return Result.succeed({
         item,
         index,

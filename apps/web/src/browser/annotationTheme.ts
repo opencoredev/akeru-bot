@@ -6,6 +6,7 @@ const readVariable = (styles: CSSStyleDeclaration, name: string, fallback: strin
 export function readPreviewAnnotationTheme(): DesktopPreviewAnnotationTheme {
   const root = document.documentElement;
   const styles = getComputedStyle(root);
+
   return {
     colorScheme: root.classList.contains("dark") ? "dark" : "light",
     radius: readVariable(styles, "--radius", "0.625rem"),

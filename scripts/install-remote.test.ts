@@ -1,8 +1,9 @@
-// @effect-diagnostics nodeBuiltinImport:off - Tests inspect and run the installer script.
 import * as NodeChildProcess from "node:child_process";
 import * as NodeFS from "node:fs";
 import { describe, expect, it } from "vite-plus/test";
+
 const script = NodeFS.readFileSync(new URL("./install-remote.sh", import.meta.url), "utf8");
+
 describe("remote installer", () => {
   it("verifies signed archives and installs atomically", () => {
     expect(script).toContain("verify_checksum");
@@ -31,10 +32,12 @@ describe("remote installer", () => {
   it("resolves the latest release tag from the GitHub API response", () => {
     const program = /\| sed -n '([^']+)'/.exec(script)?.[1];
     expect(program).toBeDefined();
+
     const result = NodeChildProcess.spawnSync("sed", ["-n", program ?? ""], {
       input: '{\n  "url": "x",\n  "tag_name": "v1.2.3",\n  "name": "Akeru Bot v1.2.3"\n}\n',
       encoding: "utf8",
     });
+
     expect(result.stdout).toBe("v1.2.3\n");
   });
   it("quotes custom paths in the update unit", () => {
@@ -42,11 +45,13 @@ describe("remote installer", () => {
     expect(script).toContain('ExecStart=$(systemd_quote "$bin_dir/akeru") remote update');
     const quote = /^systemd_quote\(\) \{\n[\s\S]*?\n\}$/m.exec(script)?.[0];
     expect(quote).toBeDefined();
+
     const result = NodeChildProcess.spawnSync(
       "sh",
       ["-c", `${quote}\nsystemd_quote "$1"`, "sh", '/home/lee/My Bins/50%/a"b\\c/akeru'],
       { encoding: "utf8" },
     );
+
     expect(result.stdout).toBe('"/home/lee/My Bins/50%%/a\\"b\\\\c/akeru"');
   });
   it("is served unchanged as the public installer", () => {

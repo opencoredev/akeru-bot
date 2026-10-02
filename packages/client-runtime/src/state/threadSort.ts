@@ -16,12 +16,14 @@ export interface ThreadSortInput {
 export function toSortableTimestamp(iso: string | undefined): number | null {
   if (!iso) return null;
   const ms = Date.parse(iso);
+
   return Number.isFinite(ms) ? ms : null;
 }
 
 function getFirstSortableTimestamp(...values: Array<string | null | undefined>): number | null {
   for (const value of values) {
     const timestamp = toSortableTimestamp(value ?? undefined);
+
     if (timestamp !== null) {
       return timestamp;
     }
@@ -33,6 +35,7 @@ function getFirstSortableTimestamp(...values: Array<string | null | undefined>):
 function getLatestUserMessageTimestamp(thread: ThreadSortInput): number {
   if (thread.latestUserMessageAt) {
     const latestUserMessageTimestamp = toSortableTimestamp(thread.latestUserMessageAt);
+
     if (latestUserMessageTimestamp !== null) {
       return latestUserMessageTimestamp;
     }
@@ -43,6 +46,7 @@ function getLatestUserMessageTimestamp(thread: ThreadSortInput): number {
   for (const message of thread.messages ?? []) {
     if (message.role !== "user") continue;
     const messageTimestamp = toSortableTimestamp(message.createdAt);
+
     if (messageTimestamp === null) continue;
     latestUserMessageTimestamp =
       latestUserMessageTimestamp === null
@@ -66,6 +70,7 @@ export function getThreadSortTimestamp(
       getFirstSortableTimestamp(thread.createdAt, thread.updatedAt) ?? Number.NEGATIVE_INFINITY
     );
   }
+
   return getLatestUserMessageTimestamp(thread);
 }
 
@@ -132,9 +137,11 @@ const PIN_ORDER_DIGITS = "abcdefghijklmnopqrstuvwxyz";
 
 function isValidPinOrderKey(key: string): boolean {
   if (key.length === 0) return false;
+
   for (const char of key) {
     if (!PIN_ORDER_DIGITS.includes(char)) return false;
   }
+
   // A trailing minimum digit would leave no room to sort a key immediately
   // before this one; generators never produce it, so treat it as corrupt.
   return key.at(-1) !== PIN_ORDER_DIGITS[0];
@@ -144,21 +151,28 @@ function isValidPinOrderKey(key: string): boolean {
     "" stands for the open bound on either side. Requires a < b. */
 function pinOrderMidpoint(a: string, b: string): string {
   if (b !== "" && a >= b) throw new Error("pinOrderMidpoint: bounds out of order");
+
   if (b !== "") {
     // Recurse past the longest common prefix ("a" pads the shorter side).
     let n = 0;
+
     while ((a.charAt(n) || PIN_ORDER_DIGITS[0]) === b.charAt(n)) n += 1;
+
     if (n > 0) return b.slice(0, n) + pinOrderMidpoint(a.slice(n), b.slice(n));
   }
+
   const digitA = a === "" ? 0 : PIN_ORDER_DIGITS.indexOf(a.charAt(0));
   const digitB = b === "" ? PIN_ORDER_DIGITS.length : PIN_ORDER_DIGITS.indexOf(b.charAt(0));
+
   if (digitB - digitA > 1) {
     return PIN_ORDER_DIGITS.charAt(Math.round((digitA + digitB) / 2));
   }
+
   // Consecutive leading digits: either b has spare digits to shorten into,
   // or we extend a (never producing a trailing minimum digit — the base
   // case midpoint("", "") is the middle of the alphabet).
   if (b.length > 1) return b.charAt(0);
+
   return PIN_ORDER_DIGITS.charAt(digitA) + pinOrderMidpoint(a.slice(1), "");
 }
 
@@ -169,9 +183,13 @@ function pinOrderMidpoint(a: string, b: string): string {
 export function pinOrderKeyBetween(before: string | null, after: string | null): string | null {
   const a = before ?? "";
   const b = after ?? "";
+
   if (a !== "" && !isValidPinOrderKey(a)) return null;
+
   if (b !== "" && !isValidPinOrderKey(b)) return null;
+
   if (b !== "" && a >= b) return null;
+
   return pinOrderMidpoint(a, b);
 }
 
@@ -184,8 +202,10 @@ export function generateSpreadPinOrderKeys(count: number): string[] {
   const step = space / (count + 1);
   const keys: string[] = [];
   let previous = 0;
+
   for (let i = 0; i < count; i += 1) {
     let value = Math.max(Math.round(step * (i + 1)), previous + 1);
+
     // Skip values whose low digit is the minimum (a trailing "a" key).
     if (value % PIN_ORDER_DIGITS.length === 0) value += 1;
     value = Math.min(value, space - 1);
@@ -195,6 +215,7 @@ export function generateSpreadPinOrderKeys(count: number): string[] {
         PIN_ORDER_DIGITS.charAt(value % PIN_ORDER_DIGITS.length),
     );
   }
+
   return keys;
 }
 
@@ -213,6 +234,7 @@ export function planPinnedReorder(input: {
 }): ReadonlyArray<{ readonly id: string; readonly orderKey: string }> {
   const { orderedIds, keysById, movedId } = input;
   const movedIndex = orderedIds.indexOf(movedId);
+
   if (movedIndex === -1) return [];
   const beforeId = movedIndex > 0 ? orderedIds[movedIndex - 1] : null;
   const afterId = movedIndex < orderedIds.length - 1 ? orderedIds[movedIndex + 1] : null;
@@ -220,14 +242,19 @@ export function planPinnedReorder(input: {
   const afterKey = afterId != null ? (keysById.get(afterId) ?? null) : null;
   const beforeUsable = beforeId === null || beforeKey != null;
   const afterUsable = afterId === null || afterKey != null;
+
   if (beforeUsable && afterUsable) {
     const key = pinOrderKeyBetween(beforeKey, afterKey);
+
     if (key !== null) return [{ id: movedId, orderKey: key }];
   }
+
   // Keyless neighbor (or corrupt keys): rewrite the section in the new order.
   const keys = generateSpreadPinOrderKeys(orderedIds.length);
+
   return orderedIds.flatMap((id, index) => {
     const key = keys[index]!;
+
     return keysById.get(id) === key ? [] : [{ id, orderKey: key }];
   });
 }
@@ -251,25 +278,31 @@ export function sortPinnedThreadsByOrderKey<
 >(threads: readonly T[]): T[] {
   const keyed: T[] = [];
   const keyless: T[] = [];
+
   for (const thread of threads) {
     (thread.pinOrderKey != null ? keyed : keyless).push(thread);
   }
+
   const identityTiebreak = (left: T, right: T) =>
     left.id.localeCompare(right.id) ||
     (left.environmentId ?? "").localeCompare(right.environmentId ?? "");
+
   keyed.sort((left, right) => {
     const leftKey = left.pinOrderKey!;
     const rightKey = right.pinOrderKey!;
+
     return leftKey < rightKey ? -1 : leftKey > rightKey ? 1 : identityTiebreak(left, right);
   });
   keyless.sort((left, right) => {
     const leftMs = Date.parse(left.createdAt);
     const rightMs = Date.parse(right.createdAt);
+
     return (
       (Number.isNaN(rightMs) ? 0 : rightMs) - (Number.isNaN(leftMs) ? 0 : leftMs) ||
       identityTiebreak(left, right)
     );
   });
+
   return [...keyed, ...keyless];
 }
 
@@ -288,11 +321,14 @@ export function planPinnedMove(input: {
 }): ReadonlyArray<{ readonly id: string; readonly orderKey: string }> | null {
   const { orderedIds, keysById, movedId, direction } = input;
   const from = orderedIds.indexOf(movedId);
+
   if (from === -1) return null;
   const to = direction === "up" ? from - 1 : from + 1;
+
   if (to < 0 || to >= orderedIds.length) return null;
   const newOrder = [...orderedIds];
   newOrder.splice(from, 1);
   newOrder.splice(to, 0, movedId);
+
   return planPinnedReorder({ orderedIds: newOrder, keysById, movedId });
 }

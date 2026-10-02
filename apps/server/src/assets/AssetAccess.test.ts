@@ -15,6 +15,7 @@ import { ASSET_ROUTE_PREFIX, issueAssetUrl, resolveAsset } from "./AssetAccess.t
 const configLayer = ServerConfig.ServerConfig.layerTest(process.cwd(), {
   prefix: "t3-asset-access-test-",
 });
+
 const testLayer = Layer.mergeAll(
   configLayer,
   WorkspacePaths.layer,
@@ -26,9 +27,11 @@ describe("AssetAccess", () => {
     Effect.gen(function* () {
       const fileSystem = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
+
       const root = yield* fileSystem.makeTempDirectoryScoped({
         prefix: "t3-asset-workspace-",
       });
+
       const htmlPath = path.join(root, "report.html");
       const cssPath = path.join(root, "report.css");
       yield* fileSystem.writeFileString(htmlPath, '<link rel="stylesheet" href="report.css">');
@@ -45,6 +48,7 @@ describe("AssetAccess", () => {
         },
         workspaceRoot: root,
       });
+
       const suffix = result.relativeUrl.slice(`${ASSET_ROUTE_PREFIX}/`.length);
       const separatorIndex = suffix.indexOf("/");
       const token = suffix.slice(0, separatorIndex);
@@ -68,13 +72,16 @@ describe("AssetAccess", () => {
       const fs = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
       const root = yield* fs.makeTempDirectoryScoped({ prefix: "t3-asset-dimensions-" });
+
       const png = Uint8Array.from([
         0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 13, 0x49, 0x48, 0x44, 0x52, 0, 0,
         0x06, 0x40, 0, 0, 0x03, 0x84,
       ]);
+
       yield* fs.writeFile(path.join(root, "shot.png"), png);
       yield* fs.writeFileString(path.join(root, "clip.html"), "<html></html>");
       yield* fs.writeFileString(path.join(root, "broken.png"), "not a png");
+
       const issue = (name: string) =>
         issueAssetUrl({
           resource: {
@@ -95,12 +102,15 @@ describe("AssetAccess", () => {
     Effect.gen(function* () {
       const fileSystem = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
+
       const root = yield* fileSystem.makeTempDirectoryScoped({
         prefix: "t3-asset-root-",
       });
+
       const outside = yield* fileSystem.makeTempDirectoryScoped({
         prefix: "t3-asset-outside-",
       });
+
       const htmlPath = path.join(outside, "report.html");
       yield* fileSystem.writeFileString(htmlPath, "<p>outside</p>");
 
@@ -112,6 +122,7 @@ describe("AssetAccess", () => {
         },
         workspaceRoot: root,
       }).pipe(Effect.flip);
+
       expect(error.message).toBe("Workspace file path must be relative to the project root.");
       expect(error).toMatchObject({
         _tag: "AssetWorkspacePathValidationError",
@@ -129,17 +140,21 @@ describe("AssetAccess", () => {
     Effect.gen(function* () {
       const fileSystem = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
+
       const root = yield* fileSystem.makeTempDirectoryScoped({
         prefix: "t3-asset-permission-root-",
       });
+
       const htmlPath = path.join(root, "report.html");
       yield* fileSystem.writeFileString(htmlPath, "<p>report</p>");
+
       const cause = PlatformError.systemError({
         _tag: "PermissionDenied",
         module: "FileSystem",
         method: "realPath",
         pathOrDescriptor: htmlPath,
       });
+
       const failingFileSystem = FileSystem.FileSystem.of({
         ...fileSystem,
         realPath: () => Effect.fail(cause),
@@ -171,9 +186,11 @@ describe("AssetAccess", () => {
     Effect.gen(function* () {
       const fileSystem = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
+
       const root = yield* fileSystem.makeTempDirectoryScoped({
         prefix: "t3-asset-image-workspace-",
       });
+
       const assetsDirectory = path.join(root, "assets");
       const imagePath = path.join(assetsDirectory, "icon.png");
       const siblingPath = path.join(assetsDirectory, "other.png");
@@ -190,6 +207,7 @@ describe("AssetAccess", () => {
         },
         workspaceRoot: root,
       });
+
       const suffix = result.relativeUrl.slice(`${ASSET_ROUTE_PREFIX}/`.length);
       const separatorIndex = suffix.indexOf("/");
       const token = suffix.slice(0, separatorIndex);
@@ -216,6 +234,7 @@ describe("AssetAccess", () => {
       const result = yield* issueAssetUrl({
         resource: { _tag: "attachment", attachmentId },
       });
+
       const suffix = result.relativeUrl.slice(`${ASSET_ROUTE_PREFIX}/`.length);
       const separatorIndex = suffix.indexOf("/");
       const token = suffix.slice(0, separatorIndex);

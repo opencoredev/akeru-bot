@@ -16,6 +16,7 @@ describe("ProviderUnavailableLine", () => {
         }}
       />,
     );
+
     expect(markup).toContain('id="send-blocked"');
     expect(markup).toContain('role="status"');
     expect(markup).toContain("No provider is ready for this bot.");
@@ -35,6 +36,7 @@ describe("ProviderUnavailableLine", () => {
         }}
       />,
     );
+
     expect(markup).toContain("Claude limit reached. Wait for it to reset");
     expect(markup).not.toContain("<button");
   });

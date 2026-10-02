@@ -27,14 +27,18 @@ class TestElement {
   remove() {
     if (!this.parentElement) return;
     const index = this.parentElement.children.indexOf(this);
+
     if (index >= 0) this.parentElement.children.splice(index, 1);
     this.parentElement = null;
   }
 
   getAttribute(name: string) {
     if (name === "data-component") return this.dataset.component ?? null;
+
     if (name === "data-source") return this.dataset.source ?? null;
+
     if (name === "data-feedback-target") return this.dataset.feedbackTarget ?? null;
+
     return this.attributes.get(name) ?? null;
   }
 
@@ -57,38 +61,41 @@ class TestElement {
   }
 
   closest(selector: string): TestElement | null {
-    let current: TestElement | null = this;
-    while (current) {
-      if (selector === "[data-component]" && current.dataset.component) return current;
-      if (
-        selector === "[data-akeru-feedback-ui]" &&
-        current.dataset.akeruFeedbackUi !== undefined
-      ) {
-        return current;
-      }
-      if (
-        selector === "button, a, [role], [data-feedback-target], [data-component]" &&
-        (current.tagName === "BUTTON" ||
-          current.tagName === "A" ||
-          current.attributes.has("role") ||
-          current.dataset.feedbackTarget !== undefined ||
-          current.dataset.component !== undefined)
-      ) {
-        return current;
-      }
-      if (
-        selector.includes(",") &&
-        (["INPUT", "TEXTAREA", "SELECT", "OPTION"].includes(current.tagName) ||
-          current.attributes.has("contenteditable") ||
-          current.dataset.akeruFeedbackUi !== undefined ||
-          current.dataset.feedbackPrivate !== undefined ||
-          current.dataset.sensitive !== undefined)
-      ) {
-        return current;
-      }
-      current = current.parentElement;
+    if (this.matchesSelector(selector)) return this;
+
+    return this.parentElement?.closest(selector) ?? null;
+  }
+
+  private matchesSelector(selector: string): boolean {
+    if (selector === "[data-component]" && this.dataset.component) return true;
+
+    if (selector === "[data-akeru-feedback-ui]" && this.dataset.akeruFeedbackUi !== undefined) {
+      return true;
     }
-    return null;
+
+    if (
+      selector === "button, a, [role], [data-feedback-target], [data-component]" &&
+      (this.tagName === "BUTTON" ||
+        this.tagName === "A" ||
+        this.attributes.has("role") ||
+        this.dataset.feedbackTarget !== undefined ||
+        this.dataset.component !== undefined)
+    ) {
+      return true;
+    }
+
+    if (
+      selector.includes(",") &&
+      (["INPUT", "TEXTAREA", "SELECT", "OPTION"].includes(this.tagName) ||
+        this.attributes.has("contenteditable") ||
+        this.dataset.akeruFeedbackUi !== undefined ||
+        this.dataset.feedbackPrivate !== undefined ||
+        this.dataset.sensitive !== undefined)
+    ) {
+      return true;
+    }
+
+    return false;
   }
 
   getBoundingClientRect() {
@@ -109,6 +116,7 @@ class TestDocument {
   createElement(tagName: string) {
     const element = new TestElement(tagName.toUpperCase());
     element.ownerDocument = this;
+
     return element;
   }
 
@@ -122,7 +130,16 @@ class TestDocument {
     this.listeners.get(type)?.delete(listener);
   }
 
-  emit(type: string, event: Record<string, unknown>) {
+  emit(
+    type: string,
+    event: {
+      target?: TestElement;
+      key?: string;
+      preventDefault?: () => void;
+      stopPropagation?: () => void;
+      stopImmediatePropagation?: () => void;
+    },
+  ) {
     for (const listener of this.listeners.get(type) ?? []) listener(event as never);
   }
 
@@ -208,17 +225,17 @@ describe("product feedback element picker", () => {
 
   it("never captures form values, private UI, tokens, or paths", () => {
     const input = testDocument.createElement("input");
-    expect(productFeedbackElementDescriptor(input as unknown as Element)).toBeNull();
+    expect(productFeedbackElementDescriptor(input)).toBeNull();
 
     const privateNode = testDocument.createElement("button");
     privateNode.dataset.feedbackPrivate = "true";
     privateNode.textContent = "Private";
-    expect(productFeedbackElementDescriptor(privateNode as unknown as Element)).toBeNull();
+    expect(productFeedbackElementDescriptor(privateNode)).toBeNull();
 
     const button = testDocument.createElement("button");
     button.textContent =
       "Open sk_abcdefghijklmnopqrstuvwxyz /Users/alice/private/file.ts https://private.example/path";
-    const descriptor = productFeedbackElementDescriptor(button as unknown as Element);
+    const descriptor = productFeedbackElementDescriptor(button);
     expect(descriptor?.label).toContain("[redacted]");
     expect(descriptor?.label).toContain("[path]");
     expect(descriptor?.label).toContain("[url]");

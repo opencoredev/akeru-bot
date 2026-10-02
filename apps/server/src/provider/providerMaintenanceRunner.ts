@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import {
   defaultInstanceIdForDriver,
   ProviderDriverKind,
@@ -26,9 +27,11 @@ import { makeProviderMaintenanceCommandCoordinator } from "./providerMaintenance
 import { enrichProviderSnapshotWithVersionAdvisory } from "./providerMaintenance.ts";
 import type { ProviderMaintenanceCapabilities } from "./providerMaintenance.ts";
 import { collectUint8StreamText } from "../stream/collectUint8StreamText.ts";
+
 const isServerProviderUpdateError = Schema.is(ServerProviderUpdateError);
 
 const UPDATE_TIMEOUT_MS = 5 * 60_000;
+
 const UPDATE_OUTPUT_MAX_BYTES = 10_000;
 
 export interface ProviderMaintenanceCommandResult {
@@ -82,6 +85,7 @@ const runProviderMaintenanceCommandWithSpawner = Effect.fn("ProviderMaintenanceR
         // resolveSpawnCommand finds the real `.cmd` and routes it through the
         // shell. On Linux/macOS (incl. the WSL backend) this is a no-op.
         const resolved = yield* resolveSpawnCommand(input.command, input.args);
+
         const child = yield* input.spawner
           .spawn(ChildProcess.make(resolved.command, resolved.args, { shell: resolved.shell }))
           .pipe(
@@ -93,6 +97,7 @@ const runProviderMaintenanceCommandWithSpawner = Effect.fn("ProviderMaintenanceR
                 }),
             ),
           );
+
         yield* Effect.addFinalizer(() => child.kill().pipe(Effect.ignore));
 
         const [stdout, stderr, exitCode] = yield* Effect.all(
@@ -152,6 +157,7 @@ const runProviderMaintenanceCommandWithSpawner = Effect.fn("ProviderMaintenanceR
 
 function trimNullable(value: string): string | null {
   const trimmed = value.trim();
+
   return trimmed.length > 0 ? trimmed : null;
 }
 
@@ -161,9 +167,11 @@ function truncateText(value: string, maxLength: number): string {
 
 function commandOutput(result: ProviderMaintenanceCommandResult): string | null {
   const output = trimNullable([result.stderr, result.stdout].filter(Boolean).join("\n\n"));
+
   if (!output) {
     return null;
   }
+
   return truncateText(output, UPDATE_OUTPUT_MAX_BYTES);
 }
 
@@ -171,9 +179,11 @@ function failureMessage(result: ProviderMaintenanceCommandResult): string {
   if (result.timedOut) {
     return "Update timed out.";
   }
+
   if (result.exitCode !== null && result.exitCode !== 0) {
     return `Update command exited with code ${result.exitCode}.`;
   }
+
   return "Update command failed.";
 }
 
@@ -201,12 +211,14 @@ export const make = Effect.fn("ProviderMaintenanceRunner.make")(function* () {
   const providerRegistry = yield* ProviderRegistry;
   const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
   const httpClient = yield* HttpClient.HttpClient;
+
   const runMaintenanceCommand = (command: string, args: ReadonlyArray<string>) =>
     runProviderMaintenanceCommandWithSpawner({
       spawner,
       command,
       args,
     });
+
   const commandCoordinator = yield* makeProviderMaintenanceCommandCoordinator({
     makeAlreadyRunningError: () =>
       new ServerProviderUpdateError({
@@ -223,11 +235,13 @@ export const make = Effect.fn("ProviderMaintenanceRunner.make")(function* () {
     providerRegistry.getProviders.pipe(
       Effect.map((providers) => {
         const instanceIds: Array<ProviderInstanceId> = [];
+
         for (const candidate of providers) {
           if (candidate.driver === provider && candidate.instanceId === instanceId) {
             instanceIds.push(candidate.instanceId);
           }
         }
+
         return instanceIds;
       }),
       Effect.flatMap((instanceIds) =>
@@ -246,12 +260,14 @@ export const make = Effect.fn("ProviderMaintenanceRunner.make")(function* () {
         const refreshedProviders = providers.filter(
           (candidate) => candidate.driver === provider && candidate.instanceId === instanceId,
         );
+
         if (refreshedProviders.length === 0) {
           return Effect.succeed<VerifiedProviderRefresh>({
             providers,
             verifiedProviders: [],
           });
         }
+
         return Effect.forEach(
           refreshedProviders,
           (refreshedProvider) =>
@@ -287,17 +303,21 @@ export const make = Effect.fn("ProviderMaintenanceRunner.make")(function* () {
   const updateProvider: ProviderMaintenanceRunnerShape["updateProvider"] = Effect.fn(
     "ProviderMaintenanceRunner.updateProvider",
   )(function* (target) {
-    const provider = typeof target === "string" ? target : target.provider;
-    const instanceId =
-      typeof target === "string"
-        ? defaultInstanceIdForDriver(provider)
-        : (target.instanceId ?? defaultInstanceIdForDriver(provider));
+    const provider = Predicate.isString(target) ? target : target.provider;
+
+    const instanceId = Predicate.isString(target)
+      ? defaultInstanceIdForDriver(provider)
+      : (target.instanceId ?? defaultInstanceIdForDriver(provider));
+
     const targetKey = `instance:${instanceId}`;
+
     const capabilities = yield* providerRegistry.getProviderMaintenanceCapabilitiesForInstance(
       instanceId,
       provider,
     );
+
     const update = capabilities.update;
+
     if (!update) {
       return yield* new ServerProviderUpdateError({
         provider,
@@ -311,6 +331,7 @@ export const make = Effect.fn("ProviderMaintenanceRunner.make")(function* () {
         action: "update",
         state,
       });
+
     const setQueuedState = setUpdateState(
       makeUpdateState({
         status: "queued",
@@ -324,6 +345,7 @@ export const make = Effect.fn("ProviderMaintenanceRunner.make")(function* () {
       function* () {
         const finish = (state: ServerProviderUpdateState) =>
           setUpdateState(state).pipe(Effect.map((providers) => ({ providers })));
+
         const startedAtRef = yield* Ref.make<string | null>(null);
 
         const runCommandAndVerify = Effect.fn("ProviderMaintenanceRunner.runCommandAndVerify")(
@@ -341,6 +363,7 @@ export const make = Effect.fn("ProviderMaintenanceRunner.make")(function* () {
 
             const result = yield* runMaintenanceCommand(update.executable, update.args);
             const finishedAt = yield* nowIso;
+
             if (result.timedOut || result.exitCode !== 0) {
               return yield* finish(
                 makeUpdateState({
@@ -358,10 +381,13 @@ export const make = Effect.fn("ProviderMaintenanceRunner.make")(function* () {
               capabilities,
               instanceId,
             );
+
             const couldNotVerify = verifiedProviders.length === 0;
+
             const stillOutdated =
               couldNotVerify ||
               verifiedProviders.some((verifiedProvider) => isOutdatedProvider(verifiedProvider));
+
             return yield* finish(
               makeUpdateState({
                 status: stillOutdated ? "unchanged" : "succeeded",
@@ -382,6 +408,7 @@ export const make = Effect.fn("ProviderMaintenanceRunner.make")(function* () {
           function* (cause: Cause.Cause<unknown>) {
             const failure = Cause.squash(cause);
             const startedAt = yield* Ref.get(startedAtRef);
+
             return yield* finish(
               makeUpdateState({
                 status: "failed",

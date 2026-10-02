@@ -1,3 +1,6 @@
+import * as Data from "effect/Data";
+import type { AkeruDelegationDispatch } from "../provider/AkeruDelegationRuntime.ts";
+import * as Predicate from "effect/Predicate";
 import {
   AkeruUsageReservationId,
   type BotId,
@@ -52,8 +55,11 @@ export const findBlockingDependencyIncident = (
     ) {
       return false;
     }
+
     const [, dependencyId] = incident.incidentKey.split(":");
+
     if (!dependencyId) return false;
+
     return connectorDependencies.some(
       (id) => id === dependencyId || `mcp-${id}` === dependencyId || id === `mcp-${dependencyId}`,
     );
@@ -91,6 +97,7 @@ const make = Effect.gen(function* () {
   const checkDependencies: RoutineRuntimeAdapterShape["checkDependencies"] = (routine) =>
     Effect.gen(function* () {
       const bot = yield* bots.getById({ botId: routine.botId });
+
       if (Option.isNone(bot) || bot.value.archivedAt !== null) {
         return {
           kind: "bot",
@@ -108,7 +115,9 @@ const make = Effect.gen(function* () {
               "Pick another bot to do the work, or clear the helper, then resume the routine.",
           } satisfies RoutineDependencyFailure;
         }
+
         const helper = yield* bots.getById({ botId: routine.delegateToBotId });
+
         if (Option.isNone(helper) || helper.value.archivedAt !== null) {
           return {
             kind: "bot",
@@ -116,14 +125,17 @@ const make = Effect.gen(function* () {
             nextAction: "Restore that bot or pick another one, then resume the routine.",
           } satisfies RoutineDependencyFailure;
         }
+
         // Standard OpenCode runs on the legacy bridge, which cannot enforce a
         // delegated grant, so its bots never take bot work.
         const helperInstanceId = helper.value.engine?.provider;
+
         if (helperInstanceId !== undefined) {
           const helperDriver =
             (yield* providers.getProviders).find(
               (provider) => provider.instanceId === helperInstanceId,
             )?.driver ?? helperInstanceId;
+
           if (!driverSupportsDelegation(helperDriver)) {
             return {
               kind: "bot",
@@ -135,6 +147,7 @@ const make = Effect.gen(function* () {
       }
 
       const target = yield* snapshots.getThreadShellById(routine.targetThreadId);
+
       if (
         Option.isNone(target) ||
         target.value.archivedAt !== null ||
@@ -149,11 +162,13 @@ const make = Effect.gen(function* () {
       }
 
       inbox.reload();
+
       const dependencyIncident = findBlockingDependencyIncident(
         inbox.list(),
         routine.botId,
         routine.connectorDependencies,
       );
+
       if (dependencyIncident !== undefined) {
         return {
           kind: dependencyIncident.kind === "browser-dead" ? "browser" : "connector",
@@ -163,6 +178,7 @@ const make = Effect.gen(function* () {
       }
 
       const project = yield* snapshots.getProjectShellById(routine.projectId);
+
       if (Option.isNone(project) || !(yield* fileSystem.exists(project.value.workspaceRoot))) {
         return {
           kind: "workspace",
@@ -172,12 +188,14 @@ const make = Effect.gen(function* () {
       }
 
       const readModel = yield* snapshots.getCommandReadModel();
+
       const missingSkill = routine.skillAssignmentIds.find(
         (id) =>
           !(readModel.skillAssignments ?? []).some(
             (assignment) => assignment.id === id && assignment.botId === routine.botId,
           ),
       );
+
       if (missingSkill !== undefined) {
         return {
           kind: "bot",
@@ -187,9 +205,11 @@ const make = Effect.gen(function* () {
       }
 
       const configuredMcpServers = yield* mcpServers.listAll();
+
       const unavailableConnector = routine.connectorDependencies.find(
         (id) => !configuredMcpServers.some((server) => server.id === id && server.enabled),
       );
+
       if (unavailableConnector !== undefined) {
         return {
           kind: "connector",
@@ -201,11 +221,13 @@ const make = Effect.gen(function* () {
       const unhealthySubscription = routine.connectorDependencies.find((id) => {
         if (!isSubscriptionProviderId(id)) return false;
         const status = subscriptionAuth.statuses().find((entry) => entry.provider === id);
+
         return (
           status !== undefined &&
           ["expired", "revoked", "failed", "failed-first-request"].includes(status.health)
         );
       });
+
       if (unhealthySubscription !== undefined) {
         return {
           kind: "connector",
@@ -216,6 +238,7 @@ const make = Effect.gen(function* () {
 
       const providerInstanceId = target.value.modelSelection.instanceId;
       const providerSnapshots = yield* providers.getProviders;
+
       if (!providerSnapshots.some((provider) => provider.instanceId === providerInstanceId)) {
         return {
           kind: "provider",
@@ -233,6 +256,7 @@ const make = Effect.gen(function* () {
       }
 
       inbox.resolve(`routine:${routine.id}`);
+
       return null;
     }).pipe(Effect.orDie);
 
@@ -311,13 +335,15 @@ const make = Effect.gen(function* () {
     Effect.gen(function* () {
       if (run.threadRef === null) return;
       const readModel = yield* snapshots.getCommandReadModel();
+
       const delegation = (readModel.delegations ?? []).find(
         (candidate) =>
           candidate.trigger === "scheduled" &&
           !isAkeruDelegationTerminal(candidate.phase) &&
-          candidate.phase._tag !== "Queued" &&
+          Predicate.hasProperty(candidate.phase, "childThreadId") &&
           candidate.phase.childThreadId === run.threadRef,
       );
+
       if (delegation === undefined) return;
       yield* cancelDelegation(run, delegation.delegationId);
     }).pipe(Effect.orDie);
@@ -331,7 +357,7 @@ const make = Effect.gen(function* () {
           (readModel.delegations ?? []).find(
             (candidate) =>
               candidate.trigger === "scheduled" &&
-              candidate.phase._tag !== "Queued" &&
+              Predicate.hasProperty(candidate.phase, "childThreadId") &&
               candidate.phase.childThreadId === threadRef,
           ) ?? null,
       ),
@@ -372,13 +398,16 @@ const make = Effect.gen(function* () {
         threadRef,
         startedAt: DateTime.formatIso(yield* DateTime.now),
       }).pipe(Effect.result);
-      if (started._tag === "Success") return "started" as const;
+
+      if (Predicate.isTagged(started, "Success")) return "started" as const;
+
       if (
-        started.failure._tag === "OrchestrationCommandInvariantError" ||
-        started.failure._tag === "OrchestrationCommandPreviouslyRejectedError"
+        Predicate.isTagged(started.failure, "OrchestrationCommandInvariantError") ||
+        Predicate.isTagged(started.failure, "OrchestrationCommandPreviouslyRejectedError")
       ) {
         return "ended" as const;
       }
+
       return {
         failure: {
           kind: "execution",
@@ -414,18 +443,21 @@ const make = Effect.gen(function* () {
           },
         } as const;
       }
+
       const handle = yield* agentController
-        .dispatchDelegation({
-          _tag: "Scheduled",
-          parentThreadId: routine.targetThreadId,
-          parentBotId: routine.botId,
-          childBotId,
-          task: routineTask(routine.procedure),
-          expectedResult: "A short summary of what you did and anything the owner should know.",
-          runtimeMode: routine.approvalPolicy,
-        })
+        .dispatchDelegation(
+          DelegationDispatch["Scheduled"]({
+            parentThreadId: routine.targetThreadId,
+            parentBotId: routine.botId,
+            childBotId,
+            task: routineTask(routine.procedure),
+            expectedResult: "A short summary of what you did and anything the owner should know.",
+            runtimeMode: routine.approvalPolicy,
+          }),
+        )
         .pipe(Effect.result);
-      if (handle._tag === "Failure") {
+
+      if (Predicate.isTagged(handle, "Failure")) {
         return {
           failure: {
             kind: "execution",
@@ -434,14 +466,18 @@ const make = Effect.gen(function* () {
           },
         } as const;
       }
+
       const { childThreadId: threadRef, delegationId } = handle.success;
       // A run canceled while its work was starting has no threadRef for
       // cancelDelegatedRun to match, so cancel the work by its id here.
       const started = yield* startRun(routine, run, threadRef);
+
       if (started !== "started") {
         yield* cancelDelegation(run, delegationId);
+
         return started === "ended" ? ({ canceled: true } satisfies RoutineDispatchResult) : started;
       }
+
       return { threadRef } satisfies RoutineDispatchResult;
     });
 
@@ -450,9 +486,11 @@ const make = Effect.gen(function* () {
       if (routine.delegateToBotId !== null) {
         return yield* dispatchDelegatedTurn(routine, run, routine.delegateToBotId);
       }
+
       const threadRef = routine.targetThreadId;
       const createdAt = DateTime.formatIso(yield* DateTime.now);
       const bot = yield* bots.getById({ botId: routine.botId });
+
       if (Option.isSome(bot)) {
         yield* botUsageLedger
           .recordMeasurement({
@@ -479,8 +517,11 @@ const make = Effect.gen(function* () {
             ),
           );
       }
+
       const started = yield* startRun(routine, run, threadRef);
+
       if (started === "ended") return { canceled: true } satisfies RoutineDispatchResult;
+
       if (started !== "started") return started;
       yield* dispatch({
         type: "thread.turn.start",
@@ -496,6 +537,7 @@ const make = Effect.gen(function* () {
         interactionMode: "default",
         createdAt,
       });
+
       return { threadRef };
     }).pipe(Effect.orDie);
 
@@ -516,3 +558,5 @@ const make = Effect.gen(function* () {
 });
 
 export const RoutineRuntimeAdapterLive = Layer.effect(RoutineRuntimeAdapter, make);
+
+const DelegationDispatch = Data.taggedEnum<AkeruDelegationDispatch>();

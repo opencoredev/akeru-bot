@@ -27,6 +27,7 @@ export const AuthPairingLinkRecord = Schema.Struct({
   consumedAt: Schema.NullOr(Schema.DateTimeUtcFromString),
   revokedAt: Schema.NullOr(Schema.DateTimeUtcFromString),
 });
+
 export type AuthPairingLinkRecord = typeof AuthPairingLinkRecord.Type;
 
 export const CreateAuthPairingLinkInput = Schema.Struct({
@@ -39,6 +40,7 @@ export const CreateAuthPairingLinkInput = Schema.Struct({
   createdAt: Schema.DateTimeUtcFromString,
   expiresAt: Schema.DateTimeUtcFromString,
 });
+
 export type CreateAuthPairingLinkInput = typeof CreateAuthPairingLinkInput.Type;
 
 export const ConsumeAuthPairingLinkInput = Schema.Struct({
@@ -46,22 +48,26 @@ export const ConsumeAuthPairingLinkInput = Schema.Struct({
   consumedAt: Schema.DateTimeUtcFromString,
   now: Schema.DateTimeUtcFromString,
 });
+
 export type ConsumeAuthPairingLinkInput = typeof ConsumeAuthPairingLinkInput.Type;
 
 export const ListActiveAuthPairingLinksInput = Schema.Struct({
   now: Schema.DateTimeUtcFromString,
 });
+
 export type ListActiveAuthPairingLinksInput = typeof ListActiveAuthPairingLinksInput.Type;
 
 export const RevokeAuthPairingLinkInput = Schema.Struct({
   id: Schema.String,
   revokedAt: Schema.DateTimeUtcFromString,
 });
+
 export type RevokeAuthPairingLinkInput = typeof RevokeAuthPairingLinkInput.Type;
 
 export const GetAuthPairingLinkByCredentialInput = Schema.Struct({
   credential: Schema.String,
 });
+
 export type GetAuthPairingLinkByCredentialInput = typeof GetAuthPairingLinkByCredentialInput.Type;
 
 const AuthPairingLinkRawDbRow = Schema.Struct({

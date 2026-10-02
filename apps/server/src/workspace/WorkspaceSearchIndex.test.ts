@@ -11,6 +11,21 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
+const unusedFinderMethods = () => ({
+  directorySearch: () => {
+    throw new Error("unused directory search");
+  },
+  fileSearch: () => {
+    throw new Error("unused file search");
+  },
+  mixedSearch: () => {
+    throw new Error("unused mixed search");
+  },
+  scanFiles: () => {
+    throw new Error("unused refresh");
+  },
+});
+
 function fileItem(relativePath: string): FileItem {
   return {
     relativePath,
@@ -31,6 +46,7 @@ it.effect("filters image searches before applying the result limit", () =>
         ...Array.from({ length: 200 }, (_, index) => fileItem(`src/file-${index}.ts`)),
         fileItem("public/icon.svg"),
       ];
+
       const fileSearch = vi.fn(() => ({
         ok: true as const,
         value: {
@@ -40,14 +56,20 @@ it.effect("filters image searches before applying the result limit", () =>
           totalFiles: items.length,
         },
       }));
-      const finder = {
-        destroy: vi.fn(),
-        waitForIndexReady: vi.fn(async () => ({ ok: true as const, value: true })),
-        fileSearch,
-      } as unknown as FileFinder;
-      vi.spyOn(FileFinder, "create").mockReturnValueOnce({ ok: true, value: finder });
 
-      const searchIndex = yield* WorkspaceSearchIndex.make("/workspace/project");
+      const finder = {
+        ...unusedFinderMethods(),
+        destroy: vi.fn(),
+        waitForIndexReady: vi.fn(async () => ({
+          ok: true as const,
+          value: true,
+        })),
+        fileSearch,
+      };
+
+      const create = () => ({ ok: true as const, value: finder });
+
+      const searchIndex = yield* WorkspaceSearchIndex.make("/workspace/project", create);
       const resultWithoutKind = yield* searchIndex.search("", 200, undefined, true);
       const resultWithDirectoryKind = yield* searchIndex.search("", 200, "directory", true);
 
@@ -102,13 +124,16 @@ it.effect("keeps returned FileFinder creation diagnostics out of the cause chain
 it.effect("waits for the full index warmup before returning", () =>
   Effect.gen(function* () {
     const waitForIndexReady = vi.fn(async () => ({ ok: true as const, value: true }));
+
     const finder = {
+      ...unusedFinderMethods(),
       destroy: vi.fn(),
       waitForIndexReady,
-    } as unknown as FileFinder;
-    vi.spyOn(FileFinder, "create").mockReturnValueOnce({ ok: true, value: finder });
+    };
 
-    yield* Effect.scoped(WorkspaceSearchIndex.make("/workspace/project"));
+    const create = () => ({ ok: true as const, value: finder });
+
+    yield* Effect.scoped(WorkspaceSearchIndex.make("/workspace/project", create));
 
     expect(waitForIndexReady).toHaveBeenCalledWith(15_000);
   }),
@@ -117,13 +142,18 @@ it.effect("waits for the full index warmup before returning", () =>
 it.effect("preserves a full-index warmup timeout as a structured error", () =>
   Effect.gen(function* () {
     const finder = {
+      ...unusedFinderMethods(),
       destroy: vi.fn(),
-      waitForIndexReady: vi.fn(async () => ({ ok: true as const, value: false })),
-    } as unknown as FileFinder;
-    vi.spyOn(FileFinder, "create").mockReturnValueOnce({ ok: true, value: finder });
+      waitForIndexReady: vi.fn(async () => ({
+        ok: true as const,
+        value: false,
+      })),
+    };
+
+    const create = () => ({ ok: true as const, value: finder });
 
     const error = yield* Effect.flip(
-      Effect.scoped(WorkspaceSearchIndex.make("/workspace/project")),
+      Effect.scoped(WorkspaceSearchIndex.make("/workspace/project", create)),
     );
 
     expect(error).toMatchObject({
@@ -137,19 +167,26 @@ it.effect("preserves a full-index warmup timeout as a structured error", () =>
 it.effect("preserves FileFinder destroy failures as structured defects", () =>
   Effect.gen(function* () {
     const cause = new Error("native destroy failed");
+
     const finder = {
+      ...unusedFinderMethods(),
       destroy: vi.fn(() => {
         throw cause;
       }),
-      waitForIndexReady: vi.fn(async () => ({ ok: true as const, value: true })),
-    } as unknown as FileFinder;
-    vi.spyOn(FileFinder, "create").mockReturnValueOnce({ ok: true, value: finder });
+      waitForIndexReady: vi.fn(async () => ({
+        ok: true as const,
+        value: true,
+      })),
+    };
 
-    const exit = yield* Effect.scoped(WorkspaceSearchIndex.make("/workspace/project")).pipe(
+    const create = () => ({ ok: true as const, value: finder });
+
+    const exit = yield* Effect.scoped(WorkspaceSearchIndex.make("/workspace/project", create)).pipe(
       Effect.exit,
     );
 
     expect(Exit.isFailure(exit)).toBe(true);
+
     if (Exit.isFailure(exit)) {
       expect(Cause.hasDies(exit.cause)).toBe(true);
       const error = Cause.squash(exit.cause);
@@ -167,14 +204,25 @@ it.effect("keeps returned search diagnostics out of the cause chain", () =>
   Effect.scoped(
     Effect.gen(function* () {
       const finder = {
+        ...unusedFinderMethods(),
         destroy: vi.fn(),
-        waitForIndexReady: vi.fn(async () => ({ ok: true as const, value: true })),
-        mixedSearch: vi.fn(() => ({ ok: false, error: "native query rejected" })),
-        scanFiles: vi.fn(() => ({ ok: false, error: "native refresh rejected" })),
-      } as unknown as FileFinder;
-      vi.spyOn(FileFinder, "create").mockReturnValueOnce({ ok: true, value: finder });
+        waitForIndexReady: vi.fn(async () => ({
+          ok: true as const,
+          value: true,
+        })),
+        mixedSearch: vi.fn(() => ({
+          ok: false as const,
+          error: "native query rejected",
+        })),
+        scanFiles: vi.fn(() => ({
+          ok: false as const,
+          error: "native refresh rejected",
+        })),
+      };
 
-      const searchIndex = yield* WorkspaceSearchIndex.make("/workspace/project");
+      const create = () => ({ ok: true as const, value: finder });
+
+      const searchIndex = yield* WorkspaceSearchIndex.make("/workspace/project", create);
       const query = "authorization: Bearer secret-token";
       const searchError = yield* Effect.flip(searchIndex.search(query, 3));
       const refreshError = yield* Effect.flip(searchIndex.refresh());

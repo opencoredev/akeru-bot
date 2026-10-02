@@ -13,7 +13,6 @@ import { ActivityIndicator, Alert, Platform, Pressable, ScrollView, View } from 
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useThemeColor } from "../../lib/useThemeColor";
 import { cn } from "../../lib/cn";
-
 import { AndroidScreenHeader } from "../../components/AndroidScreenHeader";
 import { AppText as Text } from "../../components/AppText";
 import { useProjects } from "../../state/entities";
@@ -24,15 +23,17 @@ import { useIncomingShare } from "../sharing/IncomingShareProvider";
 import { useNewTaskFlow } from "./new-task-flow-provider";
 import { getProjectScopeSelectionTarget } from "./new-task-project-selection";
 
+type ProjectEmptyState = {
+  readonly title: string;
+  readonly detail: string;
+  readonly loading: boolean;
+};
+
 type NewTaskRouteParams = {
   readonly incomingShareId?: string | string[];
 };
 
-function deriveProjectEmptyState(catalogState: WorkspaceState): {
-  readonly title: string;
-  readonly detail: string;
-  readonly loading: boolean;
-} {
+function deriveProjectEmptyState(catalogState: WorkspaceState): ProjectEmptyState {
   if (catalogState.isLoadingConnections) {
     return {
       title: "Loading environments",
@@ -95,10 +96,13 @@ export function NewTaskRouteScreen({ route }: StaticScreenProps<NewTaskRoutePara
   const chevronColor = useThemeColor("--color-chevron");
   const accentColor = useThemeColor("--color-icon-muted");
   const { getShare, releaseShareReservation } = useIncomingShare();
+
   const routeShareId = Array.isArray(route.params?.incomingShareId)
     ? route.params.incomingShareId[0]
     : route.params?.incomingShareId;
+
   const incomingShare = routeShareId ? getShare(routeShareId) : null;
+
   const incomingShareSubtitle = incomingShare
     ? incomingShare.attachments.length === 0
       ? "Choose a project for what you shared"
@@ -106,9 +110,11 @@ export function NewTaskRouteScreen({ route }: StaticScreenProps<NewTaskRoutePara
         ? "Choose a project for the image you shared"
         : `Choose a project for the ${incomingShare.attachments.length} images you shared`
     : null;
+
   const screenTitle = incomingShare ? "Start a chat" : "Choose project";
   const projectEmptyState = deriveProjectEmptyState(catalogState);
   const resumedDestinationKeyRef = useRef<string | null>(null);
+
   const reservedDestinationProject = incomingShare?.destination
     ? (projects.find(
         (project) =>
@@ -128,14 +134,18 @@ export function NewTaskRouteScreen({ route }: StaticScreenProps<NewTaskRoutePara
             ? error.message
             : t("The shared content reservation could not be updated."),
         );
+
         return;
       }
     }
+
     const state = navigation.getState();
     const previousRoute = state?.routes[state.index - 1];
+
     if (previousRoute?.name === "NewTaskDraft") {
       setProject(project);
       navigation.goBack();
+
       return;
     }
 
@@ -151,23 +161,31 @@ export function NewTaskRouteScreen({ route }: StaticScreenProps<NewTaskRoutePara
 
   useEffect(() => {
     const destination = incomingShare?.destination;
+
     if (!destination) {
       resumedDestinationKeyRef.current = null;
+
       return;
     }
+
     if (!isFocused) {
       // Returning from the reserved draft is a fresh resume attempt. Keeping
       // this latch set would leave every project row disabled with no route.
       resumedDestinationKeyRef.current = null;
+
       return;
     }
+
     const destinationKey = `${incomingShare.id}:${destination.environmentId}:${destination.projectId}`;
+
     if (resumedDestinationKeyRef.current === destinationKey) {
       return;
     }
+
     if (!reservedDestinationProject) {
       return;
     }
+
     resumedDestinationKeyRef.current = destinationKey;
     navigation.dispatch(
       StackActions.push("NewTaskDraft", {
@@ -248,6 +266,7 @@ export function NewTaskRouteScreen({ route }: StaticScreenProps<NewTaskRoutePara
             {projectScopes.map((scope, scopeIndex) => {
               const hasMultipleProjects = scope.projects.length > 1;
               const selectionTarget = getProjectScopeSelectionTarget(scope, selectedEnvironmentId);
+
               return (
                 <View
                   key={scope.key}

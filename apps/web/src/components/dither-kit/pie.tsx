@@ -1,4 +1,3 @@
-// @ts-nocheck
 "use client";
 
 import { useEffect } from "react";
@@ -20,6 +19,7 @@ export function Pie({ variant = "gradient" }: PieProps) {
 
   useEffect(() => {
     registerVariant("*", variant);
+
     return () => unregisterVariant("*");
   }, [variant, registerVariant, unregisterVariant]);
 

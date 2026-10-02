@@ -8,7 +8,7 @@ const MCP_LISTINGS = {
 } as const satisfies Readonly<Record<string, string>>;
 
 export function integrationsShListing(id: string): string | null {
-  return MCP_LISTINGS[id as keyof typeof MCP_LISTINGS] ?? null;
+  return Object.entries(MCP_LISTINGS).find(([key]) => key === id)?.[1] ?? null;
 }
 
 export function isListedIntegration(plugin: {

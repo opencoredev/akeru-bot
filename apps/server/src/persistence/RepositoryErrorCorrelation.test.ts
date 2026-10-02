@@ -12,14 +12,19 @@ import { SqlitePersistenceMemory } from "./Layers/Sqlite.ts";
 import * as ProviderSessionRuntime from "./ProviderSessionRuntime.ts";
 
 const issuedAt = DateTime.makeUnsafe("2026-06-20T00:00:00.000Z");
+
 const expiresAt = DateTime.makeUnsafe("2027-06-20T00:00:00.000Z");
+
 const now = DateTime.makeUnsafe("2026-06-21T00:00:00.000Z");
+
 const scopes: ReadonlyArray<AuthEnvironmentScope> = ["access:read"];
 
 const authSessionLayer = AuthSessions.layer.pipe(Layer.provideMerge(SqlitePersistenceMemory));
+
 const authPairingLinkLayer = AuthPairingLinks.layer.pipe(
   Layer.provideMerge(SqlitePersistenceMemory),
 );
+
 const providerSessionRuntimeLayer = ProviderSessionRuntime.layer.pipe(
   Layer.provideMerge(SqlitePersistenceMemory),
 );
@@ -67,6 +72,7 @@ describe("persistence error correlation", () => {
       assert.notInclude(decodeError.message, subject);
 
       yield* sql`DROP TABLE auth_sessions`;
+
       const createError = yield* Effect.flip(
         sessions.create({
           sessionId,
@@ -85,6 +91,7 @@ describe("persistence error correlation", () => {
           expiresAt,
         }),
       );
+
       assert.instanceOf(createError, PersistenceErrors.PersistenceSqlError);
       assert.deepStrictEqual(createError.correlation, { sessionId });
       assert.equal(createError.message, "SQL error in AuthSessionRepository.create:query");
@@ -94,6 +101,7 @@ describe("persistence error correlation", () => {
       const revokeOtherError = yield* Effect.flip(
         sessions.revokeAllExcept({ currentSessionId, revokedAt: now }),
       );
+
       assert.instanceOf(revokeOtherError, PersistenceErrors.PersistenceSqlError);
       assert.deepStrictEqual(revokeOtherError.correlation, { currentSessionId });
       assert.equal(
@@ -155,6 +163,7 @@ describe("persistence error correlation", () => {
       assert.notInclude(decodeError.message, DateTime.formatIso(issuedAt));
 
       yield* sql`DROP TABLE auth_pairing_links`;
+
       const createError = yield* Effect.flip(
         pairingLinks.create({
           id,
@@ -167,6 +176,7 @@ describe("persistence error correlation", () => {
           expiresAt,
         }),
       );
+
       assert.instanceOf(createError, PersistenceErrors.PersistenceSqlError);
       assert.deepStrictEqual(createError.correlation, { pairingLinkId: id });
       assert.notInclude(createError.message, credential);
@@ -234,6 +244,7 @@ describe("persistence error correlation", () => {
       );
 
       yield* sql`DROP TABLE provider_session_runtime`;
+
       const sqlFailure = yield* Effect.flip(
         runtimes.upsert({
           threadId,
@@ -247,6 +258,7 @@ describe("persistence error correlation", () => {
           runtimePayload: { secret: runtimePayload },
         }),
       );
+
       assert.instanceOf(sqlFailure, PersistenceErrors.PersistenceSqlError);
       assert.deepStrictEqual(sqlFailure.correlation, { threadId });
       assert.equal(

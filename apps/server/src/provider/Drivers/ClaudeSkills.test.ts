@@ -242,16 +242,18 @@ it.layer(NodeServices.layer)("discoverClaudeSkills", (it) => {
       );
 
       // An explicit homePath wins over the environment variable, matching
-      // makeClaudeEnvironment which overwrites CLAUDE_CONFIG_DIR for the CLI.
+      // claudeEnvironment which overwrites CLAUDE_CONFIG_DIR for the CLI.
       const explicitHome = path.join(tempDir, "explicit-home");
       yield* writeSkill(
         path.join(explicitHome, "skills"),
         "explicit-skill",
         ["---", "name: explicit-skill", "---"].join("\n"),
       );
+
       const explicitSkills = yield* discoverClaudeSkills({ homePath: explicitHome }, undefined, {
         CLAUDE_CONFIG_DIR: environmentConfigDir,
       });
+
       assert.deepEqual(
         explicitSkills.map((skill) => skill.name),
         ["explicit-skill"],

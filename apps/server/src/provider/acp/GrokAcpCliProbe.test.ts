@@ -18,6 +18,7 @@ import { makeGrokAcpRuntime } from "./GrokAcpSupport.ts";
 
 const makeProbeRuntime = Effect.gen(function* () {
   const childProcessSpawner = yield* ChildProcessSpawner.ChildProcessSpawner;
+
   return yield* makeGrokAcpRuntime({
     grokSettings: { binaryPath: "grok" },
     environment: process.env,
@@ -34,7 +35,7 @@ describe.runIf(process.env.T3_GROK_ACP_PROBE === "1")("Grok ACP CLI probe", () =
       const initialized = yield* runtime.initialize();
       const models = sessionModelStateFromInitialize(initialized);
       expect(initialized.protocolVersion).toBeDefined();
-      expect(typeof models?.currentModelId).toBe("string");
+      expect(models?.currentModelId).toBeTypeOf("string");
       expect(models?.availableModels.length ?? 0).toBeGreaterThan(0);
       expect(models?.availableModels.some((model) => model.modelId === "grok-build")).toBe(false);
     }).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),
@@ -54,14 +55,14 @@ describe.runIf(process.env.T3_GROK_ACP_PROBE === "1")("Grok ACP CLI probe", () =
       const started = yield* runtime.start();
       const result = started.sessionSetupResult;
 
-      expect(typeof started.sessionId).toBe("string");
+      expect(started.sessionId).toBeTypeOf("string");
 
       // Modern grok-shell advertises models through the typed
       // `SessionModelState` field, not via a `configOptions` entry.
       // If this assertion fails the upstream surface has regressed.
       const models = result.models;
       expect(models).toBeDefined();
-      expect(typeof models?.currentModelId).toBe("string");
+      expect(models?.currentModelId).toBeTypeOf("string");
       expect(models?.availableModels.length ?? 0).toBeGreaterThan(0);
     }).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),
   );
@@ -72,6 +73,7 @@ describe.runIf(process.env.T3_GROK_ACP_PROBE === "1")("Grok ACP CLI probe", () =
       const started = yield* runtime.start();
       const currentModelId = started.sessionSetupResult.models?.currentModelId?.trim();
       expect(currentModelId).toBeDefined();
+
       if (!currentModelId) return;
 
       // No-op switch — selecting the model the session already runs on must

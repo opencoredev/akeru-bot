@@ -15,6 +15,7 @@ describe("applyAuthAccessStreamEvent", () => {
       createdAt: DateTime.makeUnsafe("2036-04-07T00:00:00.000Z"),
       expiresAt: DateTime.makeUnsafe("2036-04-07T00:05:00.000Z"),
     } as const;
+
     const clientSession = {
       sessionId: AuthSessionId.make("session-client"),
       subject: "subject",
@@ -37,6 +38,7 @@ describe("applyAuthAccessStreamEvent", () => {
       type: "pairingLinkUpserted",
       payload: pairingLink,
     });
+
     const withClient = applyAuthAccessStreamEvent(withPairingLink, {
       version: 1,
       revision: 2,

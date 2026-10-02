@@ -16,8 +16,11 @@ import {
 } from "./delegationPresentation.ts";
 
 const NOW = "2026-09-25T12:00:00.000Z";
+
 const PARENT_THREAD_ID = ThreadId.make("thread-parent");
+
 const CHILD_THREAD_ID = ThreadId.make("thread-child");
+
 const CHILD_TURN_ID = TurnId.make("turn-child");
 
 function makeDelegation(
@@ -141,6 +144,7 @@ describe("presentDelegation card labels", () => {
       trigger: "scheduled" as const,
       retryOfDelegationId: DelegationId.make("delegation-original"),
     };
+
     expect(presentDelegation(queued)).toMatchObject({
       childThreadId: null,
       trigger: "scheduled",
@@ -204,6 +208,7 @@ describe("presentDelegation failure text", () => {
           "    at disabledProviderError (file:///srv/akeru/apps/server/src/provider/Layers/AgentController.ts:584:10)",
       },
     });
+
     expect(presentDelegation(failed).outcome).toEqual({
       kind: "failure",
       text: "Provider instance 'codex' is disabled in Akeru Bot settings.",
@@ -231,6 +236,7 @@ describe("delegationActions", () => {
       acknowledgedAt: null,
       failure: { failureCode: "child_failed", message: "The site was down." },
     });
+
     const canceled = makeDelegation({
       _tag: "Canceled",
       childThreadId: null,
@@ -239,6 +245,7 @@ describe("delegationActions", () => {
       completedAt: NOW,
       canceledBy: "user",
     });
+
     expect(delegationActions(failed, [failed])).toEqual(["retry"]);
     expect(delegationActions(canceled, [canceled])).toEqual(["retry"]);
     expect(delegationActions(makeDelegation(completed(null)), [])).toEqual([]);
@@ -253,11 +260,13 @@ describe("delegationActions", () => {
       completedAt: NOW,
       canceledBy: "user",
     });
+
     const retry = {
       ...makeDelegation({ _tag: "Queued" }),
       delegationId: DelegationId.make("delegation-retry"),
       retryOfDelegationId: canceled.delegationId,
     };
+
     expect(isDelegationSuperseded(canceled, [canceled, retry])).toBe(true);
     expect(isDelegationSuperseded(retry, [canceled, retry])).toBe(false);
     expect(delegationActions(canceled, [canceled, retry])).toEqual([]);

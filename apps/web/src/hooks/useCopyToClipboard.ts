@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import * as React from "react";
 import * as Schema from "effect/Schema";
 
@@ -51,7 +52,7 @@ export class ClipboardReadError extends Schema.TaggedErrorClass<ClipboardReadErr
 function writeTextWithExecCommand(value: string): boolean {
   if (
     typeof document === "undefined" ||
-    typeof document.execCommand !== "function" ||
+    !Predicate.isFunction(document.execCommand) ||
     document.body == null
   ) {
     return false;
@@ -69,17 +70,23 @@ function writeTextWithExecCommand(value: string): boolean {
 
   const previouslyFocused = document.activeElement;
   document.body.appendChild(textarea);
+
   try {
     textarea.focus({ preventScroll: true });
     textarea.select();
     textarea.setSelectionRange(0, value.length);
+
     return document.execCommand("copy");
   } catch {
     return false;
   } finally {
     textarea.remove();
-    const restoreFocus = (previouslyFocused as { focus?: unknown } | null)?.focus;
-    if (typeof restoreFocus === "function") {
+
+    const restoreFocus = Predicate.hasProperty(previouslyFocused, "focus")
+      ? previouslyFocused.focus
+      : undefined;
+
+    if (Predicate.isFunction(restoreFocus)) {
       restoreFocus.call(previouslyFocused);
     }
   }
@@ -103,6 +110,7 @@ export async function writeTextToClipboard(value: string, target = "text") {
 
   try {
     await navigator.clipboard.writeText(value);
+
     return true;
   } catch (cause) {
     throw new ClipboardWriteError({
@@ -143,7 +151,7 @@ export function useCopyToClipboard<TContext = void>({
   target?: string;
   onCopy?: (ctx: TContext) => void;
   onError?: (error: Error, ctx: TContext) => void;
-} = {}): { copyToClipboard: (value: string, ctx: TContext) => void; isCopied: boolean } {
+} = {}) {
   const [isCopied, setIsCopied] = React.useState(false);
   const timeoutIdRef = React.useRef<NodeJS.Timeout | null>(null);
   const onCopyRef = React.useRef(onCopy);
@@ -160,9 +168,11 @@ export function useCopyToClipboard<TContext = void>({
     void writeTextToClipboard(value, targetRef.current).then(
       (didCopy) => {
         if (!didCopy) return;
+
         if (timeoutIdRef.current) {
           clearTimeout(timeoutIdRef.current);
         }
+
         setIsCopied(true);
 
         onCopyRef.current?.(ctx);

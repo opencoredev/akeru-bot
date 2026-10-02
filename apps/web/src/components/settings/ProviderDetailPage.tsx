@@ -35,17 +35,16 @@ export function defaultServerProvider(
 export function useProviderConnectionStates(
   environmentId: EnvironmentId,
   entries: ReadonlyArray<ProviderCatalogEntry>,
-): {
-  readonly states: ReadonlyMap<string, ProviderConnectionState>;
-  readonly plans: ReadonlyMap<string, string>;
-  readonly error: string | null;
-} {
+) {
   const { t, translate } = useI18n();
   const { statusQuery, statusByProvider } = useSubscriptionStatuses(environmentId);
+
   const serverProviders =
     useAtomValue(serverEnvironment.providersValueAtom(environmentId)) ?? EMPTY_SERVER_PROVIDERS;
+
   const states = new Map<string, ProviderConnectionState>();
   const plans = new Map<string, string>();
+
   for (const entry of entries) {
     if (entry.account) {
       const status = statusByProvider.get(entry.account.id);
@@ -70,6 +69,7 @@ export function useProviderConnectionStates(
       plans.set(entry.slug, translate(entry.planHint));
     }
   }
+
   return { states, plans, error: statusQuery.error };
 }
 
@@ -83,6 +83,7 @@ function translateConnectionState(
 
 function useUnavailableState(): ProviderConnectionState {
   const { t } = useI18n();
+
   return { tone: "neutral", label: t("Unavailable"), detail: null };
 }
 
@@ -90,6 +91,7 @@ export function ProviderDetailPage({ entry }: { readonly entry: ProviderCatalogE
   const { t, translate } = useI18n();
   const unavailable = useUnavailableState();
   const environmentId = useSettingsEnvironmentId();
+
   if (environmentId === null) {
     return (
       <SettingsPageContainer className="gap-10">
@@ -102,6 +104,7 @@ export function ProviderDetailPage({ entry }: { readonly entry: ProviderCatalogE
       </SettingsPageContainer>
     );
   }
+
   return (
     <ConnectedProviderDetail key={environmentId} environmentId={environmentId} entry={entry} />
   );
@@ -117,6 +120,7 @@ function ProviderHeader({
   readonly plan: string;
 }) {
   const { t } = useI18n();
+
   return (
     <SettingsDetailHeader
       back={{ section: "providers", label: t("Providers") }}
@@ -139,6 +143,7 @@ function ConnectedProviderDetail({
   const { translate } = useI18n();
   const unavailable = useUnavailableState();
   const { states, plans } = useProviderConnectionStates(environmentId, [entry]);
+
   return (
     <SettingsPageContainer className="gap-10">
       <ProviderHeader
@@ -163,6 +168,7 @@ function ConnectedProviderDetail({
 export function ProvidersListSection() {
   const { t } = useI18n();
   const environmentId = useSettingsEnvironmentId();
+
   if (environmentId === null) {
     return (
       <SettingsSection {...searchableSetting("providers", t)}>
@@ -172,6 +178,7 @@ export function ProvidersListSection() {
       </SettingsSection>
     );
   }
+
   return <ConnectedProvidersList key={environmentId} environmentId={environmentId} />;
 }
 
@@ -179,11 +186,13 @@ function ConnectedProvidersList({ environmentId }: { readonly environmentId: Env
   const { t, translate } = useI18n();
   const unavailable = useUnavailableState();
   const { states, plans, error } = useProviderConnectionStates(environmentId, PROVIDER_CATALOG);
+
   return (
     <>
       <SettingsSection {...searchableSetting("providers", t)}>
         {PROVIDER_CATALOG.map((entry) => {
           const state = states.get(entry.slug) ?? unavailable;
+
           return (
             <SettingsLinkRow
               key={entry.slug}
@@ -199,7 +208,7 @@ function ConnectedProvidersList({ environmentId }: { readonly environmentId: Env
         })}
       </SettingsSection>
       {error ? (
-        <p role="alert" className="-mt-5 px-3 text-[13px] text-destructive sm:px-4">
+        <p role="alert" className="-mt-5 px-3 text-13px text-destructive sm:px-4">
           {t("Could not load account status.")} {error}
         </p>
       ) : null}

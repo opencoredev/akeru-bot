@@ -1,3 +1,4 @@
+import { isTagged } from "../tagged";
 import type {
   EnvironmentId,
   PreviewOpenInput,
@@ -32,16 +33,20 @@ export async function openPreviewSession<E>(
       viewport: input.viewport ?? browserDefaultOpenViewport(await resolveBrowserDefaults()),
     },
   });
-  if (result._tag === "Failure") {
+
+  if (isTagged(result, "Failure")) {
     return result;
   }
+
   const snapshot = result.value;
   applyPreviewServerSnapshot(input.threadRef, snapshot);
+
   if (input.url !== undefined) {
     rememberPreviewUrl(
       input.threadRef,
-      snapshot.navStatus._tag === "Idle" ? input.url : snapshot.navStatus.url,
+      isTagged(snapshot.navStatus, "Idle") ? input.url : snapshot.navStatus.url,
     );
   }
+
   return result;
 }

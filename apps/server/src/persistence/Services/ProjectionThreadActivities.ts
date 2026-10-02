@@ -32,6 +32,7 @@ export const ProjectionThreadActivity = Schema.Struct({
   sequence: Schema.optional(NonNegativeInt),
   createdAt: IsoDateTime,
 });
+
 export type ProjectionThreadActivity = typeof ProjectionThreadActivity.Type;
 
 export const ListProjectionThreadActivitiesInput = Schema.Struct({
@@ -39,12 +40,14 @@ export const ListProjectionThreadActivitiesInput = Schema.Struct({
   activityKinds: Schema.optional(Schema.Array(Schema.String)),
   limit: Schema.optional(NonNegativeInt),
 });
+
 export type ListProjectionThreadActivitiesInput = typeof ListProjectionThreadActivitiesInput.Type;
 
 export const ListProjectionThreadUserInputLifecycleInput = Schema.Struct({
   threadId: ThreadId,
   turnId: TurnId,
 });
+
 export type ListProjectionThreadUserInputLifecycleInput =
   typeof ListProjectionThreadUserInputLifecycleInput.Type;
 
@@ -52,12 +55,14 @@ export const GetLatestProjectionThreadTaskActivityInput = Schema.Struct({
   threadId: ThreadId,
   taskId: Schema.String,
 });
+
 export type GetLatestProjectionThreadTaskActivityInput =
   typeof GetLatestProjectionThreadTaskActivityInput.Type;
 
 export const DeleteProjectionThreadActivitiesInput = Schema.Struct({
   threadId: ThreadId,
 });
+
 export type DeleteProjectionThreadActivitiesInput =
   typeof DeleteProjectionThreadActivitiesInput.Type;
 

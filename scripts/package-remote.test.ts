@@ -1,4 +1,3 @@
-// @effect-diagnostics nodeBuiltinImport:off - Tests package into isolated temporary directories.
 import * as NodeChildProcess from "node:child_process";
 import * as NodeCrypto from "node:crypto";
 import * as NodeFS from "node:fs";
@@ -17,7 +16,9 @@ import {
 } from "./package-remote.ts";
 
 const scripts = import.meta.dirname;
+
 const read = (name: string) => NodeFS.readFileSync(NodePath.join(scripts, name), "utf8");
+
 const temporary = () => NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "akeru-package-test-"));
 
 describe("package-remote", () => {
@@ -68,6 +69,7 @@ describe("package-remote", () => {
       nodeBinary: fakeNode,
       license,
     });
+
     expect(NodePath.basename(archive)).toBe("Akeru-Remote-1.2.3-linux-x64.tar.gz");
 
     // Extract the way install-remote.sh does.
@@ -80,6 +82,7 @@ describe("package-remote", () => {
       installed,
       "--strip-components=1",
     ]);
+
     for (const file of [
       "akeru",
       "node/bin/node",
@@ -92,6 +95,7 @@ describe("package-remote", () => {
     ]) {
       expect(NodeFS.existsSync(NodePath.join(installed, file)), file).toBe(true);
     }
+
     expect(NodeFS.readFileSync(NodePath.join(installed, "VERSION"), "utf8")).toBe("1.2.3\n");
 
     // The installer links the launcher into the user's bin directory.
@@ -103,29 +107,36 @@ describe("package-remote", () => {
     expect(serve).toBe(
       `${NodePath.join(home, ".akeru")}|${NodePath.join(installed, "node_modules/akeru-bot/dist/bin.mjs")}\n`,
     );
+
     const custom = NodeChildProcess.execFileSync(link, ["serve"], {
       env: { ...env, AKERU_HOME: "/srv/akeru" },
       encoding: "utf8",
     });
+
     expect(custom.split("|")[0]).toBe("/srv/akeru");
+
     const doctor = NodeChildProcess.spawnSync(link, ["remote", "doctor"], {
       env,
       encoding: "utf8",
     });
+
     expect(doctor.stdout).toContain(`${NodePath.join(home, ".akeru")}|`);
   });
 
   it("signs a manifest the installer's openssl check accepts", () => {
     const directory = temporary();
+
     for (const target of REMOTE_TARGETS) {
       NodeFS.writeFileSync(
         NodePath.join(directory, remoteArchiveName("1.2.3", target)),
         target.arch,
       );
     }
+
     for (const installer of REMOTE_INSTALLERS) {
       NodeFS.copyFileSync(NodePath.join(scripts, installer), NodePath.join(directory, installer));
     }
+
     const { privateKey, publicKey } = NodeCrypto.generateKeyPairSync("ed25519");
     const privateKeyPem = privateKey.export({ type: "pkcs8", format: "pem" }).toString();
     const publicKeyPem = publicKey.export({ type: "spki", format: "pem" }).toString();
@@ -148,6 +159,7 @@ describe("package-remote", () => {
       publicKeyPem,
       externalChecksums: { "tailscale_1.88.4_amd64.tgz": tailscale },
     });
+
     const lines = manifest.trimEnd().split("\n");
     expect(lines.map((line) => line.slice(66))).toEqual([
       "Akeru-Remote-1.2.3-linux-x64.tar.gz",
@@ -161,6 +173,7 @@ describe("package-remote", () => {
 
     const publicKeyPath = NodePath.join(directory, "manifest.pub");
     NodeFS.writeFileSync(publicKeyPath, publicKeyPem);
+
     const verified = NodeChildProcess.spawnSync("openssl", [
       "pkeyutl",
       "-verify",
@@ -173,6 +186,7 @@ describe("package-remote", () => {
       "-sigfile",
       NodePath.join(directory, "AKERU-REMOTE-MANIFEST.sig"),
     ]);
+
     expect(verified.status).toBe(0);
   });
 });

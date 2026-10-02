@@ -9,6 +9,7 @@ describe("roster approval response state", () => {
       environmentId: "local",
       threadId: "thread-a",
     } as ScopedThreadRef;
+
     const requestId = ApprovalRequestId.make("request-a");
     const key = rosterApprovalResponseKey(thread, requestId);
 

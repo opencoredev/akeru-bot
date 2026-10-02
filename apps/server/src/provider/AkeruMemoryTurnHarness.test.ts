@@ -1,4 +1,3 @@
-// @effect-diagnostics nodeBuiltinImport:off
 import * as NodeFS from "node:fs";
 import * as NodeOS from "node:os";
 import * as NodePath from "node:path";
@@ -18,6 +17,7 @@ describe("AkeruMemoryTurnHarness", () => {
       const store = new BotMemoryStore(root);
       const botId = BotId.make(`bot-turn-harness-${successfulCalls}`);
       const access = { botId, groupId: null, groupMemberBotIds: [] } as const;
+
       try {
         for (let prompt = 0; prompt < 10; prompt += 1) {
           const seed = await store.reserveReviewCadence(botId, {
@@ -25,8 +25,10 @@ describe("AkeruMemoryTurnHarness", () => {
             groupId: null,
             text: `Seed ${prompt}`,
           });
+
           await store.settleReviewCadence(seed, true);
         }
+
         const turn = await new AkeruMemoryTurnHarness(store).admit({
           access,
           input: {
@@ -35,10 +37,12 @@ describe("AkeruMemoryTurnHarness", () => {
             text: "I like cats.",
           },
         });
+
         expect(turn.reviewIncluded).toBe(true);
         expect(turn.context).toContain("<automatic-memory-review>");
         const handler: AkeruMemoryToolHandler = async () => ({ success: true });
         const tracked = turn.wrapMemoryHandler(handler);
+
         for (let call = 0; call < successfulCalls; call += 1) {
           await tracked({
             threadId: "current",
@@ -48,6 +52,7 @@ describe("AkeruMemoryTurnHarness", () => {
             approvalMode: "require-grant",
           });
         }
+
         await turn.finishForeground(true, "foreground");
         expect(await store.readReviewCadence(botId)).toEqual({
           acceptedPromptCount: 11,
@@ -64,15 +69,18 @@ describe("AkeruMemoryTurnHarness", () => {
     const root = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "akeru-deferred-harness-"));
     const store = new BotMemoryStore(root);
     const botId = BotId.make("bot-deferred-harness");
+
     try {
       for (let prompt = 0; prompt < 10; prompt += 1) {
         const seed = await store.reserveReviewCadence(botId);
         await store.settleReviewCadence(seed, true);
       }
+
       const turn = await new AkeruMemoryTurnHarness(store).admit({
         access: { botId, groupId: null, groupMemberBotIds: [] },
         input: { threadId: "current", groupId: null, text: "Remember cats." },
       });
+
       const tracked = turn.wrapMemoryHandler(async () => ({ success: true }));
       await turn.finishForeground(true, "deferred");
       expect((await store.readReviewCadence(botId)).reviewedThroughPromptCount).toBe(0);
@@ -94,15 +102,18 @@ describe("AkeruMemoryTurnHarness", () => {
     const root = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "akeru-scope-close-"));
     const store = new BotMemoryStore(root);
     const botId = BotId.make("bot-scope-close");
+
     try {
       for (let prompt = 0; prompt < 10; prompt += 1) {
         const seed = await store.reserveReviewCadence(botId);
         await store.settleReviewCadence(seed, true);
       }
+
       const turn = await new AkeruMemoryTurnHarness(store).admit({
         access: { botId, groupId: null, groupMemberBotIds: [] },
         input: { threadId: "current", groupId: null, text: "Remember cats." },
       });
+
       await turn.close();
       const retry = await new BotMemoryStore(root).reserveReviewCadence(botId);
       expect(retry.memoryReviewIncluded).toBe(true);
@@ -116,14 +127,17 @@ describe("AkeruMemoryTurnHarness", () => {
     const root = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "akeru-admission-harness-"));
     const store = new BotMemoryStore(root);
     const botId = BotId.make("bot-admission-harness");
+
     try {
       for (let prompt = 0; prompt < 10; prompt += 1) {
         const seed = await store.reserveReviewCadence(botId);
         await store.settleReviewCadence(seed, true);
       }
+
       store.readPromptSnapshot = async () => {
         throw new Error("memory unavailable");
       };
+
       await expect(
         new AkeruMemoryTurnHarness(store).admit({
           access: { botId, groupId: null, groupMemberBotIds: [] },

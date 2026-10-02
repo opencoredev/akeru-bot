@@ -1,8 +1,10 @@
+import { Predicate } from "effect";
 import { requireOptionalNativeModule } from "expo";
 
 import { MOBILE_THEME_IDS, type MobileThemeId } from "../../lib/mobileTheme";
 
 export const SHOWCASE_SCENES = ["threads", "thread", "environments"] as const;
+
 export type ShowcaseScene = (typeof SHOWCASE_SCENES)[number];
 
 export type ShowcaseOrientation = "portrait" | "landscape";
@@ -25,7 +27,9 @@ function nativeShowcaseControls(): NativeShowcaseControls | null {
 export function getNativeShowcasePairingUrls(): ReadonlyArray<string> {
   try {
     let raw = nativeShowcaseControls()?.getShowcasePairingUrl?.()?.trim();
+
     if (!raw) return [];
+
     if (raw.startsWith("json-uri:")) {
       try {
         raw = decodeURIComponent(raw.slice("json-uri:".length));
@@ -33,17 +37,20 @@ export function getNativeShowcasePairingUrls(): ReadonlyArray<string> {
         return [];
       }
     }
+
     try {
       const parsed: unknown = JSON.parse(raw);
+
       if (Array.isArray(parsed)) {
         return parsed.filter(
           (candidate): candidate is string =>
-            typeof candidate === "string" && candidate.trim().length > 0,
+            Predicate.isString(candidate) && candidate.trim().length > 0,
         );
       }
     } catch {
       // Older runners pass a single URL rather than a JSON array.
     }
+
     return [raw];
   } catch {
     return [];
@@ -53,6 +60,7 @@ export function getNativeShowcasePairingUrls(): ReadonlyArray<string> {
 export function getNativeShowcaseScene(): ShowcaseScene | null {
   try {
     const scene = nativeShowcaseControls()?.getShowcaseScene?.()?.trim();
+
     return SHOWCASE_SCENES.find((candidate) => candidate === scene) ?? null;
   } catch {
     return null;
@@ -67,6 +75,7 @@ export function getNativeShowcaseScene(): ShowcaseScene | null {
 export function getNativeShowcaseTheme(): MobileThemeId | null {
   try {
     const theme = nativeShowcaseControls()?.getShowcaseTheme?.()?.trim();
+
     return MOBILE_THEME_IDS.find((candidate) => candidate === theme) ?? null;
   } catch {
     return null;
@@ -84,6 +93,7 @@ export function prepareNativeShowcaseCapture(): void {
 export function getNativeShowcaseOrientation(): ShowcaseOrientation | null {
   try {
     const orientation = nativeShowcaseControls()?.getShowcaseOrientation?.()?.trim();
+
     return orientation === "portrait" || orientation === "landscape" ? orientation : null;
   } catch {
     return null;
@@ -94,16 +104,19 @@ export async function applyNativeShowcaseOrientation(
   orientation: ShowcaseOrientation,
 ): Promise<boolean> {
   const controls = nativeShowcaseControls();
+
   if (!controls?.applyShowcaseOrientation || !controls.getInterfaceOrientation) {
     // A development build that predates this helper keeps its default
     // orientation; report success so callers do not retry forever.
     return true;
   }
+
   try {
     await controls.applyShowcaseOrientation(orientation);
     // The geometry request settles asynchronously; confirm it took effect so
     // callers can retry attempts made before the scene was foreground-active.
     await new Promise((resolve) => setTimeout(resolve, 500));
+
     return (await controls.getInterfaceOrientation()) === orientation;
   } catch {
     return false;

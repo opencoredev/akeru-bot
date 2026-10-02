@@ -9,6 +9,10 @@ import { useI18n } from "../../i18n";
 import type { PendingApproval } from "../../session-logic";
 import { ComposerPendingApprovalActions } from "../chat/ComposerPendingApprovalActions";
 import { ComposerPendingApprovalPanel } from "../chat/ComposerPendingApprovalPanel";
+import {
+  BOT_COMPOSER_DOCKED_PANEL_CLASS_NAME,
+  BOT_COMPOSER_QUIET_SURFACE_CLASS_NAME,
+} from "./botConversationPresentation";
 
 export function BotApprovalPrompt({
   approval,
@@ -21,18 +25,21 @@ export function BotApprovalPrompt({
   readonly pendingCount: number;
   readonly responding: boolean;
   readonly error: string | null;
-  readonly onRespond: (decision: ProviderApprovalDecision) => Promise<unknown>;
+  readonly onRespond: (decision: ProviderApprovalDecision) => Promise<boolean | void>;
 }) {
   const { t } = useI18n();
+
   const isSpecialReview =
     approval.toolName === AKERU_CREATE_ROUTINE_TOOL_NAME ||
     approval.toolName === AKERU_PRODUCT_FEEDBACK_TOOL_NAME;
+
   const oneUse =
     !isSpecialReview &&
     (approval.options?.every(
       (option) => option.decision !== "acceptForSession" && option.decision !== "acceptAlways",
     ) ??
       false);
+
   const heading =
     approval.toolName === AKERU_CREATE_ROUTINE_TOOL_NAME
       ? t("Review routine")
@@ -51,9 +58,7 @@ export function BotApprovalPrompt({
   return (
     <section
       aria-label={t("Approval required")}
-      className={cn(
-        "mb-1 w-full rounded-t-[1.65rem] rounded-b-md border border-border/70 border-b-transparent bg-card px-3.5 pt-3 pb-2.5",
-      )}
+      className={cn(BOT_COMPOSER_QUIET_SURFACE_CLASS_NAME, BOT_COMPOSER_DOCKED_PANEL_CLASS_NAME)}
       data-testid="bot-approval-prompt"
     >
       <div className="flex min-w-0 items-center gap-2">

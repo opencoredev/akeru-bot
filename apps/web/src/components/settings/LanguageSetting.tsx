@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 import { availableLanguages, useI18n } from "../../i18n";
 import { Button } from "../ui/button";
 import { Select, SelectItem, SelectPopup, SelectTrigger, SelectValue } from "../ui/select";
@@ -6,8 +7,10 @@ import { searchableSetting } from "./settingsSearch";
 
 export function LanguageSetting() {
   const { t, preference, setPreference, catalogFailed, retryCatalog } = useI18n();
+
   const selectedLabel =
     availableLanguages.find((language) => language.id === preference)?.label ?? t("System default");
+
   return (
     <SettingsRow
       {...searchableSetting("language", t)}
@@ -40,7 +43,7 @@ export function LanguageSetting() {
         <Select
           value={preference}
           onValueChange={(value) => {
-            if (typeof value === "string") setPreference(value);
+            if (Predicate.isString(value)) setPreference(value);
           }}
         >
           <SelectTrigger

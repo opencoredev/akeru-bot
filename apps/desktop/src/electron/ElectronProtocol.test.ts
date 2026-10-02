@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import { assert, describe, it } from "@effect/vitest";
 import * as Cause from "effect/Cause";
 import * as Effect from "effect/Effect";
@@ -53,6 +54,7 @@ describe("ElectronProtocol", () => {
               }),
             ),
           );
+
           assert.equal(yield* Effect.promise(() => response.text()), "ok");
           assert.include(
             response.headers.get("content-security-policy") ?? "",
@@ -102,6 +104,7 @@ describe("ElectronProtocol", () => {
             targetOrigin: new URL("http://127.0.0.1:3773/"),
             backendOrigin: new URL("http://127.0.0.1:3773/"),
           });
+
           return yield* Effect.promise(() => handler!(new Request("akeru://other/")));
         }),
       );
@@ -129,6 +132,7 @@ describe("ElectronProtocol", () => {
             targetOrigin: new URL("http://127.0.0.1:5733/"),
             backendOrigin: new URL("http://127.0.0.1:3773/"),
           });
+
           return yield* Effect.promise(() => handler!(new Request("akeru-dev://app/")));
         }),
       );
@@ -146,6 +150,7 @@ describe("ElectronProtocol", () => {
       });
 
       const protocol = yield* ElectronProtocol.ElectronProtocol;
+
       const error = yield* Effect.scoped(
         protocol.registerDesktopProtocol({
           scheme: "akeru-dev",
@@ -169,6 +174,7 @@ describe("ElectronProtocol", () => {
       });
 
       const protocol = yield* ElectronProtocol.ElectronProtocol;
+
       const exit = yield* Effect.exit(
         Effect.scoped(
           protocol.registerDesktopProtocol({
@@ -180,7 +186,8 @@ describe("ElectronProtocol", () => {
       );
 
       assert.equal(exit._tag, "Failure");
-      if (exit._tag === "Failure") {
+
+      if (Predicate.isTagged(exit, "Failure")) {
         const error = Cause.squash(exit.cause);
         assert.instanceOf(error, ElectronProtocol.ElectronProtocolUnregistrationError);
         assert.equal(error.scheme, "akeru");
@@ -196,9 +203,11 @@ describe("ElectronProtocol", () => {
       targetOrigin: new URL("http://127.0.0.1:3773/"),
       backendOrigin: new URL("http://127.0.0.1:3773/"),
     });
+
     const directives = Object.fromEntries(
       policy.split("; ").map((directive) => {
         const [name, ...sources] = directive.split(" ");
+
         return [name, sources];
       }),
     );

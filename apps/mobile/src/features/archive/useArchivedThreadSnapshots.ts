@@ -6,9 +6,15 @@ import {
 } from "@akeru/client-runtime/state/threads";
 import type { EnvironmentId } from "@akeru/contracts";
 import { useCallback, useMemo } from "react";
-
 import { appAtomRegistry } from "../../state/atom-registry";
 import { orchestrationEnvironment } from "../../state/orchestration";
+
+type ArchivedThreadSnapshots = {
+  readonly snapshots: ReadonlyArray<ArchivedSnapshotEntry>;
+  readonly error: string | null;
+  readonly isLoading: boolean;
+  readonly refresh: () => void;
+};
 
 function archivedSnapshotAtom(environmentId: EnvironmentId) {
   return orchestrationEnvironment.archivedShellSnapshot({
@@ -26,17 +32,16 @@ export function refreshArchivedThreadsForEnvironment(environmentId: EnvironmentI
   appAtomRegistry.refresh(archivedSnapshotAtom(environmentId));
 }
 
-export function useArchivedThreadSnapshots(environmentIds: ReadonlyArray<EnvironmentId>): {
-  readonly snapshots: ReadonlyArray<ArchivedSnapshotEntry>;
-  readonly error: string | null;
-  readonly isLoading: boolean;
-  readonly refresh: () => void;
-} {
+export function useArchivedThreadSnapshots(
+  environmentIds: ReadonlyArray<EnvironmentId>,
+): ArchivedThreadSnapshots {
   const environmentKey = useMemo(
     () => makeArchivedThreadsEnvironmentKey(environmentIds),
     [environmentIds],
   );
+
   const result = useAtomValue(archivedSnapshotsAtom(environmentKey));
+
   const refresh = useCallback(() => {
     for (const environmentId of environmentIds) {
       appAtomRegistry.refresh(archivedSnapshotAtom(environmentId));

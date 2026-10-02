@@ -150,6 +150,7 @@ describe("KeybindingsSettings.logic", () => {
     for (const binding of DEFAULT_RESOLVED_KEYBINDINGS) {
       expect(commandLabel(binding.command)).not.toContain(":");
     }
+
     expect(keybindingGroupForCommand("commandPalette.toggle")).toBe("general");
     expect(keybindingGroupForCommand("thread.jump.1")).toBe("chats");
     expect(keybindingGroupForCommand("modelPicker.jump.1")).toBe("composer");
@@ -200,6 +201,7 @@ describe("KeybindingsSettings.logic", () => {
       ] satisfies ResolvedKeybindingsConfig,
       "",
     );
+
     const [chats] = buildKeybindingGroups(rows);
 
     expect(chats?.items).toEqual([
@@ -289,6 +291,7 @@ describe("KeybindingsSettings.logic", () => {
       ] satisfies ResolvedKeybindingsConfig,
       "",
     );
+
     expect(shadowed.map((row) => row.conflicts)).toEqual([
       ["Toggle sidebar"],
       ["Toggle right panel"],

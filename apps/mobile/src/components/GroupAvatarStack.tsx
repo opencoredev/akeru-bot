@@ -17,6 +17,7 @@ export function GroupAvatarStack(props: {
 }) {
   const members = props.bots.slice(0, 2);
   const avatarSize = Math.round(props.size * 0.68);
+
   if (members.length === 0) {
     return (
       <View style={{ height: props.size, width: props.size }}>
@@ -28,6 +29,7 @@ export function GroupAvatarStack(props: {
       </View>
     );
   }
+
   return (
     <View style={{ height: props.size, width: props.size }}>
       {members.map((bot, index) => (

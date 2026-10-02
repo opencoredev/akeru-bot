@@ -38,6 +38,7 @@ export const connectionStorageLayer = Layer.effectContext(
         Effect.mapError((error) => targetPersistenceError("list-targets", error)),
       ),
     });
+
     const registrationStore = ConnectionRegistrationStore.of({
       register: (registration) =>
         catalog
@@ -48,6 +49,7 @@ export const connectionStorageLayer = Layer.effectContext(
           .update((document) => removeConnectionFromCatalog(document, target))
           .pipe(Effect.mapError((error) => targetPersistenceError("remove-connection", error))),
     });
+
     const profileStore = ProfileStore.make({
       get: (connectionId) =>
         catalog.read.pipe(
@@ -72,6 +74,7 @@ export const connectionStorageLayer = Layer.effectContext(
           ),
         })),
     });
+
     const credentialStore = CredentialStore.make({
       get: (connectionId) =>
         catalog.read.pipe(
@@ -99,6 +102,7 @@ export const connectionStorageLayer = Layer.effectContext(
           ),
         })),
     });
+
     return Context.make(ConnectionTargetStore, targetStore).pipe(
       Context.add(ConnectionRegistrationStore, registrationStore),
       Context.add(ProfileStore.ConnectionProfileStore, profileStore),

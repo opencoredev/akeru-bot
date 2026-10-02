@@ -1,4 +1,5 @@
 export const GITHUB_REPOSITORY_URL = "https://github.com/opencoredev/akeru-bot";
+
 export const T3_CODE_WEBSITE_URL = "https://t3.codes";
 
 /** User docs live in the repository, so every docs link points at GitHub. */

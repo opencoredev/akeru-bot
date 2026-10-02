@@ -52,6 +52,7 @@ const ModelManifestSchema = Schema.Struct({
   version: Schema.Literal(2),
   currentModels: Schema.Record(Schema.String, Schema.Array(Schema.String)),
 });
+
 export type ModelManifestData = typeof ModelManifestSchema.Type;
 
 const decodeManifest = Schema.decodeUnknownEffect(ModelManifestSchema);
@@ -64,16 +65,10 @@ const ManifestCacheFile = Schema.Struct({
   fetchedAtMs: Schema.Number,
   manifest: ModelManifestSchema,
 });
-const decodeManifestCache = Schema.decodeUnknownEffect(
-  Schema.fromJsonString(
-    ManifestCacheFile as unknown as Schema.Codec<typeof ManifestCacheFile.Type>,
-  ),
-);
-const encodeManifestCache = Schema.encodeEffect(
-  Schema.fromJsonString(
-    ManifestCacheFile as unknown as Schema.Codec<typeof ManifestCacheFile.Type>,
-  ),
-);
+
+const decodeManifestCache = Schema.decodeUnknownEffect(Schema.fromJsonString(ManifestCacheFile));
+
+const encodeManifestCache = Schema.encodeEffect(Schema.fromJsonString(ManifestCacheFile));
 
 /** True when the manifest classifies `slug` as legacy for `driverKind`. */
 export function isLegacyModel(
@@ -82,7 +77,9 @@ export function isLegacyModel(
   slug: string,
 ): boolean {
   const currentModels = manifest.currentModels[driverKind];
+
   if (!currentModels) return false;
+
   return !currentModels.includes(slug);
 }
 
@@ -106,11 +103,14 @@ export function classifyModels(
 ): ReadonlyArray<ServerProviderModel> {
   return models.map((model) => {
     if (model.isCustom) return model;
+
     if (isLegacyModel(manifest, driverKind, model.slug)) {
       return model.isLegacy ? model : { ...model, isLegacy: true };
     }
+
     if (!model.isLegacy) return model;
     const { isLegacy: _isLegacy, ...rest } = model;
+
     return rest;
   });
 }
@@ -162,6 +162,7 @@ export const make = Effect.gen(function* () {
         Effect.flatMap((raw) => decodeManifestCache(raw)),
         Effect.catchCause(() => Effect.succeed(null)),
       );
+
       if (fromDisk === null) return;
       // The disk copy is the last-seen remote manifest, so it outranks the
       // bundle even when stale: it is refreshed on the next successful fetch.
@@ -173,12 +174,15 @@ export const make = Effect.gen(function* () {
   const refresh = Effect.fn("ModelManifest.refresh")(function* () {
     yield* ensureDiskCacheLoaded;
     const now = yield* Clock.currentTimeMillis;
+
     // A timestamp in the future means the wall clock moved backwards (the
     // disk cache crosses restarts, so monotonic time cannot cover it). Treat
     // it as expired: the refetch rewrites both timestamps and self-heals.
     const isWithin = (sinceMs: number | null, windowMs: number) =>
       sinceMs !== null && now >= sinceMs && now - sinceMs < windowMs;
+
     if (isWithin(fetchedAtMs, MANIFEST_TTL_MS)) return manifest;
+
     if (isWithin(lastAttemptMs, MANIFEST_RETRY_MS)) return manifest;
 
     // The same switch that gates provider CLI update checks. It stops network
@@ -188,9 +192,11 @@ export const make = Effect.gen(function* () {
     const settings = yield* settingsService.getSettings.pipe(
       Effect.catchCause(() => Effect.succeed(null)),
     );
+
     if (settings !== null && !settings.enableProviderUpdateChecks) return manifest;
 
     lastAttemptMs = now;
+
     const fetched = yield* httpClient.get(MODEL_MANIFEST_URL).pipe(
       Effect.flatMap(HttpClientResponse.filterStatusOk),
       Effect.flatMap((response) => response.json),
@@ -198,6 +204,7 @@ export const make = Effect.gen(function* () {
       Effect.timeout(FETCH_TIMEOUT_MS),
       Effect.catchCause(() => Effect.succeed(null)),
     );
+
     if (fetched === null) return manifest;
 
     manifest = fetched;
@@ -206,6 +213,7 @@ export const make = Effect.gen(function* () {
       Effect.flatMap((serialized) => fileSystem.writeFileString(cachePath, serialized)),
       Effect.catchCause(() => Effect.void),
     );
+
     return manifest;
   });
 

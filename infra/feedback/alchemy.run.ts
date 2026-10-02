@@ -58,6 +58,7 @@ export default Alchemy.Stack(
   Effect.gen(function* () {
     const database = yield* FeedbackDatabase;
     const worker = yield* FeedbackWorker;
+
     return {
       databaseName: database.databaseName,
       workerName: worker.workerName,
