@@ -196,12 +196,17 @@ export function runtimeConnectionState(
     return { tone: "positive", label: "Connected", detail: null };
   }
 
-  if (provider.status === "error" || provider.status === "warning") {
+  if (provider.status === "error") {
     return { tone: "attention", label: "Needs attention", detail: provider.message ?? null };
   }
 
+  // An instance the user has not set up yet is not a problem to fix.
   if (provider.auth.status === "unauthenticated") {
     return { tone: "neutral", label: "Not connected", detail: provider.message ?? null };
+  }
+
+  if (provider.status === "warning") {
+    return { tone: "attention", label: "Needs attention", detail: provider.message ?? null };
   }
 
   return { tone: "positive", label: "Available", detail: null };
