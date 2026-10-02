@@ -26,6 +26,7 @@ describe("browserSurfaceStore", () => {
   it("freezes the source content dimensions for a fitted presentation", () => {
     const tabId = "fitted-browser-surface";
     const sourceOwner = Symbol("source");
+
     const sourceContent = {
       x: 10,
       y: 20,
@@ -35,6 +36,7 @@ describe("browserSurfaceStore", () => {
       scrollLeft: 0,
       scrollTop: 0,
     };
+
     useBrowserSurfaceStore.getState().claim(tabId, sourceOwner, false);
     useBrowserSurfaceStore.getState().presentContent(tabId, sourceContent);
 
@@ -55,6 +57,7 @@ describe("browserSurfaceStore", () => {
   it("freezes the first content dimensions when fitting starts before the browser is measured", () => {
     const tabId = "pending-fitted-browser-surface";
     const fittedLease = acquireBrowserSurface(tabId, true);
+
     const sourceContent = {
       x: 0,
       y: 0,

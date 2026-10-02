@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 import { useAtomRefresh, useAtomValue } from "@effect/atom-react";
 import * as Cause from "effect/Cause";
 import * as Option from "effect/Option";
@@ -16,6 +17,7 @@ export interface EnvironmentQueryView<A> {
 
 function formatError(cause: Cause.Cause<unknown>): string {
   const error = Cause.squash(cause);
+
   return error instanceof Error && error.message.trim().length > 0
     ? error.message
     : "The environment request failed.";
@@ -27,9 +29,10 @@ export function useEnvironmentQuery<A, E>(
   const selectedAtom = atom ?? EMPTY_ASYNC_RESULT_ATOM;
   const result = useAtomValue(selectedAtom);
   const refresh = useAtomRefresh(selectedAtom);
+
   return {
     data: Option.getOrNull(AsyncResult.value(result)),
-    error: result._tag === "Failure" ? formatError(result.cause) : null,
+    error: Predicate.isTagged(result, "Failure") ? formatError(result.cause) : null,
     isPending: atom !== null && result.waiting,
     refresh,
   };

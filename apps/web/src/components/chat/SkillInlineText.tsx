@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 import { Children, cloneElement, isValidElement, type ReactNode } from "react";
 import type { ServerProviderSkill } from "@akeru/contracts";
 import {
@@ -26,6 +27,7 @@ export function SkillInlineText(props: { text: string; skills: ReadonlyArray<Inl
     const start = (match.index ?? 0) + prefix.length;
     const rawText = `$${name}`;
     const skill = props.skills.find((candidate) => candidate.name === name);
+
     if (!skill) {
       continue;
     }
@@ -33,6 +35,7 @@ export function SkillInlineText(props: { text: string; skills: ReadonlyArray<Inl
     if (start > cursor) {
       nodes.push(props.text.slice(cursor, start));
     }
+
     nodes.push(<SkillChip key={`${start}:${name}`} skill={skill} rawText={rawText} />);
     cursor = start + rawText.length;
   }
@@ -40,9 +43,11 @@ export function SkillInlineText(props: { text: string; skills: ReadonlyArray<Inl
   if (cursor === 0) {
     return <>{props.text}</>;
   }
+
   if (cursor < props.text.length) {
     nodes.push(props.text.slice(cursor));
   }
+
   return <>{nodes}</>;
 }
 
@@ -51,21 +56,26 @@ export function renderSkillInlineMarkdownChildren(
   skills: ReadonlyArray<InlineSkill>,
 ): ReactNode {
   return Children.map(children, (child) => {
-    if (typeof child === "string") {
+    if (Predicate.isString(child)) {
       return <SkillInlineText text={child} skills={skills} />;
     }
+
     if (!isValidElement<{ children?: ReactNode; node?: { tagName?: string } }>(child)) {
       return child;
     }
+
     // Custom react-markdown components replace the intrinsic type, so also
     // check the hast node they carry.
-    const markdownTagName = typeof child.type === "string" ? child.type : child.props.node?.tagName;
+    const markdownTagName = Predicate.isString(child.type) ? child.type : child.props.node?.tagName;
+
     if (markdownTagName === "code" || markdownTagName === "a") {
       return child;
     }
+
     if (!("children" in child.props)) {
       return child;
     }
+
     return cloneElement(
       child,
       undefined,
@@ -76,6 +86,7 @@ export function renderSkillInlineMarkdownChildren(
 
 function SkillChip(props: { skill: InlineSkill; rawText: string }) {
   const textIcon = resolveProviderSkillTextIcon(props.skill);
+
   return (
     <span className="inline-flex align-middle leading-none" data-markdown-copy={props.rawText}>
       <span className={CHAT_INLINE_SKILL_CHIP_CLASS_NAME}>

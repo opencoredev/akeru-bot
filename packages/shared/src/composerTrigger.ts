@@ -1,4 +1,5 @@
 export type ComposerTriggerKind = "path" | "slash-command" | "slash-model" | "skill";
+
 export type ComposerSlashCommand = "model";
 
 export interface ComposerTrigger {
@@ -14,11 +15,13 @@ export function serializeComposerMentionPath(path: string): string {
   if (SIMPLE_MENTION_PATH_REGEX.test(path)) {
     return path;
   }
+
   return `"${path.replaceAll("\\", "\\\\").replaceAll('"', '\\"')}"`;
 }
 
 function composerFileLinkBasename(path: string): string {
   const separatorIndex = Math.max(path.lastIndexOf("/"), path.lastIndexOf("\\"));
+
   return separatorIndex >= 0 ? path.slice(separatorIndex + 1) : path;
 }
 
@@ -37,11 +40,13 @@ function encodeMarkdownLinkDestination(path: string): string {
 
 export function serializeComposerFileLink(path: string): string {
   const label = escapeMarkdownLinkLabel(composerFileLinkBasename(path));
+
   return `[${label}](${encodeMarkdownLinkDestination(path)})`;
 }
 
 function clampCursor(text: string, cursor: number): number {
   if (!Number.isFinite(cursor)) return text.length;
+
   return Math.max(0, Math.min(text.length, Math.floor(cursor)));
 }
 
@@ -67,8 +72,10 @@ export function detectComposerTrigger(
 
   if (linePrefix.startsWith("/")) {
     const commandMatch = /^\/(\S*)$/.exec(linePrefix);
+
     if (commandMatch) {
       const commandQuery = commandMatch[1] ?? "";
+
       if (commandQuery.toLowerCase() === "model") {
         return {
           kind: "slash-model",
@@ -77,6 +84,7 @@ export function detectComposerTrigger(
           rangeEnd: cursor,
         };
       }
+
       return {
         kind: "slash-command",
         query: commandQuery,
@@ -86,6 +94,7 @@ export function detectComposerTrigger(
     }
 
     const modelMatch = /^\/model(?:\s+(.*))?$/.exec(linePrefix);
+
     if (modelMatch) {
       return {
         kind: "slash-model",
@@ -98,12 +107,15 @@ export function detectComposerTrigger(
 
   const wsCheck = isWhitespaceChar ?? isWhitespace;
   let tokenIdx = cursor - 1;
+
   while (tokenIdx >= 0 && !wsCheck(text[tokenIdx] ?? "")) {
     tokenIdx -= 1;
   }
+
   const tokenStart = tokenIdx + 1;
 
   const token = text.slice(tokenStart, cursor);
+
   if (token.startsWith("$")) {
     return {
       kind: "skill",
@@ -112,6 +124,7 @@ export function detectComposerTrigger(
       rangeEnd: cursor,
     };
   }
+
   if (!token.startsWith("@")) {
     return null;
   }
@@ -124,14 +137,17 @@ export function detectComposerTrigger(
   };
 }
 
+type ReplaceTextRangeResult = { text: string; cursor: number };
+
 export function replaceTextRange(
   text: string,
   rangeStart: number,
   rangeEnd: number,
   replacement: string,
-): { text: string; cursor: number } {
+): ReplaceTextRangeResult {
   const safeStart = Math.max(0, Math.min(text.length, rangeStart));
   const safeEnd = Math.max(safeStart, Math.min(text.length, rangeEnd));
   const nextText = `${text.slice(0, safeStart)}${replacement}${text.slice(safeEnd)}`;
+
   return { text: nextText, cursor: safeStart + replacement.length };
 }

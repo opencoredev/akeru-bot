@@ -64,6 +64,7 @@ afterEach(() => {
     unassignedItems: initialState.unassignedItems,
     environmentId: initialState.environmentId,
   });
+
   if (typeof window !== "undefined") {
     for (const key of Object.keys(window.localStorage)) {
       if (key.startsWith("akeru:roster:v1")) window.localStorage.removeItem(key);

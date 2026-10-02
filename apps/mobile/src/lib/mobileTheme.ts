@@ -1,3 +1,4 @@
+import { flow, Option, Predicate, Schema } from "effect";
 import {
   BUILT_IN_THEMES,
   getThemeColorsForAppearance,
@@ -11,10 +12,15 @@ import { STANDARD_THEME_PREVIEW_COLORS, type ThemePreviewColors } from "@akeru/s
 import { DEFAULT_MOBILE_THEME_VARIABLES } from "./mobileDefaultTheme";
 
 export const DEFAULT_MOBILE_THEME_ID = MOBILE_DEFAULT_THEME_ID;
+
 export const MOBILE_THEME_IDS = SHARED_MOBILE_THEME_IDS;
+
 export type MobileThemeId = SharedMobileThemeId;
+
 export type MobileThemeAppearance = ThemeAppearance;
+
 export type MobileThemeMode = MobileThemeAppearance | "system";
+
 export type MobileThemeIds = Readonly<Record<MobileThemeAppearance, MobileThemeId>>;
 
 export const MOBILE_THEME_OPTIONS: ReadonlyArray<{
@@ -22,32 +28,45 @@ export const MOBILE_THEME_OPTIONS: ReadonlyArray<{
   readonly label: string;
 }> = [
   { id: DEFAULT_MOBILE_THEME_ID, label: "Akeru Classic" },
-  ...BUILT_IN_THEMES.map((theme) => ({ id: theme.id as MobileThemeId, label: theme.label })),
+  ...BUILT_IN_THEMES.map((theme) => ({ id: themeIdFromString(theme.id), label: theme.label })),
 ];
 
 type MobileThemeVariable = `--color-${string}`;
+
 export type MobileThemeVariables = Readonly<Record<MobileThemeVariable, string>>;
 
 // Theme ids before the rebrand; mapped so stored preferences keep resolving.
-const LEGACY_MOBILE_THEME_IDS: Readonly<Record<string, MobileThemeId>> = {
-  "t3-code": DEFAULT_MOBILE_THEME_ID,
-  "t3-chat": "akeru-chat",
-};
+const LEGACY_MOBILE_THEME_IDS = new Map(
+  Object.entries({
+    "t3-code": DEFAULT_MOBILE_THEME_ID,
+    "t3-chat": "akeru-chat",
+  } as const),
+);
 
-export function normalizeMobileThemeId(value: unknown): MobileThemeId {
-  if (typeof value === "string") {
-    if ((MOBILE_THEME_IDS as readonly string[]).includes(value)) {
-      return value as MobileThemeId;
-    }
-    const aliased = LEGACY_MOBILE_THEME_IDS[value];
+function themeIdFromString(value: string | null): MobileThemeId {
+  if (Predicate.isString(value)) {
+    const themeId = MOBILE_THEME_IDS.find((id) => id === value);
+
+    if (themeId !== undefined) return themeId;
+
+    const aliased = LEGACY_MOBILE_THEME_IDS.get(value);
+
     if (aliased !== undefined) return aliased;
   }
+
   return DEFAULT_MOBILE_THEME_ID;
 }
 
-export function normalizeMobileThemeMode(value: unknown): MobileThemeMode {
-  return value === "light" || value === "dark" || value === "system" ? value : "system";
-}
+export const normalizeMobileThemeId = flow(
+  Schema.decodeUnknownOption(Schema.String),
+  Option.getOrNull,
+  themeIdFromString,
+);
+
+export const normalizeMobileThemeMode = flow(
+  Schema.decodeUnknownOption(Schema.Literals(["light", "dark", "system"])),
+  Option.getOrElse(() => "system" as const),
+);
 
 export function resolveMobileThemeIds(preferences: {
   readonly themeId?: unknown;
@@ -55,6 +74,7 @@ export function resolveMobileThemeIds(preferences: {
   readonly darkThemeId?: unknown;
 }): MobileThemeIds {
   const legacyThemeId = normalizeMobileThemeId(preferences.themeId);
+
   return {
     light:
       preferences.lightThemeId === undefined
@@ -77,6 +97,7 @@ export function createMobileThemeSelectionPatch(
     light: selectedAppearance === "light" ? value : themeIds.light,
     dark: selectedAppearance === "dark" ? value : themeIds.dark,
   };
+
   return {
     lightThemeId: nextThemeIds.light,
     darkThemeId: nextThemeIds.dark,
@@ -97,12 +118,14 @@ const OKLCH_PATTERN = /^oklch\(\s*([\d.]+)\s+([\d.]+)\s+(-?[\d.]+)(?:\s*\/\s*([\
 
 function linearToSrgb(value: number): number {
   const converted = value <= 0.0031308 ? 12.92 * value : 1.055 * value ** (1 / 2.4) - 0.055;
+
   return Math.round(Math.min(1, Math.max(0, converted)) * 255);
 }
 
 /** React Native does not accept OKLCH ColorValues, so palettes cross the app boundary as sRGB. */
 export function themeColorToNativeColor(value: string): string {
   const match = OKLCH_PATTERN.exec(value);
+
   if (!match) return value;
 
   const lightness = Number(match[1]);
@@ -127,6 +150,7 @@ export function themeColorToNativeColor(value: string): string {
 }
 
 function nativeColors(colors: ThemeColors): ThemeColors {
+  // SAFETY: Every ThemeColors key is retained, and the mapper returns a color string for each value.
   return Object.fromEntries(
     Object.entries(colors).map(([role, color]) => [role, themeColorToNativeColor(color)]),
   ) as ThemeColors;
@@ -134,15 +158,19 @@ function nativeColors(colors: ThemeColors): ThemeColors {
 
 function withAlpha(color: string, alpha: number): string {
   const hex = color.startsWith("#") ? color.slice(1) : "";
+
   if (hex.length !== 6) return color;
+
   const [red, green, blue] = [0, 2, 4].map((offset) =>
     Number.parseInt(hex.slice(offset, offset + 2), 16),
   );
+
   return `rgba(${red}, ${green}, ${blue}, ${alpha})`;
 }
 
 function rgbChannels(color: string): readonly [number, number, number] | null {
   const match = /^#([\da-f]{2})([\da-f]{2})([\da-f]{2})$/i.exec(color);
+
   return match
     ? [Number.parseInt(match[1], 16), Number.parseInt(match[2], 16), Number.parseInt(match[3], 16)]
     : null;
@@ -151,8 +179,10 @@ function rgbChannels(color: string): readonly [number, number, number] | null {
 function relativeLuminance(channels: readonly [number, number, number]): number {
   const [red, green, blue] = channels.map((channel) => {
     const value = channel / 255;
+
     return value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4;
   });
+
   return 0.2126 * red! + 0.7152 * green! + 0.0722 * blue!;
 }
 
@@ -162,6 +192,7 @@ function contrastRatio(
 ): number {
   const firstLuminance = relativeLuminance(first);
   const secondLuminance = relativeLuminance(second);
+
   return (
     (Math.max(firstLuminance, secondLuminance) + 0.05) /
     (Math.min(firstLuminance, secondLuminance) + 0.05)
@@ -172,6 +203,7 @@ function contrastRatio(
 function readableMessageAccent(accent: string, surface: string): string {
   const accentChannels = rgbChannels(accent);
   const surfaceChannels = rgbChannels(surface);
+
   if (
     !accentChannels ||
     !surfaceChannels ||
@@ -182,18 +214,23 @@ function readableMessageAccent(accent: string, surface: string): string {
 
   const black = [0, 0, 0] as const;
   const white = [255, 255, 255] as const;
+
   const target =
     contrastRatio(black, surfaceChannels) >= contrastRatio(white, surfaceChannels) ? black : white;
+
   let readable: readonly [number, number, number] = target;
   let lowerAmount = 0;
   let upperAmount = 1;
+
   for (let index = 0; index < 12; index += 1) {
     const amount = (lowerAmount + upperAmount) / 2;
+
     const candidate: readonly [number, number, number] = [
       Math.round(accentChannels[0] + (target[0] - accentChannels[0]) * amount),
       Math.round(accentChannels[1] + (target[1] - accentChannels[1]) * amount),
       Math.round(accentChannels[2] + (target[2] - accentChannels[2]) * amount),
     ];
+
     if (contrastRatio(candidate, surfaceChannels) >= 4.5) {
       readable = candidate;
       upperAmount = amount;
@@ -201,15 +238,19 @@ function readableMessageAccent(accent: string, surface: string): string {
       lowerAmount = amount;
     }
   }
+
   return `#${readable.map((channel) => channel.toString(16).padStart(2, "0")).join("")}`;
 }
 
 export function themeColorWithAlpha(color: string, alpha: number): string {
   const hex = /^#([\da-f]{2})([\da-f]{2})([\da-f]{2})$/i.exec(color);
+
   if (hex) {
     return `rgba(${Number.parseInt(hex[1], 16)}, ${Number.parseInt(hex[2], 16)}, ${Number.parseInt(hex[3], 16)}, ${alpha})`;
   }
+
   const rgb = /^rgba?\(\s*([\d.]+)\s*,\s*([\d.]+)\s*,\s*([\d.]+)/.exec(color);
+
   return rgb ? `rgba(${rgb[1]}, ${rgb[2]}, ${rgb[3]}, ${alpha})` : color;
 }
 
@@ -218,6 +259,7 @@ export function createMobileThemeVariables(
   appearance: MobileThemeAppearance,
 ): MobileThemeVariables {
   const c = nativeColors(colors);
+
   return {
     "--color-screen": c.canvas,
     "--color-sheet": withAlpha(c.chrome, 0.98),
@@ -225,6 +267,10 @@ export function createMobileThemeVariables(
     "--color-card": c.surfaceRaised,
     "--color-card-alt": c.surface,
     "--color-card-translucent": withAlpha(c.surfaceRaised, 0.8),
+    "--color-channel-heading": c.text,
+    "--color-channel-detail": c.textMuted,
+    "--color-work-fold-separator": c.border,
+    "--color-dictation-send-icon": c.accentForeground,
     "--color-foreground": c.text,
     "--color-foreground-secondary": c.textMuted,
     "--color-foreground-muted": c.mutedForeground,
@@ -297,13 +343,17 @@ export function getMobileThemeVariables(
 ): MobileThemeVariables {
   const baseVariables = (() => {
     if (themeId === DEFAULT_MOBILE_THEME_ID) return DEFAULT_MOBILE_THEME_VARIABLES[appearance];
+
     const theme =
       BUILT_IN_THEMES.find((candidate) => candidate.id === themeId) ?? BUILT_IN_THEMES[0];
+
     const colors = getThemeColorsForAppearance(theme, appearance) ?? theme.colors;
+
     return createMobileThemeVariables(colors, appearance);
   })();
 
   // The complete base record guarantees that optional overrides cannot leave a token undefined.
+  // SAFETY: Overrides are palette strings; the full base record supplies every theme variable.
   return overrides ? ({ ...baseVariables, ...overrides } as MobileThemeVariables) : baseVariables;
 }
 
@@ -314,6 +364,7 @@ export function getMobileThemePreviewColors(
   if (themeId === DEFAULT_MOBILE_THEME_ID) return STANDARD_THEME_PREVIEW_COLORS[appearance];
   const theme = BUILT_IN_THEMES.find((candidate) => candidate.id === themeId) ?? BUILT_IN_THEMES[0];
   const colors = getThemeColorsForAppearance(theme, appearance) ?? theme.colors;
+
   return {
     canvas: themeColorToNativeColor(colors.canvas),
     accent: themeColorToNativeColor(colors.accent),

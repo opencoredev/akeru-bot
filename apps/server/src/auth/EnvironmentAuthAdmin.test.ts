@@ -17,6 +17,7 @@ const makeServerConfigLayer = (
     ServerConfig.ServerConfig,
     Effect.gen(function* () {
       const config = yield* ServerConfig.ServerConfig;
+
       return {
         ...config,
         ...overrides,
@@ -50,6 +51,7 @@ it.layer(NodeServices.layer)("EnvironmentAuth administrative operations", (it) =
         subject: "one-time-token",
         label: "CI phone",
       });
+
       const listedBeforeRevoke = yield* environmentAuth.listPairingLinks();
       const revoked = yield* environmentAuth.revokePairingLink(created.id);
       const listedAfterRevoke = yield* environmentAuth.listPairingLinks();
@@ -73,6 +75,7 @@ it.layer(NodeServices.layer)("EnvironmentAuth administrative operations", (it) =
       const issued = yield* environmentAuth.issueSession({
         label: "deploy-bot",
       });
+
       const verified = yield* sessionCredentials.verify(issued.token);
       const listedBeforeRevoke = yield* environmentAuth.listSessions();
       const revoked = yield* environmentAuth.revokeSession(issued.sessionId);
@@ -111,6 +114,7 @@ it.layer(NodeServices.layer)("EnvironmentAuth administrative operations", (it) =
       const issued = yield* environmentAuth.issueSession({
         label: "remote-ipad",
       });
+
       const beforeConnect = yield* environmentAuth.listSessions();
       yield* sessionCredentials.markConnected(issued.sessionId);
       const afterConnect = yield* environmentAuth.listSessions();

@@ -1,4 +1,4 @@
-// @effect-diagnostics nodeBuiltinImport:off - the parser tests need real symlinks and tmpdirs.
+import type * as Schema from "effect/Schema";
 import * as NodeFS from "node:fs";
 import * as NodeOS from "node:os";
 import * as NodePath from "node:path";
@@ -166,7 +166,7 @@ it("ignores custom models that shadow a preferred slug", () => {
 });
 
 describe("parseCodexSkillsListResponse", () => {
-  const makeSkill = (overrides: Record<string, unknown>) => ({
+  const makeSkill = (overrides: Schema.JsonObject) => ({
     name: "skill",
     path: "/repo/.agents/skills/skill/SKILL.md",
     description: "Skill description.",
@@ -250,6 +250,7 @@ describe("parseCodexSkillsListResponse", () => {
   it.effect("maps the small icon, falls back to the large icon, and omits absent icons", () =>
     Effect.gen(function* () {
       const tempDir = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "codex-skills-icons-"));
+
       const response = makeResponse([
         {
           cwd: tempDir,

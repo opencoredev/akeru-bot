@@ -1,4 +1,3 @@
-// @effect-diagnostics nodeBuiltinImport:off
 import * as NodeFS from "node:fs";
 import * as NodeOS from "node:os";
 import * as NodePath from "node:path";
@@ -33,13 +32,17 @@ const subscriptionStatus = (
 });
 
 const directories: string[] = [];
+
 async function fixture() {
   const secretsDir = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "akeru-runtime-auth-"));
   directories.push(secretsDir);
+
   return { secretsDir, auth: await testSubscriptionAuthServiceForSecretsDir(secretsDir) };
 }
+
 const runtimeEnvironment = (...args: Parameters<typeof subscriptionRuntimeEnvironment>) =>
   runWithNodeServices(subscriptionRuntimeEnvironment(...args));
+
 afterEach(() => {
   for (const directory of directories.splice(0))
     NodeFS.rmSync(directory, { recursive: true, force: true });
@@ -104,12 +107,14 @@ describe("subscription runtime credentials", () => {
       const { secretsDir, auth } = await fixture();
       const login = await auth.startLogin(provider, { authMode: "api-key" });
       await auth.completeLogin(login.loginId, "provider-wide-key");
+
       const environment = {
         ...mergeSubscriptionInstanceEnvironment([{ name, value, sensitive: true }], {
           [name]: value,
           KEEP: "value",
         }),
       };
+
       expect(await runtimeEnvironment(secretsDir, provider, environment)).toBe(environment);
       expect(environment[name]).toBe(value);
       expect(JSON.stringify(environment)).not.toContain("provider-wide-key");
@@ -120,13 +125,16 @@ describe("subscription runtime credentials", () => {
     const { secretsDir, auth } = await fixture();
     const login = await auth.startLogin("anthropic", { authMode: "api-key" });
     await auth.completeLogin(login.loginId, "provider-wide-key");
+
     const merged = mergeSubscriptionInstanceEnvironment(undefined, {
       CLAUDE_CODE_OAUTH_TOKEN: "native-oauth",
     });
+
     const environment = withExplicitEnvironmentKeys(
       { ...merged, CLAUDE_CONFIG_DIR: "/instance/claude" },
       ["CLAUDE_CONFIG_DIR"],
     );
+
     expect(await runtimeEnvironment(secretsDir, "anthropic", environment)).toBe(environment);
     expect(environment.CLAUDE_CODE_OAUTH_TOKEN).toBe("native-oauth");
     expect(environment.ANTHROPIC_API_KEY).toBeUndefined();
@@ -136,12 +144,14 @@ describe("subscription runtime credentials", () => {
     const { secretsDir, auth } = await fixture();
     const login = await auth.startLogin("xai", { authMode: "api-key" });
     await auth.completeLogin(login.loginId, "provider-wide-key");
+
     const environment = {
       ...mergeSubscriptionInstanceEnvironment(
         [{ name: "KEEP", value: "instance-value", sensitive: false }],
         { XAI_API_KEY: "inherited-key", KEEP: "inherited-value" },
       ),
     };
+
     expect(await runtimeEnvironment(secretsDir, "xai", environment)).toEqual({
       XAI_API_KEY: "provider-wide-key",
       KEEP: "instance-value",
@@ -152,10 +162,12 @@ describe("subscription runtime credentials", () => {
     const { secretsDir, auth } = await fixture();
     const personal = await auth.startLogin("xai", { authMode: "api-key" });
     await auth.completeLogin(personal.loginId, "personal-key");
+
     const work = await auth.startLogin("xai", {
       authMode: "api-key",
       instanceId: ProviderInstanceId.make("grok_work"),
     });
+
     await auth.completeLogin(work.loginId, "work-key");
     expect((await runtimeEnvironment(secretsDir, "xai", {}, "grok_work")).XAI_API_KEY).toBe(
       "work-key",
@@ -177,6 +189,7 @@ describe("subscription runtime credentials", () => {
     const { secretsDir, auth } = await fixture();
     const login = await auth.startLogin("opencode-go", { authMode: "api-key" });
     await auth.completeLogin(login.loginId, "provider-wide-key");
+
     const content = JSON.stringify({
       provider: {
         "opencode-go": {
@@ -184,13 +197,16 @@ describe("subscription runtime credentials", () => {
         },
       },
     });
+
     const baseEnv = { OPENCODE_CONFIG_CONTENT: content };
+
     const explicit = {
       ...mergeSubscriptionInstanceEnvironment(
         [{ name: "OPENCODE_CONFIG_CONTENT", value: content, sensitive: true }],
         baseEnv,
       ),
     };
+
     expect(await runtimeEnvironment(secretsDir, "opencode-go", explicit)).toBe(explicit);
     const inherited = { ...mergeSubscriptionInstanceEnvironment(undefined, baseEnv) };
     const result = await runtimeEnvironment(secretsDir, "opencode-go", inherited);
@@ -209,18 +225,21 @@ describe("subscription runtime credentials", () => {
     const { secretsDir, auth } = await fixture();
     const login = await auth.startLogin("anthropic", { authMode: "api-key", baseUrl });
     await auth.completeLogin(login.loginId, "claude-key");
+
     const environment = await runtimeEnvironment(
       secretsDir,
       "anthropic",
       mergeSubscriptionInstanceEnvironment(undefined, {}),
     );
+
     expect(environment.ANTHROPIC_BASE_URL).toBe(root);
     const request = vi.fn().mockResolvedValue(new Response("{}"));
     vi.stubGlobal("fetch", request);
+
     try {
       await auth.testHealth("anthropic");
       expect(request).toHaveBeenCalledWith(
-        `${environment.ANTHROPIC_BASE_URL}/v1/models`,
+        new URL(`${environment.ANTHROPIC_BASE_URL}/v1/models`),
         expect.any(Object),
       );
     } finally {
@@ -229,6 +248,7 @@ describe("subscription runtime credentials", () => {
   });
   it("reads Claude keys at process start and leaves the original environment unchanged", async () => {
     const { secretsDir, auth } = await fixture();
+
     const environment = {
       ...mergeSubscriptionInstanceEnvironment(undefined, {
         CLAUDE_CODE_OAUTH_TOKEN: "native-oauth",
@@ -236,11 +256,14 @@ describe("subscription runtime credentials", () => {
         KEEP: "value",
       }),
     };
+
     expect(await runtimeEnvironment(secretsDir, "anthropic", environment)).toBe(environment);
+
     const login = await auth.startLogin("anthropic", {
       authMode: "api-key",
       baseUrl: "https://proxy.example/v1",
     });
+
     await auth.completeLogin(login.loginId, "new-key");
     expect(await runtimeEnvironment(secretsDir, "anthropic", environment)).toEqual({
       KEEP: "value",
@@ -264,17 +287,21 @@ describe("subscription runtime credentials", () => {
 
   it("merges OpenCode Go credentials without deleting other OpenCode providers or options", async () => {
     const { secretsDir, auth } = await fixture();
+
     const login = await auth.startLogin("opencode-go", {
       authMode: "api-key",
       baseUrl: "https://proxy.example/v1",
     });
+
     await auth.completeLogin(login.loginId, "go-key");
+
     const result = await runtimeEnvironment(secretsDir, "opencode-go", {
       OPENCODE_CONFIG_CONTENT: JSON.stringify({
         theme: "dark",
         provider: { other: { name: "Other" }, "opencode-go": { options: { timeout: 1000 } } },
       }),
     });
+
     expect(JSON.parse(result.OPENCODE_CONFIG_CONTENT!)).toEqual({
       theme: "dark",
       provider: {
@@ -291,11 +318,13 @@ describe("subscription runtime credentials", () => {
       method: "POST",
       body: "request-body",
     });
+
     const rewritten = subscriptionRequestUrl(
       request,
       "https://api.example/v1",
       "http://localhost:8000/api",
     );
+
     expect(rewritten).toBeInstanceOf(Request);
     expect((rewritten as Request).url).toBe("http://localhost:8000/api/messages?beta=true");
     expect(await (rewritten as Request).text()).toBe("request-body");

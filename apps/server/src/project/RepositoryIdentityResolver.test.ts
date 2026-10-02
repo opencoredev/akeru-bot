@@ -12,11 +12,13 @@ import * as ProcessRunner from "../processRunner.ts";
 import * as RepositoryIdentityResolver from "./RepositoryIdentityResolver.ts";
 
 const normalizePathSeparators = (value: string) => value.replaceAll("\\", "/");
+
 const normalizeResolvedPath = (value: string) => normalizePathSeparators(value);
 
 const git = (cwd: string, args: ReadonlyArray<string>) =>
   Effect.gen(function* () {
     const processRunner = yield* ProcessRunner.ProcessRunner;
+
     return yield* processRunner.run({
       command: "git",
       args: ["-C", cwd, ...args],
@@ -38,10 +40,12 @@ const makeRepositoryIdentityResolverTestLayer = (options: {
 it.layer(NodeServices.layer)("RepositoryIdentityResolverLive", (it) => {
   it.effect("reuses the cached Git root for repeated workspace lookups", () => {
     const calls: Array<ReadonlyArray<string>> = [];
+
     const processRunner = Layer.succeed(ProcessRunner.ProcessRunner, {
       run: (input) =>
         Effect.sync(() => {
           calls.push(input.args);
+
           return {
             stdout: input.args.includes("rev-parse")
               ? "/repo\n"
@@ -56,6 +60,7 @@ it.layer(NodeServices.layer)("RepositoryIdentityResolverLive", (it) => {
           };
         }),
     });
+
     const resolverLayer = Layer.effect(
       RepositoryIdentityResolver.RepositoryIdentityResolver,
       RepositoryIdentityResolver.make(),
@@ -78,12 +83,14 @@ it.layer(NodeServices.layer)("RepositoryIdentityResolverLive", (it) => {
   it.effect("retries Git root discovery after a failed lookup", () => {
     const calls: Array<ReadonlyArray<string>> = [];
     let rootAttempts = 0;
+
     const processRunner = Layer.succeed(ProcessRunner.ProcessRunner, {
       run: (input) =>
         Effect.sync(() => {
           calls.push(input.args);
           const rootLookup = input.args.includes("rev-parse");
           const failed = rootLookup && rootAttempts++ === 0;
+
           return {
             stdout: rootLookup
               ? failed
@@ -100,6 +107,7 @@ it.layer(NodeServices.layer)("RepositoryIdentityResolverLive", (it) => {
           };
         }),
     });
+
     const resolverLayer = Layer.effect(
       RepositoryIdentityResolver.RepositoryIdentityResolver,
       RepositoryIdentityResolver.make(),
@@ -122,6 +130,7 @@ it.layer(NodeServices.layer)("RepositoryIdentityResolverLive", (it) => {
   it.effect("normalizes equivalent GitHub remotes into a stable repository identity", () =>
     Effect.gen(function* () {
       const fileSystem = yield* FileSystem.FileSystem;
+
       const cwd = yield* fileSystem.makeTempDirectoryScoped({
         prefix: "t3-repository-identity-test-",
       });
@@ -131,8 +140,10 @@ it.layer(NodeServices.layer)("RepositoryIdentityResolverLive", (it) => {
 
       const resolver = yield* RepositoryIdentityResolver.RepositoryIdentityResolver;
       const identity = yield* resolver.resolve(cwd);
+
       const resolvedIdentityRoot =
         identity?.rootPath === undefined ? "" : yield* fileSystem.realPath(identity.rootPath);
+
       const resolvedCwd = yield* fileSystem.realPath(cwd);
 
       expect(identity).not.toBeNull();
@@ -149,9 +160,11 @@ it.layer(NodeServices.layer)("RepositoryIdentityResolverLive", (it) => {
     Effect.gen(function* () {
       const fileSystem = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
+
       const repoRoot = yield* fileSystem.makeTempDirectoryScoped({
         prefix: "t3-repository-identity-nested-root-test-",
       });
+
       const nestedWorkspace = path.join(repoRoot, "packages", "web");
 
       yield* fileSystem.makeDirectory(nestedWorkspace, { recursive: true });
@@ -160,8 +173,10 @@ it.layer(NodeServices.layer)("RepositoryIdentityResolverLive", (it) => {
 
       const resolver = yield* RepositoryIdentityResolver.RepositoryIdentityResolver;
       const identity = yield* resolver.resolve(nestedWorkspace);
+
       const resolvedIdentityRoot =
         identity?.rootPath === undefined ? "" : yield* fileSystem.realPath(identity.rootPath);
+
       const resolvedRepoRoot = yield* fileSystem.realPath(repoRoot);
 
       expect(identity).not.toBeNull();
@@ -175,9 +190,11 @@ it.layer(NodeServices.layer)("RepositoryIdentityResolverLive", (it) => {
   it.effect("returns null for non-git folders and repos without remotes", () =>
     Effect.gen(function* () {
       const fileSystem = yield* FileSystem.FileSystem;
+
       const nonGitDir = yield* fileSystem.makeTempDirectoryScoped({
         prefix: "t3-repository-identity-non-git-",
       });
+
       const gitDir = yield* fileSystem.makeTempDirectoryScoped({
         prefix: "t3-repository-identity-no-remote-",
       });
@@ -196,6 +213,7 @@ it.layer(NodeServices.layer)("RepositoryIdentityResolverLive", (it) => {
   it.effect("prefers origin over upstream when both remotes are configured", () =>
     Effect.gen(function* () {
       const fileSystem = yield* FileSystem.FileSystem;
+
       const cwd = yield* fileSystem.makeTempDirectoryScoped({
         prefix: "t3-repository-identity-upstream-test-",
       });
@@ -217,6 +235,7 @@ it.layer(NodeServices.layer)("RepositoryIdentityResolverLive", (it) => {
   it.effect("uses upstream when origin is missing", () =>
     Effect.gen(function* () {
       const fileSystem = yield* FileSystem.FileSystem;
+
       const cwd = yield* fileSystem.makeTempDirectoryScoped({
         prefix: "t3-repository-identity-upstream-only-test-",
       });
@@ -237,6 +256,7 @@ it.layer(NodeServices.layer)("RepositoryIdentityResolverLive", (it) => {
   it.effect("uses the last remote path segment as the repository name for nested groups", () =>
     Effect.gen(function* () {
       const fileSystem = yield* FileSystem.FileSystem;
+
       const cwd = yield* fileSystem.makeTempDirectoryScoped({
         prefix: "t3-repository-identity-nested-group-test-",
       });
@@ -260,6 +280,7 @@ it.layer(NodeServices.layer)("RepositoryIdentityResolverLive", (it) => {
     () =>
       Effect.gen(function* () {
         const fileSystem = yield* FileSystem.FileSystem;
+
         const cwd = yield* fileSystem.makeTempDirectoryScoped({
           prefix: "t3-repository-identity-late-remote-test-",
         });
@@ -299,6 +320,7 @@ it.layer(NodeServices.layer)("RepositoryIdentityResolverLive", (it) => {
   it.effect("refreshes cached identities after the positive TTL when a remote changes", () =>
     Effect.gen(function* () {
       const fileSystem = yield* FileSystem.FileSystem;
+
       const cwd = yield* fileSystem.makeTempDirectoryScoped({
         prefix: "t3-repository-identity-remote-change-test-",
       });

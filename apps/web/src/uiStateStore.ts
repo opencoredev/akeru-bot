@@ -1,11 +1,18 @@
+import * as Schema from "effect/Schema";
+import * as Option from "effect/Option";
+import { storedField } from "./lib/persistedSchema";
+import * as Predicate from "effect/Predicate";
 import { Debouncer } from "@tanstack/react-pacer";
 import { create } from "zustand";
 import { normalizeProjectPathForComparison } from "./lib/projectPaths";
 
 export const PERSISTED_STATE_KEY = "akeru:ui-state:v1";
+
 // Pre-rebrand key, checked before the older `renderer-state` lineage.
 const REBRAND_LEGACY_STATE_KEY = "t3code:ui-state:v1";
+
 const THREAD_CHANGED_FILES_EXPANSION_VERSION = 1;
+
 const LEGACY_PERSISTED_STATE_KEYS = [
   "t3code:renderer-state:v8",
   "t3code:renderer-state:v7",
@@ -56,69 +63,101 @@ const initialState: UiState = {
 };
 
 const LEGACY_PROJECT_CWD_PREFERENCE_PREFIX = "legacy-project-cwd:";
+
 const LEGACY_PROJECT_EXPANSION_DEFAULT_KEY = "legacy-project-expansion-default";
+
 let legacyKeysCleanedUp = false;
 
 export function legacyProjectCwdPreferenceKey(cwd: string): string {
   return `${LEGACY_PROJECT_CWD_PREFERENCE_PREFIX}${normalizeProjectPathForComparison(cwd)}`;
 }
 
-function sanitizeStringArray(value: unknown): string[] {
+function sanitizeStringArray(value: Schema.Json | undefined): string[] {
   if (!Array.isArray(value)) {
     return [];
   }
+
   return [
     ...new Set(
-      value.filter((entry): entry is string => typeof entry === "string" && entry.length > 0),
+      value.filter((entry): entry is string => Predicate.isString(entry) && entry.length > 0),
     ),
   ];
 }
 
-function sanitizeBooleanRecord(value: unknown): Record<string, boolean> {
-  if (!value || typeof value !== "object") {
+function sanitizeBooleanRecord(value: Schema.Json | undefined): Record<string, boolean> {
+  if (!Predicate.isObjectOrArray(value)) {
     return {};
   }
+
   return Object.fromEntries(
     Object.entries(value).filter(
-      (entry): entry is [string, boolean] => entry[0].length > 0 && typeof entry[1] === "boolean",
+      (entry): entry is [string, boolean] => entry[0].length > 0 && Predicate.isBoolean(entry[1]),
     ),
   );
 }
 
-function sanitizeTimestampRecord(value: unknown): Record<string, string> {
-  if (!value || typeof value !== "object") {
+function sanitizeTimestampRecord(value: Schema.Json | undefined): Record<string, string> {
+  if (!Predicate.isObjectOrArray(value)) {
     return {};
   }
+
   return Object.fromEntries(
     Object.entries(value).filter(
       (entry): entry is [string, string] =>
         entry[0].length > 0 &&
-        typeof entry[1] === "string" &&
+        Predicate.isString(entry[1]) &&
         entry[1].length > 0 &&
         Number.isFinite(Date.parse(entry[1])),
     ),
   );
 }
 
-export function parsePersistedState(parsed: PersistedUiState): UiState {
+const persistedUiField = storedField(Schema.Union([Schema.Json, Schema.Undefined]), undefined);
+
+const PersistedUiInput = Schema.Struct({
+  projectExpandedById: persistedUiField,
+  projectOrder: persistedUiField,
+  threadLastVisitedAtById: persistedUiField,
+  collapsedProjectCwds: persistedUiField,
+  expandedProjectCwds: persistedUiField,
+  projectOrderCwds: persistedUiField,
+  defaultAdvertisedEndpointKey: persistedUiField,
+  threadChangedFilesExpansionVersion: persistedUiField,
+  threadChangedFilesExpandedById: persistedUiField,
+});
+
+const decodePersistedUi = Schema.decodeOption(Schema.fromJsonString(PersistedUiInput));
+
+/** Parses the stored UI state JSON, migrating legacy preferences; unreadable input yields the initial state. */
+export function parsePersistedState(raw: string): UiState {
+  const decoded = decodePersistedUi(raw);
+
+  if (Option.isNone(decoded)) return initialState;
+  const parsed = decoded.value;
+
   const projectExpandedById =
     parsed.projectExpandedById === undefined
       ? (() => {
           const migrated: Record<string, boolean> = {};
           const collapsedProjectCwds = sanitizeStringArray(parsed.collapsedProjectCwds);
           const expandedProjectCwds = sanitizeStringArray(parsed.expandedProjectCwds);
+
           for (const cwd of collapsedProjectCwds) {
             migrated[legacyProjectCwdPreferenceKey(cwd)] = false;
           }
+
           for (const cwd of expandedProjectCwds) {
             migrated[legacyProjectCwdPreferenceKey(cwd)] = true;
           }
+
           if (!Array.isArray(parsed.collapsedProjectCwds) && expandedProjectCwds.length > 0) {
             migrated[LEGACY_PROJECT_EXPANSION_DEFAULT_KEY] = false;
           }
+
           return migrated;
         })()
       : sanitizeBooleanRecord(parsed.projectExpandedById);
+
   const projectOrder =
     parsed.projectOrder === undefined
       ? sanitizeStringArray(parsed.projectOrderCwds).map(legacyProjectCwdPreferenceKey)
@@ -133,7 +172,7 @@ export function parsePersistedState(parsed: PersistedUiState): UiState {
         ? sanitizePersistedThreadChangedFilesExpanded(parsed.threadChangedFilesExpandedById)
         : {},
     defaultAdvertisedEndpointKey:
-      typeof parsed.defaultAdvertisedEndpointKey === "string" &&
+      Predicate.isString(parsed.defaultAdvertisedEndpointKey) &&
       parsed.defaultAdvertisedEndpointKey.length > 0
         ? parsed.defaultAdvertisedEndpointKey
         : null,
@@ -144,42 +183,50 @@ function readPersistedState(): UiState {
   if (typeof window === "undefined") {
     return initialState;
   }
+
   try {
     const raw =
       window.localStorage.getItem(PERSISTED_STATE_KEY) ??
       window.localStorage.getItem(REBRAND_LEGACY_STATE_KEY);
+
     if (!raw) {
       for (const legacyKey of LEGACY_PERSISTED_STATE_KEYS) {
         const legacyRaw = window.localStorage.getItem(legacyKey);
+
         if (!legacyRaw) {
           continue;
         }
-        return parsePersistedState(JSON.parse(legacyRaw) as PersistedUiState);
+
+        return parsePersistedState(legacyRaw);
       }
+
       return initialState;
     }
-    return parsePersistedState(JSON.parse(raw) as PersistedUiState);
+
+    return parsePersistedState(raw);
   } catch {
     return initialState;
   }
 }
 
 function sanitizePersistedThreadChangedFilesExpanded(
-  value: PersistedUiState["threadChangedFilesExpandedById"],
-): Record<string, Record<string, boolean>> {
-  if (!value || typeof value !== "object") {
+  value: Schema.Json | undefined,
+): UiThreadState["threadChangedFilesExpandedById"] {
+  if (!Predicate.isObjectOrArray(value)) {
     return {};
   }
 
   const nextState: Record<string, Record<string, boolean>> = {};
+
   for (const [threadId, turns] of Object.entries(value)) {
-    if (!threadId || !turns || typeof turns !== "object") {
+    if (!threadId || !Predicate.isObjectOrArray(turns)) {
       continue;
     }
 
     const nextTurns: Record<string, boolean> = {};
+
     for (const [turnId, expanded] of Object.entries(turns)) {
-      if (turnId && typeof expanded === "boolean") {
+      if (turnId && Predicate.isBoolean(expanded)) {
         nextTurns[turnId] = expanded;
       }
     }
@@ -196,12 +243,14 @@ export function persistState(state: UiState): void {
   if (typeof window === "undefined") {
     return;
   }
+
   try {
     const projectExpandedById = Object.fromEntries(
       Object.entries(state.projectExpandedById).filter(
         ([key]) => key !== LEGACY_PROJECT_EXPANSION_DEFAULT_KEY,
       ),
     );
+
     window.localStorage.setItem(
       PERSISTED_STATE_KEY,
       JSON.stringify({
@@ -213,9 +262,11 @@ export function persistState(state: UiState): void {
         threadChangedFilesExpandedById: state.threadChangedFilesExpandedById,
       } satisfies PersistedUiState),
     );
+
     if (!legacyKeysCleanedUp) {
       legacyKeysCleanedUp = true;
       window.localStorage.removeItem(REBRAND_LEGACY_STATE_KEY);
+
       for (const legacyKey of LEGACY_PERSISTED_STATE_KEYS) {
         window.localStorage.removeItem(legacyKey);
       }
@@ -229,11 +280,14 @@ const debouncedPersistState = new Debouncer(persistState, { wait: 500 });
 
 export function markThreadVisited(state: UiState, threadId: string, visitedAt: string): UiState {
   const visitedAtMs = Date.parse(visitedAt);
+
   if (!Number.isFinite(visitedAtMs)) {
     return state;
   }
+
   const previousVisitedAt = state.threadLastVisitedAtById[threadId];
   const previousVisitedAtMs = previousVisitedAt ? Date.parse(previousVisitedAt) : NaN;
+
   if (
     Number.isFinite(previousVisitedAtMs) &&
     Number.isFinite(visitedAtMs) &&
@@ -241,6 +295,7 @@ export function markThreadVisited(state: UiState, threadId: string, visitedAt: s
   ) {
     return state;
   }
+
   return {
     ...state,
     threadLastVisitedAtById: {
@@ -258,14 +313,19 @@ export function markThreadUnread(
   if (!latestTurnCompletedAt) {
     return state;
   }
+
   const latestTurnCompletedAtMs = Date.parse(latestTurnCompletedAt);
+
   if (Number.isNaN(latestTurnCompletedAtMs)) {
     return state;
   }
+
   const unreadVisitedAt = new Date(latestTurnCompletedAtMs - 1).toISOString();
+
   if (state.threadLastVisitedAtById[threadId] === unreadVisitedAt) {
     return state;
   }
+
   return {
     ...state,
     threadLastVisitedAtById: {
@@ -282,6 +342,7 @@ export function setThreadChangedFilesExpanded(
   expanded: boolean,
 ): UiState {
   const currentThreadState = state.threadChangedFilesExpandedById[threadId] ?? {};
+
   if (currentThreadState[turnId] === expanded) {
     return state;
   }
@@ -300,9 +361,11 @@ export function setThreadChangedFilesExpanded(
 
 export function setDefaultAdvertisedEndpointKey(state: UiState, key: string | null): UiState {
   const nextKey = key && key.length > 0 ? key : null;
+
   if (state.defaultAdvertisedEndpointKey === nextKey) {
     return state;
   }
+
   return {
     ...state,
     defaultAdvertisedEndpointKey: nextKey,
@@ -315,10 +378,12 @@ export function resolveProjectExpanded(
 ): boolean {
   for (const key of preferenceKeys) {
     const expanded = projectExpandedById[key];
+
     if (expanded !== undefined) {
       return expanded;
     }
   }
+
   return projectExpandedById[LEGACY_PROJECT_EXPANSION_DEFAULT_KEY] ?? true;
 }
 
@@ -327,15 +392,19 @@ export function setProjectExpanded(
   projectIds: string | readonly string[],
   expanded: boolean,
 ): UiState {
-  const ids = typeof projectIds === "string" ? [projectIds] : projectIds;
+  const ids = Predicate.isString(projectIds) ? [projectIds] : projectIds;
   const nextEntries = ids.filter((projectId) => state.projectExpandedById[projectId] !== expanded);
+
   if (nextEntries.length === 0) {
     return state;
   }
+
   const projectExpandedById = { ...state.projectExpandedById };
+
   for (const projectId of nextEntries) {
     projectExpandedById[projectId] = expanded;
   }
+
   return {
     ...state,
     projectExpandedById,
@@ -351,13 +420,16 @@ export function reorderProjects(
   if (draggedProjectIds.length === 0) {
     return state;
   }
+
   const draggedSet = new Set(draggedProjectIds);
   const targetSet = new Set(targetProjectIds);
+
   if (draggedProjectIds.every((id) => targetSet.has(id))) {
     return state;
   }
 
   const originalTargetIndex = currentProjectOrder.findIndex((id) => targetSet.has(id));
+
   if (originalTargetIndex < 0) {
     return state;
   }
@@ -366,20 +438,24 @@ export function reorderProjects(
 
   const removed: string[] = [];
   let draggedBeforeTarget = 0;
+
   for (let i = projectOrder.length - 1; i >= 0; i--) {
     if (draggedSet.has(projectOrder[i]!)) {
       removed.unshift(projectOrder.splice(i, 1)[0]!);
+
       if (i < originalTargetIndex) {
         draggedBeforeTarget++;
       }
     }
   }
+
   if (removed.length === 0) {
     return state;
   }
 
   const insertIndex = originalTargetIndex - Math.max(0, draggedBeforeTarget - 1);
   projectOrder.splice(insertIndex, 0, ...removed);
+
   return {
     ...state,
     projectOrder,
@@ -419,7 +495,7 @@ export const useUiStateStore = create<UiStateStore>((set) => ({
 
 useUiStateStore.subscribe((state) => debouncedPersistState.maybeExecute(state));
 
-if (typeof window !== "undefined" && typeof window.addEventListener === "function") {
+if (typeof window !== "undefined" && Predicate.isFunction(window.addEventListener)) {
   window.addEventListener("beforeunload", () => {
     debouncedPersistState.flush();
   });

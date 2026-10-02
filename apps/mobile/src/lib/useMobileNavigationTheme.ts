@@ -14,6 +14,7 @@ export function useMobileNavigationTheme(appearance: MobileThemeAppearance): The
 
   return useMemo(() => {
     const base = appearance === "dark" ? DarkTheme : DefaultTheme;
+
     return {
       ...base,
       colors: { ...base.colors, primary, background, card, text, border, notification },

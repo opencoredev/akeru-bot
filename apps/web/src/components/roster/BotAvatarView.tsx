@@ -70,13 +70,17 @@ function eyeTransform(shape: BotBlobShape, frame: MotionFrame, index: 0 | 1) {
   let x = faceX + (eye.x + frame.gazeX) * face.scale;
   const y = faceY + (eye.y + frame.gazeY) * face.scale;
   let width = frame.eyeWidth * face.scale;
+
   if (frame.spin !== 0) {
     const wrapped = wrapOnBelt(x, 50, BELT_RADIUS, frame.spin);
+
     if (!wrapped) return null;
     x = wrapped.x;
     width *= wrapped.width;
   }
+
   const height = frame.eyeHeight[index] * face.scale;
+
   return `translate(${x.toFixed(2)} ${y.toFixed(2)}) rotate(${eye.rotate}) scale(${width.toFixed(3)} ${height.toFixed(3)})`;
 }
 
@@ -132,6 +136,7 @@ function BlobFigure({
   const d = BODY[shape];
   const eyes = resolveBlobEyes(color);
   const outline = resolveBlobOutline(color);
+
   if (eyes.kind === "ink") {
     return (
       <>
@@ -141,10 +146,12 @@ function BlobFigure({
       </>
     );
   }
+
   return (
     <>
       <mask id={maskId} maskUnits="userSpaceOnUse" x="-10" y="-10" width="120" height="120">
-        <rect x="-10" y="-10" width="120" height="120" fill="#fff" />
+        {/* Mask luminance: white keeps the body visible. */}
+        <rect x="-10" y="-10" width="120" height="120" fill="var(--color-white)" />
         <Eyes shape={shape} ink="#000" eyeRefs={eyeRefs} />
       </mask>
       <path d={d} fill={color} mask={`url(#${maskId})`} />
@@ -183,6 +190,7 @@ function BlobAvatar({
   useEffect(() => {
     const wrapper = wrapperRef.current;
     const body = bodyRef.current;
+
     if (!wrapper || !body) return;
     const motion = (motionRef.current = new BotMotion(botAvatarSeed(name)));
     const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
@@ -194,6 +202,7 @@ function BlobAvatar({
     let last = 0;
     // Last values written to the DOM, so settled or repeated poses cost no style work.
     let lastBody = "";
+
     // Switching between ink and cutout eyes replaces the eye nodes, so the cache is per node.
     const lastEyes: Array<{
       node: SVGRectElement | null;
@@ -206,25 +215,32 @@ function BlobAvatar({
 
     const render = (frame: MotionFrame) => {
       const nextBody = bodyTransform(frame);
+
       if (nextBody !== lastBody) {
         body.style.transform = nextBody;
         lastBody = nextBody;
       }
+
       for (const index of [0, 1] as const) {
         const eye = eyeRefs.current[index];
         const written = lastEyes[index];
+
         if (!eye || !written) continue;
+
         if (written.node !== eye) {
           written.node = eye;
           written.transform = null;
           written.visible = null;
         }
+
         const transform = eyeTransform(shape, frame, index);
         const visible = transform !== null;
+
         if (visible !== written.visible) {
           eye.setAttribute("visibility", visible ? "visible" : "hidden");
           written.visible = visible;
         }
+
         if (transform && transform !== written.transform) {
           eye.setAttribute("transform", transform);
           written.transform = transform;
@@ -243,25 +259,32 @@ function BlobAvatar({
         time - last < WORKING_FRAME_MS
       ) {
         frameId = visible ? requestAnimationFrame(tick) : null;
+
         if (frameId === null) last = 0;
+
         return;
       }
+
       const dt = last === 0 ? 1 / 60 : (time - last) / 1000;
       last = time;
+
       const { frame, active } = motion.tick(dt, {
         working: workingRef.current,
         hovered,
         pointer,
         reducedMotion: reducedMotion.matches,
       });
+
       render(frame);
       frameId = active && visible ? requestAnimationFrame(tick) : null;
+
       if (frameId === null) last = 0;
     };
 
     const wake = () => {
       if (frameId === null && visible) frameId = requestAnimationFrame(tick);
     };
+
     wakeRef.current = wake;
 
     const onEnter = (event: PointerEvent) => {
@@ -269,6 +292,7 @@ function BlobAvatar({
       onMove(event);
       wake();
     };
+
     const onMove = (event: PointerEvent) => {
       const rect = wrapper.getBoundingClientRect();
       const clamp = (value: number) => Math.max(-0.6, Math.min(0.6, value)) / 0.6;
@@ -277,11 +301,13 @@ function BlobAvatar({
         y: clamp((event.clientY - (rect.top + rect.height / 2)) / Math.max(rect.height, 1)),
       };
     };
+
     const onLeave = () => {
       hovered = false;
       pointer = null;
       wake();
     };
+
     reducedMotion.addEventListener("change", wake);
     hoverTarget.addEventListener("pointerenter", onEnter);
     hoverTarget.addEventListener("pointermove", onMove);
@@ -289,8 +315,10 @@ function BlobAvatar({
 
     const observer = new IntersectionObserver(([entry]) => {
       visible = entry?.isIntersecting ?? true;
+
       if (visible) wake();
     });
+
     observer.observe(wrapper);
     wake();
 
@@ -300,8 +328,10 @@ function BlobAvatar({
       hoverTarget.removeEventListener("pointermove", onMove);
       hoverTarget.removeEventListener("pointerleave", onLeave);
       observer.disconnect();
+
       if (frameId !== null) cancelAnimationFrame(frameId);
       wakeRef.current = () => {};
+
       motionRef.current = null;
     };
   }, [name, shape]);
@@ -313,7 +343,9 @@ function BlobAvatar({
 
   useEffect(() => {
     const wrapper = wrapperRef.current;
+
     if (!wrapper || working) return;
+
     return subscribeIdleBeat(wrapper, () => {
       motionRef.current?.beat(IDLE_BEAT_LENGTH_MS);
       wakeRef.current();
@@ -366,5 +398,6 @@ export function BotAvatarView({
   }
 
   const { shape, color } = resolveBlobRendering(avatar);
+
   return <BlobAvatar shape={shape} color={color} name={name} state={state} className={className} />;
 }

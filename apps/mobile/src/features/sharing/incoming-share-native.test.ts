@@ -16,6 +16,7 @@ describe("createIncomingSharePayloadReader", () => {
         code: "ERR_FAILED_TO_RESOLVE_APP_GROUP_ID",
       });
     });
+
     const read = createIncomingSharePayloadReader({ platform: "ios", readPayloads });
 
     expect(read()).toEqual([]);
@@ -34,6 +35,7 @@ describe("createIncomingSharePayloadReader", () => {
 
   it("preserves other native errors", () => {
     const error = new Error("native failure");
+
     const read = createIncomingSharePayloadReader({
       platform: "ios",
       readPayloads: () => {

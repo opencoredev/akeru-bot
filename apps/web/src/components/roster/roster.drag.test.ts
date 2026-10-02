@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 import { closestCenter, type CollisionDetection } from "@dnd-kit/core";
 import {
@@ -21,7 +22,9 @@ import {
 } from "./roster.logic";
 
 const stationary = { x: 0, y: 0, scaleX: 1, scaleY: 1 };
+
 const akeru: RosterItemRef = { kind: "bot", id: "akeru" };
+
 const mori: RosterItemRef = { kind: "bot", id: "mori" };
 
 function modifierArgs() {
@@ -42,6 +45,7 @@ describe("roster drag axis", () => {
 
 function layout(items: readonly RosterListItem[], active: string, over: string, cardHeight = 52) {
   let top = 100;
+
   const rects = items.map((item) => {
     const height =
       item.kind === "entry"
@@ -49,14 +53,18 @@ function layout(items: readonly RosterListItem[], active: string, over: string, 
         : item.marker === "pinned-header" || item.marker === "pinned-divider"
           ? 0
           : item.marker === "unassigned-placeholder" ||
-              (typeof item.marker === "object" && item.marker.kind === "section-placeholder")
+              (Predicate.isObjectOrArray(item.marker) && item.marker.kind === "section-placeholder")
             ? 0
             : 32;
+
     const rect = { top, height, bottom: top + height, left: 0, right: 260, width: 260 };
     top += height + 1;
+
     return rect;
   });
+
   const activeIndex = items.findIndex((item) => rosterListItemId(item) === active);
+
   return {
     activeIndex,
     overIndex: items.findIndex((item) => rosterListItemId(item) === over),
@@ -79,7 +87,9 @@ describe("roster collision detection", () => {
       rosterEntryId(akeru),
       rosterEntryId(mori),
     );
+
     const collisionRect = rects[overIndex]!;
+
     return {
       active: {
         id: rosterEntryId(akeru),
@@ -121,10 +131,12 @@ describe("roster collision detection", () => {
       ],
       unassignedItems: [],
     });
+
     const active = rosterMarkerId({ kind: "section-header", sectionId: "alpha" });
     const over = rosterEntryId(mori);
     const { rects, activeIndex, overIndex } = layout(items, active, over);
     const collisionRect = rects[overIndex]!;
+
     const args = {
       active: {
         id: active,
@@ -143,6 +155,7 @@ describe("roster collision detection", () => {
       })),
       pointerCoordinates: null,
     } satisfies Parameters<CollisionDetection>[0];
+
     const detector = createRosterCollisionDetection(
       (id) => id === rosterMarkerId({ kind: "section-header", sectionId: "beta" }),
       { items },
@@ -158,19 +171,25 @@ describe("roster collision detection", () => {
 describe("roster drag projection", () => {
   it("uses two-dimensional projection when reordering wrapped pinned cards", () => {
     const cedar: RosterItemRef = { kind: "bot", id: "cedar" };
+
     const items = buildRosterListItems({
       pinnedItems: [akeru, mori, cedar],
       sections: [],
       unassignedItems: [],
     });
+
     const args = layout(items, rosterEntryId(akeru), rosterEntryId(mori));
+
     const pinnedIndexes = items.flatMap((item, index) =>
       item.kind === "entry" && item.zone === "pinned" ? [index] : [],
     );
+
     const [first, second, third] = pinnedIndexes;
+
     if (first === undefined || second === undefined || third === undefined) {
       throw new Error("expected three pinned entries");
     }
+
     args.rects[first] = { top: 100, bottom: 172, left: 0, right: 72, width: 72, height: 72 };
     args.rects[second] = { top: 100, bottom: 172, left: 76, right: 148, width: 72, height: 72 };
     args.rects[third] = { top: 176, bottom: 248, left: 0, right: 72, width: 72, height: 72 };
@@ -189,10 +208,12 @@ describe("roster drag projection", () => {
       sections: [],
       unassignedItems: [akeru, mori],
     });
+
     const strategy = createRosterSortingStrategy({
       items,
       boundaryLabelHeight: 16,
     });
+
     const args = layout(items, rosterEntryId(akeru), rosterMarkerId("pinned-header"));
     const header = strategy({ ...args, index: 0 });
     expect(header).toEqual(stationary);
@@ -206,8 +227,10 @@ describe("roster drag projection", () => {
       sections: [],
       unassignedItems: [akeru, mori],
     });
+
     const strategy = createRosterSortingStrategy({ items });
     const args = layout(items, rosterEntryId(akeru), rosterEntryId(mori));
+
     for (let index = 0; index < items.length; index += 1) {
       if (index === args.activeIndex) continue;
       expect(strategy({ ...args, index })).toEqual(verticalListSortingStrategy({ ...args, index }));

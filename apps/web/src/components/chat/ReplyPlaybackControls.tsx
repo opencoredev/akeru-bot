@@ -1,3 +1,4 @@
+import { Match } from "effect";
 import { useSyncExternalStore } from "react";
 import { PauseIcon, PlayIcon, SquareIcon, Volume2Icon } from "lucide-react";
 import {
@@ -23,31 +24,33 @@ export function ReplyPlaybackControls({
   disclosure,
 }: ReplyPlaybackControlsProps) {
   const { t } = useI18n();
+
   const snapshot = useSyncExternalStore(
     controller.subscribe,
     controller.getSnapshot,
     controller.getSnapshot,
   );
+
   const state =
     snapshot.status !== "idle" && sameReplyPlaybackIdentity(snapshot.identity, request.identity)
       ? snapshot.status
       : "idle";
-  const label =
-    state === "loading"
-      ? t("Preparing audio")
-      : state === "playing"
-        ? t("Pause readout")
-        : state === "paused"
-          ? t("Resume readout")
-          : state === "error"
-            ? t("Retry readout")
-            : t("Read aloud");
+
+  const label = Match.value(state).pipe(
+    Match.when("loading", () => t("Preparing audio")),
+    Match.when("playing", () => t("Pause readout")),
+    Match.when("paused", () => t("Resume readout")),
+    Match.when("error", () => t("Retry readout")),
+    Match.orElse(() => t("Read aloud")),
+  );
+
   const activate = () => {
     if (state === "playing") controller.pause();
     else if (state === "paused") void controller.resume();
     else if (state === "error") void controller.retry();
     else void controller.start(request);
   };
+
   return (
     <div className="flex min-w-0 flex-wrap items-center gap-1" aria-label={t("Reply playback")}>
       <Button
@@ -59,12 +62,10 @@ export function ReplyPlaybackControls({
         variant="ghost"
         onClick={activate}
       >
-        {state === "playing" ? (
-          <PauseIcon className="size-3.5" />
-        ) : state === "paused" ? (
-          <PlayIcon className="size-3.5" />
-        ) : (
-          <Volume2Icon className="size-3.5" />
+        {Match.value(state).pipe(
+          Match.when("playing", () => <PauseIcon className="size-3.5" />),
+          Match.when("paused", () => <PlayIcon className="size-3.5" />),
+          Match.orElse(() => <Volume2Icon className="size-3.5" />),
         )}
         {label}
       </Button>

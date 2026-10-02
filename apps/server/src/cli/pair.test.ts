@@ -1,4 +1,4 @@
-// @effect-diagnostics nodeBuiltinImport:off - CLI integration exercises Node HTTP and filesystem boundaries.
+import * as Predicate from "effect/Predicate";
 import * as NodeHttp from "node:http";
 import * as NodeFS from "node:fs";
 import * as NodeOS from "node:os";
@@ -23,7 +23,7 @@ import * as ServerConfig from "../config.ts";
 import * as ServerEnvironment from "../environment/ServerEnvironment.ts";
 import { SqlitePersistenceMemory } from "../persistence/Layers/Sqlite.ts";
 import {
-  makePersistedServerRuntimeState,
+  persistedServerRuntimeState,
   persistServerRuntimeState,
   type PersistedServerRuntimeState,
 } from "../serverRuntimeState.ts";
@@ -141,8 +141,10 @@ describe("first admin pairing", () => {
             deviceType: "mobile",
           })
           .pipe(Effect.flip);
+
         expect(refused._tag).toBe("ServerAuthInvalidCredentialError");
       }
+
       // Standard links for adding devices stay valid.
       yield* environmentAuth.exchangeBootstrapCredentialForAccessToken(
         standard.credential,
@@ -193,9 +195,11 @@ const runCliCaptured = (args: ReadonlyArray<string>) =>
   provideCliTestLayers(
     Effect.gen(function* () {
       const exit = yield* Effect.exit(runCli(args));
-      const errorLines = (yield* TestConsole.errorLines).filter(
-        (line): line is string => typeof line === "string",
+
+      const errorLines = (yield* TestConsole.errorLines).filter((line): line is string =>
+        Predicate.isString(line),
       );
+
       return { exit, errorLines };
     }),
   );
@@ -210,9 +214,10 @@ const captureStdout = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
   provideCliTestLayers(
     Effect.gen(function* () {
       yield* effect;
+
       return (
-        (yield* TestConsole.logLines).findLast(
-          (line): line is string => typeof line === "string",
+        (yield* TestConsole.logLines).findLast((line): line is string =>
+          Predicate.isString(line),
         ) ?? ""
       );
     }),
@@ -233,18 +238,23 @@ const withDescriptorServer = <A, E, R>(run: (origin: string) => Effect.Effect<A,
         if (request.url === "/.well-known/t3/environment") {
           response.writeHead(200, { "content-type": "application/json" });
           response.end(JSON.stringify(testDescriptor));
+
           return;
         }
+
         response.writeHead(404);
         response.end();
       });
+
       server.listen(0, "127.0.0.1", () => resume(Effect.succeed(server)));
     }),
     (server) => {
       const address = server.address();
-      if (address === null || typeof address === "string") {
+
+      if (address === null || Predicate.isString(address)) {
         return Effect.die(new Error("Expected a TCP address"));
       }
+
       return run(`http://127.0.0.1:${String(address.port)}`);
     },
     (server) => Effect.sync(() => server.close()),
@@ -259,7 +269,7 @@ describe("akeru pair", () => {
         const statePath = NodePath.join(baseDir, "userdata", "server-runtime.json");
         yield* persistServerRuntimeState({
           path: statePath,
-          state: yield* makePersistedServerRuntimeState({
+          state: yield* persistedServerRuntimeState({
             config: { host: "127.0.0.1", devUrl: undefined },
             port,
           }),
@@ -282,7 +292,7 @@ describe("akeru pair", () => {
         const listed = yield* captureStdout(
           runCli(["auth", "pairing", "list", "--base-dir", baseDir, "--json"]),
         );
-        // @effect-diagnostics-next-line preferSchemaOverJson:off - CLI JSON output is decoded as a presentation DTO.
+
         const credentials = JSON.parse(listed) as ReadonlyArray<{ readonly label?: string }>;
         assert.equal(credentials.length, 1);
         assert.equal(credentials[0]?.label, "akeru pair");
@@ -296,7 +306,7 @@ describe("akeru pair", () => {
         const baseDir = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "t3-pair-qr-test-"));
         yield* persistServerRuntimeState({
           path: NodePath.join(baseDir, "userdata", "server-runtime.json"),
-          state: yield* makePersistedServerRuntimeState({
+          state: yield* persistedServerRuntimeState({
             config: { host: "127.0.0.1", devUrl: undefined },
             port: Number(new URL(origin).port),
           }),
@@ -306,14 +316,17 @@ describe("akeru pair", () => {
         const onTerminal = yield* captureStdout(runCli(["pair", "--base-dir", baseDir])).pipe(
           Effect.provideService(PairStdoutIsTerminal, true),
         );
+
         const optedOut = yield* captureStdout(
           runCli(["pair", "--base-dir", baseDir, "--no-qr"]),
         ).pipe(Effect.provideService(PairStdoutIsTerminal, true));
+
         const piped = yield* captureStdout(runCli(["pair", "--base-dir", baseDir])).pipe(
           Effect.provideService(PairStdoutIsTerminal, false),
         );
 
         assert.isTrue(hasQrCode(onTerminal));
+
         for (const output of [optedOut, piped]) {
           assert.isFalse(hasQrCode(output));
           // The full URL with its token is always printed, QR code or not.
@@ -329,7 +342,7 @@ describe("akeru pair", () => {
         const baseDir = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "t3-pair-public-test-"));
         yield* persistServerRuntimeState({
           path: NodePath.join(baseDir, "userdata", "server-runtime.json"),
-          state: yield* makePersistedServerRuntimeState({
+          state: yield* persistedServerRuntimeState({
             config: { host: "127.0.0.1", devUrl: undefined },
             port: Number(new URL(origin).port),
           }),
@@ -348,6 +361,7 @@ describe("akeru pair", () => {
   it.effect("refuses a non-http --public-url and --public-url with --tailscale", () =>
     Effect.gen(function* () {
       const baseDir = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "t3-pair-public-bad-"));
+
       const badScheme = yield* runCliCaptured([
         "pair",
         "--base-dir",
@@ -355,6 +369,7 @@ describe("akeru pair", () => {
         "--public-url",
         "ftp://example.com",
       ]);
+
       const both = yield* runCliCaptured([
         "pair",
         "--base-dir",
@@ -370,6 +385,7 @@ describe("akeru pair", () => {
         assert.isFalse(Runtime.getErrorReported(Cause.squash(exit.cause)));
         assert.isAbove(errorLines.length, 0);
       }
+
       assert.include(badScheme.errorLines.at(-1) ?? "", "must use http or https");
       assert.include(both.errorLines.at(-1) ?? "", "not both");
     }).pipe(Effect.provide(NodeServices.layer)),
@@ -381,24 +397,26 @@ describe("akeru pair", () => {
         const baseDir = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "t3-pair-admin-cli-"));
         yield* persistServerRuntimeState({
           path: NodePath.join(baseDir, "userdata", "server-runtime.json"),
-          state: yield* makePersistedServerRuntimeState({
+          state: yield* persistedServerRuntimeState({
             config: { host: "127.0.0.1", devUrl: undefined },
             port: Number(new URL(origin).port),
           }),
         });
 
         const output = yield* captureStdout(runCli(["pair", "--base-dir", baseDir, "--admin"]));
+
         const listed = yield* captureStdout(
           runCli(["auth", "pairing", "list", "--base-dir", baseDir, "--json"]),
         );
 
         assert.include(output, "grants admin scope");
         assert.match(output, /Pairing URL: http:\/\/127\.0\.0\.1:\d+\/pair#token=[A-Z2-9]+/);
-        // @effect-diagnostics-next-line preferSchemaOverJson:off - CLI JSON output is decoded as a presentation DTO.
+
         const credentials = JSON.parse(listed) as ReadonlyArray<{
           readonly label?: string;
           readonly scopes: ReadonlyArray<string>;
         }>;
+
         assert.equal(credentials.length, 1);
         assert.equal(credentials[0]?.label, "akeru pair --admin");
         assert.include(credentials[0]?.scopes ?? [], "access:write");
@@ -414,7 +432,7 @@ describe("akeru pair", () => {
         const statePath = NodePath.join(baseDir, "dev", "server-runtime.json");
         yield* persistServerRuntimeState({
           path: statePath,
-          state: yield* makePersistedServerRuntimeState({
+          state: yield* persistedServerRuntimeState({
             config: { host: undefined, devUrl: new URL("http://localhost:5733") },
             port,
           }),
@@ -447,13 +465,15 @@ describe("akeru pair", () => {
       Effect.gen(function* () {
         const baseDir = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "t3-pair-pid-test-"));
         const statePath = NodePath.join(baseDir, "userdata", "server-runtime.json");
+
         // The origin answers (another server reused the port), but the pid
         // that wrote this state file is dead — pairing must not mint a token
         // into the dead server's database.
-        const state = yield* makePersistedServerRuntimeState({
+        const state = yield* persistedServerRuntimeState({
           config: { host: "127.0.0.1", devUrl: undefined },
           port: Number(new URL(origin).port),
         });
+
         yield* persistServerRuntimeState({
           path: statePath,
           // pid 2**22 + 1 exceeds any default Linux/macOS pid range.
@@ -461,6 +481,7 @@ describe("akeru pair", () => {
         });
 
         const { exit, errorLines } = yield* runCliCaptured(["pair", "--base-dir", baseDir]);
+
         if (!Exit.isFailure(exit)) assert.fail("expected the command to fail");
         assert.isFalse(Runtime.getErrorReported(Cause.squash(exit.cause)));
         assert.isAbove(errorLines.length, 0);
@@ -480,7 +501,7 @@ describe("akeru pair", () => {
       // fast with ECONNREFUSED and discovery moves on.
       yield* persistServerRuntimeState({
         path: statePath,
-        state: yield* makePersistedServerRuntimeState({
+        state: yield* persistedServerRuntimeState({
           config: { host: "127.0.0.1", devUrl: undefined },
           port: 1,
         }),
@@ -491,9 +512,11 @@ describe("akeru pair", () => {
       );
 
       assert.isFalse(Runtime.getErrorReported(error));
+
       const rendered = String(
-        typeof error === "object" && error !== null && "cause" in error ? error.cause : error,
+        Predicate.isObjectOrArray(error) && "cause" in error ? error.cause : error,
       );
+
       assert.include(rendered, "No running Akeru Bot server found.");
     }).pipe(Effect.provide(NodeServices.layer)),
   );

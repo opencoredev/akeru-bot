@@ -1,3 +1,4 @@
+import { Match } from "effect";
 import type { ServerProviderSkill } from "@akeru/contracts";
 import { collectComposerInlineTokens } from "@akeru/shared/composerInlineTokens";
 import { AtSignIcon, GlobeIcon, MessageSquareIcon } from "lucide-react";
@@ -32,6 +33,7 @@ export function SentMessageText({
   readonly replySourceMessageId?: string | null;
 }) {
   const reply = parseReplyPrompt(text);
+
   if (!reply) {
     return (
       <p className="whitespace-pre-wrap">
@@ -69,47 +71,65 @@ function MentionText({
   readonly skills: ReadonlyArray<ServerProviderSkill>;
 }) {
   const { t } = useI18n();
+
   const plain = (segment: string, key: number) =>
     skills.length === 0 ? segment : <SkillInlineText key={key} text={segment} skills={skills} />;
+
   const tokens = collectComposerInlineTokens(`${text}\n`).filter(
     (token) =>
       token.type === "browser-mention" ||
       token.type === "thread-mention" ||
       token.type === "bot-mention",
   );
+
   if (tokens.length === 0) return plain(text, 0);
   const nodes: ReactNode[] = [];
   let cursor = 0;
+
   for (const token of tokens) {
     if (token.start > cursor) nodes.push(plain(text.slice(cursor, token.start), -token.start - 1));
     nodes.push(
-      token.type === "browser-mention" ? (
-        <MentionChip key={token.start} source={token.source} label={t("Browser")} icon="browser" />
-      ) : token.type === "bot-mention" ? (
-        <BotMentionChip key={token.start} source={token.source} botId={token.value} />
-      ) : (
-        <ThreadMentionChip key={token.start} source={token.source} threadId={token.value} />
+      Match.value(token).pipe(
+        Match.when({ type: "browser-mention" }, (token) => (
+          <MentionChip
+            key={token.start}
+            source={token.source}
+            label={t("Browser")}
+            icon="browser"
+          />
+        )),
+        Match.when({ type: "bot-mention" }, (token) => (
+          <BotMentionChip key={token.start} source={token.source} botId={token.value} />
+        )),
+        Match.orElse((token) => (
+          <ThreadMentionChip key={token.start} source={token.source} threadId={token.value} />
+        )),
       ),
     );
     cursor = token.end;
   }
+
   if (cursor < text.length) nodes.push(plain(text.slice(cursor), -text.length - 2));
+
   return nodes;
 }
 
 function ThreadMentionChip({ source, threadId }: { source: string; threadId: string }) {
   const { t } = useI18n();
   const shells = useThreadShells();
+
   const title = useMemo(
     () => shells.find((shell) => shell.id === threadId)?.title ?? null,
     [shells, threadId],
   );
+
   return <MentionChip source={source} label={title ?? t("Unknown chat")} icon="thread" />;
 }
 
 function BotMentionChip({ source, botId }: { source: string; botId: string }) {
   const { t } = useI18n();
   const name = useRosterStore((state) => state.bots.find((bot) => bot.id === botId)?.name ?? null);
+
   return <MentionChip source={source} label={name ?? t("Unknown bot")} icon="bot" />;
 }
 
@@ -117,6 +137,7 @@ const MENTION_CHIP_ICONS = { browser: GlobeIcon, thread: MessageSquareIcon, bot:
 
 function MentionChip(props: { source: string; label: string; icon: "browser" | "thread" | "bot" }) {
   const Icon = MENTION_CHIP_ICONS[props.icon];
+
   return (
     <span className="inline-flex align-middle leading-none" data-markdown-copy={props.source}>
       <span className={CHAT_INLINE_CHIP_CLASS_NAME}>

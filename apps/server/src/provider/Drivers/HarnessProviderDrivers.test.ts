@@ -1,4 +1,5 @@
-// @effect-diagnostics nodeBuiltinImport:off preferSchemaOverJson:off
+import { registeredProviderDriver } from "../registeredProviderDriver.ts";
+import * as Predicate from "effect/Predicate";
 import * as NodePath from "node:path";
 import { NodeServices } from "@effect/platform-node";
 import { describe, expect, it } from "@effect/vitest";
@@ -19,7 +20,7 @@ import * as BackgroundPolicy from "../../background/BackgroundPolicy.ts";
 import { ServerConfig } from "../../config.ts";
 import { layerTest as settingsLayer, ServerSettingsService } from "../../serverSettings.ts";
 import { SubscriptionAuthService } from "../../subscription-auth/service.ts";
-import { makeSubscriptionProviderMutation } from "../../subscription-auth/providerMutation.ts";
+import { subscriptionProviderMutation } from "../../subscription-auth/providerMutation.ts";
 import { makeProviderInstanceRegistry } from "../Layers/ProviderInstanceRegistryLive.ts";
 import { deriveProviderInstanceConfigMap } from "../Layers/ProviderInstanceRegistryHydration.ts";
 import { ProviderRegistryLive } from "../Layers/ProviderRegistry.ts";
@@ -33,6 +34,7 @@ import { ClaudeDriver } from "./ClaudeDriver.ts";
 import { GrokDriver } from "./GrokDriver.ts";
 
 const epoch = DateTime.makeUnsafe("1970-01-01T00:00:00.000Z");
+
 const testLayer = Layer.mergeAll(
   ServerConfig.layerTest(process.cwd(), { prefix: "akeru-harness-driver-" }).pipe(
     Layer.provideMerge(NodeServices.layer),
@@ -76,7 +78,7 @@ const testLayer = Layer.mergeAll(
 
 function driverCase<Config, Environment>(driver: ProviderDriver<Config, Environment>) {
   return {
-    rawDriver: driver,
+    rawDriver: registeredProviderDriver(driver),
     driverKind: driver.driverKind,
     create: (input: Omit<ProviderDriverCreateInput<Config>, "config"> & { homePath?: string }) =>
       driver.create({
@@ -118,10 +120,19 @@ for (const name of [
   vi.stubEnv(name, "");
 }
 
-const undefinedValuePaths = (value: unknown, path = "$"): string[] =>
+type SnapshotValue =
+  | undefined
+  | null
+  | string
+  | number
+  | boolean
+  | readonly SnapshotValue[]
+  | { readonly [key: string]: SnapshotValue };
+
+const undefinedValuePaths = (value: SnapshotValue, path = "$"): string[] =>
   value === undefined
     ? [path]
-    : value !== null && typeof value === "object"
+    : Predicate.isObject(value)
       ? Object.entries(value).flatMap(([key, child]) =>
           undefinedValuePaths(child, `${path}.${key}`),
         )
@@ -141,8 +152,10 @@ it.layer(testLayer)("Harness provider drivers without CLIs", (it) => {
             xai: { type: "api-key", access: "test-key" },
           }),
         );
+
         for (const driver of [driverCase(ClaudeDriver), driverCase(GrokDriver)]) {
           const added = driver.driverKind === "claudeAgent" ? "claude-next" : "grok-next";
+
           const manifest = {
             ...ModelManifest.BUNDLED_MODEL_MANIFEST,
             currentModels: {
@@ -150,6 +163,7 @@ it.layer(testLayer)("Harness provider drivers without CLIs", (it) => {
               [driver.driverKind]: [added],
             },
           };
+
           const instance = yield* driver
             .create({
               instanceId: ProviderInstanceId.make(String(driver.driverKind)),
@@ -164,6 +178,7 @@ it.layer(testLayer)("Harness provider drivers without CLIs", (it) => {
                 refreshInBackground: Effect.void,
               }),
             );
+
           const snapshot = yield* instance.snapshot.refresh;
           expect(snapshot.status).toBe("ready");
           expect(snapshot.models).toContainEqual(
@@ -189,6 +204,7 @@ it.layer(testLayer)("Harness provider drivers without CLIs", (it) => {
               const defaultId = ProviderInstanceId.make(String(driver.driverKind));
               yield* Effect.promise(() => auth.logout(provider));
               yield* Effect.promise(() => auth.logout(provider, namedId));
+
               const initial = yield* settings.updateSettings({
                 providerHealthRefreshInterval: Duration.millis(0),
                 providers: {
@@ -206,22 +222,22 @@ it.layer(testLayer)("Harness provider drivers without CLIs", (it) => {
                   },
                 },
               });
+
               const built = yield* makeProviderInstanceRegistry({
                 drivers: [driver.rawDriver],
                 configMap: deriveProviderInstanceConfigMap(initial),
               });
+
               const context = yield* Layer.build(
                 ProviderRegistryLive.pipe(
                   Layer.provide(Layer.succeed(ProviderInstanceRegistry, built.registry)),
                 ),
               );
+
               const registry = Context.get(context, ProviderRegistry);
-              const mutate = makeSubscriptionProviderMutation(
-                auth,
-                settings,
-                built.mutator,
-                registry,
-              );
+
+              const mutate = subscriptionProviderMutation(auth, settings, built.mutator, registry);
+
               for (const instanceId of [namedId, defaultId]) {
                 const receive = (status: "authenticated" | "unauthenticated") =>
                   registry.streamChanges.pipe(
@@ -234,8 +250,10 @@ it.layer(testLayer)("Harness provider drivers without CLIs", (it) => {
                     Stream.runHead,
                     Effect.forkChild({ startImmediately: true }),
                   );
+
                 const connected = yield* receive("authenticated");
                 const deviceLogin = provider === "openai-codex" && instanceId === defaultId;
+
                 if (deviceLogin) {
                   let polls = 0;
                   yield* Effect.acquireRelease(
@@ -244,12 +262,14 @@ it.layer(testLayer)("Harness provider drivers without CLIs", (it) => {
                         "fetch",
                         vi.fn(async (input: string | URL | Request) => {
                           const url = input instanceof Request ? input.url : String(input);
+
                           if (url.endsWith("/deviceauth/usercode"))
                             return Response.json({
                               device_auth_id: "mutation-device",
                               user_code: "TEST-CODE",
                               interval: "5",
                             });
+
                           if (url.endsWith("/deviceauth/token"))
                             return ++polls === 1
                               ? new Response("", { status: 403 })
@@ -257,6 +277,7 @@ it.layer(testLayer)("Harness provider drivers without CLIs", (it) => {
                                   authorization_code: "test-code",
                                   code_verifier: "test-verifier",
                                 });
+
                           if (url.endsWith("/oauth/token"))
                             return Response.json({
                               access_token: "oauth-mutation-key",
@@ -275,12 +296,14 @@ it.layer(testLayer)("Harness provider drivers without CLIs", (it) => {
                     () => Effect.sync(() => vi.unstubAllGlobals()),
                   );
                 }
+
                 const login = yield* Effect.promise(() =>
                   auth.startLogin(provider, {
                     authMode: deviceLogin ? "oauth" : "api-key",
                     ...(instanceId === namedId ? { instanceId } : {}),
                   }),
                 );
+
                 if (deviceLogin) {
                   expect(
                     yield* mutate(Effect.promise(() => auth.pollLogin(login.loginId))),
@@ -291,6 +314,7 @@ it.layer(testLayer)("Harness provider drivers without CLIs", (it) => {
                     )?.auth.status,
                   ).toBe("unauthenticated");
                 }
+
                 const result = yield* mutate(
                   Effect.promise(() =>
                     deviceLogin
@@ -298,6 +322,7 @@ it.layer(testLayer)("Harness provider drivers without CLIs", (it) => {
                       : auth.completeLogin(login.loginId, "mutation-test-key"),
                   ),
                 );
+
                 expect(result.status).toBe("connected");
                 expect(
                   (yield* registry.getProviders).find(
@@ -332,6 +357,7 @@ it.layer(testLayer)("Harness provider drivers without CLIs", (it) => {
             const config = yield* ServerConfig;
             const fs = yield* FileSystem.FileSystem;
             yield* fs.makeDirectory(config.secretsDir, { recursive: true });
+
             const create = () =>
               driver.create({
                 instanceId: ProviderInstanceId.make(String(driver.driverKind)),
@@ -339,6 +365,7 @@ it.layer(testLayer)("Harness provider drivers without CLIs", (it) => {
                 environment: [{ name: "PATH", value: "", sensitive: false }],
                 enabled: true,
               });
+
             const instance = yield* create();
             const before = yield* instance.snapshot.getSnapshot;
             expect(before).toMatchObject({
@@ -378,6 +405,7 @@ it.layer(testLayer)("Harness provider drivers without CLIs", (it) => {
             );
             expect(after.models.some((model) => !model.isCustom && !model.isLegacy)).toBe(true);
             expect(new Set(after.models.map((model) => model.slug)).size).toBe(after.models.length);
+
             if (driver.driverKind === "codex") {
               expect(after.models).toContainEqual(
                 expect.objectContaining({ slug: "gpt-5.4", isCustom: false, isLegacy: true }),
@@ -392,25 +420,30 @@ it.layer(testLayer)("Harness provider drivers without CLIs", (it) => {
                 ]),
               );
             }
+
             if (driver.driverKind === "grok") {
               expect(after.models).toContainEqual(
                 expect.objectContaining({ slug: "grok-build", name: "Grok 4.6", isDefault: true }),
               );
+
               for (const slug of ["grok-4.6", "grok-4.5", "grok-code-fast-1"]) {
                 expect(after.models).toContainEqual(
                   expect.objectContaining({ slug, isCustom: false }),
                 );
               }
             }
+
             if (driver.driverKind === "claudeAgent") {
               expect(after.models).toContainEqual(
                 expect.objectContaining({ slug: "claude-opus-4-6", isLegacy: true }),
               );
             }
+
             const connectedInstance = yield* create();
             expect((yield* connectedInstance.snapshot.getSnapshot).status).toBe("ready");
             expect(connectedInstance.adapter).toBeUndefined();
             expect(connectedInstance.textGeneration).toBeDefined();
+
             if (instance.snapshotForCwd)
               expect((yield* instance.snapshotForCwd(config.cwd)).skills).toEqual([]);
           }),
@@ -428,12 +461,14 @@ it.layer(testLayer)("Harness provider drivers without CLIs", (it) => {
               NodePath.join(config.secretsDir, "subscription-auth.json"),
               JSON.stringify({ [provider]: { type: "api-key", access: "default-test-key" } }),
             );
+
             const instance = yield* driver.create({
               instanceId,
               displayName: "Named account",
               environment: [{ name: "PATH", value: "", sensitive: false }],
               enabled: true,
             });
+
             expect(instance.mastraConnection?.useSavedCredential).toBe(true);
             expect((yield* instance.snapshot.getSnapshot).auth.status).toBe("unauthenticated");
             yield* fs.writeFileString(
@@ -462,6 +497,7 @@ it.layer(testLayer)("Harness provider drivers without CLIs", (it) => {
                 NodePath.join(config.secretsDir, "subscription-auth.json"),
                 JSON.stringify({ [provider]: { type: "api-key", access: "saved-key" } }),
               );
+
               for (const value of ["", "explicit-key"]) {
                 const instance = yield* driver.create({
                   instanceId: ProviderInstanceId.make(`${driver.driverKind}_custom`),
@@ -473,11 +509,13 @@ it.layer(testLayer)("Harness provider drivers without CLIs", (it) => {
                   enabled: true,
                   homePath: "/no/provider/home",
                 });
+
                 const snapshot = yield* instance.snapshot.getSnapshot;
                 expect(instance.mastraConnection?.useSavedCredential).toBe(false);
                 expect(snapshot.installed).toBe(true);
                 expect(snapshot.status).toBe(value ? "ready" : "warning");
                 expect(snapshot.auth.status).toBe(value ? "authenticated" : "unauthenticated");
+
                 if (!value) expect(snapshot.message).toContain("Akeru harness");
               }
             }),

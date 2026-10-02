@@ -45,7 +45,9 @@ export function createMarkdownCodeHighlightAtomFamily(options?: {
             theme: input.theme,
           })
         : Promise.resolve(null));
+
   const idleTtlMs = options?.idleTtlMs ?? MARKDOWN_CODE_HIGHLIGHT_IDLE_TTL_MS;
+
   const family = Atom.family((request: MarkdownCodeHighlightCacheKey) =>
     Atom.make(
       Effect.tryPromise({
@@ -72,6 +74,7 @@ export function useMarkdownCodeHighlight(input: {
   const normalizedLanguage = input.language?.trim() || "text";
   const enabled = input.enabled && Boolean(input.language?.trim());
   const atomLanguage = enabled ? normalizedLanguage : "text";
+
   const highlightAtom = useMemo(
     () =>
       markdownCodeHighlightAtom({
@@ -82,6 +85,8 @@ export function useMarkdownCodeHighlight(input: {
       }),
     [atomLanguage, enabled, input.code, input.theme],
   );
+
   const result = useAtomValue(highlightAtom);
+
   return AsyncResult.isSuccess(result) ? result.value : null;
 }

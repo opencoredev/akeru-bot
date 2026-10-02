@@ -12,10 +12,15 @@ import { describe, expect, it, vi } from "vite-plus/test";
 import { createAkeruChannelRuntime } from "./AkeruChannelRuntime.ts";
 
 const now = "2026-09-01T00:00:00.000Z";
+
 const bossBotId = BotId.make("boss");
+
 const specialistBotId = BotId.make("specialist");
+
 const channelId = GroupId.make("channel-1");
+
 const threadId = ThreadId.make("thread-1");
+
 const messageId = MessageId.make("message-1");
 
 const bot = (id: BotId, groupId: GroupId | null) => ({
@@ -106,6 +111,7 @@ const snapshotWithMessage = (reacted = false): OrchestrationReadModel => ({
 describe("AkeruChannelRuntime", () => {
   it("creates a persisted group with the calling bot as boss", async () => {
     const dispatch = vi.fn();
+
     const runtime = createAkeruChannelRuntime({
       readSnapshot: async () => ({ ...snapshot, groups: [], bots: [bot(bossBotId, null)] }),
       dispatch,
@@ -126,6 +132,7 @@ describe("AkeruChannelRuntime", () => {
 
   it("lets the existing boss rename a channel", async () => {
     const dispatch = vi.fn();
+
     const runtime = createAkeruChannelRuntime({
       readSnapshot: async () => snapshot,
       dispatch,
@@ -140,6 +147,7 @@ describe("AkeruChannelRuntime", () => {
 
   it("rejects updates from specialists and missing channels", async () => {
     const dispatch = vi.fn();
+
     const runtime = createAkeruChannelRuntime({
       readSnapshot: async () => snapshot,
       dispatch,
@@ -156,16 +164,19 @@ describe("AkeruChannelRuntime", () => {
 
   it("adds reactions once and keeps retries idempotent", async () => {
     const dispatch = vi.fn();
+
     const readThread = vi
       .fn()
       .mockResolvedValueOnce(snapshotWithMessage().threads[0])
       .mockResolvedValue(snapshotWithMessage(true).threads[0]);
+
     const runtime = createAkeruChannelRuntime({
       readSnapshot: async () => snapshot,
       readThread,
       dispatch,
       now: () => now,
     });
+
     const input = { messageId, emoji: "👍", action: "add" as const };
 
     await expect(
@@ -185,16 +196,19 @@ describe("AkeruChannelRuntime", () => {
 
   it("dispatches a new command when a removed reaction is added again", async () => {
     const dispatch = vi.fn();
+
     const readSnapshot = vi
       .fn<() => Promise<OrchestrationReadModel>>()
       .mockResolvedValueOnce({ ...snapshot, snapshotSequence: 1 })
       .mockResolvedValueOnce({ ...snapshot, snapshotSequence: 2 })
       .mockResolvedValueOnce({ ...snapshot, snapshotSequence: 3 });
+
     const readThread = vi
       .fn()
       .mockResolvedValueOnce(snapshotWithMessage().threads[0])
       .mockResolvedValueOnce(snapshotWithMessage(true).threads[0])
       .mockResolvedValueOnce(snapshotWithMessage().threads[0]);
+
     const runtime = createAkeruChannelRuntime({
       readSnapshot,
       readThread,
@@ -227,11 +241,13 @@ describe("AkeruChannelRuntime", () => {
 
   it("returns a typed unsupported result and rejects invisible messages", async () => {
     const dispatch = vi.fn();
+
     const unsupported = createAkeruChannelRuntime({
       readSnapshot: async () => snapshotWithMessage(),
       dispatch,
       supportsReactions: () => false,
     });
+
     await expect(
       unsupported.react(
         threadId,
@@ -249,6 +265,7 @@ describe("AkeruChannelRuntime", () => {
       readSnapshot: async () => snapshotWithMessage(),
       dispatch,
     });
+
     await expect(
       hidden.react(
         threadId,

@@ -1,4 +1,6 @@
-// @effect-diagnostics globalFetch:off
+import type * as Schema from "effect/Schema";
+import { decodeJsonString, jsonObject, isJsonObject } from "../json.ts";
+import * as Predicate from "effect/Predicate";
 /**
  * Image provider adapters.
  *
@@ -29,7 +31,9 @@ import type { SubscriptionAuthService } from "../subscription-auth/service.ts";
 import { ImageResponseTooLargeError, readBoundedText } from "./boundedResponse.ts";
 
 export const CHATGPT_RESPONSES_URL = "https://chatgpt.com/backend-api/codex/responses";
+
 export const XAI_DEFAULT_BASE_URL = "https://api.x.ai/v1";
+
 export const GROK_IMAGE_MODEL = "grok-imagine-image-2.0";
 
 export type FetchFn = (input: string | URL, init?: RequestInit) => Promise<Response>;
@@ -125,24 +129,31 @@ export function unsupportedReason(
   request: Pick<ImageAdapterRequest, "operation" | "aspectRatio" | "count" | "inputImages">,
 ): string | undefined {
   const capability = request.operation === "edit" ? capabilities.edit : capabilities.generate;
+
   if (!capability) return `${label} does not support image editing.`;
+
   if (request.operation === "edit" && request.inputImages.length === 0) {
     return "Image editing needs at least one input image.";
   }
+
   if (request.operation === "generate" && request.inputImages.length > 0) {
     return "Input images are only accepted for edits.";
   }
+
   if (request.inputImages.length > capability.maxInputImages) {
     return `${label} accepts at most ${capability.maxInputImages} input image${capability.maxInputImages === 1 ? "" : "s"} for edits.`;
   }
+
   if (request.count > capability.maxCount) {
     return `${label} returns at most ${capability.maxCount} image${capability.maxCount === 1 ? "" : "s"} per ${request.operation}.`;
   }
+
   if (request.aspectRatio !== undefined && !capability.aspectRatios.includes(request.aspectRatio)) {
     return capability.aspectRatios.length === 0
       ? `${label} does not accept an aspect ratio for ${request.operation}s.`
       : `${label} supports aspect ratios ${capability.aspectRatios.join(", ")}.`;
   }
+
   return undefined;
 }
 
@@ -150,9 +161,10 @@ function dataUrl(image: ImageAdapterInputImage): string {
   return `data:${image.mimeType};base64,${Buffer.from(image.bytes).toString("base64")}`;
 }
 
-function decodeBase64Image(value: unknown): Uint8Array | undefined {
-  if (typeof value !== "string" || value.length === 0) return undefined;
+function decodeBase64Image(value: Schema.Json | undefined): Uint8Array | undefined {
+  if (!Predicate.isString(value) || value.length === 0) return undefined;
   const bytes = Buffer.from(value, "base64");
+
   return bytes.length > 0 ? new Uint8Array(bytes) : undefined;
 }
 
@@ -164,44 +176,53 @@ export function failureForStatus(label: string, status: number): ImageAdapterFai
       `${label} rejected the connected account (${status}).`,
     );
   }
+
   if (status === 400 || status === 422) {
     return new ImageAdapterFailure(
       "invalid-request",
       `${label} refused this image request (${status}). Try a different prompt.`,
     );
   }
+
   if (status === 404) {
     return new ImageAdapterFailure(
       "unavailable",
       `${label} image generation is not available for this account (${status}).`,
     );
   }
+
   return new ImageAdapterFailure("provider-failed", `${label} image request failed (${status}).`);
 }
 
 function rethrowFetchFailure(label: string, cause: unknown): never {
   if (cause instanceof ImageAdapterFailure) throw cause;
+
   if (cause instanceof ImageResponseTooLargeError) {
     throw new ImageAdapterFailure("provider-failed", cause.message);
   }
+
   if (cause instanceof Error && cause.name === "AbortError") {
     throw new ImageAdapterFailure("cancelled", `${label} image request was cancelled.`);
   }
+
   throw new ImageAdapterFailure("provider-failed", `${label} could not be reached.`);
 }
 
-function finiteNumber(value: unknown): number | undefined {
-  return typeof value === "number" && Number.isFinite(value) ? value : undefined;
+function finiteNumber(value: Schema.Json | undefined): number | undefined {
+  return Predicate.isNumber(value) && Number.isFinite(value) ? value : undefined;
 }
 
-function* sseEvents(body: string): Generator<Record<string, unknown>> {
+function* sseEvents(body: string): Generator<Schema.JsonObject> {
   for (const line of body.split(/\r?\n/)) {
     if (!line.startsWith("data:")) continue;
     const data = line.slice(5).trim();
+
     if (!data || data === "[DONE]") continue;
+
     try {
-      const parsed: unknown = JSON.parse(data);
-      if (parsed && typeof parsed === "object") yield parsed as Record<string, unknown>;
+      const parsed = decodeJsonString(data);
+
+      if (isJsonObject(parsed)) yield parsed;
     } catch {
       // Ignore keep-alive fragments; missing images are reported below.
     }
@@ -217,19 +238,25 @@ export function parseChatGptImageStream(body: string): {
 } {
   const images: Uint8Array[] = [];
   let usage: ImageAdapterUsage | undefined;
+
   for (const event of sseEvents(body)) {
     const type = event.type;
+
     if (type === "response.output_item.done") {
-      const item = event.item as Record<string, unknown> | undefined;
+      const item = jsonObject(event.item);
+
       if (item?.type === "image_generation_call") {
         const image = decodeBase64Image(item.result);
+
         if (image) images.push(image);
       }
+
       continue;
     }
+
     if (type === "response.failed" || type === "error") {
-      const response = event.response as Record<string, unknown> | undefined;
-      const error = (response?.error ?? event.error ?? event) as Record<string, unknown>;
+      const response = jsonObject(event.response);
+      const error = jsonObject(response?.error ?? event.error) ?? event;
       const code = `${String(error.code ?? "")} ${String(error.type ?? "")}`;
       throw MODERATION_CODE.test(code)
         ? new ImageAdapterFailure(
@@ -238,13 +265,15 @@ export function parseChatGptImageStream(body: string): {
           )
         : new ImageAdapterFailure("provider-failed", "ChatGPT could not finish the image.");
     }
+
     if (type === "response.completed") {
-      const response = event.response as Record<string, unknown> | undefined;
-      const raw = response?.usage as Record<string, unknown> | undefined;
+      const response = jsonObject(event.response);
+      const raw = jsonObject(response?.usage);
       const inputTokens = finiteNumber(raw?.input_tokens);
       const outputTokens = finiteNumber(raw?.output_tokens);
+
       if (inputTokens !== undefined && outputTokens !== undefined) {
-        const details = raw?.output_tokens_details as Record<string, unknown> | undefined;
+        const details = jsonObject(raw?.output_tokens_details);
         usage = {
           inputTokens,
           outputTokens,
@@ -253,6 +282,7 @@ export function parseChatGptImageStream(body: string): {
       }
     }
   }
+
   return usage ? { images, usage } : { images };
 }
 
@@ -261,7 +291,9 @@ function addUsage(
   right: ImageAdapterUsage | undefined,
 ): ImageAdapterUsage | undefined {
   if (!left) return right;
+
   if (!right) return left;
+
   return {
     inputTokens: left.inputTokens + right.inputTokens,
     outputTokens: left.outputTokens + right.outputTokens,
@@ -275,7 +307,7 @@ function addUsage(
 const CHATGPT_INSTRUCTIONS =
   "Create the requested image with the image_generation tool. Do not answer with text.";
 
-export function makeChatGptImageAdapter(deps: {
+export function chatGptImageAdapter(deps: {
   readonly subscriptionAuth: Pick<
     SubscriptionAuthService,
     "getOpenAICodexAccess" | "getApiKeyCredential"
@@ -284,16 +316,19 @@ export function makeChatGptImageAdapter(deps: {
 }): ImageProviderAdapter {
   const fetchFn = deps.fetchFn ?? fetch;
   const label = "ChatGPT";
+
   return {
     provider: "chatgpt",
     capabilities: CHATGPT_IMAGE_CAPABILITIES,
     run: async (request, signal) => {
       let access: Awaited<ReturnType<SubscriptionAuthService["getOpenAICodexAccess"]>>;
+
       try {
         access = await deps.subscriptionAuth.getOpenAICodexAccess();
       } catch {
         throw new ImageAdapterFailure("revoked", "The ChatGPT sign-in needs to be reconnected.");
       }
+
       if (!access) {
         throw new ImageAdapterFailure(
           "unavailable",
@@ -302,12 +337,15 @@ export function makeChatGptImageAdapter(deps: {
             : "No ChatGPT account is connected.",
         );
       }
+
       const size = CHATGPT_SIZES[request.aspectRatio ?? "1:1"] ?? "1024x1024";
       const images: Uint8Array[] = [];
       let usage: ImageAdapterUsage | undefined;
+
       // One image per call keeps each stream small and cancellation prompt.
       for (let index = 0; index < request.count; index += 1) {
         let body: string;
+
         try {
           const response = await fetchFn(CHATGPT_RESPONSES_URL, {
             method: "POST",
@@ -349,27 +387,33 @@ export function makeChatGptImageAdapter(deps: {
               tool_choice: { type: "image_generation" },
             }),
           });
+
           if (!response.ok) {
             await response.body?.cancel().catch(() => undefined);
             throw failureForStatus(label, response.status);
           }
+
           body = await readBoundedText(response, label);
         } catch (cause) {
           rethrowFetchFailure(label, cause);
         }
+
         const parsed = parseChatGptImageStream(body);
+
         if (parsed.images.length === 0) {
           throw new ImageAdapterFailure("provider-failed", "ChatGPT returned no image.");
         }
+
         images.push(...parsed.images.slice(0, 1));
         usage = addUsage(usage, parsed.usage);
       }
+
       return usage ? { images, usage } : { images };
     },
   };
 }
 
-export function makeGrokImageAdapter(deps: {
+export function grokImageAdapter(deps: {
   readonly subscriptionAuth: Pick<
     SubscriptionAuthService,
     "getAccessToken" | "getApiKeyCredential"
@@ -378,22 +422,28 @@ export function makeGrokImageAdapter(deps: {
 }): ImageProviderAdapter {
   const fetchFn = deps.fetchFn ?? fetch;
   const label = "Grok";
+
   return {
     provider: "grok",
     capabilities: GROK_IMAGE_CAPABILITIES,
     run: async (request, signal) => {
       let token: string | undefined;
+
       try {
         token = await deps.subscriptionAuth.getAccessToken("xai");
       } catch {
         throw new ImageAdapterFailure("revoked", "The Grok account needs to be reconnected.");
       }
+
       if (!token) throw new ImageAdapterFailure("unavailable", "No Grok account is connected.");
+
       const baseUrl = (
         deps.subscriptionAuth.getApiKeyCredential("xai")?.baseUrl ?? XAI_DEFAULT_BASE_URL
       ).replace(/\/+$/, "");
+
       const edit = request.operation === "edit";
       const firstImage = request.inputImages[0];
+
       const body = edit
         ? {
             model: GROK_IMAGE_MODEL,
@@ -409,7 +459,9 @@ export function makeGrokImageAdapter(deps: {
             resolution: request.quality === "high" ? "2k" : "1k",
             ...(request.aspectRatio ? { aspect_ratio: request.aspectRatio } : {}),
           };
-      let payload: unknown;
+
+      let payload: Schema.Json;
+
       try {
         const response = await fetchFn(`${baseUrl}/images/${edit ? "edits" : "generations"}`, {
           method: "POST",
@@ -421,25 +473,32 @@ export function makeGrokImageAdapter(deps: {
           },
           body: JSON.stringify(body),
         });
+
         if (!response.ok) {
           await response.body?.cancel().catch(() => undefined);
           throw failureForStatus(label, response.status);
         }
-        payload = JSON.parse(await readBoundedText(response, label));
+
+        payload = decodeJsonString(await readBoundedText(response, label));
       } catch (cause) {
         rethrowFetchFailure(label, cause);
       }
-      const record = (payload ?? {}) as Record<string, unknown>;
-      const data = Array.isArray(record.data) ? (record.data as Record<string, unknown>[]) : [];
+
+      const record = jsonObject(payload) ?? {};
+      const data = Array.isArray(record.data) ? record.data : [];
+
       const images = data
-        .map((entry) => decodeBase64Image(entry?.b64_json))
+        .map((entry) => decodeBase64Image(jsonObject(entry)?.b64_json))
         .filter((image): image is Uint8Array => image !== undefined)
         .slice(0, request.count);
+
       if (images.length === 0) {
         throw new ImageAdapterFailure("provider-failed", "Grok returned no image.");
       }
+
       const model =
-        typeof record.model === "string" && record.model ? record.model : GROK_IMAGE_MODEL;
+        Predicate.isString(record.model) && record.model ? record.model : GROK_IMAGE_MODEL;
+
       return { images, model };
     },
   };

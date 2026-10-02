@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import { RegistryContext } from "@effect/atom-react";
 import {
   type AtomCommand,
@@ -12,9 +13,9 @@ export function useAtomCommand<A, E, W>(
   options?: string | AtomCommandOptions,
 ): (value: W) => Promise<AtomCommandResult<A, E>> {
   const registry = useContext(RegistryContext);
-  const label = typeof options === "string" ? options : (options?.label ?? command.label);
-  const reportFailure = typeof options === "string" ? true : (options?.reportFailure ?? true);
-  const reportDefect = typeof options === "string" ? true : (options?.reportDefect ?? true);
+  const label = Predicate.isString(options) ? options : (options?.label ?? command.label);
+  const reportFailure = Predicate.isString(options) ? true : (options?.reportFailure ?? true);
+  const reportDefect = Predicate.isString(options) ? true : (options?.reportDefect ?? true);
 
   return useCallback(
     (value: W) => runAtomCommand(registry, command, value, { label, reportFailure, reportDefect }),

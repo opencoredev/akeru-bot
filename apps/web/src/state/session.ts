@@ -1,3 +1,4 @@
+import { hasTag } from "~/lib/taggedUnion";
 import { useAtomValue } from "@effect/atom-react";
 import { createEnvironmentSessionAtoms } from "@akeru/client-runtime/state/session";
 import type { EnvironmentId } from "@akeru/contracts";
@@ -34,9 +35,10 @@ export function readPreparedConnection(environmentId: EnvironmentId) {
  */
 export function useEnvironmentSessionState(environmentId: EnvironmentId) {
   const result = useAtomValue(environmentSession.sessionStateAtom(environmentId));
+
   return {
     data: Option.getOrNull(AsyncResult.value(result)),
-    hasError: result._tag === "Failure",
+    hasError: hasTag(result, "Failure"),
     isPending: result.waiting,
   };
 }

@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 import {
   canSaveDurableFactEdit,
   describeDurableFactFailure,
@@ -17,6 +18,11 @@ import { memoryEnvironment } from "../../state/memory";
 import { useAtomCommand } from "../../state/use-atom-command";
 import { Button } from "../ui/button";
 import { Textarea } from "../ui/textarea";
+import { cn } from "../../lib/utils";
+import {
+  BOT_COMPOSER_DOCKED_PANEL_CLASS_NAME,
+  BOT_COMPOSER_SURFACE_CLASS_NAME,
+} from "./botConversationPresentation";
 
 // Asks the user to approve a shared fact a bot wants to save. Shown above the
 // composer while the chat has undecided requests; the inbox resolves the same ones.
@@ -33,17 +39,21 @@ export function MemoryApprovalPrompt({
   const { t } = i18n;
   const approval = approvals[0];
   const bots = useAtomValue(environmentBotsAtom(threadRef.environmentId));
-  const botNames = useMemo(() => new Map(bots.map((bot) => [bot.id as string, bot.name])), [bots]);
+  const botNames = useMemo(() => new Map(bots.map((bot) => [bot.id, bot.name])), [bots]);
   const mutateFact = useAtomCommand(memoryEnvironment.mutateFact, { reportFailure: false });
+
   const [draft, setDraft] = useState<{
     readonly candidateId: string;
     readonly fact: string;
   } | null>(null);
+
   const [responding, setResponding] = useState(false);
+
   const [failure, setFailure] = useState<{
     readonly candidateId: string;
     readonly message: string;
   } | null>(null);
+
   if (!approval) return null;
 
   const editing = draft?.candidateId === approval.candidateId ? draft : null;
@@ -54,18 +64,22 @@ export function MemoryApprovalPrompt({
   const respond = async (intent: MemoryApprovalIntent) => {
     setResponding(true);
     setFailure(null);
+
     try {
       const result = await mutateFact({
         environmentId: threadRef.environmentId,
         input: { threadId: threadRef.threadId, mutation: memoryApprovalMutation(approval, intent) },
       });
-      if (result._tag === "Failure") {
+
+      if (Predicate.isTagged(result, "Failure")) {
         setFailure({
           candidateId: approval.candidateId,
           message: t(describeDurableFactFailure(squashAtomCommandFailure(result)).message),
         });
+
         return;
       }
+
       setDraft(null);
     } finally {
       setResponding(false);
@@ -75,11 +89,14 @@ export function MemoryApprovalPrompt({
   return (
     <section
       aria-label={t("Memory approval")}
-      className="mb-1 w-full rounded-t-[1.65rem] rounded-b-md border border-white/10 border-b-transparent bg-foreground/[0.12] px-3.5 pt-3 pb-2.5 dark:bg-white/[0.16]"
+      className={cn(BOT_COMPOSER_SURFACE_CLASS_NAME, BOT_COMPOSER_DOCKED_PANEL_CLASS_NAME)}
       data-testid="memory-approval-prompt"
     >
       <div className="flex min-w-0 items-center gap-2">
-        <span aria-hidden="true" className="size-1.5 shrink-0 rounded-full bg-amber-400" />
+        <span
+          aria-hidden="true"
+          className="size-1.5 shrink-0 rounded-full bg-memory-approval-indicator"
+        />
         <p className="text-sm font-semibold text-foreground">
           {memoryApprovalHeading(approval.scope, i18n)}
         </p>
@@ -89,7 +106,7 @@ export function MemoryApprovalPrompt({
           </span>
         ) : null}
         {approvals.length > 1 ? (
-          <span className="ml-auto text-[11px] font-medium text-muted-foreground tabular-nums">
+          <span className="ml-auto text-11px font-medium text-muted-foreground tabular-nums">
             {t("1 of {count}", { count: approvals.length })}
           </span>
         ) : null}

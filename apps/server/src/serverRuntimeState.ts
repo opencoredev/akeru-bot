@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
@@ -19,6 +20,7 @@ export const PersistedServerRuntimeState = Schema.Struct({
   devUrl: Schema.optional(Schema.String),
   startedAt: Schema.String,
 });
+
 export type PersistedServerRuntimeState = typeof PersistedServerRuntimeState.Type;
 
 export class ServerRuntimeStateError extends Schema.TaggedErrorClass<ServerRuntimeStateError>()(
@@ -44,10 +46,11 @@ const runtimeOriginForConfig = (
 ): PersistedServerRuntimeState["origin"] => {
   const hostname =
     config.host && !isWildcardHost(config.host) ? formatHostForUrl(config.host) : "127.0.0.1";
+
   return `http://${hostname}:${port}`;
 };
 
-export const makePersistedServerRuntimeState = (input: {
+export const persistedServerRuntimeState = (input: {
   readonly config: Pick<ServerConfig.ServerConfig["Service"], "host" | "devUrl">;
   readonly port: number;
 }): Effect.Effect<PersistedServerRuntimeState> =>
@@ -107,10 +110,11 @@ export const clearPersistedServerRuntimeState = (path: string) =>
 export const readPersistedServerRuntimeState = (path: string) =>
   Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;
+
     const raw = yield* fs.readFileString(path).pipe(
       Effect.matchEffect({
         onFailure: (cause) =>
-          cause.reason._tag === "NotFound"
+          Predicate.isTagged(cause.reason, "NotFound")
             ? Effect.succeed(Option.none<string>())
             : Effect.fail(
                 new ServerRuntimeStateError({
@@ -122,11 +126,13 @@ export const readPersistedServerRuntimeState = (path: string) =>
         onSuccess: (contents) => Effect.succeed(Option.some(contents)),
       }),
     );
+
     if (Option.isNone(raw)) {
       return Option.none<PersistedServerRuntimeState>();
     }
 
     const trimmed = raw.value.trim();
+
     if (trimmed.length === 0) {
       return Option.none<PersistedServerRuntimeState>();
     }

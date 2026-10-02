@@ -32,9 +32,11 @@ export function createDesktopSshHostsStateAtom(
 ) {
   const discoverDesktopSshHosts = Effect.fn("discoverDesktopSshHosts")(function* () {
     const bridge = getBridge();
+
     if (!bridge) {
       return yield* new DesktopSshDiscoveryUnavailableError();
     }
+
     return yield* Effect.tryPromise({
       try: (): Promise<ReadonlyArray<DesktopDiscoveredSshHost>> => bridge.discoverSshHosts(),
       catch: (cause) => new DesktopSshDiscoveryError({ cause }),

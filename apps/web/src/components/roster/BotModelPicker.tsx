@@ -22,6 +22,7 @@ export function buildBotModelChoices(
 ): ReadonlyArray<BotModelChoice> {
   return instanceEntries.flatMap((entry) => {
     const disabledReason = providerInstancePickerBlockReason(entry);
+
     return (modelOptionsByInstance.get(entry.instanceId) ?? []).map((model) => ({
       instanceId: entry.instanceId,
       model: model.slug,
@@ -48,6 +49,7 @@ export function BotModelPicker({
   readonly onChange: (instanceId: ProviderInstanceId, model: string) => void;
 }) {
   const { t } = useI18n();
+
   return (
     <ProviderModelPicker
       activeInstanceId={activeInstanceId}
@@ -59,7 +61,7 @@ export function BotModelPicker({
       compact
       disabled={disabled}
       triggerAriaLabel={t("Change model")}
-      triggerClassName="max-w-52"
+      triggerFit="capped"
       onInstanceModelChange={onChange}
     />
   );

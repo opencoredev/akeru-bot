@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 /**
  * ClaudeSkills — filesystem discovery of Claude Code skills for the `$` picker.
  *
@@ -37,24 +38,28 @@ type SkillFrontmatter =
 
 function parseSkillFrontmatter(contents: string): SkillFrontmatter {
   const match = FRONTMATTER_PATTERN.exec(contents);
+
   if (!match) {
     return { kind: "missing" };
   }
 
   let parsed: unknown;
+
   try {
     parsed = parseYamlDocument(match[1] ?? "");
   } catch {
     return { kind: "malformed" };
   }
-  if (typeof parsed !== "object" || parsed === null) {
+
+  if (!Predicate.isObjectOrArray(parsed) || parsed === null) {
     return { kind: "malformed" };
   }
 
-  const record = parsed as Record<string, unknown>;
-  const name = typeof record.name === "string" ? record.name.trim() : "";
-  const description = typeof record.description === "string" ? record.description.trim() : "";
-  const icon = typeof record.icon === "string" ? record.icon.trim() : "";
+  const record = Array.isArray(parsed) ? {} : parsed;
+  const name = Predicate.isString(record.name) ? record.name.trim() : "";
+  const description = Predicate.isString(record.description) ? record.description.trim() : "";
+  const icon = Predicate.isString(record.icon) ? record.icon.trim() : "";
+
   return {
     kind: "parsed",
     ...(name ? { name } : {}),
@@ -66,7 +71,7 @@ function parseSkillFrontmatter(contents: string): SkillFrontmatter {
 /**
  * Resolve the Claude config directory the CLI would use, matching the
  * precedence the spawned CLI sees: the instance's `homePath` (exported as
- * `CLAUDE_CONFIG_DIR` by `makeClaudeEnvironment`), then a `CLAUDE_CONFIG_DIR`
+ * `CLAUDE_CONFIG_DIR` by `claudeEnvironment`), then a `CLAUDE_CONFIG_DIR`
  * already present in the process environment, then `~/.claude`.
  */
 const resolveClaudeConfigDirPath = Effect.fn("resolveClaudeConfigDirPath")(function* (
@@ -76,18 +81,22 @@ const resolveClaudeConfigDirPath = Effect.fn("resolveClaudeConfigDirPath")(funct
 ): Effect.fn.Return<string, never, Path.Path> {
   const path = yield* Path.Path;
   const homePath = config.homePath.trim();
+
   if (homePath.length > 0) {
-    return path.resolve(expandHomePath(homePath));
+    return path.resolve(expandHomePath(homePath, path));
   }
+
   // No tilde expansion here: the spawned CLI receives this env var verbatim
   // (env vars are never shell-expanded), so a literal `~` must stay literal
   // for discovery to scan the same directory the runtime would. A relative
   // value is resolved against the workspace cwd — the subprocess's own cwd —
   // for the same reason.
   const environmentConfigDir = environment.CLAUDE_CONFIG_DIR?.trim() ?? "";
+
   if (environmentConfigDir.length > 0) {
     return cwd ? path.resolve(cwd, environmentConfigDir) : path.resolve(environmentConfigDir);
   }
+
   return path.join(NodeOS.homedir(), ".claude");
 });
 
@@ -119,6 +128,7 @@ export const discoverClaudeSkills = Effect.fn("discoverClaudeSkills")(function* 
   ];
 
   const skillsByName = new Map<string, ServerProviderSkill>();
+
   for (const root of roots) {
     const entries = yield* fileSystem
       .readDirectory(root.directory)
@@ -126,14 +136,17 @@ export const discoverClaudeSkills = Effect.fn("discoverClaudeSkills")(function* 
 
     for (const entry of [...entries].sort()) {
       const skillPath = path.join(root.directory, entry, "SKILL.md");
+
       const contents = yield* fileSystem
         .readFileString(skillPath)
         .pipe(Effect.orElseSucceed(() => undefined));
+
       if (contents === undefined) {
         continue;
       }
 
       const frontmatter = parseSkillFrontmatter(contents);
+
       // Malformed frontmatter means the skill won't load in Claude Code
       // either — skip it rather than surfacing a broken entry under its
       // directory name.
@@ -142,6 +155,7 @@ export const discoverClaudeSkills = Effect.fn("discoverClaudeSkills")(function* 
       }
 
       const name = (frontmatter.kind === "parsed" ? frontmatter.name : undefined) ?? entry.trim();
+
       if (!name) {
         continue;
       }

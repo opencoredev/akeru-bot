@@ -10,29 +10,38 @@ import * as NodePath from "node:path";
 import * as NodeURL from "node:url";
 
 const here = NodePath.dirname(NodeURL.fileURLToPath(import.meta.url));
+
 const fixture = JSON.parse(
   NodeFS.readFileSync(NodePath.join(here, "codexMultiAgentWire.json"), "utf8"),
 );
+
 const script = JSON.parse(NodeFS.readFileSync(process.env.T3_CODEX_COLLAB_SCRIPT, "utf8"));
 
 const write = (message) => process.stdout.write(`${JSON.stringify(message)}\n`);
+
 let turnStartCount = 0;
+
 let activeTurn;
 
 const rl = NodeReadline.createInterface({ input: process.stdin });
+
 rl.on("line", (line) => {
   let message;
+
   try {
     message = JSON.parse(line);
   } catch {
     return;
   }
+
   const { id, method } = message;
+
   if (method === undefined && script.serverRequests?.some((request) => request.id === id)) {
     NodeFS.appendFileSync(
       `${process.env.T3_CODEX_COLLAB_SCRIPT}.responses`,
       `${JSON.stringify({ id, result: message.result, error: message.error })}\n`,
     );
+
     if (script.completeTurnOnServerResponse && activeTurn) {
       write({
         jsonrpc: "2.0",
@@ -43,8 +52,10 @@ rl.on("line", (line) => {
         },
       });
     }
+
     return;
   }
+
   if (method === "initialize") {
     write({
       id,
@@ -55,21 +66,28 @@ rl.on("line", (line) => {
         platformOs: "linux",
       },
     });
+
     return;
   }
+
   if (method === "thread/start" || method === "thread/resume") {
     write({ id, result: fixture.responses.threadStart });
+
     return;
   }
+
   if (method === "turn/start") {
     const turnId = script.turnIds?.[turnStartCount];
+
     const turn = turnId
       ? { ...fixture.responses.turnStart.turn, id: turnId }
       : fixture.responses.turnStart.turn;
+
     activeTurn = turn;
     turnStartCount += 1;
     write({ id, result: { ...fixture.responses.turnStart, turn } });
     const rootThreadId = script.rootThreadId;
+
     if (script.onlyFirstTurnStarts !== true || turnStartCount === 1) {
       write({
         jsonrpc: "2.0",
@@ -77,12 +95,15 @@ rl.on("line", (line) => {
         params: { threadId: rootThreadId, turn },
       });
     }
+
     for (const notification of script.notifications) {
       write({ jsonrpc: "2.0", method: notification.method, params: notification.params });
     }
+
     for (const request of script.serverRequests ?? []) {
       write({ jsonrpc: "2.0", id: request.id, method: request.method, params: request.params });
     }
+
     if (script.holdTurnOpen !== true) {
       write({
         jsonrpc: "2.0",
@@ -93,8 +114,10 @@ rl.on("line", (line) => {
         },
       });
     }
+
     return;
   }
+
   if (method === "turn/interrupt") {
     // Record which thread/turn was interrupted (append-only sidecar file the
     // test reads) so Stop coverage can assert every live child was reached.
@@ -104,6 +127,7 @@ rl.on("line", (line) => {
       `${process.env.T3_CODEX_COLLAB_SCRIPT}.interrupts`,
       `${JSON.stringify({ threadId: target, turnId: message.params?.turnId })}\n`,
     );
+
     if (
       script.expectedActiveTurnId &&
       message.params?.threadId === script.rootThreadId &&
@@ -116,20 +140,27 @@ rl.on("line", (line) => {
           message: `expected active turn id ${message.params?.turnId} but found ${script.expectedActiveTurnId}`,
         },
       });
+
       return;
     }
+
     if (script.failInterruptFor && script.failInterruptFor === target) {
       write({ id, error: { code: -32000, message: "thread already closed" } });
+
       return;
     }
+
     if (script.hangInterruptFor && script.hangInterruptFor === target) {
       // Never respond: simulates a wedged child whose RPC neither resolves
       // nor rejects. The runtime's bounded deadline must move on.
       return;
     }
+
     write({ id, result: {} });
+
     return;
   }
+
   if (id !== undefined) {
     write({ id, result: {} });
   }

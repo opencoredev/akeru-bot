@@ -43,11 +43,13 @@ export const make = ElectronTheme.of({
     Effect.acquireRelease(
       Effect.suspend(() => {
         Electron.nativeTheme.on("updated", listener);
+
         return Effect.void;
       }),
       () =>
         Effect.suspend(() => {
           Electron.nativeTheme.removeListener("updated", listener);
+
           return Effect.void;
         }),
     ),

@@ -8,15 +8,15 @@ import type { ServerSettingsService } from "../serverSettings.ts";
 import { instanceUsesSavedCredential, subscriptionProviderSettingsPatch } from "./runtime.ts";
 import type { SubscriptionAuthService, SubscriptionProviderId } from "./service.ts";
 
-const providersByDriver: Readonly<Record<string, SubscriptionProviderId>> = {
+const providersByDriver = {
   codex: "openai-codex",
   claudeAgent: "anthropic",
   grok: "xai",
   kimi: "kimi-for-coding",
   opencodeGo: "opencode-go",
-};
+} satisfies Readonly<Record<string, SubscriptionProviderId>>;
 
-export function makeSubscriptionProviderMutation(
+export function subscriptionProviderMutation(
   auth: SubscriptionAuthService,
   settings: ServerSettingsService["Service"],
   mutator: ProviderInstanceRegistryMutatorShape,
@@ -30,10 +30,15 @@ export function makeSubscriptionProviderMutation(
     const beforeSettings = yield* settings.getSettings.pipe(
       Effect.mapError((cause) => new SubscriptionAuthError({ reason: cause.message })),
     );
+
     const bindings = Object.entries(deriveProviderInstanceConfigMap(beforeSettings)).flatMap(
       ([instanceId, instance]) => {
-        const provider = providersByDriver[instance.driver];
+        const provider = Object.entries(providersByDriver).find(
+          ([driver]) => driver === instance.driver,
+        )?.[1];
+
         if (!provider || !instanceUsesSavedCredential(provider, instance)) return [];
+
         return [
           {
             provider,
@@ -45,27 +50,36 @@ export function makeSubscriptionProviderMutation(
         ];
       },
     );
+
     const result = yield* operation;
+
     const changed = bindings.filter(({ provider, instanceId, credential }) => {
       const current =
         auth.getOAuthCredential(provider, instanceId) ??
         auth.getApiKeyCredential(provider, instanceId);
+
       return credential?.type !== current?.type || credential?.access !== current?.access;
     });
+
     if (changed.length === 0) return result;
+
     const currentSettings = yield* settings.getSettings.pipe(
       Effect.mapError((cause) => new SubscriptionAuthError({ reason: cause.message })),
     );
+
     const patch = subscriptionProviderSettingsPatch(currentSettings, auth.statuses());
+
     const nextSettings = patch
       ? yield* settings
           .updateSettings(patch)
           .pipe(Effect.mapError((cause) => new SubscriptionAuthError({ reason: cause.message })))
       : currentSettings;
+
     yield* mutator.reconcile(deriveProviderInstanceConfigMap(nextSettings));
     yield* Effect.forEach(changed, ({ instanceId }) => registry.refreshInstance(instanceId), {
       discard: true,
     });
+
     return result;
   });
 }

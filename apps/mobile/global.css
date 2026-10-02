@@ -20,6 +20,10 @@
       --color-card-translucent: rgba(255, 255, 255, 0.8);
 
       /* Text */
+      --color-channel-heading: #171717;
+      --color-channel-detail: #525252;
+      --color-work-fold-separator: rgba(229, 229, 229, 0.8);
+      --color-dictation-send-icon: #ffffff;
       --color-foreground: #262626;
       --color-foreground-secondary: #525252;
       --color-foreground-muted: #737373;
@@ -119,6 +123,10 @@
       --color-card-translucent: rgba(17, 17, 17, 0.8);
 
       /* Text */
+      --color-channel-heading: #f5f5f5;
+      --color-channel-detail: #d4d4d4;
+      --color-work-fold-separator: rgba(255, 255, 255, 0.08);
+      --color-dictation-send-icon: #ffffff;
       --color-foreground: #f5f5f5;
       --color-foreground-secondary: #a3a3a3;
       --color-foreground-muted: #8e8e93;

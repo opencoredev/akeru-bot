@@ -16,13 +16,15 @@ import type * as OpenCodeAdapter from "../Services/OpenCodeAdapter.ts";
 import * as ProviderAdapterRegistry from "../Services/ProviderAdapterRegistry.ts";
 import * as ProviderInstanceRegistry from "../Services/ProviderInstanceRegistry.ts";
 import type { ProviderInstance } from "../ProviderDriver.ts";
-import { makeManualOnlyProviderMaintenanceCapabilities } from "../providerMaintenance.ts";
+import { manualOnlyProviderMaintenanceCapabilities } from "../providerMaintenance.ts";
 import type * as TextGeneration from "../../textGeneration/TextGeneration.ts";
 import * as ProviderAdapterRegistryLayer from "./ProviderAdapterRegistry.ts";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 
 const CODEX_DRIVER = ProviderDriverKind.make("codex");
+
 const CLAUDE_AGENT_DRIVER = ProviderDriverKind.make("claudeAgent");
+
 const OPENCODE_DRIVER = ProviderDriverKind.make("opencode");
 
 const fakeCodexAdapter: CodexAdapter.CodexAdapterShape = {
@@ -87,6 +89,7 @@ const makeFakeInstance = (
   adapter: ProviderInstance["adapter"],
 ): ProviderInstance => {
   const driverKind = ProviderDriverKind.make(driverKindString);
+
   return {
     instanceId: defaultInstanceIdForDriver(driverKind),
     driverKind,
@@ -97,16 +100,16 @@ const makeFakeInstance = (
     displayName: undefined,
     enabled: true,
     snapshot: {
-      maintenanceCapabilities: makeManualOnlyProviderMaintenanceCapabilities({
+      maintenanceCapabilities: manualOnlyProviderMaintenanceCapabilities({
         provider: driverKind,
         packageName: null,
       }),
-      getSnapshot: Effect.succeed({} as unknown as ServerProvider),
-      refresh: Effect.succeed({} as unknown as ServerProvider),
+      getSnapshot: Effect.succeed({} as ServerProvider),
+      refresh: Effect.succeed({} as ServerProvider),
       streamChanges: Stream.empty,
     },
     adapter,
-    textGeneration: {} as unknown as TextGeneration.TextGeneration["Service"],
+    textGeneration: {} as TextGeneration.TextGeneration["Service"],
   };
 };
 

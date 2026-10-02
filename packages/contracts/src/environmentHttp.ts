@@ -26,14 +26,14 @@ import {
 } from "./auth.ts";
 import { AuthSessionId, ThreadId, TrimmedNonEmptyString } from "./baseSchemas.ts";
 import { ExecutionEnvironmentDescriptor } from "./environment.ts";
+import { ClientOrchestrationCommand } from "./orchestration/commands.ts";
+import { DispatchResult } from "./orchestration/rpc.ts";
 import {
-  ClientOrchestrationCommand,
-  DispatchResult,
   OrchestrationReadModel,
   OrchestrationShellSnapshot,
   OrchestrationThreadDetailSnapshot,
-} from "./orchestration.ts";
-import { ServerProviderUnavailability } from "./server.ts";
+} from "./orchestration/readModel.ts";
+import { ServerProviderUnavailability } from "./server/providers.ts";
 
 const OptionalBearerHeaders = Schema.Struct({
   authorization: Schema.optionalKey(Schema.String),
@@ -44,17 +44,20 @@ export const EnvironmentRequestInvalidReason = Schema.Literals([
   "scope_not_granted",
   "invalid_command",
 ]);
+
 export type EnvironmentRequestInvalidReason = typeof EnvironmentRequestInvalidReason.Type;
 
 export const EnvironmentAuthInvalidReason = Schema.Literals([
   "missing_credential",
   "invalid_credential",
 ]);
+
 export type EnvironmentAuthInvalidReason = typeof EnvironmentAuthInvalidReason.Type;
 
 export const EnvironmentOperationForbiddenReason = Schema.Literals([
   "current_session_revoke_not_allowed",
 ]);
+
 export type EnvironmentOperationForbiddenReason = typeof EnvironmentOperationForbiddenReason.Type;
 
 export const EnvironmentInternalErrorReason = Schema.Literals([
@@ -73,6 +76,7 @@ export const EnvironmentInternalErrorReason = Schema.Literals([
   "orchestration_dispatch_failed",
   "internal_error",
 ]);
+
 export type EnvironmentInternalErrorReason = typeof EnvironmentInternalErrorReason.Type;
 
 export class EnvironmentRequestInvalidError extends Schema.TaggedErrorClass<EnvironmentRequestInvalidError>()(
@@ -169,6 +173,7 @@ export class EnvironmentInternalError extends Schema.TaggedErrorClass<Environmen
 }
 
 export const EnvironmentResourceNotFoundReason = Schema.Literals(["thread_not_found"]);
+
 export type EnvironmentResourceNotFoundReason = typeof EnvironmentResourceNotFoundReason.Type;
 
 export class EnvironmentResourceNotFoundError extends Schema.TaggedErrorClass<EnvironmentResourceNotFoundError>()(
@@ -197,6 +202,7 @@ export const EnvironmentHttpCommonError = Schema.Union([
   EnvironmentResourceNotFoundError,
   EnvironmentInternalError,
 ]);
+
 export type EnvironmentHttpCommonError = typeof EnvironmentHttpCommonError.Type;
 
 const EnvironmentAuthenticationErrors = [
@@ -268,33 +274,40 @@ const EnvironmentSessionCreationErrors = [
   EnvironmentAuthInvalidError,
   EnvironmentInternalError,
 ] as const;
+
 const EnvironmentTokenExchangeErrors = [
   EnvironmentRequestInvalidError,
   EnvironmentAuthInvalidError,
   EnvironmentInternalError,
 ] as const;
+
 const EnvironmentScopedOperationErrors = [
   EnvironmentScopeRequiredError,
   EnvironmentInternalError,
 ] as const;
+
 const EnvironmentPairingCredentialErrors = [
   EnvironmentRequestInvalidError,
   ...EnvironmentScopedOperationErrors,
 ] as const;
+
 const EnvironmentSessionRevokeErrors = [
   EnvironmentScopeRequiredError,
   EnvironmentOperationForbiddenError,
   EnvironmentInternalError,
 ] as const;
+
 const EnvironmentOrchestrationSnapshotErrors = [
   EnvironmentScopeRequiredError,
   EnvironmentInternalError,
 ] as const;
+
 const EnvironmentOrchestrationThreadSnapshotErrors = [
   EnvironmentScopeRequiredError,
   EnvironmentResourceNotFoundError,
   EnvironmentInternalError,
 ] as const;
+
 const EnvironmentOrchestrationDispatchErrors = [
   EnvironmentRequestInvalidError,
   EnvironmentScopeRequiredError,
@@ -324,16 +337,19 @@ export class EnvironmentAuthenticatedAuth extends HttpApiMiddleware.Service<
 export const AuthPairingLinkRevokeResult = Schema.Struct({
   revoked: Schema.Boolean,
 });
+
 export type AuthPairingLinkRevokeResult = typeof AuthPairingLinkRevokeResult.Type;
 
 export const AuthClientSessionRevokeResult = Schema.Struct({
   revoked: Schema.Boolean,
 });
+
 export type AuthClientSessionRevokeResult = typeof AuthClientSessionRevokeResult.Type;
 
 export const AuthOtherClientSessionsRevokeResult = Schema.Struct({
   revokedCount: Schema.Number,
 });
+
 export type AuthOtherClientSessionsRevokeResult = typeof AuthOtherClientSessionsRevokeResult.Type;
 
 export class EnvironmentMetadataHttpApi extends HttpApiGroup.make("metadata").add(

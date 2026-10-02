@@ -55,11 +55,13 @@ export function projectThreadAwareness(
 ): AgentAwarenessState | null {
   const { environmentId, project, thread } = input;
   const phase = resolveThreadAwarenessPhase(thread);
+
   if (!phase) {
     return null;
   }
 
   const detail = detailForPhase(phase, thread);
+
   return {
     environmentId,
     threadId: thread.id,
@@ -80,21 +82,27 @@ function resolveThreadAwarenessPhase(
   if (thread.hasPendingApprovals) {
     return "waiting_for_approval";
   }
+
   if (thread.hasPendingUserInput) {
     return "waiting_for_input";
   }
+
   if (thread.session?.status === "error" || thread.latestTurn?.state === "error") {
     return "failed";
   }
+
   if (thread.session?.status === "starting") {
     return "starting";
   }
+
   if (thread.session?.status === "running" || thread.latestTurn?.state === "running") {
     return "running";
   }
+
   if (thread.latestTurn?.state === "completed") {
     return "completed";
   }
+
   // A turn that finished can still read as "interrupted" here: session
   // teardown settles still-running turns by session status, and that write
   // can race the turn.completed one. completedAt survives the race — a turn
@@ -104,6 +112,7 @@ function resolveThreadAwarenessPhase(
   if (thread.latestTurn?.state === "interrupted" && thread.latestTurn.completedAt !== null) {
     return "completed";
   }
+
   // Threads whose turns never produce a checkpoint (no code changes) have no
   // materialized latestTurn in the shell at all, and the session-set
   // projection clears latest_turn_id the moment the session settles. The
@@ -113,6 +122,7 @@ function resolveThreadAwarenessPhase(
   if (thread.session?.status === "ready" || thread.session?.status === "idle") {
     return "completed";
   }
+
   return null;
 }
 
@@ -142,11 +152,14 @@ function detailForPhase(
   if (phase === "failed") {
     return thread.session?.lastError ?? undefined;
   }
+
   if (phase === "completed") {
     return "Review the completed task.";
   }
+
   if (phase === "running" && thread.session?.providerName) {
     return `${thread.session.providerName} is active.`;
   }
+
   return undefined;
 }

@@ -9,9 +9,11 @@ export function mergeProviderInstanceEnvironment(
   }
 
   const next: NodeJS.ProcessEnv = { ...baseEnv };
+
   for (const variable of environment) {
     next[variable.name] = variable.value;
   }
+
   return next;
 }
 

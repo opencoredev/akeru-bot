@@ -1,5 +1,7 @@
 "use client";
 
+import { Predicate } from "effect";
+
 import { Input as InputPrimitive } from "@base-ui/react/input";
 import type * as React from "react";
 
@@ -7,15 +9,29 @@ import { cn } from "~/lib/utils";
 
 type InputProps = Omit<InputPrimitive.Props & React.RefAttributes<HTMLInputElement>, "size"> & {
   size?: "sm" | "compact" | "default" | "lg" | number;
+  reserveWarningSpace?: boolean;
   unstyled?: boolean;
   nativeInput?: boolean;
+  /** "color-value" is the compact mono field beside a color swatch; pair it with `unstyled`. */
+  variant?:
+    | "default"
+    | "color-value"
+    | "keybinding-capture"
+    | "keybinding-expression"
+    | "keybinding-search"
+    | "mono"
+    | "viewport-dimension";
+  surface?: "background";
 };
 
 function Input({
   className,
   size = "default",
+  reserveWarningSpace = false,
   unstyled = false,
   nativeInput = false,
+  variant = "default",
+  surface,
   ...props
 }: InputProps) {
   const inputClassName = cn(
@@ -28,19 +44,23 @@ function Input({
     props.type === "file" &&
       "text-muted-foreground file:me-3 file:bg-transparent file:font-medium file:text-foreground file:text-sm",
   );
+
   let inputElement: React.ReactElement;
 
   if (nativeInput) {
     const { style, onValueChange: _onValueChange, ...nativeInputProps } = props;
-    const nativeStyle = typeof style === "function" ? undefined : style;
+
+    // Base UI accepts a state callback for style; a native input forwards only a plain object.
+    const forwardedProps = Predicate.isFunction(style)
+      ? nativeInputProps
+      : { ...nativeInputProps, style };
 
     inputElement = (
       <input
         className={inputClassName}
         data-slot="input"
-        size={typeof size === "number" ? size : undefined}
-        style={nativeStyle}
-        {...(nativeInputProps as React.ComponentProps<"input">)}
+        size={Predicate.isNumber(size) ? size : undefined}
+        {...forwardedProps}
       />
     );
   } else {
@@ -48,7 +68,7 @@ function Input({
       <InputPrimitive
         className={inputClassName}
         data-slot="input"
-        size={typeof size === "number" ? size : undefined}
+        size={Predicate.isNumber(size) ? size : undefined}
         {...props}
       />
     );
@@ -63,6 +83,20 @@ function Input({
           !unstyled &&
             size === "compact" &&
             "rounded-md before:rounded-[calc(var(--radius-md)-1px)]",
+          variant === "color-value" &&
+            "rounded-md border-0 bg-shade/10 font-mono text-xs text-foreground shadow-none focus-within:bg-shade/15 focus-within:ring-0 dark:bg-shade/20 dark:focus-within:bg-shade/25 [&_[data-slot=input]]:text-right",
+          variant === "keybinding-capture" && "border-ring/60 font-mono ring-3 ring-ring/15",
+          variant === "keybinding-expression" &&
+            "rounded-md font-mono text-xs leading-7 sm:leading-7",
+          variant === "keybinding-expression" && reserveWarningSpace && "pr-9",
+          variant === "keybinding-expression" &&
+            props["aria-invalid"] &&
+            "border-destructive/70 focus-visible:border-destructive",
+          variant === "keybinding-search" && "[&_[data-slot=input]]:pl-8",
+          variant === "mono" && "font-mono",
+          variant === "viewport-dimension" &&
+            "h-6 rounded-md text-center tabular-nums [&_[data-slot=input]]:h-full [&_[data-slot=input]]:px-1 [&_[data-slot=input]]:text-xs [&_[data-slot=input]]:leading-none [&_[data-slot=input]::-webkit-inner-spin-button]:appearance-none [&_[data-slot=input]]:appearance-textfield",
+          surface === "background" && "bg-background",
           className,
         ) || undefined
       }

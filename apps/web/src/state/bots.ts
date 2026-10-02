@@ -8,6 +8,7 @@ import { connectionAtomRuntime } from "../connection/runtime";
 import { environmentSnapshotAtom } from "./shell";
 
 const EMPTY_BOTS: ReadonlyArray<OrchestrationBot> = Object.freeze([]);
+
 const EMPTY_GROUPS: ReadonlyArray<OrchestrationGroup> = Object.freeze([]);
 
 export const botEnvironment = createBotEnvironmentAtoms(connectionAtomRuntime);
@@ -35,7 +36,9 @@ export interface EnvironmentRoster {
 /** The bots and groups of every environment whose snapshot has loaded. */
 export const allEnvironmentRostersAtom = Atom.make((get): ReadonlyArray<EnvironmentRoster> => {
   const catalog = AsyncResult.value(get(environmentCatalog.catalogAtom));
+
   if (Option.isNone(catalog)) return [];
+
   return Array.from(catalog.value.entries.keys(), (environmentId) => ({
     environmentId,
     bots: get(environmentBotsAtom(environmentId)),
@@ -46,6 +49,7 @@ export const allEnvironmentRostersAtom = Atom.make((get): ReadonlyArray<Environm
 export const environmentPeopleAtom = Atom.family((environmentId: EnvironmentId) =>
   Atom.make((get) => {
     const snapshot = get(environmentSnapshotAtom(environmentId));
+
     return {
       current: snapshot?.currentPersonId
         ? {

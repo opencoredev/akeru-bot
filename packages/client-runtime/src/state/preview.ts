@@ -23,11 +23,13 @@ export function createPreviewEnvironmentAtoms<R, E>(
   const lifecycleScheduler = createAtomCommandScheduler();
   const statusScheduler = createAtomCommandScheduler();
   const automationScheduler = createAtomCommandScheduler();
+
   const lifecycleConcurrency = {
     mode: "serial" as const,
     key: ({ environmentId, input }: { environmentId: string; input: { threadId: string } }) =>
       JSON.stringify([environmentId, input.threadId]),
   };
+
   return {
     list: createEnvironmentRpcQueryAtomFamily(runtime, {
       label: "environment-data:preview:list",

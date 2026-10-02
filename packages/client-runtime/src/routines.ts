@@ -1,4 +1,9 @@
-// @effect-diagnostics globalDate:off -- Routine labels format wall-clock run times with Intl for display.
+import * as DateTime from "effect/DateTime";
+import * as Option from "effect/Option";
+import { asRecord } from "./work-log-command.ts";
+import type { PendingApproval } from "./pendingRequests.ts";
+import * as Match from "effect/Match";
+import * as Predicate from "effect/Predicate";
 import type {
   BotId,
   McpServer,
@@ -15,8 +20,11 @@ import { withoutErrorStack } from "@akeru/shared/errorText";
 import { createTranslator, type MessageKey } from "./i18n/index.ts";
 
 export type RoutineAdapterFrequency = RoutineSchedule["kind"];
+
 export type RoutineAdapterApproval = RoutineApprovalPolicy;
+
 export type RoutineAdapterSandbox = RoutineSandbox;
+
 export type RoutineAdapterRunStatus = RoutineRunStatus;
 
 export interface RoutineAdapterProject {
@@ -109,6 +117,7 @@ export function toRoutineSchedule(draft: RoutineAdapterDraft): RoutineSchedule {
   if (draft.schedule.frequency !== "weekly") {
     return { kind: draft.schedule.frequency, time: draft.schedule.time };
   }
+
   return {
     kind: "weekly",
     weekdays: [WEEKDAY_IDS[draft.schedule.weekday ?? 1]!],
@@ -151,9 +160,11 @@ export function toRoutinePanelItem(
     .filter((run) => run.routineId === routine.id)
     .sort((left, right) => right.createdAt.localeCompare(left.createdAt))
     .map(toAdapterRun);
+
   const assignmentNames = new Map(
     assignments.map((assignment) => [assignment.id, assignment.name]),
   );
+
   const connectorNames = new Map(mcpServers.map((server) => [server.id, server.name]));
 
   return {
@@ -166,10 +177,12 @@ export function toRoutinePanelItem(
     approval: routine.approvalPolicy,
     skills: routine.skillAssignmentIds.flatMap((id) => {
       const name = assignmentNames.get(id);
+
       return name ? [name] : [];
     }),
     connectors: routine.connectorDependencies.flatMap((id) => {
       const name = connectorNames.get(id);
+
       return name ? [name] : [];
     }),
     delegateToBotId: routine.delegateToBotId,
@@ -209,7 +222,9 @@ export function botRoutinesView(
   botId: BotId | string,
 ): BotRoutinesView {
   if (!snapshot) return { kind: "loading" };
+
   if (snapshot.routines === undefined) return { kind: "unavailable" };
+
   return {
     kind: "ready",
     routines: snapshot.routines
@@ -234,12 +249,12 @@ export function routineScheduleLabel(
   schedule: RoutineAdapterSchedule,
   i18n: RoutineTranslator = englishTranslator,
 ) {
-  const frequency =
-    schedule.frequency === "daily"
-      ? i18n.t("Daily")
-      : schedule.frequency === "weekdays"
-        ? i18n.t("Weekdays")
-        : i18n.t(WEEKDAY_LABELS[schedule.weekday ?? 1] ?? "Monday");
+  const frequency = Match.value(schedule.frequency).pipe(
+    Match.when("daily", () => i18n.t("Daily")),
+    Match.when("weekdays", () => i18n.t("Weekdays")),
+    Match.orElse(() => i18n.t(WEEKDAY_LABELS[schedule.weekday ?? 1] ?? "Monday")),
+  );
+
   return i18n.t("{frequency} at {time} ({timezone})", {
     frequency,
     time: schedule.time,
@@ -256,13 +271,18 @@ export function boundedRunHistory(history: readonly RoutineAdapterRun[]) {
  * A routine that was never approved is a Draft; one that was turned off is Off, and
  * the two take different routes back on.
  */
-export function routineStatus(routine: RoutineAdapterItem): {
+type RoutineStatusResult = {
   readonly label: MessageKey & ("Active" | "Paused" | "Off" | "Draft");
   readonly variant: "success" | "warning" | "secondary";
-} {
+};
+
+export function routineStatus(routine: RoutineAdapterItem): RoutineStatusResult {
   if (routine.paused) return { label: "Paused", variant: "warning" };
+
   if (routine.enabled) return { label: "Active", variant: "success" };
+
   if (routine.procedureApproved) return { label: "Off", variant: "secondary" };
+
   return { label: "Draft", variant: "secondary" };
 }
 
@@ -272,8 +292,11 @@ export function routineStatus(routine: RoutineAdapterItem): {
  */
 export function routineStateNote(routine: RoutineAdapterItem): (MessageKey & string) | null {
   if (routine.pausedByAkeru) return "Paused. Fix the cause in Bot inbox, then resume it.";
+
   if (routine.paused) return "Paused until you resume it.";
+
   if (routine.enabled) return null;
+
   return routine.procedureApproved
     ? "Off until you turn it back on."
     : "Draft. Approve its procedure to schedule it.";
@@ -287,8 +310,11 @@ export function routineLifecycleAction(
   routine: RoutineAdapterItem,
 ): "resume" | "enable" | "pause" | null {
   if (routine.paused) return "resume";
+
   if (routine.enabled) return "pause";
+
   if (routine.procedureApproved) return "enable";
+
   return null;
 }
 
@@ -315,9 +341,11 @@ export function runStatusTone(status: RoutineAdapterRunStatus) {
 
 /** The absolute wall-clock label a relative time is paired with. */
 export function absoluteRunTime(value: string, i18n: RoutineTranslator = englishTranslator) {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "";
-  return i18n.formatDate(date, {
+  const date = DateTime.make(Date.parse(value));
+
+  if (Option.isNone(date)) return "";
+
+  return i18n.formatDate(DateTime.toDateUtc(date.value), {
     month: "short",
     day: "numeric",
     hour: "numeric",
@@ -328,6 +356,7 @@ export function absoluteRunTime(value: string, i18n: RoutineTranslator = english
 /** An absolute run time, or "Not scheduled" when there is none. */
 export function routineDateLabel(value: string | null, i18n: RoutineTranslator) {
   if (!value) return i18n.t("Not scheduled");
+
   return absoluteRunTime(value, i18n);
 }
 
@@ -337,21 +366,28 @@ export function routineDateLabel(value: string | null, i18n: RoutineTranslator) 
  */
 export function relativeRunTime(
   value: string,
-  nowMs: number = Date.now(),
+  nowMs: number = DateTime.toEpochMillis(DateTime.nowUnsafe()),
   i18n: RoutineTranslator = englishTranslator,
 ) {
-  const target = new Date(value).getTime();
+  const target = Option.match(DateTime.make(Date.parse(value)), {
+    onNone: () => Number.NaN,
+    onSome: DateTime.toEpochMillis,
+  });
+
   if (Number.isNaN(target)) return "";
   const diffMs = target - nowMs;
   const seconds = Math.floor(Math.abs(diffMs) / 1000);
+
   if (seconds < 60) return i18n.t("now");
   const minutes = Math.floor(seconds / 60);
+
   const span =
     minutes < 60
       ? i18n.t("{count}m", { count: minutes })
       : minutes < 1440
         ? i18n.t("{count}h", { count: Math.floor(minutes / 60) })
         : i18n.t("{count}d", { count: Math.floor(minutes / 1440) });
+
   return diffMs >= 0 ? i18n.t("in {span}", { span }) : i18n.t("{span} ago", { span });
 }
 
@@ -362,6 +398,7 @@ export function runSummaryLine(
 ) {
   const detail = run.error ?? run.summary ?? "";
   const line = detail.split("\n").find((part) => part.trim().length > 0);
+
   return line?.trim() || i18n.t(runStatusTone(run.status).label);
 }
 
@@ -377,38 +414,43 @@ export interface RoutineApprovalSummary {
  * tool arguments so a malformed request still renders as a reviewable approval.
  */
 export function routineApprovalSummary(
-  args: unknown,
+  args: PendingApproval["args"],
   t: RoutineTranslator["t"] = englishTranslator.t,
 ): RoutineApprovalSummary {
-  const record = args && typeof args === "object" ? (args as Record<string, unknown>) : null;
-  const schedule =
-    record?.schedule && typeof record.schedule === "object"
-      ? (record.schedule as Record<string, unknown>)
-      : null;
-  const time = typeof schedule?.time === "string" ? schedule.time : null;
+  const record = asRecord(args);
+  const schedule = asRecord(record?.schedule);
+
+  const time = Predicate.isString(schedule?.time) ? schedule.time : null;
+
   const weekdays = Array.isArray(schedule?.weekdays)
-    ? schedule.weekdays.filter((day): day is string => typeof day === "string")
+    ? schedule.weekdays.filter((day): day is string => Predicate.isString(day))
     : [];
-  const kind =
-    schedule?.kind === "weekdays"
-      ? t("Weekdays")
-      : schedule?.kind === "weekly"
-        ? weekdays.length > 0
-          ? weekdays
-              .map((day) => {
-                const index = WEEKDAY_IDS.indexOf(day as (typeof WEEKDAY_IDS)[number]);
-                return index === -1 ? day : t(WEEKDAY_LABELS[index]!);
-              })
-              .join(", ")
-          : t("Weekly")
-        : t("Daily");
+
+  const kind = Match.value(schedule?.kind).pipe(
+    Match.when("weekdays", () => t("Weekdays")),
+    Match.when("weekly", () =>
+      weekdays.length > 0
+        ? weekdays
+            .map((day) => {
+              const index = WEEKDAY_IDS.findIndex((weekday) => weekday === day);
+
+              return index === -1 ? day : t(WEEKDAY_LABELS[index]!);
+            })
+            .join(", ")
+        : t("Weekly"),
+    ),
+    Match.orElse(() => t("Daily")),
+  );
+
   const base = time ? t("{schedule} at {time}", { schedule: kind, time }) : null;
+
   const timezone =
-    typeof record?.timezone === "string" && record.timezone.trim() ? record.timezone.trim() : null;
+    Predicate.isString(record?.timezone) && record.timezone.trim() ? record.timezone.trim() : null;
+
   return {
-    name: typeof record?.name === "string" && record.name.trim() ? record.name : t("New routine"),
+    name: Predicate.isString(record?.name) && record.name.trim() ? record.name : t("New routine"),
     instructions:
-      typeof record?.instructions === "string" && record.instructions.trim()
+      Predicate.isString(record?.instructions) && record.instructions.trim()
         ? record.instructions
         : null,
     schedule: base && timezone ? `${base} (${timezone})` : base,

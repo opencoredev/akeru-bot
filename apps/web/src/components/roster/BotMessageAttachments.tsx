@@ -37,6 +37,7 @@ export function BotMessageAttachments({
   readonly environmentId: EnvironmentId;
 }) {
   const { t } = useI18n();
+
   const resources = useMemo(
     () =>
       attachments.map((attachment) => ({
@@ -45,18 +46,22 @@ export function BotMessageAttachments({
       })),
     [attachments],
   );
+
   const urls = useAssetUrls(environmentId, resources);
   const [failedIds, setFailedIds] = useState<ReadonlySet<string>>(() => new Set());
   const [preview, setPreview] = useState<ExpandedImagePreview | null>(null);
+
   if (attachments.length === 0) return null;
 
   return (
     <>
-      <div className="grid max-w-[420px] grid-cols-1 gap-2 sm:grid-cols-2">
+      <div className="grid max-w-105 grid-cols-1 gap-2 sm:grid-cols-2">
         {attachments.map((attachment, index) => {
           const url = urls[index];
+
           const canPreview =
             attachment.type === "image" && url !== null && !failedIds.has(attachment.id);
+
           if (attachment.type === "file") {
             return (
               <a
@@ -71,11 +76,12 @@ export function BotMessageAttachments({
               </a>
             );
           }
+
           return (
             <div
               key={attachment.id}
               data-testid="bot-message-attachment"
-              className="aspect-[4/3] min-h-20 overflow-hidden rounded-lg border border-border/70 bg-background/45"
+              className="aspect-4/3 min-h-20 overflow-hidden rounded-lg border border-border/70 bg-background/45"
             >
               {canPreview ? (
                 <button
@@ -91,7 +97,7 @@ export function BotMessageAttachments({
                   <img
                     src={url}
                     alt={attachment.name}
-                    className="size-full max-h-[220px] object-cover"
+                    className="size-full max-h-55 object-cover"
                     draggable={false}
                     onError={() => setFailedIds((current) => new Set(current).add(attachment.id))}
                   />

@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import { assert, describe, it } from "@effect/vitest";
 import * as Cause from "effect/Cause";
 import * as Effect from "effect/Effect";
@@ -31,11 +32,13 @@ describe("DesktopIpc", () => {
   it.effect("preserves invoke registration context and cause", () =>
     Effect.gen(function* () {
       const cause = new Error("invoke registration failed");
+
       const ipcMain = makeIpcMain({
         handle: () => {
           throw cause;
         },
       });
+
       const ipc = DesktopIpc.make(ipcMain);
 
       const error = yield* Effect.flip(Effect.scoped(ipc.handle(invokeMethod)));
@@ -55,18 +58,22 @@ describe("DesktopIpc", () => {
     Effect.gen(function* () {
       const cause = new Error("sync unregistration failed");
       let removeCount = 0;
+
       const ipcMain = makeIpcMain({
         removeAllListeners: () => {
           removeCount += 1;
+
           if (removeCount === 2) throw cause;
         },
       });
+
       const ipc = DesktopIpc.make(ipcMain);
 
       const exit = yield* Effect.exit(Effect.scoped(ipc.handleSync(syncMethod)));
 
-      assert.isTrue(exit._tag === "Failure");
-      if (exit._tag === "Success") return;
+      assert.isTrue(Predicate.isTagged(exit, "Failure"));
+
+      if (Predicate.isTagged(exit, "Success")) return;
       const error = Cause.squash(exit.cause);
       assert.instanceOf(error, DesktopIpc.DesktopIpcUnregistrationError);
       assert.isTrue(DesktopIpc.isDesktopIpcError(error));

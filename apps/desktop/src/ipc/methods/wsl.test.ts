@@ -24,8 +24,10 @@ const decodeWslState = Schema.decodeUnknownEffect(DesktopWslStateSchema);
 
 const invokeSetWslBackendEnabled = (enabled: boolean) =>
   setWslBackendEnabled.handler(enabled).pipe(Effect.flatMap(decodeWslState));
+
 const invokeSetWslDistro = (distro: string | null) =>
   setWslDistro.handler(distro).pipe(Effect.flatMap(decodeWslState));
+
 const invokeSetWslOnly = (enabled: boolean) =>
   setWslOnly.handler(enabled).pipe(Effect.flatMap(decodeWslState));
 
@@ -87,6 +89,7 @@ const unusedLifecycleRuntimeLayer = Layer.mergeAll(
 describe("WSL IPC", () => {
   it.effect("stages dual-backend preferences before enabling without relaunching", () => {
     const relaunchReasons: Array<string> = [];
+
     const layer = Layer.mergeAll(
       DesktopAppSettings.layerTest({
         ...DesktopAppSettings.DEFAULT_DESKTOP_SETTINGS,
@@ -118,6 +121,7 @@ describe("WSL IPC", () => {
 
   it.effect("stages WSL-only preferences and relaunches only after enabling", () => {
     const relaunchReasons: Array<string> = [];
+
     const layer = Layer.mergeAll(
       DesktopAppSettings.layerTest({
         ...DesktopAppSettings.DEFAULT_DESKTOP_SETTINGS,
@@ -155,6 +159,7 @@ describe("WSL IPC", () => {
   it.effect("relaunches when enabling the WSL backend while wsl-only is already persisted", () => {
     const relaunchReasons: Array<string> = [];
     let reconcileCount = 0;
+
     const layer = Layer.mergeAll(
       DesktopAppSettings.layerTest({
         ...DesktopAppSettings.DEFAULT_DESKTOP_SETTINGS,
@@ -190,6 +195,7 @@ describe("WSL IPC", () => {
   it.effect("reconciles in dual-backend mode without relaunching", () => {
     const relaunchReasons: Array<string> = [];
     let reconcileCount = 0;
+
     const layer = Layer.mergeAll(
       DesktopAppSettings.layerTest({
         ...DesktopAppSettings.DEFAULT_DESKTOP_SETTINGS,
@@ -219,6 +225,7 @@ describe("WSL IPC", () => {
   it.effect("clears wsl-only before relaunching when disabling a WSL-only backend", () => {
     const relaunchReasons: Array<string> = [];
     let reconcileCount = 0;
+
     const layer = Layer.mergeAll(
       DesktopAppSettings.layerTest({
         ...DesktopAppSettings.DEFAULT_DESKTOP_SETTINGS,
@@ -258,6 +265,7 @@ describe("WSL IPC", () => {
   it.effect("clears dual-backend WSL without relaunching", () => {
     const relaunchReasons: Array<string> = [];
     let reconcileCount = 0;
+
     const layer = Layer.mergeAll(
       DesktopAppSettings.layerTest({
         ...DesktopAppSettings.DEFAULT_DESKTOP_SETTINGS,

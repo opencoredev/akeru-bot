@@ -61,9 +61,11 @@ describe("channel origin presentation", () => {
         ["failed", { message: "Could not deliver to Telegram", tone: "error" }],
         ["unknown", { message: "Delivery to Telegram unknown", tone: "warning" }],
       ];
+
     for (const [delivery, expected] of cases) {
       expect(channelDeliveryLabel(delivery, "telegram")).toEqual(expected);
     }
+
     expect(channelDeliveryLabel(undefined, "telegram")).toBeNull();
     expect(channelDeliveryLabel(null, "telegram")).toBeNull();
   });
@@ -78,12 +80,14 @@ describe("channel origin presentation", () => {
 
   it("finds the channel origin of the nearest preceding user message", () => {
     const origin = { provider: "telegram" as const, externalThreadId: "chat-1" };
+
     const messages = [
       userMessage({ id: MessageId.make("user-plain"), channelOrigin: null }),
       assistantMessage({ id: MessageId.make("assistant-plain") }),
       userMessage({ id: MessageId.make("user-channel"), channelOrigin: origin }),
       assistantMessage({ id: MessageId.make("assistant-channel") }),
     ];
+
     expect(channelOriginForAssistantMessage(messages, 1)).toBeNull();
     expect(channelOriginForAssistantMessage(messages, 3)).toEqual(origin);
     expect(channelOriginForAssistantMessage(messages, 0)).toBeNull();

@@ -5,6 +5,7 @@ const settingsDialog = vi.hoisted(() => ({ environmentId: "environment-a" }));
 vi.mock("../../i18n", async () => {
   const { createTranslator } = await import("@akeru/client-runtime/i18n");
   const translator = createTranslator("en");
+
   return { useI18n: () => ({ ...translator, t: translator.translate }) };
 });
 

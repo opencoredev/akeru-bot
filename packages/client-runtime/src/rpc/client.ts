@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import { ORCHESTRATION_WS_METHODS, WS_METHODS } from "@akeru/contracts";
 import * as Cause from "effect/Cause";
 import * as Context from "effect/Context";
@@ -37,12 +38,14 @@ export class EnvironmentRpcRequestObserver extends Context.Reference<{
 }) {}
 
 export type EnvironmentRpcTag = keyof WsRpcProtocolClient & string;
+
 type RpcMethod<TTag extends EnvironmentRpcTag> = WsRpcProtocolClient[TTag];
 
 export type EnvironmentSubscriptionRpcTag =
   | typeof ORCHESTRATION_WS_METHODS.subscribeShell
   | typeof ORCHESTRATION_WS_METHODS.subscribeThread
   | typeof WS_METHODS.subscribeAuthAccess
+  | typeof WS_METHODS.subscribeBackgroundPolicy
   | typeof WS_METHODS.subscribeServerConfig
   | typeof WS_METHODS.subscribeServerLifecycle
   | typeof WS_METHODS.subscribePreviewEvents
@@ -81,28 +84,30 @@ export const isRpcClientError = Schema.is(RpcClientError.RpcClientError);
 
 export type EnvironmentRpcInput<TTag extends EnvironmentRpcTag> = Parameters<RpcMethod<TTag>>[0];
 
-export type EnvironmentRpcSuccess<TTag extends EnvironmentUnaryRpcTag> =
-  RpcMethod<TTag> extends (input: any, options?: any) => Effect.Effect<infer A, any, any>
-    ? A
-    : never;
+export type EnvironmentRpcSuccess<TTag extends EnvironmentUnaryRpcTag> = Effect.Success<
+  ReturnType<RpcMethod<TTag>>
+>;
 
-export type EnvironmentRpcFailure<TTag extends EnvironmentUnaryRpcTag> =
-  RpcMethod<TTag> extends (input: any, options?: any) => Effect.Effect<any, infer E, any>
-    ? E
-    : never;
+export type EnvironmentRpcFailure<TTag extends EnvironmentUnaryRpcTag> = Effect.Error<
+  ReturnType<RpcMethod<TTag>>
+>;
 
-export type EnvironmentRpcStreamValue<TTag extends EnvironmentStreamRpcTag> =
-  RpcMethod<TTag> extends (input: any, options?: any) => Stream.Stream<infer A, any, any>
-    ? A
-    : never;
+type RpcStreamResult<TTag extends EnvironmentStreamRpcTag> = Extract<
+  ReturnType<RpcMethod<TTag>>,
+  Stream.Stream<unknown, unknown, unknown>
+>;
 
-export type EnvironmentRpcStreamFailure<TTag extends EnvironmentStreamRpcTag> =
-  RpcMethod<TTag> extends (input: any, options?: any) => Stream.Stream<any, infer E, any>
-    ? E
-    : never;
+export type EnvironmentRpcStreamValue<TTag extends EnvironmentStreamRpcTag> = Stream.Success<
+  RpcStreamResult<TTag>
+>;
+
+export type EnvironmentRpcStreamFailure<TTag extends EnvironmentStreamRpcTag> = Stream.Error<
+  RpcStreamResult<TTag>
+>;
 
 const currentSession = Effect.fn("EnvironmentRpc.currentSession")(function* () {
   const supervisor = yield* EnvironmentSupervisor;
+
   return yield* SubscriptionRef.get(supervisor.session).pipe(
     Effect.flatMap(
       Option.match({
@@ -129,13 +134,17 @@ export const request = Effect.fn("EnvironmentRpc.request")(function* <
   });
   const session = yield* currentSession();
   const observer = yield* EnvironmentRpcRequestObserver;
+
+  // SAFETY: Unary tags select schema-generated Effect methods; only the generic input/result correlation is erased by indexing.
   const method = session.client[tag] as (
     input: EnvironmentRpcInput<TTag>,
   ) => Effect.Effect<EnvironmentRpcSuccess<TTag>, EnvironmentRpcFailure<TTag>>;
+
   const completeObservation = yield* observer.observe({
     environmentId: supervisor.target.environmentId,
     method: tag,
   });
+
   return yield* method(input).pipe(Effect.ensuring(completeObservation));
 });
 
@@ -150,9 +159,11 @@ export function runStream<TTag extends EnvironmentStreamCommandRpcTag>(
   return Stream.unwrap(
     currentSession().pipe(
       Effect.map((session) => {
+        // SAFETY: Stream command tags select schema-generated streams when called without queue options.
         const method = session.client[tag] as (
           input: EnvironmentRpcInput<TTag>,
         ) => Stream.Stream<EnvironmentRpcStreamValue<TTag>, EnvironmentRpcStreamFailure<TTag>>;
+
         return method(input);
       }),
     ),
@@ -185,6 +196,7 @@ export function subscribeDynamic<TTag extends EnvironmentSubscriptionRpcTag>(
       const supervisor = yield* EnvironmentSupervisor;
       const observer = yield* EnvironmentRpcSubscriptionObserver;
       const sessionChanges = SubscriptionRef.changes(supervisor.session);
+
       const sessions =
         options?.resubscribe === undefined
           ? sessionChanges
@@ -194,17 +206,20 @@ export function subscribeDynamic<TTag extends EnvironmentSubscriptionRpcTag>(
                 Stream.mapEffect(() => SubscriptionRef.get(supervisor.session)),
               ),
             );
+
       return sessions.pipe(
         Stream.switchMap(
           Option.match({
             onNone: () => Stream.empty,
             onSome: (session) => {
+              // SAFETY: Subscription tags select schema-generated streams with matching input and output schemas.
               const method = session.client[tag] as (
                 input: EnvironmentRpcInput<TTag>,
               ) => Stream.Stream<
                 EnvironmentRpcStreamValue<TTag>,
                 EnvironmentRpcStreamFailure<TTag>
               >;
+
               const subscribeToSession = (): Stream.Stream<
                 EnvironmentRpcStreamValue<TTag>,
                 EnvironmentRpcStreamFailure<TTag>
@@ -213,22 +228,28 @@ export function subscribeDynamic<TTag extends EnvironmentSubscriptionRpcTag>(
                   Stream.unwrap(
                     Effect.gen(function* () {
                       const input = yield* makeInput(session);
+
                       const completeObservation = yield* observer.observe({
                         environmentId: supervisor.target.environmentId,
                         method: tag,
                         input,
                       });
+
                       return method(input).pipe(
                         Stream.ensuring(completeObservation),
                         Stream.catchCause((cause) => {
                           const hasOnlyExpectedFailures =
                             cause.reasons.length > 0 &&
-                            cause.reasons.every((reason) => reason._tag === "Fail");
+                            cause.reasons.every((reason) => Predicate.isTagged(reason, "Fail"));
+
                           const isTransportFailure =
                             hasOnlyExpectedFailures &&
                             cause.reasons.every(
-                              (reason) => reason._tag === "Fail" && isRpcClientError(reason.error),
+                              (reason) =>
+                                Predicate.isTagged(reason, "Fail") &&
+                                isRpcClientError(reason.error),
                             );
+
                           if (isTransportFailure) {
                             return Stream.fromEffect(
                               Effect.logWarning(
@@ -241,13 +262,16 @@ export function subscribeDynamic<TTag extends EnvironmentSubscriptionRpcTag>(
                               ),
                             ).pipe(Stream.drain);
                           }
+
                           if (hasOnlyExpectedFailures && options?.onExpectedFailure !== undefined) {
                             const handled = Stream.fromEffect(
                               options.onExpectedFailure(cause),
                             ).pipe(Stream.drain);
+
                             if (options.retryExpectedFailureAfter === undefined) {
                               return handled;
                             }
+
                             return handled.pipe(
                               Stream.concat(
                                 Stream.fromEffect(
@@ -257,12 +281,14 @@ export function subscribeDynamic<TTag extends EnvironmentSubscriptionRpcTag>(
                               Stream.concat(subscribeToSession()),
                             );
                           }
+
                           return Stream.failCause(cause);
                         }),
                       );
                     }),
                   ),
                 );
+
               return subscribeToSession();
             },
           }),
@@ -290,5 +316,6 @@ export function subscribe<TTag extends EnvironmentSubscriptionRpcTag>(
 
 export const config = Effect.gen(function* () {
   const session = yield* currentSession();
+
   return yield* session.initialConfig;
 }).pipe(Effect.withSpan("EnvironmentRpc.config"));

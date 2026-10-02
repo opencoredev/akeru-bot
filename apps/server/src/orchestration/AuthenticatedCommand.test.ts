@@ -16,6 +16,7 @@ import {
 } from "./AuthenticatedCommand.ts";
 
 const currentPersonId = AuthSessionId.make("person-current");
+
 const targetPersonId = AuthSessionId.make("person-target");
 
 const targetSession = {
@@ -44,6 +45,7 @@ describe("authenticated orchestration commands", () => {
       displayName: "Current person",
       canManageGroups: false,
     };
+
     const group = applyAuthenticatedCommandActor(
       {
         type: "group.create",
@@ -55,6 +57,7 @@ describe("authenticated orchestration commands", () => {
       },
       actor,
     );
+
     const turn = applyAuthenticatedCommandActor(
       {
         type: "thread.turn.start",
@@ -141,6 +144,7 @@ describe("authenticated orchestration commands", () => {
         displayName: "Target person",
       },
     };
+
     const unassign = {
       type: "group.person.unassign" as const,
       commandId: CommandId.make("command-unassign-scope"),

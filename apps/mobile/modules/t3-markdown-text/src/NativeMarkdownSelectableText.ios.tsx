@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 import { Image, Linking, type TextStyle, useColorScheme } from "react-native";
 
 import { MarkdownTextPrimitive } from "./MarkdownTextPrimitive";
@@ -6,8 +7,11 @@ import type { NativeMarkdownTextRun } from "./nativeMarkdownText";
 import type { NativeMarkdownTextStyle } from "./SelectableMarkdownText.types";
 
 const EXTERNAL_LINK_PREFIX = "◉ ";
+
 const INLINE_ATTACHMENT_PREFIX = "\uFFFC\u00A0";
+
 const SKILL_ICON_PLACEHOLDER = "\uFFFC";
+
 const PARAGRAPH_STYLE_ENCODING_OFFSET = 1000;
 
 function runKeySignature(run: NativeMarkdownTextRun): string {
@@ -34,16 +38,19 @@ function runKeySignature(run: NativeMarkdownTextRun): string {
 }
 
 const DEFAULT_BODY_FONT_SIZE = 15;
+
 const DEFAULT_HEADING_FONT_SIZES = [22, 19, 17, 16, 15, 15] as const;
 
 function resolveHeadingFontSize(textStyle: NativeMarkdownTextStyle, headingLevel: number): number {
   const index = Math.max(0, Math.min(5, headingLevel - 1));
   const configured = textStyle.headingFontSizes?.[index];
-  if (typeof configured === "number" && Number.isFinite(configured)) {
+
+  if (Predicate.isNumber(configured) && Number.isFinite(configured)) {
     return configured;
   }
 
   const scale = textStyle.fontSize / DEFAULT_BODY_FONT_SIZE;
+
   return Math.max(12, Math.round(DEFAULT_HEADING_FONT_SIZES[index] * scale));
 }
 
@@ -55,6 +62,7 @@ function runStyle(run: NativeMarkdownTextRun, textStyle: NativeMarkdownTextStyle
   const isHeading = run.role === "heading";
   const isCodeBlock = run.role === "code-block" || run.role === "code-language";
   const hasParagraphStyle = run.headIndent !== undefined;
+
   const textDecorationLine = run.strikethrough
     ? "line-through"
     : run.href && !isFile
@@ -142,12 +150,14 @@ export function NativeMarkdownSelectableText(props: {
   const colorScheme = useColorScheme();
   const occurrences = new Map<string, number>();
   const prefixedExternalLinks = new Set<string>();
+
   const keyedRuns = props.runs.map((run) => {
     const signature = runKeySignature(run);
     const occurrence = occurrences.get(signature) ?? 0;
     occurrences.set(signature, occurrence + 1);
 
     let text = run.text;
+
     if (run.fileIcon) {
       text = `${INLINE_ATTACHMENT_PREFIX}${text}`;
     } else if (run.skillName && run.skillLabel) {
@@ -159,6 +169,7 @@ export function NativeMarkdownSelectableText(props: {
 
     return { key: `${signature}:${occurrence}`, run, text };
   });
+
   // T3MarkdownText only rebuilds its attributed string during native layout. A
   // color-only child update can otherwise leave the previous appearance cached.
   const appearanceKey = [
@@ -196,6 +207,7 @@ export function NativeMarkdownSelectableText(props: {
     >
       {keyedRuns.map(({ key, run, text }) => {
         const href = run.href;
+
         return (
           <MarkdownTextPrimitive
             key={key}

@@ -35,6 +35,7 @@ describe("closePreviewSession", () => {
   it("suppresses stale server snapshots while the close is in flight", async () => {
     applyPreviewServerSnapshot(threadRef, snapshot);
     let finishClose: (() => void) | undefined;
+
     const closePreview = vi.fn(
       (_input: PreviewCloseInput) =>
         new Promise<ReturnType<typeof AsyncResult.success<void>>>((resolve) => {

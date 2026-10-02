@@ -38,11 +38,13 @@ function escapeRegExp(value: string): string {
 
 function stripLeadingQualifier(value: string, qualifier: string | null | undefined): string {
   const trimmedQualifier = qualifier?.trim();
+
   if (!trimmedQualifier) {
     return value;
   }
 
   const pattern = new RegExp(`^${escapeRegExp(trimmedQualifier)}(?:\\s*[.:/-]\\s*|\\s+)`, "iu");
+
   return value.replace(pattern, "").trim() || value;
 }
 
@@ -51,6 +53,7 @@ export function getDisplayModelName(
   options?: { preferShortName?: boolean },
 ): string {
   const name = options?.preferShortName && model.shortName ? model.shortName : model.name;
+
   return stripLeadingQualifier(name, model.subProvider);
 }
 

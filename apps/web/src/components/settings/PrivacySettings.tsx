@@ -21,16 +21,19 @@ import { PortabilitySettings } from "./PortabilitySettings";
 import { searchableSetting, type SettingsSearchItemId } from "./settingsSearch";
 
 const privacyPolicyUrl = `${AKERU_MARKETING_SITE_URL}/privacy-policy`;
+
 const termsUrl = `${AKERU_MARKETING_SITE_URL}/terms-of-service`;
 
 export function PrivacySettingsPanel() {
   const settings = usePrimarySettings();
   const updateSettings = useUpdatePrimarySettings();
   const { t } = useI18n();
+
   const memoryHint = (description: MessageKey) =>
     settings.memory.enabled
       ? t(description)
       : `${t(description)} ${t(MEMORY_SETTING_DISABLED_HINT)}`;
+
   const translatedSetting = (id: SettingsSearchItemId) => searchableSetting(id, t);
 
   return (

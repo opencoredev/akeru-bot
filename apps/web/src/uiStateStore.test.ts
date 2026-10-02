@@ -41,6 +41,7 @@ describe("uiStateStore pure functions", () => {
 
   it("marks a completed thread unread using the server completion timestamp", () => {
     const threadId = ThreadId.make("thread-1");
+
     const initialState = makeUiState({
       threadLastVisitedAtById: {
         [threadId]: "2026-02-25T12:35:00.000Z",
@@ -148,25 +149,27 @@ describe("uiStateStore pure functions", () => {
 
 describe("parsePersistedState", () => {
   it("hydrates raw UI-owned state without server entities", () => {
-    const parsed = parsePersistedState({
-      projectExpandedById: {
-        logical: false,
-        invalid: "no" as unknown as boolean,
-      },
-      projectOrder: ["physical-b", "", "physical-a", "physical-b"],
-      threadLastVisitedAtById: {
-        "environment:thread-1": "2026-02-25T12:35:00.000Z",
-        invalid: "not-a-date",
-      },
-      defaultAdvertisedEndpointKey: "desktop-core:lan:http",
-      threadChangedFilesExpansionVersion: 1,
-      threadChangedFilesExpandedById: {
-        "environment:thread-1": {
-          "turn-1": false,
-          "turn-2": true,
+    const parsed = parsePersistedState(
+      JSON.stringify({
+        projectExpandedById: {
+          logical: false,
+          invalid: "no",
         },
-      },
-    });
+        projectOrder: ["physical-b", "", "physical-a", "physical-b"],
+        threadLastVisitedAtById: {
+          "environment:thread-1": "2026-02-25T12:35:00.000Z",
+          invalid: "not-a-date",
+        },
+        defaultAdvertisedEndpointKey: "desktop-core:lan:http",
+        threadChangedFilesExpansionVersion: 1,
+        threadChangedFilesExpandedById: {
+          "environment:thread-1": {
+            "turn-1": false,
+            "turn-2": true,
+          },
+        },
+      }),
+    );
 
     expect(parsed).toEqual({
       projectExpandedById: {
@@ -187,23 +190,28 @@ describe("parsePersistedState", () => {
   });
 
   it("ignores changed-file expansion values saved with legacy folder semantics", () => {
-    const parsed = parsePersistedState({
-      threadChangedFilesExpandedById: {
-        "environment:thread-1": {
-          "turn-1": false,
+    const parsed = parsePersistedState(
+      JSON.stringify({
+        threadChangedFilesExpandedById: {
+          "environment:thread-1": {
+            "turn-1": false,
+          },
         },
-      },
-    });
+      }),
+    );
 
     expect(parsed.threadChangedFilesExpandedById).toEqual({});
   });
 
   it("migrates legacy CWD project preferences into local alias keys", () => {
-    const parsed = parsePersistedState({
-      collapsedProjectCwds: ["/repo/b"],
-      expandedProjectCwds: ["/repo/a"],
-      projectOrderCwds: ["/repo/b", "/repo/a"],
-    });
+    const parsed = parsePersistedState(
+      JSON.stringify({
+        collapsedProjectCwds: ["/repo/b"],
+        expandedProjectCwds: ["/repo/a"],
+        projectOrderCwds: ["/repo/b", "/repo/a"],
+      }),
+    );
+
     const projectAKey = legacyProjectCwdPreferenceKey("/repo/a");
     const projectBKey = legacyProjectCwdPreferenceKey("/repo/b");
 
@@ -214,9 +222,11 @@ describe("parsePersistedState", () => {
   });
 
   it("preserves legacy expanded-only semantics for one-way migration", () => {
-    const parsed = parsePersistedState({
-      expandedProjectCwds: ["/repo/a"],
-    });
+    const parsed = parsePersistedState(
+      JSON.stringify({
+        expandedProjectCwds: ["/repo/a"],
+      }),
+    );
 
     expect(
       resolveProjectExpanded(parsed.projectExpandedById, [
@@ -233,6 +243,7 @@ describe("parsePersistedState", () => {
 
 function createLocalStorageStub(): Storage {
   const store = new Map<string, string>();
+
   return {
     clear: () => {
       store.clear();
@@ -287,6 +298,7 @@ describe("uiStateStore persistence", () => {
     const persisted = JSON.parse(
       localStorageStub.getItem(PERSISTED_STATE_KEY) ?? "{}",
     ) as PersistedUiState;
+
     expect(persisted).toEqual({
       projectExpandedById: {
         logical: false,
@@ -304,21 +316,24 @@ describe("uiStateStore persistence", () => {
         },
       },
     });
-    expect(parsePersistedState(persisted)).toEqual({
+    expect(parsePersistedState(JSON.stringify(persisted))).toEqual({
       ...state,
     });
   });
 
   it("drops the temporary expanded-only migration fallback when rewriting state", () => {
-    const migrated = parsePersistedState({
-      expandedProjectCwds: ["/repo/a"],
-    });
+    const migrated = parsePersistedState(
+      JSON.stringify({
+        expandedProjectCwds: ["/repo/a"],
+      }),
+    );
 
     persistState(migrated);
 
     const persisted = JSON.parse(
       localStorageStub.getItem(PERSISTED_STATE_KEY) ?? "{}",
     ) as PersistedUiState;
+
     expect(resolveProjectExpanded(persisted.projectExpandedById ?? {}, ["unknown"])).toBe(true);
   });
 });

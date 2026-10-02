@@ -25,6 +25,7 @@ const BOTH: ImageGenerationSettings = {
   defaultProvider: "chatgpt",
   fallbackOrder: ["chatgpt", "grok"],
 };
+
 const NONE: ImageGenerationSettings = {
   chatgptEnabled: false,
   grokEnabled: false,

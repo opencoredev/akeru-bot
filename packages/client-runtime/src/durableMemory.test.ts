@@ -1,10 +1,14 @@
+import * as Schema from "effect/Schema";
+
+const decodeArchive = Schema.decodeUnknownSync(AkeruMemoryArchiveV2);
+
 import {
   AKERU_MEMORY_APPROVAL_REQUESTED_ACTIVITY,
   AKERU_MEMORY_APPROVAL_RESOLVED_ACTIVITY,
   AkeruMemoryCandidateId,
   BotId,
   ThreadId,
-  type AkeruMemoryArchiveV2,
+  AkeruMemoryArchiveV2,
   type AkeruMemoryImportPreview,
   type AkeruMemoryRevision,
 } from "@akeru/contracts";
@@ -158,9 +162,18 @@ describe("import conflict choices", () => {
   });
 
   it("groups preview items conflicts first with archive and local text", () => {
-    const archive = {
+    const archive = decodeArchive({
+      schemaVersion: 2,
+      anchorThreadId: "thread-1",
+      target: "thread",
+      complete: true,
+      createdAt: "2026-09-01T00:00:00.000Z",
+      files: [],
+      conversations: [],
+      manifestSha256: "0".repeat(64),
       revisions: [
         {
+          sha256: "0".repeat(64),
           revision: revision({
             id: "a1" as never,
             rootId: "m1" as never,
@@ -169,7 +182,8 @@ describe("import conflict choices", () => {
           }),
         },
       ],
-    } as unknown as AkeruMemoryArchiveV2;
+    });
+
     const groups = groupImportPreview({
       preview: items,
       archive,
@@ -177,6 +191,7 @@ describe("import conflict choices", () => {
         revision({ id: "l1" as never, rootId: "m1" as never, revision: 1, fact: "Local" }),
       ]),
     });
+
     expect(groups.map((group) => group.classification)).toEqual(["conflicting", "new", "skipped"]);
     expect(groups[0]!.items[0]).toMatchObject({ archiveFact: "Archive", localFact: "Local" });
     expect(groups[0]!.items[1]).toMatchObject({ archiveFact: null, localFact: null });
@@ -251,6 +266,7 @@ describe("durable fact actions", () => {
       currentThreadId: "thread-1",
       threadTitles: new Map([["thread-2", "Launch plan"]]),
     };
+
     expect(durableFactSourceLabel(fact({ sourceThreadId: null }), names)).toBeNull();
     expect(durableFactSourceLabel(fact({ sourceThreadId: "thread-1" as never }), names)).toBe(
       "this chat",
@@ -280,6 +296,7 @@ describe("durable fact actions", () => {
       "{count} other bots": "其他 {count} 个机器人",
       ", ": "、",
     });
+
     const names = { currentThreadId: "thread-1", threadTitles: new Map<string, string>() };
     expect(durableFactSourceLabel(fact({ sourceThreadId: "thread-1" as never }), names, i18n)).toBe(
       "此聊天",
@@ -312,12 +329,16 @@ describe("durable fact actions", () => {
         ["bot-3", "小明"],
       ]),
     };
+
     const available = (affectedBotIds: ReadonlyArray<string>, locale: "en" | "zh-CN") => {
       const i18n =
         locale === "en" ? createTranslator("en") : createTranslator("zh-CN", zhCNCatalog);
+
       const label = durableFactBotsLabel(fact({ affectedBotIds } as never), bots, i18n) ?? "";
+
       return i18n.t("Available to {bots}", { bots: label });
     };
+
     // The label trails a full-width colon, so a Latin name never touches Chinese text.
     expect(available(["bot-1"], "zh-CN")).toBe("使用范围：此机器人");
     expect(available(["bot-1", "bot-2", "bot-3"], "zh-CN")).toBe("使用范围：此机器人、Iris、小明");
@@ -415,6 +436,7 @@ describe("shared memory approvals", () => {
   it("keeps only requests without a decision, once each, and ignores malformed payloads", () => {
     const first = request("candidate-1", "Deploys happen on Fridays.");
     const second = request("candidate-2", "The team uses pnpm.");
+
     const activities = [
       { kind: AKERU_MEMORY_APPROVAL_REQUESTED_ACTIVITY, payload: first },
       { kind: AKERU_MEMORY_APPROVAL_REQUESTED_ACTIVITY, payload: second },
@@ -434,6 +456,7 @@ describe("shared memory approvals", () => {
         },
       },
     ];
+
     expect(pendingMemoryApprovals(activities)).toEqual([second]);
     expect(pendingMemoryApprovals([])).toEqual([]);
   });

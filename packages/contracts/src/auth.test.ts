@@ -4,6 +4,7 @@ import * as Schema from "effect/Schema";
 import { AuthEnvironmentScopes } from "./auth.ts";
 
 const decodeScopes = Schema.decodeUnknownSync(AuthEnvironmentScopes);
+
 const decodeStoredScopes = Schema.decodeUnknownSync(Schema.fromJsonString(AuthEnvironmentScopes));
 
 describe("AuthEnvironmentScopes", () => {

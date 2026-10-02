@@ -9,9 +9,11 @@ import { hasUnseenCompletion } from "./chatActions.logic";
 /** Whether the chat finished a turn this browser has not shown yet, or was marked unread. */
 export function useChatUnread(threadRef: ScopedThreadRef | null): boolean {
   const shell = useThreadShell(threadRef);
+
   const lastVisitedAt = useUiStateStore((state) =>
     threadRef ? state.threadLastVisitedAtById[scopedThreadKey(threadRef)] : undefined,
   );
+
   return hasUnseenCompletion(shell?.latestTurn?.completedAt, lastVisitedAt);
 }
 
@@ -29,16 +31,19 @@ export function useBotRosterUnread(
   const completions = useBotChatCompletions(environmentId, botId);
   const shownUnread = useChatUnread(shownChat) && !chatOpen;
   const shownKey = shownChat ? scopedThreadKey(shownChat) : null;
+
   const otherUnread = useUiStateStore((state) =>
     environmentId === null
       ? false
       : completions.some((completion) => {
           const key = scopedThreadKey(scopeThreadRef(environmentId, completion.threadId));
+
           return (
             key !== shownKey &&
             hasUnseenCompletion(completion.completedAt, state.threadLastVisitedAtById[key])
           );
         }),
   );
+
   return shownUnread || otherUnread;
 }

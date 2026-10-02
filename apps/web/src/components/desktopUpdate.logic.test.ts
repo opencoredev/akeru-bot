@@ -39,6 +39,7 @@ describe("desktop update button state", () => {
       status: "available",
       availableVersion: "1.1.0",
     };
+
     expect(shouldShowDesktopUpdateButton(state)).toBe(true);
     expect(resolveDesktopUpdateButtonAction(state)).toBe("download");
   });
@@ -52,6 +53,7 @@ describe("desktop update button state", () => {
       errorContext: "download",
       canRetry: true,
     };
+
     expect(shouldShowDesktopUpdateButton(state)).toBe(true);
     expect(resolveDesktopUpdateButtonAction(state)).toBe("download");
     expect(getDesktopUpdateButtonTooltip(state)).toContain("Click to retry");
@@ -67,6 +69,7 @@ describe("desktop update button state", () => {
       errorContext: "install",
       canRetry: true,
     };
+
     expect(shouldShowDesktopUpdateButton(state)).toBe(true);
     expect(resolveDesktopUpdateButtonAction(state)).toBe("install");
     expect(getDesktopUpdateButtonTooltip(state)).toContain("Click to retry");
@@ -82,6 +85,7 @@ describe("desktop update button state", () => {
       errorContext: null,
       canRetry: true,
     };
+
     expect(shouldShowDesktopUpdateButton(state)).toBe(true);
     expect(resolveDesktopUpdateButtonAction(state)).toBe("install");
     expect(getDesktopUpdateButtonTooltip(state)).toContain("Click to restart and install");
@@ -94,6 +98,7 @@ describe("desktop update button state", () => {
       availableVersion: "1.2.0",
       downloadedVersion: "1.1.0",
     };
+
     expect(resolveDesktopUpdateButtonAction(state)).toBe("download");
   });
 
@@ -105,6 +110,7 @@ describe("desktop update button state", () => {
       downloadedVersion: "1.1.0",
       downloadPercent: 100,
     };
+
     expect(resolveDesktopUpdateButtonAction(state)).toBe("none");
   });
 
@@ -116,6 +122,7 @@ describe("desktop update button state", () => {
       errorContext: "check",
       canRetry: true,
     };
+
     expect(shouldShowDesktopUpdateButton(state)).toBe(false);
     expect(resolveDesktopUpdateButtonAction(state)).toBe("none");
   });
@@ -127,6 +134,7 @@ describe("desktop update button state", () => {
       availableVersion: "1.1.0",
       downloadPercent: 42.5,
     };
+
     expect(shouldShowDesktopUpdateButton(state)).toBe(true);
     expect(isDesktopUpdateButtonDisabled(state)).toBe(true);
     expect(getDesktopUpdateButtonTooltip(state)).toContain("42%");
@@ -147,6 +155,7 @@ describe("getDesktopUpdateActionError", () => {
         canRetry: true,
       },
     };
+
     expect(getDesktopUpdateActionError(result)).toBe("checksum mismatch");
   });
 
@@ -162,6 +171,7 @@ describe("getDesktopUpdateActionError", () => {
         canRetry: false,
       },
     };
+
     expect(getDesktopUpdateActionError(result)).toBeNull();
   });
 
@@ -179,6 +189,7 @@ describe("getDesktopUpdateActionError", () => {
         canRetry: true,
       },
     };
+
     expect(getDesktopUpdateActionError(result)).toBeNull();
   });
 });

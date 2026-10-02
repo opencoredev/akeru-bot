@@ -59,9 +59,11 @@ export function projectRefCollectionKey(refs: ReadonlyArray<ScopedProjectRef>): 
 
 export function parseProjectKey(key: string): ScopedProjectRef {
   const separator = key.indexOf("\u0000");
+
   if (separator < 0) {
     throw new InvalidScopedProjectKeyError({ key });
   }
+
   return {
     environmentId: EnvironmentId.make(key.slice(0, separator)),
     projectId: ProjectId.make(key.slice(separator + 1)),
@@ -70,11 +72,13 @@ export function parseProjectKey(key: string): ScopedProjectRef {
 
 export function parseProjectRefCollectionKey(key: string): ReadonlyArray<ScopedProjectRef> {
   let entries: ReadonlyArray<readonly [string, string]>;
+
   try {
     entries = decodeProjectRefCollectionKey(JSON.parse(key));
   } catch (cause) {
     throw new InvalidScopedProjectRefCollectionKeyError({ key, cause });
   }
+
   return entries.map(([environmentId, projectId]) => ({
     environmentId: EnvironmentId.make(environmentId),
     projectId: ProjectId.make(projectId),
@@ -83,9 +87,11 @@ export function parseProjectRefCollectionKey(key: string): ReadonlyArray<ScopedP
 
 export function parseThreadKey(key: string): ScopedThreadRef {
   const separator = key.indexOf("\u0000");
+
   if (separator < 0) {
     throw new InvalidScopedThreadKeyError({ key });
   }
+
   return {
     environmentId: EnvironmentId.make(key.slice(0, separator)),
     threadId: ThreadId.make(key.slice(separator + 1)),

@@ -1,38 +1,22 @@
-import * as Cause from "effect/Cause";
-import * as Context from "effect/Context";
-import * as Data from "effect/Data";
+import * as Predicate from "effect/Predicate";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
-import * as Option from "effect/Option";
-import * as Schema from "effect/Schema";
-import * as Sink from "effect/Sink";
-import * as Stream from "effect/Stream";
 import type * as Types from "effect/Types";
-import { AiError, McpProtocol, McpSchema, McpServer, Tool } from "effect/unstable/ai";
+import { McpProtocol, McpServer } from "effect/unstable/ai";
 import { HttpRouter, HttpServerRequest, HttpServerResponse } from "effect/unstable/http";
-
 import packageJson from "../../package.json" with { type: "json" };
-import { ImageGenerationRequest, type ImageGenerationResult } from "@akeru/contracts";
-import { runImageGenerationTool } from "../image-generation/ImageGenerationRuntime.ts";
-import {
-  AKERU_MEMORY_TOOL_DESCRIPTION,
-  AkeruMemoryToolInputSchema,
-} from "../memory/BotMemoryToolHandlers.ts";
 import * as McpInvocationContext from "./McpInvocationContext.ts";
-import * as McpMemoryToolSession from "./McpMemoryToolSession.ts";
 import * as McpSessionRegistry from "./McpSessionRegistry.ts";
-import * as PreviewAutomationBroker from "./PreviewAutomationBroker.ts";
 import {
   PreviewSnapshotToolkitHandlersLive,
   PreviewStandardToolkitHandlersLive,
 } from "./toolkits/preview/handlers.ts";
 import {
-  PreviewSnapshotTool,
-  PreviewSnapshotToolkit,
-  PreviewStandardToolkit,
-} from "./toolkits/preview/tools.ts";
-
-const decodeMemoryToolInput = Schema.decodeUnknownEffect(AkeruMemoryToolInputSchema);
+  registerPreviewStandardTools,
+  registerPreviewSnapshot,
+} from "./PreviewToolRegistration.ts";
+import { registerMemoryTool } from "./MemoryToolRegistration.ts";
+import { registerImageTool } from "./ImageToolRegistration.ts";
 
 const unauthorized = HttpServerResponse.jsonUnsafe(
   {
@@ -66,9 +50,10 @@ export const normalizeMcpHttpResponse = (
   response: HttpServerResponse.HttpServerResponse,
 ): HttpServerResponse.HttpServerResponse => {
   const bodyIsEmpty =
-    response.body._tag === "Empty" ||
-    (response.body._tag === "Uint8Array" && response.body.contentLength === 0) ||
-    (response.body._tag === "Raw" && response.body.contentLength === 0);
+    Predicate.isTagged(response.body, "Empty") ||
+    (Predicate.isTagged(response.body, "Uint8Array") && response.body.contentLength === 0) ||
+    (Predicate.isTagged(response.body, "Raw") && response.body.contentLength === 0);
+
   return response.status === 200 && bodyIsEmpty
     ? HttpServerResponse.setStatus(response, 202)
     : response;
@@ -80,11 +65,14 @@ const makeMcpAuthMiddleware = McpSessionRegistry.McpSessionRegistry.pipe(
       Effect.fn("McpHttpServer.authenticateRequest")(function* (httpEffect) {
         const request = yield* HttpServerRequest.HttpServerRequest;
         const authorization = request.headers.authorization;
+
         const token =
           authorization?.startsWith("Bearer ") === true
             ? authorization.slice("Bearer ".length).trim()
             : "";
+
         const invocation = yield* registry.resolve(token);
+
         if (!invocation) {
           // Without this the only symptom of a dead credential is the agent
           // quietly losing the whole `akeru` toolkit for the rest of its
@@ -92,8 +80,10 @@ const makeMcpAuthMiddleware = McpSessionRegistry.McpSessionRegistry.pipe(
           yield* Effect.logWarning("rejected MCP request with an unusable credential", {
             reason: token.length === 0 ? "missing_bearer_token" : "unknown_or_expired_token",
           });
+
           return unauthorized;
         }
+
         return yield* httpEffect.pipe(
           Effect.provideService(McpInvocationContext.McpInvocationContext, invocation),
           Effect.map(normalizeMcpHttpResponse),
@@ -106,408 +96,6 @@ const makeMcpAuthMiddleware = McpSessionRegistry.McpSessionRegistry.pipe(
 const McpAuthMiddlewareLive = HttpRouter.middleware<{
   provides: McpInvocationContext.McpInvocationContext;
 }>()(makeMcpAuthMiddleware).layer;
-
-const previewSnapshotFailure = <E>(cause: Cause.Cause<E>) => {
-  if (Cause.hasInterrupts(cause) || cause.reasons.some(Cause.isDieReason)) {
-    return Effect.failCause(cause).pipe(Effect.orDie);
-  }
-  const failures = cause.reasons.filter(Cause.isFailReason);
-  const firstFailure = failures[0]?.error;
-  const errorTag =
-    typeof firstFailure === "object" &&
-    firstFailure !== null &&
-    "_tag" in firstFailure &&
-    typeof firstFailure._tag === "string"
-      ? firstFailure._tag
-      : "PreviewSnapshotError";
-  const result = new McpSchema.CallToolResult({
-    isError: true,
-    structuredContent: {
-      error: {
-        _tag: errorTag,
-        operation: "snapshot",
-        failureCount: failures.length,
-      },
-    },
-    content: [{ type: "text", text: "Preview snapshot failed." }],
-  });
-  return Effect.logWarning("preview snapshot failed", {
-    operation: "snapshot",
-    errorTag,
-    failureCount: failures.length,
-  }).pipe(Effect.as(result));
-};
-
-type ToolInputSchema = ReturnType<typeof Tool.getJsonSchema>;
-
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null && !Array.isArray(value);
-
-const providerScalarAllOfKeys = new Set([
-  "description",
-  "title",
-  "default",
-  "examples",
-  "deprecated",
-  "readOnly",
-  "writeOnly",
-  "pattern",
-  "minLength",
-  "maxLength",
-  "format",
-  "contentEncoding",
-  "contentMediaType",
-  "minimum",
-  "maximum",
-  "exclusiveMinimum",
-  "exclusiveMaximum",
-  "multipleOf",
-]);
-
-/**
- * Mastra converts scalar `allOf` members into Zod intersections. Constraint-only
- * members become objects, so Codex receives an object schema and sends `{}` for
- * fields such as URLs and key names. Flatten only scalar constraint members;
- * object intersections keep their original JSON Schema semantics.
- */
-export const normalizeProviderToolInputSchema = (schema: ToolInputSchema): ToolInputSchema => {
-  const visit = (value: unknown): unknown => {
-    if (Array.isArray(value)) return value.map(visit);
-    if (!isRecord(value)) return value;
-
-    const normalized = Object.fromEntries(
-      Object.entries(value)
-        .filter(([key]) => key !== "allOf")
-        .map(([key, child]) => [key, visit(child)]),
-    );
-    const allOf = Array.isArray(value.allOf) ? value.allOf.map(visit) : undefined;
-    const scalar = ["string", "number", "integer", "boolean"].includes(String(value.type));
-    const occupiedKeys = new Set(Object.keys(normalized));
-    const canFlatten =
-      scalar &&
-      allOf?.every((member) => {
-        if (!isRecord(member)) return false;
-        return Object.keys(member).every((key) => {
-          if (!providerScalarAllOfKeys.has(key)) return false;
-          if (key === "description") return true;
-          if (occupiedKeys.has(key)) return false;
-          occupiedKeys.add(key);
-          return true;
-        });
-      });
-
-    if (canFlatten && allOf) {
-      for (const member of allOf) {
-        if (!isRecord(member)) continue;
-        for (const [key, child] of Object.entries(member)) {
-          if (key === "description" && "description" in normalized) continue;
-          normalized[key] = child;
-        }
-      }
-      return normalized;
-    }
-    return allOf ? { ...normalized, allOf } : normalized;
-  };
-
-  return visit(schema) as ToolInputSchema;
-};
-
-const toolErrorResult = (message: string) =>
-  new McpSchema.CallToolResult({
-    isError: true,
-    content: [{ type: "text", text: message }],
-  });
-
-class MemoryMcpExecutionError extends Data.TaggedError("MemoryMcpExecutionError")<{
-  readonly cause: unknown;
-}> {}
-
-const registerPreviewStandardTools = Effect.fn("McpHttpServer.registerPreviewStandardTools")(
-  function* () {
-    const server = yield* McpServer.McpServer;
-    const broker = yield* PreviewAutomationBroker.PreviewAutomationBroker;
-    const built = yield* PreviewStandardToolkit;
-
-    for (const tool of Object.values(built.tools)) {
-      const outputSchema = Tool.getJsonSchemaFromSchema(tool.successSchema);
-      const isDeclaredFailure = Schema.is(tool.failureSchema);
-      yield* server.addTool({
-        tool: new McpSchema.Tool({
-          name: tool.name,
-          description: Tool.getDescription(tool),
-          inputSchema: normalizeProviderToolInputSchema(Tool.getJsonSchema(tool)),
-          ...(outputSchema.type === "object" ? { outputSchema } : {}),
-          annotations: {
-            ...Context.getOption(tool.annotations, Tool.Title).pipe(
-              Option.map((title) => ({ title })),
-              Option.getOrUndefined,
-            ),
-            readOnlyHint: Context.get(tool.annotations, Tool.Readonly),
-            destructiveHint: Context.get(tool.annotations, Tool.Destructive),
-            idempotentHint: Context.get(tool.annotations, Tool.Idempotent),
-            openWorldHint: Context.get(tool.annotations, Tool.OpenWorld),
-          },
-        }),
-        annotations: tool.annotations,
-        handle: (payload) =>
-          Effect.withFiber((fiber) => {
-            const invocation = Context.getUnsafe(
-              fiber.context,
-              McpInvocationContext.McpInvocationContext,
-            );
-            return built.handle(tool.name, payload).pipe(
-              Stream.unwrap,
-              Stream.run(Sink.last()),
-              Effect.flatMap(Effect.fromOption),
-              Effect.provideService(PreviewAutomationBroker.PreviewAutomationBroker, broker),
-              Effect.provideService(McpInvocationContext.McpInvocationContext, invocation),
-              Effect.map(
-                ({ encodedResult }) =>
-                  new McpSchema.CallToolResult({
-                    isError: false,
-                    structuredContent:
-                      typeof encodedResult === "object" ? encodedResult : undefined,
-                    content: [{ type: "text", text: JSON.stringify(encodedResult) }],
-                  }),
-              ),
-              Effect.tapCause(Effect.logError),
-              Effect.catch((error) => {
-                if (AiError.isAiError(error)) {
-                  const reason = error.reason;
-                  return reason._tag === "ToolParameterValidationError"
-                    ? Effect.fail(new McpSchema.InvalidParams({ message: reason.message }))
-                    : Effect.succeed(toolErrorResult("Tool execution failed."));
-                }
-                if (isDeclaredFailure(error)) {
-                  return Effect.succeed(
-                    toolErrorResult(
-                      error instanceof Error ? error.message : "Tool execution failed.",
-                    ),
-                  );
-                }
-                return Effect.succeed(toolErrorResult("Tool execution failed."));
-              }),
-              Effect.catchDefect(() => Effect.succeed(toolErrorResult("Tool execution failed."))),
-            );
-          }),
-      });
-    }
-  },
-);
-
-const registerPreviewSnapshot = Effect.fn("McpHttpServer.registerPreviewSnapshot")(function* () {
-  const server = yield* McpServer.McpServer;
-  const broker = yield* PreviewAutomationBroker.PreviewAutomationBroker;
-  const built = yield* PreviewSnapshotToolkit;
-  const tool = PreviewSnapshotTool;
-  yield* server.addTool({
-    tool: new McpSchema.Tool({
-      name: tool.name,
-      description: Tool.getDescription(tool),
-      inputSchema: Tool.getJsonSchema(tool),
-      annotations: {
-        ...Context.getOption(tool.annotations, Tool.Title).pipe(
-          Option.map((title) => ({ title })),
-          Option.getOrUndefined,
-        ),
-        readOnlyHint: Context.get(tool.annotations, Tool.Readonly),
-        destructiveHint: Context.get(tool.annotations, Tool.Destructive),
-        idempotentHint: Context.get(tool.annotations, Tool.Idempotent),
-        openWorldHint: Context.get(tool.annotations, Tool.OpenWorld),
-      },
-    }),
-    annotations: tool.annotations,
-    handle: (payload) =>
-      Effect.withFiber((fiber) => {
-        const invocation = Context.getUnsafe(
-          fiber.context,
-          McpInvocationContext.McpInvocationContext,
-        );
-        return built.handle("preview_snapshot", payload).pipe(
-          Stream.unwrap,
-          Stream.run(Sink.last()),
-          Effect.flatMap(Effect.fromOption),
-          Effect.provideService(PreviewAutomationBroker.PreviewAutomationBroker, broker),
-          Effect.provideService(McpInvocationContext.McpInvocationContext, invocation),
-          Effect.matchCauseEffect({
-            onFailure: previewSnapshotFailure,
-            onSuccess: ({ encodedResult }) => {
-              const snapshot = encodedResult as {
-                readonly screenshot: {
-                  readonly mimeType: "image/png";
-                  readonly data: string;
-                  readonly width: number;
-                  readonly height: number;
-                };
-                readonly [key: string]: unknown;
-              };
-              const { screenshot, ...page } = snapshot;
-              const metadata = {
-                ...page,
-                screenshot: {
-                  mimeType: screenshot.mimeType,
-                  width: screenshot.width,
-                  height: screenshot.height,
-                  redacted: true,
-                },
-              };
-              return Effect.succeed(
-                new McpSchema.CallToolResult({
-                  isError: false,
-                  structuredContent: metadata,
-                  content: [
-                    { type: "text", text: JSON.stringify(metadata) },
-                    ...(payload?.includeImage === false
-                      ? []
-                      : [
-                          {
-                            type: "image" as const,
-                            data: new Uint8Array(Buffer.from(screenshot.data, "base64")),
-                            mimeType: screenshot.mimeType,
-                          },
-                        ]),
-                  ],
-                }),
-              );
-            },
-          }),
-        );
-      }),
-  });
-});
-
-const registerMemoryTool = Effect.fn("McpHttpServer.registerMemoryTool")(function* () {
-  const server = yield* McpServer.McpServer;
-  const memoryTool = Tool.make("memory", {
-    description: AKERU_MEMORY_TOOL_DESCRIPTION,
-    parameters: AkeruMemoryToolInputSchema,
-    success: Schema.Unknown,
-  });
-  yield* server.addTool({
-    tool: new McpSchema.Tool({
-      name: memoryTool.name,
-      description: Tool.getDescription(memoryTool),
-      inputSchema: normalizeProviderToolInputSchema(Tool.getJsonSchema(memoryTool)),
-      annotations: {
-        readOnlyHint: false,
-        destructiveHint: false,
-        idempotentHint: false,
-        openWorldHint: false,
-      },
-    }),
-    annotations: memoryTool.annotations,
-    handle: (payload) =>
-      Effect.withFiber((fiber) => {
-        const invocation = Context.getUnsafe(
-          fiber.context,
-          McpInvocationContext.McpInvocationContext,
-        );
-        if (!invocation.capabilities.has("memory")) {
-          return Effect.succeed(toolErrorResult("This session cannot update bot memory."));
-        }
-        const handler = McpMemoryToolSession.readMcpMemoryToolSession(invocation.threadId);
-        if (!handler) {
-          return Effect.succeed(toolErrorResult("Bot memory is unavailable for this chat."));
-        }
-        return decodeMemoryToolInput(payload).pipe(
-          Effect.flatMap((input) =>
-            Effect.tryPromise({
-              try: () =>
-                handler({
-                  threadId: String(invocation.threadId),
-                  toolId: "memory",
-                  toolCallId: `mcp-memory-${invocation.providerSessionId}`,
-                  input,
-                  approvalMode: "require-grant",
-                }),
-              catch: (cause) => new MemoryMcpExecutionError({ cause }),
-            }),
-          ),
-          Effect.map(
-            (result) =>
-              new McpSchema.CallToolResult({
-                isError: false,
-                structuredContent: isRecord(result) ? result : undefined,
-                content: [{ type: "text", text: JSON.stringify(result) }],
-              }),
-          ),
-          Effect.catch((cause) =>
-            Effect.succeed(
-              toolErrorResult(
-                cause instanceof MemoryMcpExecutionError && cause.cause instanceof Error
-                  ? cause.cause.message
-                  : cause instanceof Error
-                    ? cause.message
-                    : "Memory update failed.",
-              ),
-            ),
-          ),
-        );
-      }),
-  });
-});
-
-export const IMAGE_TOOL_DESCRIPTION =
-  "Generate a new image, or edit images from this chat, with the image provider the user configured. " +
-  'Use operation "generate" with a prompt, or operation "edit" with a prompt and optional inputImages ' +
-  "(attachment ids from this chat; defaults to the images on the latest user message). " +
-  "Finished images appear in the chat automatically; do not repeat or describe the file data. " +
-  'If the result status is "needs-consent", ask the user before retrying with allowProvider.';
-
-function imageToolText(result: ImageGenerationResult): string {
-  switch (result.status) {
-    case "completed": {
-      const count = result.artifacts.length;
-      return `Created ${count} image${count === 1 ? "" : "s"}. ${count === 1 ? "It is" : "They are"} shown in the chat.`;
-    }
-    case "needs-consent":
-    case "failed":
-      return result.message;
-  }
-}
-
-const registerImageTool = Effect.fn("McpHttpServer.registerImageTool")(function* () {
-  const server = yield* McpServer.McpServer;
-  const imageTool = Tool.make("generate_image", {
-    description: IMAGE_TOOL_DESCRIPTION,
-    parameters: ImageGenerationRequest,
-    success: Schema.Unknown,
-  });
-  yield* server.addTool({
-    tool: new McpSchema.Tool({
-      name: imageTool.name,
-      description: Tool.getDescription(imageTool),
-      inputSchema: normalizeProviderToolInputSchema(Tool.getJsonSchema(imageTool)),
-      annotations: {
-        readOnlyHint: false,
-        destructiveHint: false,
-        idempotentHint: false,
-        openWorldHint: true,
-      },
-    }),
-    annotations: imageTool.annotations,
-    handle: (payload) =>
-      Effect.withFiber((fiber) => {
-        const invocation = Context.getUnsafe(
-          fiber.context,
-          McpInvocationContext.McpInvocationContext,
-        );
-        if (!invocation.capabilities.has("image")) {
-          return Effect.succeed(toolErrorResult("Image generation is turned off for this chat."));
-        }
-        return runImageGenerationTool(invocation.threadId, payload).pipe(
-          Effect.map(
-            (result) =>
-              new McpSchema.CallToolResult({
-                isError: result.status === "failed",
-                structuredContent: { ...result },
-                content: [{ type: "text", text: imageToolText(result) }],
-              }),
-          ),
-        );
-      }),
-  });
-});
 
 const PreviewStandardToolkitRegistrationLive = Layer.effectDiscard(
   registerPreviewStandardTools(),
@@ -532,3 +120,7 @@ const McpTransportLive = McpServer.layerHttp({
 }).pipe(Layer.provide(McpAuthMiddlewareLive));
 
 export const layer = PreviewToolkitRegistrationLive.pipe(Layer.provideMerge(McpTransportLive));
+
+export { normalizeProviderToolInputSchema } from "./McpToolSchema.ts";
+
+export { IMAGE_TOOL_DESCRIPTION } from "./ImageToolRegistration.ts";

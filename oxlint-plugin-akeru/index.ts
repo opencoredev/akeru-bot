@@ -2,9 +2,11 @@ import { definePlugin } from "@oxlint/plugins";
 
 import namespaceNodeImports from "./rules/namespace-node-imports.ts";
 import noGlobalProcessRuntime from "./rules/no-global-process-runtime.ts";
+import noLintSuppressions from "./rules/no-lint-suppressions.ts";
 import noInlineSchemaCompile from "./rules/no-inline-schema-compile.ts";
 import noManualEffectRuntimeInTests from "./rules/no-manual-effect-runtime-in-tests.ts";
 import noNativeTitleTooltip from "./rules/no-native-title-tooltip.ts";
+import noRawPaletteStrings from "./rules/no-raw-palette-strings.ts";
 
 export default definePlugin({
   meta: {
@@ -14,7 +16,9 @@ export default definePlugin({
     "namespace-node-imports": namespaceNodeImports,
     "no-global-process-runtime": noGlobalProcessRuntime,
     "no-inline-schema-compile": noInlineSchemaCompile,
+    "no-lint-suppressions": noLintSuppressions,
     "no-manual-effect-runtime-in-tests": noManualEffectRuntimeInTests,
     "no-native-title-tooltip": noNativeTitleTooltip,
+    "no-raw-palette-strings": noRawPaletteStrings,
   },
 });

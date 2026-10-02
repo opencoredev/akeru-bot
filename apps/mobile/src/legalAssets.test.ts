@@ -11,10 +11,12 @@ describe("mobile legal assets", () => {
       NodePath.join(import.meta.dirname, "legalAssets.ts"),
       "utf8",
     );
+
     const licenses = NodeFS.readdirSync(NodePath.join(repoRoot, "legal/licenses")).sort();
 
     expect(source).toContain('require("../../../legal/licenses/MIT-Akeru.txt")');
     expect(source).toContain('require("../../../THIRD_PARTY_NOTICES.md")');
+
     for (const license of licenses) {
       expect(source).toContain(`require("../../../legal/licenses/${license}")`);
     }

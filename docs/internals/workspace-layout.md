@@ -43,6 +43,7 @@ the task commands.
 - `assets/`: brand and app icon sources for development and production builds.
 - `patches/`: pnpm patches for pinned upstream dependencies.
 - `oxlint-plugin-akeru/`: repo-specific lint rules.
+- `oxlint-plugin-anti-slop/`: vendored anti-slop lint rules. See [Lint rules](./lint.md).
 - `experiments/`: throwaway prototypes. Not part of the shipped build.
 - `docs/`: this documentation tree.
 

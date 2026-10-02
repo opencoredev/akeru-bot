@@ -5,6 +5,7 @@ import { buildHomeListFilterMenu } from "./home-list-filter-menu";
 describe("buildHomeListFilterMenu", () => {
   it("adds a project scope submenu that selects and clears the same scope as the chips", () => {
     const onProjectChange = vi.fn();
+
     const menu = buildHomeListFilterMenu({
       environments: [],
       projects: [
@@ -20,6 +21,7 @@ describe("buildHomeListFilterMenu", () => {
     const projectMenu = menu.items.find(
       (item) => item.type === "submenu" && item.title === "Project",
     );
+
     expect(menu.items.some((item) => item.title === "Settings")).toBe(false);
     expect(projectMenu).toMatchObject({
       type: "submenu",
@@ -29,6 +31,7 @@ describe("buildHomeListFilterMenu", () => {
         { title: "Website", state: "off" },
       ],
     });
+
     if (projectMenu?.type !== "submenu") throw new Error("Expected project submenu");
 
     projectMenu.items[0]?.onPress();

@@ -1,18 +1,19 @@
+import * as Match from "effect/Match";
 import * as Schema from "effect/Schema";
 import * as SchemaIssue from "effect/SchemaIssue";
 
 function summarizeSchemaIssue(issue: SchemaIssue.Issue): string {
-  switch (issue._tag) {
-    case "Filter":
-    case "Encoding":
-    case "Pointer":
+  return Match.value(issue).pipe(
+    Match.tag("Filter", "Encoding", "Pointer", (issue): string => {
       return `${issue._tag}(${summarizeSchemaIssue(issue.issue)})`;
-    case "Composite":
-    case "AnyOf":
+    }),
+    Match.tag("Composite", "AnyOf", (issue): string => {
       return `${issue._tag}(${issue.issues.map(summarizeSchemaIssue).join(",")})`;
-    default:
+    }),
+    Match.orElse((issue): string => {
       return issue._tag;
-  }
+    }),
+  );
 }
 
 // ===============================
@@ -25,6 +26,7 @@ export const PersistenceErrorCorrelation = Schema.Union([
   Schema.Struct({ pairingLinkId: Schema.String }),
   Schema.Struct({ threadId: Schema.String }),
 ]);
+
 export type PersistenceErrorCorrelation = typeof PersistenceErrorCorrelation.Type;
 
 export class PersistenceSqlError extends Schema.TaggedErrorClass<PersistenceSqlError>()(
@@ -69,7 +71,9 @@ export class PersistenceDecodeError extends Schema.TaggedErrorClass<PersistenceD
     return `Decode error in ${this.operation}: ${this.issue}`;
   }
 }
+
 const isPersistenceSqlError = Schema.is(PersistenceSqlError);
+
 const isPersistenceDecodeError = Schema.is(PersistenceDecodeError);
 
 // Kept for orchestration/projection call sites, which are being revamped separately.
@@ -88,7 +92,7 @@ export function toPersistenceDecodeError(operation: string) {
     PersistenceDecodeError.fromSchemaError(operation, cause);
 }
 
-export const isPersistenceError = (u: unknown) =>
+export const isPersistenceError = (u: unknown): u is PersistenceSqlError | PersistenceDecodeError =>
   isPersistenceSqlError(u) || isPersistenceDecodeError(u);
 
 // ===============================
@@ -132,7 +136,9 @@ export type OrchestrationCommandReceiptRepositoryError =
   | PersistenceDecodeError;
 
 export type ProviderSessionRuntimeRepositoryError = PersistenceSqlError | PersistenceDecodeError;
+
 export type AuthPairingLinkRepositoryError = PersistenceSqlError | PersistenceDecodeError;
+
 export type AuthSessionRepositoryError = PersistenceSqlError | PersistenceDecodeError;
 
 export type ProjectionRepositoryError = PersistenceSqlError | PersistenceDecodeError;

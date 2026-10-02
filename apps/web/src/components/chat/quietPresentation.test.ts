@@ -14,6 +14,7 @@ function workEntry(overrides: Partial<WorkLogEntry> & { id: string }): TimelineE
     tone: "tool",
     ...overrides,
   };
+
   return { id: entry.id, kind: "work", createdAt: entry.createdAt, entry };
 }
 
@@ -40,6 +41,7 @@ describe("applyQuietPresentation", () => {
       workEntry({ id: "w1", command: "ls -la", toolLifecycleStatus: "completed" }),
       messageEntry("m2"),
     ];
+
     const result = applyQuietPresentation(entries);
     expect(result.map((entry) => entry.id)).toEqual(["m1", "m2"]);
   });
@@ -49,6 +51,7 @@ describe("applyQuietPresentation", () => {
       workEntry({ id: "w1", tone: "thinking", label: "Thinking" }),
       workEntry({ id: "w2", toolLifecycleStatus: "inProgress" }),
     ];
+
     expect(applyQuietPresentation(entries)).toEqual([]);
   });
 
@@ -62,9 +65,11 @@ describe("applyQuietPresentation", () => {
         toolData: { raw: "trace" },
       }),
     ];
+
     const result = applyQuietPresentation(entries);
     expect(result).toHaveLength(1);
     const only = result[0];
+
     if (only?.kind !== "work") throw new Error("expected work entry");
     expect(only.entry.label).toBe(QUIET_FAILURE_LABEL);
     expect(only.entry.tone).toBe("error");
@@ -83,6 +88,7 @@ describe("applyQuietPresentation", () => {
         agentSpawn: { workflowId: null, agentTaskIds: ["t1", "t2"] },
       }),
     ];
+
     expect(applyQuietPresentation(entries).map((entry) => entry.id)).toEqual(["w1"]);
   });
 
@@ -95,6 +101,7 @@ describe("applyQuietPresentation", () => {
 describe("presentation mode storage", () => {
   function memoryStorage(): Storage {
     const map = new Map<string, string>();
+
     return {
       get length() {
         return map.size;

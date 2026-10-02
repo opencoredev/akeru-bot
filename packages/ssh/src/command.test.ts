@@ -24,6 +24,7 @@ const encoder = new TextEncoder();
 const makeFailedProcess = (input: { readonly stdout: string; readonly stderr?: string }) => {
   const stdoutStream = Stream.make(encoder.encode(input.stdout));
   const stderrStream = input.stderr ? Stream.make(encoder.encode(input.stderr)) : Stream.empty;
+
   return ChildProcessSpawner.makeHandle({
     pid: ChildProcessSpawner.ProcessId(123),
     stdout: stdoutStream,
@@ -41,6 +42,7 @@ const makeFailedProcess = (input: { readonly stdout: string; readonly stderr?: s
 
 const makeNeverFinishingProcess = () => {
   let finish: ((exitCode: ChildProcessSpawner.ExitCode) => void) | null = null;
+
   return ChildProcessSpawner.makeHandle({
     pid: ChildProcessSpawner.ProcessId(123),
     stdout: Stream.empty,
@@ -48,6 +50,7 @@ const makeNeverFinishingProcess = () => {
     all: Stream.empty,
     exitCode: Effect.callback<ChildProcessSpawner.ExitCode>((resume) => {
       finish = (exitCode) => resume(Effect.succeed(exitCode));
+
       return Effect.sync(() => {
         finish = null;
       });
@@ -138,6 +141,7 @@ describe("ssh command", () => {
     const spawner = ChildProcessSpawner.make(() =>
       Effect.succeed(makeFailedProcess({ stdout: "Pairing token creation failed\n" })),
     );
+
     const spawnerLayer = Layer.succeed(ChildProcessSpawner.ChildProcessSpawner, spawner);
     const processLayer = Layer.mergeAll(NodeServices.layer, spawnerLayer);
 
@@ -155,6 +159,7 @@ describe("ssh command", () => {
       );
 
       assert.isTrue(Result.isFailure(result));
+
       if (Result.isFailure(result)) {
         assert.instanceOf(result.failure, SshCommandError);
         assert.equal(result.failure.message, "Pairing token creation failed");
@@ -168,6 +173,7 @@ describe("ssh command", () => {
     const spawner = ChildProcessSpawner.make(() =>
       Effect.succeed(makeFailedProcess({ stdout: '{"credential":"pairing-secret"}\n' })),
     );
+
     const spawnerLayer = Layer.succeed(ChildProcessSpawner.ChildProcessSpawner, spawner);
     const processLayer = Layer.mergeAll(NodeServices.layer, spawnerLayer);
 
@@ -185,6 +191,7 @@ describe("ssh command", () => {
       );
 
       assert.isTrue(Result.isFailure(result));
+
       if (Result.isFailure(result)) {
         assert.instanceOf(result.failure, SshCommandError);
         assert.equal(result.failure.message, '{"credential":"[redacted]"}');
@@ -212,12 +219,14 @@ describe("ssh command", () => {
           ),
         ),
       );
+
       yield* Effect.yieldNow;
       yield* TestClock.adjust(Duration.millis(1));
 
       const result = yield* Fiber.join(fiber);
 
       assert.isTrue(Result.isFailure(result));
+
       if (Result.isFailure(result)) {
         assert.include(result.failure.message, "SSH command timed out after 1ms.");
       }

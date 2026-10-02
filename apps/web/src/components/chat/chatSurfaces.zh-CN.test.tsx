@@ -39,6 +39,7 @@ describe("chat surfaces in Simplified Chinese", () => {
         onRespondToApproval={async () => undefined}
       />,
     );
+
     expect(command).toContain(zhCNCatalog["Never"]);
     expect(command).toContain(zhCNCatalog["Enable Auto Review"]);
     expect(command).toContain(zhCNCatalog["Allow once"]);
@@ -56,6 +57,7 @@ describe("chat surfaces in Simplified Chinese", () => {
         onRespondToApproval={async () => undefined}
       />,
     );
+
     expect(routine).toContain("不创建");
     expect(routine).toContain(zhCNCatalog["Create routine"]);
     expect(routine).not.toContain("Don&#x27;t create");
@@ -79,6 +81,7 @@ describe("chat surfaces in Simplified Chinese", () => {
         pendingCount={1}
       />,
     );
+
     expect(routine).toContain(`每${zhCNCatalog["Friday"]} 14:00`);
     expect(routine).toContain("它会做什么");
     expect(routine).toContain("使用 Quotes");
@@ -96,18 +99,21 @@ describe("chat surfaces in Simplified Chinese", () => {
         pendingCount={1}
       />,
     );
+
     expect(command).toContain("删除文件");
     expect(command).not.toContain("Deletes files");
   });
 
   it("translates model picker empty states", () => {
     const { translate } = createTranslator("zh-CN", zhCNCatalog);
+
     const state = {
       searchQuery: "",
       selectedInstanceId: ProviderInstanceId.make("codex"),
       hasAnyModels: false,
       selectedInstanceModelsLoaded: true,
     };
+
     expect(modelPickerEmptyMessage({ ...state, searchQuery: "opus" }, translate)).toBe(
       "没有与“opus”匹配的模型。",
     );
@@ -123,6 +129,7 @@ describe("chat surfaces in Simplified Chinese", () => {
     const html = renderInChinese(
       <ReplyReference label="Nova" text={"line one\nline two\nline three"} sourceMessageId="m1" />,
     );
+
     expect(html).toContain('aria-label="跳转到 Nova 的原始消息"');
     expect(html).toContain("显示完整消息");
     expect(html).not.toContain("Show full message");

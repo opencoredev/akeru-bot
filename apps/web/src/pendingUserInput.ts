@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import type { UserInputQuestion } from "@akeru/contracts";
 
 export interface PendingUserInputDraftAnswer {
@@ -20,11 +21,12 @@ export interface PendingUserInputProgress {
 }
 
 function normalizeDraftAnswer(value: string | undefined): string | null {
-  if (typeof value !== "string") {
+  if (!Predicate.isString(value)) {
     return null;
   }
 
   const trimmed = value.trim();
+
   return trimmed.length > 0 ? trimmed : null;
 }
 
@@ -34,9 +36,11 @@ function normalizeSelectedOptionLabels(value: string[] | undefined): string[] {
   }
 
   const normalized: string[] = [];
+
   for (const entry of value) {
-    if (typeof entry !== "string") continue;
+    if (!Predicate.isString(entry)) continue;
     const trimmed = entry.trim();
+
     if (trimmed.length > 0) {
       normalized.push(trimmed);
     }
@@ -50,11 +54,13 @@ export function resolvePendingUserInputAnswer(
   draft: PendingUserInputDraftAnswer | undefined,
 ): string | string[] | null {
   const customAnswer = normalizeDraftAnswer(draft?.customAnswer);
+
   if (customAnswer) {
     return customAnswer;
   }
 
   const selectedOptionLabels = normalizeSelectedOptionLabels(draft?.selectedOptionLabels);
+
   if (question.multiSelect) {
     return selectedOptionLabels.length > 0 ? selectedOptionLabels : null;
   }
@@ -84,6 +90,7 @@ export function togglePendingUserInputOptionSelection(
 ): PendingUserInputDraftAnswer {
   if (question.multiSelect) {
     const selectedOptionLabels = normalizeSelectedOptionLabels(draft?.selectedOptionLabels);
+
     const nextSelectedOptionLabels = selectedOptionLabels.includes(optionLabel)
       ? selectedOptionLabels.filter((label) => label !== optionLabel)
       : [...selectedOptionLabels, optionLabel];
@@ -116,7 +123,9 @@ export function applyPendingUserInputSingleSelect(
   optionLabel: string,
 ): PendingUserInputSingleSelectResult | null {
   const question = questions[questionIndex];
+
   if (!question || question.id !== questionId || question.multiSelect) return null;
+
   if (!question.options.some((option) => option.label === optionLabel)) return null;
 
   const nextDraftAnswers = {
@@ -127,6 +136,7 @@ export function applyPendingUserInputSingleSelect(
       optionLabel,
     ),
   };
+
   const nextQuestionIndex = Math.min(questionIndex + 1, Math.max(questions.length - 1, 0));
 
   return {
@@ -147,9 +157,11 @@ export function buildPendingUserInputAnswers(
 
   for (const question of questions) {
     const answer = resolvePendingUserInputAnswer(question, draftAnswers[question.id]);
+
     if (!answer) {
       return null;
     }
+
     answers[question.id] = answer;
   }
 
@@ -183,13 +195,17 @@ export function derivePendingUserInputProgress(
 ): PendingUserInputProgress {
   const normalizedQuestionIndex =
     questions.length === 0 ? 0 : Math.max(0, Math.min(questionIndex, questions.length - 1));
+
   const activeQuestion = questions[normalizedQuestionIndex] ?? null;
   const activeDraft = activeQuestion ? draftAnswers[activeQuestion.id] : undefined;
+
   const resolvedAnswer = activeQuestion
     ? resolvePendingUserInputAnswer(activeQuestion, activeDraft)
     : null;
+
   const customAnswer = activeDraft?.customAnswer ?? "";
   const answeredQuestionCount = countAnsweredPendingUserInputQuestions(questions, draftAnswers);
+
   const isLastQuestion =
     questions.length === 0 ? true : normalizedQuestionIndex >= questions.length - 1;
 

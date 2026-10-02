@@ -13,6 +13,7 @@ const showContextMenuFallbackMock =
       position?: { x: number; y: number },
     ) => Promise<T | null>
   >();
+
 const dismissContextMenuMock = vi.fn<() => void>();
 
 const requestConfirmDialogMock =
@@ -29,6 +30,7 @@ vi.mock("./confirmDialog", () => ({
 
 function createLocalStorageStub(): Storage {
   const values = new Map<string, string>();
+
   return {
     getItem: (key) => values.get(key) ?? null,
     setItem: (key, value) => {
@@ -45,19 +47,21 @@ function createLocalStorageStub(): Storage {
   };
 }
 
-function testWindow(): Window & typeof globalThis {
-  return globalThis.window ?? (globalThis as unknown as Window & typeof globalThis);
+function testWindow() {
+  return globalThis.window ?? globalThis;
 }
 
 beforeEach(() => {
   vi.resetModules();
   vi.clearAllMocks();
+
   if (globalThis.window === undefined) {
     Object.defineProperty(globalThis, "window", {
       configurable: true,
       value: globalThis,
     });
   }
+
   Reflect.deleteProperty(testWindow(), "desktopBridge");
   Object.defineProperty(testWindow(), "localStorage", {
     configurable: true,
@@ -118,12 +122,18 @@ describe("LocalApi", () => {
     const pickFolder = vi.fn().mockResolvedValue("/tmp/project");
     const getClientSettings = vi.fn().mockResolvedValue(DEFAULT_CLIENT_SETTINGS);
     const setClientSettings = vi.fn().mockResolvedValue(undefined);
-    testWindow().desktopBridge = {
+
+    const desktopBridge = {
       showContextMenu,
       pickFolder,
       getClientSettings,
       setClientSettings,
-    } as unknown as DesktopBridge;
+    } satisfies Partial<DesktopBridge>;
+
+    Object.defineProperty(testWindow(), "desktopBridge", {
+      configurable: true,
+      value: desktopBridge,
+    });
 
     const { createLocalApi } = await import("./localApi");
     const api = createLocalApi();
@@ -145,6 +155,7 @@ describe("LocalApi", () => {
   it("persists client settings in browser storage", async () => {
     const { createLocalApi } = await import("./localApi");
     const api = createLocalApi();
+
     const settings = {
       ...DEFAULT_CLIENT_SETTINGS,
       timestampFormat: "12-hour" as const,

@@ -26,6 +26,7 @@ describe("channel provider metadata", () => {
       "slack",
       "discord",
     ]);
+
     for (const meta of CHANNEL_PROVIDER_META) {
       expect(meta.icon).toBeTypeOf("function");
       expect(meta.steps.length).toBeGreaterThanOrEqual(2);
@@ -36,13 +37,15 @@ describe("channel provider metadata", () => {
 
   it("splits Photon fields by connection mode", () => {
     const fields = channelProviderMeta("imessage").fields;
-    expect(fields.filter((field) => field.mode === "hosted").map((field) => field.key)).toEqual([
+    expect(fields.flatMap((field) => (field.mode === "hosted" ? [field.key] : []))).toEqual([
       "projectId",
       "projectSecret",
     ]);
-    expect(
-      fields.filter((field) => field.mode === "self-hosted").map((field) => field.key),
-    ).toEqual(["serverUrl", "apiKey", "phone"]);
+    expect(fields.flatMap((field) => (field.mode === "self-hosted" ? [field.key] : []))).toEqual([
+      "serverUrl",
+      "apiKey",
+      "phone",
+    ]);
     expect(fields.find((field) => field.key === "phone")?.optional).toBe(true);
   });
 });
@@ -126,6 +129,7 @@ describe("buildChannelConnectionSaveInput", () => {
       projectId: "p",
       projectSecret: "s",
     });
+
     const selfHosted = buildChannelConnectionSaveInput({
       connectionId,
       name: "Line",
@@ -133,6 +137,7 @@ describe("buildChannelConnectionSaveInput", () => {
       mode: "self-hosted",
       values: { serverUrl: "https://x", apiKey: "k", phone: "  " },
     });
+
     expect(selfHosted).toEqual({
       connectionId,
       name: "Line",

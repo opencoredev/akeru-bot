@@ -1,16 +1,17 @@
 import { useNavigation } from "@react-navigation/native";
 import { useCallback } from "react";
 import { Alert } from "react-native";
-
 import { useMobileI18n } from "../../lib/i18n";
 import { removeThreadOutboxMessage } from "../../state/thread-outbox";
 import type { PendingNewTask } from "../../state/use-pending-new-tasks";
 import { releaseEditingQueuedMessage } from "../../state/use-thread-outbox";
 
-export function usePendingTaskListActions(): {
+type PendingTaskListActions = {
   readonly openPendingTask: (pendingTask: PendingNewTask) => void;
   readonly confirmDeletePendingTask: (pendingTask: PendingNewTask) => void;
-} {
+};
+
+export function usePendingTaskListActions(): PendingTaskListActions {
   const { t } = useMobileI18n();
   const navigation = useNavigation();
 

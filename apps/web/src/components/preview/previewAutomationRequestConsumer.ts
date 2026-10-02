@@ -15,23 +15,25 @@ import {
 type AutomationStreamResult<E> = AsyncResult.AsyncResult<PreviewAutomationStreamEvent, E>;
 
 export function serializePreviewAutomationError(
-  error: unknown,
+  cause: unknown,
   context: PreviewAutomationOperationContext,
 ): NonNullable<PreviewAutomationResponse["error"]> {
   return serializePreviewAutomationHostError(
-    PreviewAutomationOperationError.fromCause({ ...context, cause: error }),
+    PreviewAutomationOperationError.fromCause({ ...context, cause }),
   );
 }
 
-export function createPreviewAutomationRequestConsumerAtom<E>(options: {
+export function createPreviewAutomationRequestConsumerAtom<E, R>(options: {
   readonly requestsAtom: Atom.Atom<AutomationStreamResult<E>>;
   readonly clientId: PreviewAutomationHost["clientId"];
   readonly connectionAtom: Atom.Writable<PreviewAutomationStreamEvent["connectionId"] | null>;
   readonly environmentId: PreviewAutomationHost["environmentId"];
   readonly requestHandlerAtom: Atom.Atom<{
-    readonly handle: (request: PreviewAutomationRequest) => Promise<unknown>;
+    readonly handle: (
+      request: PreviewAutomationRequest,
+    ) => Promise<PreviewAutomationResponse["result"]>;
   }>;
-  readonly respond: (response: PreviewAutomationResponse) => Promise<unknown>;
+  readonly respond: (response: PreviewAutomationResponse) => Promise<R>;
   readonly label: string;
 }): Atom.Atom<void> {
   return Atom.make((get) => {
@@ -46,6 +48,7 @@ export function createPreviewAutomationRequestConsumerAtom<E>(options: {
     const consume = (result: AutomationStreamResult<E>) => {
       if (!AsyncResult.isSuccess(result)) return;
       const event = result.value;
+
       if (event.type === "connected") {
         activeConnectionId = event.connectionId;
         connectionExplicitlyAnnounced = true;
@@ -55,13 +58,16 @@ export function createPreviewAutomationRequestConsumerAtom<E>(options: {
         if (connectionExplicitlyAnnounced) return;
         activeConnectionId = event.connectionId;
       }
+
       if (reportedConnectionId !== event.connectionId) {
         reportedConnectionId = event.connectionId;
         get.set(options.connectionAtom, event.connectionId);
       }
+
       if (event.type === "connected") {
         return;
       }
+
       const request = event.request;
       void get
         .once(options.requestHandlerAtom)
@@ -96,14 +102,17 @@ export function createPreviewAutomationRequestConsumerAtom<E>(options: {
       disposed = true;
     });
     const initialRequest = get.once(options.requestsAtom);
+
     if (AsyncResult.isSuccess(initialRequest)) {
       activeConnectionId = initialRequest.value.connectionId;
       connectionExplicitlyAnnounced = initialRequest.value.type === "connected";
+
       if (initialRequest.value.type === "connected") {
         reportedConnectionId = initialRequest.value.connectionId;
         get.set(options.connectionAtom, initialRequest.value.connectionId);
       }
     }
+
     get.subscribe(options.requestsAtom, (result) => {
       requestsVersion += 1;
       consume(result);
@@ -113,6 +122,7 @@ export function createPreviewAutomationRequestConsumerAtom<E>(options: {
         AsyncResult.isSuccess(initialRequest) &&
         initialRequest.value.connectionId === activeConnectionId &&
         initialRequest.value.connectionId !== reportedConnectionId;
+
       if (!disposed && (requestsVersion === 0 || initialConnectionWasSkipped)) {
         consume(initialRequest);
       }

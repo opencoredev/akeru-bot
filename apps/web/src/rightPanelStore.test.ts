@@ -3,6 +3,7 @@ import { type EnvironmentId, ThreadId } from "@akeru/contracts";
 import { beforeEach, describe, expect, it } from "vite-plus/test";
 
 import {
+  decodeStoredPanel,
   migratePersistedRightPanelState,
   selectActiveRightPanel,
   selectActiveRightPanelSurface,
@@ -12,6 +13,7 @@ import {
 } from "./rightPanelStore";
 
 const refA = scopeThreadRef("env-1" as EnvironmentId, ThreadId.make("thread-A"));
+
 const refB = scopeThreadRef("env-1" as EnvironmentId, ThreadId.make("thread-B"));
 
 beforeEach(() => {
@@ -21,17 +23,19 @@ beforeEach(() => {
 describe("rightPanelStore", () => {
   it("drops the legacy singleton terminal surface during migration", () => {
     expect(
-      migratePersistedRightPanelState({
-        byThreadKey: {
-          "env-1:thread-A": {
-            activeSurfaceId: "terminal",
-            surfaces: [
-              { id: "browser:tab-a", kind: "preview", resourceId: "tab-a" },
-              { id: "terminal", kind: "terminal" },
-            ],
+      migratePersistedRightPanelState(
+        decodeStoredPanel({
+          byThreadKey: {
+            "env-1:thread-A": {
+              activeSurfaceId: "terminal",
+              surfaces: [
+                { id: "browser:tab-a", kind: "preview", resourceId: "tab-a" },
+                { id: "terminal", kind: "terminal" },
+              ],
+            },
           },
-        },
-      }),
+        }),
+      ),
     ).toEqual({
       byThreadKey: {
         "env-1:thread-A": {
@@ -45,20 +49,22 @@ describe("rightPanelStore", () => {
 
   it("drops retired terminal, file explorer, and file surfaces during migration", () => {
     expect(
-      migratePersistedRightPanelState({
-        byThreadKey: {
-          "env-1:thread-A": {
-            isOpen: true,
-            activeSurfaceId: "file:src/index.ts",
-            surfaces: [
-              { id: "terminal:term-1", kind: "terminal", resourceId: "term-1" },
-              { id: "files", kind: "files" },
-              { id: "file:src/index.ts", kind: "file", relativePath: "src/index.ts" },
-              { id: "agents", kind: "agents" },
-            ],
+      migratePersistedRightPanelState(
+        decodeStoredPanel({
+          byThreadKey: {
+            "env-1:thread-A": {
+              isOpen: true,
+              activeSurfaceId: "file:src/index.ts",
+              surfaces: [
+                { id: "terminal:term-1", kind: "terminal", resourceId: "term-1" },
+                { id: "files", kind: "files" },
+                { id: "file:src/index.ts", kind: "file", relativePath: "src/index.ts" },
+                { id: "agents", kind: "agents" },
+              ],
+            },
           },
-        },
-      }),
+        }),
+      ),
     ).toEqual({
       byThreadKey: {
         "env-1:thread-A": {
@@ -78,25 +84,28 @@ describe("rightPanelStore", () => {
       repository: "pingdotgg/t3code",
       number: 4909,
     };
+
     expect(
-      migratePersistedRightPanelState({
-        byThreadKey: {
-          "env-1:pull-requests-panel": {
-            isOpen: true,
-            activeSurfaceId: pullRequestSurface.id,
-            surfaces: [pullRequestSurface],
+      migratePersistedRightPanelState(
+        decodeStoredPanel({
+          byThreadKey: {
+            "env-1:pull-requests-panel": {
+              isOpen: true,
+              activeSurfaceId: pullRequestSurface.id,
+              surfaces: [pullRequestSurface],
+            },
+            "env-1:thread-A": {
+              isOpen: true,
+              activeSurfaceId: "diff",
+              surfaces: [
+                { id: "diff", kind: "diff" },
+                pullRequestSurface,
+                { id: "agents", kind: "agents" },
+              ],
+            },
           },
-          "env-1:thread-A": {
-            isOpen: true,
-            activeSurfaceId: "diff",
-            surfaces: [
-              { id: "diff", kind: "diff" },
-              pullRequestSurface,
-              { id: "agents", kind: "agents" },
-            ],
-          },
-        },
-      }),
+        }),
+      ),
     ).toEqual({
       byThreadKey: {
         "env-1:thread-A": {
@@ -110,23 +119,25 @@ describe("rightPanelStore", () => {
 
   it("drops persisted plan surfaces and does not reopen an empty panel", () => {
     expect(
-      migratePersistedRightPanelState({
-        byThreadKey: {
-          "env-1:thread-A": {
-            isOpen: true,
-            activeSurfaceId: "plan",
-            surfaces: [{ id: "plan", kind: "plan" }],
+      migratePersistedRightPanelState(
+        decodeStoredPanel({
+          byThreadKey: {
+            "env-1:thread-A": {
+              isOpen: true,
+              activeSurfaceId: "plan",
+              surfaces: [{ id: "plan", kind: "plan" }],
+            },
+            "env-1:thread-B": {
+              isOpen: true,
+              activeSurfaceId: "plan",
+              surfaces: [
+                { id: "plan", kind: "plan" },
+                { id: "agents", kind: "agents" },
+              ],
+            },
           },
-          "env-1:thread-B": {
-            isOpen: true,
-            activeSurfaceId: "plan",
-            surfaces: [
-              { id: "plan", kind: "plan" },
-              { id: "agents", kind: "agents" },
-            ],
-          },
-        },
-      }),
+        }),
+      ),
     ).toEqual({
       byThreadKey: {
         "env-1:thread-A": {

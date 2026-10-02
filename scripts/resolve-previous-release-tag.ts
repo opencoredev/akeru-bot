@@ -12,6 +12,7 @@ import { Command, Flag } from "effect/unstable/cli";
 import { ChildProcess, ChildProcessSpawner } from "effect/unstable/process";
 
 const ReleaseChannel = Schema.Literal("stable");
+
 type ReleaseChannel = typeof ReleaseChannel.Type;
 
 export class InvalidReleaseTagError extends Schema.TaggedErrorClass<InvalidReleaseTagError>()(
@@ -101,34 +102,46 @@ const comparePrereleaseIdentifiers = (left: string, right: string): number => {
   if (leftNumeric !== undefined && rightNumeric !== undefined) {
     return leftNumeric - rightNumeric;
   }
+
   if (leftNumeric !== undefined) {
     return -1;
   }
+
   if (rightNumeric !== undefined) {
     return 1;
   }
+
   return left.localeCompare(right);
 };
 
 const compareStableVersions = (left: StableVersion, right: StableVersion): number => {
   if (left.major !== right.major) return left.major - right.major;
+
   if (left.minor !== right.minor) return left.minor - right.minor;
+
   if (left.patch !== right.patch) return left.patch - right.patch;
 
   const leftHasPrerelease = left.prerelease.length > 0;
   const rightHasPrerelease = right.prerelease.length > 0;
+
   if (!leftHasPrerelease && !rightHasPrerelease) return 0;
+
   if (!leftHasPrerelease) return 1;
+
   if (!rightHasPrerelease) return -1;
 
   const maxLength = Math.max(left.prerelease.length, right.prerelease.length);
+
   for (let index = 0; index < maxLength; index += 1) {
     const leftIdentifier = left.prerelease[index];
     const rightIdentifier = right.prerelease[index];
+
     if (leftIdentifier === undefined) return -1;
+
     if (rightIdentifier === undefined) return 1;
 
     const comparison = comparePrereleaseIdentifiers(leftIdentifier, rightIdentifier);
+
     if (comparison !== 0) return comparison;
   }
 
@@ -137,9 +150,11 @@ const compareStableVersions = (left: StableVersion, right: StableVersion): numbe
 
 const parseStableTag = (tag: string): StableVersion | undefined => {
   const match = /^v(\d+)\.(\d+)\.(\d+)(?:\+[0-9A-Za-z.-]+)?$/.exec(tag);
+
   if (!match) return undefined;
 
   const [, major, minor, patch] = match;
+
   if (!major || !minor || !patch) return undefined;
 
   return {
@@ -157,15 +172,17 @@ export const resolvePreviousReleaseTag = (
 ) =>
   Effect.gen(function* () {
     const current = parseStableTag(currentTag);
+
     if (!current) {
       return yield* new InvalidReleaseTagError({ channel, currentTag });
     }
 
     const candidates = tags
-      .map((tag) => ({ tag, parsed: parseStableTag(tag) }))
-      .filter(
-        (entry): entry is { tag: string; parsed: StableVersion } => entry.parsed !== undefined,
-      )
+      .flatMap((tag) => {
+        const parsed = parseStableTag(tag);
+
+        return parsed === undefined ? [] : [{ tag, parsed }];
+      })
       .filter((entry) => compareStableVersions(entry.parsed, current) < 0)
       .toSorted((left, right) => compareStableVersions(right.parsed, left.parsed));
 
@@ -184,11 +201,13 @@ const collectStreamAsString = <E>(stream: Stream.Stream<Uint8Array, E>): Effect.
 export const listGitTags = Effect.fn("listGitTags")(function* (cwd = process.cwd()) {
   const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
   const args = ["tag", "--list"] as const;
+
   const context = {
     executable: "git",
     argumentCount: args.length,
     cwd,
   } as const;
+
   const child = yield* spawner.spawn(ChildProcess.make("git", args, { cwd })).pipe(
     Effect.mapError(
       (cause) =>
@@ -199,6 +218,7 @@ export const listGitTags = Effect.fn("listGitTags")(function* (cwd = process.cwd
         }),
     ),
   );
+
   const [stdout, stderr, exitCode] = yield* Effect.all(
     [
       collectStreamAsString(child.stdout).pipe(
@@ -256,6 +276,7 @@ export const writePreviousReleaseTagOutput = Effect.fn("writePreviousReleaseTagO
 
   if (writeGithubOutput) {
     const fs = yield* FileSystem.FileSystem;
+
     const githubOutputPath = yield* Config.nonEmptyString("GITHUB_OUTPUT").pipe(
       Effect.mapError(
         (cause) =>
@@ -264,6 +285,7 @@ export const writePreviousReleaseTagOutput = Effect.fn("writePreviousReleaseTagO
           }),
       ),
     );
+
     yield* fs.writeFileString(githubOutputPath, entry, { flag: "a" }).pipe(
       Effect.mapError(
         (cause) =>
@@ -273,6 +295,7 @@ export const writePreviousReleaseTagOutput = Effect.fn("writePreviousReleaseTagO
           }),
       ),
     );
+
     return;
   }
 

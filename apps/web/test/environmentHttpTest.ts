@@ -77,6 +77,7 @@ export async function installEnvironmentHttpTest(scenario: EnvironmentHttpTestSc
             "descriptor",
             Effect.fn("test.environment.metadata.descriptor")(function* () {
               calls.descriptor += 1;
+
               return yield* scenario.descriptor?.() ?? unexpectedEndpoint("metadata.descriptor");
             }),
           ),
@@ -87,6 +88,7 @@ export async function installEnvironmentHttpTest(scenario: EnvironmentHttpTestSc
               "session",
               Effect.fn("test.environment.auth.session")(function* () {
                 calls.session += 1;
+
                 return yield* scenario.session?.() ?? unexpectedEndpoint("auth.session");
               }),
             )
@@ -94,6 +96,7 @@ export async function installEnvironmentHttpTest(scenario: EnvironmentHttpTestSc
               "browserSession",
               Effect.fn("test.environment.auth.browserSession")(function* ({ payload }) {
                 calls.browserSession.push(payload);
+
                 return yield* (
                   scenario.browserSession?.(payload) ?? unexpectedEndpoint("auth.browserSession")
                 );
@@ -105,6 +108,7 @@ export async function installEnvironmentHttpTest(scenario: EnvironmentHttpTestSc
               "pairingCredential",
               Effect.fn("test.environment.auth.pairingCredential")(function* ({ payload }) {
                 calls.pairingCredential.push(payload);
+
                 return yield* (
                   scenario.pairingCredential?.(payload) ??
                     unexpectedEndpoint("auth.pairingCredential")

@@ -7,6 +7,7 @@ import { BotTurnFailureRow } from "./BotTurnFailureRow";
 import { latestBotThreadFailure } from "./threadRuntimeWarning.logic";
 
 const sentAt = "2026-09-23T05:00:00.000Z";
+
 const startFailed: OrchestrationThreadActivity = {
   id: EventId.make("activity-start-failed"),
   tone: "error",
@@ -25,12 +26,14 @@ describe("BotThreadLanding failed request", () => {
       session: { status: "error", lastError: "Claude Code is not authenticated." },
       lastUserMessageAt: sentAt,
     });
+
     expect(failure).not.toBeNull();
 
     const title = presentThreadError(failure!.message, {
       unavailability: failure!.unavailability,
       providerName: "Claude",
     }).title;
+
     const html = renderToStaticMarkup(<BotTurnFailureRow botName="Mika" title={title} />);
 
     expect(html).toContain('data-testid="bot-turn-failure"');

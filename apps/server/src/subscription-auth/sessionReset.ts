@@ -23,7 +23,7 @@ function sessionInstanceId(session: ProviderSession): ProviderInstanceId {
 }
 
 /** Restart bridge processes after their saved API credentials change. */
-export function makeApiKeySessionReset(
+export function apiKeySessionReset(
   auth: Pick<SubscriptionAuthService, "getApiKeyCredential">,
   controller: Pick<AgentControllerShape, "listSessions" | "stopSession">,
   loadInstances: Effect.Effect<Readonly<Record<string, ProviderInstanceConfig>>>,
@@ -44,33 +44,38 @@ export function makeApiKeySessionReset(
     operation: Effect.Effect<A, E, R>,
   ) {
     const instances = yield* loadInstances;
+
     // Default instances run even when settings do not list them.
     const bindings = [
-      ...BRIDGE_PROVIDERS.filter(
-        ({ driver }) =>
-          !Object.hasOwn(instances, defaultInstanceIdForDriver(ProviderDriverKind.make(driver))),
-      ).map(({ provider, driver }) => ({
-        provider,
-        instanceId: defaultInstanceIdForDriver(ProviderDriverKind.make(driver)) as string,
-      })),
+      ...BRIDGE_PROVIDERS.flatMap(({ provider, driver }) => {
+        const instanceId = defaultInstanceIdForDriver(ProviderDriverKind.make(driver));
+
+        return Object.hasOwn(instances, instanceId) ? [] : [{ provider, instanceId }];
+      }),
       ...Object.entries(instances).flatMap(([instanceId, instance]) => {
         const match = BRIDGE_PROVIDERS.find(({ driver }) => driver === instance.driver);
+
         return match ? [{ provider: match.provider, instanceId }] : [];
       }),
     ];
+
     const before = bindings.map(({ provider, instanceId }) =>
       auth.getApiKeyCredential(provider, instanceId),
     );
+
     const result = yield* operation;
+
     const changed = new Set(
       bindings.flatMap(({ provider, instanceId }, index) => {
         const previous = before[index];
         const current = auth.getApiKeyCredential(provider, instanceId);
+
         return previous?.access !== current?.access || previous?.baseUrl !== current?.baseUrl
           ? [`${provider}:${instanceId}`]
           : [];
       }),
     );
+
     if (changed.size === 0) return result;
 
     const sessions = yield* controller.listSessions();
@@ -87,6 +92,7 @@ export function makeApiKeySessionReset(
           }),
       ),
     );
+
     return result;
   });
 }

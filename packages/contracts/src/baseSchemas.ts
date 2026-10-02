@@ -12,13 +12,17 @@ export const TrimmedString = Schema.String.pipe(
     }),
   ),
 );
+
 export const TrimmedNonEmptyString = TrimmedString.check(Schema.isNonEmpty());
 
 export const NonNegativeInt = Schema.Int.check(Schema.isGreaterThanOrEqualTo(0));
+
 export const PositiveInt = Schema.Int.check(Schema.isGreaterThanOrEqualTo(1));
+
 export const PortSchema = Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 65535 }));
 
 export const IsoDateTime = Schema.String;
+
 export type IsoDateTime = typeof IsoDateTime.Type;
 
 /**
@@ -30,12 +34,15 @@ export type IsoDateTime = typeof IsoDateTime.Type;
  * couldn't act on anyway. Encoding is the plain array encoding.
  */
 export const ForwardCompatibleArray = <Element extends Schema.Top>(element: Element) => {
+  // SAFETY: Wire element schemas are context-free codecs; Schema.Top erases their decoding service requirement.
   const decodeElement = Schema.decodeUnknownOption(element as never);
+
   return Schema.Array(Schema.Unknown).pipe(
     Schema.decodeTo(
       Schema.Array(element),
       SchemaTransformation.transform<ReadonlyArray<Element["Encoded"]>, ReadonlyArray<unknown>>({
         decode: (values) =>
+          // SAFETY: Retained values decoded successfully as this element; keep their encoded form for decodeTo to apply the element codec once.
           values.filter((value) => Option.isSome(decodeElement(value))) as ReadonlyArray<
             Element["Encoded"]
           >,
@@ -53,28 +60,51 @@ const makeEntityId = <Brand extends string>(brand: Brand) => {
 };
 
 export const ThreadId = makeEntityId("ThreadId");
+
 export type ThreadId = typeof ThreadId.Type;
+
 export const ProjectId = makeEntityId("ProjectId");
+
 export type ProjectId = typeof ProjectId.Type;
+
 export const BotId = makeEntityId("BotId");
+
 export type BotId = typeof BotId.Type;
+
 export const GroupId = makeEntityId("GroupId");
+
 export type GroupId = typeof GroupId.Type;
+
 export const ChannelConnectionId = makeEntityId("ChannelConnectionId");
+
 export type ChannelConnectionId = typeof ChannelConnectionId.Type;
+
 export const EnvironmentId = makeEntityId("EnvironmentId");
+
 export type EnvironmentId = typeof EnvironmentId.Type;
+
 export const CommandId = makeEntityId("CommandId");
+
 export type CommandId = typeof CommandId.Type;
+
 export const EventId = makeEntityId("EventId");
+
 export type EventId = typeof EventId.Type;
+
 export const MessageId = makeEntityId("MessageId");
+
 export type MessageId = typeof MessageId.Type;
+
 export const TurnId = makeEntityId("TurnId");
+
 export type TurnId = typeof TurnId.Type;
+
 export const AuthSessionId = makeEntityId("AuthSessionId");
+
 export type AuthSessionId = typeof AuthSessionId.Type;
+
 export const RpcClientId = NonNegativeInt.pipe(Schema.brand("RpcClientId"));
+
 export type RpcClientId = typeof RpcClientId.Type;
 
 /**
@@ -84,21 +114,37 @@ export type RpcClientId = typeof RpcClientId.Type;
  * Optional everywhere it appears: old clients never send it.
  */
 export const ClientSurface = Schema.Literals(["web", "desktop", "mobile"]);
+
 export type ClientSurface = typeof ClientSurface.Type;
 
 export const ProviderItemId = makeEntityId("ProviderItemId");
+
 export type ProviderItemId = typeof ProviderItemId.Type;
+
 export const RuntimeSessionId = makeEntityId("RuntimeSessionId");
+
 export type RuntimeSessionId = typeof RuntimeSessionId.Type;
+
 export const RuntimeItemId = makeEntityId("RuntimeItemId");
+
 export type RuntimeItemId = typeof RuntimeItemId.Type;
+
 export const RuntimeRequestId = makeEntityId("RuntimeRequestId");
+
 export type RuntimeRequestId = typeof RuntimeRequestId.Type;
+
 export const RuntimeTaskId = makeEntityId("RuntimeTaskId");
+
 export type RuntimeTaskId = typeof RuntimeTaskId.Type;
+
 export const ApprovalRequestId = makeEntityId("ApprovalRequestId");
+
 export type ApprovalRequestId = typeof ApprovalRequestId.Type;
+
 export const CheckpointRef = makeEntityId("CheckpointRef");
+
 export type CheckpointRef = typeof CheckpointRef.Type;
+
 export const AkeruUsageReservationId = makeEntityId("AkeruUsageReservationId");
+
 export type AkeruUsageReservationId = typeof AkeruUsageReservationId.Type;

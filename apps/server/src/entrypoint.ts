@@ -1,4 +1,3 @@
-// @effect-diagnostics nodeBuiltinImport:off
 // Entrypoint detection runs before any Effect runtime is built, so it stays on
 // Node built-ins.
 import * as NodeFS from "node:fs";
@@ -21,12 +20,15 @@ export const isEntrypoint = (input: {
   if (input.runtimeMain !== undefined) {
     return input.runtimeMain;
   }
+
   if (input.entryPath === undefined || input.entryPath === "") {
     return false;
   }
+
   if (input.moduleUrl === NodeURL.pathToFileURL(input.entryPath).href) {
     return true;
   }
+
   // npm and npx install the CLI as a symlink. Without `--preserve-symlinks` the
   // module URL is the resolved real path while `process.argv[1]` keeps the link
   // path, so the comparison above misses.

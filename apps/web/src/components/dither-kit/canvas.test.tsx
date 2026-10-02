@@ -10,21 +10,25 @@ const hooks = vi.hoisted(() => ({
 vi.mock("react", async (importOriginal) => {
   const actual = await importOriginal<typeof import("react")>();
   const { reactHookHarness } = await import("../../test/reactHookHarness");
+
   return {
     ...actual,
     useMemo: <T,>(factory: () => T, deps: readonly unknown[]) => {
       const ref = reactHookHarness.useRef<{ value: T; deps: readonly unknown[] } | null>(null);
+
       if (
         !ref.current ||
         deps.some((value, index) => !Object.is(value, ref.current!.deps[index]))
       ) {
         ref.current = { value: factory(), deps };
       }
+
       return ref.current.value;
     },
     useRef: <T,>(value: T) => {
       const ref = reactHookHarness.useRef(value);
       hooks.refs.push(ref);
+
       return ref;
     },
     useEffect: (run: () => void | (() => void), deps: readonly unknown[] | undefined) => {
@@ -32,10 +36,13 @@ vi.mock("react", async (importOriginal) => {
     },
   };
 });
+
 vi.mock("react/compiler-runtime", async () => {
   const { reactHookHarness } = await import("../../test/reactHookHarness");
+
   return { c: reactHookHarness.useMemoCache };
 });
+
 vi.mock("./chart-context", () => ({ useChart: () => chart }));
 
 import { BarCanvas } from "./bar-canvas";
@@ -77,20 +84,30 @@ function chartFixture() {
 }
 
 let chart = chartFixture();
+
 let frames = new Map<number, FrameRequestCallback>();
+
 let nextFrame = 0;
+
 let effects: { deps: readonly unknown[] | undefined; cleanup?: void | (() => void) }[] = [];
+
 const paintContext = () => ({
   clearRect: vi.fn(),
   drawImage: vi.fn(),
   fillRect: vi.fn(),
   fillStyle: "",
 });
+
 const paint = paintContext();
+
 const fillPaint = paintContext();
+
 const bloomPaint = paintContext();
+
 const canvas = { width: 0, height: 0, getContext: () => paint };
+
 const fillCanvas = { width: 0, height: 0, getContext: () => fillPaint };
+
 const bloomCanvas = { width: 0, height: 0, getContext: () => bloomPaint };
 
 function render(Component: typeof BarCanvas) {
@@ -102,6 +119,7 @@ function render(Component: typeof BarCanvas) {
   hooks.refs[1]!.current = bloomCanvas;
   hooks.effects.forEach((effect, index) => {
     const previous = effects[index];
+
     if (
       previous?.deps &&
       effect.deps &&
@@ -131,6 +149,7 @@ beforeEach(() => {
   vi.stubGlobal("document", { createElement: () => fillCanvas });
   vi.stubGlobal("requestAnimationFrame", (callback: FrameRequestCallback) => {
     frames.set(++nextFrame, callback);
+
     return nextFrame;
   });
   vi.stubGlobal("cancelAnimationFrame", (id: number) => frames.delete(id));
@@ -158,6 +177,7 @@ for (const [name, Component] of [
     it("repaints hover, selection, data and marker removal without retaining a loop", () => {
       render(Component);
       flushFrame();
+
       for (const update of [
         { hoverIndex: 1, isMouseInChart: true },
         { selectedDataKey: "tokens" },
@@ -210,6 +230,7 @@ for (const [name, Component] of [
     it.each([false, true])("reuses the fill for cursor-only updates with animate=%s", (animate) => {
       chart = { ...chart, animate, hoverIndex: 1, isMouseInChart: true };
       render(Component);
+
       for (let frame = 0; frame < 100; frame++) flushFrame(1000 + frame * 16);
       seriesPaint.fillRect.mockClear();
       chart = { ...chart, cursorX: 20 };

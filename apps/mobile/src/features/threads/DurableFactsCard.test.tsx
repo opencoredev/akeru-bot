@@ -1,7 +1,10 @@
+import { AkeruMemoryRootId, BotId, ThreadId } from "@akeru/contracts";
+import { Predicate } from "effect";
 import type { DurableMemoryFact } from "@akeru/client-runtime/durable-memory";
 import { createElement, isValidElement, type ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vite-plus/test";
+import { DurableFactsCard } from "./DurableFactsCard";
 
 vi.mock("react-native", () => ({
   Text: "span",
@@ -13,17 +16,16 @@ vi.mock("react-native", () => ({
 vi.mock("../../lib/i18n", async () => {
   const { createTranslator } = await import("@akeru/client-runtime/i18n");
   const translator = createTranslator("en");
+
   return { useMobileI18n: () => ({ ...translator, t: translator.translate }) };
 });
 
-import { DurableFactsCard } from "./DurableFactsCard";
-
 const fact = {
-  rootId: "m1",
+  rootId: AkeruMemoryRootId.make("m1"),
   fact: "Prefers detailed replies.",
   scope: "bot-user",
-  sourceThreadId: "thread-1",
-  affectedBotIds: ["bot-1", "bot-2"],
+  sourceThreadId: ThreadId.make("thread-1"),
+  affectedBotIds: [BotId.make("bot-1"), BotId.make("bot-2")],
   approvalState: "pending",
   deletionState: "active",
   pinned: true,
@@ -31,7 +33,7 @@ const fact = {
   updatedAt: "2026-09-03T00:00:00.000Z",
   revision: 2,
   supersededFact: "Prefers short replies.",
-} as unknown as DurableMemoryFact;
+} satisfies DurableMemoryFact;
 
 type CardProps = Parameters<typeof DurableFactsCard>[0];
 
@@ -66,6 +68,7 @@ function render(overrides: Partial<CardProps> = {}) {
 describe("mobile durable facts", () => {
   it("renders each fact with scope, provenance, approval, times, and the replaced value", () => {
     const tree = render();
+
     for (const text of [
       "Durable facts",
       "This chat",
@@ -88,6 +91,7 @@ describe("mobile durable facts", () => {
     ]) {
       expect(tree).toContain(text);
     }
+
     expect(tree).not.toContain("All memory");
     expect(tree).not.toContain("bot-2");
     expect(tree).not.toContain("revision");
@@ -96,11 +100,22 @@ describe("mobile durable facts", () => {
   it("names other chats and bots without their ids", () => {
     const tree = render({
       facts: [
-        { ...fact, rootId: "m1", sourceThreadId: "thread-2", affectedBotIds: ["bot-9"] },
-        { ...fact, rootId: "m2", sourceThreadId: "thread-9", affectedBotIds: [] },
-        { ...fact, rootId: "m3", sourceThreadId: null, affectedBotIds: [] },
-      ] as unknown as DurableMemoryFact[],
+        {
+          ...fact,
+          rootId: AkeruMemoryRootId.make("m1"),
+          sourceThreadId: ThreadId.make("thread-2"),
+          affectedBotIds: [BotId.make("bot-9")],
+        },
+        {
+          ...fact,
+          rootId: AkeruMemoryRootId.make("m2"),
+          sourceThreadId: ThreadId.make("thread-9"),
+          affectedBotIds: [],
+        },
+        { ...fact, rootId: AkeruMemoryRootId.make("m3"), sourceThreadId: null, affectedBotIds: [] },
+      ] satisfies DurableMemoryFact[],
     });
+
     expect(tree).toContain("From Launch plan · Bots: another bot");
     expect(tree).toContain("From another chat · Bots: none");
     expect(tree).not.toContain("unknown chat");
@@ -119,11 +134,13 @@ describe("mobile durable facts", () => {
   it("reports the scope a user picks", () => {
     const onScopeChange = vi.fn();
     const tree = DurableFactsCard(cardProps({ onScopeChange, facts: [], currentBotId: null }));
+
     const tabs = (
       tree.props.children as ReadonlyArray<{
         props?: { children?: ReadonlyArray<{ props: { onPress: () => void } }> };
       }>
     )[2]!.props!.children!;
+
     tabs[2]!.props.onPress();
     expect(onScopeChange).toHaveBeenCalledWith("project");
   });
@@ -134,8 +151,20 @@ type ActionElement = { props: { label: string; disabled: boolean; onPress: () =>
 // The card holds no state, so its element tree exposes every action handler directly.
 function actions(node: ReactNode): ActionElement[] {
   if (Array.isArray(node)) return node.flatMap(actions);
-  if (!isValidElement<{ children?: ReactNode; label?: string }>(node)) return [];
-  if (typeof node.props.label === "string") return [node as unknown as ActionElement];
+
+  if (
+    !isValidElement<{
+      children?: ReactNode;
+      label?: string;
+      disabled: boolean;
+      onPress: () => void;
+    }>(node)
+  )
+    return [];
+
+  if (Predicate.isString(node.props.label))
+    return [{ props: { ...node.props, label: node.props.label } }];
+
   return actions(node.props.children);
 }
 
@@ -174,6 +203,7 @@ describe("mobile durable fact actions", () => {
     const tree = render({
       facts: [{ ...fact, approvalState: "approved", deletionState: "tombstoned", pinned: false }],
     });
+
     expect(tree).toContain("Approved, Forgotten");
     expect(tree).toContain("Delete");
     expect(tree).not.toContain("Edit");
@@ -182,9 +212,10 @@ describe("mobile durable fact actions", () => {
 
   it("shows the edit draft and the last failure", () => {
     const tree = render({
-      editing: { rootId: "m1", draft: "Prefers bullet points." },
+      editing: { rootId: AkeruMemoryRootId.make("m1"), draft: "Prefers bullet points." },
       failure: "This fact changed somewhere else. The latest version is shown now.",
     });
+
     expect(tree).toContain('value="Prefers bullet points."');
     expect(tree).toContain("Save");
     expect(tree).toContain("Cancel");
@@ -195,10 +226,12 @@ describe("mobile durable fact actions", () => {
   it("hides every mutation control for a read-only connection and says why", () => {
     const readOnly = cardProps({ policy: { ...OPEN, canOperate: false } });
     expect(actions(DurableFactsCard(readOnly))).toEqual([]);
+
     const forgotten = cardProps({
       policy: { ...OPEN, canOperate: false },
       facts: [{ ...fact, deletionState: "tombstoned" }],
     });
+
     expect(actions(DurableFactsCard(forgotten))).toEqual([]);
     const tree = render({ policy: { ...OPEN, canOperate: false } });
     expect(tree).toContain("This connection can read memory but not change it.");
@@ -227,6 +260,7 @@ describe("mobile durable fact actions", () => {
         policy: { ...OPEN, privateBotMemory: false },
       }),
     );
+
     expect(actions(tree).map((item) => item.props.label)).toEqual([
       "Edit",
       "Unpin",
@@ -238,7 +272,12 @@ describe("mobile durable fact actions", () => {
   });
 
   it("marks only the fact that is saving", () => {
-    const other = { ...fact, rootId: "m2", fact: "Uses metric units." } as DurableMemoryFact;
+    const other = {
+      ...fact,
+      rootId: AkeruMemoryRootId.make("m2"),
+      fact: "Uses metric units.",
+    } satisfies DurableMemoryFact;
+
     const tree = render({ facts: [fact, other], busyRootId: "m2" });
     expect(tree.match(/Saving…/g)).toHaveLength(1);
     expect(tree.indexOf("Saving…")).toBeGreaterThan(tree.indexOf("Uses metric units."));

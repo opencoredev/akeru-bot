@@ -46,6 +46,7 @@ const resolveResourcePath = Effect.fn("desktop.assets.resolveResourcePath")(func
   const fileSystem = yield* FileSystem.FileSystem;
   const environment = yield* DesktopEnvironment.DesktopEnvironment;
   const candidates = environment.resolveResourcePathCandidates(fileName);
+
   for (const candidate of candidates) {
     const exists = yield* fileSystem
       .exists(candidate)
@@ -54,10 +55,12 @@ const resolveResourcePath = Effect.fn("desktop.assets.resolveResourcePath")(func
           (cause) => new DesktopAssetProbeError({ fileName, candidatePath: candidate, cause }),
         ),
       );
+
     if (exists) {
       return Option.some(candidate);
     }
   }
+
   return Option.none<string>();
 });
 
@@ -81,12 +84,14 @@ function resolveSourceTreeIconPath(
   if (environment.isPackaged || ext === "icns") return undefined;
   const brand = environment.isDevelopment ? "dev" : "prod";
   const paths = sourceTreeIconPaths[brand];
+
   const pathParts =
     ext === "ico"
       ? paths.ico
       : environment.platform === "darwin"
         ? paths.macPng
         : paths.universalPng;
+
   return environment.path.join(environment.rootDir, ...pathParts);
 }
 
@@ -100,6 +105,7 @@ const resolveIconPath = Effect.fn("desktop.assets.resolveIconPath")(function* (
   const fileSystem = yield* FileSystem.FileSystem;
   const environment = yield* DesktopEnvironment.DesktopEnvironment;
   const sourceTreeIconPath = resolveSourceTreeIconPath(environment, ext);
+
   if (sourceTreeIconPath !== undefined) {
     const sourceTreeIconExists = yield* fileSystem.exists(sourceTreeIconPath).pipe(
       Effect.mapError(
@@ -111,6 +117,7 @@ const resolveIconPath = Effect.fn("desktop.assets.resolveIconPath")(function* (
           }),
       ),
     );
+
     if (sourceTreeIconExists) {
       return Option.some(sourceTreeIconPath);
     }
@@ -123,10 +130,12 @@ export const make = Effect.gen(function* () {
   const context = yield* Effect.context<
     FileSystem.FileSystem | DesktopEnvironment.DesktopEnvironment
   >();
+
   const [ico, icns, png] = yield* Effect.all(
     [resolveIconPath("ico"), resolveIconPath("icns"), resolveIconPath("png")] as const,
     { concurrency: "unbounded" },
   );
+
   const iconPaths = { ico, icns, png } satisfies DesktopIconPaths;
 
   return DesktopAssets.of({

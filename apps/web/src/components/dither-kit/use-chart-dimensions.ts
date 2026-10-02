@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { useLayoutEffect, useRef, useState } from "react";
 
 export type Dimensions = { width: number; height: number };
@@ -16,6 +15,7 @@ export function useChartDimensions<T extends HTMLElement>() {
 
   useLayoutEffect(() => {
     const el = ref.current;
+
     if (!el) return;
 
     const measure = () => {
@@ -31,6 +31,7 @@ export function useChartDimensions<T extends HTMLElement>() {
     const ro = new ResizeObserver(measure);
     ro.observe(el);
     measure();
+
     return () => ro.disconnect();
   }, []);
 

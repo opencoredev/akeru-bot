@@ -16,13 +16,16 @@ describe("client-local readout preference", () => {
   });
   it("does not let a delayed load overwrite explicit user choice", async () => {
     let resolve!: (value: string) => void;
+
     const value = new Promise<string>((done) => {
       resolve = done;
     });
+
     const preference = createReplyReadoutPreference(
       { getItem: () => value, setItem: async () => {} },
       () => {},
     );
+
     const loading = preference.load();
     await preference.setEnabled(false);
     resolve("true");
@@ -31,6 +34,7 @@ describe("client-local readout preference", () => {
   });
   it("serializes rapid preference changes", async () => {
     const values: string[] = [];
+
     const preference = createReplyReadoutPreference(
       {
         getItem: async () => null,
@@ -40,6 +44,7 @@ describe("client-local readout preference", () => {
       },
       () => {},
     );
+
     const first = preference.setEnabled(true);
     const second = preference.setEnabled(false);
     await Promise.all([first, second]);
@@ -58,6 +63,7 @@ describe("client-local readout preference", () => {
       },
       () => {},
     );
+
     await preference.load();
     expect(preference.getSnapshot()).toEqual({ enabled: false, persistenceError: true });
     await preference.setEnabled(true);

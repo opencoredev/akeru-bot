@@ -1,4 +1,4 @@
-// @effect-diagnostics nodeBuiltinImport:off
+import * as Predicate from "effect/Predicate";
 import * as NodeFSP from "node:fs/promises";
 import * as NodePath from "node:path";
 import * as Schema from "effect/Schema";
@@ -46,6 +46,7 @@ export class RotatingFileSinkError extends Schema.TaggedErrorClass<RotatingFileS
 }
 
 const isRotatingFileSinkError = Schema.is(RotatingFileSinkError);
+
 const isFileNotFoundError = (cause: unknown): cause is NodeJS.ErrnoException =>
   cause instanceof Error && "code" in cause && cause.code === "ENOENT";
 
@@ -82,15 +83,24 @@ export class RotatingFileSink {
       maxBufferedBytes: options.maxBufferedBytes ?? 1024 * 1024,
       maxBufferedChunks: options.maxBufferedChunks ?? 512,
     };
-    for (const [option, received] of Object.entries(limits)) {
+
+    for (const option of [
+      "maxBytes",
+      "maxFiles",
+      "maxBufferedBytes",
+      "maxBufferedChunks",
+    ] as const) {
+      const received = limits[option];
+
       if (!Number.isSafeInteger(received) || received < 1) {
         throw new RotatingFileSinkConfigurationError({
-          option: option as keyof typeof limits,
+          option,
           received,
           minimum: 1,
         });
       }
     }
+
     this.filePath = options.filePath;
     this.maxBytes = limits.maxBytes;
     this.maxFiles = limits.maxFiles;
@@ -111,17 +121,21 @@ export class RotatingFileSink {
   }
 
   write(chunk: string | Buffer): Promise<void> {
-    const bytes = typeof chunk === "string" ? Buffer.byteLength(chunk) : chunk.length;
+    const bytes = Predicate.isString(chunk) ? Buffer.byteLength(chunk) : chunk.length;
+
     if (this.closed) {
       return Promise.reject(this.error("closed", new Error("Log sink is closed")));
     }
+
     if (bytes === 0) return Promise.resolve();
+
     if (
       this.pendingBytes + bytes > this.maxBufferedBytes ||
       this.pendingChunks >= this.maxBufferedChunks
     ) {
       const error = this.error("buffer", new Error("Log buffer capacity exceeded"));
       this.failure ??= error;
+
       return Promise.reject(error);
     }
 
@@ -133,37 +147,47 @@ export class RotatingFileSink {
     this.queue.push({ buffer, resolve: () => receipt.resolve(), reject: receipt.reject });
     this.latestWrite = receipt.promise;
     void receipt.promise.catch(() => undefined);
+
     if (!this.draining) {
       this.draining = true;
       void this.drain();
     }
+
     return receipt.promise;
   }
 
   async flush(): Promise<void> {
     await (this.latestWrite ?? this.initialized).catch(() => undefined);
+
     if (this.failure) throw this.failure;
   }
 
   close(): Promise<void> {
     this.closed = true;
+
     return this.flush();
   }
 
   private async drain(): Promise<void> {
     let active: PendingChunk[] = [];
+
     try {
       await this.initialized;
+
       while (this.queue.length > 0) {
         if (this.fatalFailure) throw this.fatalFailure;
         const first = this.queue[0]!;
+
         if (this.currentSize > 0 && this.currentSize + first.buffer.length > this.maxBytes) {
           await this.rotate();
         }
+
         let bytes = first.buffer.length;
         let count = 1;
+
         while (count < this.queue.length) {
           const nextBytes = this.queue[count]!.buffer.length;
+
           if (
             bytes + nextBytes > MAX_APPEND_BATCH_BYTES ||
             this.currentSize + bytes + nextBytes > this.maxBytes
@@ -172,6 +196,7 @@ export class RotatingFileSink {
           bytes += nextBytes;
           count += 1;
         }
+
         active = this.queue.splice(0, count);
         await NodeFSP.appendFile(
           this.filePath,
@@ -183,11 +208,13 @@ export class RotatingFileSink {
               ),
         );
         this.currentSize += bytes;
+
         for (const entry of active) {
           this.pendingBytes -= entry.buffer.length;
           this.pendingChunks -= 1;
           entry.resolve();
         }
+
         active = [];
       }
     } catch (cause) {
@@ -195,6 +222,7 @@ export class RotatingFileSink {
       // An append may have partially succeeded; never retry ambiguous bytes.
       this.failure ??= error;
       this.fatalFailure = error;
+
       for (const entry of [...active, ...this.queue.splice(0)]) entry.reject(error);
       this.pendingBytes = this.pendingChunks = 0;
     } finally {
@@ -215,18 +243,22 @@ export class RotatingFileSink {
     } catch (cause) {
       throw this.error("initialize", cause);
     }
+
     try {
       const dir = NodePath.dirname(this.filePath);
       const baseName = NodePath.basename(this.filePath);
+
       for (const entry of await NodeFSP.readdir(dir)) {
         if (!entry.startsWith(`${baseName}.`)) continue;
         const suffix = Number(entry.slice(baseName.length + 1));
+
         if (!Number.isInteger(suffix) || suffix <= this.maxFiles) continue;
         await NodeFSP.rm(NodePath.join(dir, entry), { force: true });
       }
     } catch (cause) {
       throw this.error("prune", cause);
     }
+
     try {
       this.currentSize = (await NodeFSP.stat(this.filePath)).size;
     } catch (cause) {
@@ -237,14 +269,17 @@ export class RotatingFileSink {
   private async rotate(): Promise<void> {
     try {
       await NodeFSP.rm(`${this.filePath}.${this.maxFiles}`, { force: true });
+
       for (let index = this.maxFiles - 1; index >= 0; index -= 1) {
         const source = index === 0 ? this.filePath : `${this.filePath}.${index}`;
+
         try {
           await NodeFSP.rename(source, `${this.filePath}.${index + 1}`);
         } catch (cause) {
           if (!isFileNotFoundError(cause)) throw cause;
         }
       }
+
       this.currentSize = 0;
     } catch (cause) {
       throw this.error("rotate", cause);

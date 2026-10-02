@@ -364,9 +364,7 @@ export const SETTINGS_SEARCH_ITEMS = [
 
 export type SettingsSearchItemId = (typeof SETTINGS_SEARCH_ITEMS)[number]["id"];
 
-const SEARCH_ITEMS_BY_ID = Object.fromEntries(
-  SETTINGS_SEARCH_ITEMS.map((item) => [item.id, item]),
-) as Readonly<Record<SettingsSearchItemId, SettingsSearchItem>>;
+const SEARCH_ITEMS_BY_ID = new Map(SETTINGS_SEARCH_ITEMS.map((item) => [item.id, item]));
 
 /**
  * `id` and `title` props for the element a search item anchors to. Panels
@@ -377,11 +375,9 @@ const SEARCH_ITEMS_BY_ID = Object.fromEntries(
 export function searchableSetting(
   id: SettingsSearchItemId,
   translate: (message: string) => string = (message) => message,
-): {
-  readonly id: string;
-  readonly title: string;
-} {
-  const { id: anchorId, title } = SEARCH_ITEMS_BY_ID[id];
+) {
+  const { id: anchorId, title } = SEARCH_ITEMS_BY_ID.get(id)!;
+
   return { id: anchorId, title: translate(title) };
 }
 
@@ -400,6 +396,7 @@ export function searchSettings(
   translateTitle: (title: string) => string = (title) => title,
 ): ReadonlyArray<SettingsSearchItem> {
   const normalizedQuery = normalizeSearchText(query);
+
   if (normalizedQuery.length === 0) return [];
 
   return items.filter(

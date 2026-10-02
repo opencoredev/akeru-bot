@@ -63,6 +63,7 @@ const resolveTargets = (input: {
   );
 
 const TAILSCALE_UP = { exitCode: 0, stdout: TAILSCALE_STATUS_JSON };
+
 const TAILSCALE_DOWN = { exitCode: 1, stdout: "" };
 
 describe("RemoteOpenTargets", () => {
@@ -73,6 +74,7 @@ describe("RemoteOpenTargets", () => {
         tailscale: TAILSCALE_UP,
         hostname: "bb-1",
       });
+
       expect(targets).toEqual([]);
     }),
   );
@@ -84,6 +86,7 @@ describe("RemoteOpenTargets", () => {
         tailscale: TAILSCALE_UP,
         hostname: "bb-1",
       });
+
       expect(targets).toEqual([
         { kind: "tailscale", host: "bb-1.tail1234.ts.net" },
         { kind: "mdns", host: "bb-1.local" },
@@ -98,6 +101,7 @@ describe("RemoteOpenTargets", () => {
         tailscale: TAILSCALE_DOWN,
         hostname: "bb-1",
       });
+
       expect(targets).toEqual([{ kind: "mdns", host: "bb-1.local" }]);
     }),
   );
@@ -109,6 +113,7 @@ describe("RemoteOpenTargets", () => {
         tailscale: TAILSCALE_DOWN,
         hostname: "bb-1",
       });
+
       expect(targets).toEqual([{ kind: "mdns", host: "bb-1.local" }]);
     }),
   );
@@ -120,6 +125,7 @@ describe("RemoteOpenTargets", () => {
         tailscale: TAILSCALE_DOWN,
         hostname: "bb-1.example.com",
       });
+
       expect(targets).toEqual([{ kind: "mdns", host: "bb-1.local" }]);
     }),
   );

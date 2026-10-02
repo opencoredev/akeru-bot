@@ -42,6 +42,7 @@ it.layer(Layer.mergeAll(NodeSqliteClient.layerMemory()))("064_ExternalChannelPro
         FROM channel_deliveries
         ORDER BY message_id
       `;
+
       assert.deepEqual(rows, [
         { messageId: "discord-message", provider: "discord", status: "requested" },
         { messageId: "slack-message", provider: "slack", status: "requested" },

@@ -11,6 +11,7 @@ import {
 import { canonicalizeClientCommandTimestamps } from "./Normalizer.ts";
 
 const clientCreatedAt = "2031-01-01T00:00:00.000Z";
+
 const serverReceivedAt = "2026-07-18T00:00:00.000Z";
 
 describe("canonicalizeClientCommandTimestamps", () => {
@@ -64,9 +65,11 @@ describe("canonicalizeClientCommandTimestamps", () => {
     const result = canonicalizeClientCommandTimestamps(command, serverReceivedAt);
 
     expect(result.type).toBe("thread.turn.start");
+
     if (result.type !== "thread.turn.start") {
       throw new Error("Expected a thread.turn.start command");
     }
+
     expect(result.createdAt).toBe(serverReceivedAt);
     expect(result.bootstrap?.createThread?.createdAt).toBe(serverReceivedAt);
   });

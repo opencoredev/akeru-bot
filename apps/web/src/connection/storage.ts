@@ -1,21 +1,16 @@
+import { hasTag } from "~/lib/taggedUnion";
+import * as Predicate from "effect/Predicate";
 import {
-  ConnectionCatalogDocument,
-  type ConnectionCatalogDocument as ConnectionCatalogDocumentType,
   ConnectionPersistenceError,
   ConnectionRegistrationStore,
   ConnectionTargetStore,
-  EMPTY_CONNECTION_CATALOG_DOCUMENT,
   EnvironmentCacheStore,
   registerConnectionInCatalog,
   removeCatalogValue,
   removeConnectionFromCatalog,
   replaceCatalogValue,
 } from "@akeru/client-runtime/platform";
-import {
-  ConnectionTransientError,
-  CredentialStore,
-  ProfileStore,
-} from "@akeru/client-runtime/connection";
+import { CredentialStore, ProfileStore } from "@akeru/client-runtime/connection";
 import {
   EnvironmentId,
   OrchestrationShellSnapshot,
@@ -28,25 +23,21 @@ import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
-import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
-import * as Semaphore from "effect/Semaphore";
+import {
+  SHELL_STORE_NAME,
+  THREAD_STORE_NAME,
+  SERVER_CONFIG_STORE_NAME,
+  openDatabase,
+  readDatabaseValue,
+  writeDatabaseValue,
+  removeDatabaseValue,
+  removeDatabaseValuesInRange,
+  threadCacheKey,
+} from "./indexedDbStorage";
+import { migrateLegacyConnectionDatabase } from "./legacyDatabaseMigration";
+import { catalogBackendForDatabase, cachedCatalogStore } from "./catalogStorage";
 
-const DATABASE_NAME = "akeru:connection-runtime";
-// Database used before the rebrand; its stores are copied forward once and the
-// legacy database is retired only after the copy succeeds.
-const LEGACY_DATABASE_NAME = "t3code:connection-runtime";
-const DATABASE_VERSION = 5;
-const CATALOG_STORE_NAME = "catalog";
-const SHELL_STORE_NAME = "shell";
-const THREAD_STORE_NAME = "thread";
-const SERVER_CONFIG_STORE_NAME = "server-config";
-// Retired with the branch picker; version 5 drops the store from older databases.
-const RETIRED_VCS_REFS_STORE_NAME = "vcs-refs";
-// Written with the copied records so a legacy database that survives a blocked
-// deletion is never copied again over later removals.
-const LEGACY_MIGRATED_KEY = "legacy-migrated";
-const CATALOG_KEY = "document";
 const SHELL_SNAPSHOT_CACHE_SCHEMA_VERSION = 1;
 
 const StoredShellSnapshot = Schema.Struct({
@@ -54,7 +45,9 @@ const StoredShellSnapshot = Schema.Struct({
   environmentId: EnvironmentId,
   snapshot: OrchestrationShellSnapshot,
 });
+
 const StoredShellSnapshotJson = Schema.fromJsonString(StoredShellSnapshot);
+
 // v2 stores the snapshot sequence alongside the thread so a warm cache can
 // resume via `afterSequence` instead of re-downloading the full thread body.
 // v3 adds windowed (paginated) snapshots carrying `page` metadata. The bump
@@ -67,29 +60,28 @@ const StoredThreadSnapshot = Schema.Struct({
   threadId: ThreadId,
   snapshot: OrchestrationThreadDetailSnapshot,
 });
+
 const StoredThreadSnapshotJson = Schema.fromJsonString(StoredThreadSnapshot);
+
 const StoredServerConfig = Schema.Struct({
   schemaVersion: Schema.Literal(1),
   environmentId: EnvironmentId,
   config: ServerConfig,
 });
-const StoredServerConfigJson = Schema.fromJsonString(StoredServerConfig);
-const ConnectionCatalogDocumentJson = Schema.fromJsonString(ConnectionCatalogDocument);
-const decodeConnectionCatalogDocument = Schema.decodeUnknownEffect(ConnectionCatalogDocumentJson);
-const encodeConnectionCatalogDocument = Schema.encodeEffect(ConnectionCatalogDocumentJson);
-const decodeStoredShellSnapshot = Schema.decodeUnknownEffect(StoredShellSnapshotJson);
-const encodeStoredShellSnapshot = Schema.encodeEffect(StoredShellSnapshotJson);
-const decodeStoredThreadSnapshot = Schema.decodeUnknownEffect(StoredThreadSnapshotJson);
-const encodeStoredThreadSnapshot = Schema.encodeEffect(StoredThreadSnapshotJson);
-const decodeStoredServerConfig = Schema.decodeUnknownEffect(StoredServerConfigJson);
-const encodeStoredServerConfig = Schema.encodeEffect(StoredServerConfigJson);
 
-function catalogError(operation: string, cause: unknown) {
-  return new ConnectionTransientError({
-    reason: "remote-unavailable",
-    detail: `Could not ${operation} the local connection catalog: ${String(cause)}`,
-  });
-}
+const StoredServerConfigJson = Schema.fromJsonString(StoredServerConfig);
+
+const decodeStoredShellSnapshot = Schema.decodeUnknownEffect(StoredShellSnapshotJson);
+
+const encodeStoredShellSnapshot = Schema.encodeEffect(StoredShellSnapshotJson);
+
+const decodeStoredThreadSnapshot = Schema.decodeUnknownEffect(StoredThreadSnapshotJson);
+
+const encodeStoredThreadSnapshot = Schema.encodeEffect(StoredThreadSnapshotJson);
+
+const decodeStoredServerConfig = Schema.decodeUnknownEffect(StoredServerConfigJson);
+
+const encodeStoredServerConfig = Schema.encodeEffect(StoredServerConfigJson);
 
 function persistenceError(
   operation:
@@ -112,353 +104,12 @@ function persistenceError(
   });
 }
 
-const OBJECT_STORE_NAMES = [
-  CATALOG_STORE_NAME,
-  SHELL_STORE_NAME,
-  THREAD_STORE_NAME,
-  SERVER_CONFIG_STORE_NAME,
-] as const;
-
-const openDatabaseAt = (name: string) =>
-  Effect.callback<IDBDatabase, ConnectionTransientError>((resume) => {
-    if (typeof indexedDB === "undefined") {
-      resume(
-        Effect.fail(catalogError("open", "IndexedDB is unavailable in this browser context.")),
-      );
-      return;
-    }
-    const request = indexedDB.open(name, DATABASE_VERSION);
-    request.addEventListener("upgradeneeded", () => {
-      for (const storeName of OBJECT_STORE_NAMES) {
-        if (!request.result.objectStoreNames.contains(storeName)) {
-          request.result.createObjectStore(storeName);
-        }
-      }
-      if (request.result.objectStoreNames.contains(RETIRED_VCS_REFS_STORE_NAME)) {
-        request.result.deleteObjectStore(RETIRED_VCS_REFS_STORE_NAME);
-      }
-    });
-    request.addEventListener("error", () => {
-      resume(Effect.fail(catalogError("open", request.error ?? "Unknown IndexedDB error")));
-    });
-    request.addEventListener("success", () => {
-      resume(Effect.succeed(request.result));
-    });
-  });
-
-const openDatabase = Effect.fn("web.connectionStorage.openDatabase")(function* () {
-  return yield* openDatabaseAt(DATABASE_NAME);
-});
-
-/** Fill missing target records from `source` and record the migration inside one transaction. */
-const copyDatabaseContents = Effect.fn("web.connectionStorage.copyDatabaseContents")(function* (
-  source: IDBDatabase,
-  target: IDBDatabase,
-) {
-  const storeNames = OBJECT_STORE_NAMES.filter(
-    (storeName) =>
-      source.objectStoreNames.contains(storeName) && target.objectStoreNames.contains(storeName),
-  );
-  const entries = yield* Effect.callback<
-    ReadonlyArray<readonly [string, IDBValidKey, unknown]>,
-    ConnectionTransientError
-  >((resume) => {
-    const collected: Array<readonly [string, IDBValidKey, unknown]> = [];
-    if (storeNames.length === 0) {
-      resume(Effect.succeed(collected));
-      return;
-    }
-    const transaction = source.transaction(storeNames, "readonly");
-    transaction.addEventListener("error", () => {
-      resume(
-        Effect.fail(catalogError("migrate", transaction.error ?? "Unknown IndexedDB read error")),
-      );
-    });
-    transaction.addEventListener("complete", () => {
-      resume(Effect.succeed(collected));
-    });
-    for (const storeName of storeNames) {
-      const request = transaction.objectStore(storeName).openCursor();
-      request.addEventListener("success", () => {
-        const cursor = request.result;
-        if (cursor === null) return;
-        collected.push([storeName, cursor.key, cursor.value] as const);
-        cursor.continue();
-      });
-      request.addEventListener("error", () => {
-        resume(
-          Effect.fail(catalogError("migrate", request.error ?? "Unknown IndexedDB cursor error")),
-        );
-      });
-    }
-  });
-
-  yield* Effect.callback<void, ConnectionTransientError>((resume) => {
-    const transaction = target.transaction([...storeNames, CATALOG_STORE_NAME], "readwrite");
-    transaction.addEventListener("error", () => {
-      resume(
-        Effect.fail(catalogError("migrate", transaction.error ?? "Unknown IndexedDB write error")),
-      );
-    });
-    transaction.addEventListener("complete", () => {
-      resume(Effect.void);
-    });
-    for (const [storeName, key, value] of entries) {
-      const store = transaction.objectStore(storeName);
-      const existing = store.getKey(key);
-      existing.addEventListener("success", () => {
-        if (existing.result === undefined) store.put(value, key);
-      });
-    }
-    transaction.objectStore(CATALOG_STORE_NAME).put(true, LEGACY_MIGRATED_KEY);
-  });
-});
-
-const deleteLegacyDatabase = Effect.fn("web.connectionStorage.deleteLegacyDatabase")(function* () {
-  yield* Effect.callback<void, never>((resume) => {
-    const request = indexedDB.deleteDatabase(LEGACY_DATABASE_NAME);
-    request.addEventListener("success", () => resume(Effect.void));
-    request.addEventListener("error", () => resume(Effect.void));
-    request.addEventListener("blocked", () => resume(Effect.void));
-  });
-});
-
-/** Fill missing Akeru records from the old database, then retire it only
- * after the copy commits. A failed migration leaves the source for retry. */
-export const migrateLegacyConnectionDatabase = Effect.fn(
-  "web.connectionStorage.migrateLegacyConnectionDatabase",
-)(function* (database: IDBDatabase) {
-  if (typeof indexedDB === "undefined") return;
-  if ((yield* readDatabaseValue(database, CATALOG_STORE_NAME, LEGACY_MIGRATED_KEY)) === true)
-    return;
-  const legacyResult = yield* Effect.result(openDatabaseAt(LEGACY_DATABASE_NAME));
-  if (legacyResult._tag === "Failure") {
-    yield* Effect.logWarning("Could not open the legacy connection database for migration.").pipe(
-      Effect.annotateLogs({ error: legacyResult.failure }),
-    );
-    return;
-  }
-  yield* Effect.scoped(
-    Effect.gen(function* () {
-      const legacy = yield* Effect.acquireRelease(Effect.succeed(legacyResult.success), (db) =>
-        Effect.sync(() => db.close()),
-      );
-      yield* copyDatabaseContents(legacy, database);
-    }),
-  );
-  yield* deleteLegacyDatabase();
-});
-
-function readDatabaseValue(database: IDBDatabase, storeName: string, key: IDBValidKey) {
-  return Effect.callback<unknown, ConnectionTransientError>((resume) => {
-    const request = database.transaction(storeName, "readonly").objectStore(storeName).get(key);
-    request.addEventListener("error", () => {
-      resume(Effect.fail(catalogError("read", request.error ?? "Unknown IndexedDB read error")));
-    });
-    request.addEventListener("success", () => {
-      resume(Effect.succeed(request.result));
-    });
-  }).pipe(Effect.withSpan("web.connectionStorage.readDatabaseValue"));
-}
-
-function writeDatabaseValue(
-  database: IDBDatabase,
-  storeName: string,
-  key: IDBValidKey,
-  value: unknown,
-) {
-  return Effect.callback<void, ConnectionTransientError>((resume) => {
-    const transaction = database.transaction(storeName, "readwrite");
-    transaction.addEventListener("error", () => {
-      resume(
-        Effect.fail(catalogError("write", transaction.error ?? "Unknown IndexedDB write error")),
-      );
-    });
-    transaction.addEventListener("complete", () => {
-      resume(Effect.void);
-    });
-    transaction.objectStore(storeName).put(value, key);
-  }).pipe(Effect.withSpan("web.connectionStorage.writeDatabaseValue"));
-}
-
-function removeDatabaseValue(database: IDBDatabase, storeName: string, key: IDBValidKey) {
-  return Effect.callback<void, ConnectionTransientError>((resume) => {
-    const transaction = database.transaction(storeName, "readwrite");
-    transaction.addEventListener("error", () => {
-      resume(
-        Effect.fail(catalogError("remove", transaction.error ?? "Unknown IndexedDB remove error")),
-      );
-    });
-    transaction.addEventListener("complete", () => {
-      resume(Effect.void);
-    });
-    transaction.objectStore(storeName).delete(key);
-  }).pipe(Effect.withSpan("web.connectionStorage.removeDatabaseValue"));
-}
-
-function removeDatabaseValuesInRange(database: IDBDatabase, storeName: string, range: IDBKeyRange) {
-  return Effect.callback<void, ConnectionTransientError>((resume) => {
-    const transaction = database.transaction(storeName, "readwrite");
-    transaction.addEventListener("error", () => {
-      resume(
-        Effect.fail(catalogError("remove", transaction.error ?? "Unknown IndexedDB cursor error")),
-      );
-    });
-    transaction.addEventListener("complete", () => {
-      resume(Effect.void);
-    });
-    const request = transaction.objectStore(storeName).openCursor(range);
-    request.addEventListener("error", () => {
-      resume(
-        Effect.fail(catalogError("remove", request.error ?? "Unknown IndexedDB cursor error")),
-      );
-    });
-    request.addEventListener("success", () => {
-      const cursor = request.result;
-      if (cursor === null) {
-        return;
-      }
-      cursor.delete();
-      cursor.continue();
-    });
-  }).pipe(Effect.withSpan("web.connectionStorage.removeDatabaseValuesInRange"));
-}
-
-function threadCacheKey(environmentId: EnvironmentId, threadId: ThreadId) {
-  return `${environmentId}:${threadId}`;
-}
-
-const decodeCatalog = Effect.fn("web.connectionStorage.decodeCatalog")(function* (raw: string) {
-  return yield* decodeConnectionCatalogDocument(raw).pipe(
-    Effect.mapError((cause) => catalogError("decode", cause)),
-  );
-});
-
-const encodeCatalog = Effect.fn("web.connectionStorage.encodeCatalog")(function* (
-  catalog: ConnectionCatalogDocumentType,
-) {
-  return yield* encodeConnectionCatalogDocument(catalog).pipe(
-    Effect.mapError((cause) => catalogError("encode", cause)),
-  );
-});
-
-export interface CatalogBackend {
-  readonly read: Effect.Effect<string | null, ConnectionTransientError>;
-  readonly write: (raw: string) => Effect.Effect<void, ConnectionTransientError>;
-  readonly quarantine?: (raw: string) => Effect.Effect<void, ConnectionTransientError>;
-}
-
-export function makeCatalogBackend(database: IDBDatabase): CatalogBackend {
-  const bridge = window.desktopBridge;
-  if (bridge?.getConnectionCatalog !== undefined && bridge.setConnectionCatalog !== undefined) {
-    return {
-      read: Effect.tryPromise({
-        try: () => bridge.getConnectionCatalog!(),
-        catch: (cause) => catalogError("load", cause),
-      }),
-      write: (raw) =>
-        Effect.tryPromise({
-          try: () => bridge.setConnectionCatalog!(raw),
-          catch: (cause) => catalogError("save", cause),
-        }).pipe(
-          Effect.flatMap((stored) =>
-            stored
-              ? Effect.void
-              : Effect.fail(
-                  catalogError(
-                    "save",
-                    "Desktop secure storage is unavailable in this system context.",
-                  ),
-                ),
-          ),
-        ),
-    };
-  }
-
-  return {
-    read: readDatabaseValue(database, CATALOG_STORE_NAME, CATALOG_KEY).pipe(
-      Effect.map((value) => (typeof value === "string" ? value : null)),
-    ),
-    write: (raw) => writeDatabaseValue(database, CATALOG_STORE_NAME, CATALOG_KEY, raw),
-    quarantine: (raw) =>
-      writeDatabaseValue(database, CATALOG_STORE_NAME, `${CATALOG_KEY}:corrupt:${Date.now()}`, raw),
-  };
-}
-
-interface CatalogStore {
-  readonly read: Effect.Effect<ConnectionCatalogDocumentType, ConnectionTransientError>;
-  readonly update: (
-    transform: (catalog: ConnectionCatalogDocumentType) => ConnectionCatalogDocumentType,
-  ) => Effect.Effect<void, ConnectionTransientError>;
-}
-
-export const makeCatalogStore = Effect.fn("web.connectionStorage.makeCatalogStore")(function* (
-  backend: CatalogBackend,
-) {
-  const state = yield* Ref.make<Option.Option<ConnectionCatalogDocumentType>>(Option.none());
-  const lock = yield* Semaphore.make(1);
-
-  const loadUnlocked = Effect.fn("web.connectionStorage.loadCatalog")(function* () {
-    const cached = yield* Ref.get(state);
-    if (Option.isSome(cached)) {
-      return cached.value;
-    }
-    const raw = yield* backend.read;
-    let catalog = EMPTY_CONNECTION_CATALOG_DOCUMENT;
-    if (raw !== null && raw.trim() !== "") {
-      catalog = yield* decodeCatalog(raw).pipe(
-        Effect.catch((error) =>
-          Effect.gen(function* () {
-            yield* Effect.logWarning("Discarding a corrupt web connection catalog.", {
-              error: error.message,
-            });
-            if (backend.quarantine !== undefined) {
-              yield* backend.quarantine(raw).pipe(
-                Effect.catch((cause) =>
-                  Effect.logWarning("Could not quarantine the corrupt web connection catalog.", {
-                    error: cause.message,
-                  }),
-                ),
-              );
-            }
-            const encoded = yield* encodeCatalog(EMPTY_CONNECTION_CATALOG_DOCUMENT);
-            yield* backend.write(encoded).pipe(
-              Effect.catch((cause) =>
-                Effect.logWarning("Could not persist the recovered web connection catalog.", {
-                  error: cause.message,
-                }),
-              ),
-            );
-            return EMPTY_CONNECTION_CATALOG_DOCUMENT;
-          }),
-        ),
-      );
-    }
-    yield* Ref.set(state, Option.some(catalog));
-    return catalog;
-  });
-
-  const read = lock.withPermits(1)(loadUnlocked());
-  const update: CatalogStore["update"] = Effect.fn("web.connectionStorage.updateCatalog")(
-    function* (transform) {
-      yield* lock.withPermits(1)(
-        Effect.gen(function* () {
-          const next = transform(yield* loadUnlocked());
-          yield* backend.write(yield* encodeCatalog(next));
-          yield* Ref.set(state, Option.some(next));
-        }),
-      );
-    },
-  );
-
-  return { read, update } satisfies CatalogStore;
-});
-
 export const connectionStorageLayer = Layer.effectContext(
   Effect.gen(function* () {
     const database = yield* Effect.acquireRelease(openDatabase(), (database) =>
       Effect.sync(() => database.close()),
     );
+
     yield* migrateLegacyConnectionDatabase(database).pipe(
       Effect.catchCause((cause) =>
         Effect.logWarning("Connection database migration failed; using the new database.", {
@@ -466,7 +117,7 @@ export const connectionStorageLayer = Layer.effectContext(
         }),
       ),
     );
-    const catalog = yield* makeCatalogStore(makeCatalogBackend(database));
+    const catalog = yield* cachedCatalogStore(catalogBackendForDatabase(database));
 
     const targetStore = ConnectionTargetStore.of({
       list: catalog.read.pipe(
@@ -474,6 +125,7 @@ export const connectionStorageLayer = Layer.effectContext(
         Effect.mapError((cause) => persistenceError("list-targets", cause)),
       ),
     });
+
     const registrationStore = ConnectionRegistrationStore.of({
       register: (registration) =>
         catalog
@@ -484,6 +136,7 @@ export const connectionStorageLayer = Layer.effectContext(
           .update((document) => removeConnectionFromCatalog(document, target))
           .pipe(Effect.mapError((cause) => persistenceError("remove-connection", cause))),
     });
+
     const profileStore = ProfileStore.make({
       get: (connectionId) =>
         catalog.read.pipe(
@@ -508,6 +161,7 @@ export const connectionStorageLayer = Layer.effectContext(
           ),
         })),
     });
+
     const credentialStore = CredentialStore.make({
       get: (connectionId) =>
         catalog.read.pipe(
@@ -535,13 +189,15 @@ export const connectionStorageLayer = Layer.effectContext(
           ),
         })),
     });
+
     const cacheStore = EnvironmentCacheStore.of({
       loadShell: (environmentId) =>
         readDatabaseValue(database, SHELL_STORE_NAME, environmentId).pipe(
           Effect.flatMap((raw) => {
-            if (typeof raw !== "string") {
+            if (!Predicate.isString(raw)) {
               return Effect.succeed(Option.none());
             }
+
             return decodeStoredShellSnapshot(raw).pipe(
               Effect.mapError((cause) => persistenceError("load-shell", cause)),
               Effect.map((stored) =>
@@ -552,7 +208,7 @@ export const connectionStorageLayer = Layer.effectContext(
             );
           }),
           Effect.mapError((cause) =>
-            cause._tag === "ConnectionPersistenceError"
+            hasTag(cause, "ConnectionPersistenceError")
               ? cause
               : persistenceError("load-shell", cause),
           ),
@@ -564,10 +220,11 @@ export const connectionStorageLayer = Layer.effectContext(
             environmentId,
             snapshot,
           }).pipe(Effect.mapError((cause) => persistenceError("save-shell", cause)));
+
           yield* writeDatabaseValue(database, SHELL_STORE_NAME, environmentId, encoded);
         }).pipe(
           Effect.mapError((cause) =>
-            cause._tag === "ConnectionPersistenceError"
+            hasTag(cause, "ConnectionPersistenceError")
               ? cause
               : persistenceError("save-shell", cause),
           ),
@@ -575,9 +232,10 @@ export const connectionStorageLayer = Layer.effectContext(
       loadServerConfig: (environmentId) =>
         readDatabaseValue(database, SERVER_CONFIG_STORE_NAME, environmentId).pipe(
           Effect.flatMap((raw) => {
-            if (typeof raw !== "string") {
+            if (!Predicate.isString(raw)) {
               return Effect.succeed(Option.none());
             }
+
             return decodeStoredServerConfig(raw).pipe(
               Effect.mapError((cause) => persistenceError("load-server-config", cause)),
               Effect.map((stored) =>
@@ -586,7 +244,7 @@ export const connectionStorageLayer = Layer.effectContext(
             );
           }),
           Effect.mapError((cause) =>
-            cause._tag === "ConnectionPersistenceError"
+            hasTag(cause, "ConnectionPersistenceError")
               ? cause
               : persistenceError("load-server-config", cause),
           ),
@@ -598,10 +256,11 @@ export const connectionStorageLayer = Layer.effectContext(
             environmentId,
             config,
           }).pipe(Effect.mapError((cause) => persistenceError("save-server-config", cause)));
+
           yield* writeDatabaseValue(database, SERVER_CONFIG_STORE_NAME, environmentId, encoded);
         }).pipe(
           Effect.mapError((cause) =>
-            cause._tag === "ConnectionPersistenceError"
+            hasTag(cause, "ConnectionPersistenceError")
               ? cause
               : persistenceError("save-server-config", cause),
           ),
@@ -613,9 +272,10 @@ export const connectionStorageLayer = Layer.effectContext(
           threadCacheKey(environmentId, threadId),
         ).pipe(
           Effect.flatMap((raw) => {
-            if (typeof raw !== "string") {
+            if (!Predicate.isString(raw)) {
               return Effect.succeed(Option.none());
             }
+
             return decodeStoredThreadSnapshot(raw).pipe(
               Effect.mapError((cause) => persistenceError("load-thread", cause)),
               Effect.map((stored) =>
@@ -626,7 +286,7 @@ export const connectionStorageLayer = Layer.effectContext(
             );
           }),
           Effect.mapError((cause) =>
-            cause._tag === "ConnectionPersistenceError"
+            hasTag(cause, "ConnectionPersistenceError")
               ? cause
               : persistenceError("load-thread", cause),
           ),
@@ -639,6 +299,7 @@ export const connectionStorageLayer = Layer.effectContext(
             threadId: snapshot.thread.id,
             snapshot,
           }).pipe(Effect.mapError((cause) => persistenceError("save-thread", cause)));
+
           yield* writeDatabaseValue(
             database,
             THREAD_STORE_NAME,
@@ -647,7 +308,7 @@ export const connectionStorageLayer = Layer.effectContext(
           );
         }).pipe(
           Effect.mapError((cause) =>
-            cause._tag === "ConnectionPersistenceError"
+            hasTag(cause, "ConnectionPersistenceError")
               ? cause
               : persistenceError("save-thread", cause),
           ),
@@ -681,3 +342,11 @@ export const connectionStorageLayer = Layer.effectContext(
     );
   }),
 );
+
+export { migrateLegacyConnectionDatabase } from "./legacyDatabaseMigration";
+
+export {
+  type CatalogBackend,
+  catalogBackendForDatabase,
+  cachedCatalogStore,
+} from "./catalogStorage";

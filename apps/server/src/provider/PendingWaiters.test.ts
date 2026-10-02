@@ -20,7 +20,10 @@ const childOptions = (timeout: Duration.Input) => ({
   timeoutMessage: "The delegation deadline expired.",
 });
 
-const waitForOpen = (waiters: { readonly get: (key: string) => unknown }, key: string) =>
+const waitForOpen = <Meta>(
+  waiters: { readonly get: (key: string) => Meta | undefined },
+  key: string,
+) =>
   Effect.gen(function* () {
     // The waiter registers synchronously once the forked fiber starts running.
     yield* Effect.yieldNow;
@@ -32,9 +35,11 @@ describe("PendingWaiters", () => {
     it.effect("resolves with the child's outcome", () =>
       Effect.gen(function* () {
         const waiters = yield* makePendingWaiters<null, string>("stopped");
+
         const fiber = yield* waiters
           .wait("child", null, childOptions(AKERU_CHILD_WAIT_DEFAULT_TIMEOUT))
           .pipe(Effect.forkChild);
+
         yield* waitForOpen(waiters, "child");
         assert.isTrue(waiters.resolve("child", "done"));
         assert.strictEqual(yield* Fiber.join(fiber), "done");
@@ -46,9 +51,11 @@ describe("PendingWaiters", () => {
     it.effect("rejects with the caller's error", () =>
       Effect.gen(function* () {
         const waiters = yield* makePendingWaiters<null, string, Error>("stopped");
+
         const fiber = yield* waiters
           .wait("child", null, childOptions(AKERU_CHILD_WAIT_DEFAULT_TIMEOUT))
           .pipe(Effect.flip, Effect.forkChild);
+
         yield* waitForOpen(waiters, "child");
         const error = new Error("child failed");
         assert.isTrue(waiters.reject("child", error));
@@ -60,9 +67,11 @@ describe("PendingWaiters", () => {
     it.effect("times out at the deadline", () =>
       Effect.gen(function* () {
         const waiters = yield* makePendingWaiters<null, string>("stopped");
+
         const fiber = yield* waiters
           .wait("child", null, childOptions(Duration.minutes(10)))
           .pipe(Effect.flip, Effect.forkChild);
+
         yield* waitForOpen(waiters, "child");
         yield* TestClock.adjust(10 * 60_000 - 1);
         assert.isUndefined(fiber.pollUnsafe());
@@ -77,9 +86,11 @@ describe("PendingWaiters", () => {
     it.effect("fails at once when the deadline has already passed", () =>
       Effect.gen(function* () {
         const waiters = yield* makePendingWaiters<null, string>("stopped");
+
         const error = yield* waiters
           .wait("child", null, childOptions(Duration.millis(-5)))
           .pipe(Effect.flip);
+
         assert.instanceOf(error, PendingWaiterTimeoutError);
         assert.isUndefined(waiters.get("child"));
       }).pipe(Effect.scoped),
@@ -88,12 +99,14 @@ describe("PendingWaiters", () => {
     it.effect("times out after the bounded default when there is no deadline", () =>
       Effect.gen(function* () {
         const waiters = yield* makePendingWaiters<null, string>("stopped");
+
         const fiber = yield* waiters
           .wait("child", null, {
             timeout: AKERU_CHILD_WAIT_DEFAULT_TIMEOUT,
             timeoutMessage: "The bot did not report back within 4 hours.",
           })
           .pipe(Effect.flip, Effect.forkChild);
+
         yield* waitForOpen(waiters, "child");
         yield* TestClock.adjust(4 * 3_600_000 - 1);
         assert.isUndefined(fiber.pollUnsafe());
@@ -107,16 +120,20 @@ describe("PendingWaiters", () => {
     it.effect("rejects a second waiter for the same child", () =>
       Effect.gen(function* () {
         const waiters = yield* makePendingWaiters<null, string>("stopped");
+
         const first = yield* waiters
           .wait("child", null, childOptions(AKERU_CHILD_WAIT_DEFAULT_TIMEOUT))
           .pipe(Effect.forkChild);
+
         yield* waitForOpen(waiters, "child");
+
         const error = yield* waiters
           .wait("child", null, {
             ...childOptions(AKERU_CHILD_WAIT_DEFAULT_TIMEOUT),
             existsMessage: "Delegation waiter already exists for 'child'.",
           })
           .pipe(Effect.flip);
+
         assert.instanceOf(error, PendingWaiterExistsError);
         assert.strictEqual(error.message, "Delegation waiter already exists for 'child'.");
         waiters.resolve("child", "done");
@@ -127,12 +144,15 @@ describe("PendingWaiters", () => {
     it.effect("fails outstanding waiters when the scope closes", () =>
       Effect.gen(function* () {
         const scope = yield* Scope.make();
+
         const waiters = yield* makePendingWaiters<null, string>(
           "The agent controller stopped.",
         ).pipe(Scope.provide(scope));
+
         const fiber = yield* waiters
           .wait("child", null, childOptions(AKERU_CHILD_WAIT_DEFAULT_TIMEOUT))
           .pipe(Effect.flip, Effect.forkChild);
+
         yield* waitForOpen(waiters, "child");
         yield* Scope.close(scope, Exit.void);
         const error = yield* Fiber.join(fiber);
@@ -145,6 +165,7 @@ describe("PendingWaiters", () => {
 
   describe("routine requests", () => {
     const meta = { threadId: "thread-1", timezone: "UTC" };
+
     const reviewOptions = {
       timeout: AKERU_ROUTINE_REVIEW_TIMEOUT,
       timeoutMessage: "The routine review expired without a response.",
@@ -155,10 +176,13 @@ describe("PendingWaiters", () => {
         const waiters = yield* makePendingWaiters<typeof meta, { readonly status: string }, Error>(
           "stopped",
         );
+
         let opened = 0;
+
         const fiber = yield* waiters
           .wait("routine-1", meta, { ...reviewOptions, onOpen: () => opened++ })
           .pipe(Effect.forkChild);
+
         yield* waitForOpen(waiters, "routine-1");
         assert.strictEqual(opened, 1);
         assert.deepStrictEqual(waiters.get("routine-1"), meta);
@@ -174,9 +198,11 @@ describe("PendingWaiters", () => {
         const waiters = yield* makePendingWaiters<typeof meta, { readonly status: string }, Error>(
           "stopped",
         );
+
         const fiber = yield* waiters
           .wait("routine-1", meta, reviewOptions)
           .pipe(Effect.flip, Effect.forkChild);
+
         yield* waitForOpen(waiters, "routine-1");
         assert.isTrue(waiters.reject("routine-1", new Error("The routine review ended.")));
         const error = yield* Fiber.join(fiber);
@@ -189,9 +215,11 @@ describe("PendingWaiters", () => {
         const waiters = yield* makePendingWaiters<typeof meta, { readonly status: string }, Error>(
           "stopped",
         );
+
         const fiber = yield* waiters
           .wait("routine-1", meta, reviewOptions)
           .pipe(Effect.flip, Effect.forkChild);
+
         yield* waitForOpen(waiters, "routine-1");
         yield* TestClock.adjust(3_600_000 - 1);
         assert.isUndefined(fiber.pollUnsafe());
@@ -208,6 +236,7 @@ describe("PendingWaiters", () => {
         const waiters = yield* makePendingWaiters<typeof meta, { readonly status: string }, Error>(
           "stopped",
         );
+
         const fiber = yield* waiters.wait("routine-1", meta, reviewOptions).pipe(Effect.forkChild);
         yield* waitForOpen(waiters, "routine-1");
         yield* TestClock.adjust(3_600_000 - 1_000);
@@ -228,9 +257,11 @@ describe("PendingWaiters", () => {
         const waiters = yield* makePendingWaiters<typeof meta, { readonly status: string }, Error>(
           "stopped",
         );
+
         const fiber = yield* waiters
           .wait("routine-1", meta, reviewOptions)
           .pipe(Effect.flip, Effect.forkChild);
+
         yield* waitForOpen(waiters, "routine-1");
         assert.isDefined(waiters.claim("routine-1"));
         assert.isTrue(waiters.reject("routine-1", new Error("Routine limit reached.")));
@@ -244,9 +275,11 @@ describe("PendingWaiters", () => {
         const waiters = yield* makePendingWaiters<typeof meta, { readonly status: string }, Error>(
           "stopped",
         );
+
         const fiber = yield* waiters
           .wait("routine-1", meta, reviewOptions)
           .pipe(Effect.flip, Effect.forkChild);
+
         yield* waitForOpen(waiters, "routine-1");
         yield* TestClock.adjust(AKERU_ROUTINE_REVIEW_TIMEOUT);
         assert.isUndefined(waiters.claim("routine-1"));
@@ -257,12 +290,15 @@ describe("PendingWaiters", () => {
     it.effect("fails a claimed review when the scope closes", () =>
       Effect.gen(function* () {
         const scope = yield* Scope.make();
+
         const waiters = yield* makePendingWaiters<typeof meta, { readonly status: string }, Error>(
           "stopped",
         ).pipe(Scope.provide(scope));
+
         const fiber = yield* waiters
           .wait("routine-1", meta, reviewOptions)
           .pipe(Effect.flip, Effect.forkChild);
+
         yield* waitForOpen(waiters, "routine-1");
         assert.isDefined(waiters.claim("routine-1"));
         yield* Scope.close(scope, Exit.void);
@@ -273,12 +309,15 @@ describe("PendingWaiters", () => {
     it.effect("fails an open review when the scope closes", () =>
       Effect.gen(function* () {
         const scope = yield* Scope.make();
+
         const waiters = yield* makePendingWaiters<typeof meta, { readonly status: string }, Error>(
           "The agent controller stopped before the routine review finished.",
         ).pipe(Scope.provide(scope));
+
         const fiber = yield* waiters
           .wait("routine-1", meta, reviewOptions)
           .pipe(Effect.flip, Effect.forkChild);
+
         yield* waitForOpen(waiters, "routine-1");
         yield* Scope.close(scope, Exit.void);
         const error = yield* Fiber.join(fiber);

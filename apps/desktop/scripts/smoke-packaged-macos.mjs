@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import * as NodeChildProcess from "node:child_process";
 import * as NodeFSP from "node:fs/promises";
 import * as NodeNet from "node:net";
@@ -20,13 +21,16 @@ async function reservePort() {
   await new Promise((resolve, reject) =>
     server.close((error) => (error ? reject(error) : resolve())),
   );
-  if (!address || typeof address === "string")
+
+  if (!address || Predicate.isString(address))
     throw new Error("Could not reserve a loopback port.");
+
   return address.port;
 }
 
 function runChecked(command, args) {
   const result = NodeChildProcess.spawnSync(command, args, { encoding: "utf8" });
+
   if (result.status === 0) return;
   throw new Error([result.stdout, result.stderr].filter(Boolean).join("\n").trim());
 }
@@ -38,6 +42,7 @@ async function waitForRenderer(cdpPort, child) {
 
   while (Date.now() < deadline && !browser) {
     if (child.exitCode !== null) throw new Error(`The app exited with code ${child.exitCode}.`);
+
     try {
       browser = await chromium.connectOverCDP(`http://127.0.0.1:${cdpPort}`);
     } catch (error) {
@@ -45,16 +50,20 @@ async function waitForRenderer(cdpPort, child) {
       await delay(100);
     }
   }
+
   if (!browser) throw lastError ?? new Error("The Electron debug endpoint did not start.");
 
   let page;
+
   while (Date.now() < deadline && !page) {
     page = browser
       .contexts()
       .flatMap((context) => context.pages())
       .find((candidate) => candidate.url().startsWith("akeru://app/"));
+
     if (!page) await delay(100);
   }
+
   if (!page) throw new Error("The packaged app did not create its akeru://app/ renderer.");
 
   const rendererErrors = [];
@@ -67,6 +76,7 @@ async function waitForRenderer(cdpPort, child) {
   });
 
   await page.reload({ waitUntil: "domcontentloaded" });
+
   try {
     await page.locator("[data-app-sidebar]").waitFor({
       state: "visible",
@@ -76,8 +86,10 @@ async function waitForRenderer(cdpPort, child) {
     if (rendererErrors.length > 0) {
       throw new Error(`Renderer errors:\n${rendererErrors.join("\n")}`, { cause: error });
     }
+
     throw error;
   }
+
   if (rendererErrors.length > 0) {
     throw new Error(`Renderer errors:\n${rendererErrors.join("\n")}`);
   }
@@ -87,14 +99,17 @@ async function stopChild(child) {
   if (child.exitCode !== null) return;
   const descendants = listDescendantPids(child.pid);
   child.kill("SIGTERM");
+
   const exited = await Promise.race([
     new Promise((resolve) => child.once("exit", () => resolve(true))),
     delay(5_000).then(() => false),
   ]);
+
   if (!exited && child.exitCode === null) {
     child.kill("SIGKILL");
     await new Promise((resolve) => child.once("exit", resolve));
   }
+
   for (const pid of descendants.toReversed()) {
     try {
       process.kill(pid, "SIGTERM");
@@ -108,9 +123,11 @@ function listDescendantPids(rootPid) {
   const result = NodeChildProcess.spawnSync("ps", ["-axo", "pid=,ppid="], {
     encoding: "utf8",
   });
+
   if (result.status !== 0) throw new Error(result.stderr.trim());
 
   const childrenByParent = new Map();
+
   for (const line of result.stdout.trim().split("\n")) {
     const [pid, parentPid] = line.trim().split(/\s+/).map(Number);
     const children = childrenByParent.get(parentPid) ?? [];
@@ -120,33 +137,37 @@ function listDescendantPids(rootPid) {
 
   const descendants = [];
   const pending = [...(childrenByParent.get(rootPid) ?? [])];
+
   while (pending.length > 0) {
     const pid = pending.pop();
     descendants.push(pid);
     pending.push(...(childrenByParent.get(pid) ?? []));
   }
+
   return descendants;
 }
 
 async function readFailureLogs(stateRoot) {
   const logDir = NodePath.join(stateRoot, "userdata", "logs");
   const sections = [];
+
   for (const name of ["server-child.log", "desktop.trace.ndjson"]) {
     try {
       const contents = await NodeFSP.readFile(NodePath.join(logDir, name), "utf8");
       sections.push(`--- ${name} ---\n${contents.slice(-12_000)}`);
     } catch {}
   }
+
   return sections.join("\n");
 }
 
 async function main() {
-  // oxlint-disable-next-line akeru/no-global-process-runtime -- Standalone release smoke script.
   if (process.platform !== "darwin")
     throw new Error("The packaged macOS smoke test requires macOS.");
   const dmgArgument = process.argv.slice(2).find((argument) => argument !== "--");
   const repositoryRoot = NodePath.resolve(import.meta.dirname, "../../..");
   const dmgPath = dmgArgument ? NodePath.resolve(repositoryRoot, dmgArgument) : undefined;
+
   if (!dmgPath) throw new Error("Usage: node smoke-packaged-macos.mjs <path-to-dmg>");
 
   const tempDir = await NodeFSP.mkdtemp(NodePath.join(NodeOS.tmpdir(), "akeru-packaged-smoke-"));
@@ -161,21 +182,25 @@ async function main() {
 
   let mounted = false;
   let child;
+
   try {
     runChecked("hdiutil", ["attach", dmgPath, "-nobrowse", "-readonly", "-mountpoint", mountPoint]);
     mounted = true;
     const apps = (await NodeFSP.readdir(mountPoint)).filter((name) => name.endsWith(".app"));
+
     if (apps.length !== 1) throw new Error(`Expected one app in the DMG, found ${apps.length}.`);
 
     const appName = NodePath.basename(apps[0], ".app");
     const executable = NodePath.join(mountPoint, apps[0], "Contents", "MacOS", appName);
     const [backendPort, cdpPort] = await Promise.all([reservePort(), reservePort()]);
+
     const env = {
       ...process.env,
       T3CODE_HOME: stateRoot,
       T3CODE_PORT: String(backendPort),
       ELECTRON_ENABLE_LOGGING: "1",
     };
+
     delete env.ELECTRON_RUN_AS_NODE;
 
     child = NodeChildProcess.spawn(
@@ -201,9 +226,11 @@ async function main() {
         cause: error,
       });
     }
+
     console.log("Packaged macOS smoke test passed.");
   } finally {
     if (child) await stopChild(child);
+
     if (mounted) runChecked("hdiutil", ["detach", mountPoint, "-force"]);
     await NodeFSP.rm(tempDir, { recursive: true, force: true });
   }

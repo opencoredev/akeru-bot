@@ -18,9 +18,12 @@ export function GroupMemberStack({
     .filter((bot) => bot.archivedAt === null)
     .sort((a, b) => {
       if (a.id === group.bossBotId) return -1;
+
       if (b.id === group.bossBotId) return 1;
+
       return 0;
     });
+
   return (
     <div className={cn("relative inline-flex shrink-0", sizeClassName, className)}>
       {groupBots.slice(0, 2).map((bot, index) => (
@@ -29,7 +32,7 @@ export function GroupMemberStack({
           avatar={bot.avatar}
           name={bot.name}
           className={cn(
-            "absolute size-[68%]",
+            "absolute size-17/25",
             index === 0 ? "left-0 top-0" : "bottom-0 right-0 z-10",
           )}
         />

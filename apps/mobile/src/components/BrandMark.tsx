@@ -5,6 +5,7 @@ import { AppText as Text } from "./AppText";
 import { BrandIcon } from "./BrandIcon";
 
 const appVariant = Constants.expoConfig?.extra?.appVariant;
+
 const DEFAULT_STAGE_LABEL = appVariant === "development" ? "Dev" : "Alpha";
 
 export function BrandMark(props: { readonly compact?: boolean; readonly stageLabel?: string }) {

@@ -52,8 +52,10 @@ export function parseSettingsDeepLink(
   href: string | undefined,
 ): SettingsDeepLinkDestination | null {
   const id = parseSettingsDeepLinkId(href);
+
   if (id === null) return null;
   const destination = destinations[id];
+
   return {
     section: destination.section,
     targetId: destination.targetId ?? null,

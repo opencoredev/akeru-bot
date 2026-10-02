@@ -31,6 +31,7 @@ describe("GitWorkflowService", () => {
   it.effect("structures worktree command failures without exposing upstream details", () =>
     Effect.gen(function* () {
       const workflow = yield* GitWorkflowService.GitWorkflowService;
+
       const error = yield* workflow
         .createWorktree({ cwd: "/repo", refName: "main", path: null })
         .pipe(Effect.flip);
@@ -49,6 +50,7 @@ describe("GitWorkflowService", () => {
   it.effect("structures branch rename failures without exposing upstream details", () =>
     Effect.gen(function* () {
       const workflow = yield* GitWorkflowService.GitWorkflowService;
+
       const error = yield* workflow
         .renameBranch({ cwd: "/repo", oldBranch: "akeru/tmp", newBranch: "akeru/named" })
         .pipe(Effect.flip);

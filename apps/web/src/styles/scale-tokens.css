@@ -1,0 +1,180 @@
+/* Fixed steps the interface uses beside Tailwind's default scale. Values stay
+   literal (px, em, rem) and are named after them, so each utility renders
+   exactly the value it names. Font sizes carry no line-height companion: they
+   set font-size only and leave line-height to leading-* or inheritance.
+
+   Viewport-capped sizes are named after their min() arguments: "vw-2rem" is
+   calc(100vw - 2rem), "dvh-2rem" is calc(100dvh - 2rem) and "pct-2rem" is
+   calc(100% - 2rem). In grid templates "1fr" is minmax(0, 1fr), matching
+   Tailwind's grid-cols-N, while "grow" is a bare 1fr. */
+
+@theme inline {
+  --text-7px: 7px;
+  --text-8px: 8px;
+  --text-9px: 9px;
+  --text-10px: 10px;
+  --text-11px: 11px;
+  --text-12px: 12px;
+  --text-13px: 13px;
+  --text-15px: 15px;
+  --text-17px: 17px;
+  --text-26px: 26px;
+  /* Code block header label. */
+  --text-code-label: 0.6875rem;
+  --text-1em: 1em;
+
+  --tracking-caps: 0.08em;
+  --tracking-caps-wide: 0.11em;
+  --tracking-caps-wider: 0.12em;
+  --tracking-caps-widest: 0.14em;
+  --tracking-title-xs: -0.005em;
+  --tracking-title-sm: -0.01em;
+  --tracking-title: -0.015em;
+  --tracking-title-lg: -0.02em;
+
+  --leading-copy: 1.45;
+  --leading-copy-tight: 1.4;
+
+  --font-emoji: "Apple Color Emoji", "Segoe UI Emoji", sans-serif;
+
+  --spacing-0\.2em: 0.2em;
+  --spacing-0\.25em: 0.25em;
+  --spacing-1em: 1em;
+  --spacing-1\.6em: 1.6em;
+  --spacing-0\.4rem: 0.4rem;
+  --spacing-0\.65rem: 0.65rem;
+  --spacing-0\.9rem: 0.9rem;
+  --spacing-48ch: 48ch;
+  --spacing-80dvh: 80dvh;
+  --spacing-86vh: 86vh;
+  --spacing-92vh: 92vh;
+  --spacing-92vw: 92vw;
+  --spacing-dvh-1rem: calc(100dvh - 1rem);
+  --spacing-dvh-2rem: calc(100dvh - 2rem);
+  --spacing-full-plus-1rem: calc(100% + 1rem);
+  --spacing-min-full-30rem: min(100%, 30rem);
+  --spacing-min-300px-vw-2rem: min(300px, calc(100vw - 2rem));
+  --spacing-min-440px-vw-2rem: min(440px, calc(100vw - 2rem));
+  --spacing-min-520px-vw-2rem: min(520px, calc(100vw - 2rem));
+  --spacing-min-22\.5rem-vw-2rem: min(22.5rem, calc(100vw - 2rem));
+  --spacing-min-26rem-vw-2rem: min(26rem, calc(100vw - 2rem));
+  --spacing-min-34rem-vw-2rem: min(34rem, calc(100vw - 2rem));
+  --spacing-min-36rem-vw-2rem: min(36rem, calc(100vw - 2rem));
+  --spacing-min-40rem-vw-2rem: min(40rem, calc(100vw - 2rem));
+  --spacing-min-92vw-24rem: min(92vw, 24rem);
+  --spacing-min-42rem-pct-2\.5rem: min(42rem, calc(100% - 2.5rem));
+  --spacing-min-46rem-pct-2rem: min(46rem, calc(100% - 2rem));
+  --spacing-min-48rem-pct-2rem: min(48rem, calc(100% - 2rem));
+  --spacing-min-21\.625rem-dvh-2rem: min(21.625rem, calc(100dvh - 2rem));
+  --spacing-min-42rem-dvh-6rem: min(42rem, calc(100dvh - 6rem));
+  --spacing-min-24rem-40dvh: min(24rem, 40dvh);
+  --spacing-min-28rem-70vh: min(28rem, 70vh);
+  --spacing-min-32rem-90dvh: min(32rem, 90dvh);
+  --spacing-min-36rem-90dvh: min(36rem, 90dvh);
+  --spacing-min-42rem-90dvh: min(42rem, 90dvh);
+  --spacing-min-44rem-88dvh: min(44rem, 88dvh);
+  --spacing-min-45dvh-22rem: min(45dvh, 22rem);
+  --spacing-min-48rem-90dvh: min(48rem, 90dvh);
+  --spacing-min-64vh-44rem: min(64vh, 44rem);
+  --spacing-min-68vh-48rem: min(68vh, 48rem);
+  /* Side gutters that center a 48rem column, never narrower than 1rem or 1.5rem. */
+  --spacing-gutter-48rem: max(1rem, calc((100% - 48rem) / 2));
+  --spacing-gutter-48rem-wide: max(1.5rem, calc((100% - 48rem) / 2));
+  --spacing-safe-left-0\.75rem: calc(env(safe-area-inset-left) + 0.75rem);
+  --spacing-safe-right-0\.75rem: calc(env(safe-area-inset-right) + 0.75rem);
+  --spacing-safe-left-1\.25rem: calc(env(safe-area-inset-left) + 1.25rem);
+  --spacing-safe-right-1\.25rem: calc(env(safe-area-inset-right) + 1.25rem);
+  /* Clears the window controls plus the titlebar toggle beside them. */
+  --spacing-titlebar-controls-end: calc(
+    var(--workspace-controls-left) + var(--workspace-titlebar-control-size) +
+      var(--workspace-titlebar-control-gap)
+  );
+  /* Spacer that lines the sidebar up with a topbar's vertical center. */
+  --spacing-topbar-spacer: calc(0.5rem + var(--workspace-topbar-height) / 2 - 1.25rem);
+  --spacing-composer-overlap-1\.5: calc(var(--chat-composer-attachment-overlap) + 0.375rem);
+  --spacing-composer-overlap-1: calc(
+    var(--chat-composer-attachment-overlap) + calc(var(--spacing) * 1)
+  );
+  /* Composer drawer seam and width: the attachment overlap and the form's side insets. */
+  --spacing-composer-seam: calc(1rem + 1px);
+  --spacing-composer-drawer: calc(100% - 2 * var(--chat-composer-drawer-inset));
+  /* Composer banner rows indent by their icon column. */
+  --spacing-banner-indent: calc(var(--composer-banner-icon-column) + calc(var(--spacing) * 1));
+  --spacing-banner-actions-wrapped: calc(
+    100% - var(--composer-banner-icon-column) - calc(var(--spacing) * 1)
+  );
+
+  --radius-1px: 1px;
+  --radius-5px: 5px;
+  --radius-10px: 10px;
+  --radius-0\.45em: 0.45em;
+  --radius-1\.65rem: 1.65rem;
+  --radius-2rem: 2rem;
+  --radius-0\.5rem: 0.5rem;
+  --radius-1rem: 1rem;
+  --radius-16px: 16px;
+
+  --shadow-hairline: 0 1px 1px rgb(0 0 0 / 0.03);
+  --shadow-hairline-lifted: 0 1px 1px rgb(0 0 0 / 0.03), 0 8px 30px rgb(0 0 0 / 0.035);
+  --shadow-card-rest: 0 1px 2px rgb(0 0 0 / 3%);
+  --shadow-card-hover: 0 1px 2px rgb(0 0 0 / 4%), 0 6px 16px -8px rgb(0 0 0 / 12%);
+  --shadow-peek: 0 6px 18px rgb(0 0 0 / 6%);
+  --shadow-composer-float: 0 12px 36px -24px rgb(0 0 0 / 80%);
+  --shadow-progress-glow: 0 0 6px 1px var(--color-ring);
+  --shadow-composer-banner: 0 12px 28px -18px rgb(0 0 0/40%);
+  --shadow-composer-banner-dark: 0 14px 32px -18px rgb(0 0 0/75%);
+  --shadow-preview-frame: 0 24px 70px -36px rgba(0, 0, 0, 0.45);
+  --shadow-inset-highlight: inset 0 1px 0 rgb(255 255 255 / 0.08);
+
+  --blur-1px: 1px;
+  --blur-2px: 2px;
+
+  --grid-template-columns-1fr-auto: minmax(0, 1fr) auto;
+  --grid-template-columns-banner-row: var(--composer-banner-icon-column) minmax(0, 1fr) auto;
+  --grid-template-columns-banner-row-plain: var(--composer-banner-icon-column) minmax(0, 1fr);
+  --grid-template-columns-1fr-2fr: minmax(0, 1fr) minmax(0, 2fr);
+  --grid-template-columns-1fr-7rem: minmax(0, 1fr) 7rem;
+  --grid-template-columns-1fr-10rem: minmax(0, 1fr) 10rem;
+  --grid-template-columns-1fr-10rem-auto: minmax(0, 1fr) minmax(10rem, auto);
+  --grid-template-columns-auto-1fr: auto minmax(0, 1fr);
+  --grid-template-columns-auto-grow: auto 1fr;
+  --grid-template-columns-grow-auto-auto: 1fr auto auto;
+  --grid-template-columns-grow-auto-grow: 1fr auto 1fr;
+  --grid-template-columns-grow-1\.2grow: 1fr 1.2fr;
+  --grid-template-columns-4ch-4ch: 4ch 4ch;
+  --grid-template-columns-8rem-1fr: 8rem minmax(0, 1fr);
+  --grid-template-columns-12rem-1fr: 12rem minmax(0, 1fr);
+  --grid-template-columns-18rem-1fr: minmax(0, 18rem) minmax(0, 1fr);
+  --grid-template-columns-10rem-1fr-7rem: 10rem minmax(0, 1fr) 7rem;
+  /* Swatch, gap and label columns of a chart legend row. */
+  --grid-template-columns-legend-row: 1.25rem 0.375rem minmax(0, 1fr);
+  --grid-template-columns-fill-15rem: repeat(auto-fill, minmax(min(100%, 15rem), 1fr));
+  --grid-template-rows-collapsed: 0fr;
+  --grid-template-rows-expanded: 1fr;
+
+  --transition-property-height: height;
+  --transition-property-top: top;
+  --transition-property-padding: padding;
+  --transition-property-padding-left: padding-left;
+  --transition-property-stroke-dashoffset: stroke-dashoffset;
+  --transition-property-grid-rows: grid-template-rows;
+  --transition-property-color-opacity: color, opacity;
+  --transition-property-transform-opacity: transform, opacity;
+  --transition-property-border-shadow: border-color, box-shadow;
+  --transition-property-border-bg-shadow: border-color, background-color, box-shadow;
+  --transition-property-bg-color-shadow: background-color, color, box-shadow;
+  --transition-property-composer-shape: min-height, border-radius, background-color, box-shadow;
+
+  --animate-prompt-stash-count-enter: prompt-stash-count-enter 180ms ease-out both;
+  --animate-provider-update-pill-countdown: provider-update-pill-countdown
+    var(--provider-update-pill-dismiss-ms) linear forwards;
+
+  --color-popover-highlight: color-mix(in srgb, var(--popover) 90%, var(--contrast-foreground));
+  --color-sidebar-wash: color-mix(in srgb, var(--sidebar-foreground) 6%, transparent);
+  /* Translucent composer banner glass over the attached surface color. */
+  --color-composer-glass: color-mix(
+    in srgb,
+    var(--chat-composer-attached-surface) var(--glass-opacity),
+    transparent
+  );
+}

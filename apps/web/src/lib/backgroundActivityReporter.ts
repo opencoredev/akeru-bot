@@ -7,7 +7,7 @@ import {
 import {
   type BackgroundScope,
   type ClientActivityReportInput,
-  type EnvironmentId,
+  EnvironmentId,
   WS_METHODS,
 } from "@akeru/contracts";
 import * as Clock from "effect/Clock";
@@ -22,9 +22,13 @@ import * as SubscriptionRef from "effect/SubscriptionRef";
 import { randomUUID } from "./utils";
 
 const CLIENT_ID_STORAGE_KEY = "t3.backgroundActivity.clientId";
+
 const REPORT_INTERVAL_MS = 25_000;
+
 const LEASE_TTL_MS = 45_000;
+
 const RECENT_INTERACTION_WINDOW_MS = LEASE_TTL_MS;
+
 const BASELINE_SCOPES: ReadonlyArray<BackgroundScope> = [{ type: "provider-status" }];
 
 interface RetainedScope {
@@ -34,6 +38,7 @@ interface RetainedScope {
 }
 
 const retainedScopes = new Map<string, RetainedScope>();
+
 const retainedScopeListeners = new Set<() => void>();
 
 function notifyRetainedScopesChanged(): void {
@@ -64,9 +69,11 @@ function stableScopeKey(environmentId: EnvironmentId, scope: BackgroundScope): s
 function getClientId(): string {
   try {
     const existing = window.localStorage.getItem(CLIENT_ID_STORAGE_KEY);
+
     if (existing) return existing;
     const next = randomUUID();
     window.localStorage.setItem(CLIENT_ID_STORAGE_KEY, next);
+
     return next;
   } catch {
     return "ephemeral-browser-client";
@@ -90,11 +97,13 @@ function createActivityReport(
   observedAtMs: number,
 ): ClientActivityReportInput {
   const scopes = [...BASELINE_SCOPES];
+
   for (const entry of retainedScopes.values()) {
     if (entry.environmentId === environmentId) {
       scopes.push(entry.scope);
     }
   }
+
   return {
     environmentId,
     clientId: getClientId(),
@@ -120,6 +129,7 @@ function scopeForSubscription(
 function retainBackgroundScope(environmentId: EnvironmentId, scope: BackgroundScope): () => void {
   const key = stableScopeKey(environmentId, scope);
   const existing = retainedScopes.get(key);
+
   if (existing) {
     existing.refCount += 1;
   } else {
@@ -129,8 +139,10 @@ function retainBackgroundScope(environmentId: EnvironmentId, scope: BackgroundSc
 
   return () => {
     const current = retainedScopes.get(key);
+
     if (!current) return;
     current.refCount -= 1;
+
     if (current.refCount <= 0) {
       retainedScopes.delete(key);
       notifyRetainedScopesChanged();
@@ -142,11 +154,14 @@ export function observeBackgroundActivitySubscription(
   observation: EnvironmentRpcSubscriptionObservation,
 ): Effect.Effect<Effect.Effect<void>> {
   const scope = scopeForSubscription(observation);
+
   if (scope === null) {
     return Effect.succeed(Effect.void);
   }
+
   return Effect.sync(() => {
-    const release = retainBackgroundScope(observation.environmentId as EnvironmentId, scope);
+    const release = retainBackgroundScope(EnvironmentId.make(observation.environmentId), scope);
+
     return Effect.sync(release);
   });
 }
@@ -177,14 +192,17 @@ export const backgroundActivityReporterLayer = Layer.effectDiscard(
     const reportRequests = yield* Queue.sliding<void>(1);
     const requestReport = () => Queue.offerUnsafe(reportRequests, undefined);
     let lastInteractionAtMs = clock.currentTimeMillisUnsafe();
+
     const recordInteraction = () => {
       const observedAtMs = clock.currentTimeMillisUnsafe();
       const wasRecent = wasRecentlyInteracted(lastInteractionAtMs, observedAtMs);
       lastInteractionAtMs = observedAtMs;
+
       if (!wasRecent) {
         requestReport();
       }
     };
+
     const passiveListenerOptions = { passive: true } as const;
 
     const report = Effect.gen(function* () {

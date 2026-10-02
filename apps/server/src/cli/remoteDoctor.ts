@@ -13,6 +13,8 @@ import {
   writeRemoteSupportBundle,
 } from "../remote/diagnostics.ts";
 
+const encodeDoctorReport = Schema.encodeEffect(Schema.fromJsonString(RemoteDoctorReport));
+
 /**
  * Akeru Remote diagnostics read only Akeru's home: an explicit `--base-dir`, then `AKERU_HOME`,
  * then `~/.akeru`. An ambient `T3CODE_HOME` is ignored so T3 Code's `~/.t3` is never inspected
@@ -35,19 +37,21 @@ export const remoteDoctorCommand = Command.make(
     Effect.gen(function* () {
       const baseDir = yield* resolveBaseDir(remoteDoctorHome(flags.baseDir, process.env));
       const platform = yield* HostProcessPlatform;
+
       const report = yield* Effect.promise(() =>
         runRemoteDoctor({ baseDir, repair: flags.repair, platform }),
       );
+
       if (Option.isSome(flags.supportBundle)) {
         const bundlePath = Option.getOrThrow(flags.supportBundle);
         const arch = yield* HostProcessArchitecture;
         yield* Effect.sync(() => writeRemoteSupportBundle(bundlePath, report, { platform, arch }));
       }
+
       const output = flags.json
-        ? yield* Schema.encodeEffect(Schema.fromJsonString(RemoteDoctorReport))(report).pipe(
-            Effect.orDie,
-          )
+        ? yield* encodeDoctorReport(report).pipe(Effect.orDie)
         : renderRemoteDoctor(report);
+
       yield* Console.log(output);
     }),
 ).pipe(Command.withDescription("Run typed Akeru Remote diagnostics."));

@@ -1,540 +1,19 @@
-// @effect-diagnostics globalDate:off globalRandom:off nodeBuiltinImport:off globalFetch:off
-import * as NodeCrypto from "node:crypto";
-import * as NodeFS from "node:fs";
-
-import type { McpManager, McpServerStatus } from "@mastra/code-sdk/mcp/index";
-import {
-  type AkeruPluginRecommendation,
-  type AkeruPluginSearchResult,
-  type BotId,
-  CommandId,
-  type ComposioToolkit,
-  McpServerId,
-  type AkeruToolId,
-  type AkeruToolInputSchemas,
-  type McpServer,
-  type OrchestrationCommand,
-  type OrchestrationReadModel,
-} from "@akeru/contracts";
-import * as DateTime from "effect/DateTime";
-
-import {
-  isInstallableManifest,
-  loadManifestCatalog,
-  type CatalogManifestModules,
-} from "../../../../plugins/manifestCatalog.ts";
-import type { PluginManifest } from "../../../../plugins/schema.ts";
+import * as Predicate from "effect/Predicate";
+import type { McpManager } from "@mastra/code-sdk/mcp/index";
+import { type AkeruToolId, decodeAkeruToolInput } from "@akeru/contracts";
 import { parseAkeruPublicUrl } from "./AkeruWebFetch.ts";
-
-declare global {
-  interface ImportMeta {
-    glob<T>(
-      pattern: string | readonly string[],
-      options: { readonly eager: true; readonly import: string; readonly query?: string },
-    ): Record<string, T>;
-  }
-}
-
-function loadNodeCatalogModules(): CatalogManifestModules {
-  // The server bundle lives at `apps/server/dist`, while source files live
-  // one directory deeper under `apps/server/src/provider`. Resolve the
-  // repository catalog from the bundled location, with the packaged desktop
-  // resource as a fallback.
-  const sourceTree = import.meta.url.includes("/src/provider/");
-  const candidates = sourceTree
-    ? [
-        new URL("../../../../plugins/entries/", import.meta.url),
-        new URL("../../../plugins/entries/", import.meta.url),
-      ]
-    : [
-        new URL("../../../plugins/entries/", import.meta.url),
-        new URL("../../../../plugins/entries/", import.meta.url),
-        new URL("../../../apps/desktop/prod-resources/plugins/entries/", import.meta.url),
-      ];
-  const entriesUrl = candidates.find((candidate) => {
-    try {
-      return NodeFS.statSync(candidate).isDirectory();
-    } catch {
-      return false;
-    }
-  });
-  if (!entriesUrl) {
-    throw new Error("Akeru plugin catalog directory is unavailable.");
-  }
-  return Object.fromEntries(
-    NodeFS.readdirSync(entriesUrl, { withFileTypes: true })
-      .filter((entry) => entry.isDirectory())
-      .map((entry) => [
-        `./entries/${entry.name}/plugin.json`,
-        JSON.parse(NodeFS.readFileSync(new URL(`${entry.name}/plugin.json`, entriesUrl), "utf8")),
-      ]),
-  );
-}
-
-const catalogManifestModules =
-  typeof import.meta.glob === "function"
-    ? import.meta.glob<unknown>("../../../../plugins/entries/*/plugin.json", {
-        eager: true,
-        import: "default",
-      })
-    : loadNodeCatalogModules();
-
-import type { RequestHealthStatus } from "../subscription-auth/service.ts";
-
-export interface AkeruCatalogToolHandlerInput {
-  readonly input: unknown;
-  readonly emitProgress: (
-    summary: string,
-    details?: { readonly authorizationUrl?: string },
-  ) => void | Promise<void>;
-}
-
-export type AkeruCatalogToolHandler = (input: AkeruCatalogToolHandlerInput) => Promise<unknown>;
-
-export interface AkeruMcpDependencies {
-  readonly dependentBots: ReadonlyArray<{ readonly id: BotId; readonly name: string }>;
-  readonly dependentRoutines: ReadonlyArray<string>;
-}
-
-export interface AkeruMcpHealthHandlerOptions {
-  readonly getRequestHealth: (serverId: string) => RequestHealthStatus | undefined;
-  readonly recordSuccess: (serverId: string, at: string) => void;
-  readonly recordFailure: (serverId: string, message: string, at: string) => void;
-  readonly getDependencies: (serverId: string) => Promise<AkeruMcpDependencies>;
-  readonly onFailure?: (
-    serverId: string,
-    message: string,
-    dependencies: AkeruMcpDependencies,
-  ) => void | Promise<void>;
-  readonly onRecovery?: (
-    serverId: string,
-    dependencies: AkeruMcpDependencies,
-  ) => void | Promise<void>;
-  readonly authenticationExpiresAt?: (serverId: string) => string | undefined;
-  readonly now?: () => string;
-}
-
-type McpRuntimeStatus = ReturnType<McpManager["getServerStatuses"]>[number];
-
-export interface AkeruPluginRuntimeOptions {
-  readonly readSnapshot: () => Promise<OrchestrationReadModel>;
-  readonly dispatch: (command: OrchestrationCommand) => Promise<unknown>;
-  readonly searchComposioToolkits?: (input: {
-    readonly query?: string;
-    readonly limit?: number;
-  }) => Promise<{
-    readonly status: "available" | "setup-required" | "unavailable";
-    readonly toolkits: readonly ComposioToolkit[];
-  }>;
-  readonly now?: () => string;
-  readonly id?: () => string;
-}
-
-export interface AkeruCatalogBackendOptions {
-  readonly webSearch?: (input: {
-    readonly query: string;
-    readonly domains?: readonly string[];
-  }) => Promise<unknown>;
-  readonly webFetch?: (input: { readonly url: string }) => Promise<unknown>;
-  readonly generateImage?: (input: unknown) => Promise<unknown>;
-  readonly addMcpServer?: (input: unknown) => Promise<unknown>;
-  readonly uninstallMcpServer?: (serverId: string) => Promise<unknown>;
-  readonly removeMcpAccount?: (serverId: string) => Promise<unknown>;
-  readonly renameMcpAccount?: (input: unknown) => Promise<unknown>;
-  readonly setMcpInstructions?: (input: {
-    readonly serverId: string;
-    readonly instructions: string;
-  }) => Promise<unknown>;
-}
-
-function pluginServerId(pluginId: string) {
-  return McpServerId.make(`builtin-${pluginId}`);
-}
-
-function pluginConnectionHealth(
-  server: McpServer | undefined,
-  statuses: readonly McpRuntimeStatus[],
-) {
-  if (!server) return { state: "not-installed" as const };
-  if (!server.enabled) return { state: "disabled" as const };
-  const status = statuses.find((candidate) => candidate.name === server.id);
-  if (!status) return { state: "not-checked" as const };
-  return status.connected
-    ? { state: "healthy" as const, toolCount: status.toolCount, toolNames: status.toolNames }
-    : { state: "failed" as const, error: status.error ?? "The MCP server did not connect." };
-}
-
-function pluginView(
-  plugin: PluginManifest,
-  snapshot: OrchestrationReadModel,
-  statuses: readonly McpRuntimeStatus[],
-) {
-  const serverId = pluginServerId(plugin.id);
-  const server = snapshot.mcpServers?.find((candidate) => candidate.id === serverId);
-  const affectedBots = server?.enabled
-    ? snapshot.bots
-        .filter(
-          (bot) =>
-            bot.archivedAt === null && !bot.disabledMcpServerIds.some((id) => id === serverId),
-        )
-        .map((bot) => ({ id: bot.id, name: bot.name }))
-    : [];
-  return {
-    id: plugin.id,
-    name: plugin.name,
-    description: plugin.description,
-    publisher: plugin.publisher,
-    capabilities: plugin.capabilities,
-    permissions: plugin.permissions,
-    approvals: plugin.approvals,
-    connection: plugin.connection,
-    authentication: plugin.authentication,
-    requiredCredentials: plugin.requiredCredentials,
-    transport: plugin.transport,
-    platforms: plugin.platforms,
-    catalogStatus: plugin.catalogStatus,
-    installed: {
-      serverId,
-      enabled: server?.enabled ?? false,
-      health: pluginConnectionHealth(server, statuses),
-    },
-    affectedBots,
-    affectedRoutines: [],
-    routinesAvailable: false,
-  };
-}
-
-function pluginMatches(plugin: PluginManifest, query: string): boolean {
-  return [
-    plugin.id,
-    plugin.name,
-    plugin.description,
-    plugin.primaryCategory,
-    plugin.publisher.name,
-    ...plugin.tags,
-    ...plugin.capabilities,
-  ]
-    .join("\n")
-    .toLocaleLowerCase()
-    .includes(query.trim().toLocaleLowerCase());
-}
-
-function recommendationForPlugin(
-  plugin: PluginManifest,
-  snapshot: OrchestrationReadModel,
-): AkeruPluginRecommendation {
-  const server = snapshot.mcpServers?.find(
-    (candidate) => candidate.id === pluginServerId(plugin.id),
-  );
-  const composio =
-    plugin.connection.type === "brokered" && plugin.connection.broker.name === "Composio";
-  const brokeredPending =
-    plugin.connection.type === "brokered" && plugin.connection.pendingBlocker !== undefined;
-  // A brokered plugin whose lifecycle is still pending cannot be connected;
-  // surface it as unavailable so the card renders a disabled action.
-  const action = server?.enabled
-    ? "open"
-    : brokeredPending
-      ? "unavailable"
-      : composio
-        ? "connect"
-        : isInstallableManifest(plugin)
-          ? "install"
-          : "unavailable";
-  return {
-    id: composio ? `composio:${plugin.id}` : plugin.id,
-    source: composio ? "composio" : "directory",
-    name: plugin.name,
-    description: plugin.description,
-    category: plugin.primaryCategory,
-    ...(plugin.logo.url ? { logoUrl: plugin.logo.url } : {}),
-    action,
-  };
-}
-
-function recommendationForToolkit(toolkit: ComposioToolkit): AkeruPluginRecommendation {
-  return {
-    id: `composio:${toolkit.slug}`,
-    source: "composio",
-    name: toolkit.name,
-    description: toolkit.description ?? `${toolkit.toolsCount} tools through Composio.`,
-    ...(toolkit.categories[0] ? { category: toolkit.categories[0] } : {}),
-    ...(toolkit.logoUrl ? { logoUrl: toolkit.logoUrl } : {}),
-    action: "connect",
-  };
-}
-
-function sameRecipe(server: McpServer, plugin: PluginManifest): boolean {
-  if (plugin.transport.type === "url") {
-    return (
-      server.transport === "url" &&
-      server.name === plugin.name &&
-      server.url === plugin.transport.url
-    );
-  }
-  if (plugin.transport.type === "stdio") {
-    return (
-      server.transport === "stdio" &&
-      server.name === plugin.name &&
-      server.command === plugin.transport.command &&
-      JSON.stringify(server.args ?? []) === JSON.stringify(plugin.transport.args ?? [])
-    );
-  }
-  return false;
-}
-
-export function createAkeruPluginRuntime(
-  options: AkeruPluginRuntimeOptions,
-  catalogOverride?: readonly PluginManifest[],
-) {
-  const catalog = catalogOverride ?? loadManifestCatalog(catalogManifestModules);
-  const byId = new Map(catalog.map((plugin) => [plugin.id, plugin]));
-  const now = options.now ?? (() => new Date().toISOString());
-  const id = options.id ?? (() => NodeCrypto.randomUUID());
-  const commandId = (operation: string) => CommandId.make(`plugin:${operation}:${id()}`);
-
-  const getPlugin = async (pluginId: string, statuses: readonly McpRuntimeStatus[] = []) => {
-    const plugin = byId.get(pluginId);
-    if (!plugin) throw new Error(`Plugin '${pluginId}' was not found in the curated directory.`);
-    return pluginView(plugin, await options.readSnapshot(), statuses);
-  };
-
-  const search = async (
-    input: (typeof AkeruToolInputSchemas.SearchPlugins)["Type"],
-    statuses: readonly McpRuntimeStatus[] = [],
-  ) => {
-    const query = input.query ?? "";
-    const matches = catalog.filter((plugin) => pluginMatches(plugin, query));
-    const limit = input.limit ?? 20;
-    const snapshot = await options.readSnapshot();
-    let composioSearch: {
-      readonly status: "available" | "setup-required" | "unavailable";
-      readonly toolkits: readonly ComposioToolkit[];
-    } = { status: "unavailable", toolkits: [] };
-    if (options.searchComposioToolkits) {
-      try {
-        composioSearch = await options.searchComposioToolkits({
-          ...(query ? { query } : {}),
-          limit,
-        });
-      } catch {
-        composioSearch = { status: "unavailable", toolkits: [] };
-      }
-    }
-    const recommendations = [
-      ...matches.map((plugin) => recommendationForPlugin(plugin, snapshot)),
-      ...composioSearch.toolkits.map(recommendationForToolkit),
-    ];
-    const uniqueRecommendations = [
-      ...new Map(
-        recommendations.map((recommendation) => [recommendation.id, recommendation]),
-      ).values(),
-    ].slice(0, limit);
-    return {
-      kind: "plugin-search-results",
-      query,
-      total: uniqueRecommendations.length,
-      sources: { directory: "available", composio: composioSearch.status },
-      recommendations: uniqueRecommendations,
-      plugins: matches.slice(0, limit).map((plugin) => pluginView(plugin, snapshot, statuses)),
-    } satisfies AkeruPluginSearchResult & { readonly plugins: readonly unknown[] };
-  };
-
-  const install = async (pluginId: string) => {
-    const plugin = byId.get(pluginId);
-    if (!plugin) throw new Error(`Plugin '${pluginId}' was not found in the curated directory.`);
-    if (!isInstallableManifest(plugin)) {
-      const blocker =
-        plugin.connection.type === "approval-pending" ||
-        plugin.connection.type === "verification-pending"
-          ? ` ${plugin.connection.blocker}`
-          : "";
-      throw new Error(`Plugin '${pluginId}' is not available for installation.${blocker}`);
-    }
-    if (plugin.authentication === "api-key") {
-      throw new Error(
-        `Plugin '${pluginId}' needs the shared credential question contract before installation.`,
-      );
-    }
-
-    const snapshot = await options.readSnapshot();
-    const mcpServerId = pluginServerId(plugin.id);
-    const existing = snapshot.mcpServers?.find((server) => server.id === mcpServerId);
-    if (!existing) {
-      await options.dispatch(
-        plugin.transport.type === "url"
-          ? {
-              type: "mcp-server.create",
-              commandId: commandId("create"),
-              mcpServerId,
-              name: plugin.name,
-              transport: "url",
-              url: plugin.transport.url,
-              enabled: true,
-              createdAt: now(),
-            }
-          : {
-              type: "mcp-server.create",
-              commandId: commandId("create"),
-              mcpServerId,
-              name: plugin.name,
-              transport: "stdio",
-              command: plugin.transport.command,
-              ...(plugin.transport.args ? { args: plugin.transport.args } : {}),
-              enabled: true,
-              createdAt: now(),
-            },
-      );
-    } else {
-      if (!sameRecipe(existing, plugin)) {
-        await options.dispatch(
-          plugin.transport.type === "url"
-            ? {
-                type: "mcp-server.update",
-                commandId: commandId("update"),
-                mcpServerId,
-                name: plugin.name,
-                transport: "url",
-                url: plugin.transport.url,
-              }
-            : {
-                type: "mcp-server.update",
-                commandId: commandId("update"),
-                mcpServerId,
-                name: plugin.name,
-                transport: "stdio",
-                command: plugin.transport.command,
-                ...(plugin.transport.args ? { args: plugin.transport.args } : {}),
-              },
-        );
-      }
-      if (!existing.enabled) {
-        await options.dispatch({
-          type: "mcp-server.enable",
-          commandId: commandId("enable"),
-          mcpServerId,
-        });
-      }
-    }
-
-    return {
-      pluginId: plugin.id,
-      mcpServerId,
-      enabled: true,
-      changed: !existing || !sameRecipe(existing, plugin) || !existing.enabled,
-      authenticationRequired: plugin.authentication !== "none",
-      nextTool:
-        plugin.authentication === "oauth" || plugin.authentication === "optional-oauth"
-          ? { id: "AuthenticateMcpServer" as const, input: { serverId: mcpServerId } }
-          : null,
-      health: { state: "not-checked" as const },
-    };
-  };
-
-  const uninstall = async (pluginId: string, statuses: readonly McpRuntimeStatus[] = []) => {
-    const plugin = byId.get(pluginId);
-    if (!plugin) throw new Error(`Plugin '${pluginId}' was not found in the curated directory.`);
-    const snapshot = await options.readSnapshot();
-    const mcpServerId = pluginServerId(plugin.id);
-    const existing = snapshot.mcpServers?.find((server) => server.id === mcpServerId);
-    if (!existing) throw new Error(`Plugin '${pluginId}' is not installed.`);
-    const before = pluginView(plugin, snapshot, statuses);
-    await options.dispatch({
-      type: "mcp-server.delete",
-      commandId: commandId("delete"),
-      mcpServerId,
-    });
-    return { pluginId: plugin.id, mcpServerId, removed: true, before };
-  };
-
-  return { search, getPlugin, install, uninstall };
-}
-
-function field(value: unknown, key: string): unknown {
-  if (typeof value !== "object" || value === null) return undefined;
-  return Object.getOwnPropertyDescriptor(value, key)?.value;
-}
-
-function requiredString(value: unknown, key: string): string {
-  const candidate = field(value, key);
-  if (typeof candidate !== "string" || candidate.length === 0) {
-    throw new Error(`Tool input field '${key}' is required.`);
-  }
-  return candidate;
-}
-
-function requireServerStatus(mcpManager: McpManager, serverId: string): McpServerStatus {
-  const status = mcpManager.getServerStatuses().find((candidate) => candidate.name === serverId);
-  if (!status) throw new Error(`MCP server '${serverId}' is not configured for this bot.`);
-  return status;
-}
-
-async function mcpHealthStatus(
-  mcpManager: McpManager,
-  options: AkeruMcpHealthHandlerOptions,
-  serverId: string,
-  status = requireServerStatus(mcpManager, serverId),
-) {
-  const health = options.getRequestHealth(serverId);
-  const dependencies = await options.getDependencies(serverId);
-  const healthTest =
-    health?.health === "healthy" || health?.health === "recovered"
-      ? "passed"
-      : health?.health === "failed" || health?.health === "failed-first-request" || status.error
-        ? "failed"
-        : "not-run";
-  const connectionState = status.disabled
-    ? "disabled"
-    : status.authenticating
-      ? "authenticating"
-      : status.connecting
-        ? "connecting"
-        : status.connected
-          ? "connected"
-          : status.needsAuth
-            ? "authentication-required"
-            : "failed";
-  return {
-    serverId,
-    connectionState,
-    healthTest,
-    connected: status.connected,
-    transport: status.transport,
-    toolCount: status.toolCount,
-    toolNames: status.toolNames,
-    needsAuthentication: status.needsAuth ?? false,
-    authenticationExpiresAt: options.authenticationExpiresAt?.(serverId) ?? null,
-    lastSuccessfulRequestAt: health?.lastSuccessfulRequestAt ?? null,
-    lastFailure:
-      health?.lastFailedRequest ?? (status.error ? { at: null, message: status.error } : null),
-    nextRetryAt: health?.nextRetryAt ?? null,
-    dependentBots: dependencies.dependentBots,
-    dependentRoutines: dependencies.dependentRoutines,
-  };
-}
-
-async function checkMcpConnection(
-  mcpManager: McpManager,
-  options: AkeruMcpHealthHandlerOptions,
-  serverId: string,
-  emitProgress: AkeruCatalogToolHandlerInput["emitProgress"],
-  action: "Testing" | "Reconnecting",
-) {
-  requireServerStatus(mcpManager, serverId);
-  await emitProgress(`${action} MCP server '${serverId}'.`);
-  const status = await mcpManager.reconnectServer(serverId);
-  const at = options.now?.() ?? DateTime.formatIso(DateTime.nowUnsafe());
-  const dependencies = await options.getDependencies(serverId);
-  if (!status.connected) {
-    const message = status.error ?? `MCP server '${serverId}' did not connect.`;
-    options.recordFailure(serverId, message, at);
-    await options.onFailure?.(serverId, message, dependencies);
-    throw new Error(message);
-  }
-  options.recordSuccess(serverId, at);
-  await options.onRecovery?.(serverId, dependencies);
-  return mcpHealthStatus(mcpManager, options, serverId, status);
-}
+import { createAkeruPluginRuntime } from "./tools/AkeruPluginCatalog.ts";
+import {
+  type AkeruMcpHealthHandlerOptions,
+  type AkeruCatalogBackendOptions,
+  type AkeruCatalogToolHandler,
+} from "./tools/AkeruCatalogTypes.ts";
+import {
+  requiredString,
+  mcpHealthStatus,
+  checkMcpConnection,
+  field,
+} from "./tools/AkeruMcpHealth.ts";
 
 export function createAkeruCatalogToolHandlers(
   mcpManager?: McpManager,
@@ -543,23 +22,40 @@ export function createAkeruCatalogToolHandlers(
   backends: AkeruCatalogBackendOptions = {},
 ): Partial<Record<AkeruToolId, AkeruCatalogToolHandler>> {
   const statuses = () => mcpManager?.getServerStatuses() ?? [];
+
   return {
     ...(backends.webSearch
-      ? { WebSearch: async ({ input }) => backends.webSearch!(input as never) }
+      ? {
+          WebSearch: async ({ input }) => {
+            const request = decodeAkeruToolInput("WebSearch", input);
+
+            return backends.webSearch!({
+              query: request.query,
+              ...(request.domains ? { domains: request.domains } : {}),
+            });
+          },
+        }
       : {}),
     ...(backends.webFetch
       ? {
           WebFetch: async ({ input }) => {
             const url = parseAkeruPublicUrl(requiredString(input, "url"));
+
             return backends.webFetch!({ url: url.toString() });
           },
         }
       : {}),
     ...(backends.generateImage
-      ? { GenerateImage: async ({ input }) => backends.generateImage!(input) }
+      ? {
+          GenerateImage: async ({ input }) =>
+            backends.generateImage!(decodeAkeruToolInput("GenerateImage", input)),
+        }
       : {}),
     ...(backends.addMcpServer
-      ? { AddMcpServer: async ({ input }) => backends.addMcpServer!(input) }
+      ? {
+          AddMcpServer: async ({ input }) =>
+            backends.addMcpServer!(decodeAkeruToolInput("AddMcpServer", input)),
+        }
       : {}),
     ...(backends.uninstallMcpServer
       ? {
@@ -574,28 +70,33 @@ export function createAkeruCatalogToolHandlers(
         }
       : {}),
     ...(backends.renameMcpAccount
-      ? { RenameMcpAccount: async ({ input }) => backends.renameMcpAccount!(input) }
+      ? {
+          RenameMcpAccount: async ({ input }) =>
+            backends.renameMcpAccount!(decodeAkeruToolInput("RenameMcpAccount", input)),
+        }
       : {}),
     ...(backends.setMcpInstructions
-      ? { SetMcpInstructions: async ({ input }) => backends.setMcpInstructions!(input as never) }
+      ? {
+          SetMcpInstructions: async ({ input }) =>
+            backends.setMcpInstructions!(decodeAkeruToolInput("SetMcpInstructions", input)),
+        }
       : {}),
     ...(pluginRuntime
       ? {
           SearchPlugins: async ({ input }) =>
-            pluginRuntime.search(
-              input as (typeof AkeruToolInputSchemas.SearchPlugins)["Type"],
-              statuses(),
-            ),
+            pluginRuntime.search(decodeAkeruToolInput("SearchPlugins", input), statuses()),
           GetPlugin: async ({ input }) =>
             pluginRuntime.getPlugin(requiredString(input, "pluginId"), statuses()),
           InstallPlugin: async ({ input, emitProgress }) => {
             const pluginId = requiredString(input, "pluginId");
             await emitProgress(`Installing plugin '${pluginId}'.`);
+
             return pluginRuntime.install(pluginId);
           },
           UninstallPlugin: async ({ input, emitProgress }) => {
             const pluginId = requiredString(input, "pluginId");
             await emitProgress(`Removing plugin '${pluginId}'.`);
+
             return pluginRuntime.uninstall(pluginId, statuses());
           },
         }
@@ -627,6 +128,7 @@ export function createAkeruCatalogToolHandlers(
           AuthenticateMcpServer: async ({ input, emitProgress }) => {
             const serverId = requiredString(input, "serverId");
             let authorizationUrl: string | undefined;
+
             const status = await mcpManager.authenticateServer(serverId, {
               onAuthorizationUrl: (url) => {
                 authorizationUrl = url;
@@ -635,33 +137,54 @@ export function createAkeruCatalogToolHandlers(
                 });
               },
             });
+
             if (!status.connected) {
               throw new Error(status.error ?? `MCP server '${serverId}' was not authenticated.`);
             }
+
             return { ...status, authorizationUrl: authorizationUrl ?? null };
           },
           RestartMcpServers: async ({ input, emitProgress }) => {
             const requested = field(input, "serverIds");
+
             const serverIds = Array.isArray(requested)
-              ? requested.filter((value): value is string => typeof value === "string")
+              ? requested.filter((value): value is string => Predicate.isString(value))
               : [];
+
             if (serverIds.length === 0) {
               await emitProgress("Restarting MCP servers.");
               await mcpManager.reload();
+
               return { servers: mcpManager.getServerStatuses() };
             }
+
             const servers = [];
+
             for (const serverId of new Set(serverIds)) {
               await emitProgress(`Restarting MCP server '${serverId}'.`);
               const status = await mcpManager.reconnectServer(serverId);
+
               if (!status.connected) {
                 throw new Error(status.error ?? `MCP server '${serverId}' did not reconnect.`);
               }
+
               servers.push(status);
             }
+
             return { servers };
           },
         }
       : {}),
   };
 }
+
+export {
+  type AkeruCatalogToolHandlerInput,
+  type AkeruCatalogToolHandler,
+  type AkeruMcpDependencies,
+  type AkeruMcpHealthHandlerOptions,
+  type AkeruPluginRuntimeOptions,
+  type AkeruCatalogBackendOptions,
+} from "./tools/AkeruCatalogTypes.ts";
+
+export { createAkeruPluginRuntime } from "./tools/AkeruPluginCatalog.ts";

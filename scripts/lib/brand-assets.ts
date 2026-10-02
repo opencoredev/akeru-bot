@@ -56,6 +56,7 @@ export function resolveWebIconOverrides(
   targetDirectory: string,
 ): ReadonlyArray<IconOverride> {
   const sourcePaths = WEB_ICON_SOURCE_PATHS_BY_BRAND[brand];
+
   return [
     {
       sourceRelativePath: sourcePaths.faviconIco,

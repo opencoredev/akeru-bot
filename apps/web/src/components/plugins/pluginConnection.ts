@@ -27,6 +27,7 @@ export async function runPluginEnablePlan(
     if (!(await operations.create(plan.mcpServerId, plan.configuration))) return false;
   } else {
     if (!(await operations.update(plan.mcpServerId, plan.configuration))) return false;
+
     if (!(await operations.enable(plan.mcpServerId))) return false;
   }
 

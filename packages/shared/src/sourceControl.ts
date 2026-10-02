@@ -4,16 +4,19 @@ const SCP_SSH_REMOTE_PATTERN = /^[a-zA-Z0-9._-]+@([^:/]+):/;
 
 export function isSshRemoteUrl(remoteUrl: string): boolean {
   const trimmed = remoteUrl.trim();
+
   return SCP_SSH_REMOTE_PATTERN.test(trimmed) || trimmed.toLowerCase().startsWith("ssh://");
 }
 
 function parseRemoteHost(remoteUrl: string): string | null {
   const trimmed = remoteUrl.trim();
+
   if (trimmed.length === 0) {
     return null;
   }
 
   const scpMatch = SCP_SSH_REMOTE_PATTERN.exec(trimmed);
+
   if (scpMatch?.[1]) {
     return scpMatch[1].toLowerCase();
   }
@@ -69,9 +72,11 @@ export function detectSourceControlProviderFromRemoteUrl(
   remoteUrl: string,
 ): SourceControlProviderInfo | null {
   const host = parseRemoteHost(remoteUrl);
+
   if (!host) {
     return null;
   }
+
   const hostname = parseHostName(host);
 
   if (isGitHubHost(hostname)) {

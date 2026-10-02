@@ -2,7 +2,15 @@ import { CommandId, MessageId, ProjectId, ThreadId } from "@akeru/contracts";
 import * as Encoding from "effect/Encoding";
 import { DraftId } from "../composerDraftStore";
 
-export { cn } from "cn";
+import type { CnFunction } from "cn";
+import { createCn } from "cn/config";
+
+import { scaleClassGroups, scaleTheme } from "./scaleTheme";
+
+/** Class merger that knows the extra theme steps declared in styles/scale-tokens.css. */
+export const cn: CnFunction = createCn({
+  extend: { theme: scaleTheme, classGroups: scaleClassGroups },
+});
 
 export function isMacPlatform(platform: string): boolean {
   return /mac|iphone|ipad|ipod/i.test(platform);
@@ -20,9 +28,11 @@ export function getLocalFileManagerName(platform: string): string {
   if (isMacPlatform(platform)) {
     return "Finder";
   }
+
   if (isWindowsPlatform(platform)) {
     return "Explorer";
   }
+
   return "Files";
 }
 
@@ -35,6 +45,7 @@ export function randomUUID(): string {
   bytes[6] = (bytes[6]! & 0x0f) | 0x40;
   bytes[8] = (bytes[8]! & 0x3f) | 0x80;
   const hex = Encoding.encodeHex(bytes);
+
   return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
 }
 

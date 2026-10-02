@@ -15,7 +15,7 @@ import { AsyncResult } from "effect/unstable/reactivity";
 
 import { threadEnvironment } from "../../state/threads";
 import type { DraftComposerImageAttachment } from "../../lib/composerImages";
-import { makeTurnCommandMetadata, type TurnCommandMetadata } from "../../lib/commandMetadata";
+import { createTurnCommandMetadata, type TurnCommandMetadata } from "../../lib/commandMetadata";
 import { buildProjectThreadStartTurnInput } from "../../lib/projectThreadStartTurn";
 import { randomHex } from "../../lib/uuid";
 import { useAtomCommand } from "../../state/use-atom-command";
@@ -40,7 +40,7 @@ export function useCreateProjectThread() {
       /** Reuse identifiers from a queued pending task instead of minting new ones. */
       readonly turnMetadata?: TurnCommandMetadata;
     }) => {
-      const metadata = input.turnMetadata ?? makeTurnCommandMetadata();
+      const metadata = input.turnMetadata ?? createTurnCommandMetadata();
       const threadId = ThreadId.make(metadata.threadId);
       const initialMessageText = input.initialMessageText.trim();
 
@@ -51,8 +51,10 @@ export function useCreateProjectThread() {
         branch: input.branch,
         initialMessageText,
       });
+
       if (validationError !== null) {
         setPendingConnectionError(validationError.message);
+
         return AsyncResult.failure(Cause.fail(validationError));
       }
 
@@ -77,13 +79,16 @@ export function useCreateProjectThread() {
           worktreeBranchName: buildTemporaryWorktreeBranchName(randomHex),
         }),
       });
+
       if (AsyncResult.isFailure(result)) {
         const error = Cause.squash(result.cause);
         setPendingConnectionError(
           error instanceof Error ? error.message : "The chat could not be started.",
         );
+
         return AsyncResult.failure(result.cause);
       }
+
       setPendingConnectionError(null);
 
       return mapAtomCommandResult(result, () =>

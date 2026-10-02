@@ -29,6 +29,7 @@ const makeRuntimeReceiptBusTest = Effect.gen(function* () {
 
   return {
     publish: (receipt) => PubSub.publish(pubSub, receipt).pipe(Effect.asVoid),
+    subscribeEventsForTest: PubSub.subscribe(pubSub).pipe(Effect.map(Stream.fromSubscription)),
     get streamEventsForTest() {
       return Stream.fromPubSub(pubSub);
     },
@@ -36,4 +37,5 @@ const makeRuntimeReceiptBusTest = Effect.gen(function* () {
 });
 
 export const RuntimeReceiptBusLive = Layer.effect(RuntimeReceiptBus, makeRuntimeReceiptBus);
+
 export const RuntimeReceiptBusTest = Layer.effect(RuntimeReceiptBus, makeRuntimeReceiptBusTest);

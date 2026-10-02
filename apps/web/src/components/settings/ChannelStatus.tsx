@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 import type { ChannelBinding, ChannelConnectionProfile } from "@akeru/contracts";
 import {
   type ChannelRepairAction,
@@ -17,7 +18,7 @@ type StatusBinding = Pick<ChannelBinding, "status" | "lastError" | "provider" | 
  * the browser origin, because the browser may reach the server over a private address.
  */
 export function channelWebhookUrl(connection: ChannelConnectionProfile): string | null {
-  return "webhookUrl" in connection && typeof connection.webhookUrl === "string"
+  return "webhookUrl" in connection && Predicate.isString(connection.webhookUrl)
     ? connection.webhookUrl
     : null;
 }
@@ -33,6 +34,7 @@ export function ChannelStatusBadge({
   readonly needsProject: boolean;
 }) {
   const { t } = useI18n();
+
   if (!binding || ownerName === undefined) {
     return (
       <Badge variant="secondary" size="sm">
@@ -40,12 +42,15 @@ export function ChannelStatusBadge({
       </Badge>
     );
   }
+
   const warning = (label: string) => (
     <Badge variant="warning" size="sm">
       {label}
     </Badge>
   );
+
   if (needsProject) return warning(t("Choose another project"));
+
   switch (binding.status) {
     case "connecting":
       return (
@@ -89,26 +94,32 @@ export function ChannelStatusNotice({
   readonly webhookUrl: string | null;
 }) {
   const { t } = useI18n();
+
   const notice = (children: ReactNode) => (
-    <div role="status" className="break-words text-xs text-amber-600 dark:text-amber-400">
+    <div role="status" className="break-words text-xs text-caution-foreground">
       {children}
     </div>
   );
+
   if (!binding) return null;
+
   if (needsProject) {
     return notice(
       t("The project for this channel is unavailable. Choose another project to reconnect it."),
     );
   }
+
   const showWebhookUrl =
     webhookUrl !== null &&
     binding.provider === "whatsapp" &&
     (binding.status === "not-live" || binding.status === "connected");
+
   const webhookLine = showWebhookUrl ? (
     <p className="mt-1 text-muted-foreground">
       {t("Webhook URL")}: <code className="break-all font-mono">{webhookUrl}</code>
     </p>
   ) : null;
+
   if (binding.status === "not-live") {
     return notice(
       <>
@@ -121,6 +132,7 @@ export function ChannelStatusNotice({
       </>,
     );
   }
+
   // Server failure text is fixed per category and never carries provider error details, so a
   // known category reads better in the client's own words.
   if (binding.failureCategory) {
@@ -131,6 +143,7 @@ export function ChannelStatusNotice({
       </>,
     );
   }
+
   if (binding.lastError) {
     return notice(
       <>
@@ -139,6 +152,7 @@ export function ChannelStatusNotice({
       </>,
     );
   }
+
   return webhookLine ? notice(webhookLine) : null;
 }
 
@@ -165,6 +179,7 @@ export function ChannelRepairButton({
   ) => void;
 }) {
   const { t } = useI18n();
+
   switch (action) {
     case "none":
     case "configure-public-url":

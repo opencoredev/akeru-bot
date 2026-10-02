@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, describe, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
@@ -31,6 +32,7 @@ function envOutput(values: Readonly<Record<string, string>>): string {
 
 function makeProcess(output: string): ChildProcessSpawner.ChildProcessHandle {
   const stdout = output.length === 0 ? Stream.empty : Stream.make(textEncoder.encode(output));
+
   return ChildProcessSpawner.makeHandle({
     pid: ChildProcessSpawner.ProcessId(123),
     stdout,
@@ -54,6 +56,7 @@ function withProcessEnv<A, E, R>(
     Effect.sync(() => {
       const previous = process.env;
       process.env = env;
+
       return previous;
     }),
     () => effect,
@@ -76,6 +79,7 @@ function runShellEnvironment(input: {
       platform: input.platform,
     } as DesktopEnvironment.DesktopEnvironment["Service"]),
   );
+
   const spawnerLayer = Layer.succeed(
     ChildProcessSpawner.ChildProcessSpawner,
     ChildProcessSpawner.make((command) =>
@@ -106,6 +110,7 @@ describe("DesktopShellEnvironment", () => {
         SHELL: "/bin/zsh",
         PATH: "/Users/test/.local/bin:/usr/bin",
       };
+
       const commands: ChildProcess.Command[] = [];
 
       yield* runShellEnvironment({
@@ -113,6 +118,7 @@ describe("DesktopShellEnvironment", () => {
         platform: "darwin",
         handler: (command) => {
           commands.push(command);
+
           return envOutput({
             PATH: "/opt/homebrew/bin:/usr/bin",
             SSH_AUTH_SOCK: "/tmp/secretive.sock",
@@ -122,7 +128,10 @@ describe("DesktopShellEnvironment", () => {
       });
 
       assert.equal(commands.length, 1);
-      assert.equal(commands[0]?._tag === "StandardCommand" ? commands[0].command : "", "/bin/zsh");
+      assert.equal(
+        Predicate.isTagged(commands[0], "StandardCommand") ? commands[0].command : "",
+        "/bin/zsh",
+      );
       assert.equal(env.PATH, "/opt/homebrew/bin:/usr/bin:/Users/test/.local/bin");
       assert.equal(env.SSH_AUTH_SOCK, "/tmp/secretive.sock");
       assert.equal(env.HOMEBREW_PREFIX, "/opt/homebrew");
@@ -282,14 +291,16 @@ describe("DesktopShellEnvironment", () => {
         SHELL: "/opt/homebrew/bin/nu",
         PATH: "/usr/bin",
       };
+
       const commands: string[] = [];
 
       yield* runShellEnvironment({
         env,
         platform: "darwin",
         handler: (command) => {
-          if (command._tag !== "StandardCommand") return "";
+          if (!Predicate.isTagged(command, "StandardCommand")) return "";
           commands.push(command.command);
+
           return command.command === "/bin/launchctl" ? "/opt/homebrew/bin:/usr/bin" : "";
         },
       });
@@ -312,8 +323,9 @@ describe("DesktopShellEnvironment", () => {
         env,
         platform: "win32",
         handler: (command) => {
-          if (command._tag !== "StandardCommand") return "";
+          if (!Predicate.isTagged(command, "StandardCommand")) return "";
           const loadProfile = !command.args.includes("-NoProfile");
+
           return loadProfile
             ? envOutput({
                 PATH: "C:\\Profile\\Node;C:\\Windows\\System32",
@@ -397,13 +409,20 @@ describe("DesktopShellEnvironment", () => {
   );
 
   it("resolves dbus runtime dir candidates with existence checks", () => {
+    const probedPaths: string[] = [];
+
     const busPath = DesktopShellEnvironment.resolveDefaultLinuxDbusSessionBusAddress({
       env: { XDG_RUNTIME_DIR: "/tmp/stale-runtime" },
       uid: 1000,
-      exists: (path) => path === "/run/user/1000/bus",
+      exists: (path) => {
+        probedPaths.push(path);
+
+        return path === "/run/user/1000/bus";
+      },
     });
 
     assert.equal(busPath, "unix:path=/run/user/1000/bus");
+    assert.deepEqual(probedPaths, ["/tmp/stale-runtime/bus", "/run/user/1000/bus"]);
   });
 
   it.effect("logs command failures with safe probe context and the exact cause", () => {
@@ -411,13 +430,16 @@ describe("DesktopShellEnvironment", () => {
       SHELL: "/bin/bash",
       PATH: "/usr/bin",
     };
+
     const cause = PlatformError.systemError({
       _tag: "PermissionDenied",
       module: "ChildProcess",
       method: "spawn",
       pathOrDescriptor: "/bin/bash",
     });
+
     const messages: Array<unknown> = [];
+
     const logger = Logger.make(({ message }) => {
       messages.push(message);
     });
@@ -433,6 +455,7 @@ describe("DesktopShellEnvironment", () => {
           const errors = messages
             .flatMap((message) => (Array.isArray(message) ? message : [message]))
             .filter(isDesktopShellEnvironmentCommandError);
+
           assert.lengthOf(errors, 1);
           assert.equal(errors[0]?.probe, "login-shell");
           assert.equal(errors[0]?.executable, "bash");

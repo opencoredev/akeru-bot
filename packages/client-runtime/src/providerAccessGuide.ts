@@ -133,7 +133,9 @@ export function providerAccessState(
   status: ProviderAccessStatusInput | undefined,
 ): ProviderAccessState {
   if (status?.connected !== true) return "not-connected";
+
   if (status.healthChecking === true) return "checking";
+
   switch (status.health) {
     case "healthy":
     case "recovered":
@@ -190,6 +192,7 @@ function savedCredential(
       ? t("Missing: no OpenCode Go API key in this environment.")
       : t("Missing: no subscription login or API key in this environment.");
   }
+
   return apiKey
     ? t("API key saved in this environment.")
     : t("Subscription login saved in this environment.");
@@ -207,9 +210,10 @@ export function providerAccessModelNames(
 ): ReadonlyArray<string> {
   const instance = providers?.find(
     (candidate) =>
-      SUBSCRIPTION_PROVIDER_BY_DRIVER[String(candidate.driver)] === provider &&
+      SUBSCRIPTION_PROVIDER_BY_DRIVER.get(String(candidate.driver)) === provider &&
       candidate.instanceId === defaultInstanceIdForDriver(candidate.driver),
   );
+
   return instance?.models.filter((model) => !model.isCustom).map((model) => model.name) ?? [];
 }
 
@@ -232,6 +236,7 @@ export function providerAccessGuide(
   const apiKey = provider === "opencode-go" || status?.authMode === "api-key";
   const models = options.models ?? [];
   const listed = models.slice(0, MAX_LISTED_MODELS).join(", ");
+
   return {
     state,
     stateLabel: t(STATE_LABELS[state]),

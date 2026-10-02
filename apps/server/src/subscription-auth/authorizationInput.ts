@@ -10,15 +10,14 @@
  *   - a raw query string (`code=...&state=...`)
  *   - a bare authorization code
  */
-export function parseAuthorizationInput(input: string): {
-  code?: string | undefined;
-  state?: string | undefined;
-} {
+export function parseAuthorizationInput(input: string): ParseAuthorizationInputResult {
   const value = input.trim();
+
   if (!value) return {};
 
   try {
     const url = new URL(value);
+
     return {
       code: url.searchParams.get("code") ?? undefined,
       state: url.searchParams.get("state") ?? undefined,
@@ -29,11 +28,13 @@ export function parseAuthorizationInput(input: string): {
 
   if (value.includes("#")) {
     const [code, state] = value.split("#", 2);
+
     return { code, state };
   }
 
   if (value.includes("code=")) {
     const params = new URLSearchParams(value);
+
     return {
       code: params.get("code") ?? undefined,
       state: params.get("state") ?? undefined,
@@ -42,3 +43,8 @@ export function parseAuthorizationInput(input: string): {
 
   return { code: value };
 }
+
+type ParseAuthorizationInputResult = {
+  code?: string | undefined;
+  state?: string | undefined;
+};

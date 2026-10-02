@@ -1,6 +1,7 @@
 import * as Effect from "effect/Effect";
 
 let maintenance = false;
+
 let startingTurns = 0;
 
 /**
@@ -17,6 +18,7 @@ export interface TurnStartAdmission {
 function makeAdmission(): TurnStartAdmission {
   startingTurns += 1;
   let held = true;
+
   return {
     release: () => {
       if (!held) return;
@@ -25,6 +27,7 @@ function makeAdmission(): TurnStartAdmission {
     },
     retain: () => {
       if (!held) throw new Error("Cannot retain a released turn-start admission.");
+
       return makeAdmission();
     },
   };
@@ -37,6 +40,7 @@ export function tryAdmitTurnStart(): TurnStartAdmission | null {
 export function tryBeginMaintenance(): boolean {
   if (maintenance || startingTurns > 0) return false;
   maintenance = true;
+
   return true;
 }
 

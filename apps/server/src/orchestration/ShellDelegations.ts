@@ -1,3 +1,4 @@
+import * as Match from "effect/Match";
 import type { AkeruDelegationRecord } from "@akeru/contracts";
 
 export { SHELL_RECENT_TERMINAL_DELEGATIONS_PER_THREAD } from "@akeru/contracts";
@@ -14,8 +15,9 @@ function truncateShellText(text: string): string {
 /** Caps a delegation's free-form result, failure, or blocked text for shell payloads. */
 export function toShellDelegation(delegation: AkeruDelegationRecord): AkeruDelegationRecord {
   const phase = delegation.phase;
-  switch (phase._tag) {
-    case "Completed":
+
+  return Match.value(phase).pipe(
+    Match.tag("Completed", (phase) => {
       return phase.result.summary.length <= SHELL_DELEGATION_TEXT_MAX_CHARS
         ? delegation
         : {
@@ -25,7 +27,8 @@ export function toShellDelegation(delegation: AkeruDelegationRecord): AkeruDeleg
               result: { ...phase.result, summary: truncateShellText(phase.result.summary) },
             },
           };
-    case "Failed":
+    }),
+    Match.tag("Failed", (phase) => {
       return phase.failure.message.length <= SHELL_DELEGATION_TEXT_MAX_CHARS
         ? delegation
         : {
@@ -35,11 +38,12 @@ export function toShellDelegation(delegation: AkeruDelegationRecord): AkeruDeleg
               failure: { ...phase.failure, message: truncateShellText(phase.failure.message) },
             },
           };
-    case "Blocked":
+    }),
+    Match.tag("Blocked", (phase) => {
       return phase.reason.length <= SHELL_DELEGATION_TEXT_MAX_CHARS
         ? delegation
         : { ...delegation, phase: { ...phase, reason: truncateShellText(phase.reason) } };
-    default:
-      return delegation;
-  }
+    }),
+    Match.orElse(() => delegation),
+  );
 }

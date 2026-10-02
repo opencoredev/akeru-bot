@@ -22,17 +22,21 @@ const SHOWCASE_ENABLED = process.env.EXPO_PUBLIC_SHOWCASE === "1";
 
 export function SettingsEnvironmentsRouteScreen() {
   const { t } = useMobileI18n();
+
   const {
     connectedEnvironments,
     onReconnectEnvironment,
     onRemoveEnvironmentPress,
     onUpdateEnvironment,
   } = useRemoteConnections();
+
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
+
   const localEnvironments = SHOWCASE_ENABLED
     ? applyShowcaseLocalEnvironmentDisplayUrls(connectedEnvironments)
     : connectedEnvironments;
+
   const hasLocalEnvironments = localEnvironments.length > 0;
   const [expandedId, setExpandedId] = useState<EnvironmentId | null>(null);
   const accentColor = useThemeColor("--color-icon-muted");
@@ -41,18 +45,22 @@ export function SettingsEnvironmentsRouteScreen() {
   const handleToggle = useCallback((environmentId: EnvironmentId) => {
     setExpandedId((prev) => (prev === environmentId ? null : environmentId));
   }, []);
+
   const handleUpdateEnvironment = useCallback(
     (
       environmentId: EnvironmentId,
       updates: { readonly label: string; readonly displayUrl: string },
     ) => {
       if (!SHOWCASE_ENABLED) return onUpdateEnvironment(environmentId, updates);
+
       const actualEnvironment = connectedEnvironments.find(
         (environment) => environment.environmentId === environmentId,
       );
+
       const presentedEnvironment = localEnvironments.find(
         (environment) => environment.environmentId === environmentId,
       );
+
       return onUpdateEnvironment(environmentId, {
         ...updates,
         displayUrl:

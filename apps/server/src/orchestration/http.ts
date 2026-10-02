@@ -30,7 +30,11 @@ import {
   applyKnownGroupPerson,
   canManageGroupPeople,
 } from "./AuthenticatedCommand.ts";
-import { cleanupFailedUploadedAttachments, normalizeDispatchCommand } from "./Normalizer.ts";
+import {
+  cleanupFailedUploadedAttachments,
+  dispatchKeepingAcceptedUploads,
+  normalizeDispatchCommand,
+} from "./Normalizer.ts";
 import * as EnvironmentAuth from "../auth/EnvironmentAuth.ts";
 import {
   annotateEnvironmentRequest,
@@ -67,6 +71,7 @@ export const orchestrationHttpApiLayer = HttpApiBuilder.group(
         Effect.fn("environment.orchestration.snapshot")(function* (args) {
           yield* annotateEnvironmentRequest(args.endpoint.name);
           yield* requireEnvironmentScope(AuthOrchestrationReadScope);
+
           // Serve the lightweight command read model (thread bodies empty)
           // instead of the fully hydrated snapshot. Hydrating every message
           // and activity payload in the database has OOM-killed servers, and
@@ -86,6 +91,7 @@ export const orchestrationHttpApiLayer = HttpApiBuilder.group(
         Effect.fn("environment.orchestration.shellSnapshot")(function* (args) {
           yield* annotateEnvironmentRequest(args.endpoint.name);
           yield* requireEnvironmentScope(AuthOrchestrationReadScope);
+
           return yield* projectionSnapshotQuery.getShellSnapshot().pipe(
             Effect.map((snapshot) => ({
               ...snapshot,
@@ -109,6 +115,7 @@ export const orchestrationHttpApiLayer = HttpApiBuilder.group(
         Effect.fn("environment.orchestration.threadSnapshot")(function* (args) {
           yield* annotateEnvironmentRequest(args.endpoint.name);
           yield* requireEnvironmentScope(AuthOrchestrationReadScope);
+
           const snapshot = yield* projectionSnapshotQuery
             .getThreadDetailSnapshot(
               args.params.threadId,
@@ -126,9 +133,11 @@ export const orchestrationHttpApiLayer = HttpApiBuilder.group(
                 failEnvironmentInternal("orchestration_thread_snapshot_failed", cause),
               ),
             );
+
           if (Option.isNone(snapshot)) {
             return yield* failEnvironmentNotFound("thread_not_found");
           }
+
           return projectThreadDetailSnapshot(snapshot.value);
         }),
       )
@@ -138,17 +147,21 @@ export const orchestrationHttpApiLayer = HttpApiBuilder.group(
           yield* annotateEnvironmentRequest(args.endpoint.name);
           const principal = yield* requireEnvironmentScope(AuthOrchestrationOperateScope);
           const command = args.payload;
+
           if (ChannelCommand.isChannelCommand(command)) {
             if (!principal.scopes.has(AuthAccessWriteScope)) {
               yield* requireEnvironmentScope(AuthAccessWriteScope);
             }
+
             const services = Option.all({ channelRuntime, startup });
+
             if (Option.isNone(services)) {
               return yield* failEnvironmentInternal(
                 "orchestration_dispatch_failed",
                 new Error("Channel services are unavailable."),
               );
             }
+
             return yield* services.value.startup
               .enqueueCommand(
                 ChannelCommand.executeChannelCommand(services.value.channelRuntime, command),
@@ -166,18 +179,22 @@ export const orchestrationHttpApiLayer = HttpApiBuilder.group(
                 ),
               );
           }
+
           const decodedCommand = yield* normalizeDispatchCommand(command).pipe(
             Effect.catch(() => failEnvironmentInvalidRequest("invalid_command")),
           );
+
           if (!canManageGroupPeople(decodedCommand, principal.scopes)) {
             return yield* failEnvironmentScopeRequired(AuthAccessWriteScope);
           }
+
           const needsPeople =
             decodedCommand.type === "group.create" ||
             decodedCommand.type === "group.leave" ||
             decodedCommand.type === "group.person.assign" ||
             decodedCommand.type === "group.person.unassign" ||
             decodedCommand.type === "thread.turn.start";
+
           const clientSessions = needsPeople
             ? yield* serverAuth
                 .listClientSessions(principal.sessionId)
@@ -187,9 +204,11 @@ export const orchestrationHttpApiLayer = HttpApiBuilder.group(
                   ),
                 )
             : [];
+
           const currentClient = clientSessions.find(
             (session) => session.sessionId === principal.sessionId,
           );
+
           const actor = {
             personId: principal.sessionId,
             displayName:
@@ -197,11 +216,14 @@ export const orchestrationHttpApiLayer = HttpApiBuilder.group(
               (principal.scopes.has(AuthAccessWriteScope) ? "Host" : "Paired person"),
             canManageGroups: principal.scopes.has(AuthAccessWriteScope),
           };
+
           const actorCommand = applyAuthenticatedCommandActor(decodedCommand, actor);
           const normalizedCommand = applyKnownGroupPerson(actorCommand, clientSessions);
+
           if (!normalizedCommand) {
             return yield* failEnvironmentInvalidRequest("invalid_command");
           }
+
           // Bot engines bypass the turn preflight, so a changed engine is
           // checked here as in WebSocket dispatch. Only an unknown model
           // blocks the save; a missing provider is not evidence of that.
@@ -211,6 +233,7 @@ export const orchestrationHttpApiLayer = HttpApiBuilder.group(
             Option.isSome(providerRegistry)
           ) {
             const engine = normalizedCommand.engine;
+
             const existingBot =
               normalizedCommand.type === "bot.update"
                 ? yield* projectionBots.getById({ botId: normalizedCommand.botId }).pipe(
@@ -220,10 +243,12 @@ export const orchestrationHttpApiLayer = HttpApiBuilder.group(
                     ),
                   )
                 : undefined;
+
             const engineChanged =
               existingBot === undefined ||
               existingBot.engine?.provider !== engine.provider ||
               existingBot.engine?.model !== engine.model;
+
             if (engineChanged) {
               const verdict = preflightProvider({
                 providers: yield* providerRegistry.value.getProviders,
@@ -235,6 +260,7 @@ export const orchestrationHttpApiLayer = HttpApiBuilder.group(
                 now: yield* Clock.currentTimeMillis,
                 requireSettledCatalog: true,
               });
+
               if (verdict?.category === "unsupported-model") {
                 return yield* failEnvironmentInvalidRequest("invalid_command", {
                   detail: verdict.detail,
@@ -243,6 +269,7 @@ export const orchestrationHttpApiLayer = HttpApiBuilder.group(
               }
             }
           }
+
           const shouldPreflightTurn =
             normalizedCommand.type === "thread.turn.start" &&
             Option.isNone(
@@ -254,6 +281,7 @@ export const orchestrationHttpApiLayer = HttpApiBuilder.group(
                   ),
                 ),
             );
+
           if (shouldPreflightTurn && normalizedCommand.type === "thread.turn.start") {
             if (Option.isNone(providerRegistry)) {
               return yield* failEnvironmentInternal(
@@ -261,6 +289,7 @@ export const orchestrationHttpApiLayer = HttpApiBuilder.group(
                 new Error("Provider registry is unavailable."),
               );
             }
+
             const thread = yield* projectionSnapshotQuery
               .getThreadShellById(normalizedCommand.threadId)
               .pipe(
@@ -269,8 +298,10 @@ export const orchestrationHttpApiLayer = HttpApiBuilder.group(
                   failEnvironmentInternal("orchestration_dispatch_failed", cause),
                 ),
               );
+
             const bootstrapThread = normalizedCommand.bootstrap?.createThread;
             const groupId = thread?.groupId ?? bootstrapThread?.groupId;
+
             const group = groupId
               ? yield* projectionGroups.getById({ groupId }).pipe(
                   Effect.map(Option.getOrUndefined),
@@ -279,6 +310,7 @@ export const orchestrationHttpApiLayer = HttpApiBuilder.group(
                   ),
                 )
               : undefined;
+
             const botId = groupId
               ? group
                 ? yield* resolveGroupResponderBotId({
@@ -297,6 +329,7 @@ export const orchestrationHttpApiLayer = HttpApiBuilder.group(
                   })
                 : normalizedCommand.respondingBotId
               : (thread?.botId ?? bootstrapThread?.botId ?? normalizedCommand.respondingBotId);
+
             const bot = botId
               ? yield* projectionBots.getById({ botId }).pipe(
                   Effect.map(Option.getOrUndefined),
@@ -305,6 +338,7 @@ export const orchestrationHttpApiLayer = HttpApiBuilder.group(
                   ),
                 )
               : undefined;
+
             const selection = bot?.engine
               ? {
                   instanceId: ProviderInstanceId.make(bot.engine.provider),
@@ -313,8 +347,10 @@ export const orchestrationHttpApiLayer = HttpApiBuilder.group(
               : (normalizedCommand.modelSelection ??
                 thread?.modelSelection ??
                 bootstrapThread?.modelSelection);
+
             const providerId = selection?.instanceId ?? thread?.session?.providerName;
             const model = selection?.model ?? "";
+
             if (providerId && model) {
               const providerInstanceConfig = Option.isSome(serverSettings)
                 ? deriveProviderInstanceConfigMap(
@@ -325,6 +361,7 @@ export const orchestrationHttpApiLayer = HttpApiBuilder.group(
                     ),
                   )[ProviderInstanceId.make(providerId)]
                 : undefined;
+
               const verdict = preflightProvider({
                 providers: yield* providerRegistry.value.getProviders,
                 providerId,
@@ -337,8 +374,10 @@ export const orchestrationHttpApiLayer = HttpApiBuilder.group(
                 now: yield* Clock.currentTimeMillis,
                 requireSettledCatalog: true,
               });
+
               if (verdict) {
                 yield* cleanupFailedUploadedAttachments(command, normalizedCommand);
+
                 return yield* failEnvironmentInvalidRequest("invalid_command", {
                   detail: verdict.detail,
                   unavailability: verdict.category,
@@ -348,6 +387,7 @@ export const orchestrationHttpApiLayer = HttpApiBuilder.group(
                 });
               }
             }
+
             if (bot?.usageCap) {
               const usage = yield* botUsageLedger
                 .summarize(bot.botId)
@@ -356,8 +396,10 @@ export const orchestrationHttpApiLayer = HttpApiBuilder.group(
                     failEnvironmentInternal("orchestration_dispatch_failed", cause),
                   ),
                 );
+
               if (usage.consumedTokens + usage.reservedTokens >= bot.usageCap.limit) {
                 yield* cleanupFailedUploadedAttachments(command, normalizedCommand);
+
                 return yield* failEnvironmentInvalidRequest("invalid_command", {
                   detail: `Usage cap reached for ${bot.name}.`,
                   unavailability: "usage-cap",
@@ -366,10 +408,15 @@ export const orchestrationHttpApiLayer = HttpApiBuilder.group(
               }
             }
           }
-          return yield* orchestrationEngine.dispatch(normalizedCommand, { actor }).pipe(
-            Effect.tapError(() =>
-              cleanupFailedUploadedAttachments(args.payload, normalizedCommand),
-            ),
+
+          return yield* dispatchKeepingAcceptedUploads({
+            command: args.payload,
+            normalizedCommand,
+            awaitReady: Effect.void,
+            dispatch: orchestrationEngine.dispatch(normalizedCommand, { actor }),
+            interruptible: false,
+            receipts: Option.some(commandReceipts),
+          }).pipe(
             Effect.catch((cause) =>
               failEnvironmentInternal("orchestration_dispatch_failed", cause),
             ),

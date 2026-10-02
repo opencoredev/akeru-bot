@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import { Debouncer } from "@tanstack/react-pacer";
 
 export interface StateStorage<R = unknown> {
@@ -12,6 +13,7 @@ export interface DebouncedStorage<R = unknown> extends StateStorage<R> {
 
 export function createMemoryStorage(): StateStorage {
   const store = new Map<string, string>();
+
   return {
     getItem: (name) => store.get(name) ?? null,
     setItem: (name, value) => {
@@ -29,9 +31,9 @@ export function isStateStorage(
   return (
     storage !== null &&
     storage !== undefined &&
-    typeof storage.getItem === "function" &&
-    typeof storage.setItem === "function" &&
-    typeof storage.removeItem === "function"
+    Predicate.isFunction(storage.getItem) &&
+    Predicate.isFunction(storage.setItem) &&
+    Predicate.isFunction(storage.removeItem)
   );
 }
 
@@ -44,6 +46,7 @@ export function createDebouncedStorage(
   debounceMs: number = 300,
 ): DebouncedStorage {
   const resolvedStorage = resolveStorage(baseStorage);
+
   const debouncedSetItem = new Debouncer(
     (name: string, value: string) => {
       resolvedStorage.setItem(name, value);

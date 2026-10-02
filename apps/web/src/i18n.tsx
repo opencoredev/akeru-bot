@@ -1,3 +1,5 @@
+import type * as Schema from "effect/Schema";
+import * as Predicate from "effect/Predicate";
 import {
   createContext,
   useCallback,
@@ -23,14 +25,15 @@ import {
 
 export { availableLanguages };
 
-export function normalizeLanguagePreference(value: unknown): string {
-  return typeof value === "string" && availableLanguages.some(({ id }) => id === value)
+export function normalizeLanguagePreference(value: Schema.Json | undefined): string {
+  return Predicate.isString(value) && availableLanguages.some(({ id }) => id === value)
     ? value
     : "system";
 }
 
 function subscribeDeviceLanguage(listener: () => void) {
   window.addEventListener("languagechange", listener);
+
   return () => window.removeEventListener("languagechange", listener);
 }
 
@@ -44,6 +47,7 @@ export interface TestLanguageCatalog {
 }
 
 const fallbackTranslator = createTranslator("en");
+
 const LanguageContext = createContext({
   ...fallbackTranslator,
   t: fallbackTranslator.translate,
@@ -67,39 +71,51 @@ export function LanguageProvider({
   const preference = normalizeLanguagePreference(
     useClientSettings((settings) => settings.language),
   );
+
   const updateClientSettings = useUpdateClientSettings();
+
   const deviceLocale = useSyncExternalStore(
     subscribeDeviceLanguage,
     getDeviceLocale,
     getDeviceLocale,
   );
+
   const locale = resolveLocale(preference, [deviceLocale]);
   const loader = useMemo(() => createCatalogLoader(), []);
+
   const catalogSnapshot = useSyncExternalStore(
     loader.subscribe,
     loader.getSnapshot,
     loader.getSnapshot,
   );
+
   const retryCatalog = useCallback(() => {
     if (testCatalog) return;
     void loader.selectLocale(preference, [deviceLocale]);
   }, [deviceLocale, loader, preference, testCatalog]);
+
   useEffect(() => retryCatalog(), [retryCatalog]);
+
   const catalogFailed =
     !testCatalog &&
     catalogSnapshot.status === "error" &&
     catalogIdForLocale(catalogSnapshot.selectedLocale) === catalogIdForLocale(locale);
+
   const translator = useMemo(() => {
     if (testCatalog) return createTranslator(testCatalog.locale, testCatalog.catalog);
+
     if (catalogIdForLocale(locale) === "en") return createTranslator(locale);
+
     if (
       catalogSnapshot.status === "ready" &&
       catalogIdForLocale(catalogSnapshot.selectedLocale) === catalogIdForLocale(locale)
     ) {
       return catalogSnapshot.translator;
     }
+
     return createTranslator(locale);
   }, [catalogSnapshot, locale, testCatalog]);
+
   const setPreference = useCallback(
     async (value: string) => {
       // Preserve disk preferences if the selector is used before initial hydration finishes.
@@ -108,6 +124,7 @@ export function LanguageProvider({
     },
     [updateClientSettings],
   );
+
   const value = useMemo(
     () => ({
       ...translator,
@@ -119,9 +136,11 @@ export function LanguageProvider({
     }),
     [translator, preference, setPreference, catalogFailed, retryCatalog],
   );
+
   useEffect(() => {
     document.documentElement.lang = translator.locale;
   }, [translator.locale]);
+
   return <LanguageContext value={value}>{children}</LanguageContext>;
 }
 

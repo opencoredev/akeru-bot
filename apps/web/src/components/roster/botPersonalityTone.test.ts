@@ -1,4 +1,3 @@
-// @effect-diagnostics nodeBuiltinImport:off - The band contract reads its source.
 import * as NodeFS from "node:fs";
 
 import { BALANCED_BOT_PERSONALITY_TONE } from "@akeru/contracts";
@@ -39,6 +38,7 @@ describe("botPersonalityTone", () => {
   it("gives every band a distinct sample so the preview actually changes", () => {
     const samples = [0, 30, 50, 70, 100].map((tone) => resolveBotPersonalityToneBand(tone).sample);
     expect(new Set(samples).size).toBe(samples.length);
+
     // The instructions forbid dashes, so the illustration must not promise them.
     for (const sample of samples) {
       expect(sample).not.toMatch(/[—–]/);
@@ -74,6 +74,7 @@ describe("botPersonalityTone", () => {
       new URL("../../../../../apps/server/src/provider/AkeruAgentInstructions.ts", import.meta.url),
       "utf8",
     );
+
     // If these move on the server, the settings copy is lying about behavior.
     expect(serverSource).toContain("tone <= 20");
     expect(serverSource).toContain("tone < 45");

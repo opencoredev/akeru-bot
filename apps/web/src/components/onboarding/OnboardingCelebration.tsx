@@ -33,8 +33,8 @@ export function OnboardingCelebration({
           {pieces.map((piece) => (
             <motion.span
               key={piece.id}
-              className={`absolute size-1.5 ${piece.square ? "rounded-[2px]" : "rounded-full"}`}
-              style={{ backgroundColor: piece.color }}
+              className={`absolute size-1.5 swatch-fill ${piece.square ? "rounded-xs" : "rounded-full"}`}
+              style={{ "--swatch": piece.color }}
               initial={{ opacity: 0, x: 0, y: 0, scale: 0.4, rotate: 0 }}
               animate={{
                 opacity: [0, 1, 1, 0],

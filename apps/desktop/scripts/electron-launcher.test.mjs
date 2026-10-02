@@ -38,12 +38,14 @@ describe("electron development launcher", () => {
 
   it("repairs Electron before loading the package entrypoint", () => {
     const calls = [];
+
     const electronPath = resolveElectronBinaryPath({
       ensureRuntime: () => {
         calls.push("ensure");
       },
       createRequire: () => (specifier) => {
         calls.push(`require:${specifier}`);
+
         return "/repo/node_modules/electron/dist/Electron.app/Contents/MacOS/Electron";
       },
       moduleUrl: import.meta.url,
@@ -78,6 +80,7 @@ describe("electron development launcher", () => {
       desktopRoot: "/repo/apps/desktop",
       environment: {},
     });
+
     assert.include(
       script,
       "exec '/repo/apps/desktop/.electron-runtime/Akeru Bot (Dev).app/Contents/MacOS/Electron'",

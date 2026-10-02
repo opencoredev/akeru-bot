@@ -5,6 +5,7 @@ import { highlightCodeSnippet } from "./codeHighlighter";
 describe("highlightCodeSnippet", () => {
   it("resolves language aliases and returns syntax-colored tokens", async () => {
     const source = "const answer: number = 42;";
+
     const highlighted = await highlightCodeSnippet({
       code: source,
       language: "ts",

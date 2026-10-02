@@ -4,6 +4,7 @@ import { RpcClientError } from "effect/unstable/rpc";
 
 import * as AcpSchema from "../_generated/schema.gen.ts";
 import * as AcpError from "../errors.ts";
+
 const isError = Schema.is(AcpSchema.Error);
 
 export const callRpc = <A>(
@@ -34,6 +35,7 @@ export const runHandler = Effect.fnUntraced(function* <A, B>(
   if (!handler) {
     return yield* Effect.fail(AcpError.AcpRequestError.methodNotFound(method).toProtocolError());
   }
+
   return yield* handler(payload).pipe(
     Effect.mapError((error) =>
       AcpError.AcpRequestError.fromCoreHandlerError(error, method).toProtocolError(),
@@ -44,9 +46,9 @@ export const runHandler = Effect.fnUntraced(function* <A, B>(
 export function decodeExtRequestRegistration<A, I>(
   method: string,
   payload: Schema.Codec<A, I>,
-  handler: (payload: A) => Effect.Effect<unknown, AcpError.AcpError>,
+  handler: (payload: A) => Effect.Effect<AcpSchema.ExtResponse, AcpError.AcpError>,
 ) {
-  return (params: unknown): Effect.Effect<unknown, AcpError.AcpError> =>
+  return (params: AcpSchema.ExtRequest): Effect.Effect<AcpSchema.ExtResponse, AcpError.AcpError> =>
     Schema.decodeUnknownEffect(payload)(params).pipe(
       Effect.mapError((error) => AcpError.AcpRequestError.invalidExtensionPayload(method, error)),
       Effect.flatMap((decoded) => handler(decoded)),
@@ -58,7 +60,7 @@ export function decodeExtNotificationRegistration<A, I>(
   payload: Schema.Codec<A, I>,
   handler: (payload: A) => Effect.Effect<void, AcpError.AcpError>,
 ) {
-  return (params: unknown): Effect.Effect<void, AcpError.AcpError> =>
+  return (params: AcpSchema.ExtRequest): Effect.Effect<void, AcpError.AcpError> =>
     Schema.decodeUnknownEffect(payload)(params).pipe(
       Effect.mapError((error) =>
         AcpError.AcpProtocolParseError.fromSchemaError(
@@ -74,6 +76,7 @@ export function decodeExtNotificationRegistration<A, I>(
 const encoder = new TextEncoder();
 
 const JsonRpcId = Schema.Union([Schema.Number, Schema.String]);
+
 const JsonRpcHeaders = Schema.Array(Schema.Unknown);
 
 export const jsonRpcRequest = <A, I>(method: string, params: Schema.Codec<A, I>) =>

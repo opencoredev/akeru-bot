@@ -4,6 +4,7 @@ import { ImageResponseTooLargeError, readBoundedText } from "./boundedResponse.t
 
 function streamedResponse(chunks: ReadonlyArray<string>): Response {
   const encoder = new TextEncoder();
+
   return new Response(
     new ReadableStream<Uint8Array>({
       start(controller) {

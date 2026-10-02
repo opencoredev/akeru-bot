@@ -21,6 +21,7 @@ export interface ArchivedThreadGroup {
 
 function archiveTimestamp(thread: EnvironmentThreadShell): number {
   const timestamp = Date.parse(thread.archivedAt ?? thread.updatedAt);
+
   return Number.isNaN(timestamp) ? 0 : timestamp;
 }
 
@@ -45,10 +46,12 @@ export function buildArchivedThreadGroups(input: {
 
     const environmentLabel = input.environmentLabels[entry.environmentId] ?? null;
     const threadsByProjectId = new Map<string, EnvironmentThreadShell[]>();
+
     for (const thread of entry.snapshot.threads) {
       if (thread.archivedAt === null) {
         continue;
       }
+
       const threads = threadsByProjectId.get(thread.projectId) ?? [];
       threads.push(scopeThreadShell(entry.environmentId, thread));
       threadsByProjectId.set(thread.projectId, threads);
@@ -57,11 +60,13 @@ export function buildArchivedThreadGroups(input: {
     for (const rawProject of entry.snapshot.projects) {
       const project = scopeProject(entry.environmentId, rawProject);
       const projectThreads = threadsByProjectId.get(project.id) ?? [];
+
       const groupMatches =
         query.length === 0 ||
         matchesQuery(project.title, query) ||
         matchesQuery(project.workspaceRoot, query) ||
         matchesQuery(environmentLabel, query);
+
       const matchingThreads = groupMatches
         ? projectThreads
         : projectThreads.filter(
@@ -92,6 +97,7 @@ export function buildArchivedThreadGroups(input: {
   }
 
   const timestampOrder = input.sortOrder === "newest" ? Order.flip(Order.Number) : Order.Number;
+
   return Arr.sort(
     groups,
     Order.mapInput(

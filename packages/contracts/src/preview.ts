@@ -1,3 +1,4 @@
+import * as Data from "effect/Data";
 /**
  * Preview - Schemas for the in-app browser preview surface.
  *
@@ -10,7 +11,10 @@
 import { Schema } from "effect";
 import { NonNegativeInt, PositiveInt, ThreadId, TrimmedNonEmptyString } from "./baseSchemas.ts";
 
+const Viewport = Data.taggedEnum<PreviewViewportSetting>();
+
 export const PREVIEW_URL_MAX_LENGTH = 2_048;
+
 export const CONFIGURED_LOCAL_SERVER_URLS_MAX_ITEMS = 32;
 
 const Url = TrimmedNonEmptyString.check(Schema.isMaxLength(PREVIEW_URL_MAX_LENGTH));
@@ -18,13 +22,17 @@ const Url = TrimmedNonEmptyString.check(Schema.isMaxLength(PREVIEW_URL_MAX_LENGT
 export const ConfiguredLocalServerUrls = Schema.Array(Url).check(
   Schema.isMaxLength(CONFIGURED_LOCAL_SERVER_URLS_MAX_ITEMS),
 );
+
 const Title = Schema.String.check(Schema.isMaxLength(512));
 
 export const PreviewTabId = TrimmedNonEmptyString.check(Schema.isMaxLength(128));
+
 export type PreviewTabId = typeof PreviewTabId.Type;
 
 export const PREVIEW_VIEWPORT_MIN_DIMENSION = 240;
+
 export const PREVIEW_VIEWPORT_MAX_DIMENSION = 3840;
+
 export const PREVIEW_VIEWPORT_MAX_AREA = 3840 * 2160;
 
 const PreviewViewportDimension = Schema.Int.check(
@@ -44,6 +52,7 @@ export const PreviewViewportSize = Schema.Struct({
   width: PreviewViewportDimension,
   height: PreviewViewportDimension,
 }).check(viewportAreaFilter);
+
 export type PreviewViewportSize = typeof PreviewViewportSize.Type;
 
 /**
@@ -55,6 +64,7 @@ export const PreviewRenderedViewportSize = Schema.Struct({
   width: Schema.Int.check(Schema.isGreaterThan(0)),
   height: Schema.Int.check(Schema.isGreaterThan(0)),
 });
+
 export type PreviewRenderedViewportSize = typeof PreviewRenderedViewportSize.Type;
 
 export const PREVIEW_VIEWPORT_PRESET_IDS = [
@@ -78,6 +88,7 @@ export const PREVIEW_VIEWPORT_PRESET_IDS = [
 ] as const;
 
 export const PreviewViewportPresetId = Schema.Literals(PREVIEW_VIEWPORT_PRESET_IDS);
+
 export type PreviewViewportPresetId = typeof PreviewViewportPresetId.Type;
 
 /**
@@ -111,11 +122,10 @@ export const PreviewViewportSetting = Schema.Union([
     presetId: StoredPreviewViewportPresetId,
   }).check(viewportAreaFilter),
 ]);
+
 export type PreviewViewportSetting = typeof PreviewViewportSetting.Type;
 
-export const FILL_PREVIEW_VIEWPORT = {
-  _tag: "fill",
-} as const satisfies PreviewViewportSetting;
+export const FILL_PREVIEW_VIEWPORT = Viewport.fill();
 
 /**
  * Discrete zoom levels mirroring Chrome's preset ladder. Zoom is applied by the
@@ -127,6 +137,7 @@ export const PREVIEW_ZOOM_LEVELS = [
 ] as const;
 
 export const PreviewZoomFactor = Schema.Literals(PREVIEW_ZOOM_LEVELS);
+
 export type PreviewZoomFactor = typeof PreviewZoomFactor.Type;
 
 export const DEFAULT_PREVIEW_ZOOM_FACTOR: PreviewZoomFactor = 1.0;
@@ -137,6 +148,7 @@ export const DEFAULT_PREVIEW_ZOOM_FACTOR: PreviewZoomFactor = 1.0;
  * `DesktopPreviewColorScheme`, which is the IPC-layer spelling of the same set.
  */
 export const PreviewAppearancePreference = Schema.Literals(["system", "light", "dark"]);
+
 export type PreviewAppearancePreference = typeof PreviewAppearancePreference.Type;
 
 export const DEFAULT_PREVIEW_APPEARANCE: PreviewAppearancePreference = "system";
@@ -158,6 +170,7 @@ export const PreviewNavStatus = Schema.Union([
     description: Schema.String,
   }),
 ]);
+
 export type PreviewNavStatus = typeof PreviewNavStatus.Type;
 
 export const PreviewSessionSnapshot = Schema.Struct({
@@ -170,6 +183,7 @@ export const PreviewSessionSnapshot = Schema.Struct({
   viewport: Schema.optional(PreviewViewportSetting),
   updatedAt: Schema.String,
 });
+
 export type PreviewSessionSnapshot = typeof PreviewSessionSnapshot.Type;
 
 export const PreviewOpenInput = Schema.Struct({
@@ -184,6 +198,7 @@ export const PreviewOpenInput = Schema.Struct({
    */
   viewport: Schema.optional(PreviewViewportSetting),
 });
+
 export type PreviewOpenInput = typeof PreviewOpenInput.Type;
 
 export const PreviewNavigateInput = Schema.Struct({
@@ -192,6 +207,7 @@ export const PreviewNavigateInput = Schema.Struct({
   url: Url,
   resolvedTitle: Schema.optional(Title),
 });
+
 export type PreviewNavigateInput = typeof PreviewNavigateInput.Type;
 
 export const PreviewReportStatusInput = Schema.Struct({
@@ -201,12 +217,14 @@ export const PreviewReportStatusInput = Schema.Struct({
   canGoBack: Schema.Boolean,
   canGoForward: Schema.Boolean,
 });
+
 export type PreviewReportStatusInput = typeof PreviewReportStatusInput.Type;
 
 export const PreviewRefreshInput = Schema.Struct({
   threadId: ThreadId,
   tabId: PreviewTabId,
 });
+
 export type PreviewRefreshInput = typeof PreviewRefreshInput.Type;
 
 export const PreviewResizeInput = Schema.Struct({
@@ -214,17 +232,20 @@ export const PreviewResizeInput = Schema.Struct({
   tabId: PreviewTabId,
   viewport: PreviewViewportSetting,
 });
+
 export type PreviewResizeInput = typeof PreviewResizeInput.Type;
 
 export const PreviewCloseInput = Schema.Struct({
   threadId: ThreadId,
   tabId: Schema.optional(PreviewTabId),
 });
+
 export type PreviewCloseInput = typeof PreviewCloseInput.Type;
 
 export const PreviewListInput = Schema.Struct({
   threadId: ThreadId,
 });
+
 export type PreviewListInput = typeof PreviewListInput.Type;
 
 export const PreviewListResult = Schema.Struct({
@@ -234,6 +255,7 @@ export const PreviewListResult = Schema.Struct({
   /** Monotonic server state revision used to reject stale list responses. */
   revision: NonNegativeInt,
 });
+
 export type PreviewListResult = typeof PreviewListResult.Type;
 
 export const PreviewFrame = Schema.Struct({
@@ -242,6 +264,7 @@ export const PreviewFrame = Schema.Struct({
   width: Schema.Int.check(Schema.isGreaterThan(0)),
   height: Schema.Int.check(Schema.isGreaterThan(0)),
 });
+
 export type PreviewFrame = typeof PreviewFrame.Type;
 
 const PreviewEventBaseSchema = Schema.Struct({
@@ -300,6 +323,7 @@ export const PreviewEvent = Schema.Union([
   PreviewClosedEvent,
   PreviewFrameEvent,
 ]);
+
 export type PreviewEvent = typeof PreviewEvent.Type;
 
 /**
@@ -310,6 +334,7 @@ export type PreviewEvent = typeof PreviewEvent.Type;
 export const PreviewEventsSubscribeInput = Schema.Struct({
   threadId: Schema.optional(TrimmedNonEmptyString),
 });
+
 export type PreviewEventsSubscribeInput = typeof PreviewEventsSubscribeInput.Type;
 
 /**
@@ -329,6 +354,7 @@ export const DiscoveredLocalServer = Schema.Struct({
     }),
   ),
 });
+
 export type DiscoveredLocalServer = typeof DiscoveredLocalServer.Type;
 
 export const DiscoveredLocalServerList = Schema.Struct({
@@ -336,6 +362,7 @@ export const DiscoveredLocalServerList = Schema.Struct({
   scannedAt: Schema.String,
   configuredUrlProbing: Schema.optional(Schema.Literal(true)),
 });
+
 export type DiscoveredLocalServerList = typeof DiscoveredLocalServerList.Type;
 
 export class PreviewSessionLookupError extends Schema.TaggedErrorClass<PreviewSessionLookupError>()(
@@ -361,9 +388,11 @@ export class PreviewInvalidUrlError extends Schema.TaggedErrorClass<PreviewInval
 ) {
   override get message() {
     const protocol = this.protocol === undefined ? "" : `: ${this.protocol}`;
+
     return `Invalid preview URL (${this.reason}${protocol}; input length ${this.inputLength}).`;
   }
 }
 
 export const PreviewError = Schema.Union([PreviewSessionLookupError, PreviewInvalidUrlError]);
+
 export type PreviewError = typeof PreviewError.Type;

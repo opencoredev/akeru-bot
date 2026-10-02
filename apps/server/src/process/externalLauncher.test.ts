@@ -1,157 +1,16 @@
-// @effect-diagnostics nodeBuiltinImport:off - the Windows reveal smoke test drives a real PowerShell through Node process and filesystem APIs.
+import { testLayer } from "./testUtils/externalLauncher.ts";
 import * as NodeChildProcess from "node:child_process";
 import * as NodeFS from "node:fs";
 import * as NodeOS from "node:os";
+import { HostProcessPlatform } from "@akeru/shared/hostProcess";
 import * as NodePath from "node:path";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, it } from "@effect/vitest";
-import * as ConfigProvider from "effect/ConfigProvider";
 import * as Effect from "effect/Effect";
-import * as Fiber from "effect/Fiber";
 import * as FileSystem from "effect/FileSystem";
-import * as Layer from "effect/Layer";
 import * as Path from "effect/Path";
-import * as Sink from "effect/Sink";
-import * as Stream from "effect/Stream";
-import * as TestClock from "effect/testing/TestClock";
-import { ChildProcess, ChildProcessSpawner } from "effect/unstable/process";
-
-import { HostProcessPlatform } from "@akeru/shared/hostProcess";
-import { SpawnExecutableResolution } from "@akeru/shared/shell";
+import { ChildProcess } from "effect/unstable/process";
 import * as ExternalLauncher from "./externalLauncher.ts";
-
-interface MockSpawnResult {
-  readonly exitCode?: number;
-  readonly stdout?: string;
-  /** Never deliver an exit code, like a child wedged on a broken desktop session. */
-  readonly stall?: boolean;
-}
-
-function makeMockDetachedHandle(input: MockSpawnResult & { readonly onUnref?: () => void } = {}) {
-  return ChildProcessSpawner.makeHandle({
-    pid: ChildProcessSpawner.ProcessId(1),
-    exitCode: input.stall
-      ? Effect.never
-      : Effect.succeed(ChildProcessSpawner.ExitCode(input.exitCode ?? 0)),
-    isRunning: Effect.succeed(true),
-    kill: () => Effect.void,
-    unref: Effect.sync(() => {
-      input.onUnref?.();
-      return Effect.void;
-    }),
-    stdin: Sink.drain,
-    stdout:
-      input.stdout === undefined
-        ? Stream.empty
-        : Stream.make(new TextEncoder().encode(input.stdout)),
-    stderr: Stream.empty,
-    all: Stream.empty,
-    getInputFd: () => Sink.drain,
-    getOutputFd: () => Stream.empty,
-  });
-}
-
-const testLayer = (input: {
-  readonly platform: NodeJS.Platform;
-  readonly env?: Record<string, string>;
-  readonly resolveExecutable?: (command: string) => string | undefined;
-  readonly onSpawn?: (command: ChildProcess.StandardCommand) => void;
-  readonly onUnref?: () => void;
-  readonly spawnResult?: (command: ChildProcess.StandardCommand) => MockSpawnResult | undefined;
-}) => {
-  const spawnerLayer = Layer.succeed(
-    ChildProcessSpawner.ChildProcessSpawner,
-    ChildProcessSpawner.make((command) =>
-      Effect.sync(() => {
-        assert.equal(ChildProcess.isStandardCommand(command), true);
-        if (!ChildProcess.isStandardCommand(command)) {
-          throw new Error("Expected a standard command");
-        }
-        input.onSpawn?.(command);
-        return makeMockDetachedHandle({
-          ...(input.onUnref === undefined ? {} : { onUnref: input.onUnref }),
-          ...input.spawnResult?.(command),
-        });
-      }),
-    ),
-  );
-
-  return Layer.mergeAll(
-    ExternalLauncher.layer.pipe(Layer.provide(Layer.merge(NodeServices.layer, spawnerLayer))),
-    Layer.succeed(HostProcessPlatform, input.platform),
-    Layer.succeed(
-      SpawnExecutableResolution,
-      (command) => input.resolveExecutable?.(command) ?? command,
-    ),
-    ConfigProvider.layer(ConfigProvider.fromEnv({ env: input.env ?? {} })),
-  );
-};
-
-it.effect("launches the default browser through the platform command", () => {
-  let spawned: ChildProcess.StandardCommand | undefined;
-  let didUnref = false;
-  return Effect.gen(function* () {
-    const launcher = yield* ExternalLauncher.ExternalLauncher;
-
-    yield* launcher.launchBrowser("https://example.com/some path");
-
-    assert.ok(spawned);
-    assert.equal(spawned.command, "xdg-open");
-    assert.deepEqual(spawned.args, ["https://example.com/some path"]);
-    assert.equal(spawned.options.detached, true);
-    assert.equal(didUnref, true);
-  }).pipe(
-    Effect.provide(
-      testLayer({
-        platform: "linux",
-        onSpawn: (command) => {
-          spawned = command;
-        },
-        onUnref: () => {
-          didUnref = true;
-        },
-      }),
-    ),
-  );
-});
-
-it.effect("launches an installed editor with platform-safe arguments", () =>
-  Effect.gen(function* () {
-    const fileSystem = yield* FileSystem.FileSystem;
-    const path = yield* Path.Path;
-    const binDir = yield* fileSystem.makeTempDirectoryScoped({ prefix: "t3-editors-" });
-    yield* fileSystem.writeFileString(path.join(binDir, "code.CMD"), "@echo off\r\n");
-
-    let spawned: ChildProcess.StandardCommand | undefined;
-    yield* Effect.gen(function* () {
-      const launcher = yield* ExternalLauncher.ExternalLauncher;
-      yield* launcher.launchEditor({
-        editor: "vscode",
-        cwd: "C:\\workspace with spaces\\src\\index.ts:12:4",
-      });
-    }).pipe(
-      Effect.provide(
-        testLayer({
-          platform: "win32",
-          env: { PATH: binDir, PATHEXT: ".COM;.EXE;.BAT;.CMD" },
-          resolveExecutable: (command) =>
-            command === "code" ? "C:\\Program Files\\Microsoft VS Code\\bin\\code.CMD" : command,
-          onSpawn: (command) => {
-            spawned = command;
-          },
-        }),
-      ),
-    );
-
-    assert.ok(spawned);
-    assert.equal(spawned.command, '^"C:\\Program^ Files\\Microsoft^ VS^ Code\\bin\\code.CMD^"');
-    assert.deepEqual(spawned.args, [
-      '^"--goto^"',
-      '^"C:\\workspace^ with^ spaces\\src\\index.ts:12:4^"',
-    ]);
-    assert.equal(spawned.options.shell, true);
-  }).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),
-);
 
 it.effect("reveals a file in Finder with open -R on macOS", () =>
   Effect.gen(function* () {
@@ -202,6 +61,7 @@ it.effect("reveals a file in File Explorer through PowerShell on Windows", () =>
     yield* fileSystem.writeFileString(powerShellPath, "");
 
     let spawned: ChildProcess.StandardCommand | undefined;
+
     const kind = yield* Effect.gen(function* () {
       const launcher = yield* ExternalLauncher.ExternalLauncher;
       yield* launcher.launchEditor({
@@ -209,6 +69,7 @@ it.effect("reveals a file in File Explorer through PowerShell on Windows", () =>
         cwd: "C:\\workspace with spaces\\media\\author's clip.mp4",
         reveal: true,
       });
+
       return yield* launcher.resolveFileManagerRevealKind();
     }).pipe(
       Effect.provide(
@@ -250,51 +111,49 @@ it.effect("reveals a file in File Explorer through PowerShell on Windows", () =>
 // single `/select,"<path>"` switch. Mock argv assertions cannot prove this —
 // only Windows' own PowerShell -> CreateProcess quoting chain can, so the
 // test runs only where that chain exists.
-// oxlint-disable-next-line akeru/no-global-process-runtime -- the skip decision needs the real host platform, outside any Effect runtime.
-it.skipIf(process.platform !== "win32")(
-  "delivers the raw /select switch for spaced paths through real PowerShell",
-  { timeout: 60_000 },
-  async () => {
-    const tempDir = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "t3-reveal-smoke-"));
-    try {
-      const recorderPath = NodePath.join(tempDir, "recorder.cmd");
-      const outputPath = NodePath.join(tempDir, "argv.txt");
-      NodeFS.writeFileSync(recorderPath, `@echo off\r\n>"${outputPath}" echo(%*\r\n`);
+const runWindowsRevealSmoke = Effect.fn("runWindowsRevealSmoke")(function* () {
+  const tempDir = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "t3-reveal-smoke-"));
 
-      const target = "C:\\workspace with spaces\\media\\author's clip.mp4";
-      const source = ExternalLauncher.buildFileExplorerRevealPowerShellSource(recorderPath, target);
-      const powerShellPath = `${process.env.SYSTEMROOT ?? "C:\\Windows"}\\System32\\WindowsPowerShell\\v1.0\\powershell.exe`;
-      NodeChildProcess.execFileSync(
-        powerShellPath,
-        [
-          "-NoProfile",
-          "-NonInteractive",
-          "-ExecutionPolicy",
-          "Bypass",
-          "-EncodedCommand",
-          Buffer.from(source, "utf16le").toString("base64"),
-        ],
-        { timeout: 30_000 },
-      );
+  try {
+    const recorderPath = NodePath.join(tempDir, "recorder.cmd");
+    const outputPath = NodePath.join(tempDir, "argv.txt");
+    NodeFS.writeFileSync(recorderPath, `@echo off\r\n>"${outputPath}" echo(%*\r\n`);
 
-      // Start-Process returns before the recorder runs; wait for its output.
-      // The waits run outside the Effect runtime on purpose: the test
-      // exercises the real Windows process chain in real time.
-      // @effect-diagnostics-next-line globalTimers:off
-      const sleep = (millis: number) => new Promise((resolve) => setTimeout(resolve, millis));
-      // @effect-diagnostics-next-line globalDate:off
-      const deadline = Date.now() + 20_000;
-      // @effect-diagnostics-next-line globalDate:off
-      while (!NodeFS.existsSync(outputPath) && Date.now() < deadline) {
-        await sleep(100);
-      }
-      await sleep(200);
-      const recorded = NodeFS.readFileSync(outputPath, "utf8").trim();
-      assert.equal(recorded, `/select,"${target}"`);
-    } finally {
-      NodeFS.rmSync(tempDir, { recursive: true, force: true });
+    const target = "C:\\workspace with spaces\\media\\author's clip.mp4";
+    const source = ExternalLauncher.buildFileExplorerRevealPowerShellSource(recorderPath, target);
+    const powerShellPath = `${process.env.SYSTEMROOT ?? "C:\\Windows"}\\System32\\WindowsPowerShell\\v1.0\\powershell.exe`;
+    NodeChildProcess.execFileSync(
+      powerShellPath,
+      [
+        "-NoProfile",
+        "-NonInteractive",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-EncodedCommand",
+        Buffer.from(source, "utf16le").toString("base64"),
+      ],
+      { timeout: 30_000 },
+    );
+
+    // Start-Process returns before the recorder runs; wait for its output.
+    const deadline = Date.now() + 20_000;
+
+    while (!NodeFS.existsSync(outputPath) && Date.now() < deadline) {
+      yield* Effect.sleep(100);
     }
-  },
+
+    yield* Effect.sleep(200);
+    const recorded = NodeFS.readFileSync(outputPath, "utf8").trim();
+    assert.equal(recorded, `/select,"${target}"`);
+  } finally {
+    NodeFS.rmSync(tempDir, { recursive: true, force: true });
+  }
+});
+
+it.live.skipIf(HostProcessPlatform.defaultValue() !== "win32")(
+  "delivers the raw /select switch for spaced paths through real PowerShell",
+  runWindowsRevealSmoke,
+  { timeout: 60_000 },
 );
 
 it.effect("does not advertise reveal on Windows when PowerShell is missing", () =>
@@ -306,6 +165,7 @@ it.effect("does not advertise reveal on Windows when PowerShell is missing", () 
 
     const result = yield* Effect.gen(function* () {
       const launcher = yield* ExternalLauncher.ExternalLauncher;
+
       return {
         kind: yield* launcher.resolveFileManagerRevealKind(),
         editors: yield* launcher.resolveAvailableEditors(),
@@ -335,6 +195,7 @@ it.effect("reveals a WSL file in Windows File Explorer through its UNC path", ()
     const fileSystem = yield* FileSystem.FileSystem;
     const path = yield* Path.Path;
     const binDir = yield* fileSystem.makeTempDirectoryScoped({ prefix: "t3-editors-" });
+
     for (const name of ["explorer.exe", "powershell.exe", "xdg-open"]) {
       const filePath = path.join(binDir, name);
       yield* fileSystem.writeFileString(filePath, "#!/bin/sh\n");
@@ -342,6 +203,7 @@ it.effect("reveals a WSL file in Windows File Explorer through its UNC path", ()
     }
 
     let spawned: ChildProcess.StandardCommand | undefined;
+
     const result = yield* Effect.gen(function* () {
       const launcher = yield* ExternalLauncher.ExternalLauncher;
       const kind = yield* launcher.resolveFileManagerRevealKind();
@@ -351,6 +213,7 @@ it.effect("reveals a WSL file in Windows File Explorer through its UNC path", ()
         cwd: "/home/t3/workspace/media/clip.mp4",
         reveal: true,
       });
+
       return { kind, editors };
     }).pipe(
       Effect.provide(
@@ -394,6 +257,7 @@ it.effect("does not advertise reveal from WSL when interop PowerShell is missing
 
     const result = yield* Effect.gen(function* () {
       const launcher = yield* ExternalLauncher.ExternalLauncher;
+
       return {
         kind: yield* launcher.resolveFileManagerRevealKind(),
         editors: yield* launcher.resolveAvailableEditors(),
@@ -424,6 +288,7 @@ it.effect("reveals through the Linux file manager when WSL lacks interop PowerSh
     const fileSystem = yield* FileSystem.FileSystem;
     const path = yield* Path.Path;
     const binDir = yield* fileSystem.makeTempDirectoryScoped({ prefix: "t3-editors-" });
+
     for (const name of ["explorer.exe", "xdg-open", "xdg-mime"]) {
       const filePath = path.join(binDir, name);
       yield* fileSystem.writeFileString(filePath, "#!/bin/sh\n");
@@ -431,6 +296,7 @@ it.effect("reveals through the Linux file manager when WSL lacks interop PowerSh
     }
 
     const spawnedCommands: ChildProcess.StandardCommand[] = [];
+
     const kind = yield* Effect.gen(function* () {
       const launcher = yield* ExternalLauncher.ExternalLauncher;
       const revealKind = yield* launcher.resolveFileManagerRevealKind();
@@ -439,6 +305,7 @@ it.effect("reveals through the Linux file manager when WSL lacks interop PowerSh
         cwd: "/home/t3/workspace/media/clip.mp4",
         reveal: true,
       });
+
       return revealKind;
     }).pipe(
       Effect.provide(
@@ -475,6 +342,7 @@ it.effect("falls back to the Linux file manager when WSL lacks the Explorer brid
     const fileSystem = yield* FileSystem.FileSystem;
     const path = yield* Path.Path;
     const binDir = yield* fileSystem.makeTempDirectoryScoped({ prefix: "t3-editors-" });
+
     for (const name of ["xdg-open", "xdg-mime"]) {
       const filePath = path.join(binDir, name);
       yield* fileSystem.writeFileString(filePath, "#!/bin/sh\n");
@@ -482,6 +350,7 @@ it.effect("falls back to the Linux file manager when WSL lacks the Explorer brid
     }
 
     const spawnedCommands: ChildProcess.StandardCommand[] = [];
+
     const result = yield* Effect.gen(function* () {
       const launcher = yield* ExternalLauncher.ExternalLauncher;
       const editors = yield* launcher.resolveAvailableEditors();
@@ -491,6 +360,7 @@ it.effect("falls back to the Linux file manager when WSL lacks the Explorer brid
         cwd: "/home/t3/workspace/media/clip.mp4",
         reveal: true,
       });
+
       return { editors, kind };
     }).pipe(
       Effect.provide(
@@ -526,6 +396,7 @@ it.effect(
       const fileSystem = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
       const binDir = yield* fileSystem.makeTempDirectoryScoped({ prefix: "t3-editors-" });
+
       for (const name of ["explorer.exe", "powershell.exe"]) {
         const filePath = path.join(binDir, name);
         yield* fileSystem.writeFileString(filePath, "#!/bin/sh\n");
@@ -569,6 +440,7 @@ it.effect("reveals by opening the containing directory on Linux", () =>
     const fileSystem = yield* FileSystem.FileSystem;
     const path = yield* Path.Path;
     const binDir = yield* fileSystem.makeTempDirectoryScoped({ prefix: "t3-editors-" });
+
     for (const name of ["xdg-open", "xdg-mime"]) {
       const filePath = path.join(binDir, name);
       yield* fileSystem.writeFileString(filePath, "#!/bin/sh\n");
@@ -614,6 +486,7 @@ it.effect("does not advertise a Linux file manager without a graphical session",
 
     const editors = yield* Effect.gen(function* () {
       const launcher = yield* ExternalLauncher.ExternalLauncher;
+
       return yield* launcher.resolveAvailableEditors();
     }).pipe(Effect.provide(testLayer({ platform: "linux", env: { PATH: binDir } })));
 
@@ -626,6 +499,7 @@ it.effect("advertises a Linux file manager when a directory handler is installed
     const fileSystem = yield* FileSystem.FileSystem;
     const path = yield* Path.Path;
     const binDir = yield* fileSystem.makeTempDirectoryScoped({ prefix: "t3-editors-" });
+
     for (const name of ["xdg-open", "xdg-mime"]) {
       const filePath = path.join(binDir, name);
       yield* fileSystem.writeFileString(filePath, "#!/bin/sh\n");
@@ -633,8 +507,10 @@ it.effect("advertises a Linux file manager when a directory handler is installed
     }
 
     let probe: ChildProcess.StandardCommand | undefined;
+
     const editors = yield* Effect.gen(function* () {
       const launcher = yield* ExternalLauncher.ExternalLauncher;
+
       return yield* launcher.resolveAvailableEditors();
     }).pipe(
       Effect.provide(
@@ -665,6 +541,7 @@ it.effect("does not advertise a Linux file manager without a directory handler",
     const fileSystem = yield* FileSystem.FileSystem;
     const path = yield* Path.Path;
     const binDir = yield* fileSystem.makeTempDirectoryScoped({ prefix: "t3-editors-" });
+
     for (const name of ["xdg-open", "xdg-mime"]) {
       const filePath = path.join(binDir, name);
       yield* fileSystem.writeFileString(filePath, "#!/bin/sh\n");
@@ -673,6 +550,7 @@ it.effect("does not advertise a Linux file manager without a directory handler",
 
     const editors = yield* Effect.gen(function* () {
       const launcher = yield* ExternalLauncher.ExternalLauncher;
+
       return yield* launcher.resolveAvailableEditors();
     }).pipe(
       Effect.provide(
@@ -693,6 +571,7 @@ it.effect("does not advertise a Linux file manager when the handler query fails"
     const fileSystem = yield* FileSystem.FileSystem;
     const path = yield* Path.Path;
     const binDir = yield* fileSystem.makeTempDirectoryScoped({ prefix: "t3-editors-" });
+
     for (const name of ["xdg-open", "xdg-mime"]) {
       const filePath = path.join(binDir, name);
       yield* fileSystem.writeFileString(filePath, "#!/bin/sh\n");
@@ -701,6 +580,7 @@ it.effect("does not advertise a Linux file manager when the handler query fails"
 
     const editors = yield* Effect.gen(function* () {
       const launcher = yield* ExternalLauncher.ExternalLauncher;
+
       return yield* launcher.resolveAvailableEditors();
     }).pipe(
       Effect.provide(
@@ -728,6 +608,7 @@ it.live("a stalled handler probe drops only the file manager", () =>
     const fileSystem = yield* FileSystem.FileSystem;
     const path = yield* Path.Path;
     const binDir = yield* fileSystem.makeTempDirectoryScoped({ prefix: "t3-editors-" });
+
     for (const name of ["xdg-open", "xdg-mime", "code"]) {
       const filePath = path.join(binDir, name);
       yield* fileSystem.writeFileString(filePath, "#!/bin/sh\n");
@@ -736,6 +617,7 @@ it.live("a stalled handler probe drops only the file manager", () =>
 
     const editors = yield* Effect.gen(function* () {
       const launcher = yield* ExternalLauncher.ExternalLauncher;
+
       return yield* launcher.resolveAvailableEditors();
     }).pipe(
       Effect.provide(
@@ -763,170 +645,10 @@ it.effect("does not advertise a Linux file manager when xdg-mime is missing", ()
 
     const editors = yield* Effect.gen(function* () {
       const launcher = yield* ExternalLauncher.ExternalLauncher;
+
       return yield* launcher.resolveAvailableEditors();
     }).pipe(Effect.provide(testLayer({ platform: "linux", env: { PATH: binDir, DISPLAY: ":0" } })));
 
     assert.equal(editors.includes("file-manager"), false);
   }).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),
-);
-
-it.effect("discovers editors through the service API", () =>
-  Effect.gen(function* () {
-    const fileSystem = yield* FileSystem.FileSystem;
-    const path = yield* Path.Path;
-    const binDir = yield* fileSystem.makeTempDirectoryScoped({ prefix: "t3-editors-" });
-    yield* fileSystem.writeFileString(path.join(binDir, "code.CMD"), "@echo off\r\n");
-    yield* fileSystem.writeFileString(path.join(binDir, "explorer.CMD"), "@echo off\r\n");
-
-    const editors = yield* Effect.gen(function* () {
-      const launcher = yield* ExternalLauncher.ExternalLauncher;
-      return yield* launcher.resolveAvailableEditors();
-    }).pipe(
-      Effect.provide(
-        testLayer({
-          platform: "win32",
-          env: { PATH: binDir, PATHEXT: ".COM;.EXE;.BAT;.CMD" },
-        }),
-      ),
-    );
-
-    assert.equal(editors.includes("vscode"), true);
-    assert.equal(editors.includes("file-manager"), true);
-  }).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),
-);
-
-it.effect("memoizes editor discovery and refreshes after the cache window", () => {
-  let statCalls = 0;
-  const fileInfo = { type: "File" } as FileSystem.File.Info;
-  const launcherLayer = ExternalLauncher.layer.pipe(
-    Layer.provide(
-      Layer.mergeAll(
-        FileSystem.layerNoop({
-          stat: () =>
-            Effect.sync(() => {
-              statCalls += 1;
-              return fileInfo;
-            }),
-        }),
-        Path.layer,
-        Layer.succeed(
-          ChildProcessSpawner.ChildProcessSpawner,
-          ChildProcessSpawner.make(() => Effect.sync(() => makeMockDetachedHandle())),
-        ),
-      ),
-    ),
-  );
-
-  return Effect.gen(function* () {
-    const launcher = yield* ExternalLauncher.ExternalLauncher;
-
-    const first = yield* launcher.resolveAvailableEditors();
-    assert.equal(first.includes("vscode"), true);
-    const statCallsAfterFirstScan = statCalls;
-    assert.isAbove(statCallsAfterFirstScan, 0);
-
-    // Past the shared command-resolution cache TTL (30s) but within the
-    // discovery cache window: the memoized set is reused without any scan.
-    yield* TestClock.adjust("31 seconds");
-    const second = yield* launcher.resolveAvailableEditors();
-    assert.deepEqual([...second], [...first]);
-    assert.equal(statCalls, statCallsAfterFirstScan);
-
-    // Past the discovery cache window the next call rescans.
-    yield* TestClock.adjust("30 seconds");
-    yield* launcher.resolveAvailableEditors();
-    assert.isAbove(statCalls, statCallsAfterFirstScan);
-  }).pipe(
-    Effect.provide(
-      Layer.mergeAll(
-        launcherLayer,
-        Layer.succeed(HostProcessPlatform, "win32"),
-        ConfigProvider.layer(
-          ConfigProvider.fromEnv({
-            env: {
-              PATH: "C:\\t3-editor-discovery-cache-test",
-              PATHEXT: ".COM;.EXE;.BAT;.CMD",
-            },
-          }),
-        ),
-        TestClock.layer(),
-      ),
-    ),
-  );
-});
-
-// A client that disconnects mid-scan interrupts the shared discovery effect on
-// the connection fiber. The cache must not retain that interrupt: doing so
-// replayed it to every later connect for the whole TTL, so `server.getConfig`
-// failed and no client could reconnect until the server restarted.
-it.effect("rescans after an interrupted discovery instead of caching the interrupt", () => {
-  const fileInfo = { type: "File" } as FileSystem.File.Info;
-  let blockFirstScan = true;
-  let scans = 0;
-  const launcherLayer = ExternalLauncher.layer.pipe(
-    Layer.provide(
-      Layer.mergeAll(
-        FileSystem.layerNoop({
-          // The first scan parks inside `stat` so the interrupt lands while
-          // discovery is in flight, which is what a client disconnecting
-          // mid-connect does to the shared effect.
-          stat: () =>
-            Effect.gen(function* () {
-              scans += 1;
-              if (blockFirstScan) {
-                return yield* Effect.never;
-              }
-              return fileInfo;
-            }),
-        }),
-        Path.layer,
-        Layer.succeed(
-          ChildProcessSpawner.ChildProcessSpawner,
-          ChildProcessSpawner.make(() => Effect.sync(() => makeMockDetachedHandle())),
-        ),
-      ),
-    ),
-  );
-
-  return Effect.gen(function* () {
-    const launcher = yield* ExternalLauncher.ExternalLauncher;
-
-    const fiber = yield* Effect.forkChild(launcher.resolveAvailableEditors());
-    yield* Effect.yieldNow;
-    yield* Fiber.interrupt(fiber);
-
-    // The next connect must still get a real answer well inside the TTL.
-    blockFirstScan = false;
-    scans = 0;
-    const editors = yield* launcher.resolveAvailableEditors();
-    assert.equal(editors.includes("vscode"), true);
-    assert.isAbove(scans, 0);
-  }).pipe(
-    Effect.provide(
-      Layer.mergeAll(
-        launcherLayer,
-        Layer.succeed(HostProcessPlatform, "win32"),
-        ConfigProvider.layer(
-          ConfigProvider.fromEnv({
-            env: {
-              PATH: "C:\\t3-editor-discovery-interrupt-test",
-              PATHEXT: ".COM;.EXE;.BAT;.CMD",
-            },
-          }),
-        ),
-      ),
-    ),
-  );
-});
-
-it.effect("rejects unknown editors through the service API", () =>
-  Effect.gen(function* () {
-    const launcher = yield* ExternalLauncher.ExternalLauncher;
-    const error = yield* launcher
-      .launchEditor({ editor: "missing-editor" as never, cwd: "/tmp/workspace" })
-      .pipe(Effect.flip);
-    assert.instanceOf(error, ExternalLauncher.ExternalLauncherUnknownEditorError);
-    assert.equal(error.editor, "missing-editor");
-    assert.equal(error.message, "Unknown editor: missing-editor");
-  }).pipe(Effect.provide(testLayer({ platform: "linux", env: { PATH: "" } }))),
 );

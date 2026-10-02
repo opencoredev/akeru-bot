@@ -9,6 +9,7 @@ import {
 } from "./mcpServer.ts";
 
 const decodeConfiguration = Schema.decodeUnknownSync(McpServerConfiguration);
+
 const decodeServer = Schema.decodeUnknownSync(McpServer);
 
 const timestamps = {
@@ -115,6 +116,7 @@ describe("McpServer", () => {
       enabled: true,
       ...timestamps,
     });
+
     const disabledGlobally = decodeServer({
       id: "builtin-context",
       name: "Context",

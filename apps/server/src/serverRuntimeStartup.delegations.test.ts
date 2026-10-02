@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import {
   type AkeruDelegationRecord,
@@ -25,19 +26,28 @@ import * as ThreadBackgroundLiveness from "./orchestration/ThreadBackgroundLiven
 import * as ThreadPlanProgress from "./orchestration/ThreadPlanProgress.ts";
 import { OrchestrationCommandReceiptRepositoryLive } from "./persistence/Layers/OrchestrationCommandReceipts.ts";
 import { OrchestrationEventStoreLive } from "./persistence/Layers/OrchestrationEventStore.ts";
-import { makeSqlitePersistenceLive } from "./persistence/Layers/Sqlite.ts";
+import { sqlitePersistenceLayer } from "./persistence/Layers/Sqlite.ts";
 import * as RepositoryIdentityResolver from "./project/RepositoryIdentityResolver.ts";
 import * as ServerRuntimeStartup from "./serverRuntimeStartup.ts";
 
 const CREATED_AT = "2026-09-26T09:26:00.000Z";
+
 const STARTED_AT = "2026-09-26T09:27:00.000Z";
+
 const FINISHED_AT = "2026-09-26T09:30:00.000Z";
+
 const RESTARTED_AT = "2026-09-28T09:00:00.000Z";
+
 const PARENT_BOT_ID = BotId.make("bot-mira");
+
 const OTHER_PARENT_BOT_ID = BotId.make("bot-sol");
+
 const CHILD_BOT_ID = BotId.make("bot-ren");
+
 const PARENT_THREAD_ID = ThreadId.make("thread-parent");
+
 const PROJECT_ID = ProjectId.make("project-1");
+
 const MODEL_SELECTION = { instanceId: ProviderInstanceId.make("codex"), model: "gpt-5.6" };
 
 const makeLayer = (dbPath: string) =>
@@ -49,7 +59,7 @@ const makeLayer = (dbPath: string) =>
     Layer.provide(OrchestrationEventStoreLive),
     Layer.provide(OrchestrationCommandReceiptRepositoryLive),
     Layer.provide(RepositoryIdentityResolver.layer),
-    Layer.provideMerge(makeSqlitePersistenceLive(dbPath)),
+    Layer.provideMerge(sqlitePersistenceLayer(dbPath)),
   );
 
 const baseDelegation = (id: string, parentBotId: BotId = PARENT_BOT_ID): AkeruDelegationRecord => ({
@@ -95,18 +105,25 @@ const running = (
 });
 
 const KEPT_CHILD = ThreadId.make("delegation-thread-kept");
+
 const LIVE_CHILD = ThreadId.make("delegation-thread-live");
+
 const DONE_CHILD = ThreadId.make("delegation-thread-done");
+
 const BLOCKED_CHILD = ThreadId.make("delegation-thread-blocked");
+
 const QUEUED_CHILD = ThreadId.make("delegation-thread-queued");
 
 const kept = running({ ...baseDelegation("delegation-kept"), keep: true }, KEPT_CHILD, null);
+
 const live = running(baseDelegation("delegation-live"), LIVE_CHILD, TurnId.make("turn-live"));
+
 const doneRunning = running(
   baseDelegation("delegation-done"),
   DONE_CHILD,
   TurnId.make("turn-done"),
 );
+
 const done: AkeruDelegationRecord = {
   ...doneRunning,
   phase: {
@@ -124,6 +141,7 @@ const done: AkeruDelegationRecord = {
   },
   updatedAt: FINISHED_AT,
 };
+
 const blocked: AkeruDelegationRecord = {
   ...running(baseDelegation("delegation-blocked"), BLOCKED_CHILD, TurnId.make("turn-blocked")),
   phase: {
@@ -135,6 +153,7 @@ const blocked: AkeruDelegationRecord = {
   },
   updatedAt: FINISHED_AT,
 };
+
 // A second parent bot keeps the first under the three-active-delegation cap.
 const queued = baseDelegation("delegation-queued", OTHER_PARENT_BOT_ID);
 
@@ -163,6 +182,7 @@ const seed = Effect.gen(function* () {
       createdAt: CREATED_AT,
     });
   }
+
   yield* engine.dispatch({
     type: "project.create",
     commandId: commandId(),
@@ -172,6 +192,7 @@ const seed = Effect.gen(function* () {
     defaultModelSelection: null,
     createdAt: CREATED_AT,
   });
+
   const createThread = (
     threadId: ThreadId,
     botId: BotId,
@@ -195,6 +216,7 @@ const seed = Effect.gen(function* () {
       worktreePath: null,
       createdAt: CREATED_AT,
     });
+
   yield* createThread(PARENT_THREAD_ID, PARENT_BOT_ID);
 
   for (const [record, childThreadId] of [
@@ -210,14 +232,16 @@ const seed = Effect.gen(function* () {
       commandId: commandId(),
       delegation: { ...record, phase: { _tag: "Queued" }, updatedAt: CREATED_AT },
     });
-    if (record.phase._tag === "Queued") continue;
+
+    if (!("childTurnId" in record.phase)) continue;
     const started = running(record, childThreadId, record.phase.childTurnId);
     yield* engine.dispatch({
       type: "delegation.state.set",
       commandId: commandId(),
       delegation: started,
     });
-    if (record.phase._tag !== "Running") {
+
+    if (!Predicate.isTagged(record.phase, "Running")) {
       yield* engine.dispatch({
         type: "delegation.state.set",
         commandId: commandId(),
@@ -253,6 +277,7 @@ const seed = Effect.gen(function* () {
 const delegationEventCount = Effect.gen(function* () {
   const engine = yield* OrchestrationEngineService;
   const events = yield* Stream.runCollect(engine.readEvents(0, 10_000));
+
   return Array.from(events).filter((event) => event.type === "delegation.updated").length;
 });
 
@@ -268,11 +293,13 @@ it.effect("fails only open delegations after a restart, once", () =>
       const before = yield* delegationEventCount;
       yield* ServerRuntimeStartup.reconcileDelegations;
       const { delegations } = yield* (yield* ProjectionSnapshotQuery).getCommandReadModel();
+
       return { delegations, written: (yield* delegationEventCount) - before };
     }).pipe(Effect.provide(makeLayer(dbPath)));
 
     const byId = new Map(first.delegations.map((record) => [record.delegationId, record]));
     assert.equal(first.written, 3);
+
     for (const [original, childThreadId, childTurnId, startedAt] of [
       [kept, KEPT_CHILD, null, STARTED_AT],
       [live, LIVE_CHILD, TurnId.make("turn-live"), STARTED_AT],
@@ -281,7 +308,8 @@ it.effect("fails only open delegations after a restart, once", () =>
       const record = byId.get(original.delegationId);
       assert.ok(record);
       assert.equal(record.phase._tag, "Failed");
-      if (record.phase._tag !== "Failed") continue;
+
+      if (!Predicate.isTagged(record.phase, "Failed")) continue;
       assert.deepStrictEqual(record.phase.failure, {
         failureCode: "internal",
         message: ServerRuntimeStartup.DELEGATION_RESTART_FAILURE_MESSAGE,
@@ -294,13 +322,16 @@ it.effect("fails only open delegations after a restart, once", () =>
       assert.equal(record.phase.completedAt, RESTARTED_AT);
       assert.equal(record.updatedAt, RESTARTED_AT);
       const { phase: _phase, updatedAt: _updatedAt, ...ownership } = record;
+
       const {
         phase: _originalPhase,
         updatedAt: _originalUpdatedAt,
         ...originalOwnership
       } = original;
+
       assert.deepStrictEqual(ownership, originalOwnership);
     }
+
     assert.deepStrictEqual(byId.get(done.delegationId), done);
     assert.deepStrictEqual(byId.get(blocked.delegationId), blocked);
 

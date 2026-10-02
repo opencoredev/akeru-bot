@@ -1,5 +1,8 @@
+import type { storedReplySynthesisCapability } from "@akeru/client-runtime/reply-playback";
 import { describe, expect, it, vi } from "vite-plus/test";
 import { createWebReplyPlaybackSession } from "./replyPlaybackSession";
+
+type VoiceSettingsSnapshot = Parameters<typeof storedReplySynthesisCapability>[0];
 
 describe("web reply playback synthesis", () => {
   it("uses the configured synthesis capability", () => {
@@ -14,6 +17,7 @@ describe("web reply playback synthesis", () => {
       synthesize: vi.fn(),
       cancel: vi.fn(),
     });
+
     expect(session.synthesisFor("environment")).toEqual({
       available: true,
       provider: "openai",
@@ -29,6 +33,7 @@ describe("web reply playback synthesis", () => {
       synthesize: vi.fn(),
       cancel: vi.fn(),
     });
+
     expect(session.synthesisFor("environment")).toEqual({
       available: true,
       provider: "openai",
@@ -39,28 +44,32 @@ describe("web reply playback synthesis", () => {
 
   it("leaves replies from another environment unavailable", async () => {
     const synthesize = vi.fn();
+
     const session = createWebReplyPlaybackSession({
       environmentId: "primary" as never,
       voice: { enabled: true, provider: "composed" },
       synthesize,
       cancel: vi.fn(),
     });
+
     expect(session.synthesisFor("remote")).toMatchObject({ available: false });
     expect(session.synthesisFor("primary")).toMatchObject({ available: true });
     session.dispose();
   });
 
   it("keeps other environments unavailable after a voice change", () => {
-    let voice: { enabled: boolean; provider: "composed"; synthesisVoices?: { openai: string } } = {
+    let voice: VoiceSettingsSnapshot = {
       enabled: true,
       provider: "composed",
     };
+
     const session = createWebReplyPlaybackSession({
       environmentId: "primary" as never,
       voice: () => voice as never,
       synthesize: vi.fn(),
       cancel: vi.fn(),
     });
+
     const listener = vi.fn();
     session.subscribeSynthesis(listener);
     voice = { ...voice, synthesisVoices: { openai: "nova" } };

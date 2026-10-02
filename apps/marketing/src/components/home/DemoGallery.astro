@@ -1,0 +1,156 @@
+---
+
+
+
+const demos = [
+  {
+    title: "Text your bot on iMessage",
+    body: "Add Akeru to a group chat and your bot answers there like any other contact.",
+    video: "https://egp0fj3aql.ufs.sh/f/oqH0Ibila2s0pjOXsCaF9MvsGzD4u1Sr2o8A07X3mnNBZOfE",
+    poster: "/demo-imessage-poster.webp",
+    label: "Akeru Bot responding in an iMessage conversation",
+  },
+  {
+    title: "Hand off browser work",
+    body: "A bot can manage a cloud browser and finish the work you hand off.",
+    video: "https://egp0fj3aql.ufs.sh/f/oqH0Ibila2s0gmR7JKHqJZ0fozh9cC7SvGNsk42WyFE5TDeI",
+    poster: "/demo-browser-poster.webp",
+    label: "An Akeru Bot using a managed browser to finish bot work",
+  },
+  {
+    title: "Talk instead of typing",
+    body: "Start a voice call with your bot when you don't want to type.",
+    video: "https://egp0fj3aql.ufs.sh/f/oqH0Ibila2s0NaYbDRPrp1SNGyXcrB2LHODWvh0g5fREJQIm",
+    poster: "/demo-voice-poster.webp",
+    label: "Starting a one-to-one voice call with an Akeru Bot",
+  },
+];
+---
+  <section id="demos" class="demos">
+    <h2 class="section-title">See it work</h2>
+    {
+      demos.map((demo) => (
+        <div class="demo-row">
+          <div class="demo-copy">
+            <h3>{demo.title}</h3>
+            <p>{demo.body}</p>
+          </div>
+          <div class="demo-media">
+            <video
+              data-demo-video
+              data-src={demo.video}
+              poster={demo.poster}
+              aria-label={demo.label}
+              muted
+              loop
+              playsinline
+              preload="metadata"
+            />
+          </div>
+        </div>
+      ))
+    }
+  </section>
+<style>
+
+
+  .section-title {
+    font-size: 46px;
+    font-weight: 600;
+    letter-spacing: -0.03em;
+    line-height: 52px;
+    text-align: center;
+  }
+
+  .demos {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    border-top: 1px solid var(--color-border);
+    padding: 104px 64px;
+  }
+
+  .demo-row {
+    display: flex;
+    align-items: center;
+    gap: 88px;
+    width: 100%;
+    margin-top: 96px;
+  }
+  .demo-row:nth-of-type(even) {
+    flex-direction: row-reverse;
+  }
+
+  .demo-copy {
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+    width: 432px;
+  }
+
+  .demo-copy h3 {
+    font-size: 34px;
+    font-weight: 600;
+    letter-spacing: -0.03em;
+    line-height: 40px;
+  }
+
+  .demo-copy p {
+    font-size: 15px;
+    line-height: 25px;
+    color: var(--color-muted-foreground);
+  }
+
+  .demo-media {
+    flex: 1 0 0;
+    aspect-ratio: 8 / 5;
+    border: 1px solid var(--color-border);
+    border-radius: 16px;
+    background: var(--color-card);
+    overflow: hidden;
+  }
+
+  .demo-media video {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  @media (max-width: 1100px) {
+    .demo-row, .demo-row:nth-of-type(even) {
+      flex-direction: column;
+      align-items: stretch;
+      gap: 28px;
+      margin-top: 64px;
+    }
+
+    .demo-copy {
+      width: 100%;
+    }
+
+    .demo-media {
+      width: 100%;
+      flex: 0 0 auto;
+    }
+  }
+
+  @media (max-width: 900px) {
+
+    .section-title {
+      font-size: 32px;
+      line-height: 38px;
+    }
+
+    .demos {
+      padding: 64px 24px;
+    }
+
+    .demo-copy h3 {
+      font-size: 26px;
+      line-height: 32px;
+    }
+  }
+
+</style>

@@ -1,66 +1,21 @@
-import { pipe } from "effect/Function";
-import * as Arr from "effect/Array";
-import * as O from "effect/Order";
-import type {
-  MessageId,
-  OrchestrationCheckpointSummary,
-  OrchestrationEvent,
-  OrchestrationLatestTurn,
-  OrchestrationMessage,
-  OrchestrationSession,
-  OrchestrationThread,
-  OrchestrationThreadActivity,
-  TurnId,
-} from "@akeru/contracts";
+import {
+  applyTurnStartRequestedEvent,
+  applyTurnInterruptRequestedEvent,
+  applySessionSetEvent,
+  applySessionStopRequestedEvent,
+  applyTurnDiffCompletedEvent,
+  applyRevertedEvent,
+} from "./threadReducer/turns.ts";
+import { applyProposedPlanUpsertedEvent } from "./threadReducer/plans.ts";
+import { applyActivityAppendedEvent } from "./threadReducer/activities.ts";
+import {
+  applyChannelDeliverySetEvent,
+  applyMessageSentEvent,
+  applyMessageReactionSetEvent,
+} from "./threadReducer/messages.ts";
 
-export type ThreadDetailReducerResult =
-  | { readonly kind: "updated"; readonly thread: OrchestrationThread }
-  | { readonly kind: "deleted" }
-  | { readonly kind: "unchanged" };
-
-const proposedPlanOrder = O.combine<OrchestrationThread["proposedPlans"][number]>(
-  O.mapInput(O.String, (p) => p.createdAt),
-  O.mapInput(O.String, (p) => p.id),
-);
-
-const checkpointOrder = O.mapInput(
-  O.Number,
-  (cp: OrchestrationThread["checkpoints"][number]) =>
-    cp.checkpointTurnCount ?? Number.MAX_SAFE_INTEGER,
-);
-
-const activityOrder = O.combineAll<OrchestrationThreadActivity>([
-  O.mapInput(O.Number, (a) => a.sequence ?? Number.MAX_SAFE_INTEGER),
-  O.mapInput(O.String, (a) => a.createdAt),
-  O.mapInput(O.String, (a) => a.id),
-]);
-
-// Per-array id index so the streaming append path can reject a re-delivered
-// id without rescanning the history. Only arrays this reducer produced are
-// indexed: presence also proves the array is activityOrder-sorted, which
-// snapshot-loaded arrays (DB order, null sequences first) are not.
-const activityIdIndex = new WeakMap<
-  ReadonlyArray<OrchestrationThreadActivity>,
-  Set<OrchestrationThreadActivity["id"]>
->();
-
-/**
- * Matches the validity rule in `deriveLatestContextWindowSnapshot` (and the
- * server's snapshot-side `dropStaleContextWindowActivities`): rows without a
- * finite, non-negative `usedTokens` are skipped during the consumer's backward
- * walk, so they must not replace an earlier resolvable row here.
- */
-function isResolvableContextWindowActivity(activity: OrchestrationThreadActivity): boolean {
-  if (activity.kind !== "context-window.updated") {
-    return false;
-  }
-  const payload =
-    activity.payload && typeof activity.payload === "object"
-      ? (activity.payload as Record<string, unknown>)
-      : null;
-  const usedTokens = payload?.usedTokens;
-  return typeof usedTokens === "number" && Number.isFinite(usedTokens) && usedTokens >= 0;
-}
+import type { OrchestrationEvent, OrchestrationThread } from "@akeru/contracts";
+import { type ThreadDetailReducerResult } from "./threadReducer/types.ts";
 
 /**
  * Apply a single orchestration event to an `OrchestrationThread`, returning
@@ -266,460 +221,43 @@ export function applyThreadDetailEvent(
 
     // ── Turn lifecycle ──────────────────────────────────────────────
     case "thread.turn-start-requested":
-      return {
-        kind: "updated",
-        thread: {
-          ...thread,
-          ...(event.payload.modelSelection !== undefined
-            ? { modelSelection: event.payload.modelSelection }
-            : {}),
-          runtimeMode: event.payload.runtimeMode,
-          interactionMode: event.payload.interactionMode,
-          updatedAt: event.occurredAt,
-        },
-      };
+      return applyTurnStartRequestedEvent(thread, event);
 
-    case "thread.turn-interrupt-requested": {
-      if (event.payload.turnId === undefined) {
-        return { kind: "unchanged" };
-      }
-      const latestTurn = thread.latestTurn;
-      if (latestTurn === null || latestTurn.turnId !== event.payload.turnId) {
-        return { kind: "unchanged" };
-      }
-      return {
-        kind: "updated",
-        thread: {
-          ...thread,
-          latestTurn: {
-            ...latestTurn,
-            state: "interrupted",
-            startedAt: latestTurn.startedAt ?? event.payload.createdAt,
-            completedAt: latestTurn.completedAt ?? event.payload.createdAt,
-          },
-          updatedAt: event.occurredAt,
-        },
-      };
-    }
+    case "thread.turn-interrupt-requested":
+      return applyTurnInterruptRequestedEvent(thread, event);
 
     // ── Messages ────────────────────────────────────────────────────
-    case "thread.channel-delivery-set": {
-      const messages = thread.messages.map((entry) =>
-        entry.id === event.payload.messageId
-          ? {
-              ...entry,
-              channelDelivery: event.payload.delivery,
-              updatedAt: event.payload.updatedAt,
-            }
-          : entry,
-      );
-      return {
-        kind: "updated",
-        thread: { ...thread, messages, updatedAt: event.payload.updatedAt },
-      };
-    }
+    case "thread.channel-delivery-set":
+      return applyChannelDeliverySetEvent(thread, event);
 
-    case "thread.message-sent": {
-      const message: OrchestrationMessage = {
-        id: event.payload.messageId,
-        role: event.payload.role,
-        text: event.payload.text,
-        ...(event.payload.attachments !== undefined
-          ? { attachments: event.payload.attachments }
-          : {}),
-        turnId: event.payload.turnId,
-        authorPersonId: event.payload.authorPersonId ?? null,
-        authorDisplayName: event.payload.authorDisplayName ?? null,
-        channelOrigin: event.payload.channelOrigin ?? null,
-        streaming: event.payload.streaming,
-        createdAt: event.payload.createdAt,
-        updatedAt: event.payload.updatedAt,
-      };
+    case "thread.message-sent":
+      return applyMessageSentEvent(thread, event);
 
-      const existingMessage = thread.messages.find((entry) => entry.id === message.id);
-      const messages = existingMessage
-        ? Arr.map(thread.messages, (entry) =>
-            entry.id !== message.id
-              ? entry
-              : {
-                  ...entry,
-                  text: message.streaming
-                    ? `${entry.text}${message.text}`
-                    : message.text.length > 0
-                      ? message.text
-                      : entry.text,
-                  streaming: message.streaming,
-                  ...(message.turnId !== undefined ? { turnId: message.turnId } : {}),
-                  ...(message.streaming ? {} : { updatedAt: message.updatedAt }),
-                  ...(message.attachments !== undefined
-                    ? { attachments: message.attachments }
-                    : {}),
-                },
-          )
-        : Arr.append(thread.messages, message);
-      // Update latestTurn for assistant messages bound to a turn. A completed
-      // assistant message only settles the turn once the session is no longer
-      // running it — providers may emit several assistant messages per turn
-      // (commentary between tool calls), and the turn must stay unsettled
-      // until the provider reports turn end. Streaming deltas recompute the
-      // same record, so the previous reference is kept when nothing changed.
-      const turnStillRunning =
-        event.payload.turnId !== null &&
-        thread.session?.status === "running" &&
-        thread.session.activeTurnId === event.payload.turnId;
-      const settlesTurn = !event.payload.streaming && !turnStillRunning;
-      const latestTurn = reuseLatestTurn(
-        thread.latestTurn,
-        event.payload.role === "assistant" &&
-          event.payload.turnId !== null &&
-          (thread.latestTurn === null || thread.latestTurn.turnId === event.payload.turnId)
-          ? {
-              turnId: event.payload.turnId,
-              state: settlesTurn
-                ? thread.latestTurn?.state === "interrupted"
-                  ? "interrupted"
-                  : thread.latestTurn?.state === "error"
-                    ? "error"
-                    : "completed"
-                : "running",
-              requestedAt:
-                thread.latestTurn?.turnId === event.payload.turnId
-                  ? thread.latestTurn.requestedAt
-                  : event.payload.createdAt,
-              startedAt:
-                thread.latestTurn?.turnId === event.payload.turnId
-                  ? (thread.latestTurn.startedAt ?? event.payload.createdAt)
-                  : event.payload.createdAt,
-              completedAt: settlesTurn
-                ? event.payload.updatedAt
-                : thread.latestTurn?.turnId === event.payload.turnId
-                  ? (thread.latestTurn.completedAt ?? null)
-                  : null,
-              assistantMessageId: event.payload.messageId,
-              ...copyLatestTurnIdentities(thread.latestTurn, event.payload.turnId),
-            }
-          : thread.latestTurn,
-      );
-
-      // Rebind checkpoint assistant message IDs for assistant messages.
-      const checkpoints =
-        event.payload.role === "assistant" && event.payload.turnId !== null
-          ? rebindCheckpointAssistantMessage(
-              thread.checkpoints,
-              event.payload.turnId,
-              event.payload.messageId,
-            )
-          : thread.checkpoints;
-
-      return {
-        kind: "updated",
-        thread: {
-          ...thread,
-          messages,
-          checkpoints,
-          latestTurn,
-          updatedAt: event.occurredAt,
-        },
-      };
-    }
-
-    case "thread.message-reaction-set": {
-      const message = thread.messages.find((entry) => entry.id === event.payload.messageId);
-      if (!message) return { kind: "unchanged" };
-      const withoutReaction = (message.reactions ?? []).filter(
-        (reaction) =>
-          reaction.botId !== event.payload.botId ||
-          reaction.personId !== event.payload.personId ||
-          reaction.emoji !== event.payload.emoji,
-      );
-      return {
-        kind: "updated",
-        thread: {
-          ...thread,
-          messages: thread.messages.map((entry) =>
-            entry.id === event.payload.messageId
-              ? {
-                  ...entry,
-                  reactions: event.payload.present
-                    ? [
-                        ...withoutReaction,
-                        {
-                          ...(event.payload.botId !== undefined
-                            ? { botId: event.payload.botId }
-                            : { personId: event.payload.personId }),
-                          emoji: event.payload.emoji,
-                        },
-                      ]
-                    : withoutReaction,
-                  updatedAt: event.payload.updatedAt,
-                }
-              : entry,
-          ),
-          updatedAt: event.payload.updatedAt,
-        },
-      };
-    }
+    case "thread.message-reaction-set":
+      return applyMessageReactionSetEvent(thread, event);
 
     // ── Session ─────────────────────────────────────────────────────
-    case "thread.session-set": {
-      // Leaving the "running" session status is the turn-end signal: settle a
-      // still-running latest turn so its duration reflects the whole turn.
-      const settledTurnState = settledTurnStateForSessionStatus(event.payload.session.status);
-      const latestTurn = reuseLatestTurn(
-        thread.latestTurn,
-        event.payload.session.status === "running" && event.payload.session.activeTurnId !== null
-          ? {
-              turnId: event.payload.session.activeTurnId,
-              state: "running",
-              requestedAt:
-                thread.latestTurn?.turnId === event.payload.session.activeTurnId
-                  ? thread.latestTurn.requestedAt
-                  : event.payload.session.updatedAt,
-              startedAt:
-                thread.latestTurn?.turnId === event.payload.session.activeTurnId
-                  ? (thread.latestTurn.startedAt ?? event.payload.session.updatedAt)
-                  : event.payload.session.updatedAt,
-              completedAt: null,
-              assistantMessageId:
-                thread.latestTurn?.turnId === event.payload.session.activeTurnId
-                  ? thread.latestTurn.assistantMessageId
-                  : null,
-              ...copyLatestTurnIdentities(thread.latestTurn, event.payload.session.activeTurnId),
-            }
-          : thread.latestTurn !== null &&
-              thread.latestTurn.state === "running" &&
-              settledTurnState !== null
-            ? {
-                ...thread.latestTurn,
-                state: settledTurnState,
-                // A running turn's completedAt can only hold a mid-turn
-                // placeholder checkpoint timestamp — the session leaving
-                // "running" is the authoritative turn end.
-                completedAt: event.payload.session.updatedAt,
-              }
-            : thread.latestTurn,
-      );
-
-      return {
-        kind: "updated",
-        thread: {
-          ...thread,
-          session: event.payload.session,
-          latestTurn,
-          updatedAt: event.occurredAt,
-        },
-      };
-    }
+    case "thread.session-set":
+      return applySessionSetEvent(thread, event);
 
     case "thread.session-stop-requested":
-      return thread.session === null
-        ? { kind: "unchanged" }
-        : {
-            kind: "updated",
-            thread: {
-              ...thread,
-              session: {
-                ...thread.session,
-                status: "stopped",
-                activeTurnId: null,
-                updatedAt: event.payload.createdAt,
-              },
-              updatedAt: event.occurredAt,
-            },
-          };
+      return applySessionStopRequestedEvent(thread, event);
 
     // ── Proposed plans ──────────────────────────────────────────────
-    case "thread.proposed-plan-upserted": {
-      const proposedPlan = event.payload.proposedPlan;
-
-      const proposedPlans = pipe(
-        thread.proposedPlans,
-        Arr.filter((entry) => entry.id !== proposedPlan.id),
-        Arr.append(proposedPlan),
-        Arr.sort(proposedPlanOrder),
-      );
-
-      return {
-        kind: "updated",
-        thread: { ...thread, proposedPlans, updatedAt: event.occurredAt },
-      };
-    }
+    case "thread.proposed-plan-upserted":
+      return applyProposedPlanUpsertedEvent(thread, event);
 
     // ── Checkpoints / turn diffs ────────────────────────────────────
-    case "thread.turn-diff-completed": {
-      const checkpoint: OrchestrationCheckpointSummary = {
-        turnId: event.payload.turnId,
-        checkpointTurnCount: event.payload.checkpointTurnCount,
-        checkpointRef: event.payload.checkpointRef,
-        status: event.payload.status,
-        files: event.payload.files,
-        assistantMessageId: event.payload.assistantMessageId,
-        completedAt: event.payload.completedAt,
-      };
-
-      const existing = thread.checkpoints.find((entry) => entry.turnId === checkpoint.turnId);
-      // Don't overwrite a non-missing checkpoint with a missing one.
-      if (existing && existing.status !== "missing" && checkpoint.status === "missing") {
-        return { kind: "unchanged" };
-      }
-
-      const checkpoints = pipe(
-        thread.checkpoints,
-        Arr.filter((entry) => entry.turnId !== checkpoint.turnId),
-        Arr.append(checkpoint),
-        Arr.sort(checkpointOrder),
-      );
-
-      // Mid-turn diff updates produce placeholder checkpoints; record the
-      // checkpoint, but don't settle a turn its session is still running.
-      const diffTurnStillRunning =
-        thread.session?.status === "running" &&
-        thread.session.activeTurnId === event.payload.turnId;
-      const latestTurn =
-        !diffTurnStillRunning &&
-        (thread.latestTurn === null || thread.latestTurn.turnId === event.payload.turnId)
-          ? {
-              turnId: event.payload.turnId,
-              state:
-                thread.latestTurn?.state === "interrupted"
-                  ? "interrupted"
-                  : checkpointStatusToTurnState(event.payload.status),
-              requestedAt: thread.latestTurn?.requestedAt ?? event.payload.completedAt,
-              startedAt: thread.latestTurn?.startedAt ?? event.payload.completedAt,
-              completedAt: event.payload.completedAt,
-              assistantMessageId: event.payload.assistantMessageId,
-            }
-          : thread.latestTurn;
-
-      return {
-        kind: "updated",
-        thread: { ...thread, checkpoints, latestTurn, updatedAt: event.occurredAt },
-      };
-    }
+    case "thread.turn-diff-completed":
+      return applyTurnDiffCompletedEvent(thread, event);
 
     // ── Revert ──────────────────────────────────────────────────────
-    case "thread.reverted": {
-      const checkpoints = pipe(
-        thread.checkpoints,
-        Arr.filter(
-          (entry) =>
-            entry.checkpointTurnCount !== undefined &&
-            entry.checkpointTurnCount <= event.payload.turnCount,
-        ),
-        Arr.sort(checkpointOrder),
-      );
-
-      const retainedTurnIds = new Set(Arr.map(checkpoints, (entry) => entry.turnId));
-      const messages = retainMessagesAfterRevert(thread.messages, retainedTurnIds);
-      const proposedPlans = pipe(
-        thread.proposedPlans,
-        Arr.filter((plan) => plan.turnId === null || retainedTurnIds.has(plan.turnId)),
-      );
-      const activities = pipe(
-        thread.activities,
-        Arr.filter((activity) => activity.turnId === null || retainedTurnIds.has(activity.turnId)),
-      );
-      const latestCheckpoint = checkpoints.at(-1) ?? null;
-
-      return {
-        kind: "updated",
-        thread: {
-          ...thread,
-          checkpoints,
-          messages,
-          proposedPlans,
-          activities,
-          latestTurn:
-            latestCheckpoint === null
-              ? null
-              : {
-                  turnId: latestCheckpoint.turnId,
-                  state: checkpointStatusToTurnState(
-                    latestCheckpoint.status as "ready" | "missing" | "error",
-                  ),
-                  requestedAt: latestCheckpoint.completedAt,
-                  startedAt: latestCheckpoint.completedAt,
-                  completedAt: latestCheckpoint.completedAt,
-                  assistantMessageId: latestCheckpoint.assistantMessageId ?? null,
-                },
-          updatedAt: event.occurredAt,
-        },
-      };
-    }
+    case "thread.reverted":
+      return applyRevertedEvent(thread, event);
 
     // ── Activities ──────────────────────────────────────────────────
-    case "thread.activity-appended": {
-      const activity = event.payload.activity;
-      // A resolvable context-window update supersedes earlier resolvable ones
-      // for the same turn: consumers only read the latest value (walking the
-      // array backwards), and providers stream these updates continuously, so
-      // retaining the history grows the thread by thousands of rows over a
-      // long session. Mirrors the server-side snapshot rule in
-      // dropStaleContextWindowActivities; retention stays per turn so a
-      // thread.reverted that discards turns can still resolve a value from
-      // the turns that survive.
-      const supersedesContextWindow = isResolvableContextWindowActivity(activity);
-      // Live streams append in order: an unseen id sorting at/after the tail
-      // of a known-sorted array appends without re-filtering and re-sorting
-      // the whole history on every event. The id set moves forward to the new
-      // array; a superseded array falls back to the sorting path.
-      const ids = activityIdIndex.get(thread.activities);
-      const lastActivity = thread.activities.at(-1);
-      if (
-        ids !== undefined &&
-        (lastActivity === undefined || activityOrder(lastActivity, activity) <= 0) &&
-        !ids.has(activity.id)
-      ) {
-        let activities: ReadonlyArray<OrchestrationThreadActivity>;
-        if (supersedesContextWindow) {
-          // Dropping rows from a sorted array keeps it sorted, so a superseding
-          // update copies once and appends instead of re-sorting the history.
-          const retained: Array<OrchestrationThreadActivity> = [];
-          for (const entry of thread.activities) {
-            if (entry.turnId === activity.turnId && isResolvableContextWindowActivity(entry)) {
-              ids.delete(entry.id);
-            } else {
-              retained.push(entry);
-            }
-          }
-          retained.push(activity);
-          activities = retained;
-        } else {
-          activities = Arr.append(thread.activities, activity);
-        }
-        activityIdIndex.delete(thread.activities);
-        ids.add(activity.id);
-        activityIdIndex.set(activities, ids);
-        return {
-          kind: "updated",
-          thread: {
-            ...thread,
-            activities,
-            updatedAt: event.occurredAt,
-          },
-        };
-      }
-      const activities = pipe(
-        thread.activities,
-        Arr.filter(
-          (entry) =>
-            entry.id !== activity.id &&
-            !(
-              supersedesContextWindow &&
-              entry.turnId === activity.turnId &&
-              isResolvableContextWindowActivity(entry)
-            ),
-        ),
-        Arr.append(activity),
-        Arr.sort(activityOrder),
-      );
-      activityIdIndex.set(activities, new Set(activities.map((entry) => entry.id)));
-
-      return {
-        kind: "updated",
-        thread: { ...thread, activities, updatedAt: event.occurredAt },
-      };
-    }
+    case "thread.activity-appended":
+      return applyActivityAppendedEvent(thread, event);
 
     // ── Events that don't mutate thread state directly ──────────────
     case "thread.approval-response-requested":
@@ -732,118 +270,4 @@ export function applyThreadDetailEvent(
   return { kind: "unchanged" };
 }
 
-// ── Helpers ──────────────────────────────────────────────────────────
-
-/**
- * Turn state to settle a still-running latest turn with when its session
- * leaves the "running" status, or null while the session is (re)starting or
- * running and the turn must stay unsettled.
- */
-function settledTurnStateForSessionStatus(
-  status: OrchestrationSession["status"],
-): "completed" | "interrupted" | "error" | null {
-  switch (status) {
-    case "idle":
-    case "ready":
-      return "completed";
-    case "error":
-      return "error";
-    case "interrupted":
-    case "stopped":
-      return "interrupted";
-    case "starting":
-    case "running":
-      return null;
-  }
-}
-
-function checkpointStatusToTurnState(
-  status: "ready" | "missing" | "error",
-): OrchestrationLatestTurn["state"] {
-  switch (status) {
-    case "ready":
-      return "completed";
-    case "error":
-      return "error";
-    case "missing":
-      return "completed";
-  }
-}
-
-/**
- * Returns `previous` when `next` matches it field for field, otherwise `next`.
- * Streaming cases recompute the latest turn on every delta, and keeping the
- * old reference lets selectors and memos keyed on `latestTurn` skip work.
- */
-function copyLatestTurnIdentities(
-  previous: OrchestrationLatestTurn | null,
-  turnId: TurnId,
-): Pick<OrchestrationLatestTurn, "requestMessageId" | "respondingBotId" | "sourceProposedPlan"> {
-  if (previous?.turnId !== turnId) {
-    return {};
-  }
-  return {
-    ...(previous.requestMessageId !== undefined
-      ? { requestMessageId: previous.requestMessageId }
-      : {}),
-    ...(previous.respondingBotId !== undefined
-      ? { respondingBotId: previous.respondingBotId }
-      : {}),
-    ...(previous.sourceProposedPlan !== undefined
-      ? { sourceProposedPlan: previous.sourceProposedPlan }
-      : {}),
-  };
-}
-
-function reuseLatestTurn(
-  previous: OrchestrationLatestTurn | null,
-  next: OrchestrationLatestTurn | null,
-): OrchestrationLatestTurn | null {
-  if (previous === null || next === null) {
-    return next;
-  }
-  return previous.turnId === next.turnId &&
-    previous.state === next.state &&
-    previous.requestedAt === next.requestedAt &&
-    previous.startedAt === next.startedAt &&
-    previous.completedAt === next.completedAt &&
-    previous.assistantMessageId === next.assistantMessageId &&
-    previous.requestMessageId === next.requestMessageId &&
-    previous.respondingBotId === next.respondingBotId &&
-    previous.sourceProposedPlan?.threadId === next.sourceProposedPlan?.threadId &&
-    previous.sourceProposedPlan?.planId === next.sourceProposedPlan?.planId
-    ? previous
-    : next;
-}
-
-function rebindCheckpointAssistantMessage(
-  checkpoints: ReadonlyArray<OrchestrationCheckpointSummary>,
-  turnId: TurnId,
-  messageId: MessageId,
-): ReadonlyArray<OrchestrationCheckpointSummary> {
-  let next: OrchestrationCheckpointSummary[] | undefined;
-  for (let index = 0; index < checkpoints.length; index += 1) {
-    const entry = checkpoints[index]!;
-    if (entry.turnId !== turnId || entry.assistantMessageId === messageId) continue;
-    next ??= checkpoints.slice();
-    next[index] = { ...entry, assistantMessageId: messageId };
-  }
-  return next ?? checkpoints;
-}
-
-function retainMessagesAfterRevert(
-  messages: ReadonlyArray<OrchestrationMessage>,
-  retainedTurnIds: ReadonlySet<string>,
-): OrchestrationMessage[] {
-  // Keep messages that belong to a retained turn, plus system messages and
-  // messages without a turn binding (pre-turn-0 user messages).
-  return Arr.filter(messages, (message) => {
-    if (message.role === "system") {
-      return true;
-    }
-    if (message.turnId === null) {
-      return true;
-    }
-    return retainedTurnIds.has(message.turnId);
-  });
-}
+export { type ThreadDetailReducerResult } from "./threadReducer/types.ts";

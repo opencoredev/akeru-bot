@@ -16,7 +16,6 @@ import * as Effect from "effect/Effect";
 
 import { exportAkeruMemory } from "./MemoryExport.ts";
 import { previewAkeruMemoryImport } from "./MemoryImport.ts";
-import type { EntityMemoryRepositoryShape } from "./Services/EntityMemoryRepository.ts";
 
 const access = {
   tenantId: AkeruMemoryTenantId.make("local"),
@@ -69,7 +68,8 @@ const archiveWithRevisions = (
 ) => {
   const repository = {
     listByPartitions: () => Effect.succeed(revisions),
-  } as unknown as EntityMemoryRepositoryShape;
+  };
+
   return exportAkeruMemory({
     repository,
     access,
@@ -89,7 +89,7 @@ const previewRepository = {
       previewHash: "a".repeat(64),
       items: [],
     }),
-} as unknown as EntityMemoryRepositoryShape;
+};
 
 it.effect("rejects readable V1 archives for import", () =>
   Effect.gen(function* () {
@@ -101,12 +101,14 @@ it.effect("rejects readable V1 archives for import", () =>
       files: [],
       manifestSha256: "a".repeat(64),
     } satisfies AkeruMemoryArchive;
+
     const failure = yield* previewAkeruMemoryImport({
       repository: previewRepository,
       access,
       target: "thread",
       archive: v1,
     }).pipe(Effect.flip);
+
     assert.match(failure.message, /Version 1/);
   }),
 );
@@ -114,21 +116,25 @@ it.effect("rejects readable V1 archives for import", () =>
 it.effect("rejects current-state and all-authority archives", () =>
   Effect.gen(function* () {
     const currentOnly = yield* archive("bot", false);
+
     const incomplete = yield* previewAkeruMemoryImport({
       repository: previewRepository,
       access,
       target: "bot",
       archive: currentOnly,
     }).pipe(Effect.flip);
+
     assert.match(incomplete.message, /complete revision chain/);
 
     const all = yield* archive("all", true);
+
     const allFailure = yield* previewAkeruMemoryImport({
       repository: previewRepository,
       access,
       target: "all",
       archive: all,
     }).pipe(Effect.flip);
+
     assert.match(allFailure.message, /authority domains/);
   }),
 );
@@ -136,13 +142,16 @@ it.effect("rejects current-state and all-authority archives", () =>
 it.effect("rejects target, checksum, and readable-file mismatches", () =>
   Effect.gen(function* () {
     const valid = yield* archive("bot", true);
+
     const targetFailure = yield* previewAkeruMemoryImport({
       repository: previewRepository,
       access,
       target: "project",
       archive: valid,
     }).pipe(Effect.flip);
+
     assert.match(targetFailure.message, /does not match/);
+
     if (valid.schemaVersion !== 2) return assert.fail("Expected a V2 archive.");
 
     const checksumFailure = yield* previewAkeruMemoryImport({
@@ -154,18 +163,21 @@ it.effect("rejects target, checksum, and readable-file mismatches", () =>
         files: valid.files.map((file) => ({ ...file, content: `${file.content}tampered` })),
       },
     }).pipe(Effect.flip);
+
     assert.match(checksumFailure.message, /checksum failed/);
 
     const fileMismatch = {
       ...valid,
       files: [],
     } satisfies AkeruMemoryArchive;
+
     const mismatch = yield* previewAkeruMemoryImport({
       repository: previewRepository,
       access,
       target: "bot",
       archive: fileMismatch,
     }).pipe(Effect.flip);
+
     assert.match(mismatch.message, /manifest is invalid|do not match/);
   }),
 );
@@ -173,6 +185,7 @@ it.effect("rejects target, checksum, and readable-file mismatches", () =>
 it.effect("keeps pending and rejected revisions importable", () =>
   Effect.gen(function* () {
     const pendingId = AkeruMemoryId.make("revision-import-pending");
+
     const rejected = yield* archiveWithRevisions([
       { ...revision, id: pendingId, approvalState: "pending", supersededById: revision.id },
       {
@@ -183,12 +196,14 @@ it.effect("keeps pending and rejected revisions importable", () =>
         updatedAt: "2026-08-30T20:01:00.000Z",
       },
     ]);
+
     const preview = yield* previewAkeruMemoryImport({
       repository: previewRepository,
       access,
       target: "bot",
       archive: rejected,
     });
+
     assert.equal(preview.previewHash, "a".repeat(64));
   }),
 );
@@ -197,12 +212,14 @@ it.effect("rejects resurrected archive revisions", () =>
   Effect.gen(function* () {
     const tombstoneId = AkeruMemoryId.make("revision-import-tombstone");
     const activeId = AkeruMemoryId.make("revision-import-resurrected");
+
     const tombstone = {
       ...revision,
       id: tombstoneId,
       supersededById: activeId,
       deletionState: "tombstoned" as const,
     };
+
     const resurrected = {
       ...revision,
       id: activeId,
@@ -211,13 +228,16 @@ it.effect("rejects resurrected archive revisions", () =>
       supersededById: null,
       updatedAt: "2026-08-30T20:01:00.000Z",
     };
+
     const resurrectedArchive = yield* archiveWithRevisions([tombstone, resurrected]);
+
     const resurrectedFailure = yield* previewAkeruMemoryImport({
       repository: previewRepository,
       access,
       target: "bot",
       archive: resurrectedArchive,
     }).pipe(Effect.flip);
+
     assert.match(resurrectedFailure.message, /terminal archive revision/);
   }),
 );

@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 import { EnvironmentId, ThreadId } from "@akeru/contracts";
@@ -30,11 +31,14 @@ function entry(overrides: Partial<BrowserHistoryEntry> = {}): BrowserHistoryEntr
 }
 
 beforeEach(() => readPreparedConnection.mockReturnValue(null));
+
 afterEach(() => vi.restoreAllMocks());
 
 function spyOnPersistWrites() {
   const storage = useBrowserHistoryStore.persist.getOptions().storage;
+
   if (!storage) throw new Error("Browser history persistence storage is unavailable.");
+
   return vi.spyOn(storage, "setItem");
 }
 
@@ -75,6 +79,7 @@ describe("upsertHistoryEntry", () => {
       entry({ url: "http://a.test/", lastVisitedAt: 500, title: "A" }),
       entry({ url: "http://b.test/", lastVisitedAt: 400 }),
     ];
+
     const next = upsertHistoryEntry(existing, "http://b.test/", 3000);
     expect(next.map((e) => e.url)).toEqual(["http://b.test/", "http://a.test/"]);
     expect(next[0]?.lastVisitedAt).toBe(3000);
@@ -85,6 +90,7 @@ describe("upsertHistoryEntry", () => {
     const full = Array.from({ length: BROWSER_HISTORY_MAX_ENTRIES_PER_PROJECT }, (_, i) =>
       entry({ url: `http://localhost:${3000 + i}/`, lastVisitedAt: i }),
     );
+
     const next = upsertHistoryEntry(full, "http://new.test/", 9999);
     expect(next).toHaveLength(BROWSER_HISTORY_MAX_ENTRIES_PER_PROJECT);
     expect(next[0]?.url).toBe("http://new.test/");
@@ -95,9 +101,11 @@ describe("upsertHistoryEntry", () => {
 
   it("with insertOrdered, slots an older entry below a newer one instead of prepending", () => {
     const existing = [entry({ url: "http://newer.test/", lastVisitedAt: 2000 })];
+
     const next = upsertHistoryEntry(existing, "http://older.test/", 1000, {
       insertOrdered: true,
     });
+
     expect(next.map((e) => e.url)).toEqual(["http://newer.test/", "http://older.test/"]);
   });
 
@@ -116,6 +124,7 @@ describe("evictExcessProjects", () => {
         [entry({ lastVisitedAt: i })],
       ]),
     );
+
     const next = evictExcessProjects(byProjectKey);
     expect(Object.keys(next)).toHaveLength(BROWSER_HISTORY_MAX_PROJECTS);
     expect(next["project-0"]).toBeUndefined();
@@ -128,6 +137,7 @@ describe("migratePersistedBrowserHistoryState", () => {
   it("drops malformed state and invalid entries", () => {
     expect(migratePersistedBrowserHistoryState(null)).toEqual({ byProjectKey: {} });
     expect(migratePersistedBrowserHistoryState({ byProjectKey: 42 })).toEqual({ byProjectKey: {} });
+
     const migrated = migratePersistedBrowserHistoryState({
       byProjectKey: {
         good: [
@@ -140,6 +150,7 @@ describe("migratePersistedBrowserHistoryState", () => {
         bad: "junk",
       },
     });
+
     expect(migrated.byProjectKey["good"]).toEqual([
       { url: "http://a.test/", lastVisitedAt: 100, title: "A" },
     ]);
@@ -152,6 +163,7 @@ describe("migratePersistedBrowserHistoryState", () => {
         good: [{ url: "a.test/path#section", lastVisitedAt: 100 }],
       },
     });
+
     expect(migrated.byProjectKey["good"]).toEqual([
       { url: "https://a.test/path#section", lastVisitedAt: 100 },
     ]);
@@ -164,6 +176,7 @@ describe("migratePersistedBrowserHistoryState", () => {
         [{ url: `http://project-${index}.test/`, lastVisitedAt: index }],
       ]),
     );
+
     byProjectKey["project-1"] = [
       { url: "a.test/", lastVisitedAt: 1 },
       { url: "http://newer.test/", lastVisitedAt: 3 },
@@ -189,16 +202,19 @@ describe("migratePersistedBrowserHistoryState", () => {
         ],
       },
     });
+
     expect(migrated.byProjectKey["good"]).toEqual([{ url: "http://a.test/", lastVisitedAt: 100 }]);
   });
 
   it("truncates oversized persisted titles to the contract bound", () => {
     const oversized = "x".repeat(BROWSER_HISTORY_MAX_TITLE_LENGTH + 100);
+
     const migrated = migratePersistedBrowserHistoryState({
       byProjectKey: {
         good: [{ url: "http://a.test/", lastVisitedAt: 100, title: oversized }],
       },
     });
+
     expect(migrated.byProjectKey["good"]?.[0]?.title).toHaveLength(
       BROWSER_HISTORY_MAX_TITLE_LENGTH,
     );
@@ -369,6 +385,7 @@ describe("pendingVisitsByThreadKey", () => {
     for (let i = 0; i < 12; i++) {
       recordVisitForThread(threadRef, `http://a.test/${i}`, i);
     }
+
     useBrowserHistoryStore.getState().registerThreadProject(threadRef, "proj-a");
     const urls = useBrowserHistoryStore.getState().byProjectKey["proj-a"]?.map((e) => e.url);
     expect(urls).toHaveLength(10);
@@ -382,6 +399,7 @@ describe("pendingVisitsByThreadKey", () => {
       environmentId: EnvironmentId.make("env-1"),
       threadId: ThreadId.make("thread-2"),
     };
+
     useBrowserHistoryStore.getState().registerThreadProject(otherThreadRef, "proj-a");
     recordVisitForThread(otherThreadRef, "http://newer.test/", 2000);
     recordVisitForThread(threadRef, "http://older.test/", 1000);
@@ -423,6 +441,7 @@ describe("mergeBrowserHistoryState", () => {
   it("sanitizes same-version corrupt persisted data and preserves actions", () => {
     // `migrate` only runs when versions differ; `merge` runs on every rehydrate.
     const current = useBrowserHistoryStore.getState();
+
     const merged = mergeBrowserHistoryState(
       {
         byProjectKey: {
@@ -433,10 +452,11 @@ describe("mergeBrowserHistoryState", () => {
       },
       current,
     );
+
     expect(merged.byProjectKey).toEqual({
       b: [{ url: "http://ok.test/", lastVisitedAt: 5 }],
     });
-    expect(typeof merged.recordVisit).toBe("function");
+    expect(Predicate.isFunction(merged.recordVisit)).toBe(true);
     expect(merged.projectKeyByThreadKey).toEqual({ good: "b" });
     expect(merged.pendingVisitsByThreadKey).toEqual({});
     expect(merged.pendingTitlesByThreadKey).toEqual({});

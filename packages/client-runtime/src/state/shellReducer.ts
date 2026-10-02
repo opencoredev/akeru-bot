@@ -27,8 +27,10 @@ export function applyShellStreamEvent(
       const projects = snapshot.projects.some((p) => p.id === event.project.id)
         ? Arr.map(snapshot.projects, (p) => (p.id === event.project.id ? event.project : p))
         : Arr.append(snapshot.projects, event.project);
+
       return { ...snapshot, projects, snapshotSequence: event.sequence };
     }
+
     case "project-removed":
       return {
         ...snapshot,
@@ -39,8 +41,10 @@ export function applyShellStreamEvent(
       const bots = snapshot.bots.some((bot) => bot.id === event.bot.id)
         ? Arr.map(snapshot.bots, (bot) => (bot.id === event.bot.id ? event.bot : bot))
         : Arr.append(snapshot.bots, event.bot);
+
       return { ...snapshot, bots, snapshotSequence: event.sequence };
     }
+
     case "bot-removed":
       return {
         ...snapshot,
@@ -51,8 +55,10 @@ export function applyShellStreamEvent(
       const groups = snapshot.groups.some((group) => group.id === event.group.id)
         ? Arr.map(snapshot.groups, (group) => (group.id === event.group.id ? event.group : group))
         : Arr.append(snapshot.groups, event.group);
+
       return { ...snapshot, groups, snapshotSequence: event.sequence };
     }
+
     case "group-removed":
       return {
         ...snapshot,
@@ -61,13 +67,16 @@ export function applyShellStreamEvent(
       };
     case "mcp-server-upserted": {
       const mcpServers = snapshot.mcpServers ?? [];
+
       const nextMcpServers = mcpServers.some((server) => server.id === event.mcpServer.id)
         ? Arr.map(mcpServers, (server) =>
             server.id === event.mcpServer.id ? event.mcpServer : server,
           )
         : Arr.append(mcpServers, event.mcpServer);
+
       return { ...snapshot, mcpServers: nextMcpServers, snapshotSequence: event.sequence };
     }
+
     case "mcp-server-removed":
       return {
         ...snapshot,
@@ -87,6 +96,7 @@ export function applyShellStreamEvent(
               : delegation,
           )
         : Arr.append(snapshot.delegations, event.delegation);
+
       return {
         ...snapshot,
         delegations: isTerminalDelegationState(akeruDelegationStateOf(event.delegation.phase))
@@ -95,20 +105,25 @@ export function applyShellStreamEvent(
         snapshotSequence: event.sequence,
       };
     }
+
     case "routine-upserted": {
       const routines = snapshot.routines ?? [];
+
       const nextRoutines = routines.some((routine) => routine.id === event.routine.id)
         ? Arr.map(routines, (routine) =>
             routine.id === event.routine.id ? event.routine : routine,
           )
         : Arr.append(routines, event.routine);
+
       const runs = snapshot.routineRuns ?? [];
       const eventRun = event.run;
+
       const nextRuns = eventRun
         ? runs.some((run) => run.id === eventRun.id)
           ? Arr.map(runs, (run) => (run.id === eventRun.id ? eventRun : run))
           : Arr.append(runs, eventRun)
         : runs;
+
       return {
         ...snapshot,
         routines: nextRoutines,
@@ -116,6 +131,7 @@ export function applyShellStreamEvent(
         snapshotSequence: event.sequence,
       };
     }
+
     case "routine-removed":
       return {
         ...snapshot,
@@ -135,6 +151,7 @@ export function applyShellStreamEvent(
       };
     case "skill-assignment-upserted": {
       const assignments = snapshot.skillAssignments ?? [];
+
       const nextAssignments = assignments.some(
         (assignment) => assignment.id === event.assignment.id,
       )
@@ -142,12 +159,14 @@ export function applyShellStreamEvent(
             assignment.id === event.assignment.id ? event.assignment : assignment,
           )
         : Arr.append(assignments, event.assignment);
+
       return {
         ...snapshot,
         skillAssignments: nextAssignments,
         snapshotSequence: event.sequence,
       };
     }
+
     case "skill-assignment-removed":
       return {
         ...snapshot,
@@ -161,8 +180,10 @@ export function applyShellStreamEvent(
       const threads = snapshot.threads.some((t) => t.id === event.thread.id)
         ? Arr.map(snapshot.threads, (t) => (t.id === event.thread.id ? event.thread : t))
         : Arr.append(snapshot.threads, event.thread);
+
       return { ...snapshot, threads, snapshotSequence: event.sequence };
     }
+
     case "thread-removed":
       return {
         ...snapshot,
@@ -192,7 +213,9 @@ function capTerminalDelegations(
       delegation.parentThreadId === parentThreadId &&
       isTerminalDelegationState(akeruDelegationStateOf(delegation.phase)),
   );
+
   if (terminal.length <= SHELL_RECENT_TERMINAL_DELEGATIONS_PER_THREAD) return delegations;
+
   const dropped = new Set(
     [...terminal]
       .sort(
@@ -203,5 +226,6 @@ function capTerminalDelegations(
       )
       .slice(SHELL_RECENT_TERMINAL_DELEGATIONS_PER_THREAD),
   );
+
   return delegations.filter((delegation) => !dropped.has(delegation));
 }

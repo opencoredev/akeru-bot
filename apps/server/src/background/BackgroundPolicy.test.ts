@@ -62,6 +62,7 @@ function makeLayer(
     Effect.gen(function* () {
       const changes = yield* PubSub.sliding<HostPowerSnapshot>(1);
       let snapshot = hostPower;
+
       return HostPowerMonitor.HostPowerMonitor.of({
         snapshot: Effect.sync(() => snapshot),
         report: (next) =>
@@ -72,6 +73,7 @@ function makeLayer(
       });
     }),
   );
+
   return BackgroundPolicy.layer.pipe(
     Layer.provide(Layer.merge(hostLayer, ServerSettingsService.layerTest(settingsOverrides))),
   );
@@ -144,6 +146,7 @@ describe("BackgroundPolicy", () => {
       const firstSnapshotStarted = yield* Deferred.make<void>();
       const releaseFirstSnapshot = yield* Deferred.make<void>();
       const snapshotReads = yield* Ref.make(0);
+
       const hostLayer = Layer.succeed(
         HostPowerMonitor.HostPowerMonitor,
         HostPowerMonitor.HostPowerMonitor.of({
@@ -161,25 +164,32 @@ describe("BackgroundPolicy", () => {
           streamChanges: Stream.empty,
         }),
       );
+
       const layer = BackgroundPolicy.layer.pipe(
         Layer.provide(Layer.merge(hostLayer, ServerSettingsService.layerTest())),
       );
 
       yield* Effect.gen(function* () {
         const policy = yield* BackgroundPolicy.BackgroundPolicy;
+
         const updatesFiber = yield* policy.streamChanges.pipe(
           Stream.take(2),
           Stream.runCollect,
           Effect.forkChild,
         );
+
         yield* Effect.yieldNow;
+
         const reportFiber = yield* policy
           .reportClientActivity(AuthSessionId.make("session-1"), RpcClientId.make(1), makeReport())
           .pipe(Effect.forkChild);
+
         yield* Deferred.await(firstSnapshotStarted);
+
         const removeFiber = yield* policy
           .removeRpcClient(AuthSessionId.make("session-1"), RpcClientId.make(1))
           .pipe(Effect.forkChild);
+
         yield* Effect.yieldNow;
         yield* Deferred.succeed(releaseFirstSnapshot, undefined);
         yield* Fiber.join(reportFiber);
@@ -197,6 +207,7 @@ describe("BackgroundPolicy", () => {
       const policy = yield* BackgroundPolicy.BackgroundPolicy;
       const sessionId = AuthSessionId.make("session-1");
       const rpcClientId = RpcClientId.make(1);
+
       for (
         let index = 0;
         index <= BackgroundPolicy.MAX_CLIENT_ACTIVITY_LEASES_PER_RPC_CLIENT;

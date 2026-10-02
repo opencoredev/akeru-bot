@@ -57,8 +57,8 @@ export function NewBotDialog({
       (assetPath) => {
         setAvatar({ kind: "image", assetPath, dithered: false });
       },
-      (error: unknown) => {
-        console.error("Could not read avatar image.", error);
+      (cause: unknown) => {
+        console.error("Could not read avatar image.", cause);
       },
     );
   };
@@ -66,13 +66,14 @@ export function NewBotDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogPopup
-        className="flex max-h-[calc(100dvh-2rem)] max-w-2xl flex-col overflow-hidden"
+        className="flex max-h-(--spacing-dvh-2rem) max-w-2xl flex-col overflow-hidden"
         bottomStickOnMobile={false}
       >
         <form
           className="flex min-h-0 flex-1 flex-col"
           onSubmit={(event) => {
             event.preventDefault();
+
             if (submitting || trimmedName.length === 0) return;
             onCreate({ name: trimmedName, avatar });
           }}
@@ -84,7 +85,7 @@ export function NewBotDialog({
             </DialogDescription>
           </DialogHeader>
 
-          <DialogPanel className="grid gap-6 sm:grid-cols-[12rem_minmax(0,1fr)]">
+          <DialogPanel className="grid gap-6 sm:grid-cols-(--grid-template-columns-12rem-1fr)">
             {defaultEngine.blocked && defaultEngine.unavailability ? (
               <div className="sm:col-span-2">
                 <ProviderUnavailableNotice
@@ -149,25 +150,24 @@ export function NewBotDialog({
                 <div className="grid grid-cols-4 gap-2 sm:grid-cols-6">
                   {BLOB_SHAPES.map((shape) => {
                     const selected = avatar.kind === "blob" && blobAvatar.shape === shape;
+
                     return (
-                      <button
+                      <Button
                         key={shape}
-                        type="button"
+                        variant="avatar-tile"
+                        size="avatar"
                         aria-label={blobShapeLabel(shape, t)}
                         aria-pressed={selected}
                         data-bot-hover
                         onClick={() => updateBlobAvatar({ ...blobAvatar, shape })}
-                        className={cn(
-                          "flex aspect-square cursor-pointer items-center justify-center rounded-xl border border-transparent outline-none transition-colors focus-visible:ring-2 focus-visible:ring-foreground/20",
-                          selected ? "border-border bg-secondary" : "hover:bg-secondary/70",
-                        )}
+                        className="aspect-square"
                       >
                         <BotAvatarView
                           avatar={{ ...blobAvatar, shape }}
                           name={trimmedName}
                           className="size-9"
                         />
-                      </button>
+                      </Button>
                     );
                   })}
                 </div>
@@ -192,7 +192,7 @@ export function NewBotDialog({
             <Button
               type="submit"
               aria-describedby={trimmedName.length === 0 ? "new-bot-name-help" : undefined}
-              className="disabled:border-border disabled:bg-muted disabled:text-muted-foreground disabled:opacity-100"
+              variant="default-muted-disabled"
               disabled={submitting || trimmedName.length === 0}
             >
               {submitting ? t("Creating") : t("Create bot")}

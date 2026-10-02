@@ -51,8 +51,10 @@ function botTakesDelegatedWork(
   providers: ReadonlyArray<Pick<ServerProvider, "instanceId" | "driver">>,
 ): boolean {
   const engine = bot.engine;
+
   if (!engine) return true;
   const provider = providers.find((candidate) => candidate.instanceId === engine.provider);
+
   return provider === undefined || driverSupportsDelegation(provider.driver);
 }
 
@@ -63,17 +65,21 @@ export function groupMentionBots(
   providers: ReadonlyArray<Pick<ServerProvider, "instanceId" | "driver">> = [],
 ): ComposerMentionItemBot[] {
   if (!group) return [];
-  const memberIds = new Set(
-    group.members.filter(isGroupBotMember).map((member) => member.botId as string),
+
+  const memberIds = new Set(group.members.filter(isGroupBotMember).map((member) => member.botId));
+
+  return bots.flatMap((bot) =>
+    bot.archivedAt === null && memberIds.has(bot.id)
+      ? [
+          {
+            id: bot.id,
+            name: bot.name,
+            title: bot.title,
+            canTakeWork: botTakesDelegatedWork(bot, providers),
+          },
+        ]
+      : [],
   );
-  return bots
-    .filter((bot) => bot.archivedAt === null && memberIds.has(bot.id))
-    .map((bot) => ({
-      id: bot.id,
-      name: bot.name,
-      title: bot.title,
-      canTakeWork: botTakesDelegatedWork(bot, providers),
-    }));
 }
 
 /**
@@ -92,6 +98,7 @@ export function buildComposerMentionItems(input: {
 }): ComposerCommandItem[] {
   const query = input.query.toLowerCase();
   const items: ComposerCommandItem[] = [];
+
   if (input.browserAvailable && !isThreadMentionQuery(query) && "browser".startsWith(query)) {
     items.push({
       id: "mention:browser",
@@ -100,8 +107,10 @@ export function buildComposerMentionItems(input: {
       description: "Preview browser",
     });
   }
+
   if (!isThreadMentionQuery(query)) {
     const bots = input.bots ?? [];
+
     for (const bot of bots) {
       if (!bot.name.toLowerCase().startsWith(query)) continue;
       items.push({
@@ -116,14 +125,17 @@ export function buildComposerMentionItems(input: {
       });
     }
   }
+
   const threads = rankComposerThreadMentions(input.threads, {
     query: threadMentionQuery(input.query),
     currentThreadId: input.currentThreadId,
     currentProjectId: input.currentProjectId,
     matchedIds: input.matchedIds,
   });
+
   // A path-like query is most likely a file, so only chats whose title matches precede files.
   const pathLike = !isThreadMentionQuery(query) && /[/\\.]/.test(query);
+
   for (const thread of threads) {
     if (pathLike && !thread.title.toLowerCase().includes(query)) continue;
     items.push({
@@ -134,6 +146,7 @@ export function buildComposerMentionItems(input: {
       description: "Chat",
     });
   }
+
   return items;
 }
 

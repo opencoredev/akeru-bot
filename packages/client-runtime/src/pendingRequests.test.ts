@@ -15,7 +15,7 @@ function makeActivity(overrides: {
   kind?: string;
   summary?: string;
   tone?: OrchestrationThreadActivity["tone"];
-  payload?: Record<string, unknown>;
+  payload?: OrchestrationThreadActivity["payload"];
   turnId?: string;
   sequence?: number;
 }): OrchestrationThreadActivity {
@@ -34,6 +34,7 @@ function makeActivity(overrides: {
 describe("pending approvals", () => {
   it("carries command arguments from the matching tool activity", () => {
     const args = { command: 'printf "hi\\n"', cwd: null };
+
     const approvals = derivePendingApprovals([
       makeActivity({
         kind: "tool.started",
@@ -62,6 +63,7 @@ describe("pending approvals", () => {
 
   it("carries command arguments when approval arrives before its tool activity", () => {
     const args = { command: "git status", cwd: "/workspace" };
+
     const approvals = derivePendingApprovals([
       makeActivity({
         kind: "approval.requested",
@@ -129,6 +131,7 @@ describe("pending approvals", () => {
         payload: { requestId: "req-closed", requestKind: "command" },
       }),
     ];
+
     expect(derivePendingRequests(activities).approvals).toEqual([]);
   });
 
@@ -242,6 +245,7 @@ describe("pending questions", () => {
       options: [{ label: " Keep spaces ", description: "Keep" }],
       multiSelect: false,
     };
+
     expect(
       derivePendingUserInputs([
         makeActivity({

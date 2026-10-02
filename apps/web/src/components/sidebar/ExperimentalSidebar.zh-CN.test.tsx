@@ -9,18 +9,26 @@ vi.mock("@tanstack/react-router", () => ({
     select({ pathname: "/settings/general" }),
   useNavigate: () => () => undefined,
 }));
+
 vi.mock("@effect/atom-react", () => ({ useAtomValue: () => null }));
+
 vi.mock("../../hooks/useTheme", () => ({
   useTheme: () => ({ resolvedTheme: "light", setAppearanceMode: () => undefined }),
 }));
+
 vi.mock("../../hooks/useSettings", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../../hooks/useSettings")>()),
   useClientSettings: () => "locale",
 }));
+
 vi.mock("../../state/environments", () => ({ usePrimaryEnvironmentId: () => null }));
+
 vi.mock("../../state/shell", () => ({ environmentSnapshotAtom: () => null }));
+
 vi.mock("../roster/BotRosterSidebar", () => ({ default: () => null }));
+
 vi.mock("../settings/SettingsSidebarNav", () => ({ SettingsPanelNav: () => null }));
+
 vi.mock("../ui/sidebar", () => ({
   useSidebar: () => ({ state: "expanded", setOpen: () => undefined }),
 }));
@@ -36,9 +44,11 @@ describe("experimental sidebar in Simplified Chinese", () => {
         <ExperimentalSidebar />
       </LanguageProvider>,
     );
+
     for (const label of ["主导航", "聊天", "例行任务", "插件", "切换到深色模式", "反馈", "设置"]) {
       expect(html).toContain(`aria-label="${label}"`);
     }
+
     expect(html).toContain(">设置</h2>");
     expect(html).not.toContain("Switch to dark mode");
   });

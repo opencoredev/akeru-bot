@@ -7,6 +7,7 @@ import { decideOrchestrationCommand } from "./decider.ts";
 import { createEmptyReadModel, projectEvent } from "./projector.ts";
 
 const now = "2026-01-01T00:00:00.000Z";
+
 const projectId = ProjectId.make("project-env-mode");
 
 const seedProjectCreated = (sequence: number): OrchestrationEvent => ({
@@ -71,6 +72,7 @@ it.layer(NodeServices.layer)("decider project defaultThreadEnvMode", (it) => {
         },
         readModel,
       });
+
       const unrelatedEvent = Array.isArray(unrelated) ? unrelated[0] : unrelated;
       expect("defaultThreadEnvMode" in (unrelatedEvent.payload as object)).toBe(false);
 
@@ -83,6 +85,7 @@ it.layer(NodeServices.layer)("decider project defaultThreadEnvMode", (it) => {
         },
         readModel,
       });
+
       const setEvent = Array.isArray(set) ? set[0] : set;
       const afterSet = yield* projectEvent(readModel, { ...setEvent, sequence: 2 });
 
@@ -95,6 +98,7 @@ it.layer(NodeServices.layer)("decider project defaultThreadEnvMode", (it) => {
         },
         readModel: afterSet,
       });
+
       const clearEvent = Array.isArray(clear) ? clear[0] : clear;
       const afterClear = yield* projectEvent(afterSet, { ...clearEvent, sequence: 3 });
       expect(afterClear.projects[0]?.defaultThreadEnvMode).toBeNull();

@@ -8,11 +8,13 @@ import * as Schema from "effect/Schema";
 import type { ProjectionRepositoryError } from "../Errors.ts";
 
 export const ProjectionMcpServer = McpServer;
+
 export type ProjectionMcpServer = typeof ProjectionMcpServer.Type;
 
 export const GetProjectionMcpServerInput = Schema.Struct({
   mcpServerId: McpServerId,
 });
+
 export type GetProjectionMcpServerInput = typeof GetProjectionMcpServerInput.Type;
 
 export interface ProjectionMcpServerRepositoryShape {

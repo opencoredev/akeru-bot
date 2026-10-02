@@ -3,13 +3,7 @@ import { Atom } from "effect/unstable/reactivity";
 
 import type { EnvironmentRegistry } from "../connection/registry.ts";
 import {
-  type ApproveRoutineInput,
   type AssignRoutineSkillInput,
-  type DeleteRoutineInput,
-  type DraftRoutineInput,
-  type EnableRoutineInput,
-  type PauseRoutineInput,
-  type RunRoutineInput,
   type UnassignRoutineSkillInput,
   approveRoutine,
   assignRoutineSkill,
@@ -37,6 +31,7 @@ export function createRoutineEnvironmentAtoms<R, E>(
   runtime: Atom.AtomRuntime<EnvironmentRegistry | Crypto.Crypto | R, E>,
 ) {
   const scheduler = createAtomCommandScheduler();
+
   const concurrency = {
     mode: "serial" as const,
     key: ({ environmentId, input }: { environmentId: string; input: { routineId: string } }) =>

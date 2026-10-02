@@ -7,9 +7,11 @@ describe("safeErrorLogAttributes", () => {
     const cause = Object.assign(new Error("nested-cause-secret-sentinel"), {
       traceId: "trace-safe-123",
     });
+
     const error = Object.assign(new Error("outer-error-secret-sentinel", { cause }), {
       _tag: "ProjectRemovalError",
     });
+
     error.stack = [
       "ProjectRemovalError: outer-error-secret-sentinel",
       "    at removeProject (https://user:password@example.com/project.ts?token=secret#fragment)",

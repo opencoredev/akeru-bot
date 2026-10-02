@@ -27,11 +27,13 @@ export function SettingsClientStorageRouteScreen() {
   const { savedConnectionsById } = useSavedRemoteConnections();
   const isClearing = clearResult.waiting;
   const summary = AsyncResult.isSuccess(summaryResult) ? summaryResult.value : null;
+
   const environmentSummaries = useMemo(
     () =>
       [...(summary?.environments ?? [])].sort((left, right) => {
         const leftLabel = savedConnectionsById[left.environmentId]?.environmentLabel ?? "";
         const rightLabel = savedConnectionsById[right.environmentId]?.environmentLabel ?? "";
+
         return leftLabel.localeCompare(rightLabel);
       }),
     [savedConnectionsById, summary?.environments],
@@ -41,6 +43,7 @@ export function SettingsClientStorageRouteScreen() {
     const label =
       savedConnectionsById[environment.environmentId]?.environmentLabel ??
       environment.environmentId;
+
     Alert.alert(
       t("Clear cache for {label}?", { label }),
       t(
@@ -184,6 +187,7 @@ function CacheEnvironmentRow(props: {
   readonly onClear: () => void;
 }) {
   const iconColor = useThemeColor("--color-icon");
+
   return (
     <View
       className={
@@ -219,6 +223,8 @@ function CacheEnvironmentRow(props: {
 
 function formatBytes(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
+
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(bytes < 10 * 1024 ? 1 : 0)} KB`;
+
   return `${(bytes / (1024 * 1024)).toFixed(bytes < 10 * 1024 * 1024 ? 1 : 0)} MB`;
 }

@@ -1,4 +1,3 @@
-// @effect-diagnostics nodeBuiltinImport:off
 import * as NodeHttp from "node:http";
 import * as NodeNet from "node:net";
 import { afterEach, describe, expect, it } from "vite-plus/test";
@@ -9,6 +8,7 @@ const servers: NodeHttp.Server[] = [];
 
 function listen(server: NodeHttp.Server): Promise<number> {
   servers.push(server);
+
   return new Promise((resolve) => {
     server.listen(0, "127.0.0.1", () => {
       resolve((server.address() as NodeNet.AddressInfo).port);
@@ -22,6 +22,7 @@ function fetchStatus(port: number, path: string): Promise<number> {
       response.resume();
       resolve(response.statusCode ?? 0);
     });
+
     request.on("error", reject);
     request.setTimeout(5_000, () => reject(new Error("request timed out")));
   });
@@ -37,6 +38,7 @@ describe("guardHttpResponseWriteErrors", () => {
   it("contains an upgrade socket write failure instead of crashing the process", async () => {
     const writeErrors: unknown[] = [];
     const failureObserved = Promise.withResolvers<void>();
+
     const server = guardHttpResponseWriteErrors(NodeHttp.createServer(), (error) => {
       writeErrors.push(error);
       failureObserved.resolve();
@@ -65,6 +67,7 @@ describe("guardHttpResponseWriteErrors", () => {
         ].join("\r\n"),
       );
     });
+
     client.on("error", () => {});
 
     await failureObserved.promise;
@@ -85,6 +88,7 @@ describe("guardHttpResponseWriteErrors", () => {
   it("arms every response with an error listener without disturbing normal traffic", async () => {
     const writeErrors: unknown[] = [];
     let responseErrorListeners = -1;
+
     const server = guardHttpResponseWriteErrors(NodeHttp.createServer(), (error) => {
       writeErrors.push(error);
     });

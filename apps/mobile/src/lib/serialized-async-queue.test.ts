@@ -4,9 +4,11 @@ import { SerializedAsyncQueue } from "./serialized-async-queue";
 
 function deferred() {
   let resolve!: () => void;
+
   const promise = new Promise<void>((next) => {
     resolve = next;
   });
+
   return { promise, resolve };
 }
 
@@ -21,6 +23,7 @@ describe("SerializedAsyncQueue", () => {
       await firstGate.promise;
       events.push("first:end");
     });
+
     const second = queue.run(async () => {
       events.push("second");
     });
@@ -34,9 +37,11 @@ describe("SerializedAsyncQueue", () => {
 
   it("continues after a rejected operation", async () => {
     const queue = new SerializedAsyncQueue();
+
     const first = queue.run(async () => {
       throw new Error("failed");
     });
+
     const second = queue.run(async () => "recovered");
 
     await expect(first).rejects.toThrow("failed");

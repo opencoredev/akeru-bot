@@ -13,9 +13,11 @@ export function BotInboxAlertStack({
   readonly onOpenDetails: () => void;
 }) {
   const { t } = useI18n();
+
   const visibleItems = items.filter(
     (item) => item.kind !== "approval-request" && item.kind !== "routine-failure",
   );
+
   if (visibleItems.length === 0) return null;
 
   return (

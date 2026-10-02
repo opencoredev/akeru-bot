@@ -1,10 +1,5 @@
 import { useAtomValue } from "@effect/atom-react";
 import { composerActionIsDictation } from "@akeru/client-runtime/dictation";
-import { PROVIDER_SEND_TURN_MAX_ATTACHMENTS } from "@akeru/contracts";
-import {
-  type ComposerBotMention,
-  resolveComposerBotMention,
-} from "@akeru/shared/composerBotMentions";
 import {
   ArrowUpIcon,
   AtSignIcon,
@@ -16,50 +11,42 @@ import {
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { type ReactNode, useCallback, useEffect, useId, useRef, useState } from "react";
 
-import {
-  hydrateImagesFromPersisted,
-  type PersistedComposerImageAttachment,
-} from "../../composerDraftStore";
-import { isCommandPaletteOpen } from "../../commandPaletteBus";
-import { resolveShortcutCommand, shortcutLabelForCommand } from "../../keybindings";
-import { compressImageForStash } from "../../lib/imageCompression";
+import { shortcutLabelForCommand } from "../../keybindings";
 import { useEnvironmentComposerDictation } from "../../lib/useEnvironmentComposerDictation";
-import { cn, randomUUID } from "../../lib/utils";
-import {
-  MAX_STASH_ENTRIES,
-  partitionStashAttachments,
-  usePromptStashStore,
-  type PromptStashEntry,
-} from "../../promptStashStore";
+import { cn } from "../../lib/utils";
 import { primaryServerKeybindingsAtom } from "../../state/server";
-import { createTranslator, type TranslationParams } from "@akeru/client-runtime/i18n";
 import { ComposerBanner } from "../chat/ComposerBanner";
 import { DictationControls } from "../chat/DictationControls";
 import { ExpandedImageDialog } from "../chat/ExpandedImageDialog";
 import { ComposerStashBadge } from "../chat/ComposerStashBadge";
 import { ComposerStashMenu } from "../chat/ComposerStashMenu";
 import { LoaderMeter } from "../chat/ResponseLoadingState";
-import { CONVERSATION_MEASURE_CLASS_NAME } from "./botConversationPresentation";
-import { ReplyReference } from "../chat/ReplyReference";
+import {
+  BOT_COMPOSER_QUIET_SURFACE_CLASS_NAME,
+  BOT_COMPOSER_SURFACE_CLASS_NAME,
+  CONVERSATION_MEASURE_CLASS_NAME,
+} from "./botConversationPresentation";
 import type { MessageReplyTarget } from "../chat/MessageControls";
 import { Menu, MenuItem, MenuPopup, MenuTrigger } from "../ui/menu";
 import { toastManager } from "../ui/toast";
 import { useI18n } from "../../i18n";
 import { BotComposerModelControl } from "./BotComposerModelControl";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
-import { clearBotDraft, readBotDraft, writeBotDraft } from "./botDraftStore";
 import { useRosterStore } from "./rosterStore";
+import { BotPromptAttachments } from "./BotPromptAttachments";
 import {
-  BotPromptAttachments,
-  buildBotPromptAttachmentPreview,
-  createBotPromptAttachments,
-  releaseBotPromptAttachments,
-  type BotPromptAttachment,
-} from "./BotPromptAttachments";
+  appendBotMention,
+  botComposerState,
+  botMentionHint,
+  botPromptCommandMenuTrigger,
+  canSubmitBotPrompt,
+  isBotPromptExpanded,
+  type MentionBot,
+  resolveBotMention,
+} from "./botPromptComposer.logic";
 import {
   applyBotPromptMention,
   botPromptMention,
-  type BotPromptMentionBot,
   botPromptMentionTrigger,
   type BotPromptMentionItem,
   removeBotPromptMention,
@@ -74,111 +61,26 @@ import {
   type BotPromptMentionScope,
   draftHasMentionChips,
 } from "./BotPromptMentions";
+import { useBotComposerDraft } from "./useBotComposerDraft";
+import { useBotComposerKeyboard } from "./useBotComposerKeyboard";
 
-export type BotComposerState = "stopped" | "sending" | "ready" | "empty";
-
-/**
- * The composer's visible state. `stopped` means sending is unavailable, `sending` means a
- * turn is still running, `ready` means this draft can go now. A running turn never blocks a
- * ready draft: a follow-up still sends and queues behind the turn.
- */
-export function botComposerState(input: {
-  readonly disabled: boolean;
-  readonly busy: boolean;
-  readonly canSubmit: boolean;
-}): BotComposerState {
-  if (input.disabled) return "stopped";
-  if (input.busy) return "sending";
-  return input.canSubmit ? "ready" : "empty";
-}
-
-export function isBotPromptExpanded(prompt: string): boolean {
-  return prompt.includes("\n") || prompt.length > 80;
-}
-
-export function canSubmitBotPrompt(disabled: boolean, prompt: string, fileCount: number): boolean {
-  return !disabled && (prompt.trim().length > 0 || fileCount > 0);
-}
-
-export function isBotPromptSubmissionCurrent(
-  submissionRevision: number,
-  currentRevision: number,
-): boolean {
-  return submissionRevision === currentRevision;
-}
-
-/** Appends a bot mention token, `@Name` or `@bot:<id>`, with the spacing the parser needs. */
-export function appendBotMention(draft: string, mention: string): string {
-  return `${draft}${draft && !/\s$/.test(draft) ? " " : ""}${mention} `;
-}
-
-export function shouldFocusBotPromptForKey(input: {
-  readonly altKey: boolean;
-  readonly ctrlKey: boolean;
-  readonly defaultPrevented: boolean;
-  readonly editableTarget: boolean;
-  readonly isComposing: boolean;
-  readonly key: string;
-  readonly metaKey: boolean;
-}): boolean {
-  return (
-    !input.altKey &&
-    !input.ctrlKey &&
-    !input.defaultPrevented &&
-    !input.editableTarget &&
-    !input.isComposing &&
-    !input.metaKey &&
-    input.key.length === 1
-  );
-}
-
-export type MentionBot = BotPromptMentionBot;
+export {
+  appendBotMention,
+  botComposerState,
+  type BotComposerState,
+  type BotMention,
+  botMentionHint,
+  botPromptCommandMenuTrigger,
+  canSubmitBotPrompt,
+  isBotPromptExpanded,
+  isBotPromptSubmissionCurrent,
+  type MentionBot,
+  resolveBotMention,
+  restoreBotStashPrompt,
+  shouldFocusBotPromptForKey,
+} from "./botPromptComposer.logic";
 
 const EMPTY_MENTION_BOTS: ReadonlyArray<MentionBot> = [];
-
-export type BotMention = ComposerBotMention;
-
-// Resolves the latest whole-word @BotName or @bot:<id>. A bare name shared by two bots
-// cannot be routed honestly; the @ menu inserts the id token for those.
-export function resolveBotMention(prompt: string, bots: ReadonlyArray<MentionBot>): BotMention {
-  return resolveComposerBotMention(prompt, bots);
-}
-
-type TranslateMessage = (message: string, params?: TranslationParams) => string;
-
-const translateEnglish: TranslateMessage = createTranslator("en").translate;
-
-export function botMentionHint(
-  mention: BotMention,
-  t: TranslateMessage = translateEnglish,
-): string | null {
-  return mention.kind === "ambiguous"
-    ? t("More than one bot here is named {name}. Pick one from the @ menu to mention it.", {
-        name: mention.name,
-      })
-    : null;
-}
-
-export function restoreBotStashPrompt(currentPrompt: string, stashedPrompt: string): string {
-  if (stashedPrompt.length === 0) return currentPrompt;
-  return currentPrompt.trim().length > 0
-    ? `${currentPrompt.trimEnd()}\n\n${stashedPrompt}`
-    : stashedPrompt;
-}
-
-/**
- * The `$` or `/` token the command picker opens for. A null catalog still opens it so
- * the picker can say a provider is missing; only an omitted catalog turns it off.
- */
-export function botPromptCommandMenuTrigger(input: {
-  readonly draft: string;
-  readonly caret: number | null;
-  readonly readOnly: boolean;
-  readonly commandCatalog: ComposerProviderCatalog | null | undefined;
-}) {
-  if (input.readOnly || input.commandCatalog === undefined || input.caret === null) return null;
-  return botPromptCommandTrigger(input.draft, input.caret);
-}
 
 export function BotPromptComposer({
   botName,
@@ -227,9 +129,10 @@ export function BotPromptComposer({
   onAddressedBotChange?: (botId: string | null) => void;
   onSubmit: (prompt: string, files: readonly File[], respondingBotId?: string) => Promise<boolean>;
 }) {
-  const { t, plural } = useI18n();
+  const { t } = useI18n();
   const prefersReducedMotion = useReducedMotion();
   const keybindings = useAtomValue(primaryServerKeybindingsAtom);
+
   // A bot chat keys its draft by bot id; group and onboarding composers namespace
   // theirs, so a key that names a live bot is the one composer that speaks for it.
   const composerBotId = useRosterStore((state) =>
@@ -238,9 +141,30 @@ export function BotPromptComposer({
       ? draftKey
       : null,
   );
-  const [draft, setDraft] = useState(() => (draftKey ? readBotDraft(draftKey) : ""));
-  // Bumped whenever the draft is sent, stashed, or swapped, so a late transcript is dropped.
-  const [dictationGeneration, setDictationGeneration] = useState(0);
+
+  const promptInputRef = useRef<HTMLTextAreaElement>(null);
+
+  const {
+    draft,
+    persistDraft,
+    dictationGeneration,
+    attachments,
+    expandedAttachmentId,
+    setExpandedAttachmentId,
+    expandedPreview,
+    addFiles,
+    removeAttachment,
+    markAttachmentPreviewFailed,
+    isStashMenuOpen,
+    setIsStashMenuOpen,
+    stashPulse,
+    stashQueue,
+    restoreStashEntry,
+    deleteStashEntry,
+    stashCurrentPrompt,
+    submitDraft,
+  } = useBotComposerDraft({ draftKey, promptInputRef });
+
   const mentionHintId = useId();
   const draftMention = resolveBotMention(draft, mentionBots);
   const mentionHint = botMentionHint(draftMention, t);
@@ -248,17 +172,7 @@ export function BotPromptComposer({
   useEffect(() => {
     onAddressedBotChange?.(addressedBotId);
   }, [addressedBotId, onAddressedBotChange]);
-  const [attachments, setAttachments] = useState<BotPromptAttachment[]>([]);
-  const [failedAttachmentIds, setFailedAttachmentIds] = useState<ReadonlySet<string>>(
-    () => new Set(),
-  );
-  const [expandedAttachmentId, setExpandedAttachmentId] = useState<string | null>(null);
-  const [isStashMenuOpen, setIsStashMenuOpen] = useState(false);
-  const [stashPulse, setStashPulse] = useState({ key: 0, active: false });
-  const attachmentsRef = useRef<BotPromptAttachment[]>([]);
-  const releasedPreviewUrlsRef = useRef(new Set<string>());
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const promptInputRef = useRef<HTMLTextAreaElement>(null);
   const mentionMenuRef = useRef<BotPromptMentionMenuHandle>(null);
   const commandMenuRef = useRef<BotPromptCommandMenuHandle>(null);
   const mentionListboxId = useId();
@@ -266,69 +180,29 @@ export function BotPromptComposer({
   const [dismissedMentionStart, setDismissedMentionStart] = useState<number | null>(null);
   const [dismissedCommandStart, setDismissedCommandStart] = useState<number | null>(null);
   const [activeMentionOptionId, setActiveMentionOptionId] = useState<string | null>(null);
-  const revisionRef = useRef(0);
-  const stashPulseTimeoutRef = useRef<number | null>(null);
-  const stashInFlightRef = useRef<Set<string>>(new Set());
-  const stashQueue = usePromptStashStore((state) => state.entries);
-  const stashEntryToQueue = usePromptStashStore((state) => state.stashEntry);
-  const takeStashEntry = usePromptStashStore((state) => state.takeEntry);
-  const finalizeStashEntryImages = usePromptStashStore((state) => state.finalizeEntryImages);
-  const releaseAttachments = useCallback((items: readonly BotPromptAttachment[]) => {
-    const unreleased = items.filter((attachment) => {
-      if (
-        attachment.previewUrl === null ||
-        releasedPreviewUrlsRef.current.has(attachment.previewUrl)
-      ) {
-        return false;
-      }
-      releasedPreviewUrlsRef.current.add(attachment.previewUrl);
-      return true;
-    });
-    releaseBotPromptAttachments(unreleased);
-  }, []);
-  const persistDraft = useCallback(
-    (next: string) => {
-      revisionRef.current += 1;
-      setDraft(next);
-      setIsStashMenuOpen(false);
-      if (draftKey) writeBotDraft(draftKey, next);
-    },
-    [draftKey],
-  );
-  const persistDraftRef = useRef(persistDraft);
-  persistDraftRef.current = persistDraft;
-
-  useEffect(() => {
-    revisionRef.current += 1;
-    setDraft(draftKey ? readBotDraft(draftKey) : "");
-    setDictationGeneration((generation) => generation + 1);
-  }, [draftKey]);
-  useEffect(
-    () => () => {
-      if (stashPulseTimeoutRef.current !== null) {
-        window.clearTimeout(stashPulseTimeoutRef.current);
-      }
-      releaseAttachments(attachmentsRef.current);
-      attachmentsRef.current = [];
-    },
-    [releaseAttachments],
-  );
 
   const hasMentionChips = mentionScope !== null && draftHasMentionChips(draft);
+
   const expanded =
     attachments.length > 0 || replyPreview != null || hasMentionChips || isBotPromptExpanded(draft);
+
   const mentionsEnabled = !readOnly && (mentionScope !== null || mentionBots.length > 0);
+
   const candidateMentionTrigger =
     mentionsEnabled && caret !== null ? botPromptMentionTrigger(draft, caret) : null;
+
   const mentionTrigger =
     candidateMentionTrigger && candidateMentionTrigger.rangeStart !== dismissedMentionStart
       ? candidateMentionTrigger
       : null;
+
   const selectMention = useCallback(
     (item: BotPromptMentionItem) => {
       const input = promptInputRef.current;
+
       if (!input || input.selectionStart === null) return;
       const trigger = botPromptMentionTrigger(input.value, input.selectionStart);
+
       if (!trigger) return;
       const next = applyBotPromptMention(input.value, trigger, item);
       persistDraft(next.text);
@@ -340,21 +214,26 @@ export function BotPromptComposer({
     },
     [persistDraft],
   );
+
   const candidateCommandTrigger = botPromptCommandMenuTrigger({
     draft,
     caret,
     readOnly,
     commandCatalog,
   });
+
   const commandTrigger =
     candidateCommandTrigger && candidateCommandTrigger.rangeStart !== dismissedCommandStart
       ? candidateCommandTrigger
       : null;
+
   const selectCommand = useCallback(
     (inserted: string) => {
       const input = promptInputRef.current;
+
       if (!input || input.selectionStart === null) return;
       const trigger = botPromptCommandTrigger(input.value, input.selectionStart);
+
       if (!trigger) return;
       const next = applyBotPromptCommand(input.value, trigger, inserted);
       persistDraft(next.text);
@@ -366,304 +245,40 @@ export function BotPromptComposer({
     },
     [persistDraft],
   );
+
   const closeCommandMenu = useCallback(() => {
     const input = promptInputRef.current;
+
     const trigger =
       input && input.selectionStart !== null
         ? botPromptCommandTrigger(input.value, input.selectionStart)
         : null;
+
     setDismissedCommandStart(trigger?.rangeStart ?? null);
   }, []);
+
   const closeMentionMenu = useCallback(() => {
     const input = promptInputRef.current;
+
     const trigger =
       input && input.selectionStart !== null
         ? botPromptMentionTrigger(input.value, input.selectionStart)
         : null;
+
     setDismissedMentionStart(trigger?.rangeStart ?? null);
   }, []);
+
   const canSubmit = canSubmitBotPrompt(disabled, draft, attachments.length);
   const composerState = botComposerState({ disabled, busy, canSubmit });
   // Only stands in for the arrow when there is nothing to send, so a follow-up stays sendable.
   const showBusyMeter = busy && !canSubmit;
-  const addFiles = (next: FileList | readonly File[]) => {
-    revisionRef.current += 1;
-    const added = createBotPromptAttachments(Array.from(next));
-    const updated = [...attachmentsRef.current, ...added];
-    attachmentsRef.current = updated;
-    setAttachments(updated);
-  };
-  const removeAttachment = (attachmentId: string) => {
-    const removed = attachmentsRef.current.find((attachment) => attachment.id === attachmentId);
-    if (!removed) return;
-    revisionRef.current += 1;
-    const updated = attachmentsRef.current.filter((attachment) => attachment.id !== attachmentId);
-    attachmentsRef.current = updated;
-    setAttachments(updated);
-    setFailedAttachmentIds((current) => {
-      if (!current.has(attachmentId)) return current;
-      const next = new Set(current);
-      next.delete(attachmentId);
-      return next;
-    });
-    if (expandedAttachmentId === attachmentId) {
-      setExpandedAttachmentId(null);
-    }
-    releaseAttachments([removed]);
-  };
-  const expandedPreview =
-    expandedAttachmentId === null
-      ? null
-      : buildBotPromptAttachmentPreview(attachments, expandedAttachmentId, failedAttachmentIds);
-
-  const pulseStashBadge = useCallback(() => {
-    if (stashPulseTimeoutRef.current !== null) {
-      window.clearTimeout(stashPulseTimeoutRef.current);
-    }
-    setStashPulse((current) => ({ key: current.key + 1, active: true }));
-    stashPulseTimeoutRef.current = window.setTimeout(() => {
-      setStashPulse((current) => ({ ...current, active: false }));
-      stashPulseTimeoutRef.current = null;
-    }, 220);
-  }, []);
-
-  const restoreStashEntry = useCallback(
-    (candidate: PromptStashEntry) => {
-      const { entry, durable } = takeStashEntry(candidate.id);
-      if (!entry) return;
-      persistDraft(restoreBotStashPrompt(draft, entry.prompt));
-
-      const hydrated = hydrateImagesFromPersisted(entry.attachments).map((image) => image.file);
-      const currentAttachments = attachmentsRef.current;
-      const existingKeys = new Set(
-        currentAttachments.map(
-          (attachment) =>
-            `${attachment.file.type}\0${attachment.file.size}\0${attachment.file.name}`,
-        ),
-      );
-      const unique = hydrated.filter((file) => {
-        const key = `${file.type}\0${file.size}\0${file.name}`;
-        if (existingKeys.has(key)) return false;
-        existingKeys.add(key);
-        return true;
-      });
-      const capacity = Math.max(0, PROVIDER_SEND_TURN_MAX_ATTACHMENTS - currentAttachments.length);
-      const restoredFiles = unique.slice(0, capacity);
-      const restoredAttachments = createBotPromptAttachments(restoredFiles);
-      const updated = [...currentAttachments, ...restoredAttachments];
-      attachmentsRef.current = updated;
-      setAttachments(updated);
-      setIsStashMenuOpen(false);
-
-      const missingImageCount =
-        entry.droppedImageNames.length +
-        (entry.unreadableImageNames?.length ?? 0) +
-        (entry.pendingImageCount ?? 0) +
-        (entry.attachments.length - hydrated.length) +
-        (unique.length - restoredFiles.length);
-      if (missingImageCount > 0) {
-        toastManager.add({
-          type: "warning",
-          title: t("Some images were not restored"),
-          description: plural(missingImageCount, {
-            one: "{count} image was unavailable or over the attachment limit.",
-            other: "{count} images were unavailable or over the attachment limit.",
-          }),
-        });
-      }
-      if (!durable) {
-        toastManager.add({
-          type: "warning",
-          title: t("Stash entry may come back"),
-          description: t("Browser storage rejected the update."),
-        });
-      }
-      window.requestAnimationFrame(() => promptInputRef.current?.focus());
-    },
-    [draft, persistDraft, plural, t, takeStashEntry],
-  );
-
-  const deleteStashEntry = useCallback(
-    (entry: PromptStashEntry) => {
-      const { durable } = takeStashEntry(entry.id);
-      if (!durable) {
-        toastManager.add({
-          type: "warning",
-          title: t("Stash entry may come back"),
-          description: t("Browser storage rejected the delete."),
-        });
-      }
-    },
-    [t, takeStashEntry],
-  );
-
-  const stashCurrentPrompt = useCallback(async () => {
-    const prompt = draft.trim();
-    const stashedAttachments = [...attachmentsRef.current];
-    const stashedFiles = stashedAttachments.map((attachment) => attachment.file);
-    if (prompt.length === 0 && stashedFiles.length === 0) {
-      setIsStashMenuOpen((open) => !open);
-      return;
-    }
-    const snapshotKey = `${draftKey ?? ""}\0${prompt}\0${stashedFiles
-      .map((file) => `${file.name}:${file.size}:${file.lastModified}`)
-      .join("\0")}`;
-    if (stashInFlightRef.current.has(snapshotKey)) return;
-    stashInFlightRef.current.add(snapshotKey);
-
-    const entryId = randomUUID();
-    try {
-      const { evicted, written, durable } = stashEntryToQueue({
-        id: entryId,
-        createdAt: new Date().toISOString(),
-        prompt,
-        attachments: [],
-        droppedImageNames: [],
-        unreadableImageNames: [],
-        pendingImageCount: stashedFiles.length,
-      });
-      if (!written) {
-        toastManager.add({
-          type: "error",
-          title: t("Could not stash this prompt"),
-          description: t("Browser storage rejected the write, so the message was left in place."),
-        });
-        return;
-      }
-
-      persistDraft("");
-      setDictationGeneration((generation) => generation + 1);
-      const stashedIds = new Set(stashedAttachments.map((attachment) => attachment.id));
-      const remaining = attachmentsRef.current.filter(
-        (attachment) => !stashedIds.has(attachment.id),
-      );
-      attachmentsRef.current = remaining;
-      setAttachments(remaining);
-      setFailedAttachmentIds(
-        (current) => new Set([...current].filter((id) => !stashedIds.has(id))),
-      );
-      if (expandedAttachmentId && stashedIds.has(expandedAttachmentId)) {
-        setExpandedAttachmentId(null);
-      }
-      releaseAttachments(stashedAttachments);
-      setIsStashMenuOpen(false);
-      pulseStashBadge();
-      if (!durable) {
-        toastManager.add({
-          type: "warning",
-          title: t("Stashed prompt will not survive a reload"),
-          description: t("Browser storage is unavailable, so the stash is kept for this session."),
-        });
-      }
-      if (evicted) {
-        toastManager.add({
-          type: "warning",
-          title: t("Oldest stashed prompt discarded"),
-          description: plural(MAX_STASH_ENTRIES, {
-            one: "The stash holds {count} prompt.",
-            other: "The stash holds {count} prompts.",
-          }),
-        });
-      }
-
-      const persistedImages: PersistedComposerImageAttachment[] = [];
-      const droppedImageNames: string[] = [];
-      const unreadableImageNames: string[] = [];
-      for (const file of stashedFiles) {
-        const result = await compressImageForStash(file);
-        if (!result.ok) {
-          (result.reason === "too-large" ? droppedImageNames : unreadableImageNames).push(
-            file.name,
-          );
-          continue;
-        }
-        persistedImages.push({
-          id: randomUUID(),
-          name: file.name,
-          mimeType: result.image.mimeType,
-          sizeBytes: result.image.sizeBytes,
-          dataUrl: result.image.dataUrl,
-        });
-      }
-      const { kept, droppedNames } = partitionStashAttachments(persistedImages);
-      const { attached, durable: imagesDurable } = finalizeStashEntryImages(entryId, {
-        attachments: kept,
-        droppedImageNames: [...droppedImageNames, ...droppedNames],
-        unreadableImageNames,
-      });
-      if (attached && !imagesDurable && durable && stashedFiles.length > 0) {
-        toastManager.add({
-          type: "warning",
-          title: t("Stashed images were not saved"),
-          description: t("The text was saved, but the images may be missing after a reload."),
-        });
-      } else if (!attached && kept.length > 0) {
-        toastManager.add({
-          type: "warning",
-          title: t("Stashed images did not attach"),
-          description: t("The prompt was restored or deleted before its images finished saving."),
-        });
-      }
-    } finally {
-      stashInFlightRef.current.delete(snapshotKey);
-    }
-  }, [
-    draft,
-    draftKey,
-    expandedAttachmentId,
-    finalizeStashEntryImages,
+  useBotComposerKeyboard({
+    readOnly,
+    keybindings,
+    promptInputRef,
     persistDraft,
-    plural,
-    pulseStashBadge,
-    releaseAttachments,
-    stashEntryToQueue,
-    t,
-  ]);
-
-  useEffect(() => {
-    if (readOnly) return;
-    const onKeyDown = (event: KeyboardEvent) => {
-      const shortcutCommand = resolveShortcutCommand(event, keybindings, {
-        context: {
-          modelPickerOpen: false,
-        },
-      });
-      if (shortcutCommand === "composer.stash") {
-        event.preventDefault();
-        event.stopPropagation();
-        if (!event.repeat && !isCommandPaletteOpen()) void stashCurrentPrompt();
-        return;
-      }
-
-      const target = event.target;
-      const editableTarget =
-        target instanceof Element &&
-        target.closest(
-          'input, textarea, select, [contenteditable]:not([contenteditable="false"]), [role="textbox"], [role="combobox"]',
-        ) !== null;
-
-      if (
-        !shouldFocusBotPromptForKey({
-          altKey: event.altKey,
-          ctrlKey: event.ctrlKey,
-          defaultPrevented: event.defaultPrevented,
-          editableTarget,
-          isComposing: event.isComposing,
-          key: event.key,
-          metaKey: event.metaKey,
-        })
-      ) {
-        return;
-      }
-
-      event.preventDefault();
-      persistDraftRef.current(`${promptInputRef.current?.value ?? ""}${event.key}`);
-      promptInputRef.current?.focus();
-    };
-
-    window.addEventListener("keydown", onKeyDown, true);
-    return () => window.removeEventListener("keydown", onKeyDown, true);
-  }, [keybindings, readOnly, stashCurrentPrompt]);
+    stashCurrentPrompt,
+  });
 
   const dictation = useEnvironmentComposerDictation({
     threadId: draftKey ?? botName,
@@ -673,6 +288,7 @@ export function BotPromptComposer({
       const input = promptInputRef.current;
       const text = input?.value ?? draft;
       const start = input?.selectionStart ?? text.length;
+
       return { text, selection: { start, end: input?.selectionEnd ?? start } };
     },
     applyDraft: (next) => {
@@ -680,12 +296,14 @@ export function BotPromptComposer({
       // Restore the caret after React commits the merged value.
       window.requestAnimationFrame(() => {
         const input = promptInputRef.current;
+
         if (!input || input.value !== next.text) return;
         input.focus();
         input.setSelectionRange(next.selection.start, next.selection.end);
       });
     },
   });
+
   useEffect(() => {
     if (dictation.status !== "failed" || !dictation.errorMessage) return;
     toastManager.add({
@@ -694,6 +312,7 @@ export function BotPromptComposer({
       description: dictation.errorMessage,
     });
   }, [dictation.errorMessage, dictation.status, t]);
+
   const showDictation =
     !readOnly &&
     !showBusyMeter &&
@@ -707,49 +326,18 @@ export function BotPromptComposer({
       data-chat-composer-form="true"
       data-state={composerState}
       aria-disabled={readOnly || undefined}
-      className="w-full px-[max(1rem,calc((100%-48rem)/2))] pb-4 pt-2 sm:px-[max(1.5rem,calc((100%-48rem)/2))] sm:pb-6"
+      className="w-full px-gutter-48rem pb-4 pt-2 sm:px-gutter-48rem-wide sm:pb-6"
       onSubmit={(event) => {
         event.preventDefault();
-        const prompt = draft.trim();
-        const submittedAttachments = [...attachmentsRef.current];
-        const submittedMention = resolveBotMention(prompt, mentionBots);
-        if (!canSubmitBotPrompt(disabled, prompt, submittedAttachments.length)) return;
-        if (submittedMention.kind === "ambiguous") return;
-        const submittedFailedIds = new Set(failedAttachmentIds);
-        persistDraft("");
-        setDictationGeneration((generation) => generation + 1);
-        // Sending with Enter settles a failed dictation, so the empty composer returns to the mic.
-        if (dictation.status === "failed") dictation.onCancel();
-        if (draftKey) clearBotDraft(draftKey);
-        attachmentsRef.current = [];
-        setAttachments([]);
-        setFailedAttachmentIds(new Set());
-        setExpandedAttachmentId(null);
-        const submissionRevision = revisionRef.current;
-        void onSubmit(
-          prompt,
-          submittedAttachments.map((attachment) => attachment.file),
-          submittedMention.kind === "bot" ? submittedMention.botId : undefined,
-        ).then(
-          (sent) => {
-            if (sent) {
-              releaseAttachments(submittedAttachments);
-              setIsStashMenuOpen(false);
-              return;
-            }
-            if (!isBotPromptSubmissionCurrent(submissionRevision, revisionRef.current)) {
-              releaseAttachments(submittedAttachments);
-              return;
-            }
-            revisionRef.current += 1;
-            setDraft(prompt);
-            if (draftKey) writeBotDraft(draftKey, prompt);
-            attachmentsRef.current = submittedAttachments;
-            setAttachments(submittedAttachments);
-            setFailedAttachmentIds(submittedFailedIds);
+        submitDraft({
+          disabled,
+          mentionBots,
+          onSubmit,
+          // Sending with Enter settles a failed dictation, so the empty composer returns to the mic.
+          onCleared: () => {
+            if (dictation.status === "failed") dictation.onCancel();
           },
-          () => undefined,
-        );
+        });
       }}
     >
       <div className={CONVERSATION_MEASURE_CLASS_NAME}>
@@ -833,10 +421,10 @@ export function BotPromptComposer({
             data-testid="bot-prompt-composer"
             data-expanded={expanded || undefined}
             className={cn(
-              "relative flex min-h-13 flex-col overflow-hidden rounded-[1.65rem] border shadow-[0_12px_36px_-24px_rgb(0_0_0/80%)] transition-[min-height,border-radius,background-color,box-shadow] duration-200 ease-out",
+              "relative flex min-h-13 flex-col overflow-hidden rounded-1.65rem border shadow-composer-float transition-composer-shape duration-200 ease-out",
               quietSurface
-                ? "border-border/70 bg-card"
-                : "border-white/10 bg-foreground/[0.12] dark:bg-white/[0.16]",
+                ? BOT_COMPOSER_QUIET_SURFACE_CLASS_NAME
+                : BOT_COMPOSER_SURFACE_CLASS_NAME,
               expanded && "min-h-28",
               pendingActionSlot ? "rounded-t-md border-t-transparent" : undefined,
             )}
@@ -866,10 +454,7 @@ export function BotPromptComposer({
               attachments={attachments}
               className="px-3 pt-3"
               onExpand={setExpandedAttachmentId}
-              onPreviewError={(attachmentId) => {
-                setFailedAttachmentIds((current) => new Set(current).add(attachmentId));
-                if (expandedAttachmentId === attachmentId) setExpandedAttachmentId(null);
-              }}
+              onPreviewError={markAttachmentPreviewFailed}
               onRemove={removeAttachment}
             />
             {hasMentionChips ? (
@@ -896,15 +481,17 @@ export function BotPromptComposer({
               aria-activedescendant={(mentionTrigger && activeMentionOptionId) || undefined}
               className={cn(
                 "field-sizing-content max-h-56 w-full resize-none bg-transparent text-base leading-6 outline-none placeholder:text-muted-foreground/70",
-                expanded ? "min-h-16 px-4 pb-13 pt-3" : "min-h-13 px-14 py-[0.9rem]",
+                expanded ? "min-h-16 px-4 pb-13 pt-3" : "min-h-13 px-14 py-0.9rem",
               )}
               onChange={(event) => {
                 const { selectionStart, value } = event.currentTarget;
                 persistDraft(value);
                 setCaret(selectionStart);
+
                 if (botPromptMentionTrigger(value, selectionStart) === null) {
                   setDismissedMentionStart(null);
                 }
+
                 if (botPromptCommandTrigger(value, selectionStart) === null) {
                   setDismissedCommandStart(null);
                 }
@@ -918,8 +505,10 @@ export function BotPromptComposer({
                 ) {
                   event.preventDefault();
                   event.stopPropagation();
+
                   return;
                 }
+
                 if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {
                   event.preventDefault();
                   event.currentTarget.form?.requestSubmit();
@@ -977,6 +566,7 @@ export function BotPromptComposer({
                       </MenuItem>
                       {mentionBots.map((bot) => {
                         const mention = botPromptMention(bot, mentionBots);
+
                         return (
                           <MenuItem
                             key={bot.id}

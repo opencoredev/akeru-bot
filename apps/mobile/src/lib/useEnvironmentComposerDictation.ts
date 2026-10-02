@@ -16,6 +16,7 @@ import { useAtomCommand } from "../state/use-atom-command";
 import { useComposerDictation } from "./useComposerDictation";
 
 let operationSequence = 0;
+
 const nextOperationId = () => `dictation-${Date.now()}-${operationSequence++}`;
 
 const NO_ENVIRONMENT = EnvironmentId.make("none");
@@ -36,16 +37,21 @@ export function useEnvironmentComposerDictation(input: {
 }): DictationControlsProps {
   const { environmentId } = input;
   const { t } = useMobileI18n();
+
   const settings =
     useAtomValue(serverEnvironment.settingsValueAtom(environmentId ?? NO_ENVIRONMENT)) ??
     DEFAULT_SERVER_SETTINGS;
+
   const providers = useEnvironmentQuery(
     environmentId ? serverEnvironment.voiceProviders({ environmentId, input: {} }) : null,
   ).data;
+
   const transcribeVoice = useAtomCommand(serverEnvironment.transcribeVoice, {
     reportFailure: false,
   });
+
   const cancelVoice = useAtomCommand(serverEnvironment.cancelVoice, { reportFailure: false });
+
   const transcribe = useMemo(
     () =>
       createVoiceDictationTranscriber({
@@ -55,6 +61,7 @@ export function useEnvironmentComposerDictation(input: {
       }),
     [cancelVoice, transcribeVoice],
   );
+
   const identity = useMemo(
     () => ({
       environmentId: environmentId ?? "",
@@ -64,6 +71,7 @@ export function useEnvironmentComposerDictation(input: {
     }),
     [environmentId, input.draftId, input.generation, input.threadId],
   );
+
   const { errorMessage, ...dictation } = useComposerDictation({
     identity,
     connected: environmentId !== null && input.connected,
@@ -76,10 +84,12 @@ export function useEnvironmentComposerDictation(input: {
     getDraft: () => ({ identity, ...input.getDraft() }),
     applyDraft: input.applyDraft,
   });
+
   // Titles are interface copy; the message and reason stay as the provider reported them.
   useEffect(() => {
     if (errorMessage) Alert.alert(t("Could not dictate"), errorMessage);
   }, [errorMessage]);
+
   return {
     ...dictation,
     onBlockedPress: (reason) => Alert.alert(t("Dictation unavailable"), reason),

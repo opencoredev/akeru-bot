@@ -1,4 +1,3 @@
-// @effect-diagnostics nodeBuiltinImport:off
 /**
  * Raw filesystem access for transcript scanning.
  *
@@ -39,6 +38,7 @@ export interface TranscriptFile {
  * failing the page.
  */
 const walks = new Map<string, Promise<readonly TranscriptFile[]>>();
+
 const reads = new Map<string, Promise<readonly UsageRecord[] | null>>();
 
 export function listTranscriptFiles(
@@ -46,10 +46,12 @@ export function listTranscriptFiles(
   sinceMs: number,
 ): Promise<readonly TranscriptFile[]> {
   let walk = walks.get(root);
+
   if (!walk) {
     walk = walkTranscriptFiles(root).finally(() => walks.delete(root));
     walks.set(root, walk);
   }
+
   return walk.then((files) => files.filter((file) => file.mtimeMs >= sinceMs));
 }
 
@@ -58,18 +60,23 @@ async function walkTranscriptFiles(root: string): Promise<readonly TranscriptFil
 
   const walk = async (dir: string): Promise<void> => {
     let entries;
+
     try {
       entries = await NodeFSP.readdir(dir, { withFileTypes: true });
     } catch {
       return;
     }
+
     for (const entry of entries) {
       const child = NodePath.join(dir, entry.name);
+
       if (entry.isDirectory()) {
         await walk(child);
         continue;
       }
+
       if (!entry.name.endsWith(".jsonl")) continue;
+
       try {
         const stats = await NodeFSP.stat(child);
         found.push({ path: child, size: stats.size, mtimeMs: stats.mtimeMs });
@@ -80,6 +87,7 @@ async function walkTranscriptFiles(root: string): Promise<readonly TranscriptFil
   };
 
   await walk(root);
+
   return found;
 }
 
@@ -93,6 +101,7 @@ async function walkTranscriptFiles(root: string): Promise<readonly TranscriptFil
 export async function readDirectoryVolumeId(path: string): Promise<string> {
   try {
     const stats = await NodeFSP.stat(path);
+
     return `${stats.dev}:${stats.ino}`;
   } catch {
     return "";
@@ -119,10 +128,12 @@ export function readTranscriptRecords(
 ): Promise<readonly UsageRecord[] | null> {
   const key = JSON.stringify([filePath, provider, version?.size, version?.mtimeMs]);
   let read = reads.get(key);
+
   if (!read) {
     read = scanTranscriptRecords(filePath, provider).finally(() => reads.delete(key));
     reads.set(key, read);
   }
+
   return read;
 }
 
@@ -148,13 +159,16 @@ async function scanTranscriptRecords(
         ) {
           continue;
         }
+
         const record = parseCodexLine(line, codexState);
+
         if (record !== null) records.push(record);
         continue;
       }
 
       if (!mightCarryUsage(line, provider)) continue;
       const record = parseClaudeLine(line);
+
       if (record !== null) records.push(record);
     }
   } catch {

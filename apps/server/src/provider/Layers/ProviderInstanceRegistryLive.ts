@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 /**
  * ProviderInstanceRegistryLive — runtime implementation of
  * `ProviderInstanceRegistry` plus its sibling mutator.
@@ -48,7 +49,6 @@ import * as Exit from "effect/Exit";
 import * as Layer from "effect/Layer";
 import * as PubSub from "effect/PubSub";
 import * as Ref from "effect/Ref";
-import * as Schema from "effect/Schema";
 import * as Scope from "effect/Scope";
 import * as Semaphore from "effect/Semaphore";
 import * as Stream from "effect/Stream";
@@ -103,11 +103,16 @@ const entryEqual = (a: ProviderInstanceConfig, b: ProviderInstanceConfig): boole
  * decoded config's flag (which carries the driver schema's default for
  * built-ins and forks alike), then enabled by default.
  */
-const resolveEntryEnabled = (entry: ProviderInstanceConfig, typedConfig: unknown): boolean => {
+const resolveEntryEnabled = <Config>(
+  entry: ProviderInstanceConfig,
+  typedConfig: Config,
+): boolean => {
   const rawConfigEnabled = providerInstanceConfigEnabledFlag(entry.config);
+
   if (entry.enabled === false || rawConfigEnabled === false) {
     return false;
   }
+
   return entry.enabled ?? providerInstanceConfigEnabledFlag(typedConfig) ?? true;
 };
 
@@ -131,6 +136,7 @@ const buildEntry = <R>(input: {
   Effect.gen(function* () {
     const { driversById, parentScope, instanceId, rawInstanceId, entry } = input;
     const driver = driversById.get(entry.driver);
+
     if (!driver) {
       return {
         kind: "unavailable" as const,
@@ -144,9 +150,9 @@ const buildEntry = <R>(input: {
       };
     }
 
-    const decoder = Schema.decodeUnknownEffect(driver.configSchema);
-    const decodeResult = yield* decoder(entry.config ?? driver.defaultConfig()).pipe(Effect.result);
-    if (decodeResult._tag === "Failure") {
+    const decodeResult = yield* driver.prepare(entry.config).pipe(Effect.result);
+
+    if (Predicate.isTagged(decodeResult, "Failure")) {
       const issue = decodeResult.failure;
       const detail = issue.message ?? String(issue);
       yield* Effect.logError("Failed to decode provider instance config", {
@@ -154,6 +160,7 @@ const buildEntry = <R>(input: {
         driver: entry.driver,
         detail,
       });
+
       return {
         kind: "unavailable" as const,
         snapshot: yield* buildUnavailableProviderSnapshot({
@@ -166,7 +173,7 @@ const buildEntry = <R>(input: {
       };
     }
 
-    const typedConfig = decodeResult.success;
+    const preparedDriver = decodeResult.success;
     const childScope = yield* Scope.make();
     // Attach the child scope to the registry's parent scope: if the
     // registry scope closes, each surviving instance's child scope is
@@ -175,23 +182,24 @@ const buildEntry = <R>(input: {
     // finalizer is a no-op because `Scope.close` is idempotent.
     yield* Scope.addFinalizer(parentScope, Scope.close(childScope, Exit.void).pipe(Effect.ignore));
 
-    const createResult = yield* driver
+    const createResult = yield* preparedDriver
       .create({
         instanceId,
         displayName: entry.displayName,
         accentColor: entry.accentColor,
         environment: entry.environment ?? [],
-        enabled: resolveEntryEnabled(entry, typedConfig),
-        config: typedConfig,
+        enabled: resolveEntryEnabled(entry, preparedDriver.config),
       })
       .pipe(Effect.provideService(Scope.Scope, childScope), Effect.result);
-    if (createResult._tag === "Failure") {
+
+    if (Predicate.isTagged(createResult, "Failure")) {
       yield* Effect.logError("Failed to create provider instance", {
         instanceId: rawInstanceId,
         driver: entry.driver,
         detail: createResult.failure.detail,
       });
       yield* Scope.close(childScope, Exit.void).pipe(Effect.ignore);
+
       return {
         kind: "unavailable" as const,
         snapshot: yield* buildUnavailableProviderSnapshot({
@@ -224,11 +232,13 @@ const makeReconcile = <R>(input: {
   readonly parentScope: Scope.Scope;
 }): ((configMap: ProviderInstanceConfigMap) => Effect.Effect<void, never, R>) => {
   const { state, driversById, parentScope } = input;
+
   return (configMap: ProviderInstanceConfigMap) =>
     Effect.gen(function* () {
       const previousEntries = yield* Ref.get(state.entries);
       const previousUnavailable = yield* Ref.get(state.unavailable);
       const nextRaw = Object.entries(configMap);
+
       const nextKeys = new Set<ProviderInstanceId>(
         nextRaw.map(([raw]) => ProviderInstanceId.make(raw)),
       );
@@ -238,18 +248,23 @@ const makeReconcile = <R>(input: {
       //    to live scopes at all times.
       const removedIds: Array<ProviderInstanceId> = [];
       const replacedIds = new Set<ProviderInstanceId>();
+
       for (const [instanceId, live] of previousEntries) {
         if (!nextKeys.has(instanceId)) {
           removedIds.push(instanceId);
           continue;
         }
+
         const nextEntry = configMap[instanceId];
+
         if (nextEntry !== undefined && !entryEqual(live.entry, nextEntry)) {
           replacedIds.add(instanceId);
         }
       }
+
       for (const id of [...removedIds, ...replacedIds]) {
         const live = previousEntries.get(id);
+
         if (live) {
           yield* Scope.close(live.scope, Exit.void).pipe(Effect.ignore);
         }
@@ -268,6 +283,7 @@ const makeReconcile = <R>(input: {
         nextOrder.push(instanceId);
 
         const existing = previousEntries.get(instanceId);
+
         if (existing !== undefined && !replacedIds.has(instanceId)) {
           // No-op update: keep the existing live entry and scope.
           builtEntries.set(instanceId, existing);
@@ -281,6 +297,7 @@ const makeReconcile = <R>(input: {
           rawInstanceId,
           entry,
         });
+
         if (result.kind === "live") {
           builtEntries.set(instanceId, result.live);
         } else {
@@ -304,10 +321,12 @@ const makeReconcile = <R>(input: {
         removedIds.length > 0 ||
         replacedIds.size > 0 ||
         builtEntries.size !== previousEntries.size;
+
       const unavailableChanged =
         builtUnavailable.size !== previousUnavailable.size ||
         [...builtUnavailable].some(([id, snapshot]) => {
           const prev = previousUnavailable.get(id);
+
           return prev === undefined || !Equal.equals(prev, snapshot);
         }) ||
         [...previousUnavailable].some(([id]) => !builtUnavailable.has(id));
@@ -373,6 +392,7 @@ export const makeProviderInstanceRegistry = <R>(input: {
 
     const state: RegistryState = { entries, unavailable, changes };
     const reconcileWithR = makeReconcile({ state, driversById, parentScope });
+
     const reconcile: ProviderInstanceRegistryMutatorShape["reconcile"] = (configMap) =>
       reconciliationLock.withPermits(1)(
         reconcileWithR(configMap).pipe(Effect.provideContext(driverContext)),
@@ -388,20 +408,18 @@ export const makeProviderInstanceRegistry = <R>(input: {
         reconciliationLock.withPermits(1)(
           Effect.gen(function* () {
             const instance = (yield* Ref.get(entries)).get(id)?.instance;
+
             if (!instance) return { _tag: "Missing" as const };
+
             if (!instance.enabled) return { _tag: "Disabled" as const };
+
             return { _tag: "Dispatched" as const, value: yield* Effect.sync(dispatch) };
           }),
         ),
       listInstances: Ref.get(entries).pipe(
-        Effect.map(
-          (map) =>
-            Array.from(map.values(), (live) => live.instance) as ReadonlyArray<ProviderInstance>,
-        ),
+        Effect.map((map) => Array.from(map.values(), (live) => live.instance)),
       ),
-      listUnavailable: Ref.get(unavailable).pipe(
-        Effect.map((map) => Array.from(map.values()) as ReadonlyArray<ServerProvider>),
-      ),
+      listUnavailable: Ref.get(unavailable).pipe(Effect.map((map) => Array.from(map.values()))),
       // Getters: each read constructs a fresh Stream / Effect descriptor
       // so multiple consumers don't share a single already-started
       // Channel or subscription. Matches the pattern `ProviderRegistry`
@@ -425,24 +443,6 @@ export const makeProviderInstanceRegistry = <R>(input: {
   });
 
 /**
- * Assemble a `ProviderInstanceRegistry` Layer bound to a fixed set of
- * drivers and a pre-resolved `ProviderInstanceConfigMap`. Used by tests
- * that want explicit control over the registry's source-of-truth without
- * wiring up the settings watcher.
- *
- * Only exposes the public registry tag — hot-reload consumers should use
- * `ProviderInstanceRegistryMutableLayer` (below) or the hydration layer.
- */
-export const ProviderInstanceRegistryLayer = <R>(input: {
-  readonly drivers: ReadonlyArray<AnyProviderDriver<R>>;
-  readonly configMap: ProviderInstanceConfigMap;
-}): Layer.Layer<ProviderInstanceRegistry, never, R> =>
-  Layer.effect(
-    ProviderInstanceRegistry,
-    makeProviderInstanceRegistry(input).pipe(Effect.map((built) => built.registry)),
-  ) as Layer.Layer<ProviderInstanceRegistry, never, R>;
-
-/**
  * Layer variant that also exposes the mutator tag. Consumed by
  * `ProviderInstanceRegistryHydrationLive` to reconcile on settings
  * changes. Tests that exercise the mutator directly can pair this Layer
@@ -460,6 +460,6 @@ export const ProviderInstanceRegistryMutableLayer = <R>(input: {
         ),
       ),
     ),
-  ) as Layer.Layer<ProviderInstanceRegistry | ProviderInstanceRegistryMutator, never, R>;
+  );
 
 export { defaultInstanceIdForDriver };

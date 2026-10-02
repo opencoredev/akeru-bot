@@ -35,6 +35,7 @@ describe("voice settings logic", () => {
       synthesisProvider: "fish" as const,
       synthesisVoices: { fish: "fish-voice" },
     };
+
     expect(voiceSetupProblem(composed, ["openai"])).toBe(
       "Connect Cartesia and Fish Audio under API connections before starting a call. Akeru will not switch to another provider or billing source.",
     );
@@ -50,6 +51,7 @@ describe("voice settings logic", () => {
       transcriptionProvider: "openai" as const,
       synthesisProvider: "elevenlabs" as const,
     };
+
     expect(selectedSynthesisVoice(composed)).toBeUndefined();
     expect(voiceSetupProblem(composed, ["openai", "elevenlabs"])).toBe(
       "Choose a voice for ElevenLabs before starting a call.",

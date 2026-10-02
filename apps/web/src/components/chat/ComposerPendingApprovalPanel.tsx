@@ -1,3 +1,4 @@
+import { Predicate, Schema, Option } from "effect";
 import { ClockIcon } from "lucide-react";
 import { memo } from "react";
 import { createTranslator } from "@akeru/client-runtime/i18n";
@@ -22,11 +23,15 @@ interface ComposerPendingApprovalPanelProps {
 // than a second bordered card.
 const DETAIL_SURFACE_CLASS_NAME = "rounded-lg border border-border/50 bg-muted/30 px-3 py-2.5";
 
+function isJsonObject(value: Schema.Json | undefined): value is Schema.JsonObject {
+  return Predicate.isObject(value);
+}
+
 function CommandGlyph() {
   return (
     <span
       aria-hidden="true"
-      className="flex size-5 shrink-0 items-center justify-center rounded-md bg-foreground/[0.07] font-mono text-[10px] text-muted-foreground"
+      className="flex size-5 shrink-0 items-center justify-center rounded-md bg-foreground/[0.07] font-mono text-10px text-muted-foreground"
     >
       $
     </span>
@@ -41,14 +46,15 @@ interface RoutineProposalDetails {
   readonly uses: ReadonlyArray<string>;
 }
 
-function stringField(record: Record<string, unknown>, key: string): string | null {
+function stringField(record: Schema.JsonObject, key: string): string | null {
   const value = record[key];
-  return typeof value === "string" && value.trim() ? value.trim() : null;
+
+  return Predicate.isString(value) && value.trim() ? value.trim() : null;
 }
 
-function stringList(value: unknown): ReadonlyArray<string> {
+function stringList(value: Schema.Json | undefined): ReadonlyArray<string> {
   return Array.isArray(value)
-    ? value.filter((item): item is string => typeof item === "string" && item.trim() !== "")
+    ? value.filter((item): item is string => Predicate.isString(item) && item.trim() !== "")
     : [];
 }
 
@@ -56,20 +62,28 @@ function capitalize(value: string) {
   return `${value.slice(0, 1).toUpperCase()}${value.slice(1)}`;
 }
 
-function routineInstructions(instructions: string | null, schedule: unknown): string | null {
+function routineInstructions(
+  instructions: string | null,
+  schedule: Schema.Json | undefined,
+): string | null {
   if (!instructions) return null;
-  if (!schedule || typeof schedule !== "object") return instructions;
-  const kind = (schedule as Record<string, unknown>).kind;
+
+  if (!schedule || !isJsonObject(schedule)) return instructions;
+  const kind = schedule.kind;
   const comma = instructions.indexOf(",");
+
   if (comma < 0) return instructions;
   const lead = instructions.slice(0, comma).trim();
   const task = instructions.slice(comma + 1).trim();
+
   if (!task) return instructions;
+
   const duplicatesSchedule =
     (kind === "daily" && /^(?:every day|every morning|daily)\b/i.test(lead)) ||
     (kind === "weekdays" && /^(?:every weekday|on weekdays|weekdays)\b/i.test(lead)) ||
     (kind === "weekly" &&
       /^every (?:monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b/i.test(lead));
+
   return duplicatesSchedule ? capitalize(task) : instructions;
 }
 
@@ -116,29 +130,44 @@ function commandSignalLabel(signal: string, t: Translate): string {
 
 // Describes only what the draft states. An unknown or missing schedule yields
 // null rather than a guessed default.
-function routineScheduleText(schedule: unknown, t: Translate, locale: string): string | null {
-  if (!schedule || typeof schedule !== "object") return null;
-  const record = schedule as Record<string, unknown>;
+function routineScheduleText(
+  schedule: Schema.Json | undefined,
+  t: Translate,
+  locale: string,
+): string | null {
+  if (!schedule || !isJsonObject(schedule)) return null;
+  const record = schedule;
   const time = stringField(record, "time");
+
   if (!time) return null;
+
   if (record.kind === "daily") return t("Every day at {time}", { time });
+
   if (record.kind === "weekdays") return t("Weekdays at {time}", { time });
+
   if (record.kind === "weekly") {
     const days = stringList(record.weekdays).map((day) => weekdayLabel(day, t));
+
     if (days.length === 0) return null;
     const dayList = new Intl.ListFormat(locale, { type: "conjunction" }).format(days);
+
     return t("Every {days} at {time}", { days: dayList, time });
   }
+
   return null;
 }
 
+const decodeRoutineArgs = Schema.decodeUnknownOption(Schema.Record(Schema.String, Schema.Json));
+
 export function routineProposalDetails(
-  args: unknown,
+  args: PendingApproval["args"],
   t: Translate = englishTranslator.translate,
   locale: string = englishTranslator.locale,
 ): RoutineProposalDetails | null {
-  if (!args || typeof args !== "object") return null;
-  const record = args as Record<string, unknown>;
+  const record = Option.getOrNull(decodeRoutineArgs(args));
+
+  if (!record) return null;
+
   const details = {
     name: stringField(record, "name"),
     instructions: routineInstructions(stringField(record, "instructions"), record.schedule),
@@ -146,6 +175,7 @@ export function routineProposalDetails(
     timezone: stringField(record, "timezone"),
     uses: [...stringList(record.skillNames), ...stringList(record.connectorNames)],
   };
+
   return details.name || details.instructions || details.schedule ? details : null;
 }
 
@@ -156,7 +186,7 @@ function RoutineProposal({
   label,
   pendingCount,
 }: {
-  args: unknown;
+  args: PendingApproval["args"];
   className: string | undefined;
   hideLabel: boolean;
   label: string;
@@ -164,6 +194,7 @@ function RoutineProposal({
 }) {
   const { t, locale } = useI18n();
   const details = routineProposalDetails(args, t, locale);
+
   return (
     <div
       aria-label={label}
@@ -174,7 +205,7 @@ function RoutineProposal({
         <div className="flex min-w-0 items-center gap-2">
           <span className="text-xs font-medium text-foreground">{t("Review routine")}</span>
           {pendingCount > 1 ? (
-            <span className="ml-auto text-[10px] text-muted-foreground tabular-nums">
+            <span className="ml-auto text-10px text-muted-foreground tabular-nums">
               1/{pendingCount}
             </span>
           ) : null}
@@ -204,14 +235,14 @@ function RoutineProposal({
           ) : null}
           {details.instructions ? (
             <div className="min-w-0">
-              <p className="text-[11px] font-medium text-muted-foreground">{t("What it does")}</p>
+              <p className="text-11px font-medium text-muted-foreground">{t("What it does")}</p>
               <p className="mt-0.5 line-clamp-4 whitespace-pre-wrap break-words text-sm leading-5 text-foreground/90">
                 {details.instructions}
               </p>
             </div>
           ) : null}
           {details.uses.length > 0 ? (
-            <p className="min-w-0 truncate text-[11px] text-muted-foreground">
+            <p className="min-w-0 truncate text-11px text-muted-foreground">
               {t("Uses {list}", { list: details.uses.join(", ") })}
             </p>
           ) : null}
@@ -236,6 +267,7 @@ export const ComposerPendingApprovalPanel = memo(function ComposerPendingApprova
   const { t, plural } = useI18n();
   const isProductFeedback = approval.toolName === AKERU_PRODUCT_FEEDBACK_TOOL_NAME;
   const isRoutine = approval.toolName === AKERU_CREATE_ROUTINE_TOOL_NAME;
+
   const fallbackLabel = isRoutine
     ? t("Routine approval")
     : isProductFeedback
@@ -247,6 +279,7 @@ export const ComposerPendingApprovalPanel = memo(function ComposerPendingApprova
           : approval.requestKind === "file-read"
             ? t("File read approval")
             : t("File change approval");
+
   const detailAriaLabel = isRoutine
     ? t("Routine details")
     : isProductFeedback
@@ -258,18 +291,21 @@ export const ComposerPendingApprovalPanel = memo(function ComposerPendingApprova
           : approval.requestKind === "file-read"
             ? t("File to read")
             : t("File change");
+
   const argsCommand =
     approval.requestKind === "command" &&
     approval.args &&
-    typeof approval.args === "object" &&
+    Predicate.isObjectOrArray(approval.args) &&
     "command" in approval.args &&
-    typeof approval.args.command === "string"
+    Predicate.isString(approval.args.command)
       ? approval.args.command
       : null;
+
   const command =
     approval.requestKind === "command"
       ? (argsCommand ?? (approval.detail?.trim() ? approval.detail : fallbackLabel))
       : null;
+
   const detail = command ?? approval.detail ?? fallbackLabel;
   const details = command ? describeCommandApproval(command, approval.args) : null;
   const firstLine = detail.split("\n", 1)[0] ?? detail;
@@ -300,12 +336,12 @@ export const ComposerPendingApprovalPanel = memo(function ComposerPendingApprova
         <div className="flex w-full min-w-0 items-center gap-2">
           <span className="text-xs font-medium text-foreground">{fallbackLabel}</span>
           {approval.appName ? (
-            <span className="max-w-32 shrink truncate text-[11px] text-muted-foreground">
+            <span className="max-w-32 shrink truncate text-11px text-muted-foreground">
               {approval.appName}
             </span>
           ) : null}
           {pendingCount > 1 ? (
-            <span className="ml-auto shrink-0 text-[10px] font-medium text-muted-foreground tabular-nums">
+            <span className="ml-auto shrink-0 text-10px font-medium text-muted-foreground tabular-nums">
               1/{pendingCount}
             </span>
           ) : null}
@@ -320,7 +356,7 @@ export const ComposerPendingApprovalPanel = memo(function ComposerPendingApprova
           >
             <CommandGlyph />
             <code
-              className="block max-h-28 min-w-0 flex-1 overflow-auto whitespace-pre-wrap break-words font-mono text-xs leading-5 text-foreground/90 [scrollbar-width:thin] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/70 [&::-webkit-scrollbar]:h-1.5"
+              className="block max-h-28 min-w-0 flex-1 overflow-auto whitespace-pre-wrap break-words font-mono text-xs leading-5 text-foreground/90 scrollbar-thin focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/70 [&::-webkit-scrollbar]:h-1.5"
               data-approval-detail="complete"
               tabIndex={0}
             >
@@ -331,19 +367,19 @@ export const ComposerPendingApprovalPanel = memo(function ComposerPendingApprova
             <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 px-0.5">
               {details.signals.map((signal) => (
                 <span
-                  className="rounded-full border border-border/60 bg-muted/50 px-2 py-0.5 text-[10px] font-medium text-muted-foreground"
+                  className="rounded-full border border-border/60 bg-muted/50 px-2 py-0.5 text-10px font-medium text-muted-foreground"
                   key={signal}
                 >
                   {commandSignalLabel(signal, t)}
                 </span>
               ))}
               {details.workingDirectory ? (
-                <span className="min-w-0 truncate font-mono text-[11px] text-muted-foreground">
+                <span className="min-w-0 truncate font-mono text-11px text-muted-foreground">
                   {details.workingDirectory}
                 </span>
               ) : null}
               {details.reason ? (
-                <span className="min-w-0 truncate text-[11px] text-muted-foreground">
+                <span className="min-w-0 truncate text-11px text-muted-foreground">
                   {details.reason}
                 </span>
               ) : null}
@@ -371,17 +407,17 @@ export const ComposerPendingApprovalPanel = memo(function ComposerPendingApprova
             <code className="min-w-0 flex-1 truncate font-mono text-xs text-foreground/90">
               {firstLine}
             </code>
-            <span className="shrink-0 text-[11px] text-muted-foreground group-open:hidden">
+            <span className="shrink-0 text-11px text-muted-foreground group-open:hidden">
               {plural(detailLineCount, { one: "{count} line", other: "{count} lines" })}
             </span>
-            <span className="hidden shrink-0 text-[11px] text-muted-foreground group-open:inline">
+            <span className="hidden shrink-0 text-11px text-muted-foreground group-open:inline">
               {t("Collapse")}
             </span>
           </summary>
           <div className="mt-1.5 flex min-w-0 flex-col gap-2 rounded-lg border border-border/50 bg-muted/30 px-3 py-2.5">
             <code
               aria-label={detailAriaLabel}
-              className="block max-h-40 overflow-auto whitespace-pre-wrap font-mono text-xs leading-5 text-foreground/90 [scrollbar-width:thin] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/70 [&::-webkit-scrollbar]:h-1.5"
+              className="block max-h-40 overflow-auto whitespace-pre-wrap font-mono text-xs leading-5 text-foreground/90 scrollbar-thin focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/70 [&::-webkit-scrollbar]:h-1.5"
               data-approval-detail="complete"
               tabIndex={0}
             >

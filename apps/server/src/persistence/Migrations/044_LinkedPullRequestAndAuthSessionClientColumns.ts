@@ -7,6 +7,7 @@ import * as SqlClient from "effect/unstable/sql/SqlClient";
 // there. Re-apply those columns under a free slot.
 export default Effect.gen(function* () {
   const sql = yield* SqlClient.SqlClient;
+
   const threadColumns = yield* sql<{ readonly name: string }>`
     PRAGMA table_info(projection_threads)
   `;

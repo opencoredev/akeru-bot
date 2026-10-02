@@ -1,3 +1,4 @@
+import type { RuntimeThreadFixture } from "../test-support/fixtures";
 import { ApprovalRequestId, EnvironmentId, ThreadId } from "@akeru/contracts";
 import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
@@ -12,8 +13,8 @@ const mocks = vi.hoisted(() => ({
   command: vi.fn(),
   approvalCommand: Symbol("respondToApproval"),
   primaryEnvironmentId: null as EnvironmentId | null,
-  threadShells: [] as Array<Record<string, unknown>>,
-  threadShell: null as Record<string, unknown> | null,
+  threadShells: [] as Array<RuntimeThreadFixture>,
+  threadShell: null as RuntimeThreadFixture | null,
   messageProjection: {
     messages: [],
     lastMessageRole: null,
@@ -25,6 +26,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock("react", async (importOriginal) => {
   const actual = await importOriginal<typeof import("react")>();
   const { reactHookHarness } = await import("../../test/reactHookHarness");
+
   return {
     ...actual,
     useCallback: reactHookHarness.useCallback,
@@ -34,13 +36,19 @@ vi.mock("react", async (importOriginal) => {
     useState: reactHookHarness.useState,
   };
 });
+
 vi.mock("react/compiler-runtime", async () => {
   const { reactHookHarness } = await import("../../test/reactHookHarness");
+
   return { c: reactHookHarness.useMemoCache };
 });
+
 vi.mock("@effect/atom-react", () => ({ useAtomValue: () => [] }));
+
 vi.mock("../../hooks/useSettings", () => ({ usePrimarySettings: () => ({}) }));
+
 vi.mock("../../modelSelection", () => ({ resolveAppModelSelectionState: () => null }));
+
 vi.mock("../../state/entities", () => ({
   useProjects: () => [],
   useThreadShells: () => mocks.threadShells,
@@ -50,26 +58,35 @@ vi.mock("../../state/entities", () => ({
   useThreadActivities: () => [],
   readEnvironmentSupportsFileAttachments: () => true,
 }));
+
 vi.mock("../../state/bots", () => ({ environmentBotsAtom: () => null }));
+
 vi.mock("../../state/environments", () => ({
   usePrimaryEnvironmentId: () => mocks.primaryEnvironmentId,
 }));
+
 vi.mock("../../state/server", () => ({ primaryServerProvidersAtom: null }));
+
 vi.mock("../../state/threads", () => ({
   threadEnvironment: { respondToApproval: mocks.approvalCommand },
 }));
+
 vi.mock("../../state/use-atom-command", () => ({ useAtomCommand: mocks.useAtomCommand }));
+
 vi.mock("../../session-logic", () => ({
   derivePendingApprovals: mocks.derivePendingApprovals,
   derivePendingUserInputs: () => [],
 }));
+
 vi.mock("../Sidebar.logic", () => ({ sortScopedProjectsForSidebar: () => [] }));
+
 vi.mock("./botConversationMessageProjection", () => ({
   useBotConversationMessageProjection: () => mocks.messageProjection,
 }));
+
 vi.mock("./rosterStore", () => ({
-  useRosterStore: (
-    selector: (state: { bots: []; chatPathByBotId: {}; openChatByBotId: {} }) => unknown,
+  useRosterStore: <T>(
+    selector: (state: { bots: []; chatPathByBotId: {}; openChatByBotId: {} }) => T,
   ) => selector({ bots: [], chatPathByBotId: {}, openChatByBotId: {} }),
 }));
 
@@ -105,10 +122,12 @@ describe("bot runtime approval ownership", () => {
 
   it("derives approvals once and keeps the roster response path active", async () => {
     const requestId = ApprovalRequestId.make("request-1");
+
     const threadRef = {
       environmentId: EnvironmentId.make("env-a"),
       threadId: ThreadId.make("thread-1"),
     };
+
     mocks.derivePendingApprovals.mockReturnValue([
       { requestId, requestKind: "command", createdAt: "2026-08-27T00:00:00.000Z" },
     ]);

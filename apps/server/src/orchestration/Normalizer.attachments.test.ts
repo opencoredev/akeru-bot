@@ -1,4 +1,3 @@
-// @effect-diagnostics nodeBuiltinImport:off
 import * as NodeFS from "node:fs";
 import * as NodePath from "node:path";
 
@@ -51,11 +50,13 @@ describe("normalizeDispatchCommand attachments", () => {
   it.effect("preserves inline image attachments from existing mobile clients", () =>
     Effect.gen(function* () {
       const config = yield* ServerConfig.ServerConfig;
+
       const normalized = yield* normalizeDispatchCommand(
         turnStartCommand({
           attachments: [{ dataUrl: "data:image/png;base64,cGl4ZWxz", sizeBytes: 6 }],
         }),
       );
+
       if (normalized.type !== "thread.turn.start") {
         throw new Error("Expected a thread.turn.start command.");
       }
@@ -71,6 +72,7 @@ describe("normalizeDispatchCommand attachments", () => {
   it.effect("persists inline document attachments", () =>
     Effect.gen(function* () {
       const config = yield* ServerConfig.ServerConfig;
+
       const command: Extract<ClientOrchestrationCommand, { type: "thread.turn.start" }> = {
         type: "thread.turn.start",
         commandId: CommandId.make("command-file"),
@@ -93,7 +95,9 @@ describe("normalizeDispatchCommand attachments", () => {
         interactionMode: "default",
         createdAt: "2026-08-01T00:00:00.000Z",
       };
+
       const normalized = yield* normalizeDispatchCommand(command);
+
       if (normalized.type !== "thread.turn.start") {
         throw new Error("Expected a thread.turn.start command.");
       }
@@ -118,6 +122,7 @@ describe("normalizeDispatchCommand attachments", () => {
           attachments: [{ id: `pending-${attachmentUuid}`, sizeBytes: bytes.byteLength }],
         }),
       );
+
       if (normalized.type !== "thread.turn.start") {
         throw new Error("Expected a thread.turn.start command.");
       }
@@ -148,6 +153,7 @@ describe("normalizeDispatchCommand attachments", () => {
           ],
         }),
       );
+
       if (normalized.type !== "thread.turn.start") {
         throw new Error("Expected a thread.turn.start command.");
       }
@@ -171,9 +177,11 @@ describe("normalizeDispatchCommand attachments", () => {
           attachments: [{ id: `pending-${attachmentUuid}`, sizeBytes: bytes.byteLength }],
         }),
       );
+
       if (first.type !== "thread.turn.start") {
         throw new Error("Expected a thread.turn.start command.");
       }
+
       NodeFS.rmSync(
         NodePath.join(config.attachmentsDir, `${first.message.attachments[0]!.id}.png`),
       );
@@ -184,9 +192,11 @@ describe("normalizeDispatchCommand attachments", () => {
           attachments: [{ id: `pending-${attachmentUuid}`, sizeBytes: bytes.byteLength }],
         }),
       );
+
       if (retried.type !== "thread.turn.start") {
         throw new Error("Expected a thread.turn.start command.");
       }
+
       expect(retried.message.attachments[0]?.id.startsWith("thread-retry-")).toBe(true);
     }).pipe(Effect.provide(testLayer)),
   );
@@ -196,13 +206,16 @@ describe("normalizeDispatchCommand attachments", () => {
       const config = yield* ServerConfig.ServerConfig;
       const pendingPath = NodePath.join(config.attachmentsDir, `pending-${attachmentUuid}.png`);
       NodeFS.writeFileSync(pendingPath, Buffer.from("pixels"));
+
       const command = turnStartCommand({
         attachments: [
           { dataUrl: "data:image/png;base64,cGl4ZWxz", sizeBytes: 6 },
           { id: `pending-${attachmentUuid}`, sizeBytes: 6 },
         ],
       });
+
       const normalized = yield* normalizeDispatchCommand(command);
+
       if (normalized.type !== "thread.turn.start") {
         throw new Error("Expected a thread.turn.start command.");
       }
@@ -211,10 +224,12 @@ describe("normalizeDispatchCommand attachments", () => {
         config.attachmentsDir,
         `${normalized.message.attachments[0]!.id}.png`,
       );
+
       const claimedPath = NodePath.join(
         config.attachmentsDir,
         `${normalized.message.attachments[1]!.id}.png`,
       );
+
       yield* cleanupFailedUploadedAttachments(command, normalized);
 
       expect(NodeFS.existsSync(pendingPath)).toBe(true);
@@ -228,10 +243,13 @@ describe("normalizeDispatchCommand attachments", () => {
       const config = yield* ServerConfig.ServerConfig;
       const pendingPath = NodePath.join(config.attachmentsDir, `pending-${attachmentUuid}.png`);
       NodeFS.writeFileSync(pendingPath, Buffer.from("pixels"));
+
       const command = turnStartCommand({
         attachments: [{ id: `pending-${attachmentUuid}`, sizeBytes: 6 }],
       });
+
       const normalized = yield* normalizeDispatchCommand(command);
+
       if (normalized.type !== "thread.turn.start") {
         throw new Error("Expected a thread.turn.start command.");
       }
@@ -240,6 +258,7 @@ describe("normalizeDispatchCommand attachments", () => {
         config.attachmentsDir,
         `${normalized.message.attachments[0]!.id}.png`,
       );
+
       NodeFS.rmSync(pendingPath);
 
       yield* cleanupFailedUploadedAttachments(command, normalized);
@@ -253,6 +272,7 @@ describe("normalizeDispatchCommand attachments", () => {
       const config = yield* ServerConfig.ServerConfig;
       const pendingPath = NodePath.join(config.attachmentsDir, `pending-${attachmentUuid}.png`);
       NodeFS.writeFileSync(pendingPath, Buffer.from("pixels"));
+
       const command = turnStartCommand({
         attachments: [{ id: `pending-${attachmentUuid}`, sizeBytes: 6 }],
       });
@@ -261,6 +281,7 @@ describe("normalizeDispatchCommand attachments", () => {
         [normalizeDispatchCommand(command), normalizeDispatchCommand(command)],
         { concurrency: 2 },
       );
+
       if (failed.type !== "thread.turn.start" || succeeded.type !== "thread.turn.start") {
         throw new Error("Expected thread.turn.start commands.");
       }
@@ -269,10 +290,12 @@ describe("normalizeDispatchCommand attachments", () => {
         config.attachmentsDir,
         `${failed.message.attachments[0]!.id}.png`,
       );
+
       const succeededPath = NodePath.join(
         config.attachmentsDir,
         `${succeeded.message.attachments[0]!.id}.png`,
       );
+
       expect(failedPath).not.toBe(succeededPath);
 
       yield* cleanupFailedUploadedAttachments(command, failed);
@@ -320,6 +343,7 @@ describe("normalizeDispatchCommand attachments", () => {
           attachments: [{ id: `pending-${attachmentUuid}`, sizeBytes: 999 }],
         }),
       ).pipe(Effect.flip);
+
       expect(wrongSize.message).toContain("size");
 
       const wrongThread = yield* normalizeDispatchCommand(
@@ -327,14 +351,17 @@ describe("normalizeDispatchCommand attachments", () => {
           attachments: [{ id: `another-thread-${attachmentUuid}`, sizeBytes: 6 }],
         }),
       ).pipe(Effect.flip);
+
       expect(wrongThread.message).toContain("pending upload");
 
       const mismatchedTypeCommand = turnStartCommand({
         attachments: [{ id: `pending-${attachmentUuid}`, sizeBytes: 6 }],
       });
+
       if (mismatchedTypeCommand.type !== "thread.turn.start") {
         throw new Error("Expected a thread.turn.start command.");
       }
+
       const mismatchedType = yield* normalizeDispatchCommand({
         ...mismatchedTypeCommand,
         message: {
@@ -344,6 +371,7 @@ describe("normalizeDispatchCommand attachments", () => {
           ),
         },
       }).pipe(Effect.flip);
+
       expect(mismatchedType.message).toContain("image type");
     }).pipe(Effect.provide(testLayer)),
   );

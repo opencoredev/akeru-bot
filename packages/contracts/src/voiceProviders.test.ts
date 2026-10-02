@@ -15,13 +15,21 @@ import {
 import { ServerSettingsPatch } from "./settings.ts";
 
 const decodeSettings = Schema.decodeUnknownSync(VoiceSettings);
+
 const decodePatch = Schema.decodeUnknownSync(ServerSettingsPatch);
+
 const decodeStart = Schema.decodeUnknownSync(VoiceCallStartInput);
+
 const decodeResult = Schema.decodeUnknownSync(VoiceCallStartResult);
+
 const isSettings = Schema.is(VoiceSettings);
+
 const isTranscribe = Schema.is(VoiceTranscribeInput);
+
 const isSynthesize = Schema.is(VoiceSynthesizeInput);
+
 const isConnect = Schema.is(VoiceConnectInput);
+
 const isStart = Schema.is(VoiceCallStartInput);
 
 describe("voice provider contracts", () => {
@@ -43,6 +51,7 @@ describe("voice provider contracts", () => {
         fish: "fish-id",
       },
     };
+
     expect(decodePatch({ voice })).toEqual({ voice });
     expect(isSettings({ enabled: true, voice: "alloy", ...voice })).toBe(true);
     expect(
@@ -58,6 +67,7 @@ describe("voice provider contracts", () => {
     expect(decodeStart({ botId: "bot" })).toEqual({
       botId: "bot",
     });
+
     const result = decodeResult({
       call: {
         callId: "call",
@@ -69,6 +79,7 @@ describe("voice provider contracts", () => {
       transport: "composed",
       settings: { provider: "composed" },
     });
+
     expect(result.transport).toBe("composed");
     expect(result.answerSdp).toBeUndefined();
   });
@@ -103,12 +114,14 @@ describe("voice provider contracts", () => {
     const legacy = decodeSettings({});
     expect(voiceRequiredApiProviders(legacy)).toEqual([]);
     expect(voiceRequiredApiProviders({ ...legacy, provider: "openai" })).toEqual(["openai"]);
+
     const composed = {
       ...legacy,
       provider: "composed" as const,
       transcriptionProvider: "cartesia" as const,
       synthesisProvider: "fish" as const,
     };
+
     expect(voiceRequiredApiProviders(composed)).toEqual(["cartesia", "fish"]);
     expect(voiceRequiredApiProviders({ ...legacy, provider: "composed" })).toEqual(["openai"]);
     expect(voiceMissingApiProviders(composed, ["fish", "openai"])).toEqual(["cartesia"]);

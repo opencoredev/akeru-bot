@@ -17,6 +17,7 @@ import { browserDictationCaptureReason } from "./browserDictation";
 import { useComposerDictation } from "./useComposerDictation";
 
 let operationSequence = 0;
+
 const nextOperationId = () => `dictation-${Date.now()}-${operationSequence++}`;
 
 /**
@@ -34,14 +35,19 @@ export function useEnvironmentComposerDictation(input: {
   const environmentId = usePrimaryEnvironmentId();
   const connection = useEnvironmentConnectionState(environmentId).data;
   const settings = useAtomValue(primaryServerSettingsAtom);
+
   const providers = useEnvironmentQuery(
     environmentId ? serverEnvironment.voiceProviders({ environmentId, input: {} }) : null,
   ).data;
+
   const voiceCall = useOptionalVoiceCall();
+
   const transcribeVoice = useAtomCommand(serverEnvironment.transcribeVoice, {
     reportFailure: false,
   });
+
   const cancelVoice = useAtomCommand(serverEnvironment.cancelVoice, { reportFailure: false });
+
   const transcribe = useMemo(
     () =>
       createVoiceDictationTranscriber({
@@ -51,6 +57,7 @@ export function useEnvironmentComposerDictation(input: {
       }),
     [cancelVoice, transcribeVoice],
   );
+
   const identity = useMemo(
     () => ({
       environmentId: environmentId ?? "",
@@ -60,7 +67,9 @@ export function useEnvironmentComposerDictation(input: {
     }),
     [environmentId, input.draftId, input.generation, input.threadId],
   );
+
   const captureReason = browserDictationCaptureReason();
+
   return useComposerDictation({
     identity,
     captureAvailable: captureReason === null,

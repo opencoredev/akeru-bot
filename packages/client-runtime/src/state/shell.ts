@@ -55,6 +55,7 @@ export const makeEnvironmentShellState = Effect.fn("EnvironmentShellState.make")
   const snapshotLoader = yield* ShellSnapshotLoader;
   const wakeups = yield* Effect.serviceOption(ConnectionWakeups.ConnectionWakeups);
   const environmentId = supervisor.target.environmentId;
+
   const cachedSnapshot = yield* cache.loadShell(environmentId).pipe(
     Effect.catch((error) =>
       Effect.logWarning("Could not load cached environment shell.").pipe(
@@ -66,11 +67,13 @@ export const makeEnvironmentShellState = Effect.fn("EnvironmentShellState.make")
       ),
     ),
   );
+
   const state = yield* SubscriptionRef.make<EnvironmentShellState>({
     snapshot: cachedSnapshot,
     status: shellStatusForSnapshot(cachedSnapshot),
     error: Option.none(),
   });
+
   const awaitingCompletion = yield* Ref.make(false);
   const lastAuthoritativeSession = yield* Ref.make<RpcSession | null>(null);
   const activeSubscriptionSession = yield* Ref.make<RpcSession | null>(null);
@@ -105,11 +108,13 @@ export const makeEnvironmentShellState = Effect.fn("EnvironmentShellState.make")
       })),
     ),
   );
+
   const setSynchronizing = SubscriptionRef.update(state, (current) => ({
     ...current,
     status: "synchronizing" as const,
     error: Option.none(),
   }));
+
   const setReady = SubscriptionRef.update(state, (current) =>
     current.status === "live"
       ? current
@@ -119,12 +124,13 @@ export const makeEnvironmentShellState = Effect.fn("EnvironmentShellState.make")
           error: Option.none(),
         },
   );
-  const setStreamError = (error: unknown) =>
+
+  const setStreamError = (cause: unknown) =>
     Ref.set(awaitingCompletion, false).pipe(
       Effect.andThen(Effect.logWarning("Could not synchronize the environment shell.")),
       Effect.annotateLogs({
         environmentId,
-        ...safeErrorLogAttributes(error),
+        ...safeErrorLogAttributes(cause),
       }),
       Effect.andThen(
         SubscriptionRef.update(state, (current) => ({
@@ -145,10 +151,12 @@ export const makeEnvironmentShellState = Effect.fn("EnvironmentShellState.make")
           ? { ...current, status: "live" as const, error: Option.none() }
           : current,
       );
+
       return;
     }
 
     const current = yield* SubscriptionRef.get(state);
+
     const nextSnapshot =
       item.kind === "snapshot"
         ? item.snapshot
@@ -159,6 +167,7 @@ export const makeEnvironmentShellState = Effect.fn("EnvironmentShellState.make")
                 ? applyShellStreamEvent(snapshot, item)
                 : snapshot,
           });
+
     if (nextSnapshot === null) {
       return;
     }
@@ -169,12 +178,15 @@ export const makeEnvironmentShellState = Effect.fn("EnvironmentShellState.make")
       status: waiting ? "synchronizing" : "live",
       error: Option.none(),
     });
+
     if (item.kind === "snapshot") {
       const session = yield* Ref.get(activeSubscriptionSession);
+
       if (session !== null) {
         yield* Ref.set(lastAuthoritativeSession, session);
       }
     }
+
     yield* Queue.offer(persistence, nextSnapshot);
   });
 
@@ -190,10 +202,12 @@ export const makeEnvironmentShellState = Effect.fn("EnvironmentShellState.make")
       ORCHESTRATION_WS_METHODS.subscribeShell,
       Effect.fn("EnvironmentShellState.makeSubscribeInput")(function* (session) {
         yield* Ref.set(activeSubscriptionSession, session);
+
         const supportsCompletionMarker = yield* session.initialConfig.pipe(
           Effect.map((config) => config.shellResumeCompletionMarker === true),
           Effect.orElseSucceed(() => false),
         );
+
         yield* Ref.set(awaitingCompletion, supportsCompletionMarker);
         yield* setSynchronizing;
 
@@ -203,6 +217,7 @@ export const makeEnvironmentShellState = Effect.fn("EnvironmentShellState.make")
         const hasAuthoritativeSnapshot = (yield* Ref.get(lastAuthoritativeSession)) === session;
         let canResume = hasAuthoritativeSnapshot;
         let current = yield* SubscriptionRef.get(state);
+
         if (!hasAuthoritativeSnapshot || Option.isNone(current.snapshot)) {
           const prepared = yield* SubscriptionRef.get(supervisor.prepared).pipe(
             Effect.flatMap(
@@ -218,7 +233,9 @@ export const makeEnvironmentShellState = Effect.fn("EnvironmentShellState.make")
               }),
             ),
           );
+
           const httpSnapshot = yield* snapshotLoader.load(prepared);
+
           if (Option.isSome(httpSnapshot)) {
             yield* applyItem({ kind: "snapshot", snapshot: httpSnapshot.value });
             canResume = true;
@@ -231,6 +248,7 @@ export const makeEnvironmentShellState = Effect.fn("EnvironmentShellState.make")
         if (!canResume || Option.isNone(current.snapshot)) {
           return supportsCompletionMarker ? { requestCompletionMarker: true as const } : {};
         }
+
         if (!supportsCompletionMarker) {
           // Without a completion marker there is no synchronized signal for a
           // resumed subscription, so report live immediately, like threads.
@@ -240,6 +258,7 @@ export const makeEnvironmentShellState = Effect.fn("EnvironmentShellState.make")
             error: Option.none(),
           }));
         }
+
         return {
           afterSequence: current.snapshot.value.snapshotSequence,
           ...(supportsCompletionMarker ? { requestCompletionMarker: true as const } : {}),
@@ -314,11 +333,13 @@ function mapsEqual<K, V>(left: ReadonlyMap<K, V>, right: ReadonlyMap<K, V>): boo
   if (left.size !== right.size) {
     return false;
   }
+
   for (const [key, value] of left) {
     if (right.get(key) !== value) {
       return false;
     }
   }
+
   return true;
 }
 
@@ -327,6 +348,7 @@ export function createEnvironmentShellSummaryAtom(input: {
   readonly shellStateValueAtom: (environmentId: EnvironmentId) => Atom.Atom<EnvironmentShellState>;
 }) {
   let previousSummary = EMPTY_ENVIRONMENT_SHELL_SUMMARY;
+
   return Atom.make((get) => {
     let hasSnapshot = false;
     let hasSynchronizingShell = false;
@@ -340,14 +362,18 @@ export function createEnvironmentShellSummaryAtom(input: {
       hasSynchronizingShell ||= state.status === "synchronizing";
       hasCachedShell ||= state.status === "cached";
       hasLiveShell ||= state.status === "live";
+
       if (firstError === null) {
         firstError = Option.getOrNull(state.error);
       }
+
       if (Option.isNone(state.snapshot)) {
         continue;
       }
+
       hasSnapshot = true;
       const updatedAt = state.snapshot.value.updatedAt;
+
       if (latestSnapshotUpdatedAt === null || updatedAt > latestSnapshotUpdatedAt) {
         latestSnapshotUpdatedAt = updatedAt;
       }
@@ -361,10 +387,13 @@ export function createEnvironmentShellSummaryAtom(input: {
       firstError,
       latestSnapshotUpdatedAt,
     };
+
     if (shellSummariesEqual(previousSummary, next)) {
       return previousSummary;
     }
+
     previousSummary = next;
+
     return previousSummary;
   }).pipe(Atom.withLabel("environment-shell-summary"));
 }
@@ -374,18 +403,24 @@ export function createEnvironmentServerConfigsAtom(input: {
   readonly serverConfigValueAtom: (environmentId: EnvironmentId) => Atom.Atom<ServerConfig | null>;
 }) {
   let previousServerConfigs = EMPTY_SERVER_CONFIGS;
+
   return Atom.make((get) => {
     const next = new Map<EnvironmentId, ServerConfig>();
+
     for (const environmentId of get(input.catalogValueAtom).entries.keys()) {
       const config = get(input.serverConfigValueAtom(environmentId));
+
       if (config !== null) {
         next.set(environmentId, config);
       }
     }
+
     if (mapsEqual(previousServerConfigs, next)) {
       return previousServerConfigs;
     }
+
     previousServerConfigs = next;
+
     return previousServerConfigs;
   }).pipe(Atom.withLabel("environment-server-configs"));
 }
@@ -415,7 +450,11 @@ export function createEnvironmentShellAtoms<R, E>(
 }
 
 export * from "./models.ts";
+
 export * from "./shellCommands.ts";
+
 export * from "./shellReducer.ts";
+
 export * from "./shellSnapshotHttp.ts";
+
 export * from "./snapshots.ts";

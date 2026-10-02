@@ -1,4 +1,3 @@
-// @effect-diagnostics nodeBuiltinImport:off - Build bootstrap reads optional root env files before an Effect runtime exists.
 import * as NodeFS from "node:fs";
 import * as NodePath from "node:path";
 import * as NodeURL from "node:url";
@@ -22,7 +21,7 @@ export function loadRepoEnv({
 }: {
   readonly baseEnv?: Environment;
   readonly repoRoot?: string;
-} = {}): Record<string, string | undefined> {
+} = {}) {
   const rootEnv = readEnvFile(NodePath.join(repoRoot, ".env"));
   const localEnv = readEnvFile(NodePath.join(repoRoot, ".env.local"));
   const config = resolvePublicConfig(baseEnv, localEnv, rootEnv);
@@ -76,11 +75,13 @@ function firstNonEmpty(sources: readonly Environment[], ...names: readonly strin
   for (const source of sources) {
     for (const name of names) {
       const value = source[name]?.trim();
+
       if (value) {
         return value;
       }
     }
   }
+
   return undefined;
 }
 

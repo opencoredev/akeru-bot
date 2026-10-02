@@ -1,3 +1,5 @@
+import { recordLookup } from "../recordLookup";
+import { isTagged } from "../tagged";
 import type {
   BackgroundActivityProfile,
   BackgroundActivitySettings,
@@ -35,10 +37,12 @@ export function projectGroupingModeFromToggle(
   lastEnabledMode: SidebarProjectGroupingMode = "repository",
 ): SidebarProjectGroupingMode {
   if (!enabled) return "separate";
+
   return lastEnabledMode === "repository_path" ? "repository_path" : "repository";
 }
 
 const LAST_ENABLED_PROJECT_GROUPING_MODE_KEY = "akeru:last-enabled-project-grouping-mode";
+
 // Pre-rebrand key, kept as a read fallback so the grouping preference survives.
 const LEGACY_LAST_ENABLED_PROJECT_GROUPING_MODE_KEY = "t3code:last-enabled-project-grouping-mode";
 
@@ -47,6 +51,7 @@ export function readLastEnabledProjectGroupingMode(): SidebarProjectGroupingMode
     const stored =
       localStorage.getItem(LAST_ENABLED_PROJECT_GROUPING_MODE_KEY) ??
       localStorage.getItem(LEGACY_LAST_ENABLED_PROJECT_GROUPING_MODE_KEY);
+
     return stored === "repository_path" ? "repository_path" : "repository";
   } catch {
     return "repository";
@@ -55,6 +60,7 @@ export function readLastEnabledProjectGroupingMode(): SidebarProjectGroupingMode
 
 export function rememberEnabledProjectGroupingMode(mode: SidebarProjectGroupingMode): void {
   if (mode === "separate") return;
+
   try {
     localStorage.setItem(LAST_ENABLED_PROJECT_GROUPING_MODE_KEY, mode);
     localStorage.removeItem(LEGACY_LAST_ENABLED_PROJECT_GROUPING_MODE_KEY);
@@ -137,9 +143,12 @@ export function isSamePreviewViewport(
   right: PreviewViewportSetting,
 ): boolean {
   if (left._tag !== right._tag) return false;
-  if (left._tag === "fill" || right._tag === "fill") return true;
+
+  if (isTagged(left, "fill") || isTagged(right, "fill")) return true;
+
   if (left.width !== right.width || left.height !== right.height) return false;
-  return left._tag === "preset" && right._tag === "preset"
+
+  return isTagged(left, "preset") && isTagged(right, "preset")
     ? left.presetId === right.presetId
     : true;
 }
@@ -166,6 +175,7 @@ export function resolveBackgroundActivityProfileOption(
   settings: ServerSettings,
 ): BackgroundActivityProfile | "advanced" {
   const resolved = resolveServerBackgroundActivitySettings(settings);
+
   const normalized = normalizeBackgroundActivitySettings({
     schemaVersion: 1,
     profile: "custom",
@@ -182,6 +192,7 @@ export function resolveBackgroundActivityProfileOption(
       pauseWhenOnBattery: resolved.pauseWhenOnBattery,
     },
   });
+
   return normalized.profile === "custom" ? "advanced" : normalized.profile;
 }
 
@@ -190,6 +201,7 @@ export function backgroundActivitySharedPolicySettings(
   profile: BackgroundActivityProfile,
 ): BackgroundActivitySettings {
   const normalized = normalizeServerBackgroundActivitySettings(settings);
+
   return {
     schemaVersion: 1,
     profile: "custom",
@@ -204,12 +216,14 @@ function collapseOtelSignalsUrl(input: {
 }): string | null {
   const tracesSuffix = "/traces";
   const metricsSuffix = "/metrics";
+
   if (!input.tracesUrl.endsWith(tracesSuffix) || !input.metricsUrl.endsWith(metricsSuffix)) {
     return null;
   }
 
   const tracesBase = input.tracesUrl.slice(0, -tracesSuffix.length);
   const metricsBase = input.metricsUrl.slice(0, -metricsSuffix.length);
+
   if (tracesBase !== metricsBase) {
     return null;
   }
@@ -233,6 +247,7 @@ export function formatDiagnosticsDescription(
 
   if (tracesUrl && metricsUrl) {
     const collapsedUrl = collapseOtelSignalsUrl({ tracesUrl, metricsUrl });
+
     return collapsedUrl
       ? t("{mode}. Exporting OTEL to {url}.", { mode, url: collapsedUrl })
       : t("{mode}. Exporting OTEL traces to {tracesUrl} and metrics to {metricsUrl}.", {
@@ -263,19 +278,19 @@ export function buildProviderInstanceUpdatePatch(input: {
     | ServerSettings["textGenerationModelSelection"]
     | undefined;
 }): Partial<UnifiedSettings> {
-  type LegacyProviderSettings = ServerSettings["providers"][keyof ServerSettings["providers"]];
-  const legacyProviderDefaults = DEFAULT_UNIFIED_SETTINGS.providers as Record<
-    string,
-    LegacyProviderSettings | undefined
-  >;
-  const legacyProviderDefault = input.isDefault ? legacyProviderDefaults[input.driver] : undefined;
+  const legacyProviderDefaults = DEFAULT_UNIFIED_SETTINGS.providers;
+
+  const legacyProviderDefault = input.isDefault
+    ? recordLookup(legacyProviderDefaults, input.driver)
+    : undefined;
+
   return {
     ...(legacyProviderDefault !== undefined
       ? {
           providers: {
             ...input.settings.providers,
             [input.driver]: legacyProviderDefault,
-          } as ServerSettings["providers"],
+          },
         }
       : {}),
     providerInstances: {
@@ -308,6 +323,7 @@ export function normalizeIntervalSeconds(value: number | null, minimum = 0): num
   if (value === null || !Number.isFinite(value)) {
     return minimum;
   }
+
   return Math.max(minimum, Math.round(value));
 }
 
@@ -328,11 +344,15 @@ export function backgroundActivityOverrideSettings(
     pauseWhenOnBattery: resolved.pauseWhenOnBattery,
     ...overrides,
   };
+
   for (const [key, value] of Object.entries(nextOverrides)) {
     if (value === undefined) {
+      // SAFETY: Object.entries supplies only own keys of nextOverrides; deletion removes explicitly undefined fields.
       delete nextOverrides[key as keyof typeof nextOverrides];
     }
   }
+
+  // SAFETY: the preceding loop removes every explicitly undefined override, satisfying the exact optional settings type.
   return {
     backgroundActivity: {
       schemaVersion: 1 as const,

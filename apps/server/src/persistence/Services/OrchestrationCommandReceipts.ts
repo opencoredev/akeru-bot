@@ -48,11 +48,13 @@ export const OrchestrationCommandReceipt = Schema.Struct({
   status: OrchestrationCommandReceiptStatus,
   error: Schema.NullOr(Schema.String),
 });
+
 export type OrchestrationCommandReceipt = typeof OrchestrationCommandReceipt.Type;
 
 export const GetByCommandIdInput = Schema.Struct({
   commandId: CommandId,
 });
+
 export type GetByCommandIdInput = typeof GetByCommandIdInput.Type;
 
 /**

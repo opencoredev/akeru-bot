@@ -1,3 +1,4 @@
+import type { TestValue } from "../test-support/reactTree";
 import type { ReactElement } from "react";
 import {
   AkeruDelegationRecord,
@@ -17,7 +18,7 @@ import * as Schema from "effect/Schema";
 import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 import { reactHookHarness as hooks } from "../../test/reactHookHarness";
-import { visitElements } from "../../test/reactElementTree";
+import { visitElements } from "../test-support/reactTree";
 import type { Bot, Group } from "./types";
 import type { PendingApproval, PendingUserInput } from "../../session-logic";
 
@@ -40,6 +41,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock("react", async (importOriginal) => {
   const actual = await importOriginal<typeof import("react")>();
   const { reactHookHarness } = await import("../../test/reactHookHarness");
+
   return {
     ...actual,
     useCallback: reactHookHarness.useCallback,
@@ -50,73 +52,96 @@ vi.mock("react", async (importOriginal) => {
     useState: reactHookHarness.useState,
   };
 });
+
 vi.mock("react/compiler-runtime", async () => {
   const { reactHookHarness } = await import("../../test/reactHookHarness");
+
   return { c: reactHookHarness.useMemoCache };
 });
+
 vi.mock("@effect/atom-react", () => ({
-  useAtomValue: (atom: unknown) =>
+  useAtomValue: <T,>(atom: T) =>
     atom === mocks.snapshotAtom
       ? mocks.snapshot
       : atom === mocks.peopleAtom
         ? { current: null, host: null }
         : [],
 }));
+
 vi.mock("@tanstack/react-router", () => ({ useNavigate: () => vi.fn() }));
+
 vi.mock("../../i18n", async () => {
   const { createTranslator } = await import("@akeru/client-runtime/i18n");
   const translator = createTranslator("en");
+
   return { useI18n: () => ({ ...translator, t: translator.translate }) };
 });
+
 vi.mock("../../hooks/useSettings", () => ({ usePrimarySettings: () => ({}) }));
+
 vi.mock("../../modelSelection", () => ({
   getCustomModelOptionsByInstance: () => new Map(),
   resolveAppModelSelectionState: () => null,
 }));
+
 vi.mock("../../providerInstances", () => ({
   applyProviderInstanceSettings: () => [],
   deriveProviderInstanceEntries: () => [],
   sortProviderInstanceEntries: () => [],
 }));
+
 vi.mock("../../state/bots", () => ({
   botEnvironment: { update: Symbol("update"), channels: { send: Symbol("send") } },
   environmentPeopleAtom: () => mocks.peopleAtom,
   environmentBotsAtom: () => Symbol("bots"),
 }));
+
 vi.mock("../../state/environments", () => ({
   usePrimaryEnvironmentId: () => EnvironmentId.make("environment-1"),
 }));
+
 vi.mock("./detailsPanelOpen", () => ({
   useBotDetailsOpen: () => [false, () => undefined],
   useGroupDetailsOpen: () => [false, () => undefined],
 }));
+
 vi.mock("../chat/ChatActionsMenu", () => ({
   ChatActionsMenu: () => null,
   useMarkChatVisited: () => undefined,
 }));
+
 vi.mock("../../state/entities", () => ({
   useThreadActivities: () => mocks.activities,
 }));
+
 vi.mock("../../state/query", () => ({ useEnvironmentQuery: () => ({ data: { inbox: [] } }) }));
+
 vi.mock("../../state/server", () => ({
   primaryServerProvidersAtom: mocks.providersAtom,
   serverEnvironment: { subscriptionAuth: () => null, routineThreadRuns: () => null },
 }));
+
 vi.mock("../../state/session", () => ({
   useEnvironmentSessionState: () => ({ data: null, isPending: false }),
 }));
+
 vi.mock("../../state/shell", () => ({ environmentSnapshotAtom: () => mocks.snapshotAtom }));
+
 vi.mock("./useServerRoster", () => ({
   useRosterLoadState: () => ({ kind: "loading" }),
   useEnableBotAutoReview: () => vi.fn(),
 }));
+
 vi.mock("../../state/use-atom-command", () => ({ useAtomCommand: () => vi.fn() }));
+
 vi.mock("../../settingsDialogStore", () => ({ openSettings: vi.fn() }));
+
 vi.mock("../voice/VoiceCall", () => ({
   BotVoiceCallButton: () => null,
   useVoiceCall: () => ({ activeCall: null, startingBotId: null }),
   useOptionalVoiceCall: () => ({ activeCall: null, startingBotId: null }),
 }));
+
 vi.mock("../chat/ReplyPlaybackProvider", () => ({
   ReplyPlaybackProvider: ({ children }: { children: unknown }) => children,
   useOptionalReplyPlayback: () => null,
@@ -124,10 +149,12 @@ vi.mock("../chat/ReplyPlaybackProvider", () => ({
     throw new Error("Reply playback is not available in this test.");
   },
 }));
+
 vi.mock("~/lib/replyPlaybackThread", () => ({
   useReplyPlaybackThread: () => undefined,
   replyPlaybackControlProps: () => undefined,
 }));
+
 vi.mock("./useRosterPendingApproval", () => ({
   useRosterPendingApproval: () => ({
     pendingApproval: mocks.pendingApproval,
@@ -137,6 +164,7 @@ vi.mock("./useRosterPendingApproval", () => ({
     respond: vi.fn(),
   }),
 }));
+
 vi.mock("./useBotEngineAvailability", () => ({
   useBotEngineAvailability: () => ({
     instanceEntries: [],
@@ -145,16 +173,26 @@ vi.mock("./useBotEngineAvailability", () => ({
     blocked: false,
   }),
 }));
+
 vi.mock("./botPresence", () => ({
   useBotPresence: () => "idle",
   useGroupPresence: () => "idle",
 }));
+
 vi.mock("./rosterStore", () => {
-  const useRosterStore = (selector: (state: unknown) => unknown) =>
-    selector({ bots: mocks.bots, groups: mocks.groups, environmentId: "environment-1" });
+  const useRosterStore = <T,>(
+    selector: (state: {
+      bots: typeof mocks.bots;
+      groups: typeof mocks.groups;
+      environmentId: string;
+    }) => T,
+  ) => selector({ bots: mocks.bots, groups: mocks.groups, environmentId: "environment-1" });
+
   useRosterStore.getState = () => ({ selectBot: vi.fn() });
+
   return { useRosterStore };
 });
+
 vi.mock("./useBotThreadRuntime", () => ({
   useBotThreadRuntime: () => ({
     sending: false,
@@ -177,6 +215,7 @@ vi.mock("./useBotThreadRuntime", () => ({
     send: vi.fn(),
   }),
 }));
+
 vi.mock("./useGroupThreadRuntime", () => ({
   useGroupThreadRuntime: () => ({
     sending: false,
@@ -211,6 +250,7 @@ import { BotUserInputPrompt } from "./BotUserInputPrompt";
 import { ThreadRuntimeWarningBanner } from "./ThreadRuntimeWarningBanner";
 
 const decodeDelegation = Schema.decodeUnknownSync(AkeruDelegationRecord);
+
 const parentBot: Bot = {
   id: "bot-parent",
   name: "Akeru",
@@ -230,7 +270,9 @@ const parentBot: Bot = {
   createdAt: "2026-08-31T00:00:00.000Z",
   updatedAt: "2026-08-31T00:00:00.000Z",
 };
+
 const childBot: Bot = { ...parentBot, id: "bot-child", name: "Mori", title: "Researcher" };
+
 const group: Group = {
   id: "group-1",
   name: "Research",
@@ -287,6 +329,7 @@ function delegation(
 
 function message(id: string, role: "user" | "assistant", turn: string, minute: number) {
   const timestamp = `2026-09-11T12:0${minute}:00.000Z`;
+
   return {
     id: MessageId.make(id),
     role,
@@ -310,19 +353,24 @@ const THREE_TURNS = [
 ];
 
 /** Message ids and delegation ids in the order the landing renders them. */
-function timelineOrder(rendered: unknown): string[] {
+function timelineOrder(rendered: TestValue): string[] {
   const order: string[] = [];
   visitElements(rendered, (element) => {
     if (element.type === DelegationCard) {
       order.push(
         `card:${(element.props as Parameters<typeof DelegationCard>[0]).delegation.delegationId}`,
       );
+
       return false;
     }
+
     const key = element.key?.replace(/^message:/, "");
+
     if (key && THREE_TURNS.some((entry) => entry.id === key)) order.push(key);
+
     return false;
   });
+
   return order;
 }
 
@@ -354,6 +402,7 @@ describe("thread landing delegations", () => {
     ["group", () => GroupThreadLanding({ groupId: group.id })],
   ])("renders the shared card for the matching %s thread delegation", (_kind, render) => {
     hooks.beginRender();
+
     const card = visitElements(
       render(),
       (element) => element.type === DelegationCard,
@@ -425,11 +474,14 @@ describe("thread landing delegations", () => {
 
   it("names the asking bot on group cards", () => {
     hooks.beginRender();
+
     const groupCard = visitElements(
       GroupThreadLanding({ groupId: group.id }),
       (element) => element.type === DelegationCard,
     ) as ReactElement<Parameters<typeof DelegationCard>[0]> | null;
+
     hooks.reset();
+
     const botCard = visitElements(
       BotThreadLanding({ botId: parentBot.id }),
       (element) => element.type === DelegationCard,
@@ -498,10 +550,12 @@ describe("thread landing delegations", () => {
     ];
 
     hooks.beginRender();
+
     const row = visitElements(
       BotThreadLanding({ botId: parentBot.id }),
       (element) => element.type === AssistantMessageRow,
     ) as ReactElement<Parameters<typeof AssistantMessageRow>[0]> | null;
+
     const result = row?.props.pluginResults?.[0]?.result;
 
     expect(result?.query).toBe("email");
@@ -530,6 +584,7 @@ describe("thread landing delegations", () => {
     ];
 
     hooks.beginRender();
+
     const card = visitElements(
       BotThreadLanding({ botId: parentBot.id }),
       (element) => element.type === ComposerPendingUserInputPanel,
@@ -558,6 +613,7 @@ describe("thread landing delegations", () => {
     ];
 
     hooks.beginRender();
+
     const prompt = visitElements(
       GroupThreadLanding({ groupId: group.id }),
       (element) => element.type === BotUserInputPrompt,
@@ -602,10 +658,12 @@ describe("thread landing delegations", () => {
 
     hooks.beginRender();
     const rendered = GroupThreadLanding({ groupId: group.id });
+
     const provider = visitElements(
       rendered,
       (element) => element.props.testId === "group-provider-message",
     );
+
     const sent = visitElements(
       rendered,
       (element) => element.props.testId === "group-user-message",
@@ -641,6 +699,7 @@ describe("thread landing delegations", () => {
     ];
 
     hooks.beginRender();
+
     const provider = visitElements(
       GroupThreadLanding({ groupId: group.id }),
       (element) => element.props.testId === "group-provider-message",
@@ -674,6 +733,7 @@ describe("thread landing delegations", () => {
     };
 
     hooks.beginRender();
+
     const composer = visitElements(
       render(),
       (element) => element.type === BotPromptComposer,
@@ -698,6 +758,7 @@ describe("thread landing delegations", () => {
     };
 
     hooks.beginRender();
+
     const composer = visitElements(
       render(),
       (element) => element.type === BotPromptComposer,
@@ -734,6 +795,7 @@ describe("thread landing delegations", () => {
     ];
 
     hooks.beginRender();
+
     const banner = visitElements(
       render(),
       (element) => element.type === ThreadRuntimeWarningBanner,

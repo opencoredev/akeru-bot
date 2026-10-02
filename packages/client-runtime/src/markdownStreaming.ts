@@ -10,12 +10,16 @@
  */
 
 const FENCE_PATTERN = /^ {0,3}(`{3,}|~{3,})(.*)$/;
+
 /** A line that may still grow into a fence opener or closer. */
 const PARTIAL_FENCE_PATTERN = /^ {0,3}(?:`{1,3}|~{1,3}|`{3,}[^`]*|~{3,}.*)$/;
+
 /** A list marker, task marker, setext underline, or thematic break with no content yet. */
 const PARTIAL_BLOCK_MARKER_PATTERN =
   /^ {0,3}(?:(?:[-*+]|\d{1,9}[.)])(?:\s+\[(?:[ xX]\]?)?)?|-+|=+|\*+|_+)\s*$/;
+
 const TABLE_ROW_PATTERN = /^ {0,3}\|/;
+
 const TABLE_DELIMITER_PATTERN = /^ {0,3}\|?\s*:?-+:?\s*(?:\|\s*:?-+:?\s*)*\|?\s*$/;
 
 interface OpenFence {
@@ -25,11 +29,14 @@ interface OpenFence {
 
 function readFenceState(lines: ReadonlyArray<string>): OpenFence | null {
   let open: OpenFence | null = null;
+
   for (const line of lines) {
     const match = FENCE_PATTERN.exec(line);
+
     if (!match) continue;
     const fence = match[1] ?? "";
     const marker = fence[0] === "~" ? "~" : "`";
+
     if (open === null) {
       // Backtick fence info strings cannot contain backticks.
       if (marker === "`" && (match[2] ?? "").includes("`")) continue;
@@ -42,6 +49,7 @@ function readFenceState(lines: ReadonlyArray<string>): OpenFence | null {
       open = null;
     }
   }
+
   return open;
 }
 
@@ -58,6 +66,7 @@ export function stabilizeStreamingMarkdown(text: string): string {
 
   if (openFence !== null) {
     const closer = new RegExp(`^ {0,3}\\${openFence.marker}+\\s*$`);
+
     return lastIsPartial && closer.test(last) ? withholdFrom(lines, lastIndex) : text;
   }
 
@@ -72,23 +81,31 @@ export function stabilizeStreamingMarkdown(text: string): string {
   // complete. Until then hold the whole run; after it, hold the row in flight.
   const blockEnd = lastIsPartial ? lastIndex : lastIndex - 1;
   let blockStart = blockEnd + 1;
+
   while (blockStart > 0 && TABLE_ROW_PATTERN.test(lines[blockStart - 1] ?? "")) {
     blockStart -= 1;
   }
+
   if (blockStart > blockEnd) return text;
   const delimiterIndex = blockStart + 1;
+
   const delimiterComplete =
     delimiterIndex <= blockEnd &&
     !(lastIsPartial && delimiterIndex === lastIndex) &&
     TABLE_DELIMITER_PATTERN.test(lines[delimiterIndex] ?? "");
+
   if (!delimiterComplete) {
     const firstRow = lines[blockStart] ?? "";
     const hasMultipleColumns = firstRow.split("|").length >= 4;
+
     if (!hasMultipleColumns && !lastIsPartial) return text;
+
     if (delimiterIndex < blockEnd || (delimiterIndex === blockEnd && !lastIsPartial)) {
       return text;
     }
+
     return withholdFrom(lines, blockStart);
   }
+
   return lastIsPartial ? withholdFrom(lines, lastIndex) : text;
 }

@@ -44,6 +44,7 @@ describe("collectUint8StreamText", () => {
       const invalid = yield* collectUint8StreamText({
         stream: Stream.make(new Uint8Array([0x66, 0x80, 0x6f])),
       });
+
       const literal = yield* collectUint8StreamText({
         stream: Stream.make(encoder.encode("before\uFFFDafter")),
       });

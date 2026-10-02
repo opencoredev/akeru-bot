@@ -6,6 +6,11 @@ import type { PendingUserInput } from "../../session-logic";
 import { ComposerPendingUserInputPanel } from "../chat/ComposerPendingUserInputPanel";
 import { OpenComputerAction } from "../computer/OpenComputerAction";
 import type { Bot } from "./types";
+import { cn } from "../../lib/utils";
+import {
+  BOT_COMPOSER_DOCKED_PANEL_CLASS_NAME,
+  BOT_COMPOSER_QUIET_SURFACE_CLASS_NAME,
+} from "./botConversationPresentation";
 
 export function BotUserInputPrompt({
   pendingUserInputs,
@@ -33,12 +38,13 @@ export function BotUserInputPrompt({
   // Once an answer is on its way the question has been dealt with: the composer's working
   // status takes over rather than leaving a dead card docked above the prompt box.
   const activePrompt = pendingUserInputs[0];
+
   if (!activePrompt || respondingRequestIds.includes(activePrompt.requestId)) return null;
 
   return (
     <section
       aria-label={t("Question")}
-      className="mb-1 w-full rounded-t-[1.65rem] rounded-b-md border border-border/70 border-b-transparent bg-card px-3.5 pt-3 pb-2.5"
+      className={cn(BOT_COMPOSER_QUIET_SURFACE_CLASS_NAME, BOT_COMPOSER_DOCKED_PANEL_CLASS_NAME)}
       data-testid="bot-user-input-prompt"
     >
       <ComposerPendingUserInputPanel

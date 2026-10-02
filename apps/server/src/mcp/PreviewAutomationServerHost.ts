@@ -25,6 +25,7 @@ const responseForFailure = (input: {
   readonly cause: unknown;
 }): PreviewAutomationResponse => {
   const message = input.cause instanceof Error ? input.cause.message : "Browser operation failed.";
+
   return {
     clientId: input.clientId,
     connectionId: input.connectionId,
@@ -50,6 +51,7 @@ export const hostLayer = Layer.effectDiscard(
     const environment = yield* ServerEnvironment.ServerEnvironment;
     const environmentId = yield* environment.getEnvironmentId;
     const clientId = `server-preview-${environmentId}`;
+
     const events = yield* broker.connect({
       clientId,
       environmentId,
@@ -58,6 +60,7 @@ export const hostLayer = Layer.effectDiscard(
 
     const handleEvent = (event: PreviewAutomationStreamEvent) => {
       if (event.type === "connected") return Effect.void;
+
       return Effect.tryPromise({
         try: () => browser.handle(event.request),
         catch: (cause) => new ServerPreviewOperationError({ cause }),

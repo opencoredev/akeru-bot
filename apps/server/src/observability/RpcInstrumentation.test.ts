@@ -43,6 +43,7 @@ const collectSpanNames = <A, E, R>(
 ): Effect.Effect<ReadonlyArray<string>, E, R> =>
   Effect.gen(function* () {
     const spanNames: Array<string> = [];
+
     const tracer = Tracer.make({
       span: (options) => {
         const span = new Tracer.NativeSpan(options);
@@ -50,6 +51,7 @@ const collectSpanNames = <A, E, R>(
 
         span.end = (endTime, exit) => {
           end(endTime, exit);
+
           if (span.sampled) {
             spanNames.push(span.name);
           }
@@ -178,6 +180,7 @@ describe("RpcInstrumentation", () => {
   it.effect("records direct stream durations from nanosecond clock readings", () =>
     Effect.gen(function* () {
       const duration = Duration.nanos(1_500_000n);
+
       const events = yield* Effect.gen(function* () {
         const fiber = yield* Stream.runCollect(
           observeRpcStream(
@@ -191,12 +194,14 @@ describe("RpcInstrumentation", () => {
 
         yield* Effect.yieldNow;
         yield* TestClock.adjust(duration);
+
         return yield* Fiber.join(fiber);
       }).pipe(Effect.provide(TestClock.layer()));
 
       assert.deepStrictEqual(Array.from(events), ["ok"]);
 
       const snapshots = yield* Metric.snapshot;
+
       const snapshot = findHistogramSnapshot(snapshots, "t3_rpc_request_duration", {
         method: WS_METHODS.serverGetProcessDiagnostics,
       });

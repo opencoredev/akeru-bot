@@ -71,11 +71,17 @@ export const COMMON_DEV_PORTS: ReadonlyArray<number> = Object.freeze([
 ]);
 
 const POLL_INTERVAL = Duration.seconds(3);
+
 const LSOF_TIMEOUT_MS = 5_000;
+
 const WINDOWS_LISTENER_TIMEOUT_MS = 5_000;
+
 const WEB_PROBE_TIMEOUT = Duration.seconds(1);
+
 const WEB_PROBE_CACHE_TTL_MS = Duration.toMillis(Duration.seconds(15));
+
 const WEB_PROBE_CONCURRENCY = 16;
+
 const NAVIGATION_REDIRECT_STATUSES = new Set([301, 302, 303, 307, 308]);
 
 type Listener = (servers: ReadonlyArray<DiscoveredLocalServer>) => Effect.Effect<void>;
@@ -127,8 +133,11 @@ const terminalOwnerKey = (owner: {
 const parseConfiguredUrl = (raw: string): URL | null => {
   try {
     const url = new URL(raw);
+
     if (url.protocol !== "http:" && url.protocol !== "https:") return null;
+
     if (!isLoopbackHost(url.hostname)) return null;
+
     return url;
   } catch {
     return null;
@@ -144,21 +153,22 @@ const urlPort = (url: URL): number =>
 const webProbeCacheKey = (raw: string): string => {
   const url = new URL(raw);
   url.hash = "";
+
   return url.href;
 };
 
 const normalizeConfiguredUrls = (urls: ReadonlyArray<string>): ReadonlyArray<string> => [
   ...new Set(
-    urls
-      .slice(0, CONFIGURED_LOCAL_SERVER_URLS_MAX_ITEMS)
-      .filter((raw) => raw.length <= PREVIEW_URL_MAX_LENGTH)
-      .map(parseConfiguredUrl)
-      .filter((url): url is URL => url !== null && url.href.length <= PREVIEW_URL_MAX_LENGTH)
-      .map((url) => {
-        if (url.hostname === "0.0.0.0") url.hostname = "localhost";
-        return url.href;
-      })
-      .filter((url) => url.length <= PREVIEW_URL_MAX_LENGTH),
+    urls.slice(0, CONFIGURED_LOCAL_SERVER_URLS_MAX_ITEMS).flatMap((raw) => {
+      if (raw.length > PREVIEW_URL_MAX_LENGTH) return [];
+      const url = parseConfiguredUrl(raw);
+
+      if (url === null || url.href.length > PREVIEW_URL_MAX_LENGTH) return [];
+
+      if (url.hostname === "0.0.0.0") url.hostname = "localhost";
+
+      return url.href.length <= PREVIEW_URL_MAX_LENGTH ? [url.href] : [];
+    }),
   ),
 ];
 
@@ -167,18 +177,24 @@ const projectWebProbeSnapshot = (
   configuredUrls: ReadonlyArray<string>,
 ): ReadonlyArray<DiscoveredLocalServer> => {
   const visibleByServer = new Map<string, DiscoveredLocalServer>();
+
   for (const raw of normalizeConfiguredUrls(configuredUrls)) {
     const url = new URL(raw);
     const port = urlPort(url);
     const serverKey = localServerKey(url.hostname, port);
+
     if (visibleByServer.has(serverKey)) continue;
     const configured = snapshot.configured.get(webProbeCacheKey(raw));
+
     if (configured) visibleByServer.set(serverKey, { ...configured, url: raw });
   }
+
   for (const server of snapshot.discovered) {
     const key = localServerKey(server.host, server.port);
+
     if (!visibleByServer.has(key)) visibleByServer.set(key, server);
   }
+
   return [...visibleByServer.values()].toSorted((left, right) => left.port - right.port);
 };
 
@@ -194,21 +210,26 @@ const parseLsofOutput = (
     if (line.length === 0) continue;
     const tag = line.charAt(0);
     const value = line.slice(1);
+
     if (tag === "p") {
       const parsed = Number.parseInt(value, 10);
       pid = Number.isFinite(parsed) && parsed > 0 ? parsed : null;
       processName = null;
       continue;
     }
+
     if (tag === "c") {
       processName = value.trim() || null;
       continue;
     }
+
     if (tag === "n") {
       const portMatch = parsePortFromLsofName(value);
+
       if (portMatch == null) continue;
       const url = `http://localhost:${portMatch}`;
       const key = `localhost:${portMatch}`;
+
       if (seen.has(key)) continue;
       seen.set(key, {
         host: "localhost",
@@ -228,14 +249,19 @@ const parsePortFromLsofName = (name: string): number | null => {
   // Examples: "*:5173", "127.0.0.1:5173", "[::1]:5173", "localhost:5173",
   //           "192.168.1.10:5173 (LISTEN)" — we only care if the host part is local.
   const trimmed = name.split(" ", 1)[0]?.trim() ?? "";
+
   if (trimmed.length === 0) return null;
   const lastColon = trimmed.lastIndexOf(":");
+
   if (lastColon < 0) return null;
   const hostPart = trimmed.slice(0, lastColon);
   const portPart = trimmed.slice(lastColon + 1);
+
   if (!LSOF_LOCAL_HOST_TOKENS.has(hostPart)) return null;
   const port = Number.parseInt(portPart, 10);
+
   if (!Number.isFinite(port) || port <= 0 || port >= 65536) return null;
+
   return port;
 };
 
@@ -244,14 +270,18 @@ const parseWindowsListenerOutput = (
   terminalByProcessId: ReadonlyMap<number, TerminalProcessOwner> = new Map(),
 ): ReadonlyArray<DiscoveredLocalServer> => {
   const seen = new Map<number, DiscoveredLocalServer>();
+
   for (const line of raw.split(/\r?\n/g)) {
     const [hostRaw, portRaw, pidRaw, processNameRaw] = line.trim().split("|", 4);
     const host = hostRaw?.trim() ?? "";
+
     if (!LSOF_LOCAL_HOST_TOKENS.has(host) && host !== "::") continue;
     const port = Number(portRaw);
     const pid = Number(pidRaw);
+
     if (!Number.isInteger(port) || port <= 0 || port >= 65536) continue;
     const normalizedPid = Number.isInteger(pid) && pid > 0 ? pid : null;
+
     if (seen.has(port)) continue;
     seen.set(port, {
       host: "localhost",
@@ -262,6 +292,7 @@ const parseWindowsListenerOutput = (
       terminal: normalizedPid === null ? null : (terminalByProcessId.get(normalizedPid) ?? null),
     });
   }
+
   return [...seen.values()].toSorted((left, right) => left.port - right.port);
 };
 
@@ -270,10 +301,13 @@ const serversEqual = (
   right: ReadonlyArray<DiscoveredLocalServer>,
 ): boolean => {
   if (left.length !== right.length) return false;
+
   for (let i = 0; i < left.length; i += 1) {
     const a = left[i];
     const b = right[i];
+
     if (!a || !b) return false;
+
     if (
       a.host !== b.host ||
       a.port !== b.port ||
@@ -286,6 +320,7 @@ const serversEqual = (
       return false;
     }
   }
+
   return true;
 };
 
@@ -294,11 +329,13 @@ export const make = Effect.gen(function* PortDiscoveryMake() {
   const processRunner = yield* ProcessRunner.ProcessRunner;
   const hostPlatform = yield* HostProcessPlatform;
   const httpClient = (yield* HttpClient.HttpClient).pipe(HttpClient.withScope);
+
   const stateRef = yield* Ref.make<ScannerState>({
     listeners: new Map(),
     terminalProcesses: new Map(),
     retainCount: 0,
   });
+
   const webProbeCacheRef = yield* Ref.make<ReadonlyMap<string, WebProbeCacheEntry>>(new Map());
   const scanSemaphore = yield* Semaphore.make(1);
 
@@ -314,6 +351,7 @@ export const make = Effect.gen(function* PortDiscoveryMake() {
         ),
       { concurrency: "unbounded" },
     );
+
     return results
       .filter((result) => result.listening)
       .map<DiscoveredLocalServer>((result) => ({
@@ -330,13 +368,18 @@ export const make = Effect.gen(function* PortDiscoveryMake() {
     httpClient.get(url).pipe(
       Effect.map((response) => {
         const location = response.headers.location?.trim();
+
         if (NAVIGATION_REDIRECT_STATUSES.has(response.status) && location) return url;
+
         if (response.status < 200 || response.status >= 300) return null;
+
         if (response.status === 204 || response.status === 205) return null;
+
         const contentType = response.headers["content-type"]
           ?.split(";", 1)[0]
           ?.trim()
           .toLowerCase();
+
         return contentType === "text/html" || contentType === "application/xhtml+xml" ? url : null;
       }),
       Effect.scoped,
@@ -354,6 +397,7 @@ export const make = Effect.gen(function* PortDiscoveryMake() {
     const serversByKey = new Map(
       servers.map((server) => [localServerKey(server.host, server.port), server] as const),
     );
+
     const groups: WebProbeGroup[] = [];
     const configuredResources = new Set<string>();
 
@@ -362,6 +406,7 @@ export const make = Effect.gen(function* PortDiscoveryMake() {
       const port = urlPort(url);
       const key = localServerKey(url.hostname, port);
       const resourceKey = webProbeCacheKey(raw);
+
       if (configuredResources.has(resourceKey)) continue;
       configuredResources.add(resourceKey);
       groups.push({
@@ -396,22 +441,29 @@ export const make = Effect.gen(function* PortDiscoveryMake() {
     const nowMillis = yield* Clock.currentTimeMillis;
     const cached = yield* Ref.get(webProbeCacheRef);
     const groups = makeWebProbeGroups(servers, configuredUrls);
+
     const batchProbes = new Map<
       string,
       Effect.Effect<{ readonly probe: WebProbeCacheEntry; readonly fresh: boolean }>
     >();
+
     const batchProbeSemaphore = yield* Semaphore.make(1);
+
     const getProbe = (url: string, pid: number | null) => {
       const key = webProbeCacheKey(url);
       const identity = `${key}\u0000${pid ?? ""}`;
+
       return batchProbeSemaphore
         .withPermits(1)(
           Effect.gen(function* () {
             const existing = batchProbes.get(identity);
+
             if (existing) return [existing] as const;
             const cachedProbe = cached.get(key);
+
             const cachedIsCurrent =
               cachedProbe?.pid === pid && cachedProbe.expiresAtMillis > nowMillis;
+
             const memoized = yield* Effect.cached(
               cachedIsCurrent
                 ? Effect.succeed({ probe: cachedProbe, fresh: false })
@@ -422,37 +474,47 @@ export const make = Effect.gen(function* PortDiscoveryMake() {
                     })),
                   ),
             );
+
             batchProbes.set(identity, memoized);
+
             return [memoized] as const;
           }),
         )
         .pipe(Effect.flatMap(([probe]) => probe));
     };
+
     const probed = yield* Effect.forEach(
       groups,
       (group) =>
         Effect.gen(function* () {
           const probes: Array<readonly [string, WebProbeCacheEntry, boolean]> = [];
           let visibleUrl: string | null = null;
+
           for (const url of group.urls) {
             const key = webProbeCacheKey(url);
             const { probe, fresh } = yield* getProbe(url, group.server.pid);
             probes.push([key, probe, fresh]);
+
             if (probe.isWeb) {
               visibleUrl = url;
               break;
             }
           }
+
           return { group, probes, visibleUrl };
         }),
       { concurrency: WEB_PROBE_CONCURRENCY },
     );
+
     const completedAtMillis = yield* Clock.currentTimeMillis;
+
     const nextCache = new Map(
       [...cached].filter(([, probe]) => probe.expiresAtMillis > completedAtMillis),
     );
+
     const discovered: DiscoveredLocalServer[] = [];
     const configured = new Map<string, DiscoveredLocalServer>();
+
     for (const { group, probes, visibleUrl } of probed) {
       for (const [key, probe, fresh] of probes) {
         nextCache.set(
@@ -460,12 +522,16 @@ export const make = Effect.gen(function* PortDiscoveryMake() {
           fresh ? { ...probe, expiresAtMillis: completedAtMillis + WEB_PROBE_CACHE_TTL_MS } : probe,
         );
       }
+
       if (visibleUrl === null) continue;
       const server = { ...group.server, url: visibleUrl };
+
       if (group.configuredKey === null) discovered.push(server);
       else configured.set(group.configuredKey, server);
     }
+
     yield* Ref.set(webProbeCacheRef, nextCache);
+
     return { discovered, configured } satisfies WebProbeSnapshot;
   });
 
@@ -482,15 +548,19 @@ export const make = Effect.gen(function* PortDiscoveryMake() {
   ) {
     const state = yield* Ref.get(stateRef);
     const terminalByProcessId = new Map<number, TerminalProcessOwner>();
+
     for (const registration of state.terminalProcesses.values()) {
       for (const processId of registration.processIds) {
         terminalByProcessId.set(processId, registration.owner);
       }
     }
+
     if (hostPlatform === "win32") {
       const recoverWindowsProbeFailure = recoverProcessProbeFailure("windows-listeners");
+
       const command =
         'Get-NetTCPConnection -State Listen -ErrorAction Stop | ForEach-Object { $processName = (Get-Process -Id $_.OwningProcess -ErrorAction SilentlyContinue).ProcessName; Write-Output "$($_.LocalAddress)|$($_.LocalPort)|$($_.OwningProcess)|$processName" }';
+
       const listeners = yield* processRunner
         .run({
           command: "powershell.exe",
@@ -509,10 +579,14 @@ export const make = Effect.gen(function* PortDiscoveryMake() {
             ProcessTimeoutError: recoverWindowsProbeFailure,
           }),
         );
+
       if (listeners !== null) return yield* probeWebServers(listeners, configuredUrls);
+
       return yield* probeWebServers(yield* probeCommonPorts(), configuredUrls);
     }
+
     const recoverLsofProbeFailure = recoverProcessProbeFailure("lsof");
+
     const lsofResult = yield* processRunner
       .run({
         command: "lsof",
@@ -531,7 +605,9 @@ export const make = Effect.gen(function* PortDiscoveryMake() {
           ProcessTimeoutError: recoverLsofProbeFailure,
         }),
       );
+
     if (lsofResult !== null) return yield* probeWebServers(lsofResult, configuredUrls);
+
     return yield* probeWebServers(yield* probeCommonPorts(), configuredUrls);
   });
 
@@ -542,6 +618,7 @@ export const make = Effect.gen(function* PortDiscoveryMake() {
 
   const scanOnce: PortDiscovery["Service"]["scan"] = (configuredUrls = []) => {
     const normalized = normalizeConfiguredUrls(configuredUrls);
+
     return scanSnapshot(normalized).pipe(
       Effect.map((snapshot) => projectWebProbeSnapshot(snapshot, normalized)),
     );
@@ -550,6 +627,7 @@ export const make = Effect.gen(function* PortDiscoveryMake() {
   const pollTick = Effect.fn("PortDiscovery.pollTick")(
     function* () {
       if ((yield* Ref.get(stateRef)).retainCount <= 0) return;
+
       const configuredUrls = [
         ...new Set(
           [...(yield* Ref.get(stateRef)).listeners.values()].flatMap(
@@ -557,18 +635,24 @@ export const make = Effect.gen(function* PortDiscoveryMake() {
           ),
         ),
       ];
+
       const snapshot = yield* scanSnapshot(configuredUrls);
+
       const notifications = yield* Ref.modify(stateRef, (state) => {
         const listeners = new Map(state.listeners);
         const changed: Array<readonly [Listener, ReadonlyArray<DiscoveredLocalServer>]> = [];
+
         for (const [listener, subscription] of listeners) {
           const next = projectWebProbeSnapshot(snapshot, subscription.configuredUrls);
+
           if (serversEqual(subscription.lastSnapshot, next)) continue;
           listeners.set(listener, { ...subscription, lastSnapshot: next });
           changed.push([listener, next]);
         }
+
         return [changed, { ...state, listeners }];
       });
+
       yield* Effect.forEach(notifications, ([listener, servers]) => listener(servers), {
         discard: true,
       });
@@ -587,6 +671,7 @@ export const make = Effect.gen(function* PortDiscoveryMake() {
       state.retainCount === 0,
       { ...state, retainCount: state.retainCount + 1 },
     ]);
+
     if (wasIdle) {
       // Run an immediate scan + broadcast so the new retainer doesn't have
       // to wait up to POLL_INTERVAL for the first emission.
@@ -610,12 +695,14 @@ export const make = Effect.gen(function* PortDiscoveryMake() {
             configuredUrls: normalizeConfiguredUrls(input.configuredUrls),
             lastSnapshot: input.initialSnapshot,
           });
+
           return { ...state, listeners };
         }),
         () =>
           Ref.update(stateRef, (state) => {
             const listeners = new Map(state.listeners);
             listeners.delete(listener);
+
             return { ...state, listeners };
           }),
       ),
@@ -627,17 +714,21 @@ export const make = Effect.gen(function* PortDiscoveryMake() {
         threadId: ThreadId.make(input.threadId),
         terminalId: input.terminalId,
       };
+
       const processIds = new Set(
         input.processIds.filter((processId) => Number.isInteger(processId) && processId > 0),
       );
+
       yield* Ref.update(stateRef, (state) => {
         const terminalProcesses = new Map(state.terminalProcesses);
         const key = terminalOwnerKey(owner);
+
         if (processIds.size === 0) {
           terminalProcesses.delete(key);
         } else {
           terminalProcesses.set(key, { owner, processIds });
         }
+
         return { ...state, terminalProcesses };
       });
     });
@@ -648,6 +739,7 @@ export const make = Effect.gen(function* PortDiscoveryMake() {
     yield* Ref.update(stateRef, (state) => {
       const terminalProcesses = new Map(state.terminalProcesses);
       terminalProcesses.delete(terminalOwnerKey(input));
+
       return { ...state, terminalProcesses };
     });
   });

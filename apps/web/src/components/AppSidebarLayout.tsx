@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 import { useAtomValue } from "@effect/atom-react";
 import * as Schema from "effect/Schema";
 import {
@@ -13,7 +14,7 @@ import { isElectron } from "../env";
 import { getLocalStorageItem, removeLocalStorageItem } from "../hooks/useLocalStorage";
 import { useI18n } from "../i18n";
 import { resolveShortcutCommand, shortcutLabelForCommand } from "../keybindings";
-import { cn, isMacPlatform } from "../lib/utils";
+import { isMacPlatform } from "../lib/utils";
 import { primaryServerKeybindingsAtom } from "../state/server";
 import BotRosterSidebar from "./roster/BotRosterSidebar";
 import {
@@ -27,10 +28,7 @@ import { SettingsSidebarNav } from "./settings/SettingsSidebarNav";
 import { useServerRosterSync } from "./roster/useServerRoster";
 import { openSettings } from "~/settingsDialogStore";
 import { openProductFeedback } from "~/productFeedbackStore";
-import {
-  resolveSidebarStageFocusRingOffsetClass,
-  useSidebarStageBackdropVariant,
-} from "./SidebarStageBackdrop";
+import { useSidebarStageBackdropVariant } from "./SidebarStageBackdrop";
 import { useProjects } from "../state/entities";
 import {
   resolveInitialThreadSidebarWidth,
@@ -47,6 +45,7 @@ import {
   useSidebar,
   useSidebarVisibility,
 } from "./ui/sidebar";
+import { SIDEBAR_WIDTH_ICON } from "./ui/sidebarContext";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "./ui/tooltip";
 import { DesktopOnboarding } from "./onboarding/DesktopOnboarding";
 
@@ -54,6 +53,7 @@ const MACOS_TRAFFIC_LIGHTS_LEFT_INSET = "90px";
 
 function subscribeToViewportWidth(onChange: () => void): () => void {
   window.addEventListener("resize", onChange);
+
   return () => window.removeEventListener("resize", onChange);
 }
 
@@ -69,6 +69,7 @@ function readInitialThreadSidebarWidth(): number {
     );
   } catch (error) {
     console.error("Could not read persisted thread sidebar width.", error);
+
     return resolveInitialThreadSidebarWidth(null, window.innerWidth);
   }
 }
@@ -88,12 +89,14 @@ function SidebarControl({ stageArtworkVisible }: { stageArtworkVisible: boolean 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.defaultPrevented) return;
+
       if (
         event.target instanceof HTMLElement &&
         event.target.closest("[data-keybinding-capture]")
       ) {
         return;
       }
+
       if (resolveShortcutCommand(event, keybindings) !== "sidebar.toggle") return;
 
       event.preventDefault();
@@ -103,6 +106,7 @@ function SidebarControl({ stageArtworkVisible }: { stageArtworkVisible: boolean 
 
     // Capture before focused editors consume commands such as Mod+B for rich-text formatting.
     window.addEventListener("keydown", onKeyDown, true);
+
     return () => window.removeEventListener("keydown", onKeyDown, true);
   }, [keybindings, toggleSidebar]);
 
@@ -115,22 +119,15 @@ function SidebarControl({ stageArtworkVisible }: { stageArtworkVisible: boolean 
     // the panel), so the trigger mirrors it: both clusters sit one extra pixel
     // off their edge and the titlebar reads symmetric.
     <div
-      className="pointer-events-none fixed left-[var(--workspace-controls-left)] top-[var(--workspace-controls-top)] z-50 ml-px flex h-[var(--workspace-topbar-height)] items-center"
+      className="pointer-events-none fixed left-(--workspace-controls-left) top-(--workspace-controls-top) z-50 ml-px flex h-(--workspace-topbar-height) items-center"
       data-sidebar-control=""
     >
       <Tooltip>
         <TooltipTrigger
           render={
             <SidebarTrigger
-              className={cn(
-                "pointer-events-auto",
-                isSidebarVisible &&
-                  stageBackdropVariant &&
-                  "focus-visible:ring-white/90 [&_svg]:stroke-white/90! [&_svg]:opacity-100! [&_svg]:hover:stroke-white! [:hover,[data-pressed]]:bg-white/15",
-                isSidebarVisible &&
-                  stageBackdropVariant &&
-                  resolveSidebarStageFocusRingOffsetClass(stageBackdropVariant),
-              )}
+              onStage={Boolean(isSidebarVisible && stageBackdropVariant)}
+              className="pointer-events-auto"
               aria-label={t("Toggle main sidebar")}
             />
           }
@@ -150,6 +147,7 @@ function SidebarControl({ stageArtworkVisible }: { stageArtworkVisible: boolean 
 // zero-project state while the environment snapshot reconnects.
 function ProjectProjectionRetention() {
   useProjects();
+
   return null;
 }
 
@@ -165,21 +163,28 @@ export function AppSidebarLayout({ children }: { children: ReactNode }) {
   // that would otherwise refresh a render-time snapshot.
   const viewportWidth = useSyncExternalStore(subscribeToViewportWidth, readViewportWidth);
   const sidebarMaximumWidth = resolveThreadSidebarMaximumWidth(viewportWidth);
+
   const resetSidebarWidth = () => {
     try {
       removeLocalStorageItem(THREAD_SIDEBAR_WIDTH_STORAGE_KEY);
     } catch (error) {
       console.error("Could not clear persisted thread sidebar width.", error);
     }
+
     setSidebarWidth(resolveInitialThreadSidebarWidth(null, viewportWidth));
   };
+
   const [isWindowFullscreen, setIsWindowFullscreen] = useState(() => {
     const getWindowFullscreenState = window.desktopBridge?.getWindowFullscreenState;
-    return isMacosDesktop && typeof getWindowFullscreenState === "function"
+
+    return isMacosDesktop && Predicate.isFunction(getWindowFullscreenState)
       ? getWindowFullscreenState()
       : false;
   });
+
   const sidebarExperiment = useSidebarExperiment();
+
+  // SAFETY: React CSSProperties omits custom properties; these values are CSS variables consumed by the component stylesheet.
   const sidebarProviderStyle = {
     "--sidebar-width": `${
       sidebarExperiment
@@ -189,32 +194,37 @@ export function AppSidebarLayout({ children }: { children: ReactNode }) {
         : sidebarWidth
     }px`,
     // Collapsed, the experiment keeps its full rail.
-    ...(sidebarExperiment ? { "--sidebar-width-icon": `${EXPERIMENTAL_RAIL_ONLY_WIDTH}px` } : {}),
-    ...(isMacosDesktop && !isWindowFullscreen
-      ? { "--workspace-controls-left": MACOS_TRAFFIC_LIGHTS_LEFT_INSET }
-      : {}),
-  } as CSSProperties;
+    "--sidebar-width-icon": sidebarExperiment
+      ? `${EXPERIMENTAL_RAIL_ONLY_WIDTH}px`
+      : SIDEBAR_WIDTH_ICON,
+    "--workspace-controls-left":
+      isMacosDesktop && !isWindowFullscreen ? MACOS_TRAFFIC_LIGHTS_LEFT_INSET : undefined,
+  } satisfies CSSProperties;
 
   useEffect(() => {
     if (!isMacosDesktop) return;
     const bridge = window.desktopBridge;
+
     if (!bridge) return;
     const { getWindowFullscreenState, onWindowFullscreenStateChange } = bridge;
+
     if (
-      typeof getWindowFullscreenState !== "function" ||
-      typeof onWindowFullscreenStateChange !== "function"
+      !Predicate.isFunction(getWindowFullscreenState) ||
+      !Predicate.isFunction(onWindowFullscreenStateChange)
     ) {
       return;
     }
 
     const unsubscribe = onWindowFullscreenStateChange(setIsWindowFullscreen);
     setIsWindowFullscreen(getWindowFullscreenState());
+
     return unsubscribe;
   }, [isMacosDesktop]);
 
   useEffect(() => {
     const onMenuAction = window.desktopBridge?.onMenuAction;
-    if (typeof onMenuAction !== "function") {
+
+    if (!Predicate.isFunction(onMenuAction)) {
       return;
     }
 
@@ -243,10 +253,7 @@ export function AppSidebarLayout({ children }: { children: ReactNode }) {
         side="left"
         collapsible="icon"
         data-app-sidebar=""
-        className={cn(
-          "bg-sidebar text-sidebar-foreground",
-          !sidebarExperiment && "border-r border-sidebar-border",
-        )}
+        surface={sidebarExperiment ? "app" : "app-bordered"}
         resizable={{
           maxWidth: sidebarMaximumWidth,
           minWidth: THREAD_SIDEBAR_MIN_WIDTH,

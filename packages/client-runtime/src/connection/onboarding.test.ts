@@ -40,6 +40,7 @@ function pairingHttpLayer(
           Response.json({ message: "descriptor unavailable" }, { status: 503 }),
         );
       }
+
       return Promise.resolve(
         Response.json({
           environmentId: "environment-paired",
@@ -78,6 +79,7 @@ describe("connection onboarding", () => {
   it.effect("prepares a persisted bearer registration from pairing details", () =>
     Effect.gen(function* () {
       const calls: Array<{ readonly url: string; readonly init: RequestInit }> = [];
+
       const registration = yield* preparePairingRegistration({
         host: "remote.example.test",
         pairingCode: "pairing-token",
@@ -107,10 +109,12 @@ describe("connection onboarding", () => {
       ]);
 
       const tokenRequest = calls.find((call) => call.url.endsWith("/oauth/token"));
+
       const tokenBody =
         tokenRequest?.init.body instanceof Uint8Array
           ? new TextDecoder().decode(tokenRequest.init.body)
           : String(tokenRequest?.init.body);
+
       const tokenParams = new URLSearchParams(tokenBody);
       expect(tokenParams.get("subject_token")).toBe("pairing-token");
       expect(tokenParams.get("scope")).toBe(AuthStandardClientScopes.join(" "));
@@ -144,6 +148,7 @@ describe("connection onboarding", () => {
   it.effect("rejects invalid pairing details before making a request", () =>
     Effect.gen(function* () {
       const calls: Array<{ readonly url: string; readonly init: RequestInit }> = [];
+
       const error = yield* preparePairingRegistration({
         host: "",
         pairingCode: "",
@@ -164,6 +169,7 @@ describe("connection onboarding", () => {
   it.effect("updates bearer metadata while preserving the credential and identity", () =>
     Effect.gen(function* () {
       const environmentId = EnvironmentId.make("environment-paired");
+
       const registration = yield* prepareBearerConnectionUpdate({
         input: {
           environmentId,
@@ -214,6 +220,7 @@ describe("connection onboarding", () => {
         username: "developer",
         port: 22,
       };
+
       const registration = yield* prepareSshRegistration({
         target,
       }).pipe(

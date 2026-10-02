@@ -28,20 +28,22 @@ import { isCommandMissingCause, type ServerProviderDraft } from "../providerSnap
 import { explicitProviderInstanceEnvironment } from "../ProviderInstanceEnvironment.ts";
 import { mergeSubscriptionInstanceEnvironment } from "../../subscription-auth/runtime.ts";
 import {
-  makeManualOnlyProviderMaintenanceCapabilities,
-  makeStaticProviderMaintenanceResolver,
+  manualOnlyProviderMaintenanceCapabilities,
+  staticProviderMaintenanceResolver,
   resolveProviderMaintenanceCapabilitiesEffect,
 } from "../providerMaintenance.ts";
 import {
   haveProviderSnapshotSettingsChanged,
-  makeProviderSnapshotSettingsSource,
+  providerSnapshotSettingsSource,
   type ProviderSnapshotSettings,
 } from "../providerUpdateSettings.ts";
+
 const decodeGrokSettings = Schema.decodeSync(GrokSettings);
 
 const DRIVER_KIND = ProviderDriverKind.make("grok");
-const UPDATE = makeStaticProviderMaintenanceResolver(
-  makeManualOnlyProviderMaintenanceCapabilities({
+
+const UPDATE = staticProviderMaintenanceResolver(
+  manualOnlyProviderMaintenanceCapabilities({
     provider: DRIVER_KIND,
     packageName: null,
   }),
@@ -90,17 +92,21 @@ export const GrokDriver: ProviderDriver<GrokSettings, GrokDriverEnv> = {
       const serverSettings = yield* ServerSettingsService;
       const { secretsDir } = yield* ServerConfig;
       const processEnv = mergeSubscriptionInstanceEnvironment(environment);
+
       const continuationIdentity = defaultProviderContinuationIdentity({
         driverKind: DRIVER_KIND,
         instanceId,
       });
+
       const stampIdentity = withInstanceIdentity({
         instanceId,
         displayName,
         accentColor,
         continuationGroupKey: continuationIdentity.continuationKey,
       });
+
       const effectiveConfig = { ...config, enabled } satisfies GrokSettings;
+
       const connection = {
         environment: processEnv,
         instanceEnvironment: explicitProviderInstanceEnvironment(environment),
@@ -110,12 +116,14 @@ export const GrokDriver: ProviderDriver<GrokSettings, GrokDriverEnv> = {
           config,
         }),
       };
+
       const maintenanceCapabilities = yield* resolveProviderMaintenanceCapabilitiesEffect(UPDATE, {
         binaryPath: effectiveConfig.binaryPath,
         env: processEnv,
       });
 
       const adapter = undefined;
+
       const textGeneration = yield* makeHarnessTextGeneration({
         secretsDir,
         driver: DRIVER_KIND,
@@ -130,9 +138,10 @@ export const GrokDriver: ProviderDriver<GrokSettings, GrokDriverEnv> = {
         instanceId,
         connection,
         draft: buildInitialGrokProviderSnapshot(effectiveConfig),
-      })).pipe(Effect.map(stampIdentity));
+      })).checkProvider.pipe(Effect.map(stampIdentity));
 
-      const snapshotSettings = makeProviderSnapshotSettingsSource(effectiveConfig, serverSettings);
+      const snapshotSettings = providerSnapshotSettingsSource(effectiveConfig, serverSettings);
+
       const snapshot = yield* makeManagedServerProvider<ProviderSnapshotSettings<GrokSettings>>({
         maintenanceCapabilities,
         getSettings: snapshotSettings.getSettings,

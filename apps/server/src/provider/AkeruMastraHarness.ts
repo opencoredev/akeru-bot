@@ -1,1274 +1,95 @@
-// @effect-diagnostics globalFetch:off nodeBuiltinImport:off
-import * as NodeURL from "node:url";
-import * as NodeCrypto from "node:crypto";
-import * as NodeSqlite from "node:sqlite";
+import type { AkeruRunOptions } from "./mastra/AkeruModels.ts";
 
-import { AuthStorage } from "@mastra/code-sdk/auth/storage";
-import { opencodeClaudeMaxProvider } from "@mastra/code-sdk/providers/claude-max";
-import { openaiCodexProvider } from "@mastra/code-sdk/providers/openai-codex";
-import { xaiProvider } from "@mastra/code-sdk/providers/xai";
-import { createAnthropic } from "@ai-sdk/anthropic";
-import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
-import { isThinkingLevelSetting } from "@mastra/code-sdk/thinking";
-import { Agent, type ToolsInput } from "@mastra/core/agent";
+import * as Schema from "effect/Schema";
+import * as Predicate from "effect/Predicate";
+import { createAkeruConversation } from "./mastra/AkeruConversation.ts";
+import * as NodeCrypto from "node:crypto";
+import { Agent } from "@mastra/core/agent";
 import {
   AgentController as MastraAgentController,
   type MastraDBMessage,
-  type Session,
 } from "@mastra/core/agent-controller";
 import { RequestContext } from "@mastra/core/request-context";
-import {
-  isBadRequestError,
-  PrefillErrorHandler,
-  ProviderHistoryCompat,
-  StreamErrorRetryProcessor,
-  type Processor,
-  type ProcessInputStepArgs,
-  type ProcessOutputResultArgs,
-} from "@mastra/core/processors";
-import type { StandardSchemaWithJSON } from "@mastra/core/schema";
-import type { ObservationalMemoryRecord } from "@mastra/core/storage";
-import { createTool, type NeedsApprovalFn } from "@mastra/core/tools";
-import { LibSQLStore } from "@mastra/libsql";
-import { Memory } from "@mastra/memory";
-import {
-  ObservationalMemory,
-  OBSERVATION_CONTINUATION_HINT,
-  type ObserveHooks,
-} from "@mastra/memory/processors";
-import {
-  AKERU_PRODUCT_FEEDBACK_TOOL_NAME,
-  AKERU_CREATE_ROUTINE_TOOL_NAME,
-  AkeruCreateRoutineInput,
-  ProductFeedbackToolDraft,
-  classifyAkeruSensitivePath,
-  type AkeruConversationMemorySnapshot,
-  type BotPersonalityTone,
-  type ProviderDriverKind,
-  type ProductFeedbackToolDraft as ProductFeedbackToolDraftValue,
-  type AkeruCreateRoutineInput as AkeruCreateRoutineInputValue,
-} from "@akeru/contracts";
+
 import * as DateTime from "effect/DateTime";
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
-import * as Exit from "effect/Exit";
 import * as Fiber from "effect/Fiber";
 import * as FiberHandle from "effect/FiberHandle";
 import * as FiberSet from "effect/FiberSet";
-import * as Schema from "effect/Schema";
 import * as Semaphore from "effect/Semaphore";
-import { z } from "zod";
-
-import {
-  createAkeruAgentInstructions,
-  createAkeruBotInstructions,
-} from "./AkeruAgentInstructions.ts";
-import type { SubscriptionAuthService } from "../subscription-auth/service.ts";
-import { akeruOpenAIProvider } from "./AkeruOpenAIProvider.ts";
-import { akeruKimiProvider, type AkeruKimiAccess } from "./AkeruKimiProvider.ts";
-import { akeruOpenCodeGoProvider } from "./AkeruOpenCodeGoProvider.ts";
-import { createAkeruMastraTools } from "./AkeruMastraTools.ts";
-import type { AkeruToolRuntime } from "./AkeruToolRuntime.ts";
-import { isCodexComputerUseTool } from "./CodexComputerUse.ts";
-import { selectRecentConversation } from "./RecentConversation.ts";
 import {
   registerEntityMemoryResource,
   registerEntityMemoryStore,
 } from "../memory/EntityMemoryInvalidation.ts";
+import {
+  type AkeruMastraHarnessOptions,
+  type AkeruMastraState,
+  type AkeruMastraSession,
+  type AkeruBackgroundObservationInput,
+  type AkeruMastraHarness,
+} from "./mastra/AkeruHarnessTypes.ts";
+import {
+  createAkeruMastraMemory,
+  createAkeruObserveHooks,
+  controllerModelId,
+  controllerModelOptions,
+  controllerModelConnection,
+} from "./mastra/AkeruMemory.ts";
+import {
+  AkeruMastraHarnessError,
+  AkeruObservationQueueClosedError,
+  isObservationQueueClosed,
+} from "./mastra/AkeruHarnessErrors.ts";
+import { openObservationQueueDb } from "./mastra/AkeruObservationQueueStore.ts";
+import { resolveAkeruInstructions } from "./mastra/AkeruInstructions.ts";
+import {
+  resolveAkeruMastraModel,
+  DEFAULT_MODEL_ID,
+  withAkeruModelRunOptions,
+} from "./mastra/AkeruModels.ts";
+import { resolveAkeruTools } from "./mastra/AkeruTools.ts";
+import { akeruErrorProcessors } from "./mastra/AkeruErrorProcessors.ts";
+import { akeruToolCategory, routineToolNeedsGlobalApproval } from "./mastra/AkeruActions.ts";
 
-const DEFAULT_MODEL_ID = "openai/gpt-5.6-sol";
-const decodeProductFeedbackToolDraft = Schema.decodeUnknownExit(ProductFeedbackToolDraft, {
-  onExcessProperty: "error",
-});
-const decodeCreateRoutineInput = Schema.decodeUnknownPromise(AkeruCreateRoutineInput);
-const productFeedbackToolJsonSchema = {
-  type: "object",
-  additionalProperties: false,
-  properties: {
-    feedback: { type: "string", minLength: 1, maxLength: 4_000 },
-  },
-  required: ["feedback"],
-} as const;
-
-export const productFeedbackToolInputSchema: StandardSchemaWithJSON<ProductFeedbackToolDraftValue> =
-  {
-    "~standard": {
-      version: 1,
-      vendor: "akeru-effect",
-      validate: (value) => {
-        const decoded = decodeProductFeedbackToolDraft(value);
-        return Exit.isSuccess(decoded)
-          ? { value: decoded.value }
-          : { issues: [{ message: "Invalid product feedback draft." }] };
-      },
-      jsonSchema: {
-        input: () => productFeedbackToolJsonSchema,
-        output: () => productFeedbackToolJsonSchema,
-      },
-    },
-  };
-
-const productFeedbackTool = createTool({
-  id: AKERU_PRODUCT_FEEDBACK_TOOL_NAME,
-  description:
-    "Draft anonymous Akeru Bot product feedback for the user to review and send. This tool never sends feedback.",
-  inputSchema: productFeedbackToolInputSchema,
-  requireApproval: true,
-  execute: async () => ({ status: "draft-opened" as const }),
-});
-
-const routineTime = z.string().regex(/^(?:[01]\d|2[0-3]):[0-5]\d$/);
-export const AKERU_LIST_ROUTINES_TOOL_NAME = "akeru_list_routines";
-export const AKERU_DELETE_ROUTINES_TOOL_NAME = "akeru_delete_routines";
-export const routineToolInputSchema = z.object({
-  name: z.string().trim().min(1),
-  instructions: z.string().trim().min(1),
-  schedule: z.discriminatedUnion("kind", [
-    z.object({ kind: z.literal("daily"), time: routineTime }),
-    z.object({ kind: z.literal("weekdays"), time: routineTime }),
-    z.object({
-      kind: z.literal("weekly"),
-      weekdays: z
-        .array(
-          z.enum(["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]),
-        )
-        .min(1),
-      time: routineTime,
-    }),
-  ]),
-  skillNames: z.array(z.string().trim().min(1)).nullish(),
-  connectorNames: z.array(z.string().trim().min(1)).nullish(),
-});
-const routineListOutputSchema = z.object({
-  routines: z.array(
-    z.object({
-      id: z.string(),
-      name: z.string(),
-      enabled: z.boolean(),
-      lifecycle: z.enum([
-        "draft",
-        "approved",
-        "enabled",
-        "running",
-        "paused",
-        "blocked",
-        "failed",
-        "completed",
-      ]),
-    }),
-  ),
-});
-export type AkeruRoutineListResult = z.infer<typeof routineListOutputSchema>;
-const routineDeleteResultSchema = z.object({
-  status: z.enum(["deleted", "cancelled", "not-found"]),
-  deletedRoutineIds: z.array(z.string()),
-});
-export type AkeruRoutineDeleteResult = z.infer<typeof routineDeleteResultSchema>;
-
-export interface AkeruMastraState {
-  readonly providerInstanceId?: string;
-  // Undefined clears a previous directory when a reused session loses its cwd.
-  readonly projectPath?: string | undefined;
-  readonly yolo?: boolean;
-  readonly botConversation?: boolean;
-  readonly botName?: string;
-  readonly personalityTone?: BotPersonalityTone;
-  readonly persistentMemoryContext?: string;
-  readonly mcpInstructions?: string;
-  readonly modelOptions?: {
-    readonly reasoningEffort?: string;
-    readonly serviceTier?: string;
-  };
-}
-
-export type AkeruMastraSession = Session<AkeruMastraState>;
-
-type AkeruRunOptions = {
-  readonly providerOptions?: unknown;
-  readonly [key: string]: unknown;
-};
-
-export function withAkeruModelRunOptions(
-  runOptions: AkeruRunOptions,
-  state: AkeruMastraState,
-): AkeruRunOptions {
-  const serviceTier = state.modelOptions?.serviceTier;
-  if (!serviceTier) return runOptions;
-  const providerOptions =
-    typeof runOptions.providerOptions === "object" && runOptions.providerOptions !== null
-      ? runOptions.providerOptions
-      : {};
-  const openai =
-    "openai" in providerOptions &&
-    typeof providerOptions.openai === "object" &&
-    providerOptions.openai !== null
-      ? providerOptions.openai
-      : {};
-  return {
-    ...runOptions,
-    providerOptions: {
-      ...providerOptions,
-      openai: { ...openai, serviceTier },
-    },
-  };
-}
-
-export interface AkeruMastraHarnessOptions {
-  readonly authStorage: AuthStorage;
-  readonly getKimiAccess?: (instanceId?: string) => Promise<AkeruKimiAccess | undefined>;
-  readonly getOpenCodeGoApiKey?: (instanceId?: string) => Promise<string | undefined>;
-  readonly getSubscriptionApiKey?: SubscriptionAuthService["getApiKeyCredential"];
-  readonly getSubscriptionOAuth?: SubscriptionAuthService["getOAuthCredential"];
-  readonly getSubscriptionAccessToken?: SubscriptionAuthService["getAccessToken"];
-  readonly getModelConnection?: (providerInstanceId: string) =>
-    | {
-        readonly environment: NodeJS.ProcessEnv;
-        readonly instanceEnvironment: NodeJS.ProcessEnv;
-        readonly useSavedCredential: boolean;
-        readonly instanceId?: string;
-      }
-    | undefined;
-  readonly memoryDbPath: string;
-  /**
-   * How long closing the harness waits for admitted memory work before it
-   * interrupts that work. Defaults to five seconds.
-   */
-  readonly observationCloseGrace?: Duration.Input;
-  readonly startMemoryCall?: (input: {
-    readonly threadId: string;
-    readonly category: "observer" | "reflector";
-  }) => Promise<string | undefined>;
-  readonly finishMemoryCall?: (input: {
-    readonly callId: string;
-    readonly category: "observer" | "reflector";
-    readonly usage?: {
-      readonly inputTokens?: number;
-      readonly outputTokens?: number;
-      readonly totalTokens?: number;
-    };
-    readonly error?: Error;
-  }) => Promise<void>;
-  readonly getThreadTools: (threadId: string) => ToolsInput;
-  readonly syncThreadToolApproval?: (
-    threadId: string,
-    toolName: string,
-    protectedAction: boolean,
-  ) => Promise<void>;
-  readonly toolRuntime: AkeruToolRuntime;
-  readonly createRoutine?: (
-    threadId: string,
-    input: AkeruCreateRoutineInputValue,
-  ) => Promise<unknown>;
-  readonly listRoutines?: (threadId: string) => Promise<AkeruRoutineListResult>;
-  readonly deleteRoutines?: (
-    threadId: string,
-    routineIds: ReadonlyArray<string>,
-  ) => Promise<AkeruRoutineDeleteResult>;
-  readonly onObservationDropped?: (input: {
-    /** Stable queue-row id; retried notices reuse it. */
-    readonly observationId: string;
-    readonly threadId: string;
-    readonly turnId?: string;
-    readonly resourceId: string;
-    readonly modelId: string;
-    readonly attempts: number;
-    readonly error: Error;
-  }) => Promise<void> | void;
-}
-
-export interface AkeruMastraHarness {
-  readonly rebuildConversation?: (
-    threadId: string,
-    messages: ReadonlyArray<MastraDBMessage>,
-  ) => Promise<() => Promise<void>>;
-  readonly controller: Pick<
-    MastraAgentController<AkeruMastraState>,
-    "init" | "createSession" | "deleteSession"
-  >;
-  readonly clearObservationalMemory?: (threadId: string, resourceId?: string) => Promise<void>;
-  readonly readObservationalMemory?: (
-    threadId: string,
-    resourceId?: string,
-  ) => Promise<AkeruConversationMemorySnapshot>;
-  readonly restoreObservationalMemory?: (
-    threadId: string,
-    snapshot: AkeruConversationMemorySnapshot,
-    resourceId?: string,
-    expectedSnapshot?: AkeruConversationMemorySnapshot,
-  ) => Promise<void>;
-  readonly observeAfterTurn?: (input: AkeruBackgroundObservationInput) => Promise<void>;
-  readonly observeExternalTurn?: (input: {
-    readonly threadId: string;
-    readonly turnId: string;
-    readonly modelId: string;
-    readonly userMessages: ReadonlyArray<{ readonly id: string; readonly text: string }>;
-    readonly assistant: string;
-    readonly createdAt: string;
-  }) => Promise<void>;
-  readonly drainObservationQueue?: () => Promise<void>;
-}
-
-export interface AkeruBackgroundObservationInput {
-  readonly threadId: string;
-  readonly resourceId?: string;
-  readonly modelId: string;
-  /** Routes the observer to this instance's own credentials. */
-  readonly providerInstanceId?: string;
-  readonly turnId?: string;
-}
-
-type AkeruMastraToolOptions = Pick<
-  AkeruMastraHarnessOptions,
-  | "authStorage"
-  | "getKimiAccess"
-  | "getOpenCodeGoApiKey"
-  | "getThreadTools"
-  | "syncThreadToolApproval"
-  | "toolRuntime"
-  | "createRoutine"
-  | "listRoutines"
-  | "deleteRoutines"
->;
-
-export function createAkeruObserveHooks(
-  options: Pick<AkeruMastraHarnessOptions, "startMemoryCall" | "finishMemoryCall">,
-): ObserveHooks {
-  const active = new Map<string, string>();
-  const start = async (threadId: string | undefined, category: "observer" | "reflector") => {
-    if (!threadId) return;
-    const callId = await options.startMemoryCall?.({ threadId, category });
-    if (callId) active.set(`${threadId}:${category}`, callId);
-  };
-  const finish = async (
-    category: "observer" | "reflector",
-    result: Parameters<NonNullable<ObserveHooks["onObservationEnd"]>>[0],
-  ) => {
-    if (!result.threadId) return;
-    const key = `${result.threadId}:${category}`;
-    const callId = active.get(key);
-    if (!callId) return;
-    active.delete(key);
-    await options.finishMemoryCall?.({
-      callId,
-      category,
-      ...(result.usage ? { usage: result.usage } : {}),
-      ...(result.error ? { error: result.error } : {}),
-    });
-  };
-  return {
-    onObservationStart: ({ threadId } = {}) => start(threadId, "observer"),
-    onObservationEnd: (result) => finish("observer", result),
-    onReflectionStart: ({ threadId } = {}) => start(threadId, "reflector"),
-    onReflectionEnd: (result) => finish("reflector", result),
-  };
-}
-
-function controllerContext(requestContext: RequestContext): Record<string, unknown> | undefined {
-  const value = requestContext.getRaw("controller");
-  return typeof value === "object" && value !== null
-    ? (value as Record<string, unknown>)
-    : undefined;
-}
-
-function controllerModelId(requestContext: RequestContext): string {
-  const value = controllerContext(requestContext);
-  if (!value || !("session" in value)) return DEFAULT_MODEL_ID;
-  const session = value.session;
-  if (typeof session !== "object" || session === null || !("modelId" in session)) {
-    return DEFAULT_MODEL_ID;
-  }
-  return typeof session.modelId === "string" ? session.modelId : DEFAULT_MODEL_ID;
-}
-
-function controllerModelOptions(requestContext: RequestContext): AkeruMastraState["modelOptions"] {
-  const state = controllerContext(requestContext)?.state;
-  if (typeof state !== "object" || state === null || !("modelOptions" in state)) {
-    return undefined;
-  }
-  const modelOptions = state.modelOptions;
-  return typeof modelOptions === "object" && modelOptions !== null
-    ? (modelOptions as AkeruMastraState["modelOptions"])
-    : undefined;
-}
-
-function controllerModelConnection(
-  requestContext: RequestContext,
-  getModelConnection: AkeruMastraHarnessOptions["getModelConnection"],
-) {
-  const state = controllerContext(requestContext)?.state;
-  if (typeof state !== "object" || state === null || !("providerInstanceId" in state)) {
-    return undefined;
-  }
-  return typeof state.providerInstanceId === "string"
-    ? getModelConnection?.(state.providerInstanceId)
-    : undefined;
-}
-
-function controllerResourceId(requestContext: RequestContext): string | undefined {
-  const value = controllerContext(requestContext)?.resourceId;
-  return typeof value === "string" ? value : undefined;
-}
-
-export class AkeruPassiveObservationalMemoryProcessor implements Processor<"observational-memory"> {
-  readonly id = "observational-memory" as const;
-  readonly name = "Akeru Observational Memory";
-  readonly engine: ObservationalMemory;
-  private readonly memory: Memory;
-
-  constructor(engine: ObservationalMemory, memory: Memory) {
-    this.engine = engine;
-    this.memory = memory;
-  }
-
-  async processInputStep(args: ProcessInputStepArgs) {
-    if (args.stepNumber !== 0) return args.messageList;
-    const context = this.engine.getThreadContext(args.requestContext, args.messageList);
-    if (!context) return args.messageList;
-    const [history, unobserved] = await Promise.all([
-      this.memory.recall({ threadId: context.threadId, perPage: false }),
-      this.engine.loadUnobservedMessages({
-        threadId: context.threadId,
-        ...(context.resourceId ? { resourceId: context.resourceId } : {}),
-      }),
-    ]);
-    const requiredMessageIds = new Set(unobserved.map((message) => message.id));
-    for (const message of selectRecentConversation(history.messages, { requiredMessageIds })) {
-      if (message.role !== "system") args.messageList.add(message, "memory");
-    }
-    const record = await this.engine.getOrCreateRecord(context.threadId, context.resourceId);
-    const chunks = await this.engine.buildContextSystemMessages({ ...context, record });
-    args.messageList.clearSystemMessages("observational-memory");
-    for (const chunk of chunks ?? []) args.messageList.addSystem(chunk, "observational-memory");
-    args.messageList.clearSystemMessages("om-continuation");
-    if (record.activeObservations) {
-      args.messageList.addSystem(
-        `<system-reminder>${OBSERVATION_CONTINUATION_HINT}</system-reminder>`,
-        "om-continuation",
-      );
-    }
-    return args.messageList;
-  }
-
-  async processOutputResult(args: ProcessOutputResultArgs) {
-    const messages = [
-      ...args.messageList.get.input.db(),
-      ...args.messageList.get.response.db(),
-    ].filter((message) => args.messageList.isNewMessage(message));
-    if (messages.length > 0) await this.memory.persistMessages(messages);
-    return args.messageList;
-  }
-}
-
-export async function createAkeruMastraMemory(
-  options: Pick<
-    AkeruMastraHarnessOptions,
-    | "authStorage"
-    | "getKimiAccess"
-    | "getOpenCodeGoApiKey"
-    | "getSubscriptionApiKey"
-    | "getSubscriptionOAuth"
-    | "getSubscriptionAccessToken"
-    | "getModelConnection"
-    | "memoryDbPath"
-  >,
-) {
-  const storage = new LibSQLStore({
-    id: "akeru-observational-memory",
-    url: NodeURL.pathToFileURL(options.memoryDbPath).toString(),
-    connectionTimeoutMs: 5_000,
-  });
-  await storage.init();
-  const model = ({ requestContext }: { readonly requestContext: RequestContext }) =>
-    resolveAkeruMastraModel(
-      controllerModelId(requestContext),
-      options.authStorage,
-      options.getKimiAccess,
-      options.getOpenCodeGoApiKey,
-      undefined,
-      options.getSubscriptionApiKey,
-      controllerModelConnection(requestContext, options.getModelConnection),
-      options.getSubscriptionOAuth,
-      options.getSubscriptionAccessToken,
-    );
-  const memory = new Memory({
-    storage,
-    options: {
-      lastMessages: false,
-      semanticRecall: false,
-      workingMemory: { enabled: false },
-      observationalMemory: false,
-    },
-  });
-  const memoryStore = await storage.getStore("memory");
-  if (!memoryStore?.supportsObservationalMemory) {
-    await storage.close();
-    throw new Error("The configured memory store does not support observational memory.");
-  }
-  const engine = new ObservationalMemory({
-    storage: memoryStore,
-    memory,
-    scope: "thread",
-    model,
-    retrieval: false,
-    hookExecution: "await",
-    observation: {
-      bufferTokens: false,
-      bufferOnIdle: false,
-      continuationHints: { currentTask: true, suggestedResponse: true },
-    },
-    reflection: {
-      continuationHints: { currentTask: true, suggestedResponse: true },
-    },
-  });
-  const processor = new AkeruPassiveObservationalMemoryProcessor(engine, memory);
-  let closePromise: Promise<void> | undefined;
-  return {
-    memory,
-    storage,
-    engine,
-    processor,
-    close: async () => {
-      closePromise ??= (async () => {
-        await engine.settled();
-        await storage.close();
-      })();
-      await closePromise;
-    },
-  };
-}
-
-const MASTRA_MODEL_PREFIX = {
-  codex: "openai",
-  claudeAgent: "anthropic",
-  grok: "xai",
-  kimi: "kimi-for-coding",
-  opencodeGo: "opencode-go",
-} as const;
-
-export function mastraModelId(provider: ProviderDriverKind, model: string): string {
-  const trimmed = provider === "grok" && model.trim() === "grok-build" ? "grok-4.6" : model.trim();
-  const prefix = MASTRA_MODEL_PREFIX[provider as keyof typeof MASTRA_MODEL_PREFIX];
-  if (!prefix) return trimmed.includes("/") ? trimmed : `${provider}/${trimmed}`;
-  const token = `${prefix}/`;
-  return trimmed.startsWith(token) ? trimmed : `${token}${trimmed}`;
-}
-
-export function openCodeGoInlineConnection(environment: NodeJS.ProcessEnv | undefined): {
-  readonly apiKey?: string;
-  readonly baseUrl?: string;
-} {
-  const content = environment?.OPENCODE_CONFIG_CONTENT?.trim();
-  if (!content) return {};
-  try {
-    const parsed = JSON.parse(content) as {
-      readonly provider?: {
-        readonly "opencode-go"?: {
-          readonly options?: { readonly apiKey?: unknown; readonly baseURL?: unknown };
-        };
-      };
-    };
-    const options = parsed.provider?.["opencode-go"]?.options;
-    const apiKey = typeof options?.apiKey === "string" ? options.apiKey.trim() : "";
-    const baseUrl = typeof options?.baseURL === "string" ? options.baseURL.trim() : "";
-    return {
-      ...(apiKey ? { apiKey } : {}),
-      ...(baseUrl ? { baseUrl } : {}),
-    };
-  } catch {
-    return {};
-  }
-}
-
-export function resolveAkeruMastraModel(
-  modelId: string,
-  authStorage: AuthStorage,
-  getKimiAccess?: (instanceId?: string) => Promise<AkeruKimiAccess | undefined>,
-  getOpenCodeGoApiKey?: (instanceId?: string) => Promise<string | undefined>,
-  modelOptions?: AkeruMastraState["modelOptions"],
-  getSubscriptionApiKey?: SubscriptionAuthService["getApiKeyCredential"],
-  connection?: {
-    readonly environment: NodeJS.ProcessEnv;
-    readonly instanceEnvironment: NodeJS.ProcessEnv;
-    readonly useSavedCredential: boolean;
-    readonly instanceId?: string;
-  },
-  getSubscriptionOAuth?: SubscriptionAuthService["getOAuthCredential"],
-  getSubscriptionAccessToken?: SubscriptionAuthService["getAccessToken"],
-) {
-  const trimmed = modelId.trim();
-  const environment = connection?.useSavedCredential
-    ? connection.environment
-    : connection?.instanceEnvironment;
-  const useSavedCredential = connection?.useSavedCredential !== false;
-  const instanceId = connection?.instanceId;
-  const savedApiKey = (provider: Parameters<NonNullable<typeof getSubscriptionApiKey>>[0]) =>
-    instanceId ? getSubscriptionApiKey?.(provider, instanceId) : getSubscriptionApiKey?.(provider);
-  const scopedAuthStorage =
-    instanceId && getSubscriptionOAuth && getSubscriptionAccessToken
-      ? Object.assign(Object.create(authStorage) as AuthStorage, {
-          reload: () => {},
-          get: (provider: string) =>
-            getSubscriptionOAuth(
-              provider as Parameters<typeof getSubscriptionOAuth>[0],
-              instanceId,
-            ),
-          getApiKey: (provider: string) =>
-            getSubscriptionAccessToken(
-              provider as Parameters<typeof getSubscriptionAccessToken>[0],
-              instanceId,
-            ),
-        })
-      : authStorage;
-  if (trimmed.startsWith("openai/")) {
-    const instanceApiKey = environment?.OPENAI_API_KEY?.trim();
-    const getCredential = instanceApiKey
-      ? () => ({
-          type: "api-key" as const,
-          access: instanceApiKey,
-          ...(environment?.OPENAI_BASE_URL?.trim()
-            ? { baseUrl: environment.OPENAI_BASE_URL.trim() }
-            : {}),
-        })
-      : useSavedCredential
-        ? () => savedApiKey("openai-codex")
-        : undefined;
-    if (getCredential?.()) {
-      return akeruOpenAIProvider(trimmed.slice("openai/".length), () => getCredential());
-    }
-    if (!useSavedCredential) {
-      throw new Error("This Codex instance has no OPENAI_API_KEY transport for Akeru Mastra.");
-    }
-    const reasoningEffort = modelOptions?.reasoningEffort;
-    return openaiCodexProvider(trimmed.slice("openai/".length), {
-      authStorage: scopedAuthStorage,
-      ...(isThinkingLevelSetting(reasoningEffort) ? { thinkingLevel: reasoningEffort } : {}),
-    });
-  }
-  if (trimmed.startsWith("anthropic/")) {
-    const selectedModel = trimmed.slice("anthropic/".length);
-    const extendedContext = selectedModel.endsWith("[1m]");
-    const model = extendedContext ? selectedModel.slice(0, -4) : selectedModel;
-    const contextHeaders = extendedContext
-      ? { headers: { "anthropic-beta": "context-1m-2025-08-07" } }
-      : {};
-    const instanceApiKey = environment?.ANTHROPIC_API_KEY?.trim();
-    const instanceAuthToken =
-      environment?.ANTHROPIC_AUTH_TOKEN?.trim() || environment?.CLAUDE_CODE_OAUTH_TOKEN?.trim();
-    if (instanceApiKey || instanceAuthToken) {
-      return createAnthropic({
-        ...contextHeaders,
-        ...(instanceApiKey ? { apiKey: instanceApiKey } : { authToken: instanceAuthToken! }),
-        ...(environment?.ANTHROPIC_BASE_URL?.trim()
-          ? { baseURL: environment.ANTHROPIC_BASE_URL.trim() }
-          : {}),
-      })(model);
-    }
-    const credential = useSavedCredential ? savedApiKey("anthropic") : undefined;
-    if (credential) {
-      return createAnthropic({
-        ...contextHeaders,
-        apiKey: credential.access,
-        ...(credential.baseUrl ? { baseURL: credential.baseUrl } : {}),
-      })(model);
-    }
-    if (!useSavedCredential) {
-      throw new Error(
-        "This Claude instance has no API key or auth token transport for Akeru Mastra.",
-      );
-    }
-    return opencodeClaudeMaxProvider(model, { ...contextHeaders, authStorage: scopedAuthStorage });
-  }
-  if (trimmed.startsWith("xai/")) {
-    const model = trimmed.slice("xai/".length);
-    const instanceApiKey = environment?.XAI_API_KEY?.trim();
-    const credential = instanceApiKey
-      ? {
-          access: instanceApiKey,
-          baseUrl: environment?.XAI_BASE_URL?.trim() || undefined,
-        }
-      : useSavedCredential
-        ? savedApiKey("xai")
-        : undefined;
-    if (credential) {
-      return createOpenAICompatible({
-        name: "xai",
-        apiKey: credential.access,
-        baseURL: credential.baseUrl ?? "https://api.x.ai/v1",
-      })(model);
-    }
-    if (!useSavedCredential) {
-      throw new Error("This Grok instance has no XAI_API_KEY transport for Akeru Mastra.");
-    }
-    return xaiProvider(model, { authStorage: scopedAuthStorage });
-  }
-  if (trimmed.startsWith("kimi-for-coding/")) {
-    if (!useSavedCredential) {
-      throw new Error(
-        "Custom Kimi instance credentials are not supported by the Akeru Mastra transport.",
-      );
-    }
-    if (!getKimiAccess) throw new Error("Kimi For Coding subscription access is unavailable.");
-    return akeruKimiProvider(trimmed.slice("kimi-for-coding/".length), () =>
-      getKimiAccess(instanceId),
-    );
-  }
-  if (trimmed.startsWith("opencode-go/")) {
-    const inlineConnection = openCodeGoInlineConnection(environment);
-    const instanceApiKey = environment?.OPENCODE_API_KEY?.trim() || inlineConnection.apiKey;
-    const resolveApiKey = instanceApiKey
-      ? async () => instanceApiKey
-      : useSavedCredential && getOpenCodeGoApiKey
-        ? () => getOpenCodeGoApiKey(instanceId)
-        : undefined;
-    if (!resolveApiKey) throw new Error("OpenCode Go subscription access is unavailable.");
-    return akeruOpenCodeGoProvider(
-      trimmed.slice("opencode-go/".length),
-      resolveApiKey,
-      () =>
-        environment?.OPENCODE_BASE_URL?.trim() ||
-        inlineConnection.baseUrl ||
-        (useSavedCredential ? savedApiKey("opencode-go")?.baseUrl : undefined),
-    );
-  }
-  throw new Error(`Mastra has no subscription transport for model '${modelId}'.`);
-}
-
-export function resolveAkeruInstructions(
-  requestContext: RequestContext,
-  now = DateTime.nowUnsafe(),
-): string {
-  const state = controllerContext(requestContext)?.state;
-  const isBotConversation =
-    typeof state === "object" &&
-    state !== null &&
-    "botConversation" in state &&
-    state.botConversation === true;
-  const name =
-    isBotConversation && "botName" in state && typeof state.botName === "string"
-      ? state.botName
-      : "Akeru";
-  const personalityTone =
-    isBotConversation && "personalityTone" in state && typeof state.personalityTone === "number"
-      ? state.personalityTone
-      : undefined;
-  const instructions = isBotConversation
-    ? createAkeruBotInstructions({
-        name,
-        now,
-        ...(personalityTone !== undefined ? { personalityTone } : {}),
-      })
-    : createAkeruAgentInstructions({
-        name,
-        now,
-        ...(personalityTone !== undefined ? { personalityTone } : {}),
-      });
-  const persistentMemoryContext =
-    typeof state === "object" &&
-    state !== null &&
-    "persistentMemoryContext" in state &&
-    typeof state.persistentMemoryContext === "string"
-      ? state.persistentMemoryContext
-      : "";
-  const mcpInstructions =
-    typeof state === "object" &&
-    state !== null &&
-    "mcpInstructions" in state &&
-    typeof state.mcpInstructions === "string"
-      ? state.mcpInstructions
-      : "";
-  return [instructions, mcpInstructions, persistentMemoryContext].filter(Boolean).join("\n\n");
-}
-
-export async function resolveAkeruTools(
-  requestContext: RequestContext,
-  options: AkeruMastraToolOptions,
-): Promise<ToolsInput> {
-  const threadId = controllerResourceId(requestContext);
-  if (!threadId) return {};
-  const routineTool = options.createRoutine
-    ? createTool({
-        id: AKERU_CREATE_ROUTINE_TOOL_NAME,
-        description:
-          "Create a disabled routine for recurring work in this chat. Call this tool as soon as the routine details are complete. The app previews the tool arguments and asks the user before execution, so do not ask for separate confirmation. Put the timing only in schedule, and make instructions describe only what each run should do. Keep the name short and specific. Use the current chat and device timezone by default. Only name plugins or skills the user explicitly requests.",
-        inputSchema: routineToolInputSchema,
-        requireApproval: false,
-        execute: async ({ skillNames, connectorNames, ...input }) =>
-          options.createRoutine!(
-            threadId,
-            await decodeCreateRoutineInput(
-              {
-                ...input,
-                ...(skillNames ? { skillNames } : {}),
-                ...(connectorNames ? { connectorNames } : {}),
-              },
-              {
-                onExcessProperty: "error",
-              },
-            ),
-          ),
-      })
-    : undefined;
-  const listRoutinesTool = options.listRoutines
-    ? createTool({
-        id: AKERU_LIST_ROUTINES_TOOL_NAME,
-        description:
-          "List this bot's routines and show whether each schedule is enabled or disabled, plus its exact lifecycle. Use this before answering questions about routine state.",
-        inputSchema: z.object({}),
-        outputSchema: routineListOutputSchema,
-        strict: true,
-        requireApproval: false,
-        execute: async () => options.listRoutines!(threadId),
-      })
-    : undefined;
-  const deleteRoutinesTool =
-    options.listRoutines && options.deleteRoutines
-      ? createTool({
-          id: AKERU_DELETE_ROUTINES_TOOL_NAME,
-          description:
-            "Delete one or more routines owned by this bot. Pass routine IDs from akeru_list_routines. This tool asks the user for confirmation before deleting anything, so do not ask for separate confirmation.",
-          inputSchema: z.object({
-            routineIds: z.array(z.string().trim().min(1)).min(1),
-          }),
-          outputSchema: routineDeleteResultSchema,
-          suspendSchema: z.object({
-            question: z.string(),
-            options: z.array(
-              z.object({
-                label: z.string(),
-                description: z.string(),
-              }),
-            ),
-            selectionMode: z.literal("single_select"),
-          }),
-          resumeSchema: z.string(),
-          strict: true,
-          requireApproval: false,
-          execute: async ({ routineIds }, context) => {
-            const uniqueIds = [...new Set(routineIds)];
-            const available = await options.listRoutines!(threadId);
-            const requested = available.routines.filter((routine) =>
-              uniqueIds.includes(routine.id),
-            );
-            if (requested.length !== uniqueIds.length) {
-              return { status: "not-found" as const, deletedRoutineIds: [] };
-            }
-            const answer = context?.agent?.resumeData;
-            if (answer === undefined) {
-              const suspend = context?.agent?.suspend;
-              if (!suspend) return { status: "cancelled" as const, deletedRoutineIds: [] };
-              const names = requested.map((routine) => `"${routine.name}"`).join(", ");
-              await suspend({
-                question:
-                  requested.length === 1
-                    ? `Are you sure you want to delete ${names}?`
-                    : `Are you sure you want to delete these routines: ${names}?`,
-                options: [
-                  {
-                    label: "Delete routines",
-                    description: "Stop these schedules and hide them from the routines list.",
-                  },
-                  { label: "Cancel", description: "Keep every routine." },
-                ],
-                selectionMode: "single_select",
-              });
-              return;
-            }
-            if (answer !== "Delete routines") {
-              return { status: "cancelled" as const, deletedRoutineIds: [] };
-            }
-            return options.deleteRoutines!(threadId, uniqueIds);
-          },
-        })
-      : undefined;
-  return {
-    ...approvalAwareTools(threadId, options.getThreadTools(threadId), options),
-    ...createAkeruMastraTools(threadId, options.toolRuntime),
-    [AKERU_PRODUCT_FEEDBACK_TOOL_NAME]: productFeedbackTool,
-    ...(routineTool ? { [AKERU_CREATE_ROUTINE_TOOL_NAME]: routineTool } : {}),
-    ...(listRoutinesTool ? { [AKERU_LIST_ROUTINES_TOOL_NAME]: listRoutinesTool } : {}),
-    ...(deleteRoutinesTool ? { [AKERU_DELETE_ROUTINES_TOOL_NAME]: deleteRoutinesTool } : {}),
-  };
-}
-
-function approvalAwareTools(
-  threadId: string,
-  tools: ToolsInput,
-  options: AkeruMastraToolOptions,
-): ToolsInput {
-  return Object.fromEntries(
-    Object.entries(tools).map(([name, tool]) => {
-      const configured = tool as unknown as {
-        readonly requireApproval?: boolean | NeedsApprovalFn;
-        readonly needsApprovalFn?: NeedsApprovalFn;
-      };
-      const existing = configured.needsApprovalFn ?? configured.requireApproval;
-      const needsApproval: NeedsApprovalFn = async (input, context) => {
-        const protectedAction =
-          isCodexComputerUseTool(name) || akeruActionNeedsApproval(name, input);
-        await options.syncThreadToolApproval?.(threadId, name, protectedAction);
-        return (
-          protectedAction ||
-          (typeof existing === "function" ? await existing(input, context) : existing === true)
-        );
-      };
-      return [name, { ...tool, requireApproval: needsApproval, needsApprovalFn: needsApproval }];
-    }),
-  );
-}
-
-export type AkeruToolCategory = "read" | "edit" | "execute" | "mcp" | "other";
-export type AkeruCriticalAction =
-  | "send"
-  | "pay"
-  | "delete"
-  | "production"
-  | "secrets"
-  | "publish"
-  | "sign"
-  | "refund"
-  | "account";
-
-const CRITICAL_ACTION_TOKENS: ReadonlyArray<readonly [AkeruCriticalAction, ReadonlySet<string>]> = [
-  ["send", new Set(["send", "reply", "dispatch", "deliver"])],
-  ["pay", new Set(["pay", "charge", "purchase", "checkout", "transfer"])],
-  ["delete", new Set(["delete", "remove", "destroy", "erase", "purge"])],
-  ["production", new Set(["deploy", "release", "promote", "prod", "production"])],
-  ["secrets", new Set(["secret", "secrets", "credential", "credentials", "password", "token"])],
-  ["publish", new Set(["publish", "post", "broadcast"])],
-  ["sign", new Set(["sign", "signature", "countersign"])],
-  ["refund", new Set(["refund", "reimburse", "reimbursement"])],
-];
-
-const ACCOUNT_SCOPE_TOKENS = new Set(["account", "organization", "workspace", "tenant"]);
-const CHANGE_TOKENS = new Set([
-  "change",
-  "create",
-  "disable",
-  "enable",
-  "invite",
-  "remove",
-  "rename",
-  "reset",
-  "set",
-  "update",
-]);
-const MUTATING_INTENT_KEYS = new Set([
-  "action",
-  "intent",
-  "method",
-  "operation",
-  "requesttype",
-  "verb",
-]);
-const ACTION_TEXT_KEYS = new Set([...MUTATING_INTENT_KEYS, "command", "deliverymode"]);
-const READ_ONLY_INTENT_TOKENS = new Set([
-  "find",
-  "get",
-  "inspect",
-  "list",
-  "read",
-  "search",
-  "stat",
-  "status",
-  "view",
-]);
-const CRITICAL_SHELL_ACTIONS: ReadonlyArray<readonly [AkeruCriticalAction, RegExp]> = [
-  [
-    "delete",
-    /(?:^|[;&|]\s*)(?:sudo\s+)?(?:rm|rmdir|unlink)\b|\b(?:drop|truncate)\s+(?:database|schema|table)\b|\bdelete\s+from\b/i,
-  ],
-  ["delete", /(?:^|[;&|]\s*)(?:(?:sudo|command|builtin|exec|nohup)\s+)*shred\b/i],
-  [
-    "delete",
-    /(?:^|[;&|]\s*)(?:(?:sudo|command|builtin|exec|nohup)\s+)*dd\b[^\n;&|]*(?:\sof=(?:"[^"]*"|'[^']*'|[^\s;&|]+)|\s1?>>?\s*[^\s;&|]+)/i,
-  ],
-  ["delete", /(?:^|[;&|]\s*)(?:(?:sudo|command|builtin|exec|nohup)\s+)*mv\b/i],
-  ["delete", /(?:^|[;&|]\s*)git\s+(?:reset\s+--hard|clean\s+-[a-z]*[fdx][a-z]*)\b/i],
-  [
-    "delete",
-    /\bfind\b[^\n;&|]*\s-exec(?:dir)?\s+(?:(?:sudo|command|builtin|exec|nohup|env)\s+)*(?:rm|rmdir|shred|unlink)\b/i,
-  ],
-  [
-    "delete",
-    /\bxargs\b[^\n;&|]*\s(?:(?:sudo|command|builtin|exec|nohup)\s+)*(?:rm|rmdir|shred|unlink)\b/i,
-  ],
-  ["publish", /(?:^|[;&|]\s*)git\s+push\b/i],
-  [
-    "production",
-    /(?:^|[;&|]\s*)(?:kubectl\s+(?:apply|delete|replace|rollout)|terraform\s+(?:apply|destroy)|docker\s+push)\b/i,
-  ],
-  [
-    "secrets",
-    /(?:^|[;&|]\s*)(?:(?:printenv|env)(?:\s|$)|(?:cat|head|tail|less|more|sed|awk|grep|rg)\b[^\n;&|]*(?:\.env\b|\/\.ssh\/id_[\w-]+|credentials?|secrets?|tokens?)|gh\s+auth\s+token|security\s+find-(?:generic|internet)-password|op\s+(?:read|get)|vault\s+(?:kv\s+)?get|aws\s+secretsmanager\s+get-secret-value|gcloud\s+secrets\s+versions\s+access|kubectl\s+get\s+secrets?)\b/i,
-  ],
-  [
-    "send",
-    /(?:^|[;&|]\s*)(?:(?:mail|mailx)\b|curl\b[^\n;&|]*(?:--data(?:-raw|-binary)?|-d\b|--form|-F\b|--request\s+post|-X\s*post))/i,
-  ],
-];
-const SHELL_COMMAND_WRAPPER_PATTERNS = [
-  /(?:^|[;&|]\s*)(?:(?:sudo|command|builtin|exec|nohup)\s+)*(?:\/(?:usr\/)?bin\/)?(?:ba|da|z)?sh\s+-[a-z]*c[a-z]*\s+(?:"((?:\\.|[^"])*)"|'([^']*)'|([^\s;&|]+))/gi,
-  /(?:\bxargs\b[^\n;&|]*?\s+|\bfind\b[^\n;&|]*\s-exec(?:dir)?\s+)(?:(?:sudo|command|builtin|exec|nohup)\s+)*(?:\/(?:usr\/)?bin\/)?(?:ba|da|z)?sh\s+-[a-z]*c[a-z]*\s+(?:"((?:\\.|[^"])*)"|'([^']*)'|([^\s;&|]+))/gi,
-];
-
-function textTokens(value: string): ReadonlySet<string> {
-  return new Set(
-    value
-      .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
-      .toLowerCase()
-      .split(/[^a-z0-9]+/)
-      .filter(Boolean),
-  );
-}
-
-function criticalActionFromText(value: string): AkeruCriticalAction | null {
-  const tokens = textTokens(value);
-  if (tokens.has("restart") && tokens.has("mcp")) return "production";
-  for (const [action, actionTokens] of CRITICAL_ACTION_TOKENS) {
-    if ([...actionTokens].some((token) => tokens.has(token))) return action;
-  }
-  if (
-    [...ACCOUNT_SCOPE_TOKENS].some((token) => tokens.has(token)) &&
-    [...CHANGE_TOKENS].some((token) => tokens.has(token))
-  ) {
-    return "account";
-  }
-  return null;
-}
-
-function criticalActionFromShellCommand(
-  value: string,
-  wrapperDepth = 0,
-): AkeruCriticalAction | null {
-  for (const [action, pattern] of CRITICAL_SHELL_ACTIONS) {
-    if (pattern.test(value)) return action;
-  }
-  if (wrapperDepth < 5) {
-    for (const wrapperPattern of SHELL_COMMAND_WRAPPER_PATTERNS) {
-      for (const match of value.matchAll(wrapperPattern)) {
-        const nestedCommand = match[1] ?? match[2] ?? match[3];
-        if (!nestedCommand) continue;
-        const action = criticalActionFromShellCommand(nestedCommand, wrapperDepth + 1);
-        if (action) return action;
-      }
-    }
-  }
-  return criticalActionFromText(value);
-}
-
-type AkeruActionInspection = {
-  readonly action: AkeruCriticalAction | null;
-  readonly hasUnclassifiedIntent: boolean;
-};
-
-function inspectAkeruAction(toolName: string, args?: unknown): AkeruActionInspection {
-  const namedAction = criticalActionFromText(toolName);
-  if (namedAction) return { action: namedAction, hasUnclassifiedIntent: false };
-
-  const pending: unknown[] = [args];
-  let inspected = 0;
-  let hasUnclassifiedIntent = false;
-  while (pending.length > 0 && inspected < 100) {
-    const value = pending.pop();
-    inspected += 1;
-    if (Array.isArray(value)) {
-      pending.push(...value.filter((entry) => typeof entry === "object" && entry !== null));
-      continue;
-    }
-    if (typeof value !== "object" || value === null) continue;
-    for (const [key, entry] of Object.entries(value)) {
-      const normalizedKey = key.toLowerCase();
-      const keyedAction = criticalActionFromText(key);
-      if (keyedAction) return { action: keyedAction, hasUnclassifiedIntent: false };
-      if (ACTION_TEXT_KEYS.has(normalizedKey) && typeof entry === "string") {
-        const action =
-          normalizedKey === "command"
-            ? criticalActionFromShellCommand(entry)
-            : criticalActionFromText(entry);
-        if (action) return { action, hasUnclassifiedIntent: false };
-        if (MUTATING_INTENT_KEYS.has(normalizedKey)) {
-          const tokens = textTokens(entry);
-          if (![...tokens].some((token) => READ_ONLY_INTENT_TOKENS.has(token))) {
-            hasUnclassifiedIntent = true;
-          }
-        }
-      }
-      if (
-        typeof entry === "string" &&
-        (normalizedKey === "path" || normalizedKey.endsWith("path")) &&
-        classifyAkeruSensitivePath(entry)
-      ) {
-        return { action: "secrets", hasUnclassifiedIntent: false };
-      }
-      if (typeof entry === "object" && entry !== null) pending.push(entry);
-    }
-  }
-  return { action: null, hasUnclassifiedIntent: hasUnclassifiedIntent || pending.length > 0 };
-}
-
-export function criticalAkeruAction(toolName: string, args?: unknown): AkeruCriticalAction | null {
-  return inspectAkeruAction(toolName, args).action;
-}
-
-export function akeruActionNeedsApproval(toolName: string, args?: unknown): boolean {
-  const inspection = inspectAkeruAction(toolName, args);
-  return inspection.action !== null || inspection.hasUnclassifiedIntent;
-}
-
-export function akeruToolCategory(toolName: string): AkeruToolCategory {
-  if (/read|view|grep|search|find|list|stat/i.test(toolName)) return "read";
-  if (/edit|write|delete|mkdir|move|rename/i.test(toolName)) return "edit";
-  if (/execute|command|shell|process|terminal/i.test(toolName)) return "execute";
-  if (/mcp/i.test(toolName)) return "mcp";
-  return "other";
-}
-
-export function routineToolNeedsGlobalApproval(toolName: string): boolean {
-  return (
-    toolName !== AKERU_CREATE_ROUTINE_TOOL_NAME &&
-    toolName !== AKERU_LIST_ROUTINES_TOOL_NAME &&
-    toolName !== AKERU_DELETE_ROUTINES_TOOL_NAME
-  );
-}
-
-function isConnectionReset(error: unknown): boolean {
-  if (!error) return false;
-  const code = typeof error === "object" && "code" in error ? error.code : undefined;
-  if (typeof code === "string" && code.toUpperCase() === "ECONNRESET") return true;
-  return error instanceof Error && /econnreset|socket hang up/i.test(error.message);
-}
-
-/**
- * The stream retry policy `createCodingAgent` applies by default. Akeru builds
- * its Agent directly because `createCodingAgent` also adds a task-list tool
- * whenever memory is on, and each list update costs a full model round trip.
- */
-function akeruErrorProcessors() {
-  return [
-    new StreamErrorRetryProcessor({
-      retryUnknownErrors: true,
-      maxRetries: 2,
-      delayMs: 3_000,
-      matchers: [
-        { match: isBadRequestError, maxRetries: 1, delayMs: 2_000 },
-        {
-          match: isConnectionReset,
-          maxRetries: 2,
-          delayMs: ({ retryCount }) => Math.min(1_000 * 2 ** retryCount, 30_000),
-        },
-      ],
-    }),
-    new PrefillErrorHandler(),
-    new ProviderHistoryCompat(),
-  ];
-}
-
-const errorMessage = (cause: unknown) => (cause instanceof Error ? cause.message : String(cause));
-
-/** Harness construction failed before it could serve any session. */
-export class AkeruMastraHarnessError extends Schema.TaggedErrorClass<AkeruMastraHarnessError>()(
-  "AkeruMastraHarnessError",
-  {
-    operation: Schema.String,
-    cause: Schema.Defect(),
-  },
-) {
-  override get message(): string {
-    return `Akeru harness ${this.operation} failed: ${errorMessage(this.cause)}`;
-  }
-}
-
-/** Observational memory work was requested after the harness scope began closing. */
-export class AkeruObservationQueueClosedError extends Schema.TaggedErrorClass<AkeruObservationQueueClosedError>()(
-  "AkeruObservationQueueClosedError",
-  {
-    threadId: Schema.String,
-    resourceId: Schema.String,
-  },
-) {
-  override get message(): string {
-    return "Akeru observational memory is closing.";
-  }
-}
-
-/**
- * Restoring an observation snapshot failed. `cause` is always the original
- * restore failure; `rollbackCause` is set only when putting the prior records
- * back failed too, in which case `rolledBack` is false.
- */
-export class AkeruObservationRestoreError extends Schema.TaggedErrorClass<AkeruObservationRestoreError>()(
-  "AkeruObservationRestoreError",
-  {
-    threadId: Schema.String,
-    resourceId: Schema.String,
-    rolledBack: Schema.Boolean,
-    cause: Schema.Defect(),
-    rollbackCause: Schema.optional(Schema.Defect()),
-  },
-) {
-  override get message(): string {
-    return this.rolledBack
-      ? `Observation restore failed and the original observations were kept: ${errorMessage(this.cause)}`
-      : `Observation restore failed and the original observations could not be restored: ${errorMessage(this.cause)}`;
-  }
-}
-
-const isObservationQueueClosed = Schema.is(AkeruObservationQueueClosedError);
-
-const OBSERVATION_QUEUE_SCHEMA_VERSION = 2;
 const OBSERVATION_CLAIM_LEASE_MS = 5 * 60_000;
+
 const OBSERVATION_RETRY_BACKOFF_MS = 30_000;
+
 const OBSERVATION_DROP_ATTEMPTS = 3;
+
 // A dropped row stays queued until its drop notice lands; past this many
 // attempts it is removed even if the notice keeps failing.
 const OBSERVATION_NOTICE_ATTEMPTS = 6;
+
+interface ControllerRunOptionsHook {
+  buildSharedRunOptions: (session: AkeruMastraSession) => AkeruRunOptions;
+}
+
 const OBSERVATION_CLOSE_GRACE: Duration.Input = "5 seconds";
 
-// The queue lives in its own store beside the memory DB because the harness
-// opens it directly; the environment state.sqlite schema is provisioned by
-// the Effect migration runner, which this path never sees. The queue store
-// versions itself with PRAGMA user_version instead.
-function openObservationQueueDb(memoryDbPath: string): NodeSqlite.DatabaseSync {
-  const db = new NodeSqlite.DatabaseSync(`${memoryDbPath}.queue.sqlite`);
-  try {
-    db.exec("PRAGMA busy_timeout = 5000");
-    const version = (db.prepare("PRAGMA user_version").get() as { user_version: number })
-      .user_version;
-    if (version > OBSERVATION_QUEUE_SCHEMA_VERSION) {
-      throw new Error(
-        `Akeru observation queue schema version ${version} is newer than supported version ${OBSERVATION_QUEUE_SCHEMA_VERSION}.`,
-      );
-    }
-    if (version === 0) {
-      db.exec(`
-        CREATE TABLE IF NOT EXISTS akeru_observation_queue (
-          id TEXT PRIMARY KEY,
-          thread_id TEXT NOT NULL,
-          resource_id TEXT NOT NULL,
-          model_id TEXT NOT NULL,
-          turn_id TEXT,
-          attempts INTEGER NOT NULL DEFAULT 0,
-          claimed_at TEXT,
-          next_attempt_at TEXT NOT NULL,
-          created_at TEXT NOT NULL,
-          provider_instance_id TEXT
-        )
-      `);
-      db.exec(
-        "CREATE INDEX IF NOT EXISTS akeru_observation_queue_created_at ON akeru_observation_queue (created_at, id)",
-      );
-      db.exec(`PRAGMA user_version = ${OBSERVATION_QUEUE_SCHEMA_VERSION}`);
-    } else if (version === 1) {
-      // Rows queued before version 2 have no instance and keep using the default connection.
-      db.exec("ALTER TABLE akeru_observation_queue ADD COLUMN provider_instance_id TEXT");
-      db.exec(`PRAGMA user_version = ${OBSERVATION_QUEUE_SCHEMA_VERSION}`);
-    }
-    return db;
-  } catch (cause) {
-    db.close();
-    throw cause;
-  }
-}
+const decodeControllerRunOptionsHook = Schema.decodeUnknownSync(
+  Schema.declare<ControllerRunOptionsHook>(
+    (value): value is ControllerRunOptionsHook =>
+      Predicate.isObject(value) && Predicate.isFunction(value.buildSharedRunOptions),
+  ),
+);
+
+const decodeNextObservation = Schema.decodeUnknownSync(
+  Schema.Struct({ nextAttemptAt: Schema.NullOr(Schema.String) }),
+);
+
+const decodeClaimedObservation = Schema.decodeUnknownSync(
+  Schema.Struct({
+    id: Schema.String,
+    threadId: Schema.String,
+    resourceId: Schema.String,
+    modelId: Schema.String,
+    turnId: Schema.NullOr(Schema.String),
+    attempts: Schema.Number,
+    providerInstanceId: Schema.NullOr(Schema.String),
+  }),
+);
 
 /**
  * Builds the Mastra harness inside the caller's scope. Closing the scope stops
@@ -1280,6 +101,9 @@ function openObservationQueueDb(memoryDbPath: string): NodeSqlite.DatabaseSync {
 export const makeAkeruMastraHarness = Effect.fnUntraced(function* (
   options: AkeruMastraHarnessOptions,
 ) {
+  const context = yield* Effect.context<never>();
+  const runPromise = Effect.runPromiseWith(context);
+
   const observationalMemory = yield* Effect.acquireRelease(
     Effect.tryPromise({
       try: () => createAkeruMastraMemory(options),
@@ -1287,6 +111,7 @@ export const makeAkeruMastraHarness = Effect.fnUntraced(function* (
     }),
     (memory) => Effect.promise(() => memory.close()).pipe(Effect.ignoreCause({ log: true })),
   );
+
   const observationQueueDb = yield* Effect.acquireRelease(
     Effect.try({
       try: () => openObservationQueueDb(options.memoryDbPath),
@@ -1294,6 +119,7 @@ export const makeAkeruMastraHarness = Effect.fnUntraced(function* (
     }),
     (db) => Effect.sync(() => db.close()).pipe(Effect.ignoreCause({ log: true })),
   );
+
   // Every piece of observational-memory work runs as a fiber in this set, so
   // closing the scope can wait for admitted work and interrupt anything left.
   const observationFibers = yield* FiberSet.make<unknown, unknown>();
@@ -1306,10 +132,12 @@ export const makeAkeruMastraHarness = Effect.fnUntraced(function* (
   const observationRetry = yield* FiberHandle.make<void, never>();
   const runObservationRetry = yield* FiberHandle.runtime(observationRetry)();
   const observeHooks = createAkeruObserveHooks(options);
+
   const observationLocks = new Map<
     string,
     { readonly semaphore: Semaphore.Semaphore; users: number }
   >();
+
   let closed = false;
   // Rows this harness has claimed and not yet finished, with their attempts and
   // current claim token, so close can hand interrupted claims back to the queue.
@@ -1328,6 +156,7 @@ export const makeAkeruMastraHarness = Effect.fnUntraced(function* (
        provider_instance_id)
       VALUES (?, ?, ?, ?, ?, 0, NULL, ?, ?, ?)`,
   );
+
   // One statement picks and claims the oldest eligible row, so concurrent
   // drains (in-process or across processes sharing the store) cannot both
   // observe the same row.
@@ -1345,6 +174,7 @@ export const makeAkeruMastraHarness = Effect.fnUntraced(function* (
                 model_id AS modelId, turn_id AS turnId, attempts,
                 provider_instance_id AS providerInstanceId`,
   );
+
   // Release and remove only act on a row this drain still holds. If its lease
   // expired and another drain reclaimed the row, that drain owns the outcome.
   const releaseQueuedObservation = observationQueueDb.prepare(
@@ -1352,20 +182,25 @@ export const makeAkeruMastraHarness = Effect.fnUntraced(function* (
         SET claimed_at = NULL, attempts = ?, next_attempt_at = ?
       WHERE id = ? AND claimed_at = ?`,
   );
+
   const removeQueuedObservation = observationQueueDb.prepare(
     `DELETE FROM akeru_observation_queue WHERE id = ? AND claimed_at = ?`,
   );
+
   // A running observation renews its lease, so a slow observe is never reclaimed
   // and run a second time by another drain.
   const renewQueuedObservationClaim = observationQueueDb.prepare(
     `UPDATE akeru_observation_queue SET claimed_at = ? WHERE id = ? AND claimed_at = ?`,
   );
+
   const isQueuedObservationClaimed = observationQueueDb.prepare(
     `SELECT 1 AS claimed FROM akeru_observation_queue WHERE id = ? AND claimed_at = ?`,
   );
+
   const discardQueuedObservations = observationQueueDb.prepare(
     `DELETE FROM akeru_observation_queue WHERE thread_id = ? AND resource_id = ?`,
   );
+
   // A claimed row becomes eligible again when its lease expires, which covers a
   // claim left behind by a harness that stopped mid-observation.
   const nextQueuedObservationAt = observationQueueDb.prepare(
@@ -1375,11 +210,13 @@ export const makeAkeruMastraHarness = Effect.fnUntraced(function* (
               AS nextAttemptAt
        FROM akeru_observation_queue`,
   );
+
   let observationDrain: Promise<void> | undefined;
   // True while a drain loop can still claim rows. The loop clears it in the
   // same synchronous step as its last empty claim, so a row enqueued after that
   // starts a new drain instead of joining one that already finished.
   let drainActive = false;
+
   const agent = new Agent({
     id: "akeru-agent",
     name: "Akeru",
@@ -1410,6 +247,7 @@ export const makeAkeruMastraHarness = Effect.fnUntraced(function* (
     memory: observationalMemory.memory,
     modes: [
       { id: "build", name: "Build", defaultModelId: DEFAULT_MODEL_ID },
+      // Keep legacy controller requests valid until their mode is normalized to build.
       {
         id: "plan",
         name: "Plan",
@@ -1429,15 +267,13 @@ export const makeAkeruMastraHarness = Effect.fnUntraced(function* (
     toolCategoryResolver: akeruToolCategory,
     intervalHandlers: [],
   });
-  const controllerWithRunOptions = controller as unknown as {
-    buildSharedRunOptions: (session: AkeruMastraSession) => {
-      readonly requireToolApproval?: boolean | ((input: { readonly toolName: string }) => boolean);
-      readonly [key: string]: unknown;
-    };
-  };
+
+  const controllerWithRunOptions = decodeControllerRunOptionsHook(controller);
+
   const buildSharedRunOptions = controllerWithRunOptions.buildSharedRunOptions.bind(controller);
   controllerWithRunOptions.buildSharedRunOptions = (session) => {
     const runOptions = buildSharedRunOptions(session);
+
     const approvalOptions =
       runOptions.requireToolApproval === true
         ? {
@@ -1446,6 +282,7 @@ export const makeAkeruMastraHarness = Effect.fnUntraced(function* (
               routineToolNeedsGlobalApproval(toolName),
           }
         : runOptions;
+
     return withAkeruModelRunOptions(approvalOptions, session.state.get());
   };
 
@@ -1467,9 +304,11 @@ export const makeAkeruMastraHarness = Effect.fnUntraced(function* (
       yield* FiberSet.awaitEmpty(observationFibers);
       yield* Effect.sync(() => {
         const now = DateTime.formatIso(DateTime.nowUnsafe());
+
         for (const [id, { attempts, claim }] of claimedRows) {
           if (!observingRows.has(id)) releaseQueuedObservation.run(attempts, now, id, claim);
         }
+
         claimedRows.clear();
       }).pipe(Effect.ignoreCause({ log: true }));
     }),
@@ -1485,11 +324,13 @@ export const makeAkeruMastraHarness = Effect.fnUntraced(function* (
     if (closed) {
       return Promise.reject(new AkeruObservationQueueClosedError({ threadId, resourceId }));
     }
+
     const key = `${threadId}\u0000${resourceId}`;
     const lock = observationLocks.get(key) ?? { semaphore: Semaphore.makeUnsafe(1), users: 0 };
     lock.users += 1;
     observationLocks.set(key, lock);
     let settled = false;
+
     return runObservation(
       // A rejected `use` becomes a defect so the Promise caller receives the
       // original error unchanged.
@@ -1497,6 +338,7 @@ export const makeAkeruMastraHarness = Effect.fnUntraced(function* (
         Effect.ensuring(
           Effect.sync(() => {
             lock.users -= 1;
+
             if (lock.users === 0) observationLocks.delete(key);
           }),
         ),
@@ -1512,15 +354,19 @@ export const makeAkeruMastraHarness = Effect.fnUntraced(function* (
   // leaves it behind arms one timer for the earliest pending retry.
   const scheduleObservationRetry = () => {
     if (closed) return;
-    const { nextAttemptAt } = nextQueuedObservationAt.get(
-      `+${OBSERVATION_CLAIM_LEASE_MS / 1000} seconds`,
-    ) as { nextAttemptAt: string | null };
+
+    const { nextAttemptAt } = decodeNextObservation(
+      nextQueuedObservationAt.get(`+${OBSERVATION_CLAIM_LEASE_MS / 1000} seconds`),
+    );
+
     if (nextAttemptAt === null) return;
+
     const delay = Math.max(
       0,
       DateTime.toEpochMillis(DateTime.makeUnsafe(nextAttemptAt)) -
         DateTime.toEpochMillis(DateTime.nowUnsafe()),
     );
+
     runObservationRetry(
       Effect.sleep(Duration.millis(delay)).pipe(
         Effect.andThen(
@@ -1539,6 +385,7 @@ export const makeAkeruMastraHarness = Effect.fnUntraced(function* (
     readonly modelId: string;
     readonly turnId: string | null;
   };
+
   const releaseWithBackoff = (id: string, claim: string, attempts: number) =>
     releaseQueuedObservation.run(
       attempts,
@@ -1548,6 +395,7 @@ export const makeAkeruMastraHarness = Effect.fnUntraced(function* (
       id,
       claim,
     );
+
   // Delivers a dropped row's notice, then removes the row. A failed notice
   // keeps the row queued so later drains retry only the notice.
   const reportDroppedObservation = async (
@@ -1569,13 +417,14 @@ export const makeAkeruMastraHarness = Effect.fnUntraced(function* (
       droppedCauses.delete(item.id);
       removeQueuedObservation.run(item.id, claim);
     } catch (callbackCause) {
-      await Effect.runPromise(
+      await runPromise(
         Effect.logWarning("Akeru observation-drop notification failed.", {
           threadId: item.threadId,
           attempts,
           cause: callbackCause,
         }),
       );
+
       // Keep the row so a later drain retries the notice.
       if (attempts >= OBSERVATION_NOTICE_ATTEMPTS) {
         droppedCauses.delete(item.id);
@@ -1593,24 +442,20 @@ export const makeAkeruMastraHarness = Effect.fnUntraced(function* (
         if (closed) return;
         const nowUtc = DateTime.nowUnsafe();
         const now = DateTime.formatIso(nowUtc);
+
         const leaseExpiry = DateTime.formatIso(
           DateTime.subtractDuration(nowUtc, `${OBSERVATION_CLAIM_LEASE_MS} millis`),
         );
-        const item = claimQueuedObservation.get(now, now, leaseExpiry) as
-          | {
-              id: string;
-              threadId: string;
-              resourceId: string;
-              modelId: string;
-              turnId: string | null;
-              attempts: number;
-              providerInstanceId: string | null;
-            }
-          | undefined;
+
+        const row = claimQueuedObservation.get(now, now, leaseExpiry);
+        const item = row === undefined ? undefined : decodeClaimedObservation(row);
+
         if (!item) {
           scheduleObservationRetry();
+
           return;
         }
+
         if (item.attempts >= OBSERVATION_DROP_ATTEMPTS) {
           // The observer already failed its last attempt; only the notice is pending.
           await reportDroppedObservation(
@@ -1622,14 +467,18 @@ export const makeAkeruMastraHarness = Effect.fnUntraced(function* (
           );
           continue;
         }
+
         const held = { attempts: item.attempts, claim: now };
         claimedRows.set(item.id, held);
         let leaseRenewal: Fiber.Fiber<unknown, unknown> | undefined;
+
         const stopLeaseRenewal = async () => {
           const fiber = leaseRenewal;
           leaseRenewal = undefined;
-          if (fiber) await Effect.runPromise(Fiber.interrupt(fiber));
+
+          if (fiber) await runPromise(Fiber.interrupt(fiber));
         };
+
         try {
           leaseRenewal = forkObservation(
             Effect.forever(
@@ -1637,6 +486,7 @@ export const makeAkeruMastraHarness = Effect.fnUntraced(function* (
                 Effect.andThen(
                   Effect.sync(() => {
                     const renewed = DateTime.formatIso(DateTime.nowUnsafe());
+
                     if (
                       renewQueuedObservationClaim.run(renewed, item.id, held.claim).changes === 1
                     ) {
@@ -1659,6 +509,7 @@ export const makeAkeruMastraHarness = Effect.fnUntraced(function* (
             // A clear or restore queued ahead of this row discarded it.
             if (!isQueuedObservationClaimed.get(item.id, held.claim)) return;
             observingRows.add(item.id);
+
             try {
               await observationalMemory.engine.observe({
                 threadId: item.threadId,
@@ -1676,16 +527,18 @@ export const makeAkeruMastraHarness = Effect.fnUntraced(function* (
           removeQueuedObservation.run(item.id, held.claim);
         } catch (cause) {
           await stopLeaseRenewal();
+
           // Close releases the claim, so a later harness picks the row up
           // rather than waiting for the lease to expire.
           if (isObservationQueueClosed(cause)) return;
           claimedRows.delete(item.id);
           const claim = held.claim;
           const attempts = item.attempts + 1;
+
           if (attempts >= OBSERVATION_DROP_ATTEMPTS) {
             // A clear or restore discarded the row, so there is nothing to report.
             if (!isQueuedObservationClaimed.get(item.id, claim)) continue;
-            await Effect.runPromise(
+            await runPromise(
               Effect.logWarning("Akeru observational memory dropped a failed observation.", {
                 threadId: item.threadId,
                 turnId: item.turnId,
@@ -1696,6 +549,7 @@ export const makeAkeruMastraHarness = Effect.fnUntraced(function* (
             await reportDroppedObservation(item, claim, attempts, cause);
             continue;
           }
+
           // Release the row with backoff so later rows are not stuck behind a
           // failing observation; a subsequent drain retries or drops it.
           releaseWithBackoff(item.id, claim, attempts);
@@ -1708,8 +562,10 @@ export const makeAkeruMastraHarness = Effect.fnUntraced(function* (
 
   const drainObservationQueue = (): Promise<void> => {
     if (drainActive && observationDrain) return observationDrain;
+
     if (closed) return Promise.resolve();
     drainActive = true;
+
     // The drain itself is a fiber in the set, so closing waits for the item it
     // is observing; the loop stops claiming once `closed` flips. Close may
     // interrupt the drain; its rows are released, so that is not a failure.
@@ -1718,7 +574,9 @@ export const makeAkeruMastraHarness = Effect.fnUntraced(function* (
         if (!closed) throw cause;
       },
     );
+
     observationDrain = drain;
+
     return drain;
   };
 
@@ -1729,6 +587,7 @@ export const makeAkeruMastraHarness = Effect.fnUntraced(function* (
     const resourceId = input.resourceId ?? input.threadId;
     const id = `${input.threadId}:${resourceId}:${input.modelId}:${NodeCrypto.randomUUID()}`;
     const now = DateTime.formatIso(DateTime.nowUnsafe());
+
     try {
       enqueueObservation.run(
         id,
@@ -1740,17 +599,19 @@ export const makeAkeruMastraHarness = Effect.fnUntraced(function* (
         now,
         input.providerInstanceId ?? null,
       );
+
       return true;
     } catch (cause) {
       // SQLITE_BUSY is already padded by busy_timeout; a queue write failure
       // must never take down the completed turn, so report and continue.
-      Effect.runFork(
+      Effect.runForkWith(context)(
         Effect.logWarning("Akeru observation queue write failed; observation was not queued.", {
           threadId: input.threadId,
           turnId: input.turnId,
           cause,
         }),
       );
+
       return false;
     }
   };
@@ -1759,6 +620,7 @@ export const makeAkeruMastraHarness = Effect.fnUntraced(function* (
     // Same admission gate as queued work: once close begins, nothing new is
     // written to the queue.
     if (closed || !writeObservationRow(input)) return Promise.resolve();
+
     return drainObservationQueue();
   };
 
@@ -1766,11 +628,13 @@ export const makeAkeruMastraHarness = Effect.fnUntraced(function* (
     input,
   ) => {
     registerResource(input.threadId);
+
     // Persisting the turn and queueing its observation are admitted together,
     // so close waits for (or interrupts) both before the stores close. A turn
     // that persisted always leaves a row for the next start to observe.
     const queued = await queueObservation(input.threadId, input.threadId, async () => {
       await persistExternalTurn(input);
+
       return writeObservationRow({
         threadId: input.threadId,
         resourceId: input.threadId,
@@ -1778,163 +642,23 @@ export const makeAkeruMastraHarness = Effect.fnUntraced(function* (
         turnId: input.turnId,
       });
     });
+
     if (queued) await drainObservationQueue();
   };
 
-  const persistExternalTurn = async (
-    input: Parameters<NonNullable<AkeruMastraHarness["observeExternalTurn"]>>[0],
-  ) => {
-    const existingThread = await observationalMemory.memory.getThreadById({
-      threadId: input.threadId,
-      resourceId: input.threadId,
-    });
-    if (!existingThread) {
-      await observationalMemory.memory.createThread({
-        threadId: input.threadId,
-        resourceId: input.threadId,
-      });
-    }
-    const createdAt = DateTime.toDate(DateTime.makeUnsafe(input.createdAt));
-    await observationalMemory.memory.persistMessages([
-      ...input.userMessages.map((message) => ({
-        id: `${input.turnId}:user:${message.id}`,
-        role: "user" as const,
-        content: { format: 2 as const, parts: [{ type: "text" as const, text: message.text }] },
-        createdAt,
-        threadId: input.threadId,
-        resourceId: input.threadId,
-      })),
-      {
-        id: `${input.turnId}:assistant`,
-        role: "assistant",
-        content: { format: 2, parts: [{ type: "text", text: input.assistant }] },
-        createdAt,
-        threadId: input.threadId,
-        resourceId: input.threadId,
-      },
-    ]);
-  };
+  const { readObservationalMemory, restoreRecords, clearObservationalMemory, persistExternalTurn } =
+    createAkeruConversation(
+      observationalMemory,
+      (threadId, resourceId) => registerResource(threadId, resourceId),
+      queueObservation,
+      discardQueuedObservations,
+    );
 
   void drainObservationQueue().catch(() => undefined);
-
-  const readObservationalMemory = async (threadId: string, resourceId?: string) => {
-    registerResource(threadId, resourceId ?? threadId);
-    const normalize = (
-      record: Awaited<ReturnType<typeof observationalMemory.engine.getRecord>>,
-    ) => {
-      if (!record) return null;
-      return {
-        id: record.id,
-        generationCount: record.generationCount,
-        originType: record.originType,
-        activeObservations: record.activeObservations,
-        bufferedObservations: [
-          ...(record.bufferedObservationChunks?.map((chunk) => chunk.observations) ?? []),
-          ...(record.bufferedObservations ? [record.bufferedObservations] : []),
-        ].join("\n\n"),
-        bufferedReflection: record.bufferedReflection ?? null,
-        totalTokensObserved: record.totalTokensObserved,
-        observationTokenCount: record.observationTokenCount,
-        createdAt: record.createdAt.toISOString(),
-        updatedAt: record.updatedAt.toISOString(),
-      };
-    };
-    const [current, history] = await Promise.all([
-      observationalMemory.engine.getRecord(threadId, resourceId),
-      observationalMemory.engine.getHistory(threadId, resourceId, 50),
-    ]);
-    return { current: normalize(current), history: history.map((record) => normalize(record)!) };
-  };
-
-  const restoreRecords = async (
-    threadId: string,
-    snapshot: AkeruConversationMemorySnapshot,
-    resourceId: string,
-    expectedSnapshot: AkeruConversationMemorySnapshot | undefined,
-  ) => {
-    const store = observationalMemory.engine.getStorage();
-    if (
-      expectedSnapshot &&
-      JSON.stringify(await readObservationalMemory(threadId, resourceId)) !==
-        JSON.stringify(expectedSnapshot)
-    ) {
-      throw new Error("Observations changed after the import preview. Preview the archive again.");
-    }
-    discardQueuedObservations.run(threadId, resourceId);
-    const originals = await store.getObservationalMemoryHistory(
-      threadId,
-      resourceId,
-      Number.MAX_SAFE_INTEGER,
-    );
-    const replace = async () => {
-      await store.clearObservationalMemory(threadId, resourceId);
-      const records = [...snapshot.history, ...(snapshot.current ? [snapshot.current] : [])];
-      const seen = new Set<string>();
-      for (const record of records) {
-        if (seen.has(record.id)) continue;
-        seen.add(record.id);
-        await store.insertObservationalMemoryRecord({
-          id: record.id,
-          scope: "thread",
-          threadId,
-          resourceId,
-          createdAt: DateTime.toDate(DateTime.makeUnsafe(record.createdAt)),
-          updatedAt: DateTime.toDate(DateTime.makeUnsafe(record.updatedAt)),
-          lastObservedAt: DateTime.toDate(DateTime.makeUnsafe(record.updatedAt)),
-          originType: record.originType,
-          generationCount: record.generationCount,
-          // Archives flatten buffered chunks, so restore their text as active observations.
-          activeObservations: [record.activeObservations, record.bufferedObservations]
-            .filter(Boolean)
-            .join("\n\n"),
-          ...(record.bufferedReflection ? { bufferedReflection: record.bufferedReflection } : {}),
-          totalTokensObserved: record.totalTokensObserved,
-          observationTokenCount:
-            record.observationTokenCount + Math.ceil(record.bufferedObservations.length / 4),
-          pendingMessageTokens: 0,
-          isReflecting: false,
-          isObserving: false,
-          isBufferingObservation: false,
-          isBufferingReflection: false,
-          lastBufferedAtTokens: 0,
-          lastBufferedAtTime: null,
-          config: {},
-        } satisfies ObservationalMemoryRecord);
-      }
-    };
-    const rollback = async () => {
-      await store.clearObservationalMemory(threadId, resourceId);
-      for (const original of originals) await store.insertObservationalMemoryRecord(original);
-    };
-    try {
-      await replace();
-    } catch (cause) {
-      // The original failure stays the error's cause whether or not the
-      // rollback lands; a rollback failure is carried beside it.
-      let rollbackFailure: { readonly cause: unknown } | undefined;
-      await rollback().catch((rollbackCause: unknown) => {
-        rollbackFailure = { cause: rollbackCause };
-      });
-      throw new AkeruObservationRestoreError({
-        threadId,
-        resourceId,
-        rolledBack: rollbackFailure === undefined,
-        cause,
-        ...(rollbackFailure ? { rollbackCause: rollbackFailure.cause } : {}),
-      });
-    }
-  };
-
-  // Clear and restore discard pending observations for the chat, so a retry
-  // cannot write observations back over the user's change.
-  const clearObservationalMemory = (threadId: string, resourceId = threadId) =>
-    queueObservation(threadId, resourceId, () => {
-      discardQueuedObservations.run(threadId, resourceId);
-      return observationalMemory.engine.clear(threadId, resourceId);
-    });
   const unregisterStore = registerEntityMemoryStore(clearObservationalMemory);
   const registeredResources = new Map<string, () => void>();
   let resourcesUnregistered = false;
+
   const registerResource = (threadId: string, resourceId = threadId) => {
     // A late call after close must not leave a callback into this closed harness.
     if (closed || resourcesUnregistered) return;
@@ -1945,12 +669,14 @@ export const makeAkeruMastraHarness = Effect.fnUntraced(function* (
       registerEntityMemoryResource(threadId, resourceId, clearObservationalMemory),
     );
   };
+
   // Registered last, so it runs first on close: invalidation stops reaching
   // this harness before its memory work winds down.
   yield* Effect.addFinalizer(() =>
     Effect.sync(() => {
       unregisterStore();
       resourcesUnregistered = true;
+
       for (const unregister of registeredResources.values()) unregister();
       registeredResources.clear();
     }),
@@ -1964,15 +690,19 @@ export const makeAkeruMastraHarness = Effect.fnUntraced(function* (
           threadId,
           resourceId: threadId,
         });
+
         const originals = originalThread
           ? (await observationalMemory.memory.recall({ threadId, perPage: false })).messages
           : [];
+
         const store = observationalMemory.engine.getStorage();
+
         const observations = await store.getObservationalMemoryHistory(
           threadId,
           threadId,
           Number.MAX_SAFE_INTEGER,
         );
+
         const replace = async (transcript: ReadonlyArray<MastraDBMessage>) => {
           discardQueuedObservations.run(threadId, threadId);
           await observationalMemory.engine.clear(threadId, threadId);
@@ -1983,26 +713,32 @@ export const makeAkeruMastraHarness = Effect.fnUntraced(function* (
             ...(originalThread?.title ? { title: originalThread.title } : {}),
             ...(originalThread?.metadata ? { metadata: originalThread.metadata } : {}),
           });
+
           if (transcript.length > 0) {
             await observationalMemory.memory.persistMessages([...transcript]);
           }
         };
+
         const restore = async () => {
           await replace(originals);
+
           for (const record of observations) await store.insertObservationalMemoryRecord(record);
         };
+
         try {
           await replace(messages);
         } catch (cause) {
           await restore();
           throw cause;
         }
+
         return () => queueObservation(threadId, threadId, restore);
       }),
     clearObservationalMemory,
     readObservationalMemory,
     restoreObservationalMemory: (threadId, snapshot, resourceId = threadId, expectedSnapshot) => {
       registerResource(threadId, resourceId);
+
       return queueObservation(threadId, resourceId, () =>
         restoreRecords(threadId, snapshot, resourceId, expectedSnapshot),
       );
@@ -2011,5 +747,54 @@ export const makeAkeruMastraHarness = Effect.fnUntraced(function* (
     observeExternalTurn,
     drainObservationQueue,
   };
+
   return harness;
 });
+
+export {
+  type AkeruMastraState,
+  type AkeruMastraSession,
+  type AkeruMastraHarnessOptions,
+  type AkeruMastraHarness,
+  type AkeruBackgroundObservationInput,
+} from "./mastra/AkeruHarnessTypes.ts";
+
+export {
+  withAkeruModelRunOptions,
+  mastraModelId,
+  openCodeGoInlineConnection,
+  resolveAkeruMastraModel,
+} from "./mastra/AkeruModels.ts";
+
+export { resolveAkeruInstructions } from "./mastra/AkeruInstructions.ts";
+
+export {
+  productFeedbackToolInputSchema,
+  AKERU_LIST_ROUTINES_TOOL_NAME,
+  AKERU_DELETE_ROUTINES_TOOL_NAME,
+  routineToolInputSchema,
+  type AkeruRoutineListResult,
+  type AkeruRoutineDeleteResult,
+  resolveAkeruTools,
+} from "./mastra/AkeruTools.ts";
+
+export {
+  type AkeruToolCategory,
+  type AkeruCriticalAction,
+  criticalAkeruAction,
+  akeruActionNeedsApproval,
+  akeruToolCategory,
+  routineToolNeedsGlobalApproval,
+} from "./mastra/AkeruActions.ts";
+
+export {
+  createAkeruObserveHooks,
+  AkeruPassiveObservationalMemoryProcessor,
+  createAkeruMastraMemory,
+} from "./mastra/AkeruMemory.ts";
+
+export {
+  AkeruMastraHarnessError,
+  AkeruObservationQueueClosedError,
+  AkeruObservationRestoreError,
+} from "./mastra/AkeruHarnessErrors.ts";

@@ -3,24 +3,32 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vite-plus/test";
 
 vi.mock("@effect/atom-react", () => ({ useAtomValue: () => null }));
+
 vi.mock("../hooks/useTheme", () => ({ useTheme: () => ({ resolvedTheme: "dark" }) }));
+
 vi.mock("../state/use-atom-query-runner", () => ({ useAtomQueryRunner: () => vi.fn() }));
+
 vi.mock("../state/use-atom-command", () => ({ useAtomCommand: () => vi.fn() }));
+
 vi.mock("../state/session", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../state/session")>()),
   usePreparedConnection: () => ({ _tag: "Loading" }),
 }));
+
 vi.mock("../state/entities", () => ({
   readThreadShell: () => null,
   useProjects: () => [],
 }));
+
 vi.mock("../localShellAccess", () => ({
   useLocalShellAccess: () => ({ isLocal: true, isResolved: true }),
 }));
+
 vi.mock("../editorPreferences", () => ({
   useOpenInPreferredEditor: () => vi.fn(),
   usePreferredEditor: () => [null, vi.fn()],
 }));
+
 vi.mock("~/lib/openPullRequestLink", () => ({
   findProjectForChangeRequest: () => undefined,
   matchesLinkedPullRequestUrl: () => false,
@@ -55,6 +63,7 @@ describe("chat markdown controls in Simplified Chinese", () => {
     expect(html).toContain("复制代码");
     expect(html).toContain("代码块操作");
     expect(html).toMatch(/(开启|关闭)自动换行/);
+
     for (const label of ["Copy code", "Code block actions", "Wrap lines", "Disable line wrap"]) {
       expect(html).not.toContain(label);
     }

@@ -1,4 +1,7 @@
-import type { ThreadId } from "@akeru/contracts";
+import * as Schema from "effect/Schema";
+import * as Option from "effect/Option";
+
+import { ThreadId } from "@akeru/contracts";
 
 /**
  * Opaque, exclusive cursor for windowed thread detail reads. Encodes the thread
@@ -30,33 +33,32 @@ export function encodeThreadDetailPageCursor(cursor: ThreadDetailPageCursor): st
   ).toString("base64url");
 }
 
+const decodeCursor = Schema.decodeUnknownOption(
+  Schema.Struct({
+    t: Schema.String.check(Schema.isMinLength(1)),
+    a: Schema.String,
+    i: Schema.String,
+  }),
+);
+
 /**
  * Returns null for anything that is not a well-formed cursor. Callers degrade
  * a malformed or foreign-thread cursor to a first-page request.
  */
 export function decodeThreadDetailPageCursor(encoded: string): ThreadDetailPageCursor | null {
   let parsed: unknown;
+
   try {
     parsed = JSON.parse(Buffer.from(encoded, "base64url").toString("utf8"));
   } catch {
     return null;
   }
-  if (parsed === null || typeof parsed !== "object") {
-    return null;
-  }
-  const record = parsed as Record<string, unknown>;
-  if (typeof record.t !== "string" || record.t.length === 0) {
-    return null;
-  }
-  // Empty strings are valid boundary values, not malformed input: the anchor
-  // is COALESCE(requested_at, started_at, ''), so a boundary turn with no
-  // timestamps encodes a: "" (and sorts before every real anchor, correctly
-  // ending the walk); the turn key is "" for a null turn_id.
-  if (typeof record.a !== "string") {
-    return null;
-  }
-  if (typeof record.i !== "string") {
-    return null;
-  }
-  return { threadId: record.t as ThreadId, beforeAnchorAt: record.a, beforeTurnId: record.i };
+
+  const decoded = decodeCursor(parsed);
+
+  if (Option.isNone(decoded)) return null;
+  // Empty anchors and turn IDs are valid keyset boundaries.
+  const record = decoded.value;
+
+  return { threadId: ThreadId.make(record.t), beforeAnchorAt: record.a, beforeTurnId: record.i };
 }

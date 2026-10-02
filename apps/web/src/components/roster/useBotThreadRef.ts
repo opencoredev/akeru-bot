@@ -25,6 +25,7 @@ export function useBotThreadCandidate(
   const rememberedPath = useRosterStore((state) => state.chatPathByBotId[botId]);
   const parsed = rememberedPath ? parseChatPath(rememberedPath) : null;
   const openThreadId = useRosterStore((state) => state.openChatByBotId[botId] ?? null);
+
   const openRef = useMemo(
     () =>
       environmentId && openThreadId
@@ -32,17 +33,21 @@ export function useBotThreadCandidate(
         : null,
     [environmentId, openThreadId],
   );
+
   const openShell = useThreadShell(openRef);
+
   // An archived chat no longer holds the bot's view, matching resolveBotThreadTarget.
   const activeOpenRef =
     openShell && openShell.archivedAt === null && isBotOwnChatShell(botId, openShell)
       ? openRef
       : null;
+
   const remembered =
     parsed !== null &&
     (options?.rememberedInPrimaryOnly !== true || parsed.environmentId === environmentId)
       ? parsed
       : null;
+
   const rememberedRef = useMemo(
     () =>
       remembered
@@ -53,7 +58,9 @@ export function useBotThreadCandidate(
         : null,
     [remembered?.environmentId, remembered?.threadId],
   );
+
   const rememberedShell = useThreadShell(rememberedRef);
+
   const target = pickBotChatTarget(
     botId,
     environmentId,
@@ -61,8 +68,10 @@ export function useBotThreadCandidate(
     rememberedRef,
     rememberedShell,
   );
+
   const targetEnvironmentId = target?.environmentId ?? null;
   const targetThreadId = target?.threadId ?? null;
+
   const fallbackRef = useMemo(
     () =>
       targetEnvironmentId && targetThreadId
@@ -70,6 +79,7 @@ export function useBotThreadCandidate(
         : null,
     [targetEnvironmentId, targetThreadId],
   );
+
   return activeOpenRef ?? fallbackRef;
 }
 
@@ -84,12 +94,15 @@ export function useBotChatTarget(
         : null,
     [target?.environmentId, target?.threadId],
   );
+
   const shell = useThreadShell(candidate);
+
   return isBotOwnChatShell(botId, shell) ? { ref: candidate, shell } : { ref: null, shell: null };
 }
 
 export function useBotThreadRef(botId: string): ScopedThreadRef | null {
   const ref = useBotThreadCandidate(botId, { rememberedInPrimaryOnly: true });
   const shell = useThreadShell(ref);
+
   return isBotOwnChatShell(botId, shell) ? ref : null;
 }

@@ -1,4 +1,5 @@
 const motionTiming = { duration: 150, easing: "ease-out" };
+
 // A section collapse or pin change swaps several rows at once. Fades are the
 // expensive part: every removed row gets a deep clone and every clone and
 // entering row gets its own animation, and the layout reads in between force
@@ -19,9 +20,11 @@ function progress(animation: Animation) {
 export function createRosterListMotion(parent: HTMLUListElement) {
   let positions: Map<HTMLElement, RowPosition> | null = null;
   let disposed = false;
+
   const reducedMotion = parent.ownerDocument.defaultView?.matchMedia(
     "(prefers-reduced-motion: reduce)",
   );
+
   const running = new Map<HTMLElement, { animation: Animation; offset: number }>();
   const entering = new Map<HTMLElement, Animation>();
   const exiting = new Map<HTMLElement, Animation>();
@@ -31,18 +34,25 @@ export function createRosterListMotion(parent: HTMLUListElement) {
 
   const remainingOffset = (node: HTMLElement) => {
     const current = running.get(node);
+
     return current ? current.offset * (1 - progress(current.animation)) : 0;
   };
+
   const clearFades = () => {
     for (const animation of [...entering.values(), ...exiting.values()]) animation.cancel();
+
     for (const node of exiting.keys()) node.remove();
     entering.clear();
     exiting.clear();
   };
+
   const fadeOut = (node: HTMLElement, position: RowPosition) => {
     if (position.height === 0) return;
     // React owns the removed row; only a noninteractive copy stays for the fade.
-    const clone = node.cloneNode(true) as HTMLElement;
+    const clone = node.cloneNode(true);
+
+    if (!(clone instanceof HTMLElement)) return;
+
     for (const element of [clone, ...clone.querySelectorAll("*")]) {
       for (const attribute of Array.from(element.attributes)) {
         if (
@@ -54,6 +64,7 @@ export function createRosterListMotion(parent: HTMLUListElement) {
         }
       }
     }
+
     clone.setAttribute("aria-hidden", "true");
     clone.inert = true;
     Object.assign(clone.style, {
@@ -71,10 +82,12 @@ export function createRosterListMotion(parent: HTMLUListElement) {
     });
     parent.append(clone);
     const entry = entering.get(node);
+
     const animation = clone.animate(
       [{ opacity: entry ? progress(entry) : 1 }, { opacity: 0 }],
       motionTiming,
     );
+
     exiting.set(clone, animation);
     animation.addEventListener(
       "finish",
@@ -90,19 +103,24 @@ export function createRosterListMotion(parent: HTMLUListElement) {
     running.get(node)?.animation.cancel();
     running.delete(node);
   };
+
   const suspend = () => {
     for (const node of running.keys()) cancel(node);
     clearFades();
     positions = null;
     released = null;
   };
+
   const move = (node: HTMLElement, offset: number) => {
     cancel(node);
+
     if (offset === 0) return;
+
     const animation = node.animate(
       [{ transform: `translateY(${offset}px)` }, { transform: "translateY(0px)" }],
       motionTiming,
     );
+
     running.set(node, { animation, offset });
     animation.addEventListener(
       "finish",
@@ -116,51 +134,65 @@ export function createRosterListMotion(parent: HTMLUListElement) {
   return {
     update(animate: boolean) {
       if (disposed) return;
+
       const next = new Map(
-        Array.from(parent.children)
-          .filter((node): node is HTMLElement => node instanceof HTMLElement && !exiting.has(node))
-          .map((node) => [
-            node,
-            {
-              top: node.offsetTop,
-              left: node.offsetLeft,
-              width: node.offsetWidth,
-              height: node.offsetHeight,
-            },
-          ]),
+        Array.from(parent.children).flatMap((node) =>
+          node instanceof HTMLElement && !exiting.has(node)
+            ? [
+                [
+                  node,
+                  {
+                    top: node.offsetTop,
+                    left: node.offsetLeft,
+                    width: node.offsetWidth,
+                    height: node.offsetHeight,
+                  },
+                ],
+              ]
+            : [],
+        ),
       );
+
       let fadeCount = 0;
+
       if (positions !== null) {
         for (const [node, position] of positions) {
           if (!next.has(node) && position.height > 0) fadeCount++;
         }
+
         for (const [node, position] of next) {
           if (!positions.has(node) && position.height > 0) fadeCount++;
         }
       }
+
       const shouldAnimate =
         animate &&
         positions !== null &&
         !reducedMotion?.matches &&
         fadeCount <= MAX_FADED_ROWS_PER_UPDATE;
+
       if (!shouldAnimate) clearFades();
       else {
         for (const [node, position] of positions!) {
           if (!next.has(node)) fadeOut(node, position);
         }
       }
+
       for (const [node, animation] of entering) {
         if (!next.has(node)) {
           animation.cancel();
           entering.delete(node);
         }
       }
+
       for (const node of running.keys()) {
         if (!shouldAnimate || !next.has(node)) cancel(node);
       }
+
       if (shouldAnimate) {
         for (const [node, position] of next) {
           const previousTop = positions?.get(node)?.top;
+
           if (previousTop === undefined) {
             if (position.height > 0) {
               const animation = node.animate([{ opacity: 0 }, { opacity: 1 }], motionTiming);
@@ -173,23 +205,29 @@ export function createRosterListMotion(parent: HTMLUListElement) {
                 { once: true },
               );
             }
+
             continue;
           }
+
           if (previousTop === position.top) continue;
           // Computed progress includes the effect's easing. Only our own
           // translate is carried forward; dnd-kit's transforms are never read.
           move(node, previousTop + remainingOffset(node) - position.top);
         }
       }
+
       if (released !== null) {
         if (!reducedMotion?.matches) {
           for (const [node, position] of next) {
             const top = released.get(node);
+
             if (top !== undefined) move(node, top - position.top);
           }
         }
+
         released = null;
       }
+
       positions = next;
     },
     /** Called on drag release, before the commit that clears dnd-kit's
@@ -200,9 +238,11 @@ export function createRosterListMotion(parent: HTMLUListElement) {
       suspend();
       const origin = parent.getBoundingClientRect().top;
       released = new Map(
-        Array.from(parent.children)
-          .filter((node): node is HTMLElement => node instanceof HTMLElement && !exiting.has(node))
-          .map((node) => [node, node.getBoundingClientRect().top - origin]),
+        Array.from(parent.children).flatMap((node) =>
+          node instanceof HTMLElement && !exiting.has(node)
+            ? [[node, node.getBoundingClientRect().top - origin]]
+            : [],
+        ),
       );
     },
     suspend,

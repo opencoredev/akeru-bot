@@ -112,6 +112,7 @@ export function isExternalCliDependency(id: string): boolean {
 /** True when the CLI bundle should inline `id` rather than leave it external. */
 export function shouldBundleCliDependency(id: string): boolean {
   if (id.startsWith("node:")) return false;
+
   return !isExternalCliDependency(id);
 }
 
@@ -157,11 +158,7 @@ export function selectCliPackagedRuntimeDependencies(
  * backends would then fail with ERR_MODULE_NOT_FOUND because those packages
  * are not in the selected sidecar closure either.
  */
-export function findInlinedExternalPackages(source: string): {
-  readonly regionCount: number;
-  readonly inlined: ReadonlyArray<string>;
-  readonly inlinedPackages: ReadonlyArray<string>;
-} {
+export function findInlinedExternalPackages(source: string) {
   // Rolldown marks each inlined module with a `//#region <path>` comment.
   const regionPattern = /\/\/#region\s+(\S+)/g;
   const packagePattern = /node_modules\/((?:@[^/\s]+\/)?[^/\s]+)\//g;
@@ -169,13 +166,17 @@ export function findInlinedExternalPackages(source: string): {
   let regionCount = 0;
   const inlined = new Set<string>();
   const inlinedPackages = new Set<string>();
+
   for (const region of source.matchAll(regionPattern)) {
     regionCount += 1;
     const regionPath = region[1] ?? "";
+
     for (const candidate of regionPath.matchAll(packagePattern)) {
       const name = candidate[1];
+
       if (name === undefined || name === ".pnpm") continue;
       inlinedPackages.add(name);
+
       if (isExternalCliDependency(name)) inlined.add(name);
     }
   }

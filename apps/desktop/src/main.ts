@@ -68,8 +68,10 @@ const desktopEnvironmentLayer = Layer.unwrap(
     const metadata = yield* Effect.service(ElectronApp.ElectronApp).pipe(
       Effect.flatMap((app) => app.metadata),
     );
+
     const platform = yield* HostProcessPlatform;
     const processArch = yield* HostProcessArchitecture;
+
     return DesktopEnvironment.layer({
       dirname: __dirname,
       homeDirectory: NodeOS.homedir(),
@@ -85,12 +87,14 @@ const resolveDesktopSshCliRunner = (
   settings: DesktopAppSettings.DesktopSettings,
 ): RemoteT3RunnerOptions => {
   const devRemoteEntryPath = Option.getOrUndefined(environment.devRemoteT3ServerEntryPath);
+
   if (environment.isDevelopment && devRemoteEntryPath !== undefined) {
     return {
       nodeScriptPath: devRemoteEntryPath,
       nodeEngineRange: serverPackageJson.engines.node,
     };
   }
+
   return {
     packageSpec: resolveRemoteT3CliPackageSpec({
       appVersion: environment.appVersion,
@@ -105,6 +109,7 @@ const desktopSshEnvironmentLayer = Layer.unwrap(
   Effect.gen(function* () {
     const environment = yield* DesktopEnvironment.DesktopEnvironment;
     const settings = yield* DesktopAppSettings.DesktopAppSettings;
+
     return DesktopSshEnvironment.layer({
       resolveCliRunner: settings.get.pipe(
         Effect.map((currentSettings) => resolveDesktopSshCliRunner(environment, currentSettings)),

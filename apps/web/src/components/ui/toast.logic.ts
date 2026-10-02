@@ -1,3 +1,5 @@
+import type { ReactNode } from "react";
+import { Predicate } from "effect";
 import type { ScopedThreadRef, ThreadId } from "@akeru/contracts";
 
 /**
@@ -5,14 +7,19 @@ import type { ScopedThreadRef, ThreadId } from "@akeru/contracts";
  * an action must pass a defined `actionProps` whose `children` are empty.
  * Treat that payload (and missing children) as "no visible action".
  */
-export function hasVisibleToastAction(actionProps: unknown): boolean {
-  if (actionProps == null || typeof actionProps !== "object") {
+export function hasVisibleToastAction(
+  actionProps: { children?: ReactNode } | null | undefined,
+): boolean {
+  if (actionProps == null || !Predicate.isObjectOrArray(actionProps)) {
     return false;
   }
+
   if (!("children" in actionProps)) {
     return false;
   }
+
   const children = actionProps.children;
+
   return children != null && children !== false && children !== "";
 }
 
@@ -23,6 +30,7 @@ export function shouldHideCollapsedToastContent(
   // Keep the front-most toast readable even if Base UI marks it as "behind"
   // due to toasts hidden by thread filtering.
   if (visibleToastCount <= 1) return false;
+
   return visibleToastIndex > 0;
 }
 
@@ -44,10 +52,7 @@ type VisibleToastLayoutItem<TToast extends object> = {
 
 export function buildVisibleToastLayout<TToast extends object>(
   visibleToasts: readonly (TToast & ToastWithLayoutProps)[],
-): {
-  frontmostHeight: number;
-  items: VisibleToastLayoutItem<TToast & ToastWithLayoutProps>[];
-} {
+) {
   // Two parallel cursors:
   //   - `full*`  advances on every toast, so an ending toast keeps the slot it
   //     occupied before dismissal and its data-ending-style exit transform
@@ -72,8 +77,10 @@ export function buildVisibleToastLayout<TToast extends object>(
           visibleIndex: fullIndex,
           offsetY: fullOffsetY,
         };
+
         fullOffsetY += height;
         fullIndex += 1;
+
         return item;
       }
 
@@ -87,6 +94,7 @@ export function buildVisibleToastLayout<TToast extends object>(
       fullIndex += 1;
       liveOffsetY += height;
       liveIndex += 1;
+
       return item;
     },
   );
@@ -102,7 +110,7 @@ export function buildVisibleToastLayout<TToast extends object>(
 }
 
 function normalizeToastHeight(height: number | null | undefined): number {
-  return typeof height === "number" && Number.isFinite(height) && height > 0 ? height : 0;
+  return Predicate.isNumber(height) && Number.isFinite(height) && height > 0 ? height : 0;
 }
 
 export function shouldRenderThreadScopedToast(
@@ -123,6 +131,7 @@ export function shouldRenderThreadScopedToast(
   }
 
   const toastThreadId = data?.threadId;
+
   if (!toastThreadId) {
     return true;
   }

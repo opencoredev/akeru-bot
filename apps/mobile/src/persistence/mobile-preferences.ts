@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -11,16 +12,20 @@ import {
   type MobileThemeId,
   type MobileThemeMode,
 } from "../lib/mobileTheme";
-
 import * as MobileDatabase from "./mobile-database";
 import * as MobileSecureStorage from "./mobile-secure-storage";
 import { MobileStorageDecodeError, MobileStorageEncodeError } from "./mobile-storage";
 
+type MutablePreferences = { -readonly [Key in keyof Preferences]: Preferences[Key] };
+
 const PREFERENCES_KEY = "akeru.preferences";
+
 const PREFERENCES_FALLBACK_KEY = "akeru.preferences.fallback";
+
 // Keys written before the rebrand; reads fall back once and the next write
 // lands on the Akeru keys, draining the old entries.
 const LEGACY_PREFERENCES_KEY = "t3code.preferences";
+
 const LEGACY_PREFERENCES_FALLBACK_KEY = "t3code.preferences.fallback";
 
 export interface Preferences {
@@ -67,7 +72,7 @@ export class MobilePreferencesSaveError extends Schema.TaggedErrorClass<MobilePr
 interface PreferencesFallback {
   readonly payload: string;
   readonly updatedAt: number;
-  readonly preferences: Preferences;
+  readonly preferences: typeof StoredPreferences.Type;
 }
 
 export class MobilePreferencesStore extends Context.Service<
@@ -83,45 +88,56 @@ export class MobilePreferencesStore extends Context.Service<
   }
 >()("@akeru/mobile/persistence/MobilePreferencesStore") {}
 
-function sanitizePreferences(parsed: Preferences): Preferences {
-  const preferences: {
-    language?: string;
-    reviewedPrivacyPolicyVersion?: string;
-    reviewedTermsVersion?: string;
-    liveActivitiesEnabled?: boolean;
-    themeId?: MobileThemeId;
-    lightThemeId?: MobileThemeId;
-    darkThemeId?: MobileThemeId;
-    themeMode?: MobileThemeMode;
-    baseFontSize?: number;
-    markdownFontSize?: number;
-    projectGroupingEnabled?: boolean;
-    projectGroupingMode?: SidebarProjectGroupingMode;
-    threadListV2SettledShelfExpanded?: boolean;
-    threadListV2SnoozedShelfExpanded?: boolean;
-  } = {};
+const StoredPreferences = Schema.Struct({
+  language: Schema.optional(Schema.Unknown),
+  reviewedPrivacyPolicyVersion: Schema.optional(Schema.Unknown),
+  reviewedTermsVersion: Schema.optional(Schema.Unknown),
+  liveActivitiesEnabled: Schema.optional(Schema.Unknown),
+  themeId: Schema.optional(Schema.Unknown),
+  lightThemeId: Schema.optional(Schema.Unknown),
+  darkThemeId: Schema.optional(Schema.Unknown),
+  themeMode: Schema.optional(Schema.Unknown),
+  baseFontSize: Schema.optional(Schema.Unknown),
+  markdownFontSize: Schema.optional(Schema.Unknown),
+  projectGroupingEnabled: Schema.optional(Schema.Unknown),
+  projectGroupingMode: Schema.optional(Schema.Unknown),
+  threadListV2SettledShelfExpanded: Schema.optional(Schema.Unknown),
+  threadListV2SnoozedShelfExpanded: Schema.optional(Schema.Unknown),
+});
 
-  if (typeof parsed.language === "string") preferences.language = parsed.language;
-  if (typeof parsed.reviewedPrivacyPolicyVersion === "string") {
+const decodeStoredPreferences = Schema.decodeUnknownSync(StoredPreferences);
+
+function sanitizePreferences(parsed: typeof StoredPreferences.Type): Preferences {
+  const preferences: MutablePreferences = {};
+
+  if (Predicate.isString(parsed.language)) preferences.language = parsed.language;
+
+  if (Predicate.isString(parsed.reviewedPrivacyPolicyVersion)) {
     preferences.reviewedPrivacyPolicyVersion = parsed.reviewedPrivacyPolicyVersion;
   }
-  if (typeof parsed.reviewedTermsVersion === "string") {
+
+  if (Predicate.isString(parsed.reviewedTermsVersion)) {
     preferences.reviewedTermsVersion = parsed.reviewedTermsVersion;
   }
-  if (typeof parsed.liveActivitiesEnabled === "boolean") {
+
+  if (Predicate.isBoolean(parsed.liveActivitiesEnabled)) {
     preferences.liveActivitiesEnabled = parsed.liveActivitiesEnabled;
   }
+
   // Legacy ids (`t3-code`, `t3-chat`) canonicalize through the alias table so a
   // persisted selection survives the rebrand instead of being dropped.
-  if (typeof parsed.themeId === "string") {
+  if (Predicate.isString(parsed.themeId)) {
     preferences.themeId = normalizeMobileThemeId(parsed.themeId);
   }
-  if (typeof parsed.lightThemeId === "string") {
+
+  if (Predicate.isString(parsed.lightThemeId)) {
     preferences.lightThemeId = normalizeMobileThemeId(parsed.lightThemeId);
   }
-  if (typeof parsed.darkThemeId === "string") {
+
+  if (Predicate.isString(parsed.darkThemeId)) {
     preferences.darkThemeId = normalizeMobileThemeId(parsed.darkThemeId);
   }
+
   if (
     parsed.themeMode === "system" ||
     parsed.themeMode === "light" ||
@@ -129,13 +145,17 @@ function sanitizePreferences(parsed: Preferences): Preferences {
   ) {
     preferences.themeMode = parsed.themeMode;
   }
-  if (typeof parsed.baseFontSize === "number") preferences.baseFontSize = parsed.baseFontSize;
-  if (typeof parsed.markdownFontSize === "number") {
+
+  if (Predicate.isNumber(parsed.baseFontSize)) preferences.baseFontSize = parsed.baseFontSize;
+
+  if (Predicate.isNumber(parsed.markdownFontSize)) {
     preferences.markdownFontSize = parsed.markdownFontSize;
   }
-  if (typeof parsed.projectGroupingEnabled === "boolean") {
+
+  if (Predicate.isBoolean(parsed.projectGroupingEnabled)) {
     preferences.projectGroupingEnabled = parsed.projectGroupingEnabled;
   }
+
   if (
     parsed.projectGroupingMode === "repository" ||
     parsed.projectGroupingMode === "repository_path" ||
@@ -143,12 +163,15 @@ function sanitizePreferences(parsed: Preferences): Preferences {
   ) {
     preferences.projectGroupingMode = parsed.projectGroupingMode;
   }
-  if (typeof parsed.threadListV2SettledShelfExpanded === "boolean") {
+
+  if (Predicate.isBoolean(parsed.threadListV2SettledShelfExpanded)) {
     preferences.threadListV2SettledShelfExpanded = parsed.threadListV2SettledShelfExpanded;
   }
-  if (typeof parsed.threadListV2SnoozedShelfExpanded === "boolean") {
+
+  if (Predicate.isBoolean(parsed.threadListV2SnoozedShelfExpanded)) {
     preferences.threadListV2SnoozedShelfExpanded = parsed.threadListV2SnoozedShelfExpanded;
   }
+
   return preferences;
 }
 
@@ -158,26 +181,28 @@ export const make = Effect.fn("MobilePreferencesStore.make")(function* () {
   const lock = yield* Semaphore.make(1);
   const lastUpdatedAt = yield* Ref.make(0);
 
-  const parsePayload = (raw: string | null): Preferences | null => {
+  const parsePayload = (raw: string | null) => {
     if (raw === null || !raw.trim()) return null;
-    let parsed: unknown;
+    let parsed: typeof StoredPreferences.Type;
+
     try {
-      parsed = JSON.parse(raw);
+      parsed = decodeStoredPreferences(JSON.parse(raw));
     } catch (cause) {
       console.warn(
         "[mobile-storage] ignored invalid JSON",
         new MobileStorageDecodeError({ key: PREFERENCES_KEY, cause }),
       );
+
       return null;
     }
-    return typeof parsed === "object" && parsed !== null && !Array.isArray(parsed)
-      ? (parsed as Preferences)
-      : null;
+
+    return parsed;
   };
 
   const parseFallback = (raw: string | null): PreferencesFallback | null => {
     if (raw === null || !raw.trim()) return null;
     let parsed: unknown;
+
     try {
       parsed = JSON.parse(raw);
     } catch (cause) {
@@ -185,19 +210,23 @@ export const make = Effect.fn("MobilePreferencesStore.make")(function* () {
         "[mobile-storage] ignored invalid JSON",
         new MobileStorageDecodeError({ key: PREFERENCES_FALLBACK_KEY, cause }),
       );
+
       return null;
     }
+
     if (
-      typeof parsed !== "object" ||
+      !Predicate.isObjectOrArray(parsed) ||
       parsed === null ||
       !("payload" in parsed) ||
-      typeof parsed.payload !== "string" ||
+      !Predicate.isString(parsed.payload) ||
       !("updatedAt" in parsed) ||
-      typeof parsed.updatedAt !== "number"
+      !Predicate.isNumber(parsed.updatedAt)
     ) {
       return null;
     }
+
     const preferences = parsePayload(parsed.payload);
+
     return preferences === null
       ? null
       : { payload: parsed.payload, updatedAt: parsed.updatedAt, preferences };
@@ -205,7 +234,7 @@ export const make = Effect.fn("MobilePreferencesStore.make")(function* () {
 
   const encode = Effect.fn("MobilePreferencesStore.encode")(function* (
     key: string,
-    value: unknown,
+    value: Preferences | { readonly payload: string; readonly updatedAt: number },
   ) {
     return yield* Effect.try({
       try: () => JSON.stringify(value),
@@ -215,6 +244,7 @@ export const make = Effect.fn("MobilePreferencesStore.make")(function* () {
 
   const nextUpdatedAt = Ref.modify(lastUpdatedAt, (last) => {
     const next = Math.max(Date.now(), last + 1);
+
     return [next, next] as const;
   });
 
@@ -239,24 +269,29 @@ export const make = Effect.fn("MobilePreferencesStore.make")(function* () {
     const timestamp = updatedAt ?? (yield* nextUpdatedAt);
     yield* Ref.update(lastUpdatedAt, (last) => Math.max(last, timestamp));
     const databaseResult = yield* Effect.result(database.savePreferencesJson(payload, timestamp));
-    if (databaseResult._tag === "Failure") {
+
+    if (Predicate.isTagged(databaseResult, "Failure")) {
       yield* Effect.logWarning("Database unavailable; saving preferences to secure storage.").pipe(
         Effect.annotateLogs({ cause: databaseResult.failure }),
       );
       const fallback = yield* encode(PREFERENCES_FALLBACK_KEY, { payload, updatedAt: timestamp });
       yield* secureStorage.setItem(PREFERENCES_FALLBACK_KEY, fallback);
+
       return;
     }
+
     yield* clearFallbacks("Could not remove the mobile preferences fallback.");
   });
 
   const loadUnlocked = Effect.gen(function* () {
     const databaseResult = yield* Effect.result(database.loadPreferencesJson);
-    const databaseAvailable = databaseResult._tag === "Success";
+    const databaseAvailable = Predicate.isTagged(databaseResult, "Success");
+
     const storedJson = databaseAvailable
       ? databaseResult.success
       : Option.none<MobileDatabase.StoredPreferencesJson>();
-    if (databaseResult._tag === "Failure") {
+
+    if (Predicate.isTagged(databaseResult, "Failure")) {
       yield* Effect.logWarning("Database unavailable; loading fallback preferences.").pipe(
         Effect.annotateLogs({ cause: databaseResult.failure }),
       );
@@ -273,8 +308,10 @@ export const make = Effect.fn("MobilePreferencesStore.make")(function* () {
           ),
         ),
     );
+
     let fallbackJson: string | null = null;
-    if (fallbackResult._tag === "Success") {
+
+    if (Predicate.isTagged(fallbackResult, "Success")) {
       fallbackJson = fallbackResult.success;
     } else if (Option.isNone(storedJson)) {
       return yield* fallbackResult.failure;
@@ -285,22 +322,27 @@ export const make = Effect.fn("MobilePreferencesStore.make")(function* () {
     }
 
     const fallback = parseFallback(fallbackJson);
+
     const storedPreferences = Option.isSome(storedJson)
       ? parsePayload(storedJson.value.payload)
       : null;
+
     const fallbackIsNewer =
       fallback !== null &&
       (storedPreferences === null ||
         (Option.isSome(storedJson) && fallback.updatedAt > storedJson.value.updatedAt));
 
-    let parsed: Preferences | null = null;
+    let parsed: typeof StoredPreferences.Type | null = null;
+
     if (fallbackIsNewer) {
       parsed = fallback.preferences;
       yield* Ref.update(lastUpdatedAt, (last) => Math.max(last, fallback.updatedAt));
+
       if (databaseAvailable) yield* saveJson(fallback.payload, fallback.updatedAt);
     } else if (storedPreferences !== null && Option.isSome(storedJson)) {
       parsed = storedPreferences;
       yield* Ref.update(lastUpdatedAt, (last) => Math.max(last, storedJson.value.updatedAt));
+
       if (fallbackJson !== null) {
         yield* clearFallbacks("Could not remove a stale mobile preferences fallback.");
       }
@@ -314,8 +356,10 @@ export const make = Effect.fn("MobilePreferencesStore.make")(function* () {
             value !== null ? Effect.succeed(value) : secureStorage.getItem(LEGACY_PREFERENCES_KEY),
           ),
         );
+
       const legacyPreferences = parsePayload(legacyJson);
       parsed = legacyPreferences;
+
       if (legacyJson !== null && legacyPreferences !== null && databaseAvailable) {
         yield* saveJson(legacyJson);
         yield* secureStorage
@@ -346,13 +390,16 @@ export const make = Effect.fn("MobilePreferencesStore.make")(function* () {
       .withPermits(1)(
         Effect.gen(function* () {
           const current = yield* loadUnlocked;
+
           const patch = yield* Effect.try({
             try: () => transform(current),
             catch: (cause) => new MobilePreferencesSaveError({ cause }),
           });
+
           const next: Preferences = { ...current, ...patch };
           const payload = yield* encode(PREFERENCES_KEY, next);
           yield* saveJson(payload);
+
           return next;
         }),
       )

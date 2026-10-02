@@ -78,7 +78,7 @@ export function nextHiddenModelsForBulkToggle(
   models: ReadonlyArray<Pick<ServerProviderModel, "slug" | "isCustom">>,
   hiddenModels: ReadonlyArray<string>,
 ): string[] {
-  const builtInSlugs = models.filter((model) => !model.isCustom).map((model) => model.slug);
+  const builtInSlugs = models.flatMap((model) => (!model.isCustom ? [model.slug] : []));
   const builtInSlugSet = new Set(builtInSlugs);
   const allBuiltInModelsHidden = builtInSlugs.every((slug) => hiddenModels.includes(slug));
 
@@ -118,6 +118,7 @@ export function ProviderModelsSection({
   const listRef = useRef<HTMLDivElement | null>(null);
   const hiddenModelSet = useMemo(() => new Set(hiddenModels), [hiddenModels]);
   const favoriteModelSet = useMemo(() => new Set(favoriteModels), [favoriteModels]);
+
   const orderedModels = useMemo(() => {
     return sortModelsForProviderInstance(models, {
       favoriteModels: favoriteModelSet,
@@ -125,26 +126,36 @@ export function ProviderModelsSection({
       modelOrder,
     });
   }, [favoriteModelSet, modelOrder, models]);
+
   const builtInModels = useMemo(() => models.filter((model) => !model.isCustom), [models]);
+
   const allBuiltInModelsHidden =
     builtInModels.length > 0 && builtInModels.every((model) => hiddenModelSet.has(model.slug));
 
   const handleAdd = () => {
     const normalized = normalizeCustomModelSlug(input);
+
     if (!normalized) {
       setError("Enter a model slug.");
+
       return;
     }
+
     if (models.some((model) => !model.isCustom && model.slug === normalized)) {
       setError("That model is already built in.");
+
       return;
     }
+
     if (normalized.length > MAX_CUSTOM_MODEL_LENGTH) {
       setError(`Model slugs must be ${MAX_CUSTOM_MODEL_LENGTH} characters or less.`);
+
       return;
     }
+
     if (customModels.includes(normalized)) {
       setError("That custom model is already saved.");
+
       return;
     }
 
@@ -157,13 +168,16 @@ export function ProviderModelsSection({
     // the `models` prop update; the `requestAnimationFrame` covers the
     // common case where the parent updates synchronously.
     const el = listRef.current;
+
     if (!el) return;
     const scrollToEnd = () => el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
     requestAnimationFrame(scrollToEnd);
+
     const observer = new MutationObserver(() => {
       scrollToEnd();
       observer.disconnect();
     });
+
     observer.observe(el, { childList: true, subtree: true });
     setTimeout(() => observer.disconnect(), 2_000);
   };
@@ -178,16 +192,20 @@ export function ProviderModelsSection({
   const handleToggleHidden = (slug: string) => {
     if (hiddenModelSet.has(slug)) {
       onHiddenModelsChange(hiddenModels.filter((model) => model !== slug));
+
       return;
     }
+
     onHiddenModelsChange([...hiddenModels, slug]);
   };
 
   const handleToggleFavorite = (slug: string) => {
     if (favoriteModelSet.has(slug)) {
       onFavoriteModelsChange(favoriteModels.filter((model) => model !== slug));
+
       return;
     }
+
     onFavoriteModelsChange([...favoriteModels, slug]);
   };
 
@@ -195,9 +213,11 @@ export function ProviderModelsSection({
     const slugs = orderedModels.map((model) => model.slug);
     const index = slugs.indexOf(slug);
     const nextIndex = index + direction;
+
     if (index < 0 || nextIndex < 0 || nextIndex >= slugs.length) {
       return;
     }
+
     const next = [...slugs];
     [next[index], next[nextIndex]] = [next[nextIndex]!, next[index]!];
     onModelOrderChange(next);
@@ -231,17 +251,23 @@ export function ProviderModelsSection({
           const isFavorite = favoriteModelSet.has(model.slug);
           const previousModel = orderedModels[index - 1];
           const nextModel = orderedModels[index + 1];
+
           const canMoveUp =
             previousModel !== undefined && favoriteModelSet.has(previousModel.slug) === isFavorite;
+
           const canMoveDown =
             nextModel !== undefined && favoriteModelSet.has(nextModel.slug) === isFavorite;
+
           const descriptors = caps?.optionDescriptors ?? [];
+
           if (descriptors.some((descriptor) => descriptor.id === "fastMode")) {
             capLabels.push("Fast mode");
           }
+
           if (descriptors.some((descriptor) => descriptor.id === "thinking")) {
             capLabels.push("Thinking");
           }
+
           if (
             descriptors.some(
               (descriptor) =>
@@ -254,13 +280,14 @@ export function ProviderModelsSection({
           ) {
             capLabels.push("Reasoning");
           }
+
           const hasDetails = capLabels.length > 0 || model.name !== model.slug;
 
           return (
             <div
               key={`${instanceId}:${model.slug}`}
               className={cn(
-                "grid min-h-7 grid-cols-[minmax(0,1fr)_auto] items-center gap-2 py-1",
+                "grid min-h-7 grid-cols-1fr-auto items-center gap-2 py-1",
                 isHidden && "text-muted-foreground",
               )}
             >
@@ -280,7 +307,7 @@ export function ProviderModelsSection({
                         <Button
                           size="icon-micro"
                           variant="ghost"
-                          className="text-muted-foreground/60 hover:text-muted-foreground"
+                          presentation="model-visibility"
                           aria-label={`Details for ${model.name}`}
                         />
                       }
@@ -289,11 +316,11 @@ export function ProviderModelsSection({
                     </TooltipTrigger>
                     <TooltipPopup side="top" className="max-w-56">
                       <div className="space-y-1">
-                        <code className="block text-[11px] text-foreground">{model.slug}</code>
+                        <code className="block text-11px text-foreground">{model.slug}</code>
                         {capLabels.length > 0 ? (
                           <div className="flex flex-wrap gap-x-2 gap-y-0.5">
                             {capLabels.map((label) => (
-                              <span key={label} className="text-[10px] text-muted-foreground">
+                              <span key={label} className="text-10px text-muted-foreground">
                                 {label}
                               </span>
                             ))}
@@ -303,11 +330,9 @@ export function ProviderModelsSection({
                     </TooltipPopup>
                   </Tooltip>
                 ) : null}
-                {isHidden ? (
-                  <span className="text-[10px] text-muted-foreground">hidden</span>
-                ) : null}
+                {isHidden ? <span className="text-10px text-muted-foreground">hidden</span> : null}
                 {model.isCustom ? (
-                  <span className="text-[10px] text-muted-foreground">custom</span>
+                  <span className="text-10px text-muted-foreground">custom</span>
                 ) : null}
               </div>
               <div className="flex shrink-0 items-center gap-0.5">
@@ -317,7 +342,7 @@ export function ProviderModelsSection({
                       <Button
                         size="icon-micro"
                         variant="ghost-muted"
-                        className={cn(isFavorite && "text-yellow-500 hover:text-yellow-600")}
+                        presentation={isFavorite ? "model-favorite" : undefined}
                         onClick={() => handleToggleFavorite(model.slug)}
                         aria-label={`${isFavorite ? "Remove" : "Add"} ${model.name} ${
                           isFavorite ? "from" : "to"
@@ -415,6 +440,7 @@ export function ProviderModelsSection({
           value={input}
           onChange={(event) => {
             setInput(event.target.value);
+
             if (error) setError(null);
           }}
           onKeyDown={(event) => {

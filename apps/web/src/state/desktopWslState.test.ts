@@ -47,14 +47,17 @@ describe("desktopWslState", () => {
 
   it("retains the desktop bridge failure as the load error cause", async () => {
     const cause = new Error("wsl unavailable");
+
     const atom = createDesktopWslStateAtom(() => ({
       getWslState: async () => Promise.reject(cause),
     }));
+
     const registry = AtomRegistry.make();
     registry.mount(atom);
 
     await vi.waitFor(() => expect(AsyncResult.isFailure(registry.get(atom))).toBe(true));
     const result = registry.get(atom);
+
     if (!AsyncResult.isFailure(result)) throw new Error("Expected WSL state load to fail.");
 
     expect(Cause.squash(result.cause)).toEqual(
@@ -71,6 +74,7 @@ describe("desktopWslState", () => {
       ...wslState,
       preflightError: "WSL backend stopped unexpectedly.",
     };
+
     let currentState = wslState;
     const getWslState = vi.fn(async () => currentState);
     const atom = createDesktopWslStateAtom(() => ({ getWslState }));

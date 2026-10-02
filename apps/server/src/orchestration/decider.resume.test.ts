@@ -15,6 +15,7 @@ import { decideOrchestrationCommand } from "./decider.ts";
 import { createEmptyReadModel, projectEvent } from "./projector.ts";
 
 const NOW = "2026-09-15T12:00:00.000Z";
+
 const THREAD_ID = ThreadId.make("thread-resume");
 
 function makeThread(status: "error" | "ready") {
@@ -105,6 +106,7 @@ it.layer(NodeServices.layer)("turn resume decider", (it) => {
   it.effect("reserves the interrupted turn before another resume can be accepted", () =>
     Effect.gen(function* () {
       const readModel = makeReadModel(makeThread("error"));
+
       const first = yield* decideOrchestrationCommand({
         command: {
           type: "thread.turn.resume",
@@ -114,9 +116,11 @@ it.layer(NodeServices.layer)("turn resume decider", (it) => {
         },
         readModel,
       });
+
       if (!("type" in first) || first.type !== "thread.turn-resume-requested") {
         return yield* Effect.die("Expected a resume request event");
       }
+
       const reserved = yield* projectEvent(readModel, {
         sequence: 1,
         eventId: first.eventId,
@@ -130,6 +134,7 @@ it.layer(NodeServices.layer)("turn resume decider", (it) => {
         type: "thread.turn-resume-requested",
         payload: { threadId: THREAD_ID, createdAt: NOW },
       });
+
       expect(reserved.threads[0]?.session?.status).toBe("starting");
 
       const error = yield* decideOrchestrationCommand({
@@ -149,6 +154,7 @@ it.layer(NodeServices.layer)("turn resume decider", (it) => {
   it.effect("allows retry when the provider rejected the request before creating a turn", () =>
     Effect.gen(function* () {
       const thread = makeThread("error");
+
       const event = yield* decideOrchestrationCommand({
         command: {
           type: "thread.turn.resume",

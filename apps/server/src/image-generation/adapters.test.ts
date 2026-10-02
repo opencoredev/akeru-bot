@@ -7,8 +7,8 @@ import {
   GROK_IMAGE_MODEL,
   type ImageAdapterFailure,
   type ImageAdapterRequest,
-  makeChatGptImageAdapter,
-  makeGrokImageAdapter,
+  chatGptImageAdapter,
+  grokImageAdapter,
   parseChatGptImageStream,
   unsupportedReason,
 } from "./adapters.ts";
@@ -56,11 +56,14 @@ interface Call {
 
 function recordingFetch(respond: (call: Call) => Response | Promise<Response>) {
   const calls: Call[] = [];
+
   const fetchFn = async (input: string | URL, init?: RequestInit) => {
     const call = { url: String(input), init: init ?? {} };
     calls.push(call);
+
     return respond(call);
   };
+
   return { calls, fetchFn };
 }
 
@@ -70,6 +73,7 @@ const chatgptAuth = (
 ) => ({
   getOpenAICodexAccess: async () => {
     if (access === "throw") throw new Error("invalid_grant");
+
     return access;
   },
   getApiKeyCredential: () => (apiKey ? { type: "api-key" as const, access: "sk-test" } : undefined),
@@ -86,6 +90,7 @@ async function failureOf(promise: Promise<unknown>): Promise<ImageAdapterFailure
   } catch (error) {
     return error as ImageAdapterFailure;
   }
+
   throw new Error("expected the adapter to fail");
 }
 
@@ -93,7 +98,8 @@ describe("ChatGPT image adapter", () => {
   it("generates through the ChatGPT sign-in and reports usage", async () => {
     const image = pngBytes(1536, 1024);
     const { calls, fetchFn } = recordingFetch(() => new Response(chatgptStream(image)));
-    const adapter = makeChatGptImageAdapter({
+
+    const adapter = chatGptImageAdapter({
       subscriptionAuth: chatgptAuth({ accessToken: "oauth-token", accountId: "acct-1" }),
       fetchFn,
     });
@@ -124,10 +130,12 @@ describe("ChatGPT image adapter", () => {
 
   it("sends input images for edits and loops for multiple images", async () => {
     const { calls, fetchFn } = recordingFetch(() => new Response(chatgptStream(pngBytes(8, 8))));
-    const adapter = makeChatGptImageAdapter({
+
+    const adapter = chatGptImageAdapter({
       subscriptionAuth: chatgptAuth({ accessToken: "t", accountId: "a" }),
       fetchFn,
     });
+
     const output = await adapter.run(
       request({
         operation: "edit",
@@ -136,6 +144,7 @@ describe("ChatGPT image adapter", () => {
       }),
       new AbortController().signal,
     );
+
     expect(output.images).toHaveLength(2);
     expect(output.usage?.outputTokens).toBe(2400);
     expect(calls).toHaveLength(2);
@@ -146,10 +155,12 @@ describe("ChatGPT image adapter", () => {
 
   it("never falls back to an OpenAI API key", async () => {
     const { calls, fetchFn } = recordingFetch(() => new Response(""));
-    const adapter = makeChatGptImageAdapter({
+
+    const adapter = chatGptImageAdapter({
       subscriptionAuth: chatgptAuth(undefined, true),
       fetchFn,
     });
+
     const failure = await failureOf(adapter.run(request(), new AbortController().signal));
     expect(failure.kind).toBe("unavailable");
     expect(failure.message).toContain("API key is not used");
@@ -157,15 +168,17 @@ describe("ChatGPT image adapter", () => {
   });
 
   it("reports a rejected refresh and a 401 as revoked", async () => {
-    const refresh = makeChatGptImageAdapter({ subscriptionAuth: chatgptAuth("throw") });
+    const refresh = chatGptImageAdapter({ subscriptionAuth: chatgptAuth("throw") });
     expect((await failureOf(refresh.run(request(), new AbortController().signal))).kind).toBe(
       "revoked",
     );
     const { fetchFn } = recordingFetch(() => new Response("nope", { status: 401 }));
-    const rejected = makeChatGptImageAdapter({
+
+    const rejected = chatGptImageAdapter({
       subscriptionAuth: chatgptAuth({ accessToken: "t", accountId: "a" }),
       fetchFn,
     });
+
     const failure = await failureOf(rejected.run(request(), new AbortController().signal));
     expect(failure.kind).toBe("revoked");
     expect(failure.message).not.toContain("nope");
@@ -173,29 +186,33 @@ describe("ChatGPT image adapter", () => {
 
   it("normalizes server errors, content refusals, and empty results", async () => {
     const auth = chatgptAuth({ accessToken: "t", accountId: "a" });
-    const serverError = makeChatGptImageAdapter({
+
+    const serverError = chatGptImageAdapter({
       subscriptionAuth: auth,
       fetchFn: async () => new Response("", { status: 503 }),
     });
+
     expect((await failureOf(serverError.run(request(), new AbortController().signal))).kind).toBe(
       "provider-failed",
     );
 
-    const refused = makeChatGptImageAdapter({
+    const refused = chatGptImageAdapter({
       subscriptionAuth: auth,
       fetchFn: async () =>
         new Response(
           sse([{ type: "response.failed", response: { error: { code: "moderation_blocked" } } }]),
         ),
     });
+
     expect((await failureOf(refused.run(request(), new AbortController().signal))).kind).toBe(
       "invalid-request",
     );
 
-    const empty = makeChatGptImageAdapter({
+    const empty = chatGptImageAdapter({
       subscriptionAuth: auth,
       fetchFn: async () => new Response(sse([{ type: "response.completed", response: {} }])),
     });
+
     expect((await failureOf(empty.run(request(), new AbortController().signal))).kind).toBe(
       "provider-failed",
     );
@@ -208,16 +225,19 @@ describe("ChatGPT image adapter", () => {
 
   it("maps an aborted request to cancelled", async () => {
     const controller = new AbortController();
-    const adapter = makeChatGptImageAdapter({
+
+    const adapter = chatGptImageAdapter({
       subscriptionAuth: chatgptAuth({ accessToken: "t", accountId: "a" }),
       fetchFn: (_input, init) =>
         new Promise((_resolve, reject) => {
           const abort = () => reject(Object.assign(new Error("aborted"), { name: "AbortError" }));
+
           // Like real fetch, an already-aborted signal rejects immediately.
           if (init?.signal?.aborted) abort();
           init?.signal?.addEventListener("abort", abort);
         }),
     });
+
     const pending = failureOf(adapter.run(request(), controller.signal));
     controller.abort();
     expect((await pending).kind).toBe("cancelled");
@@ -227,6 +247,7 @@ describe("ChatGPT image adapter", () => {
     const parsed = parseChatGptImageStream(
       `: keep-alive\n\ndata: not-json\n\n${chatgptStream(pngBytes(2, 2))}data: [DONE]\n\n`,
     );
+
     expect(parsed.images).toHaveLength(1);
   });
 });
@@ -234,14 +255,18 @@ describe("ChatGPT image adapter", () => {
 describe("Grok image adapter", () => {
   it("generates with the documented xAI request", async () => {
     const image = jpegBytes(1280, 720);
+
     const { calls, fetchFn } = recordingFetch(() =>
       Response.json({ data: [{ b64_json: base64(image) }, { b64_json: base64(image) }] }),
     );
-    const adapter = makeGrokImageAdapter({ subscriptionAuth: grokAuth("xai-token"), fetchFn });
+
+    const adapter = grokImageAdapter({ subscriptionAuth: grokAuth("xai-token"), fetchFn });
+
     const output = await adapter.run(
       request({ aspectRatio: "16:9", quality: "high", count: 2 }),
       new AbortController().signal,
     );
+
     expect(output.images).toHaveLength(2);
     expect(output.model).toBe(GROK_IMAGE_MODEL);
     expect(sniffImage(output.images[0]!)).toEqual({
@@ -267,7 +292,8 @@ describe("Grok image adapter", () => {
     const { calls, fetchFn } = recordingFetch(() =>
       Response.json({ data: [{ b64_json: base64(jpegBytes(64, 64)) }] }),
     );
-    const adapter = makeGrokImageAdapter({ subscriptionAuth: grokAuth("t"), fetchFn });
+
+    const adapter = grokImageAdapter({ subscriptionAuth: grokAuth("t"), fetchFn });
     await adapter.run(
       request({
         operation: "edit",
@@ -282,14 +308,16 @@ describe("Grok image adapter", () => {
   });
 
   it("reports missing and revoked accounts", async () => {
-    const missing = makeGrokImageAdapter({ subscriptionAuth: grokAuth(undefined) });
+    const missing = grokImageAdapter({ subscriptionAuth: grokAuth(undefined) });
     expect((await failureOf(missing.run(request(), new AbortController().signal))).kind).toBe(
       "unavailable",
     );
-    const revoked = makeGrokImageAdapter({
+
+    const revoked = grokImageAdapter({
       subscriptionAuth: grokAuth("t"),
       fetchFn: async () => new Response("", { status: 403 }),
     });
+
     expect((await failureOf(revoked.run(request(), new AbortController().signal))).kind).toBe(
       "revoked",
     );
@@ -302,12 +330,13 @@ describe("oversized provider responses", () => {
 
   it("fail before the body is read", async () => {
     const adapters = [
-      makeChatGptImageAdapter({
+      chatGptImageAdapter({
         subscriptionAuth: chatgptAuth({ accessToken: "t", accountId: "a" }),
         fetchFn: async () => oversized(),
       }),
-      makeGrokImageAdapter({ subscriptionAuth: grokAuth("t"), fetchFn: async () => oversized() }),
+      grokImageAdapter({ subscriptionAuth: grokAuth("t"), fetchFn: async () => oversized() }),
     ];
+
     for (const adapter of adapters) {
       const failure = await failureOf(adapter.run(request(), new AbortController().signal));
       expect(failure.kind).toBe("provider-failed");
@@ -320,17 +349,20 @@ describe("rejected provider responses", () => {
   it("close the response body", async () => {
     const cancel = vi.fn();
     const rejected = async () => new Response(new ReadableStream({ cancel }), { status: 503 });
+
     const adapters = [
-      makeChatGptImageAdapter({
+      chatGptImageAdapter({
         subscriptionAuth: chatgptAuth({ accessToken: "t", accountId: "a" }),
         fetchFn: rejected,
       }),
-      makeGrokImageAdapter({ subscriptionAuth: grokAuth("t"), fetchFn: rejected }),
+      grokImageAdapter({ subscriptionAuth: grokAuth("t"), fetchFn: rejected }),
     ];
+
     for (const adapter of adapters) {
       const failure = await failureOf(adapter.run(request(), new AbortController().signal));
       expect(failure.kind).toBe("provider-failed");
     }
+
     expect(cancel).toHaveBeenCalledTimes(2);
   });
 });
@@ -341,6 +373,7 @@ describe("unsupportedReason", () => {
       { mimeType: "image/png", bytes: pngBytes(1, 1) },
       { mimeType: "image/png", bytes: pngBytes(1, 1) },
     ];
+
     expect(
       unsupportedReason(
         "Grok",

@@ -4,10 +4,12 @@ export type ProviderSkillSourceKind = "app" | "repo" | "project" | "personal" | 
 
 function titleCaseWords(value: string): string {
   const words: string[] = [];
+
   for (const segment of value.split(/[\s:_-]+/)) {
     if (segment.length === 0) continue;
     words.push(segment.charAt(0).toUpperCase() + segment.slice(1));
   }
+
   return words.join(" ");
 }
 
@@ -19,9 +21,11 @@ export function formatProviderSkillDisplayName(
   skill: Pick<ServerProviderSkill, "name" | "displayName">,
 ): string {
   const displayName = skill.displayName?.trim();
+
   if (displayName) {
     return displayName;
   }
+
   return titleCaseWords(skill.name);
 }
 
@@ -49,7 +53,9 @@ function isSingleGrapheme(text: string): boolean {
     // pattern alone, which already admits only one emoji sequence.
     return true;
   }
+
   const segments = graphemeSegmenter.segment(text)[Symbol.iterator]();
+
   return !segments.next().done && segments.next().done === true;
 }
 
@@ -64,9 +70,11 @@ export function resolveProviderSkillTextIcon(
   skill: Pick<ServerProviderSkill, "icon">,
 ): string | null {
   const icon = skill.icon?.replace(/^ +| +$/g, "");
+
   if (!icon || !EMOJI_ICON_PATTERN.test(icon) || !isSingleGrapheme(icon)) {
     return null;
   }
+
   return icon;
 }
 
@@ -82,6 +90,7 @@ export function getProviderSlashCommandsForSlashMenu(
   visibleSkills: ReadonlyArray<ServerProviderSkill>,
 ): ServerProviderSlashCommand[] {
   const skillNames = new Set(visibleSkills.map((skill) => skill.name.trim().toLowerCase()));
+
   return slashCommands.filter((command) => !skillNames.has(command.name.trim().toLowerCase()));
 }
 
@@ -89,11 +98,13 @@ export function resolveProviderSkillSourceKind(
   skill: Pick<ServerProviderSkill, "path" | "scope">,
 ): ProviderSkillSourceKind {
   const normalizedPath = normalizePathSeparators(skill.path);
+
   if (normalizedPath.includes("/.codex/plugins/") || normalizedPath.includes("/.agents/plugins/")) {
     return "app";
   }
 
   const normalizedScope = skill.scope?.trim().toLowerCase();
+
   switch (normalizedScope) {
     case "repo":
     case "repository":

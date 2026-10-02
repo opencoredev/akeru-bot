@@ -15,9 +15,11 @@ export function UsageDialog() {
   useEffect(() => {
     if (!open) return;
     const intervalMs = Math.max(1, refreshMinutes) * 60 * 1000;
+
     const timer = globalThis.setInterval(() => {
       refresh();
     }, intervalMs);
+
     return () => globalThis.clearInterval(timer);
   }, [open, refresh, refreshMinutes]);
 
@@ -31,7 +33,7 @@ export function UsageDialog() {
       <DialogPopup
         showCloseButton={false}
         bottomStickOnMobile={false}
-        className="h-[min(48rem,90dvh)] max-w-5xl flex-col overflow-hidden"
+        className="h-(--spacing-min-48rem-90dvh) max-w-5xl flex-col overflow-hidden"
       >
         {open ? <UsagePage /> : null}
       </DialogPopup>

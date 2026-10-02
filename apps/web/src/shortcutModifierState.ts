@@ -33,6 +33,7 @@ export function useShortcutModifierState(): ShortcutModifierState {
     const onKeyboardEvent = (event: KeyboardEvent) => {
       setState((current) => shortcutModifierStateAfterKeyboardEvent(current, event));
     };
+
     // Dictation tools (Wispr Flow) paste with a synthetic ⌘V whose Meta keyup
     // never reaches the page, so the tracked state stays "⌘ held" forever and
     // the thread jump hints stick on screen. A paste is never jump intent, so
@@ -50,6 +51,7 @@ export function useShortcutModifierState(): ShortcutModifierState {
     window.addEventListener("keyup", onKeyboardEvent, true);
     window.addEventListener("paste", onResetEvent, true);
     window.addEventListener("blur", onResetEvent);
+
     return () => {
       window.removeEventListener("keydown", onKeyboardEvent, true);
       window.removeEventListener("keyup", onKeyboardEvent, true);
@@ -85,6 +87,7 @@ export function shortcutModifierStateAfterKeyboardEvent(
 ): ShortcutModifierState {
   const normalizedModifierKey = normalizeModifierKey(event.key);
   let nextState: ShortcutModifierState;
+
   if (normalizedModifierKey) {
     nextState = {
       ...currentState,

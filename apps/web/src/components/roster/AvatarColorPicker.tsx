@@ -1,3 +1,4 @@
+import { Match } from "effect";
 import { useEffect, useState, type KeyboardEvent, type PointerEvent } from "react";
 
 import { useI18n } from "../../i18n";
@@ -16,14 +17,16 @@ function ColorThumb({ color, left, top }: { color: string; left: string; top: st
   return (
     <span
       aria-hidden
-      className="pointer-events-none absolute size-3 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white shadow-[0_0_0_1px_rgb(0_0_0/60%)]"
-      style={{ backgroundColor: color, left, top }}
+      // The dark ring keeps the thumb visible over any picked color.
+      className="pointer-events-none absolute top-(--thumb-top) left-(--thumb-left) size-3 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-on-solid swatch-fill ring-1 ring-shade/60"
+      style={{ "--swatch": color, "--thumb-left": left, "--thumb-top": top }}
     />
   );
 }
 
 function pointerFraction(event: PointerEvent<HTMLDivElement>) {
   const bounds = event.currentTarget.getBoundingClientRect();
+
   return {
     x: clampColorFraction((event.clientX - bounds.left) / bounds.width),
     y: clampColorFraction((event.clientY - bounds.top) / bounds.height),
@@ -43,6 +46,7 @@ function ColorPickerPanel({
 
   useEffect(() => {
     const next = hexToHsv(value);
+
     if (!next) return;
     setHsv((current) => (next.s === 0 || next.v === 0 ? { ...next, h: current.h } : next));
     setDraft(null);
@@ -56,6 +60,7 @@ function ColorPickerPanel({
 
   const commitHex = (candidate: string) => {
     const next = hexToHsv(candidate);
+
     if (next) commitHsv(next);
     else setDraft(null);
   };
@@ -74,6 +79,7 @@ function ColorPickerPanel({
   const handleFieldKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
     const step = event.shiftKey ? 0.1 : 0.02;
     const next = { ...hsv };
+
     if (event.key === "ArrowLeft") next.s = clampColorFraction(hsv.s - step);
     else if (event.key === "ArrowRight") next.s = clampColorFraction(hsv.s + step);
     else if (event.key === "ArrowUp") next.v = clampColorFraction(hsv.v + step);
@@ -84,7 +90,12 @@ function ColorPickerPanel({
   };
 
   const handleHueKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
-    const direction = event.key === "ArrowLeft" ? -1 : event.key === "ArrowRight" ? 1 : 0;
+    const direction = Match.value(event).pipe(
+      Match.when({ key: "ArrowLeft" }, () => -1),
+      Match.when({ key: "ArrowRight" }, () => 1),
+      Match.orElse(() => 0),
+    );
+
     if (direction === 0) return;
     event.preventDefault();
     const step = event.shiftKey ? 30 : 4;
@@ -104,12 +115,8 @@ function ColorPickerPanel({
         aria-valuemax={100}
         aria-valuenow={Math.round(hsv.v * 100)}
         aria-valuetext={formatColorFieldValueText(hsv, color, t)}
-        className="relative h-36 cursor-crosshair touch-none rounded-md outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        style={{
-          backgroundColor: hueColor,
-          backgroundImage:
-            "linear-gradient(to top, #000, transparent), linear-gradient(to right, #fff, transparent)",
-        }}
+        className="relative h-36 cursor-crosshair touch-none rounded-md swatch-fill bg-saturation-value-plane outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        style={{ "--swatch": hueColor }}
         onKeyDown={handleFieldKeyDown}
         onPointerDown={updateField}
         onPointerMove={(event) => {
@@ -126,10 +133,7 @@ function ColorPickerPanel({
         aria-valuemin={0}
         aria-valuemax={360}
         aria-valuenow={Math.round(hsv.h)}
-        className="relative mt-3 h-3 cursor-ew-resize touch-none rounded-full outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        style={{
-          background: "linear-gradient(to right, #f00, #ff0, #0f0, #0ff, #00f, #f0f, #f00)",
-        }}
+        className="relative mt-3 h-3 cursor-ew-resize touch-none rounded-full bg-hue-spectrum outline-none focus-visible:ring-2 focus-visible:ring-ring"
         onKeyDown={handleHueKeyDown}
         onPointerDown={updateHue}
         onPointerMove={(event) => {
@@ -194,9 +198,9 @@ export function AvatarColorPicker({
           aria-label={t("Use {color}", { color: preset })}
           aria-pressed={color === preset}
           onClick={() => onChange(preset)}
-          style={{ backgroundColor: preset }}
+          style={{ "--swatch": preset }}
           className={cn(
-            "size-8 cursor-pointer rounded-full border border-foreground/10 outline-none focus-visible:ring-2 focus-visible:ring-ring",
+            "size-8 cursor-pointer rounded-full swatch-fill border border-foreground/10 outline-none focus-visible:ring-2 focus-visible:ring-ring",
             color === preset && "ring-2 ring-foreground/30 ring-offset-2 ring-offset-background",
           )}
         />
@@ -210,22 +214,13 @@ export function AvatarColorPicker({
               aria-label={t("Choose a custom avatar color. Current color {color}", { color })}
               aria-pressed={!presetSelected}
               className={cn(
-                "size-8 cursor-pointer rounded-full border border-foreground/15 outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                "size-8 cursor-pointer rounded-full bg-color-wheel border border-foreground/15 outline-none focus-visible:ring-2 focus-visible:ring-ring",
                 !presetSelected && "ring-2 ring-foreground/30 ring-offset-2 ring-offset-background",
               )}
-              style={{
-                background:
-                  "conic-gradient(from 90deg, #ff3b30, #ffcc00, #34c759, #00c7be, #0a84ff, #bf5af2, #ff375f, #ff3b30)",
-              }}
             />
           }
         />
-        <PopoverPopup
-          align="end"
-          sideOffset={8}
-          className="overflow-hidden"
-          viewportClassName="p-0 [--viewport-inline-padding:0px]"
-        >
+        <PopoverPopup align="end" sideOffset={8} className="overflow-hidden" viewportPadding="none">
           <ColorPickerPanel value={color} onChange={onChange} />
         </PopoverPopup>
       </Popover>

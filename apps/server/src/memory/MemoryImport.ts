@@ -21,7 +21,6 @@ import {
 const checksum = (value: string) => NodeCrypto.createHash("sha256").update(value).digest("hex");
 
 const prepare = Effect.fn("MemoryImport.prepare")(function* (input: {
-  readonly repository: EntityMemoryRepositoryShape;
   readonly access: AkeruMemoryThreadAccess;
   readonly target: AkeruMemoryArchiveTarget;
   readonly archive: AkeruMemoryArchive;
@@ -31,17 +30,20 @@ const prepare = Effect.fn("MemoryImport.prepare")(function* (input: {
       detail: "Version 1 memory archives are readable exports and cannot be imported safely.",
     });
   }
+
   if (input.archive.target !== input.target) {
     return yield* new EntityMemoryImportError({
       detail: "The selected import target does not match the archive target.",
     });
   }
+
   if (!input.archive.complete) {
     return yield* new EntityMemoryImportError({
       detail:
         "A current-state archive has no complete revision chain and cannot be imported safely.",
     });
   }
+
   const importTarget =
     input.target === "all"
       ? yield* new EntityMemoryImportError({
@@ -49,9 +51,11 @@ const prepare = Effect.fn("MemoryImport.prepare")(function* (input: {
             "All-memory archives span separate authority domains. Import a thread, bot, project, or workspace archive instead.",
         })
       : input.target;
+
   if (input.archive.files.some((file) => checksum(file.content) !== file.sha256)) {
     return yield* new EntityMemoryImportError({ detail: "A memory archive file checksum failed." });
   }
+
   if (
     input.archive.revisions.some(
       ({ revision, sha256 }) => checksum(encodeMemoryArchiveJson(revision)) !== sha256,
@@ -61,6 +65,7 @@ const prepare = Effect.fn("MemoryImport.prepare")(function* (input: {
       detail: "A structured memory revision checksum failed.",
     });
   }
+
   if (
     input.archive.conversations.some(
       ({ threadId, snapshot, sha256 }) =>
@@ -71,6 +76,7 @@ const prepare = Effect.fn("MemoryImport.prepare")(function* (input: {
       detail: "A conversation memory checksum failed.",
     });
   }
+
   const manifest = encodeMemoryArchiveJson({
     schemaVersion: 2,
     anchorThreadId: input.archive.anchorThreadId,
@@ -89,17 +95,20 @@ const prepare = Effect.fn("MemoryImport.prepare")(function* (input: {
       sha256,
     })),
   });
+
   if (checksum(manifest) !== input.archive.manifestSha256) {
     return yield* new EntityMemoryImportError({
       detail: "The memory archive manifest is invalid.",
     });
   }
+
   if (
     input.archive.files.length !== input.archive.revisions.length ||
     input.archive.revisions.some(({ revision }) => {
       const file = input.archive.files.find(
         (candidate) => candidate.path === memoryRevisionArchivePath(revision),
       );
+
       return file === undefined || file.content !== renderMemoryRevision(revision);
     })
   ) {
@@ -107,29 +116,38 @@ const prepare = Effect.fn("MemoryImport.prepare")(function* (input: {
       detail: "The readable memory files do not match the structured revision records.",
     });
   }
+
   const revisionsByRoot = new Map<string, Array<AkeruMemoryRevision>>();
+
   for (const { revision } of input.archive.revisions) {
     const revisions = revisionsByRoot.get(revision.rootId) ?? [];
     revisions.push(revision);
     revisionsByRoot.set(revision.rootId, revisions);
   }
+
   for (const revisions of revisionsByRoot.values()) {
     const ordered = [...revisions].sort((left, right) => left.revision - right.revision);
+
     if (ordered.some((revision) => revision.deletionState === "deleted")) {
       return yield* new EntityMemoryImportError({
         detail: "Deleted memory revisions cannot be restored from an archive.",
       });
     }
+
     const terminalIndex = ordered.findIndex((revision) => revision.deletionState === "tombstoned");
+
     if (terminalIndex >= 0 && terminalIndex !== ordered.length - 1) {
       return yield* new EntityMemoryImportError({
         detail: "A tombstoned memory revision must be the terminal archive revision.",
       });
     }
   }
+
   const resolvedPartitions = yield* resolveMemoryArchivePartitions(input.access, importTarget);
+
   const partitions =
     importTarget === "workspace" ? resolvedPartitions.slice(0, 1) : resolvedPartitions;
+
   return {
     partitions,
     revisions: input.archive.revisions.map(({ revision }) => revision),
@@ -137,19 +155,20 @@ const prepare = Effect.fn("MemoryImport.prepare")(function* (input: {
 });
 
 export function previewAkeruMemoryImport(input: {
-  readonly repository: EntityMemoryRepositoryShape;
+  readonly repository: Pick<EntityMemoryRepositoryShape, "previewImport">;
   readonly access: AkeruMemoryThreadAccess;
   readonly target: AkeruMemoryArchiveTarget;
   readonly archive: AkeruMemoryArchive;
 }): Effect.Effect<AkeruMemoryImportPreview, Error> {
   return Effect.gen(function* () {
     const prepared = yield* prepare(input);
+
     return yield* input.repository.previewImport({ access: input.access, ...prepared });
   });
 }
 
 export function applyAkeruMemoryImport(input: {
-  readonly repository: EntityMemoryRepositoryShape;
+  readonly repository: Pick<EntityMemoryRepositoryShape, "applyImport">;
   readonly access: AkeruMemoryThreadAccess;
   readonly target: AkeruMemoryArchiveTarget;
   readonly archive: AkeruMemoryArchive;
@@ -161,6 +180,7 @@ export function applyAkeruMemoryImport(input: {
 }): Effect.Effect<AkeruMemoryImportApplyResult, Error> {
   return Effect.gen(function* () {
     const prepared = yield* prepare(input);
+
     return yield* input.repository.applyImport({
       access: input.access,
       ...prepared,

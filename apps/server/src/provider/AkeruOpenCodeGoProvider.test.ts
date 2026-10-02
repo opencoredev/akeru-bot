@@ -13,6 +13,7 @@ describe("AkeruOpenCodeGoProvider", () => {
       const request = vi.fn(
         async (_input: string | URL | Request, _init?: RequestInit) => new Response("{}"),
       );
+
       await buildAkeruOpenCodeGoFetch(
         protocol,
         async () => "custom-key",
@@ -49,6 +50,7 @@ describe("AkeruOpenCodeGoProvider", () => {
       expect(headers.get("x-api-key")).toBeNull();
       expect(headers.get("user-agent")).toBe("akeru-bot/0.0.37");
       expect(headers.get("x-opencode-client")).toBe("akeru-bot");
+
       return new Response("{}", { status: 200 });
     });
 

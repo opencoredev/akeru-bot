@@ -111,6 +111,7 @@ describe("projectThreadAwareness", () => {
       completedAt: NOW,
       assistantMessageId: null,
     };
+
     const state = projectThreadAwareness({
       environmentId: "env-1" as EnvironmentId,
       project,
@@ -128,6 +129,7 @@ describe("projectThreadAwareness", () => {
       project,
       thread: thread({ latestTurn: { ...finishedTurn, completedAt: null } }),
     });
+
     expect(trulyInterrupted).toBeNull();
   });
 

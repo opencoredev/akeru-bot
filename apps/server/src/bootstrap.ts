@@ -1,4 +1,3 @@
-// @effect-diagnostics nodeBuiltinImport:off
 import * as NodeFS from "node:fs";
 import * as NodeNet from "node:net";
 import * as NodeReadline from "node:readline";
@@ -35,6 +34,7 @@ export class BootstrapInputStreamOpenError extends Schema.TaggedErrorClass<Boots
 ) {
   override get message(): string {
     const path = this.fdPath === undefined ? "" : ` via '${this.fdPath}'`;
+
     return `Failed to open bootstrap input stream for file descriptor ${this.fd}${path} on '${this.platform}'.`;
   }
 }
@@ -69,6 +69,7 @@ export const BootstrapError = Schema.Union([
   BootstrapEnvelopeReadError,
   BootstrapEnvelopeDecodeError,
 ]);
+
 export type BootstrapError = typeof BootstrapError.Type;
 
 export const readBootstrapEnvelope = Effect.fn("readBootstrapEnvelope")(function* <A, I>(
@@ -79,6 +80,7 @@ export const readBootstrapEnvelope = Effect.fn("readBootstrapEnvelope")(function
   },
 ): Effect.fn.Return<Option.Option<A>, BootstrapError> {
   const fdReady = yield* isFdReady(fd);
+
   if (!fdReady) return Option.none();
 
   const stream = yield* makeBootstrapInputStream(fd);
@@ -105,8 +107,10 @@ export const readBootstrapEnvelope = Effect.fn("readBootstrapEnvelope")(function
     const handleError = (error: Error) => {
       if (isUnavailableBootstrapFdError(error)) {
         resume(Effect.succeedNone);
+
         return;
       }
+
       resume(
         Effect.fail(
           new BootstrapEnvelopeReadError({
@@ -119,6 +123,7 @@ export const readBootstrapEnvelope = Effect.fn("readBootstrapEnvelope")(function
 
     const handleLine = (line: string) => {
       const parsed = decodeJsonResult(schema)(line);
+
       if (Result.isSuccess(parsed)) {
         resume(Effect.succeedSome(parsed.success));
       } else {
@@ -170,6 +175,7 @@ const makeBootstrapInputStream = (fd: number) =>
   Effect.gen(function* () {
     const platform = yield* HostProcessPlatform;
     const fdPath = resolveFdPath(fd, platform);
+
     return yield* Effect.try<NodeStream.Readable, BootstrapInputStreamOpenError>({
       try: () => {
         if (fdPath === undefined) {
@@ -177,8 +183,10 @@ const makeBootstrapInputStream = (fd: number) =>
         }
 
         let streamFd: number | undefined;
+
         try {
           streamFd = NodeFS.openSync(fdPath, "r");
+
           return NodeFS.createReadStream("", {
             fd: streamFd,
             encoding: "utf8",
@@ -189,8 +197,10 @@ const makeBootstrapInputStream = (fd: number) =>
             if (streamFd !== undefined) {
               NodeFS.closeSync(streamFd);
             }
+
             return makeDirectBootstrapStream(fd);
           }
+
           throw error;
         }
       },
@@ -217,7 +227,9 @@ const makeDirectBootstrapStream = (fd: number): NodeStream.Readable => {
       readable: true,
       writable: false,
     });
+
     stream.setEncoding("utf8");
+
     return stream;
   }
 };
@@ -234,8 +246,10 @@ function resolveFdPath(fd: number, platform: NodeJS.Platform): string | undefine
   if (platform === "linux") {
     return `/proc/self/fd/${fd}`;
   }
+
   if (platform === "win32") {
     return undefined;
   }
+
   return `/dev/fd/${fd}`;
 }

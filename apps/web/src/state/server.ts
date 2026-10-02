@@ -25,6 +25,7 @@ import { environmentSession } from "./session";
 export const serverEnvironment = createServerEnvironmentAtoms(connectionAtomRuntime, {
   initialConfigValueAtom: environmentSession.initialConfigValueAtom,
 });
+
 export const environmentServerConfigsAtom = createEnvironmentServerConfigsAtom({
   catalogValueAtom: environmentCatalog.catalogValueAtom,
   serverConfigValueAtom: serverEnvironment.configValueAtom,
@@ -37,7 +38,9 @@ interface PrimaryServerState {
 }
 
 const EMPTY_AVAILABLE_EDITORS: ReadonlyArray<EditorId> = [];
+
 export const EMPTY_SERVER_PROVIDERS: ReadonlyArray<ServerProvider> = [];
+
 const EMPTY_PRIMARY_SERVER_STATE: PrimaryServerState = {
   config: null,
   latestEvent: null,
@@ -46,14 +49,17 @@ const EMPTY_PRIMARY_SERVER_STATE: PrimaryServerState = {
 
 export const primaryServerStateAtom = Atom.make((get): PrimaryServerState => {
   const environmentId = get(primaryEnvironmentIdAtom);
+
   if (environmentId === null) {
     return EMPTY_PRIMARY_SERVER_STATE;
   }
 
   const target = { environmentId, input: {} };
+
   const configProjection = Option.getOrNull(
     AsyncResult.value(get(serverEnvironment.configProjection(target))),
   );
+
   const welcome = Option.getOrNull(AsyncResult.value(get(serverEnvironment.welcome(target))));
 
   return {
@@ -82,11 +88,15 @@ export const primaryServerSettingsAtom = Atom.make(
 export const primaryServerProvidersAtom = Atom.make((get): ReadonlyArray<ServerProvider> => {
   const environmentId = get(primaryEnvironmentIdAtom);
   const providers = get(primaryServerConfigAtom)?.providers ?? EMPTY_SERVER_PROVIDERS;
+
   if (environmentId === null) return EMPTY_SERVER_PROVIDERS;
+
   const statuses = Option.getOrUndefined(
     AsyncResult.value(get(serverEnvironment.subscriptionAuth({ environmentId, input: {} }))),
   );
+
   const providerInstances = get(primaryServerSettingsAtom).providerInstances;
+
   return filterProvidersBySubscriptionConnection(providers, statuses?.providers).map((provider) =>
     withRefreshableSubscriptionLogin(provider, statuses?.providers, providerInstances),
   );

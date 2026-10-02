@@ -37,7 +37,9 @@ import {
 } from "../Services/OrchestrationEventStore.ts";
 
 const decodeEvent = Schema.decodeUnknownEffect(OrchestrationEvent);
+
 const UnknownFromJsonString = Schema.fromJsonString(Schema.Unknown);
+
 const EventMetadataFromJsonString = Schema.fromJsonString(OrchestrationEventMetadata);
 
 const AppendEventRequestSchema = Schema.Struct({
@@ -100,6 +102,7 @@ const ReadFromSequenceRequestSchema = Schema.Struct({
   toSequenceInclusive: NonNegativeInt,
   limit: Schema.Number,
 });
+
 const AggregateReplayRequestSchema = Schema.Struct({
   aggregateKind: OrchestrationAggregateKind,
   aggregateId: Schema.String,
@@ -107,12 +110,15 @@ const AggregateReplayRequestSchema = Schema.Struct({
   toSequenceInclusive: NonNegativeInt,
   limit: Schema.Number,
 });
+
 const AggregateReplayStatsRowSchema = Schema.Struct({
   eventCount: Schema.Number,
   payloadBytes: Schema.Number,
   hasCreateEvent: Schema.Number,
 });
+
 const DEFAULT_READ_FROM_SEQUENCE_LIMIT = 1_000;
+
 const READ_PAGE_SIZE = 500;
 
 function inferActorKind(
@@ -121,9 +127,11 @@ function inferActorKind(
   if (event.commandId !== null && event.commandId.startsWith("provider:")) {
     return "provider";
   }
+
   if (event.commandId !== null && event.commandId.startsWith("server:")) {
     return "server";
   }
+
   if (
     event.metadata.providerTurnId !== undefined ||
     event.metadata.providerItemId !== undefined ||
@@ -131,9 +139,11 @@ function inferActorKind(
   ) {
     return "provider";
   }
+
   if (event.commandId === null) {
     return "server";
   }
+
   return "client";
 }
 
@@ -314,9 +324,11 @@ const makeEventStore = Effect.gen(function* () {
     toSequenceInclusive = Number.MAX_SAFE_INTEGER,
   ) => {
     const normalizedLimit = Math.max(0, Math.floor(limit));
+
     if (normalizedLimit === 0 || sequenceExclusive >= toSequenceInclusive) {
       return Stream.empty;
     }
+
     return Stream.paginate(
       { cursor: sequenceExclusive, remaining: normalizedLimit },
       ({ cursor, remaining }) =>
@@ -343,6 +355,7 @@ const makeEventStore = Effect.gen(function* () {
           Effect.map((events) => {
             const last = events.at(-1);
             const nextRemaining = remaining - events.length;
+
             return [
               events,
               last === undefined || nextRemaining <= 0
@@ -356,9 +369,11 @@ const makeEventStore = Effect.gen(function* () {
 
   const readAggregateRange: OrchestrationEventStoreShape["readAggregateRange"] = (input) => {
     const limit = Math.max(0, Math.floor(input.limit ?? DEFAULT_READ_FROM_SEQUENCE_LIMIT));
+
     if (limit === 0 || input.fromSequenceExclusive >= input.toSequenceInclusive) {
       return Stream.empty;
     }
+
     return Stream.paginate(
       { cursor: input.fromSequenceExclusive, remaining: limit },
       ({ cursor, remaining }) =>
@@ -385,6 +400,7 @@ const makeEventStore = Effect.gen(function* () {
           Effect.map((events) => {
             const last = events.at(-1);
             const nextRemaining = remaining - events.length;
+
             return [
               events,
               last === undefined ||

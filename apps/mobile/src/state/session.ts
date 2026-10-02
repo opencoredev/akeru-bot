@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 import { useAtomValue } from "@effect/atom-react";
 import {
   type OperateAccess,
@@ -30,9 +31,10 @@ export function usePreparedConnection(environmentId: EnvironmentId | null) {
  */
 export function useEnvironmentOperateAccess(environmentId: EnvironmentId): OperateAccess {
   const result = useAtomValue(environmentSession.sessionStateAtom(environmentId));
+
   return resolveRemoteOperateAccess({
     session: Option.getOrNull(AsyncResult.value(result)),
     isPending: result.waiting,
-    hasError: result._tag === "Failure",
+    hasError: Predicate.isTagged(result, "Failure"),
   });
 }

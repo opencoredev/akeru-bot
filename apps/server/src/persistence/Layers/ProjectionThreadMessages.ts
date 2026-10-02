@@ -7,6 +7,7 @@ import * as Schema from "effect/Schema";
 import * as Struct from "effect/Struct";
 import {
   ChannelMessageOrigin,
+  ChannelDeliveryState,
   ChatAttachment,
   OrchestrationMessageReaction,
 } from "@akeru/contracts";
@@ -28,10 +29,11 @@ const ProjectionThreadMessageDbRowSchema = ProjectionThreadMessage.mapFields(
     isStreaming: Schema.Number,
     attachments: Schema.NullOr(Schema.fromJsonString(Schema.Array(ChatAttachment))),
     channelOrigin: Schema.NullOr(Schema.fromJsonString(ChannelMessageOrigin)),
-    channelDelivery: Schema.NullOr(Schema.String),
+    channelDelivery: Schema.NullOr(ChannelDeliveryState),
     reactions: Schema.fromJsonString(Schema.Array(OrchestrationMessageReaction)),
   }),
 );
+
 const ProjectionThreadMessageExistsDbRowSchema = Schema.Struct({ exists: Schema.Number });
 
 function toProjectionThreadMessage(
@@ -45,7 +47,7 @@ function toProjectionThreadMessage(
     authorPersonId: row.authorPersonId ?? null,
     authorDisplayName: row.authorDisplayName ?? null,
     channelOrigin: row.channelOrigin,
-    channelDelivery: row.channelDelivery as ProjectionThreadMessage["channelDelivery"],
+    channelDelivery: row.channelDelivery,
     role: row.role,
     text: row.text,
     isStreaming: row.isStreaming === 1,
@@ -64,7 +66,9 @@ const makeProjectionThreadMessageRepository = Effect.gen(function* () {
     execute: (row) => {
       const nextAttachmentsJson =
         row.attachments !== undefined ? JSON.stringify(row.attachments) : null;
+
       const reactionsJson = JSON.stringify(row.reactions ?? []);
+
       return sql`
         INSERT INTO projection_thread_messages (
           message_id,
@@ -147,6 +151,7 @@ const makeProjectionThreadMessageRepository = Effect.gen(function* () {
     execute: (row) => {
       const nextAttachmentsJson =
         row.attachments !== undefined ? JSON.stringify(row.attachments) : null;
+
       return sql`
         INSERT INTO projection_thread_messages (
           message_id,

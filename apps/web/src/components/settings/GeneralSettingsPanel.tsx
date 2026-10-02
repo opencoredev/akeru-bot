@@ -1,3 +1,5 @@
+import { recordLookup } from "../recordLookup";
+import { Predicate } from "effect";
 import { Link } from "@tanstack/react-router";
 import { useCallback, useState } from "react";
 import type { MessageKey } from "@akeru/client-runtime/i18n";
@@ -48,10 +50,11 @@ const QUIT_CONFIRMATION_MODE_LABELS: Record<QuitConfirmationMode, MessageKey> = 
 
 function AboutVersionTitle() {
   const { t } = useI18n();
+
   return (
     <span className="inline-flex items-baseline gap-2">
       <span>{t("Version")}</span>
-      <code className="text-[11px] font-medium text-muted-foreground">{APP_VERSION}</code>
+      <code className="text-11px font-medium text-muted-foreground">{APP_VERSION}</code>
     </span>
   );
 }
@@ -63,20 +66,22 @@ function AboutVersionSection() {
 
   const handleButtonClick = useCallback(async () => {
     const bridge = window.desktopBridge;
+
     if (!bridge) return;
 
     const action = updateState ? resolveDesktopUpdateButtonAction(updateState) : "none";
 
     if (action === "download") {
-      void bridge.downloadUpdate().catch((error: unknown) => {
+      void bridge.downloadUpdate().catch((cause: unknown) => {
         toastManager.add(
           stackedThreadToast({
             type: "error",
             title: t("Could not download update"),
-            description: error instanceof Error ? error.message : t("Download failed."),
+            description: cause instanceof Error ? cause.message : t("Download failed."),
           }),
         );
       });
+
       return;
     }
 
@@ -84,6 +89,7 @@ function AboutVersionSection() {
       if (isUpdateActionPending) return;
       setIsUpdateActionPending(true);
       let confirmed = false;
+
       try {
         confirmed = await ensureLocalApi().dialogs.confirm(
           getDesktopUpdateInstallConfirmationMessage(
@@ -99,28 +105,33 @@ function AboutVersionSection() {
             description: error instanceof Error ? error.message : t("Update confirmation failed."),
           }),
         );
+
         return;
       }
+
       if (!confirmed) {
         setIsUpdateActionPending(false);
+
         return;
       }
+
       void bridge
         .installUpdate()
-        .catch((error: unknown) => {
+        .catch((cause: unknown) => {
           toastManager.add(
             stackedThreadToast({
               type: "error",
               title: t("Could not install update"),
-              description: error instanceof Error ? error.message : t("Install failed."),
+              description: cause instanceof Error ? cause.message : t("Install failed."),
             }),
           );
         })
         .finally(() => setIsUpdateActionPending(false));
+
       return;
     }
 
-    if (typeof bridge.checkForUpdate !== "function") return;
+    if (!Predicate.isFunction(bridge.checkForUpdate)) return;
     void bridge
       .checkForUpdate()
       .then((result) => {
@@ -135,12 +146,12 @@ function AboutVersionSection() {
           );
         }
       })
-      .catch((error: unknown) => {
+      .catch((cause: unknown) => {
         toastManager.add(
           stackedThreadToast({
             type: "error",
             title: t("Could not check for updates"),
-            description: error instanceof Error ? error.message : t("Update check failed."),
+            description: cause instanceof Error ? cause.message : t("Update check failed."),
           }),
         );
       });
@@ -148,20 +159,29 @@ function AboutVersionSection() {
 
   const action = updateState ? resolveDesktopUpdateButtonAction(updateState) : "none";
   const buttonTooltip = updateState ? getDesktopUpdateButtonTooltip(updateState) : null;
+
   const buttonDisabled =
     action === "none"
       ? !canCheckForUpdate(updateState)
       : isDesktopUpdateButtonDisabled(updateState);
 
-  const actionLabel: Record<string, MessageKey> = { download: "Download", install: "Install" };
-  const statusLabel: Record<string, MessageKey> = {
+  const actionLabel = { download: "Download", install: "Install" } satisfies Record<
+    string,
+    MessageKey
+  >;
+
+  const statusLabel = {
     checking: "Checking…",
     downloading: "Downloading…",
     "up-to-date": "Up to Date",
-  };
+  } satisfies Record<string, MessageKey>;
+
   const buttonLabel = t(
-    actionLabel[action] ?? statusLabel[updateState?.status ?? ""] ?? "Check for Updates",
+    recordLookup(actionLabel, action) ??
+      recordLookup(statusLabel, updateState?.status ?? "") ??
+      "Check for Updates",
   );
+
   const description =
     action === "download" || action === "install"
       ? t("Update available.")
@@ -195,9 +215,11 @@ function AboutVersionSection() {
 /** "How often the usage page reloads plan limits.", with the page name as a link. */
 function UsageRefreshDescription() {
   const { t } = useI18n();
+
   const [beforeLink, afterLink = ""] = t("How often the {link} reloads plan limits.", {
     link: "\u0000",
   }).split("\u0000");
+
   return (
     <>
       {beforeLink}
@@ -214,6 +236,7 @@ export function GeneralSettingsPanel() {
   const settings = usePrimarySettings();
   const updateSettings = useUpdatePrimarySettings();
 
+  // SAFETY: every entry comes from the exhaustive QuitConfirmationMode label table.
   return (
     <SettingsPageContainer>
       <SettingsSection title={t("Preferences")}>
@@ -280,6 +303,7 @@ export function GeneralSettingsPanel() {
               value={String(settings.usageRefreshMinutes)}
               onValueChange={(value) => {
                 const minutes = Number(value);
+
                 if (minutes === 1 || minutes === 5 || minutes === 15 || minutes === 30) {
                   updateSettings({ usageRefreshMinutes: minutes });
                 }

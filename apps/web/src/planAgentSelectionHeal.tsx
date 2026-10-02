@@ -17,9 +17,11 @@ export function PlanAgentSelectionHeal() {
   const textGenerationModelSelection = usePrimarySettings(
     (settings) => settings.textGenerationModelSelection,
   );
+
   const sourceControlWriterModelSelection = usePrimarySettings(
     (settings) => settings.sourceControlWriterModelSelection,
   );
+
   const settingsHydrated = useClientSettingsHydrated();
   const updateSettings = useUpdatePrimarySettings();
 
@@ -29,10 +31,12 @@ export function PlanAgentSelectionHeal() {
     if (!settingsHydrated) {
       return;
     }
+
     const patch = resolvePlanAgentHealPatch({
       textGenerationModelSelection,
       sourceControlWriterModelSelection,
     });
+
     if (patch) {
       updateSettings(patch);
     }

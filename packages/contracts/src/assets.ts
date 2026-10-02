@@ -6,7 +6,7 @@ import {
   PROVIDER_SEND_TURN_MAX_IMAGE_BYTES,
   PROVIDER_SEND_TURN_SUPPORTED_FILE_MIME_TYPES,
   PROVIDER_SEND_TURN_SUPPORTED_IMAGE_MIME_TYPES,
-} from "./orchestration.ts";
+} from "./orchestration/attachments.ts";
 
 const ASSET_PATH_MAX_LENGTH = 1024;
 
@@ -19,17 +19,20 @@ export const AssetResource = Schema.Union([
     attachmentId: TrimmedNonEmptyString.check(Schema.isMaxLength(256)),
   }),
 ]);
+
 export type AssetResource = typeof AssetResource.Type;
 
 export const AssetCreateUrlInput = Schema.Struct({
   resource: AssetResource,
 });
+
 export type AssetCreateUrlInput = typeof AssetCreateUrlInput.Type;
 
 export const AssetImageDimensions = Schema.Struct({
   width: NonNegativeInt.check(Schema.isGreaterThanOrEqualTo(1)),
   height: NonNegativeInt.check(Schema.isGreaterThanOrEqualTo(1)),
 });
+
 export type AssetImageDimensions = typeof AssetImageDimensions.Type;
 
 export const AssetCreateUrlResult = Schema.Struct({
@@ -41,6 +44,7 @@ export const AssetCreateUrlResult = Schema.Struct({
   /** Pixel size read from the image header, so a client can reserve the exact box before the bytes arrive. */
   imageDimensions: Schema.optional(AssetImageDimensions),
 });
+
 export type AssetCreateUrlResult = typeof AssetCreateUrlResult.Type;
 
 export const ATTACHMENT_UPLOAD_URL_TTL_MS = 10 * 60_000;
@@ -58,6 +62,7 @@ export const AttachmentCreateUploadUrlInput = Schema.Struct({
     ),
   ),
 });
+
 export type AttachmentCreateUploadUrlInput = typeof AttachmentCreateUploadUrlInput.Type;
 
 export const AttachmentCreateUploadUrlResult = Schema.Struct({
@@ -65,17 +70,20 @@ export const AttachmentCreateUploadUrlResult = Schema.Struct({
   relativeUrl: TrimmedNonEmptyString.check(Schema.isMaxLength(4096)),
   expiresAt: Schema.Number,
 });
+
 export type AttachmentCreateUploadUrlResult = typeof AttachmentCreateUploadUrlResult.Type;
 
 export const AttachmentDeleteInput = Schema.Struct({
   attachmentId: TrimmedNonEmptyString.check(Schema.isMaxLength(256)),
 });
+
 export type AttachmentDeleteInput = typeof AttachmentDeleteInput.Type;
 
 /** Reveals a stored chat attachment in the environment's file manager. */
 export const AttachmentRevealInput = Schema.Struct({
   attachmentId: TrimmedNonEmptyString.check(Schema.isMaxLength(256)),
 });
+
 export type AttachmentRevealInput = typeof AttachmentRevealInput.Type;
 
 export class AttachmentNotFoundError extends Schema.TaggedErrorClass<AttachmentNotFoundError>()(
@@ -228,4 +236,5 @@ export const AssetAccessError = Schema.Union([
   AssetAttachmentNotFoundError,
   AssetSigningKeyLoadError,
 ]);
+
 export type AssetAccessError = typeof AssetAccessError.Type;

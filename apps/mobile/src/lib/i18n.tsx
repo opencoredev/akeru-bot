@@ -21,6 +21,7 @@ import { mobilePreferencesAtom } from "../state/preferences";
 import { readDeviceLocales, resolveMobileLanguage } from "./languagePreferences";
 
 const fallbackTranslator = createTranslator("en");
+
 let activeTranslator = fallbackTranslator;
 
 /** Translates copy raised by plain modules outside React, such as native alerts.
@@ -31,6 +32,7 @@ export function translateOutsideReact(
 ): string {
   return activeTranslator.translate(message, params);
 }
+
 const LanguageContext = createContext({
   preference: "system",
   locale: "en",
@@ -48,17 +50,21 @@ export function MobileLanguageProvider({ children }: { readonly children: ReactN
   const stored = useAtomValue(mobilePreferencesAtom);
   const [deviceLocales, setDeviceLocales] = useState(readDevicePreferredLocales);
   const language = AsyncResult.isSuccess(stored) ? stored.value.language : undefined;
+
   const resolved = useMemo(
     () => resolveMobileLanguage(language, deviceLocales),
     [language, deviceLocales],
   );
+
   const loader = useMemo(() => createCatalogLoader(), []);
   const snapshot = useSyncExternalStore(loader.subscribe, loader.getSnapshot, loader.getSnapshot);
 
   const retryCatalog = useCallback(() => {
     void loader.selectLocale(resolved.preference, deviceLocales);
   }, [deviceLocales, loader, resolved.preference]);
+
   useEffect(() => retryCatalog(), [retryCatalog]);
+
   const catalogFailed =
     snapshot.status === "error" &&
     catalogIdForLocale(snapshot.selectedLocale) === catalogIdForLocale(resolved.locale);
@@ -73,22 +79,27 @@ export function MobileLanguageProvider({ children }: { readonly children: ReactN
           : next,
       );
     });
+
     return () => subscription.remove();
   }, []);
 
   const translator = useMemo(() => {
     if (catalogIdForLocale(resolved.locale) === "en") return createTranslator(resolved.locale);
+
     if (
       snapshot.status === "ready" &&
       catalogIdForLocale(snapshot.selectedLocale) === catalogIdForLocale(resolved.locale)
     ) {
       return snapshot.translator;
     }
+
     return createTranslator(resolved.locale);
   }, [resolved.locale, snapshot]);
+
   useEffect(() => {
     activeTranslator = translator;
   }, [translator]);
+
   const value = useMemo(
     () => ({
       preference: resolved.preference,
@@ -105,6 +116,7 @@ export function MobileLanguageProvider({ children }: { readonly children: ReactN
 
 export function useMobileI18n() {
   const language = useContext(LanguageContext);
+
   return useMemo(
     () => ({
       preference: language.preference,

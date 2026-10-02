@@ -77,11 +77,14 @@ export function make(): ThreadBackgroundLivenessService["Service"] {
 
   const stateFor = (threadId: string): ThreadLivenessState => {
     const existing = stateByThreadId.get(threadId);
+
     if (existing) {
       return existing;
     }
+
     const created: ThreadLivenessState = { agents: new Set(), monitors: new Set() };
     stateByThreadId.set(threadId, created);
+
     return created;
   };
 
@@ -91,11 +94,14 @@ export function make(): ThreadBackgroundLivenessService["Service"] {
   // stale bucket assignment can't pin the thread's status (review finding).
   const drop = (threadId: string, taskId: string) => {
     const state = stateByThreadId.get(threadId);
+
     if (!state) {
       return;
     }
+
     state.agents.delete(taskId);
     state.monitors.delete(taskId);
+
     if (state.agents.size === 0 && state.monitors.size === 0) {
       stateByThreadId.delete(threadId);
     }
@@ -104,10 +110,13 @@ export function make(): ThreadBackgroundLivenessService["Service"] {
   return {
     recordTaskLiveness: (input) => {
       const taskType = input.taskType;
+
       if (taskType !== undefined && INERT_TASK_TYPES.has(taskType)) {
         drop(input.threadId, input.taskId);
+
         return;
       }
+
       // A subagent's internal non-agent work (its own shells/monitors) is
       // covered by the owning agent's liveness. Nested agents fall through:
       // they can outlive their parent (review finding).
@@ -116,6 +125,7 @@ export function make(): ThreadBackgroundLivenessService["Service"] {
         (taskType === undefined || MONITOR_TASK_TYPES.has(taskType))
       ) {
         drop(input.threadId, input.taskId);
+
         return;
       }
 
@@ -125,8 +135,10 @@ export function make(): ThreadBackgroundLivenessService["Service"] {
         input.kind === "completed" ||
         input.status === "idle" ||
         (input.status !== undefined && TERMINAL_STATUSES.has(input.status));
+
       if (terminal) {
         drop(input.threadId, input.taskId);
+
         return;
       }
 
@@ -135,9 +147,11 @@ export function make(): ThreadBackgroundLivenessService["Service"] {
       // (#7128).
       if (input.kind === "progress" && input.status === undefined) {
         const existing = stateByThreadId.get(input.threadId);
+
         const stillLive =
           existing !== undefined &&
           (existing.agents.has(input.taskId) || existing.monitors.has(input.taskId));
+
         if (!stillLive) {
           return;
         }
@@ -145,8 +159,10 @@ export function make(): ThreadBackgroundLivenessService["Service"] {
 
       drop(input.threadId, input.taskId);
       const state = stateFor(input.threadId);
+
       const bucket =
         taskType !== undefined && MONITOR_TASK_TYPES.has(taskType) ? state.monitors : state.agents;
+
       bucket.add(input.taskId);
     },
 
@@ -156,15 +172,19 @@ export function make(): ThreadBackgroundLivenessService["Service"] {
 
     getThreadBackgroundLiveness: (threadId) => {
       const state = stateByThreadId.get(threadId);
+
       if (!state) {
         return null;
       }
+
       if (state.agents.size > 0) {
         return "working";
       }
+
       if (state.monitors.size > 0) {
         return "monitoring";
       }
+
       return null;
     },
   };

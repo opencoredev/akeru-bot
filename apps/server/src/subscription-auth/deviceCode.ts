@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 /**
  * RFC 8628 (OAuth 2.0 Device Authorization Grant) polling helpers.
  *
@@ -13,8 +14,11 @@ import * as Ref from "effect/Ref";
 import * as Schedule from "effect/Schedule";
 
 const DEFAULT_INTERVAL_SECONDS = 5;
+
 const INITIAL_POLL_INTERVAL_MULTIPLIER = 1.2;
+
 const SLOW_DOWN_POLL_INTERVAL_MULTIPLIER = 1.4;
+
 const SLOW_DOWN_INTERVAL_INCREMENT_MS = 5000;
 
 /** Serializable poll-loop state. Safe to round-trip through JSON. */
@@ -36,9 +40,10 @@ export function createDeviceCodePollState(options: {
   now: number;
 }): DeviceCodePollState {
   const intervalSeconds =
-    typeof options.intervalSeconds === "number" && options.intervalSeconds > 0
+    Predicate.isNumber(options.intervalSeconds) && options.intervalSeconds > 0
       ? options.intervalSeconds
       : DEFAULT_INTERVAL_SECONDS;
+
   return {
     deadlineAt: options.now + options.expiresInSeconds * 1000,
     intervalMs: Math.max(1000, Math.floor(intervalSeconds * 1000)),
@@ -68,6 +73,7 @@ function timeoutMessage(state: DeviceCodePollState): string {
     // local clock is behind the server's (common in WSL/VMs after sleep).
     return "Device flow timed out after one or more slow_down responses. This is often caused by clock drift in WSL or VM environments. Sync the clock and try again.";
   }
+
   return "Device flow timed out";
 }
 
@@ -80,7 +86,9 @@ export function nextPollDelayMs(state: DeviceCodePollState, now: number): number
     state.slowDownResponses > 0
       ? SLOW_DOWN_POLL_INTERVAL_MULTIPLIER
       : INITIAL_POLL_INTERVAL_MULTIPLIER;
+
   const remainingMs = Math.max(0, state.deadlineAt - now);
+
   return Math.min(Math.ceil(state.intervalMs * multiplier), remainingMs);
 }
 
@@ -101,17 +109,20 @@ function foldOutcome<T>(
         // RFC 8628 section 3.5: grow the interval by 5 seconds, unless the
         // server told us the interval to use.
         intervalMs:
-          typeof outcome.intervalSeconds === "number" && outcome.intervalSeconds > 0
+          Predicate.isNumber(outcome.intervalSeconds) && outcome.intervalSeconds > 0
             ? outcome.intervalSeconds * 1000
             : Math.max(1000, state.intervalMs + SLOW_DOWN_INTERVAL_INCREMENT_MS),
       };
+
       return { status: "slow_down", nextPollMs: nextPollDelayMs(next, now), state: next };
     }
+
     case "pending": {
       const next: DeviceCodePollState =
-        typeof outcome.intervalSeconds === "number" && outcome.intervalSeconds > 0
+        Predicate.isNumber(outcome.intervalSeconds) && outcome.intervalSeconds > 0
           ? { ...state, intervalMs: Math.max(1000, outcome.intervalSeconds * 1000) }
           : state;
+
       return { status: "pending", nextPollMs: nextPollDelayMs(next, now), state: next };
     }
   }
@@ -129,7 +140,9 @@ export const stepDeviceCodePoll = Effect.fn("stepDeviceCodePoll")(function* <T, 
   if ((yield* Clock.currentTimeMillis) >= state.deadlineAt) {
     return { status: "failed", error: timeoutMessage(state), state };
   }
+
   const outcome = yield* pollOnce;
+
   return foldOutcome(state, outcome, yield* Clock.currentTimeMillis);
 });
 
@@ -161,9 +174,11 @@ export const pollDeviceCodeUntilSettled = Effect.fn("pollDeviceCodeUntilSettled"
   pollOnce: (state: DeviceCodePollState) => Effect.Effect<DeviceCodePollOutcome<T>, E, R>,
 ): Effect.fn.Return<DeviceCodeStepResult<T>, E, R> {
   const current = yield* Ref.make(initial);
+
   const step = Ref.get(current).pipe(
     Effect.flatMap((state) => stepDeviceCodePoll(state, pollOnce(state))),
     Effect.tap((result) => Ref.set(current, result.state)),
   );
+
   return yield* Effect.repeat(step, deviceCodePollSchedule<T>());
 });

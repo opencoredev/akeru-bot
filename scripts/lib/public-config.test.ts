@@ -1,4 +1,3 @@
-// @effect-diagnostics nodeBuiltinImport:off - Tests exercise root env file precedence directly.
 import * as NodeFS from "node:fs";
 import * as NodeOS from "node:os";
 import * as NodePath from "node:path";
@@ -91,5 +90,6 @@ describe("loadRepoEnv", () => {
 function makeTemporaryDirectory() {
   const directory = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "t3code-public-config-"));
   temporaryDirectories.push(directory);
+
   return directory;
 }

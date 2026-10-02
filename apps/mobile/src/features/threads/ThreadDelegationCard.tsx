@@ -1,3 +1,4 @@
+import { Match, Predicate } from "effect";
 /**
  * One work card inside the mobile chat feed: the other bot, its task, the
  * delegation's state, and the same reverse-state actions the web card offers.
@@ -49,14 +50,23 @@ const STATE_DOT_CLASS: Record<AkeruDelegationState, string> = {
 /** Elapsed time stamps once the card mounts; live cards do not repaint per second. */
 function delegationElapsed(delegation: AkeruDelegationRecord): string | null {
   const phase = delegation.phase;
+
   const startedAt = Date.parse(
-    phase._tag === "Queued" || phase.startedAt === null ? delegation.createdAt : phase.startedAt,
+    Match.value(phase).pipe(
+      Match.tag("Queued", () => delegation.createdAt),
+      Match.orElse((phase) => phase.startedAt ?? delegation.createdAt),
+    ),
   );
+
   const endedAt =
-    phase._tag === "Failed" || phase._tag === "Canceled" || phase._tag === "Completed"
+    Predicate.isTagged(phase, "Failed") ||
+    Predicate.isTagged(phase, "Canceled") ||
+    Predicate.isTagged(phase, "Completed")
       ? Date.parse(phase.completedAt)
       : Date.now();
+
   if (Number.isNaN(startedAt) || Number.isNaN(endedAt) || endedAt < startedAt) return null;
+
   return formatDuration(endedAt - startedAt);
 }
 
@@ -97,6 +107,7 @@ export function ThreadDelegationCard(props: {
   const childName = props.childBot?.name ?? t("Unknown bot");
   const parentName = props.parentBot?.name ?? t("Unknown bot");
   const elapsed = delegationElapsed(delegation);
+
   const outcome = presentation.outcome
     ? presentation.outcome.text ||
       (presentation.outcome.kind === "failure"
@@ -153,6 +164,7 @@ export function ThreadDelegationCard(props: {
         <View className="flex-row gap-1">
           {actions.map((action) => {
             const copy = actionCopy(action, t, childName);
+
             return (
               <Pressable
                 key={action}

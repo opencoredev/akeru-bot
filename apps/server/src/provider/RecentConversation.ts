@@ -1,6 +1,7 @@
 import type { MastraDBMessage } from "@mastra/core/agent-controller";
 
 export const AKERU_RECENT_TURN_LIMIT = 30;
+
 export const AKERU_RECENT_TOKEN_LIMIT = 64_000;
 
 interface ConversationTurn {
@@ -18,14 +19,18 @@ function conversationTurns(
   requiredMessageIds: ReadonlySet<string>,
 ): ReadonlyArray<ConversationTurn> {
   const turns: MastraDBMessage[][] = [];
+
   for (const message of messages) {
     if (message.role === "system") continue;
+
     if (message.role === "user" || turns.length === 0) turns.push([]);
     turns.at(-1)!.push(message);
   }
+
   return turns.flatMap((turn) => {
     const required = turn.some((message) => requiredMessageIds.has(message.id));
     const complete = turn.some((message) => message.role === "assistant");
+
     return complete || required
       ? [
           {
@@ -59,9 +64,11 @@ export function selectRecentConversation(
     const isNewest = index === turns.length - 1;
     const withinTurnLimit = optionalTurns < turnLimit;
     const withinTokenLimit = selectedTokens + turn.estimatedTokens <= tokenLimit;
+
     if (!turn.required && !isNewest && (!withinTurnLimit || !withinTokenLimit)) continue;
     selected.add(index);
     selectedTokens += turn.estimatedTokens;
+
     if (!turn.required) optionalTurns += 1;
   }
 

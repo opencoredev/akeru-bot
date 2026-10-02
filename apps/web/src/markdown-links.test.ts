@@ -22,6 +22,7 @@ function renderMarkdownLinkHref(markdown: string): string | undefined {
         components: {
           a({ href }) {
             renderedHref = href;
+
             return createElement("a", { href });
           },
         },
@@ -29,6 +30,7 @@ function renderMarkdownLinkHref(markdown: string): string | undefined {
       markdown,
     ),
   );
+
   return renderedHref;
 }
 

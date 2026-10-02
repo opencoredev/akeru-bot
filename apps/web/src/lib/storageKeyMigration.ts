@@ -17,7 +17,9 @@ export function createMigratingStorage(
     getItem: (name) => {
       const orLegacy = (value: string | null) =>
         value !== null ? value : name === key ? storage.getItem(legacyKey) : null;
+
       const value = storage.getItem(name);
+
       return value instanceof Promise ? value.then(orLegacy) : orLegacy(value);
     },
     setItem: (name, value) =>
@@ -32,7 +34,9 @@ export function createMigratingStorage(
       }),
     removeItem: (name) => {
       const result = storage.removeItem(name);
+
       if (name === key) storage.removeItem(legacyKey);
+
       return result;
     },
   };
@@ -46,23 +50,29 @@ export function readMigratedLocalStorage(key: string, legacyKey: string): string
   // empty so module-load callers keep working.
   let storage: Storage;
   let legacy: string | null;
+
   try {
     const available = typeof window === "undefined" ? undefined : window.localStorage;
+
     if (available === undefined || available === null) return null;
     storage = available;
     const value = storage.getItem(key);
+
     if (value !== null) return value;
     legacy = storage.getItem(legacyKey);
   } catch {
     return null;
   }
+
   if (legacy === null) return null;
+
   try {
     storage.setItem(key, legacy);
     storage.removeItem(legacyKey);
   } catch {
     // Quota errors still allow the read to succeed.
   }
+
   return legacy;
 }
 

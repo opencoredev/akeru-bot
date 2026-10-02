@@ -1,310 +1,25 @@
-import * as Cause from "effect/Cause";
+import * as Layer from "effect/Layer";
+import * as Data from "effect/Data";
 import * as Effect from "effect/Effect";
 import type * as Exit from "effect/Exit";
-import * as ExitRuntime from "effect/Exit";
 import * as Option from "effect/Option";
 import * as Tracer from "effect/Tracer";
-import { OtlpResource, OtlpTracer } from "effect/unstable/observability";
+import { traceSink } from "./observability/traceSink.ts";
+import {
+  type EffectTraceRecord,
+  type LocalFileTracerOptions,
+  type SerializableSpan,
+} from "./observability/types.ts";
+import {
+  compactTraceAttributes,
+  formatTraceExit,
+  truncateTraceAttributes,
+} from "./observability/attributes.ts";
 
-import { RotatingFileSink } from "./logging.ts";
-
-const FLUSH_BUFFER_THRESHOLD = 256;
-const DEFAULT_MAX_BUFFERED_BYTES = 1024 * 1024;
-
-export type TraceAttributes = Readonly<Record<string, unknown>>;
-
-export interface TraceRecordEvent {
-  readonly name: string;
-  readonly timeUnixNano: string;
-  readonly attributes: Readonly<Record<string, unknown>>;
-}
-
-export interface TraceRecordLink {
-  readonly traceId: string;
-  readonly spanId: string;
-  readonly attributes: Readonly<Record<string, unknown>>;
-}
-
-interface BaseTraceRecord {
-  readonly name: string;
-  readonly kind: string;
-  readonly traceId: string;
-  readonly spanId: string;
-  readonly parentSpanId?: string;
-  readonly sampled: boolean;
-  readonly startTimeUnixNano: string;
-  readonly endTimeUnixNano: string;
-  readonly durationMs: number;
-  readonly attributes: Readonly<Record<string, unknown>>;
-  readonly events: ReadonlyArray<TraceRecordEvent>;
-  readonly links: ReadonlyArray<TraceRecordLink>;
-}
-
-export interface EffectTraceRecord extends BaseTraceRecord {
-  readonly type: "effect-span";
-  readonly exit:
-    | {
-        readonly _tag: "Success";
-      }
-    | {
-        readonly _tag: "Interrupted";
-        readonly cause: string;
-      }
-    | {
-        readonly _tag: "Failure";
-        readonly cause: string;
-      };
-}
-
-export interface OtlpTraceRecord extends BaseTraceRecord {
-  readonly type: "otlp-span";
-  readonly resourceAttributes: Readonly<Record<string, unknown>>;
-  readonly scope: Readonly<{
-    readonly name?: string;
-    readonly version?: string;
-    readonly attributes: Readonly<Record<string, unknown>>;
-  }>;
-  readonly status?:
-    | {
-        readonly code?: string;
-        readonly message?: string;
-      }
-    | undefined;
-}
-
-export type TraceRecord = EffectTraceRecord | OtlpTraceRecord;
-
-function isStructuralTag(value: unknown): value is string {
-  return (
-    typeof value === "string" &&
-    value.length > 0 &&
-    value.length <= 128 &&
-    /^[A-Za-z][A-Za-z0-9._:/-]*$/.test(value)
-  );
-}
-
-export function errorTag(error: unknown): string {
-  try {
-    if (typeof error === "object" && error !== null && "_tag" in error) {
-      return isStructuralTag(error._tag) ? error._tag : "TaggedError";
-    }
-    if (error instanceof Error) {
-      return isStructuralTag(error.name) ? error.name : "Error";
-    }
-  } catch {
-    return "UnknownError";
-  }
-  return typeof error;
-}
-
-export function causeErrorTag(cause: Cause.Cause<unknown>): string {
-  const failure = Cause.findErrorOption(cause);
-  if (Option.isSome(failure)) {
-    return errorTag(failure.value);
-  }
-  return cause.reasons[0]?._tag ?? "Empty";
-}
-
-export interface TraceSinkOptions {
-  readonly filePath: string;
-  readonly maxBytes: number;
-  readonly maxFiles: number;
-  readonly batchWindowMs: number;
-  readonly maxBufferedBytes?: number;
-  readonly onFlush?: (stats: TraceSinkFlushStats) => Effect.Effect<void>;
-}
-
-export interface TraceSinkFlushStats {
-  readonly logicalWriteBytes: number;
-  readonly count: number;
-  readonly durationMs: number;
-}
-
-export interface TraceSink {
-  readonly filePath: string;
-  push: (record: TraceRecord) => void;
-  flush: Effect.Effect<void>;
-  close: () => Effect.Effect<void>;
-}
-
-export interface LocalFileTracerOptions extends TraceSinkOptions {
-  readonly delegate?: Tracer.Tracer;
-  readonly sink?: TraceSink;
-}
-
-type OtlpSpan = OtlpTracer.ScopeSpan["spans"][number];
-type OtlpSpanEvent = OtlpSpan["events"][number];
-type OtlpSpanLink = OtlpSpan["links"][number];
-type OtlpSpanStatus = OtlpSpan["status"];
-
-interface SerializableSpan {
-  readonly name: string;
-  readonly traceId: string;
-  readonly spanId: string;
-  readonly parent: Option.Option<Tracer.AnySpan>;
-  readonly status: Tracer.SpanStatus;
-  readonly sampled: boolean;
-  readonly kind: Tracer.SpanKind;
-  readonly attributes: ReadonlyMap<string, unknown>;
-  readonly links: ReadonlyArray<Tracer.SpanLink>;
-  readonly events: ReadonlyArray<
-    readonly [name: string, startTime: bigint, attributes: Record<string, unknown>]
-  >;
-}
-
-function isPlainObject(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-function markSeen(value: object, seen: WeakSet<object>): boolean {
-  if (seen.has(value)) {
-    return true;
-  }
-  seen.add(value);
-  return false;
-}
-
-function normalizeJsonValue(value: unknown, seen: WeakSet<object> = new WeakSet()): unknown {
-  if (
-    value === null ||
-    value === undefined ||
-    typeof value === "string" ||
-    typeof value === "number" ||
-    typeof value === "boolean"
-  ) {
-    return value ?? null;
-  }
-  if (typeof value === "bigint") {
-    return value.toString();
-  }
-  if (value instanceof Date) {
-    return Number.isNaN(value.getTime()) ? "Invalid Date" : value.toISOString();
-  }
-  if (value instanceof Error) {
-    return {
-      name: value.name,
-      message: value.message,
-      ...(value.stack ? { stack: value.stack } : {}),
-    };
-  }
-  if (Array.isArray(value)) {
-    if (markSeen(value, seen)) {
-      return "[Circular]";
-    }
-    return value.map((entry) => normalizeJsonValue(entry, seen));
-  }
-  if (value instanceof Map) {
-    if (markSeen(value, seen)) {
-      return "[Circular]";
-    }
-    return Object.fromEntries(
-      Array.from(value.entries(), ([key, entryValue]) => [
-        String(key),
-        normalizeJsonValue(entryValue, seen),
-      ]),
-    );
-  }
-  if (value instanceof Set) {
-    if (markSeen(value, seen)) {
-      return "[Circular]";
-    }
-    return Array.from(value.values(), (entry) => normalizeJsonValue(entry, seen));
-  }
-  if (!isPlainObject(value)) {
-    return String(value);
-  }
-  if (markSeen(value, seen)) {
-    return "[Circular]";
-  }
-  return Object.fromEntries(
-    Object.entries(value).map(([key, entryValue]) => [key, normalizeJsonValue(entryValue, seen)]),
-  );
-}
-
-export function compactTraceAttributes(
-  attributes: Readonly<Record<string, unknown>>,
-): TraceAttributes {
-  const entries: Array<[string, unknown]> = [];
-  for (const [key, value] of Object.entries(attributes)) {
-    if (value !== undefined) {
-      entries.push([key, normalizeJsonValue(value)]);
-    }
-  }
-  return Object.fromEntries(entries);
-}
-
-function formatTraceExit(exit: Exit.Exit<unknown, unknown>): EffectTraceRecord["exit"] {
-  if (ExitRuntime.isSuccess(exit)) {
-    return { _tag: "Success" };
-  }
-  if (Cause.hasInterruptsOnly(exit.cause)) {
-    return {
-      _tag: "Interrupted",
-      cause: Cause.pretty(exit.cause),
-    };
-  }
-  return {
-    _tag: "Failure",
-    cause: Cause.pretty(exit.cause),
-  };
-}
-
-const TRACE_ATTRIBUTE_MAX_LENGTH = 500;
-const TRACE_ATTRIBUTE_TRUNCATED_LENGTH = 200;
-const TRACE_ATTRIBUTE_TRUNCATION_SUFFIX = "…[truncated]";
-const ALWAYS_TRUNCATED_TRACE_ATTRIBUTES: ReadonlySet<string> = new Set(["db.query.text"]);
-
-// Clamps strings nested inside already-normalized attribute values (arrays and
-// plain objects from normalizeJsonValue, e.g. an Error's `stack`). Returns the
-// input reference when nothing was clamped.
-function truncateNestedValue(value: unknown): unknown {
-  if (typeof value === "string") {
-    return value.length <= TRACE_ATTRIBUTE_MAX_LENGTH
-      ? value
-      : `${value.slice(0, TRACE_ATTRIBUTE_MAX_LENGTH)}${TRACE_ATTRIBUTE_TRUNCATION_SUFFIX}`;
-  }
-  if (Array.isArray(value)) {
-    const truncated = value.map(truncateNestedValue);
-    return truncated.some((entry, index) => entry !== value[index]) ? truncated : value;
-  }
-  if (isPlainObject(value)) {
-    let truncated: Record<string, unknown> | undefined;
-    for (const [key, entry] of Object.entries(value)) {
-      const next = truncateNestedValue(entry);
-      if (next === entry) continue;
-      truncated ??= { ...value };
-      truncated[key] = next;
-    }
-    return truncated ?? value;
-  }
-  return value;
-}
-
-/**
- * Clamps oversized attribute values on the serialized trace record so the file
- * sink stays small, including strings nested inside arrays and objects (e.g.
- * error stacks). Returns a new record when anything was clamped; never
- * mutates the input (the live span's attributes are shared with other tracers).
- */
-export function truncateTraceAttributes(attributes: TraceAttributes): TraceAttributes {
-  let truncated: Record<string, unknown> | undefined;
-  for (const [key, value] of Object.entries(attributes)) {
-    if (typeof value === "string" && ALWAYS_TRUNCATED_TRACE_ATTRIBUTES.has(key)) {
-      if (value.length <= TRACE_ATTRIBUTE_TRUNCATED_LENGTH) continue;
-      truncated ??= { ...attributes };
-      truncated[key] =
-        `${value.slice(0, TRACE_ATTRIBUTE_TRUNCATED_LENGTH)}${TRACE_ATTRIBUTE_TRUNCATION_SUFFIX}`;
-      continue;
-    }
-    const next = truncateNestedValue(value);
-    if (next === value) continue;
-    truncated ??= { ...attributes };
-    truncated[key] = next;
-  }
-  return truncated ?? attributes;
-}
+const SpanStatus = Data.taggedEnum<Tracer.SpanStatus>();
 
 export function spanToTraceRecord(span: SerializableSpan): EffectTraceRecord {
+  // SAFETY: Trace records are emitted by end() after the span transitions to Ended.
   const status = span.status as Extract<Tracer.SpanStatus, { _tag: "Ended" }>;
   const parentSpanId = Option.getOrUndefined(span.parent)?.spanId;
 
@@ -336,116 +51,6 @@ export function spanToTraceRecord(span: SerializableSpan): EffectTraceRecord {
   };
 }
 
-export const makeTraceSink = Effect.fn("makeTraceSink")(function* (options: TraceSinkOptions) {
-  const maxBufferedBytes = options.maxBufferedBytes ?? DEFAULT_MAX_BUFFERED_BYTES;
-  const sink = new RotatingFileSink({
-    filePath: options.filePath,
-    maxBytes: options.maxBytes,
-    maxFiles: options.maxFiles,
-    maxBufferedBytes,
-  });
-
-  let buffer: Array<{ line: string; bytes: number }> = [];
-  let bufferedBytes = 0;
-  let closed = false;
-  let droppedRecords = 0;
-  let writeError: unknown;
-  let reportedWriteError = false;
-  let pendingFlushStats: TraceSinkFlushStats = { logicalWriteBytes: 0, count: 0, durationMs: 0 };
-
-  const submit = () => {
-    const records = buffer;
-    buffer = [];
-    bufferedBytes = 0;
-    let index = 0;
-    while (index < records.length) {
-      const start = index;
-      let bytes = 0;
-      const lines: string[] = [];
-      while (index < records.length) {
-        const record = records[index]!;
-        if (bytes + record.bytes > options.maxBytes) break;
-        bytes += record.bytes;
-        lines.push(record.line);
-        index += 1;
-      }
-      const count = index - start;
-      const startedAt = performance.now();
-      void sink.write(lines.join("")).then(
-        () => {
-          pendingFlushStats = {
-            logicalWriteBytes: pendingFlushStats.logicalWriteBytes + bytes,
-            count: pendingFlushStats.count + count,
-            durationMs: pendingFlushStats.durationMs + Math.max(0, performance.now() - startedAt),
-          };
-        },
-        (cause: unknown) => {
-          writeError = cause;
-          droppedRecords += count;
-        },
-      );
-    }
-  };
-
-  const drain = (close: boolean) =>
-    Effect.gen(function* () {
-      if (close) closed = true;
-      submit();
-      yield* Effect.promise(() => (close ? sink.close() : sink.flush())).pipe(
-        Effect.catchCause((cause) =>
-          Effect.sync(() => {
-            writeError ??= Cause.squash(cause);
-          }),
-        ),
-      );
-      const stats = pendingFlushStats;
-      pendingFlushStats = { logicalWriteBytes: 0, count: 0, durationMs: 0 };
-      const dropped = droppedRecords;
-      droppedRecords = 0;
-      if (dropped > 0 || (writeError !== undefined && !reportedWriteError)) {
-        reportedWriteError = writeError !== undefined;
-        yield* Effect.logWarning("trace log records could not be persisted", {
-          filePath: options.filePath,
-          droppedRecords: dropped,
-          ...(writeError !== undefined ? { errorTag: errorTag(writeError) } : {}),
-        });
-      }
-      if (stats.count > 0 && options.onFlush) yield* options.onFlush(stats).pipe(Effect.ignore);
-    }).pipe(Effect.withTracerEnabled(false), Effect.uninterruptible);
-  const flush = drain(false);
-  const close = () => drain(true);
-
-  yield* Effect.addFinalizer(close);
-  yield* Effect.forkScoped(
-    Effect.sleep(`${options.batchWindowMs} millis`).pipe(Effect.andThen(flush), Effect.forever),
-  );
-
-  return {
-    filePath: options.filePath,
-    push(record) {
-      if (closed) return;
-      try {
-        const line = `${JSON.stringify(record)}\n`;
-        const bytes = Buffer.byteLength(line);
-        if (
-          bytes > options.maxBytes ||
-          bufferedBytes + sink.bufferedBytes + bytes > maxBufferedBytes
-        ) {
-          droppedRecords += 1;
-          return;
-        }
-        buffer.push({ line, bytes });
-        bufferedBytes += bytes;
-        if (buffer.length >= FLUSH_BUFFER_THRESHOLD) submit();
-      } catch {
-        droppedRecords += 1;
-      }
-    },
-    flush,
-    close,
-  } satisfies TraceSink;
-});
-
 class LocalFileSpan implements Tracer.Span {
   readonly _tag = "Span";
   readonly name: string;
@@ -459,7 +64,9 @@ class LocalFileSpan implements Tracer.Span {
 
   status: Tracer.SpanStatus;
   attributes: Map<string, unknown>;
-  events: Array<[name: string, startTime: bigint, attributes: Record<string, unknown>]>;
+  events: Array<
+    [name: string, startTime: bigint, attributes: NonNullable<Parameters<Tracer.Span["event"]>[2]>]
+  >;
   private readonly delegate: Tracer.Span;
   private readonly push: (record: EffectTraceRecord) => void;
 
@@ -478,21 +85,13 @@ class LocalFileSpan implements Tracer.Span {
     this.links = [...options.links];
     this.sampled = delegate.sampled;
     this.kind = delegate.kind;
-    this.status = {
-      _tag: "Started",
-      startTime: options.startTime,
-    };
+    this.status = SpanStatus.Started({ startTime: options.startTime });
     this.attributes = new Map();
     this.events = [];
   }
 
   end(endTime: bigint, exit: Exit.Exit<unknown, unknown>): void {
-    this.status = {
-      _tag: "Ended",
-      startTime: this.status.startTime,
-      endTime,
-      exit,
-    };
+    this.status = SpanStatus.Ended({ startTime: this.status.startTime, endTime, exit });
     this.delegate.end(endTime, exit);
 
     if (this.sampled) {
@@ -500,12 +99,12 @@ class LocalFileSpan implements Tracer.Span {
     }
   }
 
-  attribute(key: string, value: unknown): void {
+  attribute(key: string, value: Parameters<Tracer.Span["attribute"]>[1]): void {
     this.attributes.set(key, value);
     this.delegate.attribute(key, value);
   }
 
-  event(name: string, startTime: bigint, attributes?: Record<string, unknown>): void {
+  event(name: string, startTime: bigint, attributes?: Parameters<Tracer.Span["event"]>[2]): void {
     const nextAttributes = attributes ?? {};
     this.events.push([name, startTime, nextAttributes]);
     this.delegate.event(name, startTime, nextAttributes);
@@ -522,7 +121,7 @@ export const makeLocalFileTracer = Effect.fn("makeLocalFileTracer")(function* (
 ) {
   const sink =
     options.sink ??
-    (yield* makeTraceSink({
+    (yield* traceSink({
       filePath: options.filePath,
       maxBytes: options.maxBytes,
       maxFiles: options.maxFiles,
@@ -547,158 +146,32 @@ export const makeLocalFileTracer = Effect.fn("makeLocalFileTracer")(function* (
   });
 });
 
-const SPAN_KIND_MAP: Record<number, OtlpTraceRecord["kind"]> = {
-  1: "internal",
-  2: "server",
-  3: "client",
-  4: "producer",
-  5: "consumer",
-};
+export {
+  type TraceSinkOptions,
+  type TraceSinkFlushStats,
+  type TraceSink,
+  traceSink,
+} from "./observability/traceSink.ts";
 
-export function decodeOtlpTraceRecords(
-  payload: OtlpTracer.TraceData,
-): ReadonlyArray<OtlpTraceRecord> {
-  const records: Array<OtlpTraceRecord> = [];
+export {
+  type TraceAttributes,
+  type TraceRecordEvent,
+  type TraceRecordLink,
+  type EffectTraceRecord,
+  type OtlpTraceRecord,
+  type TraceRecord,
+  type LocalFileTracerOptions,
+} from "./observability/types.ts";
 
-  for (const resourceSpan of payload.resourceSpans) {
-    const resourceAttributes = decodeAttributes(resourceSpan.resource?.attributes ?? []);
+export {
+  errorTag,
+  runtimeValueType,
+  causeErrorTag,
+  compactTraceAttributes,
+  truncateTraceAttributes,
+} from "./observability/attributes.ts";
 
-    for (const scopeSpan of resourceSpan.scopeSpans) {
-      for (const span of scopeSpan.spans) {
-        records.push(
-          otlpSpanToTraceRecord({
-            resourceAttributes,
-            scopeAttributes: decodeAttributes(
-              "attributes" in scopeSpan.scope && Array.isArray(scopeSpan.scope.attributes)
-                ? scopeSpan.scope.attributes
-                : [],
-            ),
-            scopeName: scopeSpan.scope.name,
-            scopeVersion:
-              "version" in scopeSpan.scope && typeof scopeSpan.scope.version === "string"
-                ? scopeSpan.scope.version
-                : undefined,
-            span,
-          }),
-        );
-      }
-    }
-  }
+export { decodeOtlpTraceRecords } from "./observability/otlp.ts";
 
-  return records;
-}
-
-function otlpSpanToTraceRecord(input: {
-  readonly resourceAttributes: Readonly<Record<string, unknown>>;
-  readonly scopeAttributes: Readonly<Record<string, unknown>>;
-  readonly scopeName: string | undefined;
-  readonly scopeVersion: string | undefined;
-  readonly span: OtlpSpan;
-}): OtlpTraceRecord {
-  return {
-    type: "otlp-span",
-    name: input.span.name,
-    traceId: input.span.traceId,
-    spanId: input.span.spanId,
-    ...(input.span.parentSpanId ? { parentSpanId: input.span.parentSpanId } : {}),
-    sampled: true,
-    kind: normalizeSpanKind(input.span.kind),
-    startTimeUnixNano: input.span.startTimeUnixNano,
-    endTimeUnixNano: input.span.endTimeUnixNano,
-    durationMs:
-      Number(parseBigInt(input.span.endTimeUnixNano) - parseBigInt(input.span.startTimeUnixNano)) /
-      1_000_000,
-    attributes: decodeAttributes(input.span.attributes),
-    resourceAttributes: input.resourceAttributes,
-    scope: {
-      ...(input.scopeName ? { name: input.scopeName } : {}),
-      ...(input.scopeVersion ? { version: input.scopeVersion } : {}),
-      attributes: input.scopeAttributes,
-    },
-    events: decodeEvents(input.span.events),
-    links: decodeLinks(input.span.links),
-    status: decodeStatus(input.span.status),
-  };
-}
-
-function decodeStatus(input: OtlpSpanStatus): OtlpTraceRecord["status"] {
-  const code = String(input.code);
-  const message = input.message;
-
-  return {
-    code,
-    ...(message ? { message } : {}),
-  };
-}
-
-function decodeEvents(input: ReadonlyArray<OtlpSpanEvent>): ReadonlyArray<TraceRecordEvent> {
-  return input.map((current) => ({
-    name: current.name,
-    timeUnixNano: current.timeUnixNano,
-    attributes: decodeAttributes(current.attributes),
-  }));
-}
-
-function decodeLinks(input: ReadonlyArray<OtlpSpanLink>): ReadonlyArray<TraceRecordLink> {
-  return input.flatMap((current) => {
-    const traceId = current.traceId;
-    const spanId = current.spanId;
-    return {
-      traceId,
-      spanId,
-      attributes: decodeAttributes(current.attributes),
-    };
-  });
-}
-
-function decodeAttributes(
-  input: ReadonlyArray<OtlpResource.KeyValue>,
-): Readonly<Record<string, unknown>> {
-  const entries: Record<string, unknown> = {};
-
-  for (const attribute of input) {
-    entries[attribute.key] = decodeValue(attribute.value);
-  }
-
-  return compactTraceAttributes(entries);
-}
-
-function decodeValue(input: OtlpResource.AnyValue | null | undefined): unknown {
-  if (input == null) {
-    return null;
-  }
-  if ("stringValue" in input) {
-    return input.stringValue;
-  }
-  if ("boolValue" in input) {
-    return input.boolValue;
-  }
-  if ("intValue" in input) {
-    return input.intValue;
-  }
-  if ("doubleValue" in input) {
-    return input.doubleValue;
-  }
-  if ("bytesValue" in input) {
-    return input.bytesValue;
-  }
-  if (input.arrayValue) {
-    return input.arrayValue.values.map((entry) => decodeValue(entry));
-  }
-  if (input.kvlistValue) {
-    return decodeAttributes(input.kvlistValue.values);
-  }
-  return null;
-}
-
-function normalizeSpanKind(input: number): OtlpTraceRecord["kind"] {
-  return SPAN_KIND_MAP[input] || "internal";
-}
-
-function parseBigInt(input: string): bigint {
-  try {
-    return BigInt(input);
-  } catch {
-    return 0n;
-  }
-}
+export const localFileTracerLayer = (options: LocalFileTracerOptions) =>
+  Layer.effect(Tracer.Tracer, makeLocalFileTracer(options));

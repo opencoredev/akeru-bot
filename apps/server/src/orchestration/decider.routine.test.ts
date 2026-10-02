@@ -40,10 +40,12 @@ it.layer(NodeServices.layer)("routine decider", (it) => {
         },
         readModel: createEmptyReadModel(NOW),
       });
+
       const events = Array.isArray(event) ? event : [event];
 
       expect(events).toHaveLength(1);
       expect(events[0]?.type).toBe("routine.approved");
+
       if (events[0]?.type === "routine.approved") {
         expect(events[0].payload.routine).toMatchObject({
           lifecycle: "approved",
@@ -58,6 +60,7 @@ it.layer(NodeServices.layer)("routine decider", (it) => {
   it.effect("deletes a routine and disables future runs", () =>
     Effect.gen(function* () {
       const readModel = createEmptyReadModel(NOW);
+
       const created = yield* decideOrchestrationCommand({
         command: {
           type: "routine.create-approved",
@@ -79,12 +82,15 @@ it.layer(NodeServices.layer)("routine decider", (it) => {
         },
         readModel,
       });
+
       const createdEvent = Array.isArray(created) ? created[0] : created;
+
       const withRoutine = yield* projectEvent(readModel, {
         ...createdEvent,
         sequence: 1,
         eventId: EventId.make("event-routine-created-for-delete"),
       });
+
       const started = yield* decideOrchestrationCommand({
         command: {
           type: "routine.run",
@@ -96,12 +102,15 @@ it.layer(NodeServices.layer)("routine decider", (it) => {
         },
         readModel: withRoutine,
       });
+
       const startedEvent = Array.isArray(started) ? started[0] : started;
+
       const withRun = yield* projectEvent(withRoutine, {
         ...startedEvent,
         sequence: 2,
         eventId: EventId.make("event-routine-run-before-delete"),
       });
+
       const deletedAt = "2026-08-31T14:00:00.000Z";
 
       const deleted = yield* decideOrchestrationCommand({
@@ -113,9 +122,11 @@ it.layer(NodeServices.layer)("routine decider", (it) => {
         },
         readModel: withRun,
       });
+
       const deletedEvent = Array.isArray(deleted) ? deleted[0] : deleted;
 
       expect(deletedEvent?.type).toBe("routine.deleted");
+
       if (deletedEvent?.type === "routine.deleted") {
         expect(deletedEvent.payload.routine).toMatchObject({
           id: RoutineId.make("routine-delete"),
@@ -126,11 +137,13 @@ it.layer(NodeServices.layer)("routine decider", (it) => {
           deletedAt,
         });
       }
+
       const afterDelete = yield* projectEvent(withRun, {
         ...deletedEvent,
         sequence: 3,
         eventId: EventId.make("event-routine-deleted"),
       });
+
       const completionError = yield* Effect.flip(
         decideOrchestrationCommand({
           command: {
@@ -146,6 +159,7 @@ it.layer(NodeServices.layer)("routine decider", (it) => {
           readModel: afterDelete,
         }),
       );
+
       expect(completionError.message).toContain("does not exist");
     }),
   );
@@ -172,9 +186,11 @@ it.layer(NodeServices.layer)("routine decider", (it) => {
     Effect.gen(function* () {
       let readModel = createEmptyReadModel(NOW);
       let sequence = 0;
+
       const apply = (command: Parameters<typeof decideOrchestrationCommand>[0]["command"]) =>
         Effect.gen(function* () {
           const decided = yield* decideOrchestrationCommand({ command, readModel });
+
           for (const event of Array.isArray(decided) ? decided : [decided]) {
             sequence += 1;
             readModel = yield* projectEvent(readModel, {
@@ -184,6 +200,7 @@ it.layer(NodeServices.layer)("routine decider", (it) => {
             });
           }
         });
+
       const routineId = RoutineId.make("routine-canceled-start");
       const runId = RoutineRunId.make("run-canceled-start");
       yield* apply({
@@ -243,9 +260,11 @@ it.layer(NodeServices.layer)("routine decider", (it) => {
     Effect.gen(function* () {
       let readModel = createEmptyReadModel(NOW);
       let sequence = 0;
+
       const apply = (command: Parameters<typeof decideOrchestrationCommand>[0]["command"]) =>
         Effect.gen(function* () {
           const decided = yield* decideOrchestrationCommand({ command, readModel });
+
           for (const event of Array.isArray(decided) ? decided : [decided]) {
             sequence += 1;
             readModel = yield* projectEvent(readModel, {
@@ -255,6 +274,7 @@ it.layer(NodeServices.layer)("routine decider", (it) => {
             });
           }
         });
+
       const routineId = RoutineId.make("routine-late-cancel");
       const runId = RoutineRunId.make("run-late-cancel");
       yield* apply({

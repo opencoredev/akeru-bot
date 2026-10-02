@@ -1,4 +1,4 @@
-import type { MessageKey } from "@akeru/client-runtime/i18n";
+import { Predicate } from "effect";
 import { squashAtomCommandFailure } from "@akeru/client-runtime/state/runtime";
 import type {
   AkeruMemoryDocument,
@@ -23,8 +23,8 @@ import { Textarea } from "../ui/textarea";
 import { toastManager } from "../ui/toast";
 
 /** The server's own error text, shown as received, or null when it sent none. */
-export function memoryErrorMessage(error: unknown) {
-  return error instanceof Error ? error.message : null;
+export function memoryErrorMessage(cause: unknown) {
+  return cause instanceof Error ? cause.message : null;
 }
 
 function failureMessage(result: Parameters<typeof squashAtomCommandFailure>[0]) {
@@ -110,6 +110,7 @@ export function BotMemorySheet({
   readonly threadRef: ScopedThreadRef | null;
 }) {
   const { t, plural, formatNumber } = useI18n();
+
   const query = useEnvironmentQuery(
     open && threadRef
       ? memoryEnvironment.inspectDocuments({
@@ -118,15 +119,19 @@ export function BotMemorySheet({
         })
       : null,
   );
+
   const replaceDocument = useAtomCommand(memoryEnvironment.replaceDocument, {
     reportFailure: false,
   });
+
   const clearObservations = useAtomCommand(memoryEnvironment.clearObservations, {
     reportFailure: false,
   });
+
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [clearPending, setClearPending] = useState(false);
+
   const previousObservations = query.data?.conversation.current
     ? query.data.conversation.history.filter(
         (item) => item.generationCount !== query.data!.conversation.current!.generationCount,
@@ -141,6 +146,7 @@ export function BotMemorySheet({
     if (!threadRef || !query.data) return false;
     setBusy(true);
     setError(null);
+
     const result = await replaceDocument({
       environmentId: threadRef.environmentId,
       input: {
@@ -151,13 +157,16 @@ export function BotMemorySheet({
         content,
       },
     });
+
     setBusy(false);
-    if (result._tag === "Failure") {
+
+    if (Predicate.isTagged(result, "Failure")) {
       const message = failureMessage(result) ?? t("Memory request failed.");
       setError(message);
       toastManager.add({ type: "error", title: t("Could not save memory"), description: message });
     }
-    return result._tag !== "Failure";
+
+    return !Predicate.isTagged(result, "Failure");
   };
 
   const current = query.data?.conversation.current ?? null;
@@ -219,6 +228,7 @@ export function BotMemorySheet({
                 disabled={busy || !current}
                 onClick={() => {
                   if (!clearPending) return setClearPending(true);
+
                   if (!threadRef) return;
                   setBusy(true);
                   setError(null);
@@ -227,7 +237,8 @@ export function BotMemorySheet({
                     input: { threadId: threadRef.threadId },
                   }).then((result) => {
                     setBusy(false);
-                    if (result._tag === "Failure") {
+
+                    if (Predicate.isTagged(result, "Failure")) {
                       const message = failureMessage(result);
                       setError(message);
                       toastManager.add({

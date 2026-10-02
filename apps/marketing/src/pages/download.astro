@@ -69,25 +69,20 @@ import { RELEASES_URL } from "../lib/releases";
 </Layout>
 
 <script>
-  import {
-    fetchLatestRelease,
-    requiresUnsignedInstall,
-    resolveAssetDownload,
-  } from "../lib/releases";
-
-  const UNSIGNED_PROMPT =
-    "This build is unsigned. Your system may ask you to confirm the install. Continue?";
+  import { resolveDownloadLink } from "../lib/downloadLinks";
+  import { fetchLatestRelease } from "../lib/releases";
 
   async function init() {
     const versionLabel = document.getElementById("version-label");
     // Only release-asset links; mobile store cards have no data-asset and keep their href.
     const cards = document.querySelectorAll<HTMLAnchorElement>("a[data-asset]");
     const releasePromise = fetchLatestRelease();
+
     const cardDownloads = Array.from(cards, async (card) => {
       const suffix = card.dataset.asset;
+
       if (!suffix) return;
-      const asset = await resolveAssetDownload(card, suffix, releasePromise);
-      card.dataset.unsigned = asset && requiresUnsignedInstall(suffix) ? "true" : "";
+      await resolveDownloadLink(card, suffix, releasePromise);
     });
 
     try {
@@ -97,7 +92,8 @@ import { RELEASES_URL } from "../lib/releases";
         versionLabel.textContent = `Latest (${release.tag_name})`;
       }
 
-      const changelogLink = document.getElementById("changelog-link") as HTMLAnchorElement | null;
+      const changelogLink = document.querySelector<HTMLAnchorElement>("#changelog-link");
+
       if (changelogLink && release.html_url) {
         changelogLink.href = release.html_url;
         changelogLink.style.display = "";
@@ -108,13 +104,9 @@ import { RELEASES_URL } from "../lib/releases";
         versionLabel.textContent = "Could not load release info.";
       }
     }
+
     await Promise.all(cardDownloads);
 
-    document.querySelectorAll<HTMLAnchorElement>("a[data-unsigned='true']").forEach((link) => {
-      link.addEventListener("click", (event) => {
-        if (!window.confirm(UNSIGNED_PROMPT)) event.preventDefault();
-      });
-    });
   }
 
   init();

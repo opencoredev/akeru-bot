@@ -1,3 +1,4 @@
+import * as Match from "effect/Match";
 import * as Schema from "effect/Schema";
 
 import {
@@ -11,6 +12,7 @@ export const StoredConnectionCredential = Schema.Struct({
   connectionId: Schema.String,
   credential: ConnectionCredential,
 });
+
 export type StoredConnectionCredential = typeof StoredConnectionCredential.Type;
 
 export const ConnectionCatalogDocument = Schema.Struct({
@@ -19,6 +21,7 @@ export const ConnectionCatalogDocument = Schema.Struct({
   profiles: Schema.Array(ConnectionProfile),
   credentials: Schema.Array(StoredConnectionCredential),
 });
+
 export type ConnectionCatalogDocument = typeof ConnectionCatalogDocument.Type;
 
 export const EMPTY_CONNECTION_CATALOG_DOCUMENT: ConnectionCatalogDocument = Object.freeze({
@@ -34,6 +37,7 @@ export function replaceCatalogValue<A>(
   next: A,
 ): ReadonlyArray<A> {
   const nextKey = key(next);
+
   return [...values.filter((value) => key(value) !== nextKey), next];
 }
 
@@ -46,13 +50,19 @@ export function removeCatalogValue<A>(
 }
 
 function connectionIdOf(target: ConnectionTarget): string | null {
-  switch (target._tag) {
-    case "PrimaryConnectionTarget":
-      return null;
-    case "BearerConnectionTarget":
-    case "SshConnectionTarget":
-      return target.connectionId;
-  }
+  return Match.value(target).pipe(
+    Match.tagsExhaustive({
+      PrimaryConnectionTarget: () => {
+        return null;
+      },
+      BearerConnectionTarget: (target) => {
+        return target.connectionId;
+      },
+      SshConnectionTarget: (target) => {
+        return target.connectionId;
+      },
+    }),
+  );
 }
 
 function removeConnectionMetadata(
@@ -60,6 +70,7 @@ function removeConnectionMetadata(
   target: ConnectionTarget,
 ): ConnectionCatalogDocument {
   const connectionId = connectionIdOf(target);
+
   return {
     ...document,
     targets: removeCatalogValue(
@@ -83,39 +94,46 @@ export function registerConnectionInCatalog(
   registration: ConnectionRegistration,
 ): ConnectionCatalogDocument {
   const target = registration.target;
+
   const previous = document.targets.find(
     (candidate) => candidate.environmentId === target.environmentId,
   );
+
   const cleaned = previous === undefined ? document : removeConnectionMetadata(document, previous);
+
   const next: ConnectionCatalogDocument = {
     ...cleaned,
     targets: replaceCatalogValue(cleaned.targets, (value) => value.environmentId, target),
   };
 
-  switch (registration._tag) {
-    case "BearerConnectionRegistration":
-      return {
-        ...next,
-        profiles: replaceCatalogValue(
-          next.profiles,
-          (value) => value.connectionId,
-          registration.profile,
-        ),
-        credentials: replaceCatalogValue(next.credentials, (value) => value.connectionId, {
-          connectionId: registration.target.connectionId,
-          credential: registration.credential,
-        }),
-      };
-    case "SshConnectionRegistration":
-      return {
-        ...next,
-        profiles: replaceCatalogValue(
-          next.profiles,
-          (value) => value.connectionId,
-          registration.profile,
-        ),
-      };
-  }
+  return Match.value(registration).pipe(
+    Match.tagsExhaustive({
+      BearerConnectionRegistration: (registration) => {
+        return {
+          ...next,
+          profiles: replaceCatalogValue(
+            next.profiles,
+            (value) => value.connectionId,
+            registration.profile,
+          ),
+          credentials: replaceCatalogValue(next.credentials, (value) => value.connectionId, {
+            connectionId: registration.target.connectionId,
+            credential: registration.credential,
+          }),
+        };
+      },
+      SshConnectionRegistration: (registration) => {
+        return {
+          ...next,
+          profiles: replaceCatalogValue(
+            next.profiles,
+            (value) => value.connectionId,
+            registration.profile,
+          ),
+        };
+      },
+    }),
+  );
 }
 
 export function removeConnectionFromCatalog(

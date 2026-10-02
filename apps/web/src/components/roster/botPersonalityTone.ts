@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 import {
   BALANCED_BOT_PERSONALITY_TONE,
   MAX_BOT_PERSONALITY_TONE,
@@ -125,24 +126,31 @@ export function botPersonalityToneSamplePrompt(t: Translate = translateEnglish):
 
 /** Clamp anything that reached the client to the range the server accepts. */
 export function normalizeBotPersonalityTone(tone: number | undefined | null): number {
-  if (typeof tone !== "number" || !Number.isFinite(tone)) return BALANCED_BOT_PERSONALITY_TONE;
+  if (!Predicate.isNumber(tone) || !Number.isFinite(tone)) return BALANCED_BOT_PERSONALITY_TONE;
   const rounded = Math.round(tone);
+
   if (rounded < MIN_BOT_PERSONALITY_TONE) return MIN_BOT_PERSONALITY_TONE;
+
   if (rounded > MAX_BOT_PERSONALITY_TONE) return MAX_BOT_PERSONALITY_TONE;
+
   return rounded;
 }
 
 export function resolveBotPersonalityToneBand(tone: number): BotPersonalityToneBand {
   const normalized = normalizeBotPersonalityTone(tone);
   const match = BANDS.find((entry) => normalized <= entry.max);
+
   return (match ?? BANDS[BANDS.length - 1]!).band;
 }
 
 /** Collapse imported or older numeric values into the three settings choices. */
 export function resolveBotPersonalityToneOption(tone: number): BotPersonalityToneOption {
   const normalized = normalizeBotPersonalityTone(tone);
+
   if (normalized < 45) return BOT_PERSONALITY_TONE_OPTIONS[0];
+
   if (normalized <= 55) return BOT_PERSONALITY_TONE_OPTIONS[1];
+
   return BOT_PERSONALITY_TONE_OPTIONS[2];
 }
 

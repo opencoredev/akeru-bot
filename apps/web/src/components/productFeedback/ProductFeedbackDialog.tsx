@@ -46,6 +46,7 @@ function TurnstileChallenge({
   useEffect(() => {
     let widgetId: string | null = null;
     let cancelled = false;
+
     const render = () => {
       if (cancelled || !containerRef.current || !window.turnstile) return;
       widgetId = window.turnstile.render(containerRef.current, {
@@ -53,7 +54,9 @@ function TurnstileChallenge({
         callback: onToken,
       });
     };
+
     const existing = document.querySelector<HTMLScriptElement>("script[data-akeru-turnstile]");
+
     if (existing) {
       if (window.turnstile) render();
       else existing.addEventListener("load", render, { once: true });
@@ -66,11 +69,14 @@ function TurnstileChallenge({
       script.addEventListener("load", render, { once: true });
       document.head.append(script);
     }
+
     return () => {
       cancelled = true;
+
       if (widgetId && window.turnstile) window.turnstile.remove(widgetId);
     };
   }, [onToken, siteKey]);
+
   return <div ref={containerRef} aria-label="Verification challenge" />;
 }
 
@@ -86,9 +92,11 @@ export function ProductFeedbackDialog() {
   const completeFeedback = useProductFeedbackStore((state) => state.completeFeedback);
   const [submitting, setSubmitting] = useState(false);
   const [website, setWebsite] = useState("");
+
   const [status, setStatus] = useState<
     { readonly kind: "idle" } | { readonly kind: "failure"; readonly message: string }
   >({ kind: "idle" });
+
   const [challengeSiteKey, setChallengeSiteKey] = useState<string | null>(null);
   const [challengeAttempt, setChallengeAttempt] = useState(0);
   const [turnstileToken, setTurnstileToken] = useState<string | undefined>();
@@ -99,10 +107,12 @@ export function ProductFeedbackDialog() {
 
   useEffect(() => {
     if (!picking) return;
+
     const session = startProductFeedbackElementPicker({
       onPick: (element) => stopPicking(element),
       onCancel: () => stopPicking(),
     });
+
     return session.stop;
   }, [picking, stopPicking]);
 
@@ -115,6 +125,7 @@ export function ProductFeedbackDialog() {
       }),
     [draft, turnstileToken, website],
   );
+
   const canSend =
     settings.productFeedbackEnabled && draft.feedback.trim().length > 0 && !submitting;
 
@@ -127,24 +138,30 @@ export function ProductFeedbackDialog() {
 
   const handleSubmit = async (event: FormEvent) => {
     event.preventDefault();
+
     if (!canSend) return;
     setSubmitting(true);
     setStatus({ kind: "idle" });
     const result = await submitProductFeedback(settings.productFeedbackEndpoint, payload);
     setSubmitting(false);
+
     if (result.ok) {
       completeFeedback();
       setWebsite("");
       setChallengeSiteKey(null);
       setTurnstileToken(undefined);
       toastManager.add({ type: "success", title: "Feedback sent" });
+
       return;
     }
+
     setStatus({ kind: "failure", message: result.rejection.message });
+
     if (shouldRefreshProductFeedbackChallenge(payload, result)) {
       setTurnstileToken(undefined);
       setChallengeAttempt((attempt) => attempt + 1);
     }
+
     if (result.rejection.reason === "challenge_required" && result.rejection.challengeSiteKey) {
       setChallengeSiteKey(result.rejection.challengeSiteKey);
     }
@@ -153,7 +170,7 @@ export function ProductFeedbackDialog() {
   return (
     <Dialog open={open} onOpenChange={(nextOpen) => !nextOpen && handleClose()}>
       <DialogPopup
-        className="flex max-h-[min(32rem,90dvh)] max-w-lg flex-col overflow-hidden"
+        className="flex max-h-(--spacing-min-32rem-90dvh) max-w-lg flex-col overflow-hidden"
         data-akeru-feedback-ui="composer"
       >
         <form className="flex min-h-0 flex-1 flex-col" onSubmit={handleSubmit}>
@@ -193,7 +210,7 @@ export function ProductFeedbackDialog() {
               autoComplete="off"
               name="website"
               tabIndex={-1}
-              className="absolute -left-[10000px] size-px opacity-0"
+              className="absolute -left-2500 size-px opacity-0"
               value={website}
               onChange={(event) => setWebsite(event.currentTarget.value)}
             />
@@ -220,7 +237,7 @@ export function ProductFeedbackDialog() {
           </DialogPanel>
 
           <DialogFooter className="shrink-0">
-            <div className="grid w-full grid-cols-2 gap-2 min-[360px]:grid-cols-[1fr_auto_auto]">
+            <div className="grid w-full grid-cols-2 gap-2 min-[360px]:grid-cols-grow-auto-auto">
               <Button
                 className="col-span-2 min-[360px]:col-span-1 min-[360px]:mr-auto"
                 type="button"

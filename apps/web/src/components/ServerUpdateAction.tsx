@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 import type { EnvironmentId, ServerSelfUpdateCapability } from "@akeru/contracts";
 import type { ServerUpdateStage, ServerUpdateState } from "@akeru/client-runtime/state/server";
 import {
@@ -21,14 +22,15 @@ const UPDATE_STAGE_LABELS: Record<ServerUpdateStage, string> = {
   installing: "Downloading…",
   resuming: "Restarting…",
 };
+
 const pendingUpdateEnvironmentIds = new Set<EnvironmentId>();
 
 export function serverUpdateStageLabel(stage: ServerUpdateStage): string {
   return UPDATE_STAGE_LABELS[stage];
 }
 
-function updateFailureMessage(error: unknown): string {
-  return error instanceof Error ? error.message : "Server update failed.";
+function updateFailureMessage(cause: unknown): string {
+  return cause instanceof Error ? cause.message : "Server update failed.";
 }
 
 /**
@@ -55,6 +57,7 @@ export function ServerUpdateProgress({
       </div>
     );
   }
+
   return (
     <div className="mt-1 flex items-center gap-2 text-xs font-medium text-foreground">
       <span
@@ -87,6 +90,7 @@ export function ServerUpdateAction({
   const updateServer = useAtomCommand(serverEnvironment.updateServer, {
     reportFailure: false,
   });
+
   const { copyToClipboard } = useCopyToClipboard<{ command: string }>({
     target: "update command",
     onCopy: ({ command }) => {
@@ -109,23 +113,29 @@ export function ServerUpdateAction({
     if (pendingUpdateEnvironmentIds.has(environmentId)) {
       return;
     }
+
     pendingUpdateEnvironmentIds.add(environmentId);
+
     try {
       const result = await updateServer({
         environmentId,
         input: { targetVersion },
       });
-      if (result._tag === "Failure") {
+
+      if (Predicate.isTagged(result, "Failure")) {
         if (isAtomCommandInterrupted(result)) {
           return;
         }
+
         toastManager.add({
           type: "error",
           title: "Server update failed",
           description: updateFailureMessage(squashAtomCommandFailure(result)),
         });
+
         return;
       }
+
       toastManager.add({
         type: "success",
         title: `${serverLabel} updated`,
@@ -146,6 +156,7 @@ export function ServerUpdateAction({
 
   if (selfUpdate === null) {
     const command = manualServerUpdateCommand(targetVersion);
+
     return (
       <Button size="xs" variant="outline" onClick={() => copyToClipboard(command, { command })}>
         Copy update command

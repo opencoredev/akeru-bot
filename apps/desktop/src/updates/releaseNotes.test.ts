@@ -8,6 +8,7 @@ describe("normalizeDesktopUpdateReleaseNotes", () => {
       "## What's changed\n- First fix\n- Second fix",
       "1.2.3",
     );
+
     expect(notes).toEqual([{ version: "1.2.3", items: ["First fix", "Second fix"] }]);
   });
 
@@ -20,6 +21,7 @@ describe("normalizeDesktopUpdateReleaseNotes", () => {
       ],
       "1.2.3",
     );
+
     expect(notes).toEqual([
       { version: "1.2.3", items: ["Newer change"] },
       { version: "1.2.1", items: ["Older change"] },
@@ -42,6 +44,7 @@ describe("normalizeDesktopUpdateReleaseNotes", () => {
       ],
       "1.2.3",
     );
+
     expect(notes).toEqual([{ version: "1.2.3", items: ["Valid change"] }]);
   });
 
@@ -50,10 +53,12 @@ describe("normalizeDesktopUpdateReleaseNotes", () => {
       version: `1.3.${9 - index}`,
       note: "Full changelog: https://example.com/compare/x...y",
     }));
+
     const notes = normalizeDesktopUpdateReleaseNotes(
       [...boilerplate, { version: "1.3.2", note: "- Older but real change" }],
       "1.3.9",
     );
+
     expect(notes).toEqual([{ version: "1.3.2", items: ["Older but real change"] }]);
   });
 

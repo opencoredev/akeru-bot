@@ -11,6 +11,7 @@ import { runRemoteDoctor } from "./diagnostics.ts";
 const runDoctor = (baseDir: string, repair: false | ReadonlySet<string>) =>
   Effect.gen(function* () {
     const platform = yield* HostProcessPlatform;
+
     return yield* Effect.tryPromise({
       try: () => runRemoteDoctor({ baseDir, repair, platform }),
       catch: (cause) =>
@@ -48,19 +49,25 @@ export const repairRemoteDoctor = Effect.fn("remote.doctor.repair")(function* (i
       detail: "This environment is not an Akeru Remote install.",
     });
   }
+
   const current = yield* runDoctor(input.baseDir, false);
+
   const offered = new Set(
     current.checks
       .filter((check) => check.repairable && check.status !== "pass")
       .map((check) => check.id),
   );
+
   const refused = input.request.checkIds.filter((id) => !offered.has(id));
+
   if (refused.length > 0) {
     return yield* new RemoteDoctorError({
       reason: "not-repairable",
       detail: `No repair is available for: ${refused.join(", ")}.`,
     });
   }
+
   const report = yield* runDoctor(input.baseDir, new Set(input.request.checkIds));
+
   return { applicable: true, report } satisfies RemoteDoctorStatus;
 });

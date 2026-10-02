@@ -43,7 +43,6 @@
  */
 import {
   defaultInstanceIdForDriver,
-  type ProviderInstanceConfig,
   type ProviderInstanceConfigMap,
   ServerSettings,
 } from "@akeru/contracts";
@@ -70,16 +69,21 @@ import { ProviderInstanceRegistryMutableLayer } from "./ProviderInstanceRegistry
  * separately so the hydration logic can be exercised by unit tests
  * without layering.
  */
+type MutableProviderInstanceConfigs = {
+  -readonly [Key in keyof ProviderInstanceConfigMap]: ProviderInstanceConfigMap[Key];
+};
+
 export const deriveProviderInstanceConfigMap = (
   settings: ServerSettings,
 ): ProviderInstanceConfigMap => {
-  const merged: Record<string, ProviderInstanceConfig> = { ...settings.providerInstances };
+  const merged: MutableProviderInstanceConfigs = { ...settings.providerInstances };
 
   for (const driver of BUILT_IN_DRIVERS) {
     // Standard OpenCode is retained only for explicit legacy instances.
     // New environments use the separate OpenCode Go driver.
     if (driver.driverKind === "opencode") continue;
     const instanceId = defaultInstanceIdForDriver(driver.driverKind);
+
     if (instanceId in merged) {
       // Explicit `providerInstances` entry for this slot — user-authored
       // config always wins over the legacy mirror.
@@ -91,8 +95,10 @@ export const deriveProviderInstanceConfigMap = (
     // `driverKind`. Access is dynamic (the driver kind is a branded string),
     // but it's constrained to `keyof settings.providers` by the union of
     // built-in driver kinds.
-    const legacyKey = driver.driverKind as keyof ServerSettings["providers"];
-    const legacyConfig = settings.providers[legacyKey];
+    const legacyConfig = Object.entries(settings.providers).find(
+      ([key]) => key === driver.driverKind,
+    )?.[1];
+
     if (legacyConfig === undefined) {
       continue;
     }
@@ -103,7 +109,7 @@ export const deriveProviderInstanceConfigMap = (
     };
   }
 
-  return merged as ProviderInstanceConfigMap;
+  return merged;
 };
 
 /**
@@ -159,13 +165,13 @@ export const ProviderInstanceRegistryHydrationLive: Layer.Layer<
 > = Layer.unwrap(
   Effect.gen(function* () {
     const serverSettings = yield* ServerSettingsService;
+
     const initialSettings: ServerSettings | undefined = yield* serverSettings.getSettings.pipe(
       Effect.orElseSucceed(() => undefined),
     );
+
     const initialConfigMap =
-      initialSettings === undefined
-        ? ({} as ProviderInstanceConfigMap)
-        : deriveProviderInstanceConfigMap(initialSettings);
+      initialSettings === undefined ? {} : deriveProviderInstanceConfigMap(initialSettings);
 
     const mutableLayer = ProviderInstanceRegistryMutableLayer({
       drivers: BUILT_IN_DRIVERS,
@@ -174,8 +180,4 @@ export const ProviderInstanceRegistryHydrationLive: Layer.Layer<
 
     return SettingsWatcherLive.pipe(Layer.provideMerge(mutableLayer));
   }),
-) as Layer.Layer<
-  ProviderInstanceRegistry | ProviderInstanceRegistryMutator,
-  never,
-  BuiltInDriversEnv | ServerSettingsService
->;
+);

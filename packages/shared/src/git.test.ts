@@ -6,7 +6,6 @@ import {
   buildTemporaryWorktreeBranchName,
   isTemporaryWorktreeBranch,
   normalizeGitRemoteUrl,
-  stripWorktreeBranchPrefix,
   parseGitHubRepositoryNameWithOwnerFromRemoteUrl,
   WORKTREE_BRANCH_PREFIX,
 } from "./git.ts";
@@ -69,6 +68,7 @@ describe("isTemporaryWorktreeBranch", () => {
       isTemporaryWorktreeBranch(
         buildTemporaryWorktreeBranchName((byteLength) => {
           expect(byteLength).toBe(4);
+
           return "DEADBEEF";
         }),
       ),

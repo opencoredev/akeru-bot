@@ -1,8 +1,13 @@
+import { makeMobileBot } from "../../lib/mobile-fixtures.test-support";
 import { BotId, DelegationId, ThreadId, TurnId } from "@akeru/contracts";
 import type { AkeruDelegationRecord, OrchestrationBot } from "@akeru/contracts";
 import { createElement, type ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vite-plus/test";
+import { delegationActions } from "@akeru/client-runtime/delegation-presentation";
+import { ThreadDelegationCard } from "./ThreadDelegationCard";
+
+type PhasesTable = Record<string, AkeruDelegationRecord["phase"]>;
 
 vi.mock("react-native", () => ({
   Text: "span",
@@ -22,12 +27,9 @@ vi.mock("../../components/BotAvatarView", () => ({
 vi.mock("../../lib/i18n", async () => {
   const { createTranslator } = await import("@akeru/client-runtime/i18n");
   const translator = createTranslator("en");
+
   return { useMobileI18n: () => ({ ...translator, t: translator.translate }) };
 });
-
-import { delegationActions } from "@akeru/client-runtime/delegation-presentation";
-
-import { ThreadDelegationCard } from "./ThreadDelegationCard";
 
 const delegation = (phase: AkeruDelegationRecord["phase"]): AkeruDelegationRecord => ({
   delegationId: DelegationId.make("d-1"),
@@ -62,7 +64,7 @@ const delegation = (phase: AkeruDelegationRecord["phase"]): AkeruDelegationRecor
 });
 
 const bot = (id: string, name: string): OrchestrationBot =>
-  ({ id: BotId.make(id), name, archivedAt: null, avatar: null }) as unknown as OrchestrationBot;
+  makeMobileBot({ id: BotId.make(id), name, archivedAt: null });
 
 const markup = (element: Parameters<typeof renderToStaticMarkup>[0]) =>
   renderToStaticMarkup(element);
@@ -137,7 +139,7 @@ describe("ThreadDelegationCard", () => {
   });
 
   describe("actions", () => {
-    const phases: Record<string, AkeruDelegationRecord["phase"]> = {
+    const phases = {
       queued: { _tag: "Queued" },
       running: {
         _tag: "Running",
@@ -176,8 +178,10 @@ describe("ThreadDelegationCard", () => {
         },
         acknowledgedAt: null,
       },
-    };
+    } satisfies PhasesTable;
+
     const labels = ["Let it finish", "Cancel", "Try again"] as const;
+
     const rendered = (record: AkeruDelegationRecord, all: ReadonlyArray<AkeruDelegationRecord>) => {
       const html = markup(
         createElement(ThreadDelegationCard, {
@@ -188,6 +192,7 @@ describe("ThreadDelegationCard", () => {
           onAction: () => Promise.resolve(),
         }),
       );
+
       return labels.filter((label) => html.includes(`>${label}</span>`));
     };
 
@@ -209,16 +214,19 @@ describe("ThreadDelegationCard", () => {
 
     it("drops Try again once a later card retries the work", () => {
       const original = delegation(phases.failed!);
+
       const retry = {
         ...delegation(phases.running!),
         delegationId: DelegationId.make("d-2"),
         retryOfDelegationId: original.delegationId,
       };
+
       expect(rendered(original, [original, retry])).toEqual([]);
     });
 
     it("shows no buttons when the card cannot run commands", () => {
       const record = delegation(phases.running!);
+
       const html = markup(
         createElement(ThreadDelegationCard, {
           delegation: record,
@@ -227,6 +235,7 @@ describe("ThreadDelegationCard", () => {
           actions: delegationActions(record, [record]),
         }),
       );
+
       expect(html).not.toContain("Let it finish");
       expect(html).not.toContain(">Cancel<");
     });

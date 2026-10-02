@@ -1,3 +1,4 @@
+import type { BrowserRpcParams } from "./browser/BotBrowserTypes.ts";
 import { Clock, Effect } from "effect";
 import { ComputerError, type ComputerAction, type ComputerFrame } from "@akeru/contracts";
 import type { BotBrowserRpc } from "./botBrowser.ts";
@@ -46,11 +47,13 @@ export class WorkspaceComputer implements BotBrowserRpc {
 
   private async connect() {
     await this.checkRunning();
+
     if (this.browser?.connected) return this.browser;
     this.browser?.close();
     this.browser = undefined;
     await this.initialize();
     this.browser = await ComputerCdp.connect(await this.endpoint());
+
     return this.browser;
   }
 
@@ -59,13 +62,16 @@ export class WorkspaceComputer implements BotBrowserRpc {
     // Only a stop invalidates startup. Taking or releasing control changes the gate
     // generation too, but must not stop the computer or revoke the new owner.
     let stopped = false;
+
     const unsubscribe = this.gate.subscribe(() => {
       stopped = true;
     });
+
     this.initialization = (async () => {
       await this.checkRunning();
       await this.desktop.open();
       await this.launch();
+
       if (stopped) {
         throw new ComputerError({
           code: "revoked",
@@ -79,6 +85,7 @@ export class WorkspaceComputer implements BotBrowserRpc {
         throw cause;
       })
       .finally(unsubscribe);
+
     return this.initialization;
   }
 
@@ -87,7 +94,7 @@ export class WorkspaceComputer implements BotBrowserRpc {
     await this.initialize();
   }
 
-  async call(name: string, input: Readonly<Record<string, unknown>>): Promise<string> {
+  async call(name: string, input: BrowserRpcParams): Promise<string> {
     return this.gate.bot(async () => (await this.connect()).call(name, input));
   }
 
@@ -95,31 +102,39 @@ export class WorkspaceComputer implements BotBrowserRpc {
     const generation = this.gate.generation;
     await this.checkRunning();
     await this.initialize();
+
     // Release or stop during inspection must not let a stale action reach the desktop.
     if (generation !== this.gate.generation) {
       throw new ComputerError({ code: "revoked", message: "Computer input was revoked." });
     }
+
     await this.desktop.input(action);
   }
 
   async capture() {
     await this.checkRunning();
+
     if (this.gate.status !== "ready" && this.gate.status !== "human") {
       throw new ComputerError({ code: "closed", message: "Computer is stopped." });
     }
+
     await this.initialize();
+
     if (this.gate.status !== "ready" && this.gate.status !== "human") {
       throw new ComputerError({ code: "closed", message: "Computer is stopped." });
     }
+
     const generation = this.gate.generation;
     const frame = await this.desktop.capture();
     await this.checkRunning();
+
     if (
       generation !== this.gate.generation ||
       (this.gate.status !== "ready" && this.gate.status !== "human")
     ) {
       throw new ComputerError({ code: "revoked", message: "Computer frame was invalidated." });
     }
+
     return frame;
   }
 

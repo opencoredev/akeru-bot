@@ -187,6 +187,7 @@ describe("terminalContext", () => {
 
   it("marks contexts without snapshot text as expired and filters them from sendable contexts", () => {
     const liveContext = makeContext();
+
     const expiredContext = makeContext({
       id: "context-2",
       text: "",

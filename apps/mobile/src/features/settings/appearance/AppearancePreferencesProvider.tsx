@@ -52,15 +52,18 @@ const AppearancePreferencesContext = createContext<AppearancePreferencesContextV
 function applyAppearanceVariables(baseFontSize: number, themeIds: MobileThemeIds) {
   const textVariables = resolveTextScaleVariables(baseFontSize);
   const currentTheme = Uniwind.currentTheme;
+
   const activeAppearance =
     currentTheme === "light" || currentTheme === "dark" ? currentTheme : null;
 
   for (const theme of ["light", "dark"] as const) {
     const variables = { ...getMobileThemeVariables(themeIds[theme], theme), ...textVariables };
+
     if (theme !== activeAppearance) {
       Uniwind.updateCSSVariables(theme, variables);
     }
   }
+
   if (activeAppearance !== null) {
     Uniwind.updateCSSVariables(activeAppearance, {
       ...getMobileThemeVariables(themeIds[activeAppearance], activeAppearance),
@@ -73,19 +76,24 @@ export function AppearancePreferencesProvider(props: { readonly children: ReactN
   const preferencesResult = useAtomValue(mobilePreferencesAtom);
   const savePreferences = useAtomSet(updateMobilePreferencesAtom);
   const systemColorScheme = useColorScheme() === "dark" ? "dark" : "light";
+
   const storedPreferences = AsyncResult.isSuccess(preferencesResult)
     ? preferencesResult.value
     : null;
+
   const preferences = useMemo(
     () => resolveAppearancePreferences(storedPreferences),
     [storedPreferences],
   );
+
   const themeMode = normalizeMobileThemeMode(storedPreferences?.themeMode);
   const themeAppearance = themeMode === "system" ? systemColorScheme : themeMode;
+
   const themeIds = useMemo(
     () => resolveMobileThemeIds(storedPreferences ?? {}),
     [storedPreferences],
   );
+
   const themeId = themeIds[themeAppearance];
   const isReady = AsyncResult.isSuccess(preferencesResult) && !preferencesResult.waiting;
 
@@ -167,8 +175,10 @@ export function AppearancePreferencesProvider(props: { readonly children: ReactN
 
 export function useAppearancePreferences(): AppearancePreferencesContextValue {
   const context = use(AppearancePreferencesContext);
+
   if (!context) {
     throw new Error("useAppearancePreferences must be used within AppearancePreferencesProvider");
   }
+
   return context;
 }

@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, describe, expect, it } from "@effect/vitest";
 import * as Duration from "effect/Duration";
@@ -17,6 +18,7 @@ import * as VcsProcess from "./VcsProcess.ts";
 const run = (input: VcsProcess.VcsProcessInput) =>
   Effect.gen(function* () {
     const process = yield* VcsProcess.VcsProcess;
+
     return yield* process.run(input);
   });
 
@@ -87,6 +89,7 @@ describe("VcsProcess.run", () => {
     Effect.gen(function* () {
       const secretArgument = "--token=super-secret-token";
       const secretStderr = "remote rejected super-secret-token";
+
       const error = yield* run({
         operation: "test.exit",
         command: "node",
@@ -118,6 +121,7 @@ describe("VcsProcess.run", () => {
   it.effect("classifies authentication failures without retaining stderr", () =>
     Effect.gen(function* () {
       const secretStderr = "authentication failed for token super-secret-token";
+
       const error = yield* run({
         operation: "test.authentication",
         command: "node",
@@ -144,6 +148,7 @@ describe("VcsProcess.run", () => {
     Effect.gen(function* () {
       const providerStderr =
         "GraphQL: API rate limit already exceeded for user ID 51714798 and token secret-value.";
+
       const error = yield* run({
         operation: "test.rate-limit",
         command: "node",
@@ -168,6 +173,7 @@ describe("VcsProcess.run", () => {
   it.effect("classifies HTTP 429 responses as rate limits", () =>
     Effect.gen(function* () {
       const providerStderr = "HTTP 429: Too Many Requests. request-id=secret-value";
+
       const error = yield* run({
         operation: "test.rate-limit",
         command: "node",
@@ -186,6 +192,7 @@ describe("VcsProcess.run", () => {
   it.effect("retains spawn causes without exposing process arguments in the error message", () =>
     Effect.gen(function* () {
       const secretArgument = "--token=super-secret-token";
+
       const error = yield* run({
         operation: "test.spawn",
         command: "definitely-not-a-t3code-executable",
@@ -207,6 +214,7 @@ describe("VcsProcess.run", () => {
   it.effect("preserves real boundary causes without manufacturing structural ones", () =>
     Effect.gen(function* () {
       const cause = new Error("secret stdin failure");
+
       const error = yield* captureProcessResult(
         Effect.fail(
           new ProcessRunner.ProcessStdinError({
@@ -309,7 +317,7 @@ describe("VcsProcess.run", () => {
         outputMode: "error",
       }).pipe(Effect.flip);
 
-      assert(error._tag === "VcsProcessOutputLimitError");
+      assert(Predicate.isTagged(error, "VcsProcessOutputLimitError"));
       expect(error.stream).toBe("stdout");
       expect(error.maxBytes).toBe(128);
       expect(error.observedBytes).toBeGreaterThan(error.maxBytes);
@@ -325,6 +333,7 @@ describe("VcsProcess.run", () => {
         cwd: process.cwd(),
         timeoutMs: 50,
       }).pipe(Effect.flip, Effect.forkScoped);
+
       yield* Effect.yieldNow;
       yield* TestClock.adjust(Duration.millis(50));
       const error = yield* Fiber.join(errorFiber);

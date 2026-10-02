@@ -19,6 +19,7 @@ export type AppStateSubscribe = (listener: (status: AppStateStatus) => void) => 
 
 const subscribeToAppState: AppStateSubscribe = (listener) => {
   const subscription = AppState.addEventListener("change", listener);
+
   return () => subscription.remove();
 };
 
@@ -29,12 +30,15 @@ const subscribeToAppState: AppStateSubscribe = (listener) => {
 export function createAppFocusSignalAtom(subscribe: AppStateSubscribe): Atom.Atom<number> {
   return Atom.readable<number>((get) => {
     let count = 0;
+
     const unsubscribe = subscribe((status) => {
       if (status !== "active") return;
       count += 1;
       get.setSelf(count);
     });
+
     get.addFinalizer(unsubscribe);
+
     return count;
   }).pipe(Atom.withLabel("mobile-app-focus-signal"));
 }

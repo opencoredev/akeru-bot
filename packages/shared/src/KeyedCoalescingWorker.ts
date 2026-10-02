@@ -29,6 +29,7 @@ export const makeKeyedCoalescingWorker = <K, V, E, R>(options: {
 }): Effect.Effect<KeyedCoalescingWorker<K, V>, never, Scope.Scope | R> =>
   Effect.gen(function* () {
     const queue = yield* Effect.acquireRelease(TxQueue.unbounded<K>(), TxQueue.shutdown);
+
     const stateRef = yield* TxRef.make<KeyedCoalescingWorkerState<K, V>>({
       latestByKey: new Map(),
       queuedKeys: new Set(),
@@ -40,14 +41,17 @@ export const makeKeyedCoalescingWorker = <K, V, E, R>(options: {
         Effect.flatMap(() =>
           TxRef.modify(stateRef, (state) => {
             const nextValue = state.latestByKey.get(key);
+
             if (nextValue === undefined) {
               const activeKeys = new Set(state.activeKeys);
               activeKeys.delete(key);
+
               return [null, { ...state, activeKeys }] as const;
             }
 
             const latestByKey = new Map(state.latestByKey);
             latestByKey.delete(key);
+
             return [nextValue, { ...state, latestByKey }] as const;
           }).pipe(Effect.tx),
         ),
@@ -64,6 +68,7 @@ export const makeKeyedCoalescingWorker = <K, V, E, R>(options: {
         if (state.latestByKey.has(key) && !state.queuedKeys.has(key)) {
           const queuedKeys = new Set(state.queuedKeys);
           queuedKeys.add(key);
+
           return [true, { ...state, activeKeys, queuedKeys }] as const;
         }
 
@@ -82,6 +87,7 @@ export const makeKeyedCoalescingWorker = <K, V, E, R>(options: {
           queuedKeys.delete(key);
 
           const value = state.latestByKey.get(key);
+
           if (value === undefined) {
             return [null, { ...state, queuedKeys }] as const;
           }
@@ -120,6 +126,7 @@ export const makeKeyedCoalescingWorker = <K, V, E, R>(options: {
 
         const queuedKeys = new Set(state.queuedKeys);
         queuedKeys.add(key);
+
         return [true, { ...state, latestByKey, queuedKeys }] as const;
       }).pipe(
         Effect.flatMap((shouldOffer) => (shouldOffer ? TxQueue.offer(queue, key) : Effect.void)),

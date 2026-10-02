@@ -1,5 +1,5 @@
-// @effect-diagnostics globalDate:off nodeBuiltinImport:off
-import * as NodePath from "node:path";
+import * as Effect from "effect/Effect";
+import * as Path from "effect/Path";
 
 import type {
   CopyOptions,
@@ -13,6 +13,8 @@ import type {
   WorkspaceFilesystem,
   WriteOptions,
 } from "@mastra/core/workspace";
+
+const posixPath = Effect.runSync(Path.Path.pipe(Effect.provide(Path.layer)));
 
 interface RemoteCommandSession {
   readonly run: (
@@ -40,18 +42,20 @@ export class BotWorkspaceFilesystem implements WorkspaceFilesystem {
   async readFile(path: string, options?: ReadOptions): Promise<string | Buffer> {
     const result = await this.shell(`base64 < ${quote(path)}`);
     const content = Buffer.from(result.trim(), "base64");
+
     return options?.encoding ? content.toString(options.encoding) : content;
   }
 
   async writeFile(path: string, content: FileContent, options?: WriteOptions): Promise<void> {
     const checks = [
-      options?.recursive ? `mkdir -p -- ${quote(NodePath.posix.dirname(path))}` : "",
+      options?.recursive ? `mkdir -p -- ${quote(posixPath.dirname(path))}` : "",
       options?.overwrite === false ? `test ! -e ${quote(path)}` : "",
       options?.expectedMtime
         ? `test "$(stat -c %Y -- ${quote(path)})" = ${quote(String(Math.floor(options.expectedMtime.getTime() / 1_000)))}`
         : "",
       `printf %s ${quote(Buffer.from(content).toString("base64"))} | base64 -d > ${quote(path)}`,
     ].filter(Boolean);
+
     await this.shell(checks.join(" && "));
   }
 
@@ -98,6 +102,7 @@ export class BotWorkspaceFilesystem implements WorkspaceFilesystem {
 
   async readdir(path: string, options?: ListOptions): Promise<FileEntry[]> {
     const maxDepth = options?.recursive ? options.maxDepth : 1;
+
     const output = await this.command("find", [
       path,
       "-mindepth",
@@ -106,16 +111,19 @@ export class BotWorkspaceFilesystem implements WorkspaceFilesystem {
       "-printf",
       "%P\\037%y\\037%s\\037%l\\036",
     ]);
+
     const extensions = options?.extension
       ? Array.isArray(options.extension)
         ? options.extension
         : [options.extension]
       : undefined;
+
     return output
       .split("\u001e")
       .filter(Boolean)
       .map((record) => {
         const [name = "", type = "f", size = "0", symlinkTarget = ""] = record.split("\u001f");
+
         return {
           name,
           type: type === "d" ? ("directory" as const) : ("file" as const),
@@ -130,16 +138,19 @@ export class BotWorkspaceFilesystem implements WorkspaceFilesystem {
 
   async exists(path: string): Promise<boolean> {
     const result = await this.session.run("test", ["-e", path]);
+
     return result.exitCode === 0;
   }
 
   async stat(path: string): Promise<FileStat> {
     const output = await this.command("stat", ["-c", "%F\\037%s\\037%W\\037%Y", "--", path]);
+
     const [kind = "", size = "0", createdAt = "0", modifiedAt = "0"] = output
       .trim()
       .split("\u001f");
+
     return {
-      name: NodePath.posix.basename(path),
+      name: posixPath.basename(path),
       path,
       type: kind.includes("directory") ? "directory" : "file",
       size: kind.includes("directory") ? 0 : Number(size),
@@ -154,9 +165,11 @@ export class BotWorkspaceFilesystem implements WorkspaceFilesystem {
 
   private async command(command: string, args: readonly string[]): Promise<string> {
     const result = await this.session.run(command, args);
+
     if (result.exitCode !== 0) {
       throw new Error(result.stderr || `${command} exited with code ${result.exitCode}.`);
     }
+
     return result.stdout;
   }
 }

@@ -10,6 +10,7 @@ import {
 } from "./botPromptMentions.logic";
 
 const bots = [{ id: "bot-1", name: "Mika" }];
+
 const threads = [{ id: "thread-2", title: "Release plan" }];
 
 describe("botPromptMentionTrigger", () => {
@@ -41,6 +42,7 @@ describe("buildBotPromptMentionItems", () => {
       bots,
       threads,
     });
+
     expect(enabled.map((item) => item.kind)).toEqual(["browser", "bot", "thread"]);
 
     const gated = buildBotPromptMentionItems({ query: "", browserAvailable: false, bots, threads });
@@ -55,6 +57,7 @@ describe("buildBotPromptMentionItems", () => {
       bots,
       threads,
     });
+
     expect(items[0]?.kind).toBe("browser");
   });
 
@@ -79,6 +82,7 @@ describe("buildBotPromptMentionItems", () => {
       ],
       threads: [],
     });
+
     expect(
       items.map((item) => (item.kind === "bot" ? [item.label, item.canTakeWork] : null)),
     ).toEqual([
@@ -92,6 +96,7 @@ describe("buildBotPromptMentionItems", () => {
       { id: "bot-1", name: "Mika" },
       { id: "bot-2", name: "Tamika" },
     ];
+
     expect(
       buildBotPromptMentionItems({
         query: "mi",
@@ -109,6 +114,7 @@ describe("buildBotPromptMentionItems", () => {
       bots: [{ id: "bot-browser", name: "browser" }],
       threads: [],
     });
+
     expect(item).toMatchObject({ kind: "bot" });
     expect(item && "source" in item ? item.source : null).not.toBe("@browser");
   });
@@ -119,12 +125,14 @@ describe("buildBotPromptMentionItems", () => {
       { id: "bot-grok-2", name: "Mika", title: "Reviewer" },
       { id: "bot-3", name: "Mila", title: "Writer" },
     ];
+
     const items = buildBotPromptMentionItems({
       query: "mi",
       browserAvailable: false,
       bots: namesakes,
       threads: [],
     });
+
     expect(items.map((item) => (item.kind === "bot" ? [item.label, item.detail] : null))).toEqual([
       ["Mika", "Designer"],
       ["Mika", "Reviewer"],
@@ -148,13 +156,16 @@ describe("buildBotPromptMentionItems", () => {
       { id: "bot-2", name: "Mika", title: "Reviewer" },
       { id: "bot-3", name: "Mila" },
     ];
+
     const trigger = botPromptMentionTrigger("ask @mi", 7)!;
+
     const items = buildBotPromptMentionItems({
       query: trigger.query,
       browserAvailable: false,
       bots: namesakes,
       threads: [],
     });
+
     expect(items.map((item) => applyBotPromptMention("ask @mi", trigger, item).text)).toEqual([
       "ask @bot:bot-1 ",
       "ask @bot:bot-2 ",
@@ -170,6 +181,7 @@ describe("buildBotPromptMentionItems", () => {
       threads,
       paths: [{ path: "docs/release.md" }],
     });
+
     expect(items.map((item) => item.kind)).toEqual(["thread", "path"]);
     expect(items[1]).toMatchObject({ label: "release.md", directory: "docs" });
   });
@@ -177,6 +189,7 @@ describe("buildBotPromptMentionItems", () => {
   it("puts the file first when a path query matches no mention by name", () => {
     // Chat search also matches message text, so a chat can rank for "src/comp".
     const contentMatch = [{ id: "thread-3", title: "Refactor review" }];
+
     const items = buildBotPromptMentionItems({
       query: "src/comp",
       browserAvailable: true,
@@ -184,6 +197,7 @@ describe("buildBotPromptMentionItems", () => {
       threads: contentMatch,
       paths: [{ path: "src/components/App.tsx" }, { path: "src/compat.ts" }],
     });
+
     expect(items.map((item) => item.kind)).toEqual(["path", "path"]);
 
     const titled = buildBotPromptMentionItems({
@@ -193,6 +207,7 @@ describe("buildBotPromptMentionItems", () => {
       threads: [{ id: "thread-4", title: "Ship v1.2" }],
       paths: [],
     });
+
     expect(titled.map((item) => item.label)).toEqual(["Ship v1.2"]);
   });
 
@@ -212,12 +227,14 @@ describe("buildBotPromptMentionItems", () => {
 describe("applyBotPromptMention", () => {
   it("replaces the typed query with the token and a trailing space", () => {
     const trigger = botPromptMentionTrigger("check @rel now", 10)!;
+
     const [thread] = buildBotPromptMentionItems({
       query: "rel",
       browserAvailable: false,
       bots: [],
       threads,
     });
+
     expect(applyBotPromptMention("check @rel now", trigger, thread!)).toEqual({
       text: "check @chat:thread-2 now",
       caret: 21,
@@ -233,6 +250,7 @@ describe("applyBotPromptMention", () => {
     ).toBe("@browser ");
 
     const pathTrigger = botPromptMentionTrigger("open @src/comp", 14)!;
+
     const [file] = buildBotPromptMentionItems({
       query: pathTrigger.query,
       browserAvailable: true,
@@ -240,6 +258,7 @@ describe("applyBotPromptMention", () => {
       threads: [],
       paths: [{ path: "src/components/App.tsx" }],
     });
+
     expect(applyBotPromptMention("open @src/comp", pathTrigger, file!).text).toBe(
       "open [App.tsx](src/components/App.tsx) ",
     );

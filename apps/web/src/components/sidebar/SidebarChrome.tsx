@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 import { useAtomValue } from "@effect/atom-react";
 import {
   Analytics01Icon,
@@ -40,7 +41,6 @@ import { cn } from "../../lib/utils";
 import {
   resolveEnvironmentIdentificationPillLabel,
   resolveSidebarStageBackdropVariant,
-  resolveSidebarStageFocusRingOffsetClass,
   SidebarStageBackdrop,
   useEnvironmentStageLabel,
 } from "../SidebarStageBackdrop";
@@ -68,10 +68,12 @@ export const SidebarChromeHeader = memo(function SidebarChromeHeader({
   const { t } = useI18n();
   const stageLabel = useEnvironmentStageLabel();
   const environmentIdentificationMode = useEnvironmentIdentificationMode();
+
   const backdropVariant = resolveSidebarStageBackdropVariant(
     stageLabel,
     environmentIdentificationMode === "artwork",
   );
+
   const pillLabel =
     environmentIdentificationMode === "pill"
       ? resolveEnvironmentIdentificationPillLabel(stageLabel)
@@ -79,29 +81,20 @@ export const SidebarChromeHeader = memo(function SidebarChromeHeader({
 
   return (
     <SidebarHeader
-      className={cn(
-        "@container/sidebar-header relative h-[var(--workspace-topbar-height)] shrink-0 flex-row items-center gap-1 px-3 py-0 md:px-2",
-        isElectron && "drag-region",
-      )}
+      dragRegion={isElectron}
+      className="@container/sidebar-header relative h-(--workspace-topbar-height) shrink-0 flex-row items-center gap-1 px-3 py-0 md:px-2"
     >
       {backdropVariant ? <SidebarStageBackdrop variant={backdropVariant} /> : null}
-      <div className="relative z-10 grid min-w-0 flex-1 grid-cols-[1fr_auto_1fr] items-center group-data-[collapsible=icon]:hidden">
+      <div className="relative z-10 grid min-w-0 flex-1 grid-cols-grow-auto-grow items-center group-data-[collapsible=icon]:hidden">
         <div className="flex items-center justify-start">
-          <SidebarTrigger
-            className={cn(
-              "md:hidden",
-              backdropVariant &&
-                "focus-visible:ring-white/90 [&_svg]:stroke-white/90! [&_svg]:opacity-100! [&_svg]:hover:stroke-white! [:hover,[data-pressed]]:bg-white/15",
-              backdropVariant && resolveSidebarStageFocusRingOffsetClass(backdropVariant),
-            )}
-          />
+          <SidebarTrigger onStage={Boolean(backdropVariant)} className="md:hidden" />
         </div>
         <div className="relative flex items-center justify-center">
           <Link
             aria-label={t("Go to chats")}
             className={cn(
-              "flex items-center justify-center rounded-md outline-none ring-ring focus-visible:ring-2 [-webkit-app-region:no-drag]",
-              backdropVariant ? "text-white" : "text-sidebar-foreground",
+              "flex items-center justify-center rounded-md outline-none ring-ring focus-visible:ring-2 app-region-no-drag",
+              backdropVariant ? "text-on-solid" : "text-sidebar-foreground",
             )}
             to="/"
           >
@@ -109,7 +102,8 @@ export const SidebarChromeHeader = memo(function SidebarChromeHeader({
           </Link>
           {pillLabel ? (
             <Badge
-              className="absolute left-full ml-2 rounded-full px-1.5 text-muted-foreground"
+              presentation="environment-pill"
+              className="absolute left-full ml-2"
               data-environment-identification="pill"
               size="sm"
               variant="secondary"
@@ -125,6 +119,7 @@ export const SidebarChromeHeader = memo(function SidebarChromeHeader({
 });
 
 const PLUGIN_CATALOG = loadCatalog();
+
 const COMPUTER_USE_SERVER_ID = "builtin-computer-use";
 
 export interface ActiveComputerUseControl {
@@ -140,7 +135,9 @@ export function findActiveComputerUseControl(input: {
   const server = input.mcpServers.find(
     (candidate) => candidate.id === COMPUTER_USE_SERVER_ID && candidate.enabled,
   );
+
   if (!server) return null;
+
   for (const thread of input.threads) {
     if (
       !thread.session ||
@@ -150,11 +147,15 @@ export function findActiveComputerUseControl(input: {
     ) {
       continue;
     }
+
     const botId = thread.respondingBotId ?? thread.botId;
     const bot = input.bots.find((candidate) => candidate.id === botId);
+
     if (!bot || bot.disabledMcpServerIds.includes(server.id)) continue;
+
     return { threadId: thread.id, botName: bot.name };
   }
+
   return null;
 }
 
@@ -168,22 +169,26 @@ export function formatEnabledPluginStatus(
   plural: Pluralize = englishTranslator.plural,
 ): string {
   if (enabledCount === 0) return t("No plugins enabled");
+
   return plural(enabledCount, { one: "{count} plugin enabled", other: "{count} plugins enabled" });
 }
 
 export function formatEnabledPluginBadge(enabledCount: number): string | null {
   if (enabledCount === 0) return null;
+
   return enabledCount > 99 ? "99+" : String(enabledCount);
 }
 
 export function summarizeEnabledPlugins(
   servers: readonly McpServer[],
   catalog: readonly PluginDefinition[] = PLUGIN_CATALOG,
-): { readonly enabledPlugins: readonly PluginDefinition[]; readonly enabledCount: number } {
+) {
   const enabledIds = new Set<string>(
-    servers.filter((server) => server.enabled).map((server) => server.id),
+    servers.flatMap((server) => (server.enabled ? [server.id] : [])),
   );
+
   const installations = resolveCatalogInstallations(servers, catalog);
+
   const enabledPluginIds = new Set(
     installations.flatMap((installation) =>
       installation.kind === "catalog" && enabledIds.has(installation.serverId)
@@ -191,6 +196,7 @@ export function summarizeEnabledPlugins(
         : [],
     ),
   );
+
   return {
     enabledPlugins: catalog.filter((plugin) => enabledPluginIds.has(plugin.id)),
     enabledCount:
@@ -247,7 +253,7 @@ function SidebarPluginButton({
               {badgeLabel ? (
                 <span
                   aria-hidden="true"
-                  className="ms-auto text-xs tabular-nums text-sidebar-muted-foreground group-data-[collapsible=icon]:absolute group-data-[collapsible=icon]:-right-1 group-data-[collapsible=icon]:-top-1 group-data-[collapsible=icon]:ms-0 group-data-[collapsible=icon]:flex group-data-[collapsible=icon]:h-4 group-data-[collapsible=icon]:min-w-4 group-data-[collapsible=icon]:items-center group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:rounded-full group-data-[collapsible=icon]:bg-sidebar-primary group-data-[collapsible=icon]:px-1 group-data-[collapsible=icon]:text-[9px] group-data-[collapsible=icon]:font-semibold group-data-[collapsible=icon]:text-sidebar-primary-foreground"
+                  className="ms-auto text-xs tabular-nums text-sidebar-muted-foreground group-data-[collapsible=icon]:absolute group-data-[collapsible=icon]:-right-1 group-data-[collapsible=icon]:-top-1 group-data-[collapsible=icon]:ms-0 group-data-[collapsible=icon]:flex group-data-[collapsible=icon]:h-4 group-data-[collapsible=icon]:min-w-4 group-data-[collapsible=icon]:items-center group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:rounded-full group-data-[collapsible=icon]:px-1 group-data-[collapsible=icon]:text-9px group-data-[collapsible=icon]:font-semibold"
                 >
                   {badgeLabel}
                 </span>
@@ -268,6 +274,7 @@ function SidebarPluginButton({
 function SidebarPluginSummary({ onClick }: { readonly onClick: () => void }) {
   const { t } = useI18n();
   const environmentId = usePrimaryEnvironmentId();
+
   if (!environmentId) {
     return (
       <SidebarPluginButton
@@ -277,6 +284,7 @@ function SidebarPluginSummary({ onClick }: { readonly onClick: () => void }) {
       />
     );
   }
+
   return <SidebarPluginSummaryForEnvironment environmentId={environmentId} onClick={onClick} />;
 }
 
@@ -290,6 +298,7 @@ function ComputerUseControlForEnvironment({
   const stopSession = useAtomCommand(threadEnvironment.stopSession);
   const disableServer = useAtomCommand(mcpServerEnvironment.disable);
   const [pending, setPending] = useState(false);
+
   const control = snapshot
     ? findActiveComputerUseControl({
         threads: snapshot.threads,
@@ -297,24 +306,30 @@ function ComputerUseControlForEnvironment({
         mcpServers: snapshot.mcpServers ?? [],
       })
     : null;
+
   if (!control) return null;
 
   const stop = async () => {
     setPending(true);
+
     try {
       await stopSession({ environmentId, input: { threadId: control.threadId } });
     } finally {
       setPending(false);
     }
   };
+
   const revoke = async () => {
     setPending(true);
+
     try {
       const stopped = await stopSession({
         environmentId,
         input: { threadId: control.threadId },
       });
-      if (stopped._tag === "Success") {
+
+      if (Predicate.isTagged(stopped, "Success")) {
+        // SAFETY: the fixed computer-use server identifier is the same nonempty identifier used to register that server.
         await disableServer({
           environmentId,
           input: { mcpServerId: COMPUTER_USE_SERVER_ID as McpServer["id"] },
@@ -326,20 +341,30 @@ function ComputerUseControlForEnvironment({
   };
 
   return (
-    <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-2.5" role="status">
+    <div
+      className="rounded-xl border border-computer-control-indicator/30 bg-computer-control-indicator/10 p-2.5"
+      role="status"
+    >
       <div className="flex items-center gap-2 text-xs font-medium">
-        <span className="size-2 rounded-full bg-amber-500" aria-hidden="true" />
+        <span className="size-2 rounded-full bg-computer-control-indicator" aria-hidden="true" />
         <span className="min-w-0 truncate">
           {t("{name} controls this Mac", { name: control.botName })}
         </span>
       </div>
       <div className="mt-2 flex gap-2">
-        <Button className="h-7 flex-1 text-xs" disabled={pending} size="sm" onClick={stop}>
+        <Button
+          presentation="text-xs"
+          className="h-7 flex-1"
+          disabled={pending}
+          size="sm"
+          onClick={stop}
+        >
           {t("Stop")}
         </Button>
         <Button
           aria-label={t("Revoke Computer Use for all bots")}
-          className="h-7 flex-1 text-xs"
+          presentation="text-xs"
+          className="h-7 flex-1"
           disabled={pending}
           size="sm"
           title={t("Disable Computer Use for all bots")}
@@ -355,6 +380,7 @@ function ComputerUseControlForEnvironment({
 
 function ComputerUseControl() {
   const environmentId = usePrimaryEnvironmentId();
+
   return environmentId ? <ComputerUseControlForEnvironment environmentId={environmentId} /> : null;
 }
 
@@ -410,28 +436,33 @@ export function SidebarUtilityItem({
 export const SidebarChromeFooter = memo(function SidebarChromeFooter() {
   const { t } = useI18n();
   const { isMobile, setOpenMobile } = useSidebar();
+
   const closeMobileSidebar = useCallback(() => {
     if (isMobile) setOpenMobile(false);
   }, [isMobile, setOpenMobile]);
+
   const handlePluginsClick = useCallback(() => {
     closeMobileSidebar();
     openPlugins();
   }, [closeMobileSidebar]);
+
   const handleSettingsClick = useCallback(() => {
     closeMobileSidebar();
     openSettings();
   }, [closeMobileSidebar]);
+
   const handleUsageClick = useCallback(() => {
     closeMobileSidebar();
     openUsage();
   }, [closeMobileSidebar]);
+
   const handleFeedbackClick = useCallback(() => {
     closeMobileSidebar();
     openProductFeedback();
   }, [closeMobileSidebar]);
 
   return (
-    <SidebarFooter className="max-h-[min(45dvh,22rem)] shrink-0 overflow-y-auto overscroll-contain p-[var(--sidebar-content-inset)]">
+    <SidebarFooter className="max-h-(--spacing-min-45dvh-22rem) shrink-0 overflow-y-auto overscroll-contain p-(--sidebar-content-inset)">
       <div className="flex flex-col gap-2 empty:hidden group-data-[collapsible=icon]:hidden">
         <ComputerUseControl />
         <SidebarProviderUpdatePill />
@@ -440,7 +471,7 @@ export const SidebarChromeFooter = memo(function SidebarChromeFooter() {
       {/* A labeled column, not a row of glyphs: each destination gets a
           full-width row with a comfortable hit target. The icon rail collapses
           it back to centered icons. */}
-      <SidebarMenu className="flex-col flex-nowrap gap-0.5 overflow-visible">
+      <SidebarMenu density="tight" className="flex-col flex-nowrap overflow-visible">
         <SidebarPluginSummary onClick={handlePluginsClick} />
         <SidebarUtilityItem
           icon={<AppIcon className="size-4" icon={Analytics01Icon} />}

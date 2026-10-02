@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import * as NodeFileSystem from "@effect/platform-node/NodeFileSystem";
 import * as NodeHttpClient from "@effect/platform-node/NodeHttpClient";
 import * as NodeServices from "@effect/platform-node/NodeServices";
@@ -18,6 +19,7 @@ import * as DesktopAppSettings from "../settings/DesktopAppSettings.ts";
 const encoder = new TextEncoder();
 
 const emptyNetworkInterfaces: DesktopNetworkInterfaces.NetworkInterfaces = {};
+
 const lanNetworkInterfaces: DesktopNetworkInterfaces.NetworkInterfaces = {
   en0: [
     {
@@ -95,6 +97,7 @@ function makeLayer(input: {
 }) {
   const env = { T3CODE_HOME: input.baseDir, ...input.env };
   const environmentLayer = makeEnvironmentLayer(input.baseDir, env);
+
   const networkLayer = Layer.succeed(DesktopNetworkInterfaces.DesktopNetworkInterfaces, {
     read: Effect.succeed(input.networkInterfaces ?? emptyNetworkInterfaces),
   });
@@ -127,9 +130,11 @@ const withHarness = <A, E, R>(
 ) =>
   Effect.gen(function* () {
     const fileSystem = yield* FileSystem.FileSystem;
+
     const baseDir = yield* fileSystem.makeTempDirectoryScoped({
       prefix: "t3-desktop-server-exposure-test-",
     });
+
     return yield* effect.pipe(
       Effect.provide(
         makeLayer({
@@ -173,7 +178,7 @@ describe("DesktopServerExposure", () => {
         yield* serverExposure.configureFromSettings({ port: 4173 });
 
         const error = yield* serverExposure.setMode("network-accessible").pipe(Effect.flip);
-        assert.ok(error._tag === "DesktopServerExposureNoNetworkAddressError");
+        assert.ok(Predicate.isTagged(error, "DesktopServerExposureNoNetworkAddressError"));
         assert.equal(error.port, 4173);
       }),
     ),
@@ -223,6 +228,7 @@ describe("DesktopServerExposure", () => {
           enabled: true,
           port: 8443,
         });
+
         assert.equal(changed.requiresRelaunch, true);
         assert.equal(changed.state.tailscaleServeEnabled, true);
         assert.equal(changed.state.tailscaleServePort, 8443);
@@ -231,6 +237,7 @@ describe("DesktopServerExposure", () => {
           enabled: true,
           port: 8443,
         });
+
         assert.equal(unchanged.requiresRelaunch, false);
 
         const persisted = yield* settings.get;
@@ -242,11 +249,13 @@ describe("DesktopServerExposure", () => {
 
   it.effect("preserves persistence request context and the settings failure chain", () => {
     const diskFailure = new Error("disk exploded");
+
     const settingsFailure = new DesktopAppSettings.DesktopSettingsWriteError({
       operation: "replace-settings-file",
       path: "/tmp/desktop-settings.json",
       cause: diskFailure,
     });
+
     const settingsLayer = Layer.succeed(DesktopAppSettings.DesktopAppSettings, {
       get: Effect.succeed(DesktopAppSettings.DEFAULT_DESKTOP_SETTINGS),
       load: Effect.succeed(DesktopAppSettings.DEFAULT_DESKTOP_SETTINGS),
@@ -286,6 +295,7 @@ describe("DesktopServerExposure", () => {
         const tailscaleError = yield* serverExposure
           .setTailscaleServeEnabled({ enabled: true, port: 8443 })
           .pipe(Effect.flip);
+
         assert.instanceOf(
           tailscaleError,
           DesktopServerExposure.DesktopTailscaleServePersistenceError,

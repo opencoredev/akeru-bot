@@ -11,7 +11,9 @@ export class RoutineScheduleError extends Schema.TaggedErrorClass<RoutineSchedul
 
 const parseTime = (time: string): readonly [hour: number, minute: number] => {
   const match = /^(?:[01]\d|2[0-3]):[0-5]\d$/.exec(time);
+
   if (match === null) throw new RoutineScheduleError({ detail: `Invalid routine time: ${time}` });
+
   return [Number(time.slice(0, 2)), Number(time.slice(3, 5))];
 };
 
@@ -43,6 +45,7 @@ const candidateForDay = (
 ): DateTime.Zoned => {
   const [hour, minute] = parseTime(schedule.time);
   const parts = DateTime.toParts(day);
+
   const candidate = DateTime.makeZoned(
     {
       year: parts.year,
@@ -53,9 +56,11 @@ const candidateForDay = (
     },
     { timeZone: timezone, adjustForTimeZone: true },
   );
+
   if (Option.isNone(candidate)) {
     throw new RoutineScheduleError({ detail: `Invalid routine timezone: ${timezone}` });
   }
+
   return candidate.value;
 };
 
@@ -65,14 +70,17 @@ export const latestScheduledFor = (
   nowEpochMillis: number,
 ): string => {
   const now = DateTime.makeZoned(nowEpochMillis, { timeZone: timezone });
+
   if (Option.isNone(now)) {
     throw new RoutineScheduleError({ detail: `Invalid routine timezone: ${timezone}` });
   }
 
   for (let daysBack = 0; daysBack <= 7; daysBack += 1) {
     const day = DateTime.subtract(now.value, { days: daysBack });
+
     if (!matchesDay(schedule, DateTime.toParts(day).weekDay)) continue;
     const candidate = candidateForDay(day, schedule, timezone);
+
     if (DateTime.toEpochMillis(candidate) <= nowEpochMillis) return DateTime.formatIso(candidate);
   }
 
@@ -85,14 +93,17 @@ export const nextScheduledFor = (
   afterEpochMillis: number,
 ): string => {
   const after = DateTime.makeZoned(afterEpochMillis, { timeZone: timezone });
+
   if (Option.isNone(after)) {
     throw new RoutineScheduleError({ detail: `Invalid routine timezone: ${timezone}` });
   }
 
   for (let daysAhead = 0; daysAhead <= 7; daysAhead += 1) {
     const day = DateTime.add(after.value, { days: daysAhead });
+
     if (!matchesDay(schedule, DateTime.toParts(day).weekDay)) continue;
     const candidate = candidateForDay(day, schedule, timezone);
+
     if (DateTime.toEpochMillis(candidate) > afterEpochMillis) return DateTime.formatIso(candidate);
   }
 

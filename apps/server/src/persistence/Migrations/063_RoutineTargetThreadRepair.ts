@@ -24,6 +24,7 @@ export default Effect.gen(function* () {
   const claimTables = yield* sql<{ readonly sql: string }>`
     SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'routine_run_claims'
   `;
+
   if (!claimTables[0]?.sql.includes("'completed'")) {
     yield* sql`
       CREATE TABLE routine_run_claims_repaired (

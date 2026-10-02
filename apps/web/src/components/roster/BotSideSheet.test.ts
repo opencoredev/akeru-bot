@@ -1,4 +1,3 @@
-// @effect-diagnostics nodeBuiltinImport:off - The component contract reads its source.
 import * as NodeFS from "node:fs";
 
 import { describe, expect, it } from "vite-plus/test";

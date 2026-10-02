@@ -14,9 +14,11 @@ export const ProjectionGroup = Schema.Struct({
   createdAt: IsoDateTime,
   updatedAt: IsoDateTime,
 });
+
 export type ProjectionGroup = typeof ProjectionGroup.Type;
 
 export const GetProjectionGroupInput = Schema.Struct({ groupId: GroupId });
+
 export type GetProjectionGroupInput = typeof GetProjectionGroupInput.Type;
 
 export interface ProjectionGroupRepositoryShape {

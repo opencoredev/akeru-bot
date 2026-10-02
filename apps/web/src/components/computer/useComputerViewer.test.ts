@@ -4,8 +4,11 @@ import { AsyncResult } from "effect/unstable/reactivity";
 import { describe, expect, it, vi } from "vite-plus/test";
 
 vi.mock("~/state/computer", () => ({ computerEnvironment: {} }));
+
 vi.mock("~/state/environments", () => ({ useEnvironmentConnectionState: () => ({ data: null }) }));
+
 vi.mock("~/state/use-atom-command", () => ({ useAtomCommand: () => vi.fn() }));
+
 vi.mock("~/state/use-atom-query-runner", () => ({ useAtomQueryRunner: () => vi.fn() }));
 
 import {
@@ -39,8 +42,10 @@ describe("computerViewerOutcome", () => {
 describe("applyUnavailableRecheck", () => {
   const unavailable = { status: "unavailable" } as ComputerState;
   const ready = { status: "ready" } as ComputerState;
+
   const controllerAt = (server: ComputerState) => {
     const state: ComputerViewerState = { ...initialComputerViewerState, server };
+
     return { getState: () => state, dispatch: vi.fn() };
   };
 

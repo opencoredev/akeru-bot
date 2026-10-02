@@ -6,6 +6,7 @@ import { makeComposerTestProvider } from "../../test/composerTestProvider";
 import { buildBotModelChoices } from "./BotModelPicker";
 
 const codex = ProviderInstanceId.make("codex");
+
 const claude = ProviderInstanceId.make("claude-work");
 
 function makeClaudeProvider(): ServerProvider {
@@ -52,6 +53,7 @@ describe("bot model picker", () => {
       auth: { status: "unauthenticated" },
       unavailability: "missing-login",
     };
+
     const choices = buildBotModelChoices(
       deriveProviderInstanceEntries([makeComposerTestProvider(), signedOut]),
       new Map([

@@ -1,4 +1,3 @@
-// @effect-diagnostics nodeBuiltinImport:off - This integration guard reads related source files.
 import * as NodeFS from "node:fs";
 import { BotId, McpServerId, ThreadId, type McpServer } from "@akeru/contracts";
 
@@ -13,7 +12,9 @@ import {
 } from "./SidebarChrome";
 
 const exa = loadDirectoryCatalog().find((plugin) => plugin.id === "exa");
+
 if (!exa || exa.kind !== "mcp-url") throw new TypeError("Exa URL fixture is missing.");
+
 const catalogPlugin = {
   ...exa,
   catalogStatus: "available" as const,
@@ -60,6 +61,7 @@ describe("sidebar footer", () => {
 
   it("shows only the bot that holds an enabled Computer Use session", () => {
     const botId = BotId.make("bot-1");
+
     const input: Parameters<typeof findActiveComputerUseControl>[0] = {
       mcpServers: [server("builtin-computer-use")],
       bots: [
@@ -118,9 +120,11 @@ describe("sidebar footer", () => {
         },
       ],
     };
+
     const control = findActiveComputerUseControl(input);
 
     expect(control).toEqual({ threadId: ThreadId.make("thread-1"), botName: "Operator" });
+
     for (const status of ["starting", "error", "stopped"] as const) {
       expect(
         findActiveComputerUseControl({
@@ -132,6 +136,7 @@ describe("sidebar footer", () => {
         }),
       ).toBeNull();
     }
+
     expect(
       findActiveComputerUseControl({
         ...input,
@@ -161,6 +166,7 @@ describe("sidebar footer", () => {
       new URL("../AppSidebarLayout.tsx", import.meta.url),
       "utf8",
     );
+
     const rosterSource = NodeFS.readFileSync(
       new URL("../roster/BotRosterSidebar.tsx", import.meta.url),
       "utf8",
@@ -175,6 +181,7 @@ describe("sidebar footer", () => {
       new URL("../roster/BotRosterSidebar.tsx", import.meta.url),
       "utf8",
     );
+
     const syncSource = NodeFS.readFileSync(
       new URL("../roster/useServerRoster.ts", import.meta.url),
       "utf8",
@@ -191,6 +198,7 @@ describe("sidebar footer", () => {
       new URL("../roster/useBotThreadRuntime.ts", import.meta.url),
       "utf8",
     );
+
     const groupSource = NodeFS.readFileSync(
       new URL("../roster/useGroupThreadRuntime.ts", import.meta.url),
       "utf8",
@@ -216,24 +224,24 @@ describe("sidebar footer", () => {
   });
 
   it("keeps the roster scrollable from touch gestures that start on a bot row", () => {
-    const source = NodeFS.readFileSync(
-      new URL("../roster/BotRosterSidebar.tsx", import.meta.url),
-      "utf8",
-    );
+    // The roster sidebar composes its rows and drag wiring from sibling modules.
+    const source = ["BotRosterSidebar.tsx", "RosterRows.tsx", "RosterDrag.tsx"]
+      .map((file) => NodeFS.readFileSync(new URL(`../roster/${file}`, import.meta.url), "utf8"))
+      .join("\n");
 
     expect(source).toContain("touch-pan-y");
     expect(source).not.toContain("touch-none");
   });
 
   it("keeps group membership out of roster drag and treats pins as a drop target", () => {
-    const source = NodeFS.readFileSync(
-      new URL("../roster/BotRosterSidebar.tsx", import.meta.url),
-      "utf8",
-    );
+    // The roster sidebar composes its rows and drag wiring from sibling modules.
+    const source = ["BotRosterSidebar.tsx", "RosterRows.tsx", "RosterDrag.tsx"]
+      .map((file) => NodeFS.readFileSync(new URL(`../roster/${file}`, import.meta.url), "utf8"))
+      .join("\n");
 
     expect(source).not.toContain("botEnvironment.groups.assignMember");
     expect(source).toContain("roster-pinned-header");
-    expect(source).toContain("[overflow-anchor:none]");
+    expect(source).toContain("scrollAnchoring={false}");
     expect(source).toContain("restrictRosterAxis");
     expect(source).not.toContain("KeyboardSensor");
     expect(source).toContain("Move up");
@@ -246,6 +254,7 @@ describe("sidebar footer", () => {
       new URL("./SidebarChrome.tsx", import.meta.url),
       "utf8",
     );
+
     const pluginsSource = NodeFS.readFileSync(
       new URL("../plugins/PluginsDialog.tsx", import.meta.url),
       "utf8",

@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { type ReactNode, useEffect } from "react";
 import {
   type AreaVariant,
@@ -42,15 +41,18 @@ function CartesianSeries({
 
   useEffect(() => {
     registerSeries({ dataKey, kind, variant, strokeVariant });
+
     return () => unregisterSeries(dataKey);
   }, [dataKey, kind, variant, strokeVariant, registerSeries, unregisterSeries]);
 
   const band = ctx.bands[dataKey];
+
   if (!ctx.ready || !band) return null;
 
   const seed = ctx.seedOf(dataKey);
   const emphasis = ctx.selectedDataKey ?? ctx.focusDataKey;
   const dimmed = emphasis !== null && emphasis !== dataKey;
+
   const onClick = isClickable
     ? () => ctx.selectDataKey(ctx.selectedDataKey === dataKey ? null : dataKey)
     : undefined;
@@ -59,22 +61,26 @@ function CartesianSeries({
   // selects *that* series. The Legend offers the same toggle accessibly.
   // One pass out along the top edge, one pass back along the floor.
   let hitPath: string | null = null;
+
   if (isClickable) {
     const parts: string[] = [];
     band.forEach((b, i) => {
       parts.push(`${i === 0 ? "M" : "L"}${ctx.xCenter(i)},${ctx.y(b[1])}`);
     });
+
     for (let i = band.length - 1; i >= 0; i -= 1) {
-      parts.push(`L${ctx.xCenter(i)},${ctx.y(band[i][0])}`);
+      const b = band[i];
+
+      if (b) parts.push(`L${ctx.xCenter(i)},${ctx.y(b[0])}`);
     }
+
     hitPath = `${parts.join(" ")} Z`;
   }
 
   return (
     <>
       {hitPath && (
-        // biome-ignore lint/a11y/noStaticElementInteractions: progressive enhancement; the Legend offers the same toggle accessibly
-        <path d={hitPath} fill="transparent" style={{ cursor: "pointer" }} onClick={onClick} />
+        <path d={hitPath} fill="transparent" className="cursor-pointer" onClick={onClick} />
       )}
       <SeriesContext value={{ dataKey, seed, dimmed }}>{children}</SeriesContext>
     </>

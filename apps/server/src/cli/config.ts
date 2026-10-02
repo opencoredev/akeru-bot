@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import * as NetService from "@akeru/shared/Net";
 import { parsePersistedServerObservabilitySettings } from "@akeru/shared/serverSettings";
 import { DesktopBackendBootstrap, PortSchema } from "@akeru/contracts";
@@ -25,6 +26,7 @@ export const PublicOriginFromString = Schema.String.pipe(
     SchemaTransformation.transformOrFail({
       decode: (value) => {
         const url = URL.canParse(value.trim()) ? new URL(value.trim()) : null;
+
         if (
           url &&
           (url.protocol === "https:" || url.protocol === "http:") &&
@@ -36,6 +38,7 @@ export const PublicOriginFromString = Schema.String.pipe(
         ) {
           return Effect.succeed(url.origin);
         }
+
         return Effect.fail(
           new SchemaIssue.InvalidValue({
             message:
@@ -52,41 +55,49 @@ export const modeFlag = Flag.choice("mode", ServerConfig.RuntimeMode.literals).p
   Flag.withDescription("Runtime mode. `desktop` keeps loopback defaults unless overridden."),
   Flag.optional,
 );
+
 export const portFlag = Flag.integer("port").pipe(
   Flag.withSchema(PortSchema),
   Flag.withDescription("Port for the HTTP/WebSocket server."),
   Flag.optional,
 );
+
 export const hostFlag = Flag.string("host").pipe(
   Flag.withDescription("Host/interface to bind (for example 127.0.0.1, 0.0.0.0, or a Tailnet IP)."),
   Flag.optional,
 );
+
 export const baseDirFlag = Flag.string("base-dir").pipe(
   Flag.withDescription(
     "Explicit Akeru Bot data directory; runtime state is stored under userdata (equivalent to AKERU_HOME).",
   ),
   Flag.optional,
 );
+
 export const devUrlFlag = Flag.string("dev-url").pipe(
   Flag.withSchema(Schema.URLFromString),
   Flag.withDescription("Dev web URL to proxy/redirect to (equivalent to VITE_DEV_SERVER_URL)."),
   Flag.optional,
 );
+
 export const noBrowserFlag = Flag.boolean("no-browser").pipe(
   Flag.withDescription("Disable automatic browser opening."),
   Flag.optional,
 );
+
 export const bootstrapFdFlag = Flag.integer("bootstrap-fd").pipe(
   Flag.withSchema(Schema.Int),
   Flag.withDescription("Read one-time bootstrap secrets from the given file descriptor."),
   Flag.optional,
 );
+
 export const autoBootstrapProjectFromCwdFlag = Flag.boolean("auto-bootstrap-project-from-cwd").pipe(
   Flag.withDescription(
     "Create a project for the current working directory on startup when missing.",
   ),
   Flag.optional,
 );
+
 export const logWebSocketEventsFlag = Flag.boolean("log-websocket-events").pipe(
   Flag.withDescription(
     "Emit server-side logs for outbound WebSocket push traffic (equivalent to AKERU_LOG_WS_EVENTS).",
@@ -94,12 +105,14 @@ export const logWebSocketEventsFlag = Flag.boolean("log-websocket-events").pipe(
   Flag.withAlias("log-ws-events"),
   Flag.optional,
 );
+
 export const tailscaleServeFlag = Flag.boolean("tailscale-serve").pipe(
   Flag.withDescription(
     "Configure Tailscale Serve to expose this backend over HTTPS on the Tailnet.",
   ),
   Flag.optional,
 );
+
 export const publicOriginFlag = Flag.string("public-origin").pipe(
   Flag.withSchema(PublicOriginFromString),
   Flag.withDescription(
@@ -107,6 +120,7 @@ export const publicOriginFlag = Flag.string("public-origin").pipe(
   ),
   Flag.optional,
 );
+
 export const tailscaleServePortFlag = Flag.integer("tailscale-serve-port").pipe(
   Flag.withSchema(PortSchema),
   Flag.withDescription("HTTPS port for Tailscale Serve when --tailscale-serve is enabled."),
@@ -115,6 +129,7 @@ export const tailscaleServePortFlag = Flag.integer("tailscale-serve-port").pipe(
 
 const optionalEnv = <A>(read: (name: string) => Config.Config<A>, suffix: string) =>
   aliasedEnv(read, suffix).pipe(Config.map(Option.getOrUndefined));
+
 const envWithDefault = <A>(read: (name: string) => Config.Config<A>, suffix: string, fallback: A) =>
   aliasedEnv(read, suffix).pipe(Config.map(Option.getOrElse(() => fallback)));
 
@@ -214,11 +229,13 @@ const resolveOptionPrecedence = <Value>(
 const loadPersistedObservabilitySettings = Effect.fn(function* (settingsPath: string) {
   const fs = yield* FileSystem.FileSystem;
   const exists = yield* fs.exists(settingsPath).pipe(Effect.orElseSucceed(() => false));
+
   if (!exists) {
     return { otlpTracesUrl: undefined, otlpMetricsUrl: undefined };
   }
 
   const raw = yield* fs.readFileString(settingsPath).pipe(Effect.orElseSucceed(() => ""));
+
   return parsePersistedServerObservabilitySettings(raw);
 });
 
@@ -235,6 +252,7 @@ export const resolveServerConfig = (
     const path = yield* Path.Path;
     const fs = yield* FileSystem.FileSystem;
     const env = yield* EnvServerConfig;
+
     const normalizedFlags = {
       mode: flags.mode ?? Option.none(),
       port: flags.port ?? Option.none(),
@@ -250,11 +268,14 @@ export const resolveServerConfig = (
       tailscaleServePort: flags.tailscaleServePort ?? Option.none(),
       publicOrigin: flags.publicOrigin ?? Option.none(),
     } satisfies CliServerFlags;
+
     const bootstrapFd = Option.getOrUndefined(normalizedFlags.bootstrapFd) ?? env.bootstrapFd;
+
     const bootstrapEnvelope =
       bootstrapFd !== undefined
         ? yield* readBootstrapEnvelope(DesktopBackendBootstrap, bootstrapFd)
         : Option.none();
+
     const bootstrap = Option.getOrUndefined(bootstrapEnvelope);
 
     const mode: ServerConfig.RuntimeMode = Option.getOrElse(
@@ -278,37 +299,47 @@ export const resolveServerConfig = (
           if (mode === "desktop") {
             return Effect.succeed(ServerConfig.DEFAULT_PORT);
           }
+
           return findAvailablePort(ServerConfig.DEFAULT_PORT);
         },
       },
     );
+
     const devUrl = Option.getOrElse(
       resolveOptionPrecedence(normalizedFlags.devUrl, Option.fromUndefinedOr(env.devUrl)),
       () => undefined,
     );
+
     const explicitBaseDir = resolveOptionPrecedence(
       normalizedFlags.baseDir,
       Option.fromUndefinedOr(env.t3Home),
     ).pipe(Option.filter((value) => value.trim().length > 0));
+
     const baseDir = yield* resolveBaseDir(
       Option.getOrUndefined(
         resolveOptionPrecedence(explicitBaseDir, Option.fromUndefinedOr(bootstrap?.t3Home)),
       ),
     );
+
     const rawCwd = Option.getOrElse(normalizedFlags.cwd, () => process.cwd());
     const cwd = path.resolve(yield* expandHomePath(rawCwd.trim()));
     yield* fs.makeDirectory(cwd, { recursive: true });
+
     const derivedPaths = yield* ServerConfig.deriveServerPaths(baseDir, devUrl, {
       baseDirIsExplicit: Option.isSome(explicitBaseDir),
     });
+
     yield* ServerConfig.ensureServerDirectories(derivedPaths);
+
     const persistedObservabilitySettings = yield* loadPersistedObservabilitySettings(
       derivedPaths.settingsPath,
     );
+
     const serverTracePath = env.traceFile ?? derivedPaths.serverTracePath;
     yield* fs.makeDirectory(path.dirname(serverTracePath), { recursive: true });
     const startupPresentation = options?.startupPresentation ?? "browser";
     const isHeadlessStartup = startupPresentation === "headless";
+
     const noBrowser = Option.getOrElse(
       resolveOptionPrecedence(
         isHeadlessStartup ? Option.some(true) : Option.none(),
@@ -318,10 +349,12 @@ export const resolveServerConfig = (
       ),
       () => mode === "desktop",
     );
+
     const desktopBootstrapToken = bootstrap?.desktopBootstrapToken;
     const desktopTelemetryFd = bootstrap?.desktopTelemetryFd;
     const desktopTelemetryControlFd = bootstrap?.desktopTelemetryControlFd;
     const resourceMonitorPath = bootstrap?.resourceMonitorPath;
+
     const autoBootstrapProjectFromCwd = Option.getOrElse(
       resolveOptionPrecedence(
         Option.fromUndefinedOr(options?.forceAutoBootstrapProjectFromCwd),
@@ -331,6 +364,7 @@ export const resolveServerConfig = (
       ),
       () => mode === "web",
     );
+
     const logWebSocketEvents = Option.getOrElse(
       resolveOptionPrecedence(
         normalizedFlags.logWebSocketEvents,
@@ -338,6 +372,7 @@ export const resolveServerConfig = (
       ),
       () => Boolean(devUrl),
     );
+
     const tailscaleServeEnabled = Option.getOrElse(
       resolveOptionPrecedence(
         normalizedFlags.tailscaleServeEnabled,
@@ -346,6 +381,7 @@ export const resolveServerConfig = (
       ),
       () => false,
     );
+
     const tailscaleServePort = Option.getOrElse(
       resolveOptionPrecedence(
         normalizedFlags.tailscaleServePort,
@@ -354,7 +390,9 @@ export const resolveServerConfig = (
       ),
       () => 443,
     );
+
     const staticDir = devUrl ? undefined : yield* ServerConfig.resolveStaticDir();
+
     const host = Option.getOrElse(
       resolveOptionPrecedence(
         normalizedFlags.host,
@@ -363,12 +401,14 @@ export const resolveServerConfig = (
       ),
       () => (mode === "desktop" ? "127.0.0.1" : undefined),
     );
+
     const publicOrigin = Option.getOrUndefined(
       resolveOptionPrecedence(
         normalizedFlags.publicOrigin,
         Option.fromUndefinedOr(env.publicOrigin),
       ),
     );
+
     const logLevel = Option.getOrElse(cliLogLevel, () => env.logLevel);
 
     const config: ServerConfig.ServerConfig["Service"] = {
@@ -440,18 +480,23 @@ const DurationShorthandPattern = /^(?<value>\d+)(?<unit>ms|s|m|h|d|w)$/i;
 
 const parseDurationInput = (value: string): Duration.Duration | null => {
   const trimmed = value.trim();
+
   if (trimmed.length === 0) return null;
 
   const shorthand = DurationShorthandPattern.exec(trimmed);
+
+  // SAFETY: Duration.fromInput performs runtime parsing; the string may be invalid and is rejected by its Option result.
   const normalizedInput = shorthand?.groups
     ? (() => {
         const amountText = shorthand.groups.value;
         const unitText = shorthand.groups.unit;
-        if (typeof amountText !== "string" || typeof unitText !== "string") {
+
+        if (!Predicate.isString(amountText) || !Predicate.isString(unitText)) {
           return null;
         }
 
         const amount = Number.parseInt(amountText, 10);
+
         if (!Number.isFinite(amount)) return null;
 
         switch (unitText.toLowerCase()) {
@@ -475,7 +520,9 @@ const parseDurationInput = (value: string): Duration.Duration | null => {
 
   if (normalizedInput === null) return null;
 
+  // SAFETY: Duration.fromInput performs runtime parsing; the string may be invalid and is rejected by its Option result.
   const decoded = Duration.fromInput(normalizedInput as Duration.Input);
+
   return Option.isSome(decoded) ? decoded.value : null;
 };
 
@@ -485,9 +532,11 @@ export const DurationFromString = Schema.String.pipe(
     SchemaTransformation.transformOrFail({
       decode: (value) => {
         const duration = parseDurationInput(value);
+
         if (duration !== null) {
           return Effect.succeed(duration);
         }
+
         return Effect.fail(
           new SchemaIssue.InvalidValue({
             message: "Invalid duration. Use values like 5m, 1h, 30d, or 15 minutes.",

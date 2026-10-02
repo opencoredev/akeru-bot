@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import type { ESTree } from "@oxlint/plugins";
 import * as Option from "effect/Option";
 
@@ -10,10 +11,8 @@ type ExpressionWrapper =
 
 type AstNode = ESTree.Node;
 
-const asAstNode = (node: unknown): Option.Option<AstNode> =>
-  typeof node === "object" && node !== null && "type" in node && typeof node.type === "string"
-    ? Option.some(node as AstNode)
-    : Option.none();
+const asAstNode = (node: AstNode | null | undefined): Option.Option<AstNode> =>
+  Option.fromNullishOr(node);
 
 const isExpressionWrapper = (node: AstNode): node is ExpressionWrapper =>
   node.type === "ChainExpression" ||
@@ -22,7 +21,7 @@ const isExpressionWrapper = (node: AstNode): node is ExpressionWrapper =>
   node.type === "TSAsExpression" ||
   node.type === "TSTypeAssertion";
 
-export function unwrapExpression(node: unknown): Option.Option<AstNode> {
+export function unwrapExpression(node: AstNode | null | undefined): Option.Option<AstNode> {
   let current = asAstNode(node);
 
   while (Option.isSome(current) && isExpressionWrapper(current.value)) {
@@ -32,17 +31,20 @@ export function unwrapExpression(node: unknown): Option.Option<AstNode> {
   return current;
 }
 
-export function getPropertyName(node: unknown): Option.Option<string> {
+export function getPropertyName(node: AstNode | null | undefined): Option.Option<string> {
   return Option.flatMap(asAstNode(node), (expression) => {
-    if (expression.type === "Identifier" && typeof expression.name === "string") {
+    if (expression.type === "Identifier") {
       return Option.some(expression.name);
     }
-    if (expression.type === "PrivateIdentifier" && typeof expression.name === "string") {
+
+    if (expression.type === "PrivateIdentifier") {
       return Option.some(expression.name);
     }
-    if (expression.type === "Literal" && typeof expression.value === "string") {
+
+    if (expression.type === "Literal" && Predicate.isString(expression.value)) {
       return Option.some(expression.value);
     }
+
     return Option.none();
   });
 }
@@ -50,9 +52,10 @@ export function getPropertyName(node: unknown): Option.Option<string> {
 export function isIdentifier(node: Option.Option<AstNode>, name?: string): boolean {
   if (Option.isNone(node)) return false;
   const expression = node.value;
+
   return (
     expression.type === "Identifier" &&
-    typeof expression.name === "string" &&
+    Predicate.isString(expression.name) &&
     (name === undefined || expression.name === name)
   );
 }

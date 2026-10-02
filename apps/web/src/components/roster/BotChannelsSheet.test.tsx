@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 import { AuthAccessWriteScope, type ChannelBinding } from "@akeru/contracts";
 import * as Cause from "effect/Cause";
 import type { ReactNode } from "react";
@@ -27,6 +28,7 @@ vi.mock("@effect/atom-react", () => ({
       ? fixtures.bots
       : { projects: fixtures.projects, threads: fixtures.threads, bots: fixtures.bots },
 }));
+
 vi.mock("../../state/bots", () => ({
   environmentBotsAtom: () => "bots",
   botEnvironment: {
@@ -39,28 +41,37 @@ vi.mock("../../state/bots", () => ({
     },
   },
 }));
+
 vi.mock("../../state/shell", () => ({ environmentSnapshotAtom: () => "snapshot" }));
+
 vi.mock("../../state/environments", () => ({ usePrimaryEnvironmentId: () => "environment-1" }));
+
 vi.mock("../../state/use-atom-command", () => ({
   useAtomCommand: (command: keyof typeof fixtures.commands) => fixtures.commands[command],
 }));
+
 vi.mock("../../hooks/useSettings", () => ({
   usePrimarySettings: () => [
     { id: "profile-1", name: "Fixture line", provider: "telegram", externalIdentity: null },
   ],
 }));
+
 vi.mock("../../settingsDialogStore", () => ({
   openSettings: fixtures.openSettings,
 }));
+
 vi.mock("../ui/toast", () => ({ toastManager: { add: fixtures.toast } }));
+
 vi.mock("../../state/session", () => ({
   useEnvironmentSessionState: () => ({
     isPending: false,
     data: { authenticated: true, scopes: fixtures.scopes },
   }),
 }));
+
 vi.mock("../ui/sheet", () => {
   const Pass = ({ children }: { children?: ReactNode }) => <div>{children}</div>;
+
   return {
     Sheet: Pass,
     SheetDescription: Pass,
@@ -71,9 +82,11 @@ vi.mock("../ui/sheet", () => {
     SheetTitle: Pass,
   };
 });
+
 vi.mock("../ui/button", () => ({
   Button: (props: { children: ReactNode; onClick?: () => void; disabled?: boolean }) => {
-    if (typeof props.children === "string") fixtures.buttons.set(props.children, props);
+    if (Predicate.isString(props.children)) fixtures.buttons.set(props.children, props);
+
     return <button disabled={props.disabled}>{props.children}</button>;
   },
 }));
@@ -109,9 +122,11 @@ describe("BotChannelsSheet project selection", () => {
     fixtures.scopes = [AuthAccessWriteScope];
     fixtures.toast.mockReset();
     fixtures.openSettings.mockReset();
+
     for (const command of Object.values(fixtures.commands)) {
       command.mockReset().mockResolvedValue({ _tag: "Success" });
     }
+
     fixtures.bots = [];
     fixtures.threads = [];
     fixtures.projects = [
@@ -176,9 +191,11 @@ describe("BotChannelsSheet health and repair", () => {
     fixtures.scopes = [AuthAccessWriteScope];
     fixtures.toast.mockReset();
     fixtures.openSettings.mockReset();
+
     for (const command of Object.values(fixtures.commands)) {
       command.mockReset().mockResolvedValue({ _tag: "Success" });
     }
+
     fixtures.threads = [];
     fixtures.projects = [
       { id: "project-1", title: "First", updatedAt: "2026-09-01T00:00:00.000Z" },
@@ -240,6 +257,7 @@ describe("BotChannelsSheet health and repair", () => {
   it("offers no repair when delivery is unknown and the provider has no console", () => {
     own("connected", "delivery-unknown");
     render();
+
     for (const label of ["Reconnect", "Update credentials", "Connect", "Check the channel"]) {
       expect(fixtures.buttons.has(label)).toBe(false);
     }

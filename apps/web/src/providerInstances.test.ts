@@ -1,321 +1,19 @@
-import { ProviderDriverKind, ProviderInstanceId, type ServerProvider } from "@akeru/contracts";
+import * as Predicate from "effect/Predicate";
+import { ProviderDriverKind, ProviderInstanceId } from "@akeru/contracts";
 import { describe, expect, it } from "vite-plus/test";
 import {
-  applyProviderInstanceSettings,
-  deriveProviderEntriesByEnvironment,
   deriveProviderInstanceEntries,
   getDefaultProviderInstanceModel,
-  isProviderInstancePickerReady,
-  isProviderInstancePickerSelectable,
-  isProviderInstancePickerVisible,
-  providerInstancePickerBlockReason,
-  providerInstanceUnavailableReason,
   resolveDefaultProviderModelSelection,
   resolveSelectableProviderInstance,
   resolveProviderDriverKindForInstanceSelection,
 } from "./providerInstances";
-
-function provider(input: {
-  provider: ProviderDriverKind;
-  instanceId: string;
-  enabled?: boolean;
-  installed?: boolean;
-  availability?: ServerProvider["availability"];
-  authStatus?: ServerProvider["auth"]["status"];
-  displayName?: string;
-  accentColor?: string;
-  status?: ServerProvider["status"];
-  models?: ServerProvider["models"];
-}): ServerProvider {
-  return {
-    instanceId: ProviderInstanceId.make(input.instanceId),
-    driver: input.provider,
-    ...(input.displayName ? { displayName: input.displayName } : {}),
-    ...(input.accentColor ? { accentColor: input.accentColor } : {}),
-    enabled: input.enabled ?? true,
-    installed: input.installed ?? true,
-    version: null,
-    status: input.status ?? "ready",
-    ...(input.availability ? { availability: input.availability } : {}),
-    auth: { status: input.authStatus ?? "authenticated" },
-    checkedAt: "2026-01-01T00:00:00.000Z",
-    models: input.models ?? [],
-    slashCommands: [],
-    skills: [],
-  };
-}
-
-const model = (slug: string, isCustom = false, isDefault = false) => ({
-  slug,
-  name: slug,
-  isCustom,
-  ...(isDefault ? { isDefault: true } : {}),
-  capabilities: {},
-});
-
-describe("isProviderInstancePickerReady", () => {
-  it("rejects a disabled instance even while its last probe status is ready", () => {
-    const [entry] = deriveProviderInstanceEntries([
-      provider({
-        provider: ProviderDriverKind.make("codex"),
-        instanceId: "codex",
-        enabled: false,
-      }),
-    ]);
-
-    expect(entry?.status).toBe("ready");
-    expect(entry && isProviderInstancePickerReady(entry)).toBe(false);
-  });
-
-  it("accepts an enabled, available, ready instance", () => {
-    const [entry] = deriveProviderInstanceEntries([
-      provider({ provider: ProviderDriverKind.make("codex"), instanceId: "codex" }),
-    ]);
-
-    expect(entry && isProviderInstancePickerReady(entry)).toBe(true);
-  });
-});
-
-describe("isProviderInstancePickerSelectable", () => {
-  it("keeps installed provider models selectable while the probe is limited", () => {
-    const [entry] = deriveProviderInstanceEntries([
-      provider({
-        provider: ProviderDriverKind.make("grok"),
-        instanceId: "grok",
-        status: "warning",
-        models: [model("grok-build")],
-      }),
-    ]);
-
-    expect(entry && isProviderInstancePickerSelectable(entry)).toBe(true);
-  });
-
-  it("rejects missing and explicitly unauthenticated providers", () => {
-    const [missing, unauthenticated] = deriveProviderInstanceEntries([
-      provider({
-        provider: ProviderDriverKind.make("grok"),
-        instanceId: "grok_missing",
-        installed: false,
-      }),
-      provider({
-        provider: ProviderDriverKind.make("grok"),
-        instanceId: "grok_signed_out",
-        authStatus: "unauthenticated",
-      }),
-    ]);
-
-    expect(missing && isProviderInstancePickerSelectable(missing)).toBe(false);
-    expect(unauthenticated && isProviderInstancePickerSelectable(unauthenticated)).toBe(false);
-  });
-
-  it("rejects disabled provider snapshots with explicit or omitted availability", () => {
-    const [available, availabilityOmitted] = deriveProviderInstanceEntries([
-      provider({
-        provider: ProviderDriverKind.make("grok"),
-        instanceId: "grok_available",
-        status: "disabled",
-        availability: "available",
-      }),
-      provider({
-        provider: ProviderDriverKind.make("grok"),
-        instanceId: "grok_availability_omitted",
-        status: "disabled",
-      }),
-    ]);
-
-    expect(available && isProviderInstancePickerSelectable(available)).toBe(false);
-    expect(availabilityOmitted && isProviderInstancePickerSelectable(availabilityOmitted)).toBe(
-      false,
-    );
-  });
-});
-
-describe("isProviderInstancePickerVisible", () => {
-  it("shows disabled instances with known models so their reason remains visible", () => {
-    const [enabledEntry, disabledEntry, missingEntry, signedOutEntry] =
-      deriveProviderInstanceEntries([
-        provider({ provider: ProviderDriverKind.make("codex"), instanceId: "codex" }),
-        provider({
-          provider: ProviderDriverKind.make("claudeAgent"),
-          instanceId: "claudeAgent",
-          enabled: false,
-          models: [model("sonnet")],
-        }),
-        provider({
-          provider: ProviderDriverKind.make("kimi"),
-          instanceId: "kimi",
-          installed: false,
-        }),
-        provider({
-          provider: ProviderDriverKind.make("opencodeGo"),
-          instanceId: "opencodeGo",
-          authStatus: "unauthenticated",
-        }),
-      ]);
-
-    expect(enabledEntry && isProviderInstancePickerVisible(enabledEntry)).toBe(true);
-    expect(disabledEntry && isProviderInstancePickerVisible(disabledEntry)).toBe(true);
-    expect(disabledEntry && isProviderInstancePickerSelectable(disabledEntry)).toBe(false);
-    expect(disabledEntry && providerInstancePickerBlockReason(disabledEntry)).toContain(
-      "turned off",
-    );
-    expect(missingEntry && isProviderInstancePickerVisible(missingEntry)).toBe(true);
-    expect(signedOutEntry && isProviderInstancePickerVisible(signedOutEntry)).toBe(true);
-    expect(signedOutEntry && isProviderInstancePickerSelectable(signedOutEntry)).toBe(false);
-  });
-});
-
-describe("providerInstanceUnavailableReason", () => {
-  it("names the provider and the next action for each blocking state", () => {
-    const [ready, signedOut, missing, limited, flaky] = deriveProviderInstanceEntries([
-      provider({ provider: ProviderDriverKind.make("codex"), instanceId: "codex" }),
-      provider({
-        provider: ProviderDriverKind.make("claudeAgent"),
-        instanceId: "claudeAgent",
-        authStatus: "unauthenticated",
-      }),
-      provider({
-        provider: ProviderDriverKind.make("kimi"),
-        instanceId: "kimi",
-        installed: false,
-      }),
-      {
-        ...provider({ provider: ProviderDriverKind.make("grok"), instanceId: "grok" }),
-        unavailability: "limit-reached",
-      },
-      {
-        ...provider({ provider: ProviderDriverKind.make("opencodeGo"), instanceId: "opencodeGo" }),
-        unavailability: "temporary-failure",
-      },
-    ]);
-
-    expect(providerInstanceUnavailableReason(ready)).toBeNull();
-    expect(providerInstanceUnavailableReason(signedOut)).toMatch(
-      /not connected.*Settings > Providers/,
-    );
-    expect(providerInstanceUnavailableReason(missing)).toMatch(/not installed/);
-    expect(providerInstanceUnavailableReason(limited)).toMatch(/limit reached/);
-    expect(providerInstanceUnavailableReason(undefined, { providerName: "Codex" })).toMatch(
-      /Codex is not set up/,
-    );
-
-    expect(limited && providerInstancePickerBlockReason(limited)).toMatch(/limit reached/);
-    expect(flaky && providerInstancePickerBlockReason(flaky)).toBeNull();
-    expect(flaky && isProviderInstancePickerSelectable(flaky)).toBe(true);
-  });
-
-  it("flags a saved model the provider no longer offers", () => {
-    const [entry] = deriveProviderInstanceEntries([
-      provider({
-        provider: ProviderDriverKind.make("codex"),
-        instanceId: "codex",
-        models: [model("gpt-5.5")],
-      }),
-    ]);
-    expect(providerInstanceUnavailableReason(entry, { model: "gpt-5.5" })).toBeNull();
-    expect(providerInstanceUnavailableReason(entry, { model: "retired-model" })).toMatch(
-      /retired-model is not available on/,
-    );
-  });
-});
-
-describe("applyProviderInstanceSettings", () => {
-  it("uses settings when a streamed snapshot still reports a disabled default as enabled", () => {
-    const entries = deriveProviderInstanceEntries([
-      provider({ provider: ProviderDriverKind.make("codex"), instanceId: "codex" }),
-    ]);
-    const [entry] = applyProviderInstanceSettings(entries, {
-      providerInstances: {
-        [ProviderInstanceId.make("codex")]: {
-          driver: ProviderDriverKind.make("codex"),
-          enabled: false,
-        },
-      },
-      providers: {} as never,
-    });
-
-    expect(entry?.enabled).toBe(false);
-  });
-
-  it("treats a removed custom instance snapshot as disabled", () => {
-    const entries = deriveProviderInstanceEntries([
-      provider({
-        provider: ProviderDriverKind.make("claudeAgent"),
-        instanceId: "claude_work",
-      }),
-    ]);
-    const [entry] = applyProviderInstanceSettings(entries, {
-      providerInstances: {},
-      providers: {} as never,
-    });
-
-    expect(entry?.enabled).toBe(false);
-  });
-});
-
-describe("deriveProviderInstanceEntries", () => {
-  it("uses explicit instance id and driver kind from the snapshot", () => {
-    const snapshot = provider({
-      provider: ProviderDriverKind.make("codex"),
-      instanceId: "codex_personal",
-    });
-    const [entry] = deriveProviderInstanceEntries([snapshot]);
-
-    expect(entry?.instanceId).toBe("codex_personal");
-    expect(entry?.driverKind).toBe("codex");
-    expect(entry?.isDefault).toBe(false);
-  });
-});
-
-describe("deriveProviderEntriesByEnvironment", () => {
-  it("keeps same-id default instances distinct per environment", () => {
-    const byEnvironment = deriveProviderEntriesByEnvironment([
-      [
-        "local",
-        [
-          provider({
-            provider: ProviderDriverKind.make("claude"),
-            instanceId: "claude",
-            displayName: "Claude Local",
-            accentColor: "#112233",
-          }),
-        ],
-      ],
-      [
-        "remote",
-        [
-          provider({
-            provider: ProviderDriverKind.make("claude"),
-            instanceId: "claude",
-            displayName: "Claude Remote",
-            accentColor: "#445566",
-          }),
-        ],
-      ],
-    ]);
-
-    expect(byEnvironment.get("local")?.get("claude")?.displayName).toBe("Claude Local");
-    expect(byEnvironment.get("local")?.get("claude")?.accentColor).toBe("#112233");
-    expect(byEnvironment.get("remote")?.get("claude")?.displayName).toBe("Claude Remote");
-    expect(byEnvironment.get("remote")?.get("claude")?.accentColor).toBe("#445566");
-  });
-
-  it("never falls back to another environment's instances", () => {
-    const byEnvironment = deriveProviderEntriesByEnvironment([
-      ["local", [provider({ provider: ProviderDriverKind.make("codex"), instanceId: "codex" })]],
-      ["empty", []],
-    ]);
-
-    expect(byEnvironment.get("empty")?.get("codex")).toBeUndefined();
-    // Every environment gets its own bucket, so an absent lookup is a real
-    // "this environment has no such instance", not a missing key.
-    expect(byEnvironment.get("empty")?.size).toBe(0);
-  });
-});
+import { provider, model } from "./providerInstances.test-support";
 
 describe("resolveSelectableProviderInstance", () => {
   it("returns the requested instance when it is enabled and available", () => {
     const requested = ProviderInstanceId.make("claude_work");
+
     const providers = [
       provider({ provider: ProviderDriverKind.make("codex"), instanceId: "codex" }),
       provider({ provider: ProviderDriverKind.make("claudeAgent"), instanceId: requested }),
@@ -327,6 +25,7 @@ describe("resolveSelectableProviderInstance", () => {
   it("falls back to the first enabled and available instance", () => {
     const disabled = ProviderInstanceId.make("codex");
     const fallback = ProviderInstanceId.make("claudeAgent");
+
     const providers = [
       provider({
         provider: ProviderDriverKind.make("codex"),
@@ -342,6 +41,7 @@ describe("resolveSelectableProviderInstance", () => {
   it("prefers a ready instance over an enabled one whose driver cannot start", () => {
     const notInstalled = ProviderInstanceId.make("codex");
     const ready = ProviderInstanceId.make("claudeAgent");
+
     const providers = [
       provider({
         provider: ProviderDriverKind.make("codex"),
@@ -357,6 +57,7 @@ describe("resolveSelectableProviderInstance", () => {
   it("prefers an unprobed (warning) instance over one whose probe errored", () => {
     const notInstalled = ProviderInstanceId.make("codex");
     const unprobed = ProviderInstanceId.make("claudeAgent");
+
     const providers = [
       provider({
         provider: ProviderDriverKind.make("codex"),
@@ -375,6 +76,7 @@ describe("resolveSelectableProviderInstance", () => {
 
   it("keeps a requested instance even when its probe errored", () => {
     const requested = ProviderInstanceId.make("codex");
+
     const providers = [
       provider({
         provider: ProviderDriverKind.make("codex"),
@@ -389,6 +91,7 @@ describe("resolveSelectableProviderInstance", () => {
 
   it("does not invent an errored instance as a new-user default", () => {
     const notInstalled = ProviderInstanceId.make("codex");
+
     const providers = [
       provider({
         provider: ProviderDriverKind.make("codex"),
@@ -404,6 +107,7 @@ describe("resolveSelectableProviderInstance", () => {
     const disabled = ProviderInstanceId.make("codex");
     const unavailable = ProviderInstanceId.make("claudeAgent");
     const unknown = ProviderInstanceId.make("removed_instance");
+
     const providers = [
       provider({
         provider: ProviderDriverKind.make("codex"),
@@ -433,6 +137,7 @@ describe("resolveProviderDriverKindForInstanceSelection", () => {
         displayName: "Claude OpenRouter",
       }),
     ];
+
     const entries = deriveProviderInstanceEntries(providers);
 
     expect(
@@ -449,6 +154,7 @@ describe("resolveProviderDriverKindForInstanceSelection", () => {
       provider({ provider: ProviderDriverKind.make("codex"), instanceId: "codex", enabled: false }),
       provider({ provider: ProviderDriverKind.make("claudeAgent"), instanceId: "claudeAgent" }),
     ];
+
     const entries = deriveProviderInstanceEntries(providers);
 
     expect(
@@ -490,7 +196,8 @@ describe("getDefaultProviderInstanceModel", () => {
       providers,
       ProviderInstanceId.make("claudeAgent"),
     );
-    expect(typeof resolved).toBe("string");
+
+    expect(Predicate.isString(resolved)).toBe(true);
     expect(resolved?.length).toBeGreaterThan(0);
   });
 
@@ -543,6 +250,7 @@ describe("resolveDefaultProviderModelSelection", () => {
         models: [model("claude-opus-4-8")],
       }),
     ];
+
     const stored = {
       instanceId: ProviderInstanceId.make("claudeAgent"),
       model: "custom-model",

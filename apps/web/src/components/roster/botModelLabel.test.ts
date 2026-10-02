@@ -28,6 +28,7 @@ const providers = [
     { slug: "gpt-6-sol", name: "GPT-6-Sol", isDefault: true },
   ]),
 ];
+
 // The app's text-generation default differs from the model a bot chat sends.
 const settings: UnifiedSettings = {
   ...DEFAULT_UNIFIED_SETTINGS,

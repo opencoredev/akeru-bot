@@ -1,360 +1,71 @@
-// @effect-diagnostics globalDate:off
+import type { AkeruToolResult } from "./tools/AkeruToolTypes.ts";
+import * as Match from "effect/Match";
+import * as Predicate from "effect/Predicate";
+import { decodeAkeruRuntimeToolInput } from "./tools/AkeruToolInputs.ts";
 import { RequestContext } from "@mastra/core/request-context";
-import { createWorkspaceTools, type Workspace } from "@mastra/core/workspace";
 import {
-  type AkeruDelegationAccessGrant,
-  type AkeruMemoryTargetScope,
-  AkeruToolInputSchemas,
-  type BotId,
-  type AkeruToolDefinition,
+  AKERU_TOOL_CATALOG,
   type AkeruToolId,
   type AkeruToolReceipt,
-  type AkeruToolWorkspaceType,
-  type AkeruWorkerStatus,
-  type RuntimeMode,
   ThreadId,
   akeruToolApprovalForInput,
   akeruToolRequiresApproval,
-  decodeAkeruToolInput,
   filterAkeruTools,
   AkeruDelegationContextTooLongError,
   AkeruDelegationProviderUnsupportedError,
 } from "@akeru/contracts";
 import * as DateTime from "effect/DateTime";
 import * as Schema from "effect/Schema";
-
-import type { UserActionIncidentInput } from "../bot-inbox/userActionIncidents.ts";
 import { redactComputerScreenshot } from "../mcp/PreviewSnapshotRedaction.ts";
 import {
   AKERU_MEMORY_TOOL_DESCRIPTION,
-  AkeruMemoryToolInputSchema,
-  type AkeruMemoryToolHandler,
   type AkeruMemoryToolId,
 } from "../memory/BotMemoryToolHandlers.ts";
-import type { AkeruCatalogToolHandler } from "./AkeruCatalogToolHandlers.ts";
-import type { AkeruBotStateRuntime } from "./AkeruBotStateRuntime.ts";
+import {
+  type AkeruRuntimeToolDefinition,
+  type AkeruToolRuntimeOptions,
+  type AkeruToolRuntime,
+  type AkeruToolSession,
+  type AkeruRuntimeToolId,
+  type AkeruToolExecution,
+} from "./tools/AkeruToolTypes.ts";
+import {
+  ensureWorkspaceCwd,
+  APPROVAL_RANK,
+  canonicalInput,
+  requiredString,
+  field,
+} from "./tools/AkeruToolAuthorization.ts";
+import {
+  workspaceForTool,
+  toolsForWorkspace,
+  BACKEND_NAMES,
+  executable,
+} from "./tools/AkeruWorkspaceTools.ts";
 
-export type AkeruRuntimeToolId = AkeruToolId | AkeruMemoryToolId;
+const isDelegationContextTooLong = Schema.is(AkeruDelegationContextTooLongError);
 
-export interface AkeruRuntimeToolDefinition {
-  readonly id: AkeruRuntimeToolId;
-  readonly description: string;
-}
+const isDelegationProviderUnsupported = Schema.is(AkeruDelegationProviderUnsupportedError);
 
 const MEMORY_TOOL_DEFINITIONS = [
   { id: "memory", description: AKERU_MEMORY_TOOL_DESCRIPTION },
 ] as const satisfies ReadonlyArray<AkeruRuntimeToolDefinition>;
 
-const MEMORY_TOOL_INPUT_DECODERS = {
-  memory: Schema.decodeUnknownSync(AkeruMemoryToolInputSchema),
-} as const;
-
 export function isMemoryToolId(toolId: string): toolId is AkeruMemoryToolId {
   return toolId === "memory";
-}
-
-export interface AkeruToolSession {
-  readonly botId?: BotId;
-  readonly botName?: string;
-  readonly billedBotId?: BotId;
-  readonly runtimeMode: RuntimeMode;
-  readonly workspaceType: AkeruToolWorkspaceType;
-  readonly timezone?: string;
-  readonly workspace?: Workspace;
-  readonly userComputerWorkspace?: Workspace;
-  readonly memoryHandlers?: Record<AkeruMemoryToolId, AkeruMemoryToolHandler>;
-  readonly delegation?: {
-    readonly depth: number;
-    readonly activeDelegations: number;
-    readonly access: AkeruDelegationAccessGrant;
-    readonly create?: (
-      input: (typeof AkeruToolInputSchemas.CreateAgent)["Type"],
-    ) => Promise<unknown>;
-    readonly check?: (input: (typeof AkeruToolInputSchemas.CheckAgent)["Type"]) => Promise<unknown>;
-    readonly send: (input: (typeof AkeruToolInputSchemas.SendToAgent)["Type"]) => Promise<unknown>;
-    readonly stop?: (input: (typeof AkeruToolInputSchemas.StopAgent)["Type"]) => Promise<unknown>;
-  };
-  /** Temporary workers owned by this bot turn. Worker threads never get this. */
-  readonly workers?: {
-    readonly depth: number;
-    readonly spawn: (
-      input: (typeof AkeruToolInputSchemas.Task)["Type"],
-    ) => Promise<AkeruWorkerStatus>;
-    readonly check: (
-      input: (typeof AkeruToolInputSchemas.CheckSubagent)["Type"],
-    ) => Promise<AkeruWorkerStatus>;
-    readonly message: (
-      input: (typeof AkeruToolInputSchemas.MessageSubagent)["Type"],
-    ) => Promise<AkeruWorkerStatus>;
-    readonly stop: (
-      input: (typeof AkeruToolInputSchemas.StopSubagent)["Type"],
-    ) => Promise<AkeruWorkerStatus>;
-  };
-  readonly channels?: {
-    readonly create: (
-      input: (typeof AkeruToolInputSchemas.CreateChannel)["Type"],
-    ) => Promise<string>;
-    readonly update: (
-      input: (typeof AkeruToolInputSchemas.UpdateChannel)["Type"],
-    ) => Promise<string>;
-  };
-  readonly sendToUser?: (
-    input: (typeof AkeruToolInputSchemas.SendToUser)["Type"],
-  ) => Promise<AkeruToolReceipt>;
-  readonly botState?: Pick<AkeruBotStateRuntime, "updateProfile">;
-  readonly reactToMessage?: (
-    input: (typeof AkeruToolInputSchemas.ReactToMessage)["Type"],
-    toolCallId: string,
-  ) => Promise<unknown>;
-  readonly catalogHandlers?: Partial<Record<AkeruToolId, AkeruCatalogToolHandler>>;
-  /** Image providers enabled in Settings; gates the GenerateImage tool. */
-  readonly imageGeneration?: { readonly chatgptEnabled: boolean; readonly grokEnabled: boolean };
-}
-
-export interface AkeruToolRuntimeOptions {
-  readonly onUserActionRequired?: (input: UserActionIncidentInput) => void | Promise<void>;
-  readonly onReceipt?: (receipt: AkeruToolReceipt) => void;
-  readonly onProgress?: (input: {
-    readonly threadId: string;
-    readonly toolId: AkeruToolId;
-    readonly toolCallId: string;
-    readonly summary: string;
-    readonly authorizationUrl?: string;
-  }) => void | Promise<void>;
-  readonly now?: () => string;
-  readonly onToolStart?: (input: AkeruToolExecution, session: AkeruToolSession) => Promise<void>;
-  readonly onToolFinish?: (input: AkeruToolExecution, session: AkeruToolSession) => Promise<void>;
-}
-
-export interface AkeruToolExecution {
-  readonly threadId: string;
-  readonly toolId: AkeruRuntimeToolId;
-  readonly toolCallId: string;
-  readonly input: unknown;
-  readonly approvalMode: "require-grant";
-}
-
-export interface AkeruToolRuntime {
-  readonly registerSession: (threadId: string, session: AkeruToolSession) => void;
-  readonly unregisterSession: (threadId: string) => void;
-  readonly clearApprovals: (threadId: string) => void;
-  readonly toolsForThread: (threadId: string) => ReadonlyArray<AkeruRuntimeToolDefinition>;
-  readonly requiresApproval: (
-    threadId: string,
-    toolId: AkeruRuntimeToolId,
-    input: unknown,
-  ) => Promise<boolean>;
-  readonly grantApproval: (input: Omit<AkeruToolExecution, "approvalMode">) => void;
-  readonly execute: (input: AkeruToolExecution) => Promise<unknown>;
-}
-
-const BACKEND_NAMES: Record<
-  Exclude<
-    AkeruToolId,
-    | "CopyToBox"
-    | "CopyFromBox"
-    | "request_box_help"
-    | "CreateAgent"
-    | "CheckAgent"
-    | "MessageAgent"
-    | "StopAgent"
-    | "SendToAgent"
-    | "Task"
-    | "CheckSubagent"
-    | "MessageSubagent"
-    | "StopSubagent"
-    | "CreateChannel"
-    | "UpdateChannel"
-    | "SendToUser"
-    | "UpdateBotProfile"
-    | "SearchPlugins"
-    | "GetPlugin"
-    | "ReactToMessage"
-    | "InstallPlugin"
-    | "UninstallPlugin"
-    | "GetMcpServerStatus"
-    | "TestMcpServer"
-    | "ReconnectMcpServer"
-    | "AuthenticateMcpServer"
-    | "RestartMcpServers"
-    | "WebSearch"
-    | "WebFetch"
-    | "GenerateImage"
-    | "generate_image"
-    | "AddMcpServer"
-    | "UninstallMcpServer"
-    | "RemoveMcpAccount"
-    | "RenameMcpAccount"
-    | "SetMcpInstructions"
-  >,
-  ReadonlyArray<string>
-> = {
-  Shell: ["execute_command", "mastra_workspace_execute_command"],
-  Read: ["view", "mastra_workspace_read_file"],
-  Screenshot: ["mastra_workspace_computer_screenshot"],
-  ExternalShell: ["execute_command", "mastra_workspace_execute_command"],
-  ExternalRead: ["view", "mastra_workspace_read_file"],
-  AwaitShell: ["get_process_output", "mastra_workspace_get_process_output"],
-  AwaitExternalShell: ["get_process_output", "mastra_workspace_get_process_output"],
-};
-
-function field(value: unknown, key: string): unknown {
-  if (typeof value !== "object" || value === null) return undefined;
-  return Object.getOwnPropertyDescriptor(value, key)?.value;
-}
-
-function requiredString(value: unknown, key: string): string {
-  const candidate = field(value, key);
-  if (typeof candidate !== "string" || candidate.length === 0) {
-    throw new Error(`Tool input field '${key}' is required.`);
-  }
-  return candidate;
-}
-
-function canonicalInput(value: unknown): string {
-  if (Array.isArray(value)) return `[${value.map(canonicalInput).join(",")}]`;
-  if (typeof value === "object" && value !== null) {
-    return `{${Object.keys(value)
-      .filter((key) => field(value, key) !== undefined)
-      .sort()
-      .map((key) => `${JSON.stringify(key)}:${canonicalInput(field(value, key))}`)
-      .join(",")}}`;
-  }
-  return JSON.stringify(value) ?? "undefined";
-}
-
-function ensureWorkspaceCwd(toolId: AkeruToolId, input: unknown): void {
-  if (toolId !== "Shell" && toolId !== "ExternalShell") return;
-  const cwd = field(input, "cwd");
-  if (cwd === undefined) return;
-  if (typeof cwd !== "string") throw new Error(`Tool '${toolId}' cwd must be a relative path.`);
-  if (
-    cwd.startsWith("/") ||
-    cwd.startsWith("\\") ||
-    /^[A-Za-z]:/.test(cwd) ||
-    cwd.split(/[\\/]+/).includes("..")
-  ) {
-    throw new Error(`Tool '${toolId}' cwd must stay inside its workspace.`);
-  }
-}
-
-function workspaceForTool(toolId: AkeruToolId, session: AkeruToolSession) {
-  return toolId === "ExternalShell" || toolId === "ExternalRead" || toolId === "AwaitExternalShell"
-    ? session.userComputerWorkspace
-    : session.workspace;
-}
-
-async function toolsForWorkspace(workspace: Workspace | undefined) {
-  if (!workspace) return {};
-  return createWorkspaceTools(workspace, {
-    requestContext: {},
-    workspace,
-  });
-}
-
-function executable(value: unknown): value is {
-  readonly execute: (input: unknown, context: Record<string, unknown>) => Promise<unknown>;
-} {
-  return (
-    typeof value === "object" &&
-    value !== null &&
-    "execute" in value &&
-    typeof value.execute === "function"
-  );
-}
-
-const APPROVAL_RANK = [
-  "none",
-  "user-computer",
-  "send",
-  "pay",
-  "delete",
-  "production",
-  "secrets",
-] as const;
-const RUNTIME_RANK = ["approval-required", "auto-accept-edits", "auto", "full-access"] as const;
-
-function requestedSubset<T>(
-  requested: ReadonlyArray<T> | undefined,
-  ceiling: ReadonlyArray<T>,
-  label: string,
-): ReadonlyArray<T> {
-  if (requested?.some((value) => !ceiling.includes(value))) {
-    throw new Error(`Delegation requested ${label} outside the parent turn grant.`);
-  }
-  return requested ?? ceiling;
-}
-
-export function intersectDelegationAccess(input: {
-  readonly parent: AkeruDelegationAccessGrant;
-  readonly child: AkeruDelegationAccessGrant;
-  readonly requested: (typeof AkeruToolInputSchemas.SendToAgent)["Type"];
-}): AkeruDelegationAccessGrant {
-  const requestedTools = requestedSubset(
-    input.requested.allowedToolIds,
-    input.parent.allowedToolIds,
-    "tools",
-  );
-  const requestedMemory = requestedSubset<AkeruMemoryTargetScope>(
-    input.requested.memoryScopes,
-    input.parent.memoryScopes,
-    "memory scopes",
-  );
-  const requestedMcpServers = requestedSubset(
-    input.requested.mcpServerIds,
-    input.parent.enabledMcpServerIds,
-    "MCP servers",
-  );
-  const requestedRuntime = input.requested.runtimeMode ?? input.parent.runtimeMode;
-  if (RUNTIME_RANK.indexOf(requestedRuntime) > RUNTIME_RANK.indexOf(input.parent.runtimeMode)) {
-    throw new Error("Delegation requested a runtime mode above the parent turn grant.");
-  }
-  const requestedApproval = input.requested.approvalCeiling ?? input.parent.approvalCeiling;
-  if (
-    APPROVAL_RANK.indexOf(requestedApproval) > APPROVAL_RANK.indexOf(input.parent.approvalCeiling)
-  ) {
-    throw new Error("Delegation requested approvals above the parent turn grant.");
-  }
-  if (
-    input.requested.sandbox !== undefined &&
-    input.requested.sandbox !== null &&
-    input.requested.sandbox !== input.parent.sandbox
-  ) {
-    throw new Error("Delegation requested a sandbox outside the parent turn grant.");
-  }
-  const sandbox =
-    input.requested.sandbox === undefined ? input.parent.sandbox : input.requested.sandbox;
-  return {
-    allowedToolIds: requestedTools.filter((toolId) => input.child.allowedToolIds.includes(toolId)),
-    memoryScopes: requestedMemory.filter((scope) => input.child.memoryScopes.includes(scope)),
-    sandbox: sandbox === input.child.sandbox ? sandbox : null,
-    runtimeMode:
-      RUNTIME_RANK.indexOf(requestedRuntime) <= RUNTIME_RANK.indexOf(input.child.runtimeMode)
-        ? requestedRuntime
-        : input.child.runtimeMode,
-    hasUserComputer: input.parent.hasUserComputer && input.child.hasUserComputer,
-    enabledMcpServerIds: requestedMcpServers.filter((serverId) =>
-      input.child.enabledMcpServerIds.includes(serverId),
-    ),
-    disabledMcpServerIds: [
-      ...new Set([...input.parent.disabledMcpServerIds, ...input.child.disabledMcpServerIds]),
-    ],
-    approvalCeiling:
-      APPROVAL_RANK.indexOf(requestedApproval) <= APPROVAL_RANK.indexOf(input.child.approvalCeiling)
-        ? requestedApproval
-        : input.child.approvalCeiling,
-  };
 }
 
 export function createAkeruToolRuntime(options?: AkeruToolRuntimeOptions): AkeruToolRuntime {
   const sessions = new Map<string, AkeruToolSession>();
   const grants = new Map<string, { readonly toolId: AkeruRuntimeToolId; readonly input: string }>();
   const key = (threadId: string, toolCallId: string) => `${threadId}\u0000${toolCallId}`;
+
   const clearApprovals = (threadId: string) => {
     for (const grantKey of grants.keys()) {
       if (grantKey.startsWith(`${threadId}\u0000`)) grants.delete(grantKey);
     }
   };
+
   const emitReceipt = (
     input: AkeruToolExecution,
     phase: AkeruToolReceipt["phase"],
@@ -367,7 +78,7 @@ export function createAkeruToolRuntime(options?: AkeruToolRuntimeOptions): Akeru
         phase,
         threadId: ThreadId.make(input.threadId),
         fatalToThread: false,
-        createdAt: new Date().toISOString(),
+        createdAt: DateTime.formatIso(DateTime.nowUnsafe()),
         ...details,
       });
     } catch {
@@ -375,67 +86,120 @@ export function createAkeruToolRuntime(options?: AkeruToolRuntimeOptions): Akeru
     }
   };
 
+  const nonfatalToolFailureReceipt = (
+    input: AkeruToolExecution,
+    session: AkeruToolSession,
+    cause: unknown,
+    failureCode: NonNullable<AkeruToolReceipt["failureCode"]>,
+    billedBotId?: AkeruToolSession["botId"],
+  ): AkeruToolReceipt => {
+    const summary = cause instanceof Error ? cause.message : String(cause);
+
+    const receipt = {
+      receiptId: input.toolCallId,
+      toolId: input.toolId,
+      phase: "failure",
+      threadId: ThreadId.make(input.threadId),
+      botId: session.botId,
+      summary,
+      failureCode,
+      fatalToThread: false,
+      ...(billedBotId ? { billedBotId } : {}),
+      createdAt: options?.now?.() ?? DateTime.formatIso(DateTime.nowUnsafe()),
+    } satisfies AkeruToolReceipt;
+
+    emitReceipt(input, "failure", { failureCode, summary });
+
+    return receipt;
+  };
+
   const implementedTools = (session: AkeruToolSession) => {
     const tools = new Set<AkeruToolId>();
+
     if (session.workspace?.sandbox?.executeCommand) tools.add("Shell");
+
     if (session.workspace?.filesystem) tools.add("Read");
+
     if (session.workspace?.sandbox?.processes) tools.add("AwaitShell");
+
     if (session.workspace?.sandbox?.computer) tools.add("Screenshot");
+
     if (session.userComputerWorkspace?.sandbox?.executeCommand) {
       tools.add("ExternalShell");
     }
+
     if (session.userComputerWorkspace?.filesystem) {
       tools.add("ExternalRead");
     }
+
     if (session.userComputerWorkspace?.sandbox?.processes) {
       tools.add("AwaitExternalShell");
     }
+
     if (session.workspace?.filesystem && session.userComputerWorkspace?.filesystem) {
       tools.add("CopyToBox");
       tools.add("CopyFromBox");
     }
+
     if (options?.onUserActionRequired && session.workspace && session.botId && session.botName) {
       tools.add("request_box_help");
     }
+
     if (session.delegation) {
       if (session.delegation.create) tools.add("CreateAgent");
+
       if (session.delegation.check) tools.add("CheckAgent");
       tools.add("MessageAgent");
+
       if (session.delegation.stop) tools.add("StopAgent");
       tools.add("SendToAgent");
     }
+
     if (session.workers) {
       tools.add("Task");
       tools.add("CheckSubagent");
       tools.add("MessageSubagent");
       tools.add("StopSubagent");
     }
+
     if (session.channels) {
       tools.add("CreateChannel");
       tools.add("UpdateChannel");
     }
+
     if (session.sendToUser) tools.add("SendToUser");
+
     if (session.botId && session.botState) tools.add("UpdateBotProfile");
+
     if (session.reactToMessage) tools.add("ReactToMessage");
-    for (const toolId of Object.keys(session.catalogHandlers ?? {}) as AkeruToolId[]) {
+
+    for (const { id: toolId } of AKERU_TOOL_CATALOG) {
+      if (!Object.hasOwn(session.catalogHandlers ?? {}, toolId)) continue;
+
       if (toolId === "GenerateImage") {
         const image = session.imageGeneration;
+
         if (image && !image.chatgptEnabled && !image.grokEnabled) continue;
       }
+
       tools.add(toolId);
     }
+
     if (session.delegation) {
       for (const toolId of tools) {
         if (!session.delegation.access.allowedToolIds.includes(toolId)) tools.delete(toolId);
       }
     }
+
     return tools;
   };
 
   const toolsForThread = (threadId: string) => {
     const session = sessions.get(threadId);
+
     if (!session) throw new Error(`Tool session '${threadId}' is not registered.`);
     const implemented = implementedTools(session);
+
     const workspaceTools = filterAkeruTools({
       capabilities: new Set(["bot-workspace", "user-computer"]),
       workspaceType: session.workspaceType,
@@ -450,37 +214,27 @@ export function createAkeruToolRuntime(options?: AkeruToolRuntimeOptions): Akeru
         : {}),
       ...(session.workers ? { workerDepth: session.workers.depth } : {}),
     });
+
     return session.memoryHandlers
       ? [...workspaceTools, ...MEMORY_TOOL_DEFINITIONS]
       : workspaceTools;
   };
 
-  const validatedInput = (toolId: AkeruRuntimeToolId, input: unknown) =>
-    Schema.decodeUnknownPromise(
-      isMemoryToolId(toolId) ? AkeruMemoryToolInputSchema : AkeruToolInputSchemas[toolId],
-    )(input, {
-      onExcessProperty: "error",
-    });
-
-  const decodedGrantInput = (toolId: AkeruRuntimeToolId, input: unknown) =>
-    isMemoryToolId(toolId)
-      ? MEMORY_TOOL_INPUT_DECODERS[toolId](input, { onExcessProperty: "error" })
-      : decodeAkeruToolInput(
-          toolId,
-          input && typeof input === "object" && !Array.isArray(input)
-            ? Object.fromEntries(Object.entries(input).filter(([, value]) => value !== null))
-            : input,
-        );
+  const decodedGrantInput = (toolId: AkeruRuntimeToolId, input: AkeruToolExecution["input"]) =>
+    decodeAkeruRuntimeToolInput(toolId, input, { approvalGrant: true }).input;
 
   const requiresApproval = async (
     session: AkeruToolSession,
     tool: AkeruRuntimeToolDefinition,
-    input: unknown,
+    input: AkeruToolExecution["input"],
   ) => {
     if (tool.id === "memory") return false;
-    const akeruTool = tool as AkeruToolDefinition;
+    const akeruTool = AKERU_TOOL_CATALOG.find((candidate) => candidate.id === tool.id);
+
+    if (!akeruTool) throw new Error(`Tool '${tool.id}' has no definition.`);
     ensureWorkspaceCwd(akeruTool.id, input);
     const ceiling = session.delegation?.access.approvalCeiling;
+
     if (
       ceiling &&
       APPROVAL_RANK.indexOf(
@@ -489,6 +243,7 @@ export function createAkeruToolRuntime(options?: AkeruToolRuntimeOptions): Akeru
     ) {
       throw new Error(`Tool '${tool.id}' exceeds this delegation's approval ceiling.`);
     }
+
     return akeruToolRequiresApproval(
       akeruTool,
       {
@@ -512,10 +267,13 @@ export function createAkeruToolRuntime(options?: AkeruToolRuntimeOptions): Akeru
     toolsForThread,
     requiresApproval: async (threadId, toolId, input) => {
       const session = sessions.get(threadId);
+
       if (!session) throw new Error(`Tool session '${threadId}' is not registered.`);
       const tool = toolsForThread(threadId).find((candidate) => candidate.id === toolId);
+
       if (!tool) throw new Error(`Tool '${toolId}' is not available for this turn.`);
-      return requiresApproval(session, tool, await validatedInput(toolId, input));
+
+      return requiresApproval(session, tool, decodeAkeruRuntimeToolInput(toolId, input).input);
     },
     grantApproval: (input) => {
       grants.set(key(input.threadId, input.toolCallId), {
@@ -527,23 +285,30 @@ export function createAkeruToolRuntime(options?: AkeruToolRuntimeOptions): Akeru
       let failureCode: NonNullable<AkeruToolReceipt["failureCode"]> = "internal";
       emitReceipt(input, "start");
       let executionSession: AkeruToolSession | undefined;
+
       try {
         failureCode = "not_found";
         const session = sessions.get(input.threadId);
+
         if (!session) throw new Error(`Tool session '${input.threadId}' is not registered.`);
         executionSession = session;
         await options?.onToolStart?.(input, session);
+
         const tool = toolsForThread(input.threadId).find(
           (candidate) => candidate.id === input.toolId,
         );
+
         if (!tool) throw new Error(`Tool '${input.toolId}' is not available for this turn.`);
 
         failureCode = "validation";
-        const decoded = await validatedInput(input.toolId, input.input);
+        const execution = decodeAkeruRuntimeToolInput(input.toolId, input.input);
+        const decoded = execution.input;
         failureCode = "denied";
+
         if (await requiresApproval(session, tool, decoded)) {
           const grantKey = key(input.threadId, input.toolCallId);
           const grant = grants.get(grantKey);
+
           if (
             !grant ||
             input.approvalMode !== "require-grant" ||
@@ -552,14 +317,19 @@ export function createAkeruToolRuntime(options?: AkeruToolRuntimeOptions): Akeru
           ) {
             throw new Error(`Tool '${input.toolId}' requires approval.`);
           }
+
           grants.delete(grantKey);
         }
 
         failureCode = "not_found";
-        let result: unknown;
-        const catalogHandler = session.catalogHandlers?.[input.toolId as AkeruToolId];
+        let result: AkeruToolResult;
+
+        const catalogHandler =
+          execution.toolId === "memory" ? undefined : session.catalogHandlers?.[execution.toolId];
+
         if (isMemoryToolId(input.toolId)) {
           const handler = session.memoryHandlers?.[input.toolId];
+
           if (!handler) throw new Error(`Tool '${input.toolId}' has no backend.`);
           failureCode = "internal";
           result = await handler({ ...input, toolId: input.toolId, input: decoded });
@@ -570,129 +340,97 @@ export function createAkeruToolRuntime(options?: AkeruToolRuntimeOptions): Akeru
             emitProgress: (summary, details) =>
               options?.onProgress?.({
                 threadId: input.threadId,
+                // SAFETY: Only catalog tools reach this callback; memory dispatch returns above.
                 toolId: input.toolId as AkeruToolId,
                 toolCallId: input.toolCallId,
                 summary,
                 ...details,
               }),
           });
-        } else if (input.toolId === "SendToAgent" || input.toolId === "MessageAgent") {
+        } else if (execution.toolId === "SendToAgent" || execution.toolId === "MessageAgent") {
           if (!session.delegation) throw new Error("Delegation is not available for this session.");
-          const delegationInput =
-            input.toolId === "MessageAgent"
-              ? decodeAkeruToolInput("MessageAgent", decoded)
-              : decodeAkeruToolInput("SendToAgent", decoded);
+          const delegationInput = execution.input;
           failureCode = "internal";
+
           try {
             result = await session.delegation.send(delegationInput);
           } catch (cause) {
-            if (Schema.is(AkeruDelegationContextTooLongError)(cause)) failureCode = "validation";
-            if (Schema.is(AkeruDelegationProviderUnsupportedError)(cause)) failureCode = "denied";
-            const summary = cause instanceof Error ? cause.message : String(cause);
-            result = {
-              receiptId: input.toolCallId,
-              toolId: input.toolId,
-              phase: "failure",
-              threadId: ThreadId.make(input.threadId),
-              botId: session.botId,
-              summary,
+            if (isDelegationContextTooLong(cause)) failureCode = "validation";
+
+            if (isDelegationProviderUnsupported(cause)) failureCode = "denied";
+
+            return nonfatalToolFailureReceipt(
+              input,
+              session,
+              cause,
               failureCode,
-              fatalToThread: false,
-              billedBotId: delegationInput.botId,
-              createdAt: options?.now?.() ?? DateTime.formatIso(DateTime.nowUnsafe()),
-            } satisfies AkeruToolReceipt;
-            emitReceipt(input, "failure", { failureCode, summary });
-            return result;
+              delegationInput.botId,
+            );
           }
         } else if (
-          input.toolId === "CreateAgent" ||
-          input.toolId === "CheckAgent" ||
-          input.toolId === "StopAgent"
+          execution.toolId === "CreateAgent" ||
+          execution.toolId === "CheckAgent" ||
+          execution.toolId === "StopAgent"
         ) {
           if (!session.delegation) {
             throw new Error("Bot management is not available for this session.");
           }
+
           failureCode = "internal";
           let billedBotId = session.botId;
+
           try {
-            if (input.toolId === "CreateAgent") {
+            if (execution.toolId === "CreateAgent") {
               if (!session.delegation.create) throw new Error("Bot creation is not available.");
-              result = await session.delegation.create(
-                decodeAkeruToolInput("CreateAgent", decoded),
-              );
-            } else if (input.toolId === "CheckAgent") {
+              result = await session.delegation.create(execution.input);
+            } else if (execution.toolId === "CheckAgent") {
               if (!session.delegation.check) throw new Error("Bot inspection is not available.");
-              const checkInput = decodeAkeruToolInput("CheckAgent", decoded);
+              const checkInput = execution.input;
               billedBotId = checkInput.botId;
               result = await session.delegation.check(checkInput);
             } else {
               if (!session.delegation.stop) throw new Error("Bot cancellation is not available.");
-              const stopInput = decodeAkeruToolInput("StopAgent", decoded);
+              const stopInput = execution.input;
               billedBotId = stopInput.botId;
               result = await session.delegation.stop(stopInput);
             }
           } catch (cause) {
-            const summary = cause instanceof Error ? cause.message : String(cause);
-            result = {
-              receiptId: input.toolCallId,
-              toolId: input.toolId,
-              phase: "failure",
-              threadId: ThreadId.make(input.threadId),
-              botId: session.botId,
-              summary,
-              failureCode,
-              fatalToThread: false,
-              ...(billedBotId ? { billedBotId } : {}),
-              createdAt: options?.now?.() ?? DateTime.formatIso(DateTime.nowUnsafe()),
-            } satisfies AkeruToolReceipt;
-            emitReceipt(input, "failure", { failureCode, summary });
-            return result;
+            return nonfatalToolFailureReceipt(input, session, cause, failureCode, billedBotId);
           }
         } else if (
-          input.toolId === "Task" ||
-          input.toolId === "CheckSubagent" ||
-          input.toolId === "MessageSubagent" ||
-          input.toolId === "StopSubagent"
+          execution.toolId === "Task" ||
+          execution.toolId === "CheckSubagent" ||
+          execution.toolId === "MessageSubagent" ||
+          execution.toolId === "StopSubagent"
         ) {
           if (!session.workers) throw new Error("Workers are not available for this session.");
           failureCode = "internal";
+
           try {
-            result =
-              input.toolId === "Task"
-                ? await session.workers.spawn(decodeAkeruToolInput("Task", decoded))
-                : input.toolId === "CheckSubagent"
-                  ? await session.workers.check(decodeAkeruToolInput("CheckSubagent", decoded))
-                  : input.toolId === "MessageSubagent"
-                    ? await session.workers.message(
-                        decodeAkeruToolInput("MessageSubagent", decoded),
-                      )
-                    : await session.workers.stop(decodeAkeruToolInput("StopSubagent", decoded));
+            result = await Match.value(execution).pipe(
+              Match.when({ toolId: "Task" }, ({ input }) => session.workers!.spawn(input)),
+              Match.when({ toolId: "CheckSubagent" }, ({ input }) => session.workers!.check(input)),
+              Match.when({ toolId: "MessageSubagent" }, ({ input }) =>
+                session.workers!.message(input),
+              ),
+              Match.orElse(({ input }) => session.workers!.stop(input)),
+            );
           } catch (cause) {
-            const summary = cause instanceof Error ? cause.message : String(cause);
-            result = {
-              receiptId: input.toolCallId,
-              toolId: input.toolId,
-              phase: "failure",
-              threadId: ThreadId.make(input.threadId),
-              botId: session.botId,
-              summary,
-              failureCode,
-              fatalToThread: false,
-              createdAt: options?.now?.() ?? DateTime.formatIso(DateTime.nowUnsafe()),
-            } satisfies AkeruToolReceipt;
-            emitReceipt(input, "failure", { failureCode, summary });
-            return result;
+            return nonfatalToolFailureReceipt(input, session, cause, failureCode);
           }
-        } else if (input.toolId === "CreateChannel" || input.toolId === "UpdateChannel") {
+        } else if (execution.toolId === "CreateChannel" || execution.toolId === "UpdateChannel") {
           if (!session.channels || !session.botId) {
             throw new Error("Channel management is not available for this session.");
           }
+
           failureCode = "internal";
+
           try {
             const channelId =
-              input.toolId === "CreateChannel"
-                ? await session.channels.create(decodeAkeruToolInput("CreateChannel", decoded))
-                : await session.channels.update(decodeAkeruToolInput("UpdateChannel", decoded));
+              execution.toolId === "CreateChannel"
+                ? await session.channels.create(execution.input)
+                : await session.channels.update(execution.input);
+
             result = {
               receiptId: input.toolCallId,
               toolId: input.toolId,
@@ -719,15 +457,18 @@ export function createAkeruToolRuntime(options?: AkeruToolRuntimeOptions): Akeru
               createdAt: options?.now?.() ?? DateTime.formatIso(DateTime.nowUnsafe()),
             } satisfies AkeruToolReceipt;
             emitReceipt(input, "failure", { failureCode, summary });
+
             return result;
           }
-        } else if (input.toolId === "SendToUser") {
+        } else if (execution.toolId === "SendToUser") {
           if (!session.sendToUser) {
             throw new Error("User messaging is not available for this session.");
           }
+
           failureCode = "internal";
+
           try {
-            result = await session.sendToUser(decodeAkeruToolInput("SendToUser", decoded));
+            result = await session.sendToUser(execution.input);
           } catch (cause) {
             const summary = cause instanceof Error ? cause.message : String(cause);
             result = {
@@ -742,19 +483,22 @@ export function createAkeruToolRuntime(options?: AkeruToolRuntimeOptions): Akeru
               createdAt: options?.now?.() ?? DateTime.formatIso(DateTime.nowUnsafe()),
             } satisfies AkeruToolReceipt;
             emitReceipt(input, "failure", { failureCode, summary });
+
             return result;
           }
-        } else if (input.toolId === "UpdateBotProfile") {
+        } else if (execution.toolId === "UpdateBotProfile") {
           if (!session.botId || !session.botState) {
             throw new Error("Bot profile management is not available for this session.");
           }
+
           failureCode = "internal";
+
           try {
             result = await session.botState.updateProfile(
               ThreadId.make(input.threadId),
               session.botId,
               input.toolCallId,
-              decodeAkeruToolInput("UpdateBotProfile", decoded),
+              execution.input,
             );
           } catch (cause) {
             const summary = cause instanceof Error ? cause.message : String(cause);
@@ -771,25 +515,27 @@ export function createAkeruToolRuntime(options?: AkeruToolRuntimeOptions): Akeru
               createdAt: options?.now?.() ?? DateTime.formatIso(DateTime.nowUnsafe()),
             } satisfies AkeruToolReceipt;
             emitReceipt(input, "failure", { failureCode, summary });
+
             return result;
           }
-        } else if (input.toolId === "ReactToMessage") {
+        } else if (execution.toolId === "ReactToMessage") {
           if (!session.reactToMessage) {
             throw new Error("Message reactions are not available for this session.");
           }
+
           failureCode = "internal";
-          result = await session.reactToMessage(
-            decodeAkeruToolInput("ReactToMessage", decoded),
-            input.toolCallId,
-          );
+          result = await session.reactToMessage(execution.input, input.toolCallId);
         } else if (input.toolId === "CopyToBox" || input.toolId === "CopyFromBox") {
           const source =
             input.toolId === "CopyToBox" ? session.userComputerWorkspace : session.workspace;
+
           const destination =
             input.toolId === "CopyToBox" ? session.workspace : session.userComputerWorkspace;
+
           if (!source?.filesystem || !destination?.filesystem) {
             throw new Error("Both computer boundaries are required for file copy.");
           }
+
           const sourcePath = requiredString(decoded, "sourcePath");
           const destinationPath = requiredString(decoded, "destinationPath");
           failureCode = "internal";
@@ -803,6 +549,7 @@ export function createAkeruToolRuntime(options?: AkeruToolRuntimeOptions): Akeru
           if (!options?.onUserActionRequired || !session.botId || !session.botName) {
             throw new Error("Human handoff is not available for this session.");
           }
+
           failureCode = "internal";
           await options.onUserActionRequired({
             botId: session.botId,
@@ -816,17 +563,25 @@ export function createAkeruToolRuntime(options?: AkeruToolRuntimeOptions): Akeru
         } else {
           const workspace = workspaceForTool(input.toolId, session);
           const backends = await toolsForWorkspace(workspace);
-          const backendNames = BACKEND_NAMES[input.toolId as keyof typeof BACKEND_NAMES] ?? [];
+
+          const backendNames = Object.hasOwn(BACKEND_NAMES, input.toolId)
+            ? // SAFETY: hasOwn limits the tool id to the backend mapping keys.
+              BACKEND_NAMES[input.toolId as keyof typeof BACKEND_NAMES]
+            : [];
+
           const backendName = backendNames.find((name) => executable(backends[name]));
           const backend = backendName ? backends[backendName] : undefined;
+
           if (!executable(backend)) throw new Error(`Tool '${input.toolId}' has no backend.`);
+
           const backendInput =
             input.toolId === "AwaitShell" || input.toolId === "AwaitExternalShell"
               ? { pid: requiredString(decoded, "handleId"), wait: true }
               : decoded;
+
           failureCode = "internal";
           result = await backend.execute(backendInput, {
-            workspace,
+            ...(workspace ? { workspace } : {}),
             requestContext: new RequestContext(),
             observe: {
               span: async <A>(_name: string, run: () => A | Promise<A>) => run(),
@@ -834,30 +589,38 @@ export function createAkeruToolRuntime(options?: AkeruToolRuntimeOptions): Akeru
             },
           });
         }
+
         if (input.toolId === "Screenshot") {
           const mediaType = field(result, "mediaType");
           const data = field(result, "data");
-          if (mediaType !== "image/png" || typeof data !== "string") {
+
+          if (mediaType !== "image/png" || !Predicate.isString(data)) {
             throw new Error("Screenshot result is invalid.");
           }
+
           const redacted = redactComputerScreenshot({
             mediaType,
             data: Buffer.from(data, "base64"),
           });
+
           result = {
-            ...(result as Record<string, unknown>),
+            ...(Predicate.isObject(result) ? result : {}),
             data: Buffer.from(redacted.data).toString("base64"),
           };
         }
+
         if (field(result, "phase") === "failure") {
           const summary = field(result, "summary");
           emitReceipt(input, "failure", {
             failureCode,
-            summary: typeof summary === "string" ? summary : "Tool execution failed.",
+            summary: Predicate.isString(summary) ? summary : "Tool execution failed.",
           });
+
           return result;
         }
+
         emitReceipt(input, "success");
+
         return result;
       } catch (cause) {
         emitReceipt(input, "failure", { failureCode, summary: "Tool execution failed." });
@@ -868,3 +631,14 @@ export function createAkeruToolRuntime(options?: AkeruToolRuntimeOptions): Akeru
     },
   };
 }
+
+export {
+  type AkeruRuntimeToolId,
+  type AkeruRuntimeToolDefinition,
+  type AkeruToolSession,
+  type AkeruToolRuntimeOptions,
+  type AkeruToolExecution,
+  type AkeruToolRuntime,
+} from "./tools/AkeruToolTypes.ts";
+
+export { intersectDelegationAccess } from "./tools/AkeruToolAuthorization.ts";

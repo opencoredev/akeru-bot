@@ -12,6 +12,7 @@ import {
 } from "./transcription.ts";
 
 const identity = { environmentId: "env-1", threadId: "thread", draftId: "draft", generation: 0 };
+
 const audio = {
   bytes: new Uint8Array([104, 105]),
   durationMs: 900,
@@ -61,11 +62,13 @@ describe("encodeDictationAudioBase64", () => {
 describe("createVoiceDictationTranscriber", () => {
   it("sends normalized audio to the chat's environment", async () => {
     const transcribe = vi.fn(async () => ({ _tag: "Success" as const, value: { text: "hello" } }));
+
     const transcriber = createVoiceDictationTranscriber({
       transcribe,
       cancel: vi.fn(async () => undefined),
       nextOperationId: () => "op-1",
     });
+
     await expect(
       transcriber({ audio, signal: new AbortController().signal, identity }),
     ).resolves.toBe("hello");
@@ -78,14 +81,17 @@ describe("createVoiceDictationTranscriber", () => {
   it("cancels the server operation when dictation is aborted", async () => {
     const cancel = vi.fn(async () => undefined);
     const controller = new AbortController();
+
     const transcriber = createVoiceDictationTranscriber({
       transcribe: async () => {
         controller.abort();
+
         return { _tag: "Success" as const, value: { text: "late" } };
       },
       cancel,
       nextOperationId: () => "op-2",
     });
+
     await expect(transcriber({ audio, signal: controller.signal, identity })).rejects.toThrow();
     expect(cancel).toHaveBeenCalledWith({ environmentId: "env-1", input: { operationId: "op-2" } });
   });
@@ -99,6 +105,7 @@ describe("createVoiceDictationTranscriber", () => {
       cancel: async () => undefined,
       nextOperationId: () => "op-3",
     });
+
     await expect(
       transcriber({ audio, signal: new AbortController().signal, identity }),
     ).rejects.toThrow(DICTATION_TRANSCRIPTION_UNAVAILABLE.disabled);
@@ -117,6 +124,7 @@ describe("createVoiceDictationTranscriber", () => {
       cancel: async () => undefined,
       nextOperationId: () => "op-4",
     });
+
     await expect(
       transcriber({ audio, signal: new AbortController().signal, identity }),
     ).rejects.toThrow(message);
@@ -130,15 +138,19 @@ describe("switching chats mid-transcription", () => {
     let draft: DictationDraft = { identity: chatA, text: "", selection: { start: 0, end: 0 } };
     let finishTranscription!: (text: string) => void;
     let transcribeRequest!: () => void;
+
     const requested = new Promise<void>((markRequested) => {
       transcribeRequest = markRequested;
     });
+
     const cancel = vi.fn(async () => undefined);
+
     const session = createDictationSession({
       capture: async () => ({ stop: async () => audio, dispose: () => undefined }),
       transcribe: createVoiceDictationTranscriber({
         transcribe: () => {
           transcribeRequest();
+
           return new Promise((resolve) => {
             finishTranscription = (text) => resolve({ _tag: "Success", value: { text } });
           });

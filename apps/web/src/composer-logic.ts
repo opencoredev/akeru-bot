@@ -2,8 +2,10 @@ import { splitPromptIntoComposerSegments } from "./composer-editor-mentions";
 import { INLINE_TERMINAL_CONTEXT_PLACEHOLDER } from "./lib/terminalContext";
 
 export type ComposerTriggerKind = "path" | "slash-command" | "skill";
+
 /** Built-in composer commands; plan mode and its /plan and /default commands are retired. */
 export type ComposerSlashCommand = "model";
+
 export type ComposerSubmissionIntent = "foreground" | "background";
 
 export interface ComposerTrigger {
@@ -22,6 +24,7 @@ export function composerSubmissionIntentForEnter(input: {
   if (input.isMobileViewport || input.shiftKey) {
     return null;
   }
+
   return input.modifierKey && input.isDraftThread ? "background" : "foreground";
 }
 
@@ -35,6 +38,7 @@ const isInlineTokenSegment = (
 
 function clampCursor(text: string, cursor: number): number {
   if (!Number.isFinite(cursor)) return text.length;
+
   return Math.max(0, Math.min(text.length, Math.floor(cursor)));
 }
 
@@ -50,15 +54,18 @@ function isWhitespace(char: string): boolean {
 
 function tokenStartForCursor(text: string, cursor: number): number {
   let index = cursor - 1;
+
   while (index >= 0 && !isWhitespace(text[index] ?? "")) {
     index -= 1;
   }
+
   return index + 1;
 }
 
 export function expandCollapsedComposerCursor(text: string, cursorInput: number): number {
   const collapsedCursor = clampCursor(text, cursorInput);
   const segments = splitPromptIntoComposerSegments(text);
+
   if (segments.length === 0) {
     return collapsedCursor;
   }
@@ -69,35 +76,44 @@ export function expandCollapsedComposerCursor(text: string, cursorInput: number)
   for (const segment of segments) {
     if (segment.type === "mention") {
       const expandedLength = segment.source.length;
+
       if (remaining <= 1) {
         return expandedCursor + (remaining === 0 ? 0 : expandedLength);
       }
+
       remaining -= 1;
       expandedCursor += expandedLength;
       continue;
     }
+
     if (segment.type === "skill") {
       const expandedLength = segment.name.length + 1;
+
       if (remaining <= 1) {
         return expandedCursor + (remaining === 0 ? 0 : expandedLength);
       }
+
       remaining -= 1;
       expandedCursor += expandedLength;
       continue;
     }
+
     if (segment.type === "terminal-context") {
       if (remaining <= 1) {
         return expandedCursor + remaining;
       }
+
       remaining -= 1;
       expandedCursor += 1;
       continue;
     }
 
     const segmentLength = segment.text.length;
+
     if (remaining <= segmentLength) {
       return expandedCursor + remaining;
     }
+
     remaining -= segmentLength;
     expandedCursor += segmentLength;
   }
@@ -115,6 +131,7 @@ function collapsedSegmentLength(
   if (segment.type === "text") {
     return segment.text.length;
   }
+
   return 1;
 }
 
@@ -131,9 +148,11 @@ function clampCollapsedComposerCursorForSegments(
     (total, segment) => total + collapsedSegmentLength(segment),
     0,
   );
+
   if (!Number.isFinite(cursorInput)) {
     return collapsedLength;
   }
+
   return Math.max(0, Math.min(collapsedLength, Math.floor(cursorInput)));
 }
 
@@ -147,6 +166,7 @@ export function clampCollapsedComposerCursor(text: string, cursorInput: number):
 export function collapseExpandedComposerCursor(text: string, cursorInput: number): number {
   const expandedCursor = clampCursor(text, cursorInput);
   const segments = splitPromptIntoComposerSegments(text);
+
   if (segments.length === 0) {
     return expandedCursor;
   }
@@ -157,41 +177,52 @@ export function collapseExpandedComposerCursor(text: string, cursorInput: number
   for (const segment of segments) {
     if (segment.type === "mention") {
       const expandedLength = segment.source.length;
+
       if (remaining === 0) {
         return collapsedCursor;
       }
+
       if (remaining <= expandedLength) {
         return collapsedCursor + 1;
       }
+
       remaining -= expandedLength;
       collapsedCursor += 1;
       continue;
     }
+
     if (segment.type === "skill") {
       const expandedLength = segment.name.length + 1;
+
       if (remaining === 0) {
         return collapsedCursor;
       }
+
       if (remaining <= expandedLength) {
         return collapsedCursor + 1;
       }
+
       remaining -= expandedLength;
       collapsedCursor += 1;
       continue;
     }
+
     if (segment.type === "terminal-context") {
       if (remaining <= 1) {
         return collapsedCursor + remaining;
       }
+
       remaining -= 1;
       collapsedCursor += 1;
       continue;
     }
 
     const segmentLength = segment.text.length;
+
     if (remaining <= segmentLength) {
       return collapsedCursor + remaining;
     }
+
     remaining -= segmentLength;
     collapsedCursor += segmentLength;
   }
@@ -205,6 +236,7 @@ export function isCollapsedCursorAdjacentToInlineToken(
   direction: "left" | "right",
 ): boolean {
   const segments = splitPromptIntoComposerSegments(text);
+
   if (!segments.some(isInlineTokenSegment)) {
     return false;
   }
@@ -217,10 +249,12 @@ export function isCollapsedCursorAdjacentToInlineToken(
       if (direction === "left" && cursor === collapsedOffset + 1) {
         return true;
       }
+
       if (direction === "right" && cursor === collapsedOffset) {
         return true;
       }
     }
+
     collapsedOffset += collapsedSegmentLength(segment);
   }
 
@@ -236,8 +270,10 @@ export function detectComposerTrigger(text: string, cursorInput: number): Compos
 
   if (linePrefix.startsWith("/")) {
     const commandMatch = /^\/(\S*)$/.exec(linePrefix);
+
     if (commandMatch) {
       const commandQuery = commandMatch[1] ?? "";
+
       return {
         kind: "slash-command",
         query: commandQuery,
@@ -249,6 +285,7 @@ export function detectComposerTrigger(text: string, cursorInput: number): Compos
 
   const tokenStart = tokenStartForCursor(text, cursor);
   const token = text.slice(tokenStart, cursor);
+
   if (token.startsWith("$")) {
     return {
       kind: "skill",
@@ -257,6 +294,7 @@ export function detectComposerTrigger(text: string, cursorInput: number): Compos
       rangeEnd: cursor,
     };
   }
+
   if (!token.startsWith("@")) {
     return null;
   }
@@ -274,9 +312,10 @@ export function replaceTextRange(
   rangeStart: number,
   rangeEnd: number,
   replacement: string,
-): { text: string; cursor: number } {
+) {
   const safeStart = Math.max(0, Math.min(text.length, rangeStart));
   const safeEnd = Math.max(safeStart, Math.min(text.length, rangeEnd));
   const nextText = `${text.slice(0, safeStart)}${replacement}${text.slice(safeEnd)}`;
+
   return { text: nextText, cursor: safeStart + replacement.length };
 }

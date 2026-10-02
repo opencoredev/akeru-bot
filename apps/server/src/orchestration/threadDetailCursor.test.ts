@@ -13,6 +13,7 @@ describe("threadDetailCursor", () => {
       beforeAnchorAt: "2026-08-01T00:00:00.000Z",
       beforeTurnId: "turn-9",
     };
+
     expect(decodeThreadDetailPageCursor(encodeThreadDetailPageCursor(cursor))).toEqual(cursor);
   });
 
@@ -26,6 +27,7 @@ describe("threadDetailCursor", () => {
       beforeAnchorAt: "",
       beforeTurnId: "",
     };
+
     expect(decodeThreadDetailPageCursor(encodeThreadDetailPageCursor(cursor))).toEqual(cursor);
   });
 

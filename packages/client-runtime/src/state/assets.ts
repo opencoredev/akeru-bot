@@ -6,7 +6,9 @@ import type { EnvironmentRegistry } from "../connection/registry.ts";
 import { createEnvironmentRpcQueryAtomFamily } from "./runtime.ts";
 
 const ASSET_URL_REFRESH_INTERVAL_MS = 30 * 60_000;
+
 const ASSET_URL_STALE_TIME_MS = 5 * 60_000;
+
 const ASSET_URL_IDLE_TTL_MS = 60 * 60_000;
 
 export class InvalidAssetCollectionKeyError extends Schema.TaggedErrorClass<InvalidAssetCollectionKeyError>()(
@@ -53,8 +55,10 @@ export function createAssetEnvironmentAtoms<R, E>(
     idleTtlMs: ASSET_URL_IDLE_TTL_MS,
     refreshIntervalMs: ASSET_URL_REFRESH_INTERVAL_MS,
   });
+
   const createUrlsFamily = Atom.family((key: string) => {
     const [environmentId, resources] = parseAssetCollectionKey(key);
+
     return Atom.make((get) =>
       resources.map((resource) =>
         get(

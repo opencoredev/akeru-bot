@@ -7,6 +7,7 @@ describe("driverSupportsDelegation", () => {
     for (const driverKind of DELEGATION_DRIVER_KINDS) {
       expect(driverSupportsDelegation(driverKind)).toBe(true);
     }
+
     expect(driverSupportsDelegation("opencode")).toBe(false);
     expect(driverSupportsDelegation("unknown")).toBe(false);
   });

@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 import { cva, type VariantProps } from "class-variance-authority";
 import { Children, isValidElement } from "react";
 import type * as React from "react";
@@ -18,17 +19,36 @@ const alertVariants = cva("relative rounded-xl border px-3.5 py-3 text-card-fore
       warning:
         "border-transparent bg-warning-surface text-warning-foreground [&_[data-slot=alert-description]]:text-warning-foreground/80 [&_svg]:text-warning",
     },
+    presentation: {
+      "composer-drawer":
+        "chat-composer-drawer-surface chat-composer-drawer-attached px-3 pt-2 pb-composer-overlap-1.5 text-xs sm:px-4",
+      glass: "alert-glass rounded-[22px]",
+      "sidebar-warning": "rounded-2xl border-warning/40 bg-warning/8 text-xs",
+    },
   },
 });
 
 function alertChildSlot(child: React.ReactElement): string | undefined {
-  const propsSlot = (child.props as Record<string, string | undefined>)["data-slot"];
+  const propsSlot = isValidElement<{ "data-slot"?: string }>(child)
+    ? child.props["data-slot"]
+    : undefined;
+
   if (propsSlot) {
     return propsSlot;
   }
 
-  const type = child.type as { displayName?: string; name?: string };
-  switch (type.displayName ?? type.name) {
+  const type = child.type;
+
+  if (!Predicate.isObject(type) && !Predicate.isFunction(type)) {
+    return undefined;
+  }
+
+  const displayName =
+    "displayName" in type && Predicate.isString(type.displayName) ? type.displayName : undefined;
+
+  const name = "name" in type && Predicate.isString(type.name) ? type.name : undefined;
+
+  switch (displayName ?? name) {
     case "AlertAction":
       return "alert-action";
     case "AlertTitle":
@@ -43,6 +63,7 @@ function alertChildSlot(child: React.ReactElement): string | undefined {
 function Alert({
   className,
   variant,
+  presentation,
   controlAlignment = "center",
   children,
   ...props
@@ -57,9 +78,12 @@ function Alert({
   Children.forEach(children, (child) => {
     if (!isValidElement(child)) {
       content.push(child);
+
       return;
     }
+
     const slot = alertChildSlot(child);
+
     if (slot === "alert-action") {
       action.push(child);
     } else if (slot === "alert-title" || slot === "alert-description") {
@@ -71,7 +95,7 @@ function Alert({
 
   return (
     <div
-      className={cn(alertVariants({ variant }), className)}
+      className={cn(alertVariants({ variant, presentation }), className)}
       data-slot="alert"
       role="alert"
       {...props}
@@ -134,7 +158,9 @@ function AlertAction({ className, ...props }: React.ComponentProps<"div">) {
 }
 
 AlertTitle.displayName = "AlertTitle";
+
 AlertDescription.displayName = "AlertDescription";
+
 AlertAction.displayName = "AlertAction";
 
 export { Alert, AlertTitle, AlertDescription, AlertAction };

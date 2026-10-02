@@ -32,6 +32,7 @@ describe("language setting", () => {
         <LanguageSetting />
       </LanguageProvider>,
     );
+
     expect(html).toContain("Langue de test");
     expect(html).toContain("Système de test");
     expect(html).toContain('aria-label="Réinitialiser Langue de test"');

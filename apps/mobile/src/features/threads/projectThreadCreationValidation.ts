@@ -30,6 +30,7 @@ export const ProjectThreadCreationValidationError = Schema.Union([
   ProjectThreadTaskRequiredError,
   ProjectThreadBaseBranchRequiredError,
 ]);
+
 export type ProjectThreadCreationValidationError = typeof ProjectThreadCreationValidationError.Type;
 
 export function validateProjectThreadCreation(input: {
@@ -46,11 +47,13 @@ export function validateProjectThreadCreation(input: {
       environmentMode: input.environmentMode,
     });
   }
+
   if (input.environmentMode === "worktree" && !input.branch) {
     return new ProjectThreadBaseBranchRequiredError({
       environmentId: input.environmentId,
       projectId: input.projectId,
     });
   }
+
   return null;
 }

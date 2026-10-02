@@ -37,6 +37,7 @@ describe("desktop local connection identity", () => {
 describe("desktop local topology reads", () => {
   it("distinguishes a successful empty topology from a read failure", () => {
     let readBootstraps = () => [];
+
     const reader = createDesktopSecondaryBootstrapsReader(() => ({
       getLocalEnvironmentBootstraps: () => readBootstraps(),
     }));
@@ -47,6 +48,7 @@ describe("desktop local topology reads", () => {
     readBootstraps = () => {
       throw cause;
     };
+
     expect(reader.readResult()).toEqual({ _tag: "Failure", cause });
   });
 
@@ -79,7 +81,9 @@ describe("desktop local topology reads", () => {
       httpBaseUrl: "http://127.0.0.1:4000",
       wsBaseUrl: "ws://127.0.0.1:4000",
     };
+
     let readBootstraps = () => [secondary];
+
     const reader = createDesktopSecondaryBootstrapsReader(() => ({
       getLocalEnvironmentBootstraps: () => readBootstraps(),
     }));
@@ -90,6 +94,7 @@ describe("desktop local topology reads", () => {
     readBootstraps = () => {
       throw new Error("IPC unavailable");
     };
+
     expect(reader.readSnapshot()).toBe(connectedSnapshot);
 
     readBootstraps = () => [];
@@ -99,6 +104,7 @@ describe("desktop local topology reads", () => {
     readBootstraps = () => {
       throw new Error("IPC unavailable again");
     };
+
     expect(reader.readSnapshot()).toBe(removedSnapshot);
   });
 });

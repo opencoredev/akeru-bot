@@ -9,6 +9,7 @@ export function useLocalDay(): Date {
 
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout> | undefined;
+
     const refresh = () => {
       const now = new Date();
       const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
@@ -21,15 +22,19 @@ export function useLocalDay(): Date {
           : { date: now, timeZone, offset },
       );
       const next = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
+
       if (timer !== undefined) globalThis.clearTimeout(timer);
       timer = globalThis.setTimeout(refresh, Math.min(next.getTime() - now.getTime(), 60_000));
     };
+
     const onVisibilityChange = () => {
       if (document.visibilityState === "visible") refresh();
     };
+
     refresh();
     window.addEventListener("focus", refresh);
     document.addEventListener("visibilitychange", onVisibilityChange);
+
     return () => {
       if (timer !== undefined) globalThis.clearTimeout(timer);
       window.removeEventListener("focus", refresh);

@@ -3,39 +3,55 @@ import { createRoot, type Root } from "react-dom/client";
 import type { ReplyPlaybackSession } from "@akeru/client-runtime/reply-playback";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
-const mocks = vi.hoisted(() => ({
-  primaryEnvironmentId: "primary" as string | null,
-  voice: {} as Record<string, unknown>,
-  session: null as ReplyPlaybackSession | null,
-  audio: [] as Array<{ play: () => Promise<void>; pause: () => void; dispose: () => void }>,
+interface PlaybackMocks {
+  primaryEnvironmentId: string | null;
+  voice: { enabled?: boolean; provider?: string };
+  session: ReplyPlaybackSession | null;
+  audio: Array<{ play: () => Promise<void>; pause: () => void; dispose: () => void }>;
+  command: () => Promise<{ _tag: string }>;
+}
+
+const mocks = vi.hoisted<PlaybackMocks>(() => ({
+  primaryEnvironmentId: "primary",
+  voice: {},
+  session: null,
+  audio: [],
   command: () => Promise.resolve({ _tag: "Success" }),
 }));
 
 vi.mock("@effect/atom-react", () => ({
   useAtomValue: () => ({ voice: mocks.voice }),
 }));
+
 vi.mock("~/state/server", () => ({
   primaryServerSettingsAtom: "settings",
   serverEnvironment: { synthesizeVoice: "synthesize", cancelVoice: "cancel" },
 }));
+
 vi.mock("~/state/use-atom-command", () => ({ useAtomCommand: () => mocks.command }));
+
 vi.mock("~/state/environments", () => ({
   usePrimaryEnvironmentId: () => mocks.primaryEnvironmentId,
   useEnvironmentConnectionState: () => ({ data: null }),
 }));
+
 vi.mock("../components/voice/VoiceCall", () => ({ voiceEnvironmentConnectionLost: () => false }));
+
 vi.mock("../components/chat/ReplyPlaybackProvider", () => ({
   useOptionalReplyPlayback: () => mocks.session,
 }));
+
 vi.mock("@akeru/client-runtime/voice", () => ({
   synthesizeVoiceChunks: async () => [
     { _tag: "Success", value: { audioBase64: "", mimeType: "audio/mpeg" } },
   ],
 }));
+
 vi.mock("./replyPlaybackAudio", () => ({
   createBrowserReplyAudio: () => {
     const audio = { play: vi.fn(async () => {}), pause: vi.fn(), dispose: vi.fn() };
     mocks.audio.push(audio);
+
     return audio;
   },
 }));
@@ -50,7 +66,9 @@ const reply = {
   text: "Stored answer",
   updatedAt: "2026-09-08T00:00:00.000Z",
 };
+
 const enabledVoice = { enabled: true, provider: "composed" };
+
 let renders = 0;
 
 function Chat(props: { environmentId: string; threadId: string | null }) {
@@ -62,11 +80,14 @@ function Chat(props: { environmentId: string; threadId: string | null }) {
     messages: [reply],
     mediaBlocked: false,
   });
+
   return null;
 }
 
 let root: Root;
+
 const listeners = { addEventListener() {}, removeEventListener() {} };
+
 // Components here render nothing, so the DOM only needs a document and a container.
 class TestNode {
   readonly nodeName = "DIV";
@@ -79,7 +100,9 @@ class TestNode {
     readonly ownerDocument: TestNode | null = null,
   ) {}
 }
+
 const testDocument = new TestNode(9);
+
 const createTestRoot = () => createRoot(new TestNode(1, testDocument) as never);
 
 beforeEach(() => {
@@ -126,10 +149,13 @@ describe("web reply playback thread", () => {
 
   it("settles after the chat context is cleared under a mounted subscriber", async () => {
     const snapshots = new Set<unknown>();
+
     function Subscriber({ session }: { session: ReplyPlaybackSession }) {
       snapshots.add(useSyncExternalStore(session.subscribeSynthesis, session.getSynthesisSnapshot));
+
       return null;
     }
+
     await render("primary");
     const session = mocks.session!;
     const subscriberRoot = createTestRoot();

@@ -28,6 +28,7 @@ function subscriptionEntry(
   drivers: ReadonlyArray<string>,
 ): ProviderCatalogEntry {
   const account = SUBSCRIPTION_PROVIDERS.find((definition) => definition.id === accountId)!;
+
   return {
     slug,
     label: account.label,

@@ -55,6 +55,7 @@ describe("botInboxItemCopy", () => {
     authorBotId: BotId.make("bot-1"),
     affectedBotIds: [BotId.make("bot-1")],
   } as const;
+
   const memoryItem = incident({
     kind: "approval-request",
     lastFailure: "Save to group memory: Standups start at ten.",
@@ -149,6 +150,7 @@ describe("botInboxRowAction", () => {
         affectedBotIds: [BotId.make("bot-1")],
       },
     });
+
     expect(botInboxRowAction(item)).toBe("memory-approval");
   });
 
@@ -166,6 +168,7 @@ describe("botInboxRowAction", () => {
         affectedBotIds: [BotId.make("bot-1")],
       },
     });
+
     expect(botInboxRowAction(item)).toBe("memory-approval");
     expect(botInboxItemCopy(item, createTranslator("en").t).sensitive).toBe(
       "Sensitive, always needs approval",

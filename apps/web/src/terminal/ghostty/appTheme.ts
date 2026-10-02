@@ -7,12 +7,14 @@ function parseTerminalColor(value: string, fallback: GhosttyColor): GhosttyColor
   canvas.width = 1;
   canvas.height = 1;
   const context = canvas.getContext("2d", { willReadFrequently: true });
+
   if (!context) return fallback;
 
   context.clearRect(0, 0, 1, 1);
   context.fillStyle = value;
   context.fillRect(0, 0, 1, 1);
   const [red, green, blue, alpha] = context.getImageData(0, 0, 1, 1).data;
+
   if (alpha === 0) return fallback;
 
   return {
@@ -24,6 +26,7 @@ function parseTerminalColor(value: string, fallback: GhosttyColor): GhosttyColor
 
 function normalizeComputedColor(value: string | null | undefined, fallback: string): string {
   const normalizedValue = value?.trim().toLowerCase();
+
   if (
     !normalizedValue ||
     normalizedValue === "transparent" ||
@@ -32,6 +35,7 @@ function normalizeComputedColor(value: string | null | undefined, fallback: stri
   ) {
     return fallback;
   }
+
   return value ?? fallback;
 }
 
@@ -50,26 +54,32 @@ export function terminalThemeFromApp(mountElement?: HTMLElement | null): Ghostty
   const hostStyles = getComputedStyle(mountElement?.parentElement ?? document.body);
   const bodyStyles = getComputedStyle(document.body);
   const themeStyles = getComputedStyle(document.documentElement);
+
   const background = normalizeComputedColor(
     hostStyles.backgroundColor,
     normalizeComputedColor(bodyStyles.backgroundColor, fallbackBackground),
   );
+
   const foreground = normalizeComputedColor(
     hostStyles.color,
     normalizeComputedColor(bodyStyles.color, fallbackForeground),
   );
+
   const terminalBackground = readThemeColor(themeStyles, "--terminal-background", background);
   const terminalForeground = readThemeColor(themeStyles, "--terminal-foreground", foreground);
+
   const terminalCursor = readThemeColor(
     themeStyles,
     "--terminal-cursor",
     isDark ? "rgb(180, 203, 255)" : "rgb(38, 56, 78)",
   );
+
   const terminalSelection = readThemeColor(
     themeStyles,
     "--terminal-selection-background",
     isDark ? "rgba(180, 203, 255, 0.25)" : "rgba(37, 63, 99, 0.2)",
   );
+
   return {
     background: parseTerminalColor(
       terminalBackground,

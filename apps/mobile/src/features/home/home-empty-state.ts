@@ -18,6 +18,7 @@ export function deriveHomeEmptyState(props: {
   readonly projectCount: number;
 }): HomeEmptyState {
   const { catalogState } = props;
+
   if (catalogState.isLoadingConnections) {
     return {
       title: "Loading environments",
@@ -117,15 +118,20 @@ export function environmentsToRetry(
     if (environment.connectionState === "offline" || environment.connectionState === "error") {
       return true;
     }
+
     if (environment.connectionState !== "connected") {
       return false;
     }
+
     const shell = shellStateOf(environment.environmentId);
+
     return Option.isNone(shell.snapshot) && Option.isSome(shell.error);
   });
+
   const targets =
     failing.length > 0
       ? failing
       : environments.filter((environment) => environment.connectionState === "available");
+
   return targets.map((environment) => environment.environmentId);
 }

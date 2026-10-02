@@ -26,6 +26,7 @@ describe("resolveStickyBotEngine", () => {
         auth: { status: "unknown" as const },
       },
     ];
+
     const instanceEntries = deriveProviderInstanceEntries(providers);
     const instanceId = instanceEntries[0]!.instanceId;
 
@@ -53,6 +54,7 @@ describe("resolveStickyBotEngine", () => {
         auth: { status: "unknown" as const },
       },
     ];
+
     const instanceEntries = deriveProviderInstanceEntries(providers);
     const instanceId = instanceEntries[0]!.instanceId;
     expect(
@@ -76,6 +78,7 @@ describe("resolveStickyBotEngine", () => {
       displayName: "Codex",
       unavailability: "expired-login" as const,
     };
+
     const signedIn = deriveProviderInstanceEntries([makeComposerTestProvider()]);
     const signedOut = deriveProviderInstanceEntries([expired]);
     const instanceId = signedOut[0]!.instanceId;
@@ -126,6 +129,7 @@ describe("resolveStickyBotEngine", () => {
         },
       ],
     };
+
     const providers = [makeComposerTestProvider(), signedOut];
     const instanceEntries = deriveProviderInstanceEntries(providers);
     const engine = { provider: signedOut.instanceId, model: "claude-opus-5-5" };
@@ -156,12 +160,14 @@ describe("resolveStickyBotEngine", () => {
   it("does not show a fallback provider for a bot with an unavailable saved engine", () => {
     const savedId = ProviderInstanceId.make("codex");
     const fallbackId = ProviderInstanceId.make("codex-backup");
+
     const providers = [
       { ...makeComposerTestProvider(), enabled: false, status: "disabled" as const },
       { ...makeComposerTestProvider(), instanceId: fallbackId },
     ];
 
     const instanceEntries = deriveProviderInstanceEntries(providers);
+
     const selected = resolveStickyBotEngine({
       engine: { provider: savedId, model: "gpt-5-codex" },
       instanceEntries,
@@ -169,6 +175,7 @@ describe("resolveStickyBotEngine", () => {
       providers,
       defaultSelection: { instanceId: fallbackId, model: "gpt-5-codex" },
     });
+
     expect(selected).toEqual({ instanceId: savedId, model: "gpt-5-codex" });
     expect(botEngineUnavailability(selected, instanceEntries)?.reason).not.toBeNull();
   });
@@ -177,6 +184,7 @@ describe("resolveStickyBotEngine", () => {
     const providers = [makeComposerTestProvider()];
     const instanceEntries = deriveProviderInstanceEntries(providers);
     const instanceId = instanceEntries[0]?.instanceId;
+
     if (!instanceId) throw new Error("missing instance");
 
     const resolved = resolveStickyBotEngine({
@@ -218,6 +226,7 @@ describe("resolveStickyBotEngine", () => {
     const providers = [makeComposerTestProvider()];
     const instanceEntries = deriveProviderInstanceEntries(providers);
     const instanceId = instanceEntries[0]?.instanceId;
+
     if (!instanceId) throw new Error("missing instance");
 
     expect(
@@ -309,6 +318,7 @@ describe("routineDelegateOptions", () => {
       driver: ProviderDriverKind.make("opencode"),
     },
   ]);
+
   const bot = (id: string, provider: string | null, archivedAt: string | null = null) => ({
     id,
     name: id,

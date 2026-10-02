@@ -15,7 +15,7 @@ describe("ThreadSyncStatusPill", () => {
     expect(markup).toContain("chat-composer-drawer-surface");
     expect(markup).toContain("chat-composer-drawer-attached");
     expect(markup).toContain("chat-composer-drawer-slot");
-    expect(markup).toContain("pb-[calc(var(--chat-composer-attachment-overlap)_+_0.375rem)]");
+    expect(markup).toContain("pb-composer-overlap-1.5");
     expect(markup).toContain(label);
     expect(markup).not.toContain("animate-");
   });

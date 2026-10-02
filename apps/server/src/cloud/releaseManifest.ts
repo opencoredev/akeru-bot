@@ -22,11 +22,14 @@ export function signedArchiveChecksum(input: {
   ) {
     throw new Error("The release manifest signature does not match the pinned Akeru release key.");
   }
+
   const expected = new TextDecoder()
     .decode(input.manifest)
     .split(/\r?\n/u)
     .map((line) => line.match(/^([a-f0-9]{64})\s+\*?(.+)$/iu))
     .find((match) => match?.[2] === input.archiveName)?.[1];
+
   if (!expected) throw new Error(`Release checksum is missing for ${input.archiveName}.`);
+
   return expected.toLowerCase();
 }

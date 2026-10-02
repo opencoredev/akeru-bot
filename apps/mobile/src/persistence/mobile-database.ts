@@ -1,4 +1,5 @@
-import type { EnvironmentId } from "@akeru/contracts";
+import { Predicate } from "effect";
+import { EnvironmentId } from "@akeru/contracts";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -7,7 +8,9 @@ import * as Schema from "effect/Schema";
 import type { SQLiteDatabase } from "expo-sqlite";
 
 const DATABASE_NAME = "t3code-client.db";
+
 const DATABASE_SCHEMA_VERSION = 1;
+
 const LEGACY_CACHE_DIRECTORIES = [
   "connection-shell-snapshots",
   "shell-snapshots",
@@ -17,6 +20,7 @@ const LEGACY_CACHE_DIRECTORIES = [
 ] as const;
 
 export const ClientCacheKind = Schema.Literals(["shell", "thread", "server-config", "vcs-refs"]);
+
 export type ClientCacheKind = typeof ClientCacheKind.Type;
 
 export interface ClientCacheSummaryRow {
@@ -33,7 +37,7 @@ export interface StoredPreferencesJson {
 
 const ClientCacheSummaryRows = Schema.Array(
   Schema.Struct({
-    environmentId: Schema.String,
+    environmentId: EnvironmentId,
     kind: ClientCacheKind,
     recordCount: Schema.Number,
     payloadBytes: Schema.Number,
@@ -78,25 +82,24 @@ interface LegacyCacheRecord {
   readonly payload: string;
 }
 
-function objectRecord(value: unknown): Record<string, unknown> | null {
-  return typeof value === "object" && value !== null ? (value as Record<string, unknown>) : null;
-}
+const decodeLegacyCacheMetadata = Schema.decodeUnknownSync(
+  Schema.Struct({
+    environmentId: Schema.String,
+    schemaVersion: Schema.Number,
+    threadId: Schema.optional(Schema.Unknown),
+    cwd: Schema.optional(Schema.Unknown),
+  }),
+);
 
 export function decodeLegacyCacheRecord(
   directoryName: (typeof LEGACY_CACHE_DIRECTORIES)[number],
   payload: string,
 ): LegacyCacheRecord | null {
-  let parsed: Record<string, unknown> | null;
+  let parsed: ReturnType<typeof decodeLegacyCacheMetadata>;
+
   try {
-    parsed = objectRecord(JSON.parse(payload));
+    parsed = decodeLegacyCacheMetadata(JSON.parse(payload));
   } catch {
-    return null;
-  }
-  if (
-    parsed === null ||
-    typeof parsed.environmentId !== "string" ||
-    typeof parsed.schemaVersion !== "number"
-  ) {
     return null;
   }
 
@@ -111,7 +114,7 @@ export function decodeLegacyCacheRecord(
         payload,
       };
     case "connection-thread-snapshots":
-      return typeof parsed.threadId === "string"
+      return Predicate.isString(parsed.threadId)
         ? {
             environmentId: parsed.environmentId,
             kind: "thread",
@@ -129,7 +132,7 @@ export function decodeLegacyCacheRecord(
         payload,
       };
     case "connection-vcs-refs":
-      return typeof parsed.cwd === "string"
+      return Predicate.isString(parsed.cwd)
         ? {
             environmentId: parsed.environmentId,
             kind: "vcs-refs",
@@ -145,6 +148,7 @@ async function migrateLegacyFileCaches(database: SQLiteDatabase): Promise<boolea
   try {
     const { Directory, File, Paths } = await import("expo-file-system");
     let complete = true;
+
     const listFiles = (
       directory: InstanceType<typeof Directory>,
     ): Array<InstanceType<typeof File>> =>
@@ -153,10 +157,13 @@ async function migrateLegacyFileCaches(database: SQLiteDatabase): Promise<boolea
     for (const directoryName of LEGACY_CACHE_DIRECTORIES) {
       try {
         const directory = new Directory(Paths.document, directoryName);
+
         if (!directory.exists) continue;
+
         for (const file of listFiles(directory)) {
           const payload = await file.text();
           const record = decodeLegacyCacheRecord(directoryName, payload);
+
           if (record === null) continue;
           await database.runAsync(
             `INSERT INTO client_cache
@@ -171,15 +178,18 @@ async function migrateLegacyFileCaches(database: SQLiteDatabase): Promise<boolea
             Date.now(),
           );
         }
+
         directory.delete();
       } catch (cause) {
         complete = false;
         console.warn(`[mobile-database] could not migrate legacy cache ${directoryName}`, cause);
       }
     }
+
     return complete;
   } catch (cause) {
     console.warn("[mobile-database] could not load legacy cache migration", cause);
+
     return false;
   }
 }
@@ -232,6 +242,7 @@ const makeAvailable = Effect.gen(function* () {
     Effect.tryPromise({
       try: async () => {
         const SQLite = await import("expo-sqlite");
+
         return SQLite.openDatabaseAsync(DATABASE_NAME);
       },
       catch: databaseError("open"),
@@ -242,9 +253,11 @@ const makeAvailable = Effect.gen(function* () {
   yield* Effect.tryPromise({
     try: async () => {
       await database.execAsync("PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON;");
+
       const schema = await database.getFirstAsync<{ readonly user_version: number }>(
         "PRAGMA user_version",
       );
+
       await database.withExclusiveTransactionAsync(async (transaction) => {
         await transaction.execAsync(`
               CREATE TABLE IF NOT EXISTS client_cache (
@@ -267,8 +280,10 @@ const makeAvailable = Effect.gen(function* () {
               );
             `);
       });
+
       if ((schema?.user_version ?? 0) < DATABASE_SCHEMA_VERSION) {
         const migrated = await migrateLegacyFileCaches(database);
+
         if (migrated) {
           await database.execAsync(`PRAGMA user_version = ${DATABASE_SCHEMA_VERSION};`);
         }
@@ -368,7 +383,7 @@ const makeAvailable = Effect.gen(function* () {
       Effect.map(
         (rows): ReadonlyArray<ClientCacheSummaryRow> =>
           rows.map((row) => ({
-            environmentId: row.environmentId as EnvironmentId,
+            environmentId: row.environmentId,
             kind: row.kind,
             recordCount: row.recordCount,
             payloadBytes: row.payloadBytes,
@@ -404,6 +419,7 @@ const makeAvailable = Effect.gen(function* () {
 
 function makeUnavailable(error: MobileDatabaseError): MobileDatabase["Service"] {
   const fail = Effect.fail(error);
+
   return MobileDatabase.of({
     loadCache: () => fail,
     saveCache: () => fail,
@@ -419,7 +435,7 @@ function makeUnavailable(error: MobileDatabaseError): MobileDatabase["Service"] 
 
 export const make = Effect.result(makeAvailable).pipe(
   Effect.map((result) =>
-    result._tag === "Success" ? result.success : makeUnavailable(result.failure),
+    Predicate.isTagged(result, "Success") ? result.success : makeUnavailable(result.failure),
   ),
 );
 

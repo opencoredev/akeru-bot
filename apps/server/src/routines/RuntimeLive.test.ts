@@ -1,201 +1,15 @@
-import {
-  type AkeruDelegationRecord,
-  BotId,
-  DelegationId,
-  EventId,
-  type OrchestrationEvent,
-  ProjectId,
-  RoutineId,
-  RoutineRunId,
-  ThreadId,
-  TurnId,
-} from "@akeru/contracts";
+import { routine, harness } from "./testUtils/runtimeLive.ts";
+import { BotId, EventId, type OrchestrationEvent, RoutineId, RoutineRunId } from "@akeru/contracts";
 import { assert, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
-import * as Layer from "effect/Layer";
-import * as Queue from "effect/Queue";
 import * as Stream from "effect/Stream";
 import * as TestClock from "effect/testing/TestClock";
-
-import { OrchestrationEngineService } from "../orchestration/Services/OrchestrationEngine.ts";
-import { RoutineRepository, type RoutineClaim, type RoutineRepositoryShape } from "./Repository.ts";
 import { RoutineRuntime } from "./Runtime.ts";
 import { findBlockingDependencyIncident } from "./RuntimeAdapterLive.ts";
-import { RoutineRuntimeLive } from "./RuntimeLive.ts";
-import {
-  RoutineRuntimeAdapter,
-  type Routine,
-  type RoutineDependencyFailure,
-  type RoutineDispatchResult,
-  type RoutineRun,
-  type RoutineRuntimeAdapterShape,
-} from "./types.ts";
-
-const routine = (overrides: Partial<Routine> = {}): Routine => ({
-  id: RoutineId.make("routine-1"),
-  botId: BotId.make("bot-1"),
-  targetThreadId: ThreadId.make("thread-1"),
-  projectId: ProjectId.make("project-1"),
-  job: "Morning research",
-  procedure: "Prepare the morning research brief.",
-  procedureVersion: 2,
-  approvalVersion: 2,
-  schedule: { kind: "daily", time: "09:00" },
-  timezone: "America/New_York",
-  skillAssignmentIds: [],
-  connectorDependencies: [],
-  sandbox: "local",
-  approvalPolicy: "approval-required",
-  delegateToBotId: null,
-  enabled: true,
-  lifecycle: "enabled",
-  nextRunAt: "2026-08-28T13:00:00.000Z",
-  lastRunAt: null,
-  latestResult: null,
-  latestFailure: null,
-  createdAt: "2026-08-01T00:00:00.000Z",
-  updatedAt: "2026-08-01T00:00:00.000Z",
-  deletedAt: null,
-  ...overrides,
-});
-
-const harness = (
-  value: Routine,
-  recoverable: ReadonlyArray<RoutineClaim> = [],
-  dependencyFailure: RoutineDependencyFailure | null = null,
-  targetBusy = false,
-  domainEvents: Stream.Stream<OrchestrationEvent> = Stream.empty,
-  projectedStatus: RoutineRun["status"] | null = null,
-  options: {
-    readonly dispatched?: RoutineDispatchResult;
-    readonly signals?: Queue.Queue<string>;
-    readonly delegation?: AkeruDelegationRecord;
-  } = {},
-) => {
-  const claims = new Map<string, RoutineClaim>();
-  const dispatchedRuns: RoutineRun[] = [];
-  const log: string[] = [];
-  const summaries: string[] = [];
-  const settledStatuses: string[] = [];
-  const events = {
-    push: (event: string) => {
-      log.push(event);
-      if (options.signals) Queue.offerUnsafe(options.signals, event);
-      return log.length;
-    },
-  };
-  const repository = RoutineRepository.of({
-    listAll: Effect.succeed([value]),
-    listEnabled: Effect.succeed([value]),
-    getById: () => Effect.succeed(value),
-    listRuns: () =>
-      Effect.succeed(
-        recoverable.map((claim) => ({
-          id: claim.runId,
-          routineId: claim.routineId,
-          procedureVersion: value.procedureVersion,
-          trigger:
-            claim.trigger === "manual" || claim.trigger === "dry-run" ? "manual" : claim.trigger,
-          scheduledFor:
-            claim.trigger === "manual" || claim.trigger === "dry-run" ? null : claim.scheduledFor,
-          status: projectedStatus ?? ("running" as const),
-          result: null,
-          failure: null,
-          usageRef: null,
-          threadRef: ThreadId.make("thread-1"),
-          startedAt: claim.claimedAt,
-          completedAt: null,
-          createdAt: claim.claimedAt,
-          updatedAt: claim.claimedAt,
-        })) as never,
-      ),
-    listThreadRuns: () => Effect.succeed({ runs: [], nextCursor: null }),
-    listAllRuns: Effect.sync(() => dispatchedRuns),
-    getActiveRunByThreadRef: () => Effect.succeed(null),
-    listSkillAssignments: Effect.succeed([]),
-    claim: (claim) =>
-      Effect.sync(() => {
-        const key =
-          claim.scheduledFor === null ? claim.runId : `${claim.routineId}:${claim.scheduledFor}`;
-        if (claims.has(key)) return false;
-        claims.set(key, claim);
-        events.push(`claimed:${claim.trigger}:${claim.scheduledFor}`);
-        return true;
-      }),
-    markDispatched: (runId, threadRef) =>
-      Effect.sync(() => {
-        dispatchedRuns.push({
-          id: runId,
-          routineId: value.id,
-          procedureVersion: value.procedureVersion,
-          trigger: "manual",
-          scheduledFor: null,
-          status: "running",
-          result: null,
-          failure: null,
-          usageRef: null,
-          threadRef: ThreadId.make(threadRef),
-          startedAt: "2026-08-31T20:00:00.000Z",
-          completedAt: null,
-          createdAt: "2026-08-31T20:00:00.000Z",
-          updatedAt: "2026-08-31T20:00:00.000Z",
-        });
-        events.push("dispatched");
-      }),
-    markBlocked: () => Effect.sync(() => events.push("claim-blocked")),
-    markSettled: (_runId, status) =>
-      Effect.sync(() => {
-        settledStatuses.push(status);
-        events.push("claim-settled");
-      }),
-    listRecoverable: Effect.succeed(recoverable),
-  } satisfies RoutineRepositoryShape);
-  const adapter = RoutineRuntimeAdapter.of({
-    isTargetBusy: () => Effect.succeed(targetBusy),
-    checkDependencies: () => Effect.succeed(dependencyFailure),
-    recordQueued: () => Effect.sync(() => events.push("queued")),
-    recordBlocked: () => Effect.sync(() => events.push("run-blocked")),
-    recordCompleted: (_run, _nextRunAt, summary) =>
-      Effect.sync(() => {
-        summaries.push(summary);
-        events.push("completed");
-      }),
-    recordFailed: () => Effect.void,
-    recordCanceled: () => Effect.sync(() => events.push("run-canceled")),
-    cancelDelegatedRun: (run) =>
-      Effect.sync(() => events.push(`delegation-canceled:${run.threadRef}`)),
-    findDelegatedRunDelegation: () => Effect.succeed(options.delegation ?? null),
-    openFailureIncident: () => Effect.sync(() => events.push("incident")),
-    resolveFailureIncident: (routineId) =>
-      Effect.sync(() => events.push(`incident-resolved:${routineId}`)),
-    dispatchTurn: () =>
-      Effect.sync(() => {
-        events.push("turn");
-        return options.dispatched ?? { threadRef: ThreadId.make("thread-1") };
-      }),
-  } satisfies RoutineRuntimeAdapterShape);
-  const layer = RoutineRuntimeLive.pipe(
-    Layer.provide(
-      Layer.mergeAll(
-        Layer.succeed(RoutineRepository, repository),
-        Layer.succeed(RoutineRuntimeAdapter, adapter),
-        Layer.succeed(OrchestrationEngineService, {
-          dispatch: () => Effect.die("unused"),
-          readEvents: () => Stream.empty,
-          readThreadEvents: () => Stream.empty,
-          getThreadReplayStats: () => Effect.die("unused thread replay stats"),
-          streamDomainEvents: domainEvents,
-          subscribeDomainEvents: Effect.succeed(domainEvents),
-          latestSequence: Effect.succeed(0),
-        }),
-      ),
-    ),
-  );
-  return { events: log, summaries, settledStatuses, layer };
-};
 
 it.effect("resolves a routine incident when the routine is deleted", () => {
   const value = routine();
+
   const deleted = {
     sequence: 1,
     eventId: EventId.make("event-routine-deleted"),
@@ -217,6 +31,7 @@ it.effect("resolves a routine incident when the routine is deleted", () => {
       },
     },
   } satisfies Extract<OrchestrationEvent, { type: "routine.deleted" }>;
+
   const test = harness(value, [], null, false, Stream.make(deleted));
 
   return Effect.scoped(
@@ -228,17 +43,6 @@ it.effect("resolves a routine incident when the routine is deleted", () => {
       assert(test.events.includes(`incident-resolved:${value.id}`));
     }),
   ).pipe(Effect.provide(test.layer));
-});
-
-it.effect("resolves stale incidents for routines deleted before restart", () => {
-  const value = routine({ enabled: false, lifecycle: "deleted", nextRunAt: null });
-  const test = harness(value);
-
-  return Effect.gen(function* () {
-    const runtime = yield* RoutineRuntime;
-    yield* runtime.recover;
-    assert.deepEqual(test.events, [`incident-resolved:${value.id}`]);
-  }).pipe(Effect.provide(test.layer));
 });
 
 it("finds open connector and browser incidents for the routine bot", () => {
@@ -276,6 +80,7 @@ it("finds open connector and browser incidents for the routine bot", () => {
 
 it.effect("coalesces missed slots and claims each slot once", () => {
   const test = harness(routine());
+
   return Effect.gen(function* () {
     yield* TestClock.setTime(Date.parse("2026-08-31T20:00:00.000Z"));
     const runtime = yield* RoutineRuntime;
@@ -292,6 +97,7 @@ it.effect("coalesces missed slots and claims each slot once", () => {
 
 it.effect("defers a due run while its target chat is busy", () => {
   const test = harness(routine(), [], null, true);
+
   return Effect.gen(function* () {
     yield* TestClock.setTime(Date.parse("2026-08-31T20:00:00.000Z"));
     const runtime = yield* RoutineRuntime;
@@ -300,52 +106,9 @@ it.effect("defers a due run while its target chat is busy", () => {
   }).pipe(Effect.provide(test.layer));
 });
 
-it.effect("settles a dispatched run from durable terminal state after restart", () => {
-  const value = routine();
-  const test = harness(value, [
-    {
-      runId: RoutineRunId.make("run-1"),
-      routineId: value.id,
-      trigger: "scheduled",
-      scheduledFor: "2026-08-31T13:00:00.000Z",
-      claimedAt: "2026-08-31T13:00:00.000Z",
-      status: "dispatched",
-      threadRef: "thread-1",
-      terminalState: "completed",
-      terminalAt: "2026-08-31T13:05:00.000Z",
-    },
-  ]);
-  return Effect.gen(function* () {
-    const runtime = yield* RoutineRuntime;
-    yield* runtime.recover;
-    assert.deepEqual(test.events, ["completed", "claim-settled"]);
-  }).pipe(Effect.provide(test.layer));
-});
-
-it.effect("leaves an in-flight dispatched run attached after restart", () => {
-  const value = routine();
-  const test = harness(value, [
-    {
-      runId: RoutineRunId.make("run-in-flight"),
-      routineId: value.id,
-      trigger: "manual",
-      scheduledFor: null,
-      claimedAt: "2026-08-31T13:00:00.000Z",
-      status: "dispatched",
-      threadRef: "thread-1",
-      terminalState: null,
-      terminalAt: null,
-    },
-  ]);
-  return Effect.gen(function* () {
-    const runtime = yield* RoutineRuntime;
-    yield* runtime.recover;
-    assert.deepEqual(test.events, []);
-  }).pipe(Effect.provide(test.layer));
-});
-
 it.effect("blocks a dispatched run whose session stopped before a turn", () => {
   const value = routine();
+
   const test = harness(value, [
     {
       runId: RoutineRunId.make("run-stopped"),
@@ -361,84 +124,17 @@ it.effect("blocks a dispatched run whose session stopped before a turn", () => {
       sessionUpdatedAt: "2026-08-31T13:01:00.000Z",
     },
   ]);
+
   return Effect.gen(function* () {
     const runtime = yield* RoutineRuntime;
     yield* runtime.recover;
     assert.deepEqual(test.events, ["incident", "claim-blocked"]);
-  }).pipe(Effect.provide(test.layer));
-});
-
-it.effect("blocks a stopped delegated session whose delegation is still running", () => {
-  const value = routine({ delegateToBotId: BotId.make("bot-helper") });
-  const test = harness(
-    value,
-    [
-      {
-        runId: RoutineRunId.make("run-delegated-stopped"),
-        routineId: value.id,
-        trigger: "scheduled",
-        scheduledFor: "2026-08-31T13:00:00.000Z",
-        claimedAt: "2026-08-31T13:00:00.000Z",
-        status: "dispatched",
-        threadRef: "thread-helper",
-        terminalState: null,
-        terminalAt: null,
-        sessionState: "stopped",
-        sessionUpdatedAt: "2026-08-31T13:01:00.000Z",
-      },
-    ],
-    null,
-    false,
-    Stream.empty,
-    null,
-    {
-      delegation: scheduledDelegation({
-        _tag: "Running",
-        childThreadId: helperThreadId,
-        childTurnId: TurnId.make("turn-helper"),
-        startedAt: "2026-08-31T13:00:00.000Z",
-        progress: null,
-      }),
-    },
-  );
-  return Effect.gen(function* () {
-    const runtime = yield* RoutineRuntime;
-    yield* runtime.recover;
-    assert.deepEqual(test.events, ["incident", "claim-blocked"]);
-  }).pipe(Effect.provide(test.layer));
-});
-
-it.effect("does not restart a claim whose projected run is already blocked", () => {
-  const value = routine({ enabled: false, lifecycle: "blocked", nextRunAt: null });
-  const test = harness(
-    value,
-    [
-      {
-        runId: RoutineRunId.make("run-blocked-before-claim-update"),
-        routineId: value.id,
-        trigger: "scheduled",
-        scheduledFor: "2026-08-31T13:00:00.000Z",
-        claimedAt: "2026-08-31T13:00:00.000Z",
-        status: "claimed",
-        threadRef: null,
-        terminalState: null,
-        terminalAt: null,
-      },
-    ],
-    null,
-    false,
-    Stream.empty,
-    "blocked",
-  );
-  return Effect.gen(function* () {
-    const runtime = yield* RoutineRuntime;
-    yield* runtime.recover;
-    assert.deepEqual(test.events, ["claim-blocked"]);
   }).pipe(Effect.provide(test.layer));
 });
 
 it.effect("validates dry runs without dispatching a provider turn", () => {
   const test = harness(routine());
+
   return Effect.gen(function* () {
     const runtime = yield* RoutineRuntime;
     yield* runtime.runNow(RoutineId.make("routine-1"), RoutineRunId.make("manual-1"), "manual");
@@ -458,6 +154,7 @@ it.effect("validates dry runs without dispatching a provider turn", () => {
 
 it.effect("blocks an unapproved routine and opens one incident", () => {
   const test = harness(routine({ approvalVersion: 1 }));
+
   return Effect.gen(function* () {
     yield* TestClock.setTime(Date.parse("2026-08-31T20:00:00.000Z"));
     const runtime = yield* RoutineRuntime;
@@ -479,6 +176,7 @@ it.effect("blocks a broken connector without retrying the same slot", () => {
     reason: "Required connector 'gmail' is unavailable.",
     nextAction: "Reconnect the connector, then resume the routine.",
   });
+
   return Effect.gen(function* () {
     yield* TestClock.setTime(Date.parse("2026-08-31T20:00:00.000Z"));
     const runtime = yield* RoutineRuntime;
@@ -493,188 +191,6 @@ it.effect("blocks a broken connector without retrying the same slot", () => {
     ]);
   }).pipe(Effect.provide(test.layer));
 });
-
-const helperThreadId = ThreadId.make("thread-helper");
-
-const scheduledDelegation = (phase: AkeruDelegationRecord["phase"]): AkeruDelegationRecord => ({
-  delegationId: DelegationId.make("delegation-scheduled"),
-  parentDelegationId: null,
-  parentBotId: BotId.make("bot-1"),
-  childBotId: BotId.make("bot-helper"),
-  parentThreadId: ThreadId.make("thread-1"),
-  parentTurnId: TurnId.make("scheduled-turn"),
-  ancestorBotIds: [],
-  depth: 0,
-  task: "Prepare the morning research brief.",
-  expectedResult: "A short summary.",
-  deadline: null,
-  access: {
-    allowedToolIds: [],
-    memoryScopes: [],
-    sandbox: "local",
-    runtimeMode: "approval-required",
-    hasUserComputer: false,
-    enabledMcpServerIds: [],
-    disabledMcpServerIds: [],
-    approvalCeiling: "secrets",
-  },
-  phase,
-  billedBotId: BotId.make("bot-helper"),
-  keep: false,
-  anchorMessageId: null,
-  retryOfDelegationId: null,
-  trigger: "scheduled",
-  createdAt: "2026-08-31T20:00:00.000Z",
-  updatedAt: "2026-08-31T20:00:00.000Z",
-});
-
-const eventBase = (id: string, aggregateKind: "delegation" | "routine", aggregateId: string) => ({
-  sequence: 1,
-  eventId: EventId.make(id),
-  aggregateKind,
-  aggregateId,
-  occurredAt: "2026-08-31T20:05:00.000Z",
-  commandId: null,
-  causationEventId: null,
-  correlationId: null,
-  metadata: {},
-});
-
-const delegationUpdated = (phase: AkeruDelegationRecord["phase"]) =>
-  ({
-    ...eventBase("event-delegation-updated", "delegation", "delegation-scheduled"),
-    type: "delegation.updated",
-    payload: { delegation: scheduledDelegation(phase) },
-  }) as OrchestrationEvent;
-
-const finishedPhase = {
-  childThreadId: helperThreadId,
-  childTurnId: TurnId.make("turn-helper"),
-  startedAt: "2026-08-31T20:00:00.000Z",
-  completedAt: "2026-08-31T20:05:00.000Z",
-};
-
-const startDelegatedRoutine = (
-  signals: Queue.Queue<string>,
-  domain: Queue.Queue<OrchestrationEvent>,
-) => {
-  const value = routine({ delegateToBotId: BotId.make("bot-helper") });
-  return {
-    value,
-    test: harness(value, [], null, false, Stream.fromQueue(domain), null, {
-      dispatched: { threadRef: helperThreadId },
-      signals,
-    }),
-  };
-};
-
-const takeUntil = (signals: Queue.Queue<string>, expected: string) =>
-  Effect.gen(function* () {
-    while ((yield* Queue.take(signals)) !== expected) {
-      // Earlier signals belong to steps the test already asserted.
-    }
-  });
-
-it.effect(
-  "settles a routine from its scheduled bot work, and pausing leaves that work running",
-  () =>
-    Effect.gen(function* () {
-      const signals = yield* Queue.unbounded<string>();
-      const domain = yield* Queue.unbounded<OrchestrationEvent>();
-      const { value, test } = startDelegatedRoutine(signals, domain);
-      yield* Effect.scoped(
-        Effect.gen(function* () {
-          yield* TestClock.setTime(Date.parse("2026-08-31T20:00:00.000Z"));
-          const runtime = yield* RoutineRuntime;
-          yield* runtime.start;
-          yield* takeUntil(signals, "dispatched");
-          yield* Queue.offer(domain, {
-            ...eventBase("event-routine-paused", "routine", value.id),
-            type: "routine.paused",
-            payload: {
-              routine: { ...value, enabled: false, lifecycle: "paused", nextRunAt: null },
-            },
-          } as OrchestrationEvent);
-          yield* Queue.offer(
-            domain,
-            delegationUpdated({
-              _tag: "Completed",
-              ...finishedPhase,
-              result: {
-                summary: "The brief is ready.",
-                childThreadId: helperThreadId,
-                childTurnId: TurnId.make("turn-helper"),
-              },
-              acknowledgedAt: null,
-            }),
-          );
-          yield* takeUntil(signals, "claim-settled");
-        }).pipe(Effect.provide(test.layer)),
-      );
-      assert.deepEqual(test.events, [
-        "claimed:missed:2026-08-31T13:00:00.000Z",
-        "queued",
-        "turn",
-        "dispatched",
-        "completed",
-        "claim-settled",
-      ]);
-      assert.deepEqual(test.summaries, ["The brief is ready."]);
-    }),
-);
-
-it.effect("cancels scheduled bot work with its run and cancels the run with its work", () =>
-  Effect.gen(function* () {
-    const signals = yield* Queue.unbounded<string>();
-    const domain = yield* Queue.unbounded<OrchestrationEvent>();
-    const { value, test } = startDelegatedRoutine(signals, domain);
-    yield* Effect.scoped(
-      Effect.gen(function* () {
-        yield* TestClock.setTime(Date.parse("2026-08-31T20:00:00.000Z"));
-        const runtime = yield* RoutineRuntime;
-        yield* runtime.start;
-        yield* takeUntil(signals, "dispatched");
-        yield* Queue.offer(domain, {
-          ...eventBase("event-run-canceled", "routine", value.id),
-          type: "routine.run-canceled",
-          payload: {
-            routine: value,
-            run: {
-              id: RoutineRunId.make("run-canceled"),
-              routineId: value.id,
-              procedureVersion: value.procedureVersion,
-              trigger: "manual",
-              scheduledFor: null,
-              status: "canceled",
-              result: null,
-              failure: null,
-              usageRef: null,
-              threadRef: helperThreadId,
-              startedAt: "2026-08-31T20:00:00.000Z",
-              completedAt: "2026-08-31T20:05:00.000Z",
-              createdAt: "2026-08-31T20:00:00.000Z",
-              updatedAt: "2026-08-31T20:05:00.000Z",
-            },
-          },
-        } as OrchestrationEvent);
-        yield* takeUntil(signals, `delegation-canceled:${helperThreadId}`);
-        yield* Queue.offer(
-          domain,
-          delegationUpdated({ _tag: "Canceled", ...finishedPhase, canceledBy: "user" }),
-        );
-        yield* takeUntil(signals, "claim-settled");
-      }).pipe(Effect.provide(test.layer)),
-    );
-    assert.deepEqual(test.events.slice(4), [
-      "claim-settled",
-      `delegation-canceled:${helperThreadId}`,
-      "run-canceled",
-      "claim-settled",
-    ]);
-    // The claim agrees with the canceled run instead of reporting a failure.
-    assert.deepEqual(test.settledStatuses, ["canceled", "canceled"]);
-  }),
-);
 
 it.effect("blocks a run whose bot work could not start", () => {
   const test = harness(
@@ -694,6 +210,7 @@ it.effect("blocks a run whose bot work could not start", () => {
       },
     },
   );
+
   return Effect.gen(function* () {
     yield* TestClock.setTime(Date.parse("2026-08-31T20:00:00.000Z"));
     const runtime = yield* RoutineRuntime;
@@ -706,29 +223,5 @@ it.effect("blocks a run whose bot work could not start", () => {
       "incident",
       "claim-blocked",
     ]);
-  }).pipe(Effect.provide(test.layer));
-});
-
-it.effect("settles the claim of a run canceled while its bot work started", () => {
-  const test = harness(
-    routine({ delegateToBotId: BotId.make("bot-helper") }),
-    [],
-    null,
-    false,
-    Stream.empty,
-    null,
-    { dispatched: { canceled: true } },
-  );
-  return Effect.gen(function* () {
-    yield* TestClock.setTime(Date.parse("2026-08-31T20:00:00.000Z"));
-    const runtime = yield* RoutineRuntime;
-    yield* runtime.runDue;
-    assert.deepEqual(test.events, [
-      "claimed:missed:2026-08-31T13:00:00.000Z",
-      "queued",
-      "turn",
-      "claim-settled",
-    ]);
-    assert.deepEqual(test.settledStatuses, ["canceled"]);
   }).pipe(Effect.provide(test.layer));
 });

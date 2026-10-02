@@ -39,10 +39,12 @@ export function HomeListOptionsProvider({
   readonly projectGroupingMode: SidebarProjectGroupingMode;
 }>) {
   const [options, setOptions] = useState<HomeListOptions>(defaultHomeListOptions);
+
   const value = useMemo(
     () => ({ options, setOptions, projectGroupingMode }),
     [options, projectGroupingMode],
   );
+
   return createElement(HomeListOptionsContext, { value }, children);
 }
 
@@ -51,11 +53,13 @@ export function useHomeListOptions(availableEnvironmentIds: ReadonlySet<Environm
   const [localOptions, setLocalOptions] = useState<HomeListOptions>(defaultHomeListOptions);
   const options = shared?.options ?? localOptions;
   const setOptions = shared?.setOptions ?? setLocalOptions;
+
   const selectedEnvironmentId =
     options.selectedEnvironmentId !== null &&
     availableEnvironmentIds.has(options.selectedEnvironmentId)
       ? options.selectedEnvironmentId
       : null;
+
   const resolvedOptions: ResolvedHomeListOptions = {
     selectedEnvironmentId,
     projectGroupingMode: shared?.projectGroupingMode ?? "repository",
@@ -64,6 +68,7 @@ export function useHomeListOptions(availableEnvironmentIds: ReadonlySet<Environm
   const setSelectedEnvironmentId = useCallback((value: EnvironmentId | null) => {
     setOptions((current) => ({ ...current, selectedEnvironmentId: value }));
   }, []);
+
   return {
     options: resolvedOptions,
     setSelectedEnvironmentId,

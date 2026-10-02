@@ -1,3 +1,5 @@
+import { Predicate } from "effect";
+import { Match } from "effect";
 import { useMobileI18n } from "../../lib/i18n";
 import { StackActions, useNavigation, type StaticScreenProps } from "@react-navigation/native";
 import { useAtomValue } from "@effect/atom-react";
@@ -30,7 +32,7 @@ import type { MobileSettingsHealthTarget } from "./settingsDeepLink";
 export type SettingsProviderHealthParams = {
   readonly environmentId: EnvironmentId;
   readonly target: MobileSettingsHealthTarget;
-} & Record<string, unknown>;
+};
 
 function Field(props: { readonly label: string; readonly value: string }) {
   return (
@@ -60,20 +62,25 @@ function BotInboxRow({
   const [error, setError] = useState<string | null>(null);
   const action = botInboxRowAction(item);
   const copy = botInboxItemCopy(item, t);
+
   const run = async (task: () => Promise<string | null>) => {
     if (busy) return;
     setBusy(true);
     setError(null);
+
     try {
       setError(await task());
     } finally {
       setBusy(false);
     }
   };
+
   const decideMemory = (intent: MemoryApprovalIntent) =>
     run(async () => {
       const approval = item.memoryApproval;
+
       if (!approval) return null;
+
       const result = await mutateFact({
         environmentId,
         input: {
@@ -81,17 +88,22 @@ function BotInboxRow({
           mutation: memoryApprovalMutation(approval, intent),
         },
       });
-      if (result._tag === "Failure") {
+
+      if (Predicate.isTagged(result, "Failure")) {
         return t(describeDurableFactFailure(squashAtomCommandFailure(result)).message);
       }
+
       // The server closes the inbox item when it records the decision.
       onDecided();
+
       return null;
     });
+
   const resolve = () =>
     run(async () => {
       const result = await resolveIncident({ environmentId, input: { id: item.id } });
-      return result._tag === "Failure" ? t("Could not resolve this item") : null;
+
+      return Predicate.isTagged(result, "Failure") ? t("Could not resolve this item") : null;
     });
 
   return (
@@ -183,6 +195,7 @@ function BotInbox({
   readonly onDecided: () => void;
 }) {
   const { t } = useMobileI18n();
+
   return (
     <SettingsSection title={t("Bot inbox")} card>
       {items.length === 0 ? (
@@ -218,6 +231,7 @@ function LocalExecution({ environmentId }: { readonly environmentId: Environment
   const settings = useAtomValue(serverEnvironment.settingsValueAtom(environmentId));
   const updateSettings = useAtomCommand(serverEnvironment.updateSettings, { reportFailure: false });
   const mode = settings?.localExecutionMode;
+
   return (
     <SettingsSection title={t("Local execution")} card>
       <View className="gap-3 p-4">
@@ -265,6 +279,7 @@ export function SettingsProviderHealthRouteScreen({
   const { t } = useMobileI18n();
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
+
   const query = useEnvironmentQuery(
     route.params.target !== "bot-inbox"
       ? null
@@ -273,18 +288,19 @@ export function SettingsProviderHealthRouteScreen({
           input: {},
         }),
   );
-  const title =
-    route.params.target === "bot-inbox"
-      ? t("Bot inbox")
-      : route.params.target === "providers"
-        ? t("Provider connections")
-        : route.params.target === "image-generation"
-          ? t("Image generation")
-          : t("Local execution");
+
+  const title = Match.value(route.params.target).pipe(
+    Match.when("bot-inbox", () => t("Bot inbox")),
+    Match.when("providers", () => t("Provider connections")),
+    Match.when("image-generation", () => t("Image generation")),
+    Match.orElse(() => t("Local execution")),
+  );
+
   const inboxView =
     route.params.target === "bot-inbox"
       ? settingsInboxView({ error: query.error, data: query.data })
       : null;
+
   const section =
     route.params.target === "local-execution" ? (
       <LocalExecution environmentId={route.params.environmentId} />
@@ -318,26 +334,33 @@ export function SettingsProviderHealthRouteScreen({
           ) : undefined
         }
       >
-        {route.params.target === "providers" ? (
-          <ProviderConnections
-            key={route.params.environmentId}
-            environmentId={route.params.environmentId}
-          />
-        ) : route.params.target === "image-generation" ? (
-          <ImageGenerationSummary
-            key={route.params.environmentId}
-            environmentId={route.params.environmentId}
-          />
-        ) : route.params.target === "local-execution" ? (
-          section
-        ) : inboxView?.kind === "error" ? (
-          <Text className="py-16 text-center text-sm text-danger">{inboxView.message}</Text>
-        ) : inboxView?.kind === "loading" ? (
-          <Text className="py-16 text-center text-sm text-foreground-muted">
-            {t("Loading bot inbox…")}
-          </Text>
-        ) : (
-          section
+        {Match.value(route.params.target).pipe(
+          Match.when("providers", () => (
+            <ProviderConnections
+              key={route.params.environmentId}
+              environmentId={route.params.environmentId}
+            />
+          )),
+          Match.when("image-generation", () => (
+            <ImageGenerationSummary
+              key={route.params.environmentId}
+              environmentId={route.params.environmentId}
+            />
+          )),
+          Match.when("local-execution", () => section),
+          Match.orElse(() =>
+            Match.value(inboxView).pipe(
+              Match.when({ kind: "error" }, (view) => (
+                <Text className="py-16 text-center text-sm text-danger">{view.message}</Text>
+              )),
+              Match.when({ kind: "loading" }, () => (
+                <Text className="py-16 text-center text-sm text-foreground-muted">
+                  {t("Loading bot inbox…")}
+                </Text>
+              )),
+              Match.orElse(() => section),
+            ),
+          ),
         )}
       </ScrollView>
     </View>

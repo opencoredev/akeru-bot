@@ -44,15 +44,22 @@ export interface CollectComposerInlineTokensOptions {
 }
 
 export const COMPOSER_BROWSER_MENTION = "@browser";
+
 const THREAD_MENTION_PREFIX = "@chat:";
+
 const THREAD_MENTION_ID_PATTERN = "[A-Za-z0-9][A-Za-z0-9._:-]*";
+
 const THREAD_MENTION_ID_REGEX = new RegExp(`^${THREAD_MENTION_ID_PATTERN}$`);
+
 const BOT_MENTION_PREFIX = "@bot:";
+
 const BROWSER_MENTION_TOKEN_REGEX = /(^|\s)@browser(?=\s)/g;
+
 const THREAD_MENTION_TOKEN_REGEX = new RegExp(
   `(^|\\s)@chat:(${THREAD_MENTION_ID_PATTERN})(?=\\s)`,
   "g",
 );
+
 const BOT_MENTION_TOKEN_REGEX = new RegExp(
   `(^|\\s)@bot:(${THREAD_MENTION_ID_PATTERN})(?=\\s)`,
   "g",
@@ -76,7 +83,9 @@ function isReservedMentionPath(path: string): boolean {
 }
 
 const SKILL_TOKEN_REGEX = /(^|\s)\$([a-zA-Z0-9][a-zA-Z0-9:_-]*)(?=\s)/g;
+
 const MENTION_TOKEN_REGEX = /(^|\s)@(?:"((?:\\.|[^"\\])*)"|([^\s@"]+))(?=\s)/g;
+
 /**
  * The label body is bounded rather than `*`. Unbounded, every whitespace in
  * the composer is a candidate start: the engine scans the rest of the text for
@@ -88,12 +97,16 @@ const MENTION_TOKEN_REGEX = /(^|\s)@(?:"((?:\\.|[^"\\])*)"|([^\s@"]+))(?=\s)/g;
  * any common filesystem allows is 255.
  */
 const MAX_FILE_LINK_LABEL_LENGTH = 512;
+
 const FILE_LINK_TOKEN_REGEX = new RegExp(
   `(^|\\s)\\[((?:\\\\.|[^\\]\\\\]){0,${MAX_FILE_LINK_LABEL_LENGTH}})\\]\\(([^)\\s]+)\\)(?=\\s)`,
   "g",
 );
+
 const URI_SCHEME_REGEX = /^[A-Za-z][A-Za-z0-9+.-]*:/;
+
 const WINDOWS_DRIVE_PATH_REGEX = /^[A-Za-z]:[\\/]/;
+
 // Autocomplete emits canonical file links, so ambiguous bare @scope/package text stays a package.
 const SCOPED_PACKAGE_REFERENCE_REGEX =
   /^[a-z0-9][a-z0-9._-]*\/[a-z0-9][a-z0-9._-]*(?:\/[^\s@"]+)*$/;
@@ -107,17 +120,21 @@ function collectMentionTokens(text: string): ComposerInlineToken[] {
     const label = (match[2] ?? "").replace(/\\(.)/g, "$1");
     const encodedPath = match[3] ?? "";
     let path = encodedPath;
+
     try {
       path = decodeURIComponent(encodedPath);
     } catch {
       // Preserve malformed source rather than dropping a user-authored token.
     }
+
     const separatorIndex = Math.max(path.lastIndexOf("/"), path.lastIndexOf("\\"));
     const basename = separatorIndex >= 0 ? path.slice(separatorIndex + 1) : path;
     const hasExternalScheme = URI_SCHEME_REGEX.test(path) && !WINDOWS_DRIVE_PATH_REGEX.test(path);
+
     if (!path || hasExternalScheme || label !== basename) {
       continue;
     }
+
     const start = (match.index ?? 0) + prefix.length;
     const end = start + fullMatch.length - prefix.length;
     matches.push({
@@ -134,6 +151,7 @@ function collectMentionTokens(text: string): ComposerInlineToken[] {
     const prefix = match[1] ?? "";
     const quotedPath = match[2];
     const path = quotedPath !== undefined ? quotedPath.replace(/\\(.)/g, "$1") : (match[3] ?? "");
+
     if (
       !path ||
       (quotedPath === undefined &&
@@ -141,6 +159,7 @@ function collectMentionTokens(text: string): ComposerInlineToken[] {
     ) {
       continue;
     }
+
     const start = (match.index ?? 0) + prefix.length;
     const end = start + fullMatch.length - prefix.length;
     matches.push({
@@ -203,9 +222,11 @@ export function collectComposerInlineTokens(
     const fullMatch = match[0];
     const prefix = match[1] ?? "";
     const value = match[2] ?? "";
+
     if (!value) {
       continue;
     }
+
     const start = (match.index ?? 0) + prefix.length;
     const end = start + fullMatch.length - prefix.length;
     matches.push({
@@ -246,18 +267,23 @@ export interface ComposerMentionReferences {
 export function collectComposerMentionReferences(text: string): ComposerMentionReferences {
   let browser = false;
   const threadIds: string[] = [];
+
   for (const token of collectComposerInlineTokens(`${text}\n`)) {
     if (token.type === "browser-mention") browser = true;
+
     if (token.type === "thread-mention" && !threadIds.includes(token.value)) {
       threadIds.push(token.value);
     }
   }
+
   return { browser, threadIds };
 }
 
 export const BROWSER_MENTION_LABEL = "Browser";
+
 /** Label for a chat mention whose chat this client cannot see, or that no longer exists. */
 export const UNKNOWN_CHAT_MENTION_LABEL = "Unknown chat";
+
 /** Label for an `@bot:<id>` mention whose bot this client cannot see, or that was removed. */
 export const UNKNOWN_BOT_MENTION_LABEL = "Unknown bot";
 
@@ -284,6 +310,7 @@ export function collectComposerMentionDisplays(
 ): ComposerMentionDisplay[] {
   const displays: ComposerMentionDisplay[] = [];
   const seen = new Set<string>();
+
   for (const token of collectComposerInlineTokens(`${text}\n`)) {
     if (
       token.type !== "browser-mention" &&
@@ -292,9 +319,11 @@ export function collectComposerMentionDisplays(
     ) {
       continue;
     }
+
     if (seen.has(token.source)) continue;
     seen.add(token.source);
     const base = { source: token.source, start: token.start, end: token.end };
+
     if (token.type === "browser-mention") {
       displays.push({
         ...base,
@@ -321,5 +350,6 @@ export function collectComposerMentionDisplays(
       });
     }
   }
+
   return displays;
 }

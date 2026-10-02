@@ -28,7 +28,7 @@ function BotIndexRedirect() {
   if (botId !== null && rosterReady) return null;
 
   return (
-    <SidebarInset className="h-dvh min-h-0 overflow-hidden bg-background text-foreground">
+    <SidebarInset tone="foreground" className="h-dvh min-h-0 overflow-hidden">
       <div className="flex min-h-0 min-w-0 flex-1 flex-col">
         <WorkspacePageHeader className="border-b border-border">
           <span className="text-sm font-medium text-muted-foreground">{APP_DISPLAY_NAME}</span>

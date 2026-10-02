@@ -14,7 +14,7 @@ import { instanceUsesSavedCredential } from "../../subscription-auth/runtime.ts"
 import { ServerSettingsService } from "../../serverSettings.ts";
 import { ProviderDriverError } from "../Errors.ts";
 import { makeHarnessProviderStatus } from "../HarnessProviderStatus.ts";
-import { makePendingClaudeProvider } from "../Layers/ClaudeProvider.ts";
+import { pendingClaudeProvider } from "../Layers/ClaudeProvider.ts";
 import { ProviderEventLoggers } from "../Layers/ProviderEventLoggers.ts";
 import { makeManagedServerProvider } from "../makeManagedServerProvider.ts";
 import * as ModelManifest from "../ModelManifest.ts";
@@ -28,23 +28,25 @@ import { explicitProviderInstanceEnvironment } from "../ProviderInstanceEnvironm
 import { mergeSubscriptionInstanceEnvironment } from "../../subscription-auth/runtime.ts";
 import {
   enrichProviderSnapshotWithVersionAdvisory,
-  makePackageManagedProviderMaintenanceResolver,
+  packageManagedProviderMaintenanceResolver,
   normalizeCommandPath,
   resolveProviderMaintenanceCapabilitiesEffect,
 } from "../providerMaintenance.ts";
 import {
   haveProviderSnapshotSettingsChanged,
-  makeProviderSnapshotSettingsSource,
+  providerSnapshotSettingsSource,
   type ProviderSnapshotSettings,
 } from "../providerUpdateSettings.ts";
-import { makeClaudeContinuationGroupKey } from "./ClaudeHome.ts";
+import { claudeContinuationGroupKey } from "./ClaudeHome.ts";
 import { discoverClaudeSkills } from "./ClaudeSkills.ts";
+
 const decodeClaudeSettings = Schema.decodeSync(ClaudeSettings);
 
 const DRIVER_KIND = ProviderDriverKind.make("claudeAgent");
 
 function isClaudeNativeCommandPath(commandPath: string): boolean {
   const normalized = normalizeCommandPath(commandPath);
+
   return (
     normalized.endsWith("/.local/bin/claude") ||
     normalized.endsWith("/.local/bin/claude.exe") ||
@@ -52,7 +54,7 @@ function isClaudeNativeCommandPath(commandPath: string): boolean {
   );
 }
 
-const UPDATE = makePackageManagedProviderMaintenanceResolver({
+const UPDATE = packageManagedProviderMaintenanceResolver({
   provider: DRIVER_KIND,
   npmPackageName: "@anthropic-ai/claude-code",
   homebrewFormula: "claude-code",
@@ -108,11 +110,14 @@ export const ClaudeDriver: ProviderDriver<ClaudeSettings, ClaudeDriverEnv> = {
       const httpClient = yield* HttpClient.HttpClient;
       const serverSettings = yield* ServerSettingsService;
       const processEnv = mergeSubscriptionInstanceEnvironment(environment);
+
       const fallbackContinuationIdentity = defaultProviderContinuationIdentity({
         driverKind: DRIVER_KIND,
         instanceId,
       });
+
       const effectiveConfig = { ...config, enabled } satisfies ClaudeSettings;
+
       const connection = {
         environment: processEnv,
         instanceEnvironment: explicitProviderInstanceEnvironment(environment),
@@ -122,11 +127,14 @@ export const ClaudeDriver: ProviderDriver<ClaudeSettings, ClaudeDriverEnv> = {
           config,
         }),
       };
+
       const maintenanceCapabilities = yield* resolveProviderMaintenanceCapabilitiesEffect(UPDATE, {
         binaryPath: effectiveConfig.binaryPath,
         env: processEnv,
       });
-      const continuationGroupKey = yield* makeClaudeContinuationGroupKey(effectiveConfig);
+
+      const continuationGroupKey = yield* claudeContinuationGroupKey(effectiveConfig);
+
       const stampIdentity = withInstanceIdentity({
         instanceId,
         displayName,
@@ -135,6 +143,7 @@ export const ClaudeDriver: ProviderDriver<ClaudeSettings, ClaudeDriverEnv> = {
       });
 
       const adapter = undefined;
+
       const textGeneration = yield* makeHarnessTextGeneration({
         secretsDir,
         driver: DRIVER_KIND,
@@ -148,8 +157,8 @@ export const ClaudeDriver: ProviderDriver<ClaudeSettings, ClaudeDriverEnv> = {
         driver: DRIVER_KIND,
         instanceId,
         connection,
-        draft: makePendingClaudeProvider(effectiveConfig),
-      })).pipe(
+        draft: pendingClaudeProvider(effectiveConfig),
+      })).checkProvider.pipe(
         Effect.flatMap((draft) =>
           discoverClaudeSkills(effectiveConfig, cwd, processEnv).pipe(
             Effect.map((skills) => stampIdentity({ ...draft, skills })),
@@ -159,7 +168,8 @@ export const ClaudeDriver: ProviderDriver<ClaudeSettings, ClaudeDriverEnv> = {
         Effect.provideService(Path.Path, path),
       );
 
-      const snapshotSettings = makeProviderSnapshotSettingsSource(effectiveConfig, serverSettings);
+      const snapshotSettings = providerSnapshotSettingsSource(effectiveConfig, serverSettings);
+
       const snapshot = yield* makeManagedServerProvider<ProviderSnapshotSettings<ClaudeSettings>>({
         maintenanceCapabilities,
         getSettings: snapshotSettings.getSettings,

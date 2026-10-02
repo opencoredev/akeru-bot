@@ -110,6 +110,7 @@ function ConnectedBotBrowserPreview({
   const nativeSupported = isPreviewSupportedInRuntime();
   const frame = tabId ? (previewState.framesByTabId[tabId] ?? null) : null;
   const failed = snapshot?.navStatus._tag === "LoadFailed";
+
   const status = resolveBotBrowserPreviewStatus({
     supported: true,
     hasThread: true,
@@ -118,6 +119,7 @@ function ConnectedBotBrowserPreview({
     loading: desktopOverlay?.loading ?? snapshot?.navStatus._tag === "Loading",
     failed,
   });
+
   const runtimeTabId =
     !nativeSupported || tabId === null
       ? null
@@ -127,11 +129,14 @@ function ConnectedBotBrowserPreview({
   // menus — keep priority.
   useEffect(() => {
     if (!expanded) return;
+
     const onKey = (event: KeyboardEvent) => {
       if (event.defaultPrevented || event.key !== "Escape") return;
       onExpandedChange(false);
     };
+
     document.addEventListener("keydown", onKey);
+
     return () => document.removeEventListener("keydown", onKey);
   }, [expanded, onExpandedChange]);
 
@@ -148,6 +153,7 @@ function ConnectedBotBrowserPreview({
     } else if (!expanded && wasExpanded.current) {
       collapsedRef.current?.querySelector<HTMLElement>("[data-browser-expand]")?.focus();
     }
+
     wasExpanded.current = expanded;
   }, [expanded]);
 
@@ -160,7 +166,7 @@ function ConnectedBotBrowserPreview({
         ref={expandedRef}
         tabIndex={-1}
       >
-        <header className="flex h-[var(--workspace-topbar-height)] shrink-0 items-center justify-between gap-3 px-4">
+        <header className="flex h-(--workspace-topbar-height) shrink-0 items-center justify-between gap-3 px-4">
           <h2 className="min-w-0 truncate text-sm font-medium">
             {t("{name}'s browser", { name: botName })}
           </h2>
@@ -186,7 +192,7 @@ function ConnectedBotBrowserPreview({
         <div
           className={cn(
             "relative mx-3 mb-3 min-h-0 flex-1 overflow-hidden rounded-xl border border-border",
-            isLiveBrowserStatus(status) ? "bg-zinc-950" : "bg-muted/40",
+            isLiveBrowserStatus(status) ? "bg-media-mat" : "bg-muted/40",
           )}
         >
           {nativeSupported ? (
@@ -271,7 +277,7 @@ function BotBrowserPreviewFrame({
       <div
         className={cn(
           "group/screen relative aspect-video overflow-hidden rounded-xl border border-border transition-shadow",
-          live ? "bg-zinc-950" : "bg-muted/40",
+          live ? "bg-media-mat" : "bg-muted/40",
           canOpen && "cursor-pointer hover:shadow-sm",
         )}
         onClick={canOpen ? onExpand : undefined}
@@ -288,10 +294,11 @@ function BotBrowserPreviewFrame({
         {showFrame && frame ? <RemoteFrame botName={botName} frame={frame} /> : null}
         <ScreenStatus status={status} />
         {canOpen ? (
-          <div className="absolute inset-0 z-40 flex items-center justify-center bg-zinc-950/0 transition-colors group-focus-within/screen:bg-zinc-950/25 group-hover/screen:bg-zinc-950/25">
+          <div className="absolute inset-0 z-40 flex items-center justify-center bg-media-mat/0 transition-colors group-focus-within/screen:bg-media-mat/25 group-hover/screen:bg-media-mat/25">
             <Button
               aria-label={t("Open {name} browser", { name: botName })}
-              className="translate-y-1 opacity-0 transition group-focus-within/screen:translate-y-0 group-focus-within/screen:opacity-100 group-hover/screen:translate-y-0 group-hover/screen:opacity-100"
+              presentation="screen-reveal"
+              className="translate-y-1 group-focus-within/screen:translate-y-0 group-hover/screen:translate-y-0"
               size="xs"
               variant="secondary"
               onClick={(event) => {
@@ -317,6 +324,7 @@ function RemoteFrame({
   readonly frame: PreviewFrame;
 }) {
   const { t } = useI18n();
+
   return (
     <img
       alt={t("{name} browser", { name: botName })}
@@ -334,12 +342,13 @@ function RemoteFrame({
  */
 function ScreenStatus({ status }: { readonly status: BotBrowserPreviewStatus }) {
   const { t } = useI18n();
+
   if (status === "ready") return null;
 
   if (status === "loading") {
     return (
       <div
-        className="pointer-events-none absolute inset-0 flex items-center justify-center bg-zinc-950/70 px-6 text-center text-xs text-zinc-300"
+        className="pointer-events-none absolute inset-0 flex items-center justify-center bg-media-mat/70 px-6 text-center text-xs text-media-mat-foreground"
         role="status"
       >
         {screenStatusLabel("loading", t)}

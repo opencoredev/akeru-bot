@@ -1,3 +1,5 @@
+import * as Layer from "effect/Layer";
+import * as Predicate from "effect/Predicate";
 import * as Queue from "effect/Queue";
 import * as Stream from "effect/Stream";
 import * as Cause from "effect/Cause";
@@ -10,13 +12,13 @@ import * as AcpError from "../errors.ts";
 
 const encoder = new TextEncoder();
 
-export const makeChildStdio = (handle: ChildProcessSpawner.ChildProcessHandle) =>
+const makeChildStdio = (handle: ChildProcessSpawner.ChildProcessHandle) =>
   Stdio.make({
     args: Effect.succeed([]),
     stdin: handle.stdout,
     stdout: () =>
       Sink.mapInput(handle.stdin, (chunk: string | Uint8Array) =>
-        typeof chunk === "string" ? encoder.encode(chunk) : chunk,
+        Predicate.isString(chunk) ? encoder.encode(chunk) : chunk,
       ),
     stderr: () => Sink.drain,
   });
@@ -34,7 +36,7 @@ export const makeInMemoryStdio = Effect.fn("makeInMemoryStdio")(function* () {
         Sink.forEach((chunk: string | Uint8Array) =>
           Queue.offer(
             output,
-            typeof chunk === "string" ? chunk : decoder.decode(chunk, { stream: true }),
+            Predicate.isString(chunk) ? chunk : decoder.decode(chunk, { stream: true }),
           ),
         ),
       stderr: () => Sink.drain,
@@ -49,7 +51,7 @@ type ChildProcessTerminationHandle = Pick<
   "exitCode" | "pid"
 >;
 
-export const makeTerminationError = (
+export const terminationErrorFromHandle = (
   handle: ChildProcessTerminationHandle,
 ): Effect.Effect<AcpError.AcpError> =>
   Effect.match(handle.exitCode, {
@@ -61,3 +63,8 @@ export const makeTerminationError = (
       }),
     onSuccess: (code) => new AcpError.AcpProcessExitedError({ code, pid: handle.pid }),
   });
+
+export { makeChildStdio };
+
+export const childStdioLayer = (handle: ChildProcessSpawner.ChildProcessHandle) =>
+  Layer.succeed(Stdio.Stdio, makeChildStdio(handle));

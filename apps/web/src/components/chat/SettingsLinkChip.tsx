@@ -10,7 +10,6 @@ import { cn } from "../../lib/utils";
 import {
   CHAT_INLINE_CHIP_CLASS_NAME,
   CHAT_INLINE_CHIP_LABEL_CLASS_NAME,
-  COMPOSER_INLINE_CHIP_ICON_CLASS_NAME,
 } from "../composerInlineChip";
 import { AppIcon } from "../ui/app-icon";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
@@ -30,6 +29,7 @@ export function SettingsLinkChip({
 }) {
   const { t } = useI18n();
   const tooltip = t("Open Settings > {destination}", { destination: t(destination.label) });
+
   return (
     <Tooltip>
       <TooltipTrigger
@@ -45,11 +45,12 @@ export function SettingsLinkChip({
             onClick={(event: MouseEvent<HTMLAnchorElement>) => {
               event.preventDefault();
               event.stopPropagation();
+
               if (destination.section === "plugins") openPlugins();
               else openSettings(destination.section, destination.targetId, environmentId);
             }}
           >
-            <AppIcon icon={Settings02Icon} className={COMPOSER_INLINE_CHIP_ICON_CLASS_NAME} />
+            <AppIcon icon={Settings02Icon} fit="inline-chip" />
             <span className={CHAT_INLINE_CHIP_LABEL_CLASS_NAME}>{children}</span>
           </a>
         }

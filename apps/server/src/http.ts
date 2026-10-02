@@ -1,4 +1,4 @@
-// @effect-diagnostics nodeBuiltinImport:off
+import * as Predicate from "effect/Predicate";
 import Mime from "@effect/platform-node/Mime";
 import * as NodeFS from "node:fs";
 import {
@@ -49,12 +49,16 @@ import * as ServerEnvironment from "./environment/ServerEnvironment.ts";
 import { browserApiCorsAllowedHeaders, browserApiCorsAllowedMethods } from "./httpCors.ts";
 
 const OTLP_TRACES_PROXY_PATH = "/api/observability/v1/traces";
+
 const LOOPBACK_HOSTNAMES = new Set(["127.0.0.1", "::1", "localhost"]);
+
 const DESKTOP_RENDERER_ORIGINS = ["akeru://app", "akeru-dev://app"];
+
 const SVG_CONTENT_SECURITY_POLICY = "default-src 'none'; style-src 'unsafe-inline'; sandbox";
 
-export function assetResponseHeaders(filePath: string): Record<string, string> {
+export function assetResponseHeaders(filePath: string) {
   const lowerPath = filePath.toLowerCase();
+
   return {
     "Cache-Control": "private, max-age=3600",
     "X-Content-Type-Options": "nosniff",
@@ -75,6 +79,7 @@ export const browserApiCorsLayer = Layer.unwrap(
   Effect.gen(function* () {
     const config = yield* ServerConfig.ServerConfig;
     const devOrigin = config.devUrl?.origin;
+
     // Dev uses credentialed requests from Vite or the Electron custom origin, so both must be
     // explicit. Packaged desktop omits credentials and uses Effect's default wildcard origin.
     //
@@ -101,6 +106,7 @@ export function isLoopbackHostname(hostname: string): boolean {
     .trim()
     .toLowerCase()
     .replace(/^\[(.*)\]$/, "$1");
+
   return LOOPBACK_HOSTNAMES.has(normalizedHostname);
 }
 
@@ -109,6 +115,7 @@ export function resolveDevRedirectUrl(devUrl: URL, requestUrl: URL): string {
   redirectUrl.pathname = requestUrl.pathname;
   redirectUrl.search = requestUrl.search;
   redirectUrl.hash = requestUrl.hash;
+
   return redirectUrl.toString();
 }
 
@@ -118,6 +125,7 @@ const authenticateRawRouteWithScope = (
   Effect.gen(function* () {
     const request = yield* HttpServerRequest.HttpServerRequest;
     const serverAuth = yield* EnvironmentAuth.EnvironmentAuth;
+
     const session = yield* serverAuth.authenticateHttpRequest(request).pipe(
       Effect.catchIf(EnvironmentAuth.isServerAuthCredentialError, (error) =>
         failEnvironmentAuthInvalid(EnvironmentAuth.serverAuthCredentialReason(error)),
@@ -126,6 +134,7 @@ const authenticateRawRouteWithScope = (
         failEnvironmentInternal("internal_error", error),
       ),
     );
+
     if (!session.scopes.includes(scope)) {
       return yield* failEnvironmentScopeRequired(scope);
     }
@@ -136,10 +145,12 @@ export const serverEnvironmentHttpApiLayer = HttpApiBuilder.group(
   "metadata",
   Effect.fnUntraced(function* (handlers) {
     const serverEnvironment = yield* ServerEnvironment.ServerEnvironment;
+
     return handlers.handle(
       "descriptor",
       Effect.fn("environment.metadata.descriptor")(function* (args) {
         yield* annotateEnvironmentRequest(args.endpoint.name);
+
         return yield* serverEnvironment.getDescriptor;
       }),
     );
@@ -212,12 +223,14 @@ export const assetRouteLayer = HttpRouter.add(
   Effect.gen(function* () {
     const request = yield* HttpServerRequest.HttpServerRequest;
     const url = HttpServerRequest.toURL(request);
+
     if (Option.isNone(url)) {
       return HttpServerResponse.text("Bad Request", { status: 400 });
     }
 
     const suffix = url.value.pathname.slice(`${ASSET_ROUTE_PREFIX}/`.length);
     const separatorIndex = suffix.indexOf("/");
+
     if (separatorIndex <= 0) {
       return HttpServerResponse.text("Not Found", { status: 404 });
     }
@@ -226,9 +239,11 @@ export const assetRouteLayer = HttpRouter.add(
       suffix.slice(0, separatorIndex),
       suffix.slice(separatorIndex + 1),
     );
+
     if (!asset) {
       return HttpServerResponse.text("Not Found", { status: 404 });
     }
+
     return yield* HttpServerResponse.file(asset.path, {
       status: 200,
       headers: assetResponseHeaders(asset.path),
@@ -244,20 +259,25 @@ export const attachmentUploadRouteLayer = HttpRouter.add(
   Effect.gen(function* () {
     const request = yield* HttpServerRequest.HttpServerRequest;
     const url = HttpServerRequest.toURL(request);
+
     if (Option.isNone(url)) {
       return HttpServerResponse.text("Bad Request", { status: 400 });
     }
 
     const token = url.value.pathname.slice(`${ATTACHMENT_UPLOAD_ROUTE_PREFIX}/`.length);
+
     if (!token) {
       return HttpServerResponse.text("Not Found", { status: 404 });
     }
+
     const claims = yield* validateAttachmentUploadToken(token);
+
     if (!claims) {
       return HttpServerResponse.text("Not Found", { status: 404 });
     }
 
     const contentLengthHeader = request.headers["content-length"];
+
     if (
       contentLengthHeader !== undefined &&
       (!Number.isInteger(Number(contentLengthHeader)) ||
@@ -272,11 +292,13 @@ export const attachmentUploadRouteLayer = HttpRouter.add(
       Effect.provideService(HttpServerRequest.MaxBodySize, FileSystem.Size(claims.sizeBytes)),
       Effect.orElseSucceed(() => null),
     );
+
     if (body === null) {
       return HttpServerResponse.text("Failed to read the upload body.", { status: 400 });
     }
 
     const stored = yield* storeAttachmentUpload(claims, new Uint8Array(body));
+
     return stored.ok
       ? HttpServerResponse.empty({ status: 204 })
       : HttpServerResponse.text(stored.detail, { status: stored.status });
@@ -298,11 +320,14 @@ const decodeBuildManifest = Schema.decodeUnknownEffect(
 
 const loadImmutableBuildAssets = Effect.gen(function* () {
   const config = yield* ServerConfig.ServerConfig;
+
   const staticDir =
     config.staticDir ?? (config.devUrl ? yield* ServerConfig.resolveStaticDir() : undefined);
+
   if (!staticDir) return new Set<string>();
   const fileSystem = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
+
   return yield* fileSystem.readFileString(path.join(staticDir, ".vite", "manifest.json")).pipe(
     Effect.flatMap(decodeBuildManifest),
     Effect.map(
@@ -323,9 +348,11 @@ const openStaticFile = Effect.fn("openStaticFile")(function* (filePath: string) 
   const fileSystem = yield* FileSystem.FileSystem;
   // Reject directories and special files before opening. Response metadata comes from the handle.
   const pathInfo = yield* fileSystem.stat(filePath).pipe(Effect.orElseSucceed(() => null));
+
   if (pathInfo?.type !== "File") return null;
   const file = yield* fileSystem.open(filePath, { flag: "r" });
   const info = yield* file.stat;
+
   return info.type === "File" ? { file, info } : null;
 });
 
@@ -336,16 +363,20 @@ const streamStaticFile = (file: FileSystem.File, size: bigint) =>
       if (offset >= size) return;
       const remaining = size - offset;
       const bytes = yield* file.readAlloc(remaining < 65_536n ? remaining : 65_536n);
+
       if (Option.isNone(bytes)) return;
+
       return [bytes.value, offset + BigInt(bytes.value.byteLength)] as const;
     }),
   );
 
 function mutableFileEtag(file: FileSystem.File): string | undefined {
-  const descriptor = (file as FileSystem.File & { readonly fd?: unknown }).fd;
-  if (typeof descriptor !== "number") return undefined;
+  if (!("fd" in file) || !Predicate.isNumber(file.fd)) return undefined;
+  const descriptor = file.fd;
+
   try {
     const info = NodeFS.fstatSync(descriptor, { bigint: true });
+
     return `W/"${info.dev.toString(16)}-${info.ino.toString(16)}-${info.size.toString(16)}-${info.mtimeNs.toString(16)}-${info.ctimeNs.toString(16)}"`;
   } catch {
     // Without a validator that changes with content, serving 200 is safer than a stale 304.
@@ -363,6 +394,7 @@ const handleStaticAndDevRequest = Effect.fn("handleStaticAndDevRequest")(
     }
 
     const config = yield* ServerConfig.ServerConfig;
+
     if (config.devUrl && isDevProxiedPath(url.value.pathname)) {
       return HttpServerResponse.text("Not Found", { status: 404 });
     }
@@ -375,6 +407,7 @@ const handleStaticAndDevRequest = Effect.fn("handleStaticAndDevRequest")(
 
     const staticDir =
       config.staticDir ?? (config.devUrl ? yield* ServerConfig.resolveStaticDir() : undefined);
+
     if (!staticDir) {
       return HttpServerResponse.text("No static directory configured and no dev URL set.", {
         status: 503,
@@ -388,6 +421,7 @@ const handleStaticAndDevRequest = Effect.fn("handleStaticAndDevRequest")(
     const hasRawLeadingParentSegment = rawStaticRelativePath.startsWith("..");
     const staticRelativePath = path.normalize(rawStaticRelativePath).replace(/^[/\\]+/, "");
     const hasPathTraversalSegment = staticRelativePath.startsWith("..");
+
     if (
       staticRelativePath.length === 0 ||
       hasRawLeadingParentSegment ||
@@ -402,41 +436,58 @@ const handleStaticAndDevRequest = Effect.fn("handleStaticAndDevRequest")(
       candidate.startsWith(staticRoot.endsWith(path.sep) ? staticRoot : `${staticRoot}${path.sep}`);
 
     let filePath = path.resolve(staticRoot, staticRelativePath);
+
     if (!isWithinStaticRoot(filePath)) {
       return HttpServerResponse.text("Invalid static file path", { status: 400 });
     }
 
     const ext = path.extname(filePath);
+
     if (!ext) {
       filePath = path.resolve(filePath, "index.html");
+
       if (!isWithinStaticRoot(filePath)) {
         return HttpServerResponse.text("Invalid static file path", { status: 400 });
       }
     }
 
     let opened = yield* openStaticFile(filePath);
+
     if (!opened) {
       filePath = path.resolve(staticRoot, "index.html");
       opened = yield* openStaticFile(filePath);
+
       if (!opened) {
         return HttpServerResponse.text("Not Found", { status: 404 });
       }
     }
+
     const fileInfo = opened.info;
 
     // A hash-like name is not enough: custom static files can use the same naming pattern.
     const relativePath = path.relative(staticRoot, filePath).replaceAll("\\", "/");
+
     const immutable =
       /^assets\/.+-[\w-]{8}\.[^/]+$/.test(relativePath) && immutableBuildAssets.has(relativePath);
-    const headers: Record<string, string> = {
+
+    type StaticResponseHeaders = {
+      "Cache-Control": string;
+      ETag?: string;
+      "Last-Modified"?: string;
+    };
+
+    const headers: StaticResponseHeaders = {
       "Cache-Control": immutable ? "public, max-age=31536000, immutable" : "no-cache",
     };
+
     const modifiedAt = Option.getOrUndefined(fileInfo.mtime);
+
     const etag = immutable
       ? modifiedAt
         ? `W/"${fileInfo.size.toString(16)}-${modifiedAt.getTime().toString(16)}"`
         : undefined
       : mutableFileEtag(opened.file);
+
     if (etag !== undefined && modifiedAt !== undefined) {
       headers.ETag = etag;
       headers["Last-Modified"] = modifiedAt.toUTCString();
@@ -446,10 +497,12 @@ const handleStaticAndDevRequest = Effect.fn("handleStaticAndDevRequest")(
     // GET/HEAD, including when compression changes the transferred bytes.
     const ifNoneMatch = request.headers["if-none-match"];
     const ifModifiedSince = request.headers["if-modified-since"];
+
     const unchanged =
       ifNoneMatch !== undefined
         ? ifNoneMatch.split(",").some((value) => {
             const candidate = value.trim();
+
             return (
               candidate === "*" ||
               (etag !== undefined && candidate.replace(/^W\//i, "") === etag.replace(/^W\//i, ""))
@@ -459,6 +512,7 @@ const handleStaticAndDevRequest = Effect.fn("handleStaticAndDevRequest")(
           ifModifiedSince !== undefined &&
           modifiedAt !== undefined &&
           Date.parse(modifiedAt.toUTCString()) <= Date.parse(ifModifiedSince);
+
     if (unchanged) {
       return HttpServerResponse.empty({
         status: 304,
@@ -470,6 +524,7 @@ const handleStaticAndDevRequest = Effect.fn("handleStaticAndDevRequest")(
       path.extname(filePath) === ".html"
         ? "text/html; charset=utf-8"
         : (Mime.getType(filePath) ?? "application/octet-stream");
+
     // The request scope closes the handle for GET, HEAD, 304, errors, and cancellation.
     // HEAD still passes through compression, which selects headers without reading the stream.
     return HttpServerResponse.stream(streamStaticFile(opened.file, fileInfo.size), {

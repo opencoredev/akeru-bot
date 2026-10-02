@@ -19,6 +19,7 @@ layer("042_ProjectionThreadLinkedPullRequest", (it) => {
       const columns = yield* sql<{ readonly name: string }>`
         PRAGMA table_info(projection_threads)
       `;
+
       assert.ok(columns.some((column) => column.name === "linked_pull_request_json"));
     }),
   );

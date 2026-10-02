@@ -101,6 +101,16 @@ export interface ProjectionTurnStartMessage {
  * ProjectionSnapshotQueryShape - Service API for read-model snapshots.
  */
 export interface ProjectionSnapshotQueryShape {
+  readonly getThreadCommandContext?: (
+    threadId: ThreadId,
+  ) => Effect.Effect<
+    Pick<OrchestrationThread, "messages" | "activities">,
+    ProjectionRepositoryError
+  >;
+  readonly getCommandMessage?: (input: {
+    readonly threadId: ThreadId;
+    readonly messageId: MessageId;
+  }) => Effect.Effect<Option.Option<OrchestrationMessage>, ProjectionRepositoryError>;
   /**
    * Read the lightweight command snapshot used to bootstrap the in-memory
    * orchestration engine without hydrating message/activity/checkpoint bodies.

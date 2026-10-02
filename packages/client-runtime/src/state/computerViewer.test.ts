@@ -109,6 +109,7 @@ describe("computer viewer state", () => {
       type: "server-state",
       state: serverState({ status: "human" }),
     });
+
     expect(deriveComputerViewer(state)).toMatchObject({
       owner: "someone-else",
       canTakeControl: false,
@@ -122,6 +123,7 @@ describe("computer viewer state", () => {
       type: "acquired",
       session: { sessionId: "lease-1", expiresAt: 60_000, state: serverState() },
     });
+
     state = reduceComputerViewer(state, { type: "server-state", state: serverState() });
     expect(state.lease?.sessionId).toBe("lease-1");
     state = reduceComputerViewer(state, {
@@ -163,6 +165,7 @@ describe("computer viewer state", () => {
       { type: "pending", pending: "acquire" },
       { type: "failed", code: "busy" },
     );
+
     expect(state.notice).toBe("busy");
     expect(state.pending).toBeNull();
   });
@@ -183,6 +186,7 @@ describe("computer viewer state", () => {
       type: "server-state",
       state: serverState({ status: "unavailable", capability: "none" }),
     });
+
     expect(cancelled.notice).toBe("ended");
     expect(deriveComputerViewer(cancelled)).toMatchObject({
       phase: "unsupported",
@@ -193,6 +197,7 @@ describe("computer viewer state", () => {
       type: "server-state",
       state: serverState({ status: "stopped" }),
     });
+
     expect(asleep.notice).toBe("stopped");
     expect(deriveComputerViewer(asleep)).toMatchObject({ phase: "stopped", owner: "nobody" });
   });
@@ -219,6 +224,7 @@ describe("computer viewer state", () => {
         visible: false,
       },
     );
+
     expect(state).toEqual(initialComputerViewerState);
   });
 
@@ -230,6 +236,7 @@ describe("computer viewer state", () => {
         state: serverState({ controlAvailable: false, reason: "Raw MCP browser attached." }),
       },
     );
+
     expect(deriveComputerViewer(state)).toMatchObject({
       owner: "bot",
       canTakeControl: false,
@@ -244,21 +251,25 @@ describe("computer capability", () => {
     expect(explainComputerCapability({ sandbox: null, provider: "codex", state: none })).toBe(
       "local",
     );
+
     for (const sandbox of ["e2b", "vercel", "upstash", "tenki"] as const) {
       expect(explainComputerCapability({ sandbox, provider: "codex", state: none })).toBe(
         "sandbox",
       );
     }
+
     for (const provider of ["claudeAgent", "grok", "opencode", null]) {
       expect(explainComputerCapability({ sandbox: "daytona", provider, state: none })).toBe(
         "provider",
       );
     }
+
     for (const provider of ["codex", "kimi"]) {
       expect(explainComputerCapability({ sandbox: "daytona", provider, state: none })).toBe(
         "not-running",
       );
     }
+
     expect(
       explainComputerCapability({ sandbox: "daytona", provider: "kimi", state: serverState() }),
     ).toBe("available");

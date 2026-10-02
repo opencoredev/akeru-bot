@@ -1,8 +1,8 @@
-// @effect-diagnostics nodeBuiltinImport:off - These contracts read their source.
 import * as NodeFS from "node:fs";
 
 import { describe, expect, it } from "vite-plus/test";
 
+import { readBotSettingsSource } from "./BotSettingsPage.test-support";
 import { BOT_IMAGE_PROVIDER_DEFAULT, botImageProviderFromSelectValue } from "./useBotProfileDraft";
 
 function read(relativePath: string): string {
@@ -24,7 +24,7 @@ describe("bot settings page", () => {
   });
 
   it("renders in the main content area with the shared settings primitives", () => {
-    const source = read("./BotSettingsPage.tsx");
+    const source = readBotSettingsSource();
 
     expect(source).toContain("<SidebarInset");
     expect(source).toContain("<WorkspacePageHeader");
@@ -37,7 +37,7 @@ describe("bot settings page", () => {
   });
 
   it("groups the bot's own settings into named sections", () => {
-    const source = read("./BotSettingsPage.tsx");
+    const source = readBotSettingsSource();
 
     expect(source).toContain('id="identity" title={t("Identity")}');
     expect(source).toContain('id="behavior" title={t("Behavior")}');
@@ -47,7 +47,7 @@ describe("bot settings page", () => {
   });
 
   it("saves through the shared bot update command", () => {
-    const source = read("./BotSettingsPage.tsx");
+    const source = readBotSettingsSource();
 
     expect(source).toContain("useAtomCommand(botEnvironment.update");
     expect(source).toContain("botId: BotId.make(bot.id)");
@@ -58,7 +58,7 @@ describe("bot settings page", () => {
   });
 
   it("reports saving, saved, and unsaved state from the shared draft", () => {
-    const source = read("./BotSettingsPage.tsx");
+    const source = readBotSettingsSource();
 
     expect(source).toContain('aria-live="polite"');
     expect(source).toContain("draft.saved");
@@ -68,7 +68,7 @@ describe("bot settings page", () => {
   });
 
   it("protects unsaved settings from app navigation and page unload", () => {
-    const source = read("./BotSettingsPage.tsx");
+    const source = readBotSettingsSource();
 
     expect(source).toContain("useBlocker({");
     expect(source).toContain('requestConfirmDialog(t("Discard unsaved bot settings?")');
@@ -77,7 +77,7 @@ describe("bot settings page", () => {
   });
 
   it("owns the three personality choices and anchors them for deep links", () => {
-    const source = read("./BotSettingsPage.tsx");
+    const source = readBotSettingsSource();
 
     expect(source).toContain("<BotPersonalityToneField");
     expect(source).toContain('id="personality"');
@@ -88,7 +88,7 @@ describe("bot settings page", () => {
   });
 
   it("lists tools inline with per-bot switches that save with the page", () => {
-    const page = read("./BotSettingsPage.tsx");
+    const page = readBotSettingsSource();
     const section = read("./BotToolsSection.tsx");
 
     expect(page).toContain("<BotToolsSection");
@@ -103,7 +103,7 @@ describe("bot settings page", () => {
   });
 
   it("handles a bot that is gone instead of rendering an empty form", () => {
-    const source = read("./BotSettingsPage.tsx");
+    const source = readBotSettingsSource();
     expect(source).toContain("This bot is no longer available.");
   });
 });
@@ -120,7 +120,7 @@ describe("bot settings entry points", () => {
   });
 
   it("opens from the roster row overflow menu", () => {
-    const source = read("./BotRosterSidebar.tsx");
+    const source = ["./BotRosterSidebar.tsx", "./RosterRows.tsx"].map(read).join("\n");
 
     expect(source).toContain("Bot settings");
     expect(source).toContain("onOpenSettings(bot)");
@@ -148,6 +148,7 @@ describe("bot settings entry points", () => {
 
   it("does not add a permanent settings section for bots", () => {
     const settingsStore = read("../../settingsDialogStore.ts");
+
     const sections = /SETTINGS_SECTIONS = \[(?<body>[\s\S]*?)\] as const;/u.exec(settingsStore)
       ?.groups?.body;
 
@@ -161,18 +162,18 @@ describe("bot settings entry points", () => {
 
 describe("global settings stay global", () => {
   it("leaves the shared sandbox and browser sharing policy in Settings", () => {
-    const panels = read("../settings/SettingsPanels.tsx");
-    const botSettings = read("./BotSettingsPage.tsx");
+    const workspace = read("../settings/BotWorkspaceSettings.tsx");
+    const botSettings = readBotSettingsSource();
 
     // This is one environment-wide policy for every bot, not per-bot data.
-    expect(panels).toContain("<BotSandboxBrowserSharingSettings");
-    expect(panels).toContain("settings.botSandboxBrowserSharing");
+    expect(workspace).toContain("<BotSandboxBrowserSharingSettings");
+    expect(workspace).toContain("settings.botSandboxBrowserSharing");
     expect(botSettings).not.toContain("botSandboxBrowserSharing");
   });
 
   it("keeps the app-wide voice toggle out of per-bot settings", () => {
     const voice = read("../settings/VoiceSettings.tsx");
-    const botSettings = read("./BotSettingsPage.tsx");
+    const botSettings = readBotSettingsSource();
 
     expect(voice).toContain("settings.voice");
     // The bot owns only its own participation.

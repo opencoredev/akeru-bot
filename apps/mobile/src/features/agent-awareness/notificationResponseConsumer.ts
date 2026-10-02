@@ -20,10 +20,12 @@ export async function consumeLastAgentNotificationResponse(input: {
   readonly handleResponse: (response: NotificationResponse) => void;
 }): Promise<void> {
   let response: NotificationResponse | null;
+
   try {
     response = await input.getLastResponse();
   } catch (cause) {
     console.error(new NotificationNavigationError({ operation: "read", cause }));
+
     return;
   }
 
@@ -41,6 +43,7 @@ export async function consumeLastAgentNotificationResponse(input: {
         cause,
       }),
     );
+
     return;
   }
 

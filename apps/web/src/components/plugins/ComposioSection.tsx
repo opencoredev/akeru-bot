@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 import {
   isAtomCommandInterrupted,
   squashAtomCommandFailure,
@@ -22,6 +23,7 @@ import { toastManager } from "../ui/toast";
 import { ComposioToolkitResults } from "./PluginsCatalog";
 
 export const COMPOSIO_API_KEYS_URL = "https://app.composio.dev/settings/api-keys";
+
 export const COMPOSIO_MIN_SEARCH_LENGTH = 2;
 
 const CONNECTION_STATUS_LABELS: Record<ComposioConnectionStatus, string> = {
@@ -38,6 +40,7 @@ type Translate = ReturnType<typeof useI18n>["t"];
 
 export function composioConnectionLabel(status: ComposioConnectionStatus, t?: Translate): string {
   const label = CONNECTION_STATUS_LABELS[status];
+
   return t ? t(label) : label;
 }
 
@@ -52,8 +55,9 @@ export function composioSearchResults(
   connectedOnly?: ReadonlySet<string>,
 ): readonly ComposioToolkit[] {
   const brokered = new Set(
-    catalog.filter((plugin) => plugin.connection.type === "brokered").map((plugin) => plugin.id),
+    catalog.flatMap((plugin) => (plugin.connection.type === "brokered" ? [plugin.id] : [])),
   );
+
   return toolkits.filter(
     (toolkit) =>
       !brokered.has(toolkit.slug) &&
@@ -65,9 +69,9 @@ export function activeComposioToolkitIds(
   connections: readonly ComposioConnection[],
 ): ReadonlySet<string> {
   return new Set(
-    connections
-      .filter((connection) => connection.status === "ACTIVE")
-      .map((connection) => connection.toolkitSlug),
+    connections.flatMap((connection) =>
+      connection.status === "ACTIVE" ? [connection.toolkitSlug] : [],
+    ),
   );
 }
 
@@ -82,13 +86,15 @@ export function ComposioAccounts({
   readonly onDisconnect: (connection: ComposioConnection) => void;
 }) {
   const { t } = useI18n();
+
   if (connections.length === 0) {
     return (
-      <p className="text-[13px] text-muted-foreground">
+      <p className="text-13px text-muted-foreground">
         {t("No accounts connected yet. Search above to find an app, then connect it.")}
       </p>
     );
   }
+
   return (
     <ul aria-label={t("Composio accounts")} className="flex flex-col gap-1">
       {connections.map((connection) => (
@@ -140,21 +146,26 @@ export function ComposioSection({
   readonly installedOnly?: boolean;
 }) {
   const { t } = useI18n();
+
   const status = useEnvironmentQuery(
     serverEnvironment.composioStatus({ environmentId, input: {} }),
   );
+
   const configure = useAtomCommand(serverEnvironment.configureComposio, { reportFailure: false });
   const remove = useAtomCommand(serverEnvironment.removeComposio, { reportFailure: false });
   const authorize = useAtomCommand(serverEnvironment.authorizeComposio, { reportFailure: false });
+
   const disconnect = useAtomCommand(serverEnvironment.disconnectComposio, {
     reportFailure: false,
   });
+
   const [apiKey, setApiKey] = useState("");
   const [pendingId, setPendingId] = useState<string | null>(null);
   const configured = status.data?.configured === true;
   const connections = status.data?.connections ?? [];
   const deferredQuery = useDeferredValue(query.trim());
   const searching = configured && deferredQuery.length >= COMPOSIO_MIN_SEARCH_LENGTH;
+
   const toolkits = useEnvironmentQuery(
     searching
       ? serverEnvironment.composioToolkits({
@@ -169,6 +180,7 @@ export function ComposioSection({
   useEffect(() => {
     const refresh = status.refresh;
     window.addEventListener("focus", refresh);
+
     return () => window.removeEventListener("focus", refresh);
   }, [status.refresh]);
 
@@ -176,7 +188,8 @@ export function ComposioSection({
     title: string,
     result: Awaited<ReturnType<typeof configure>> | Awaited<ReturnType<typeof authorize>>,
   ): boolean => {
-    if (result._tag !== "Failure") return false;
+    if (!Predicate.isTagged(result, "Failure")) return false;
+
     if (isAtomCommandInterrupted(result)) return true;
     const error = squashAtomCommandFailure(result);
     toastManager.add({
@@ -184,15 +197,18 @@ export function ComposioSection({
       title,
       description: error instanceof Error ? error.message : t("The command failed."),
     });
+
     return true;
   };
 
   const saveKey = async () => {
     const trimmed = apiKey.trim();
+
     if (!trimmed) return;
     setPendingId("key");
     const result = await configure({ environmentId, input: { apiKey: trimmed } });
     setPendingId(null);
+
     if (reportFailure(t("Could not save the Composio key"), result)) return;
     setApiKey("");
     status.refresh();
@@ -205,10 +221,12 @@ export function ComposioSection({
       ),
       { variant: "destructive" },
     );
+
     if (!confirmed) return;
     setPendingId("key");
     const result = await remove({ environmentId, input: {} });
     setPendingId(null);
+
     if (!reportFailure(t("Could not remove the Composio key"), result)) status.refresh();
   };
 
@@ -216,19 +234,25 @@ export function ComposioSection({
     setPendingId(`toolkit:${toolkit.slug}`);
     const result = await authorize({ environmentId, input: { toolkitSlug: toolkit.slug } });
     setPendingId(null);
-    if (result._tag === "Failure") {
+
+    if (Predicate.isTagged(result, "Failure")) {
       reportFailure(t("Could not connect {name}", { name: toolkit.name }), result);
+
       return;
     }
+
     const url = new URL(result.value.redirectUrl);
+
     if (url.protocol !== "https:") {
       toastManager.add({
         type: "error",
         title: t("Could not connect {name}", { name: toolkit.name }),
         description: t("Composio returned a sign-in link that does not use HTTPS."),
       });
+
       return;
     }
+
     status.refresh();
     void ensureLocalApi()
       .shell.openExternal(url.toString())
@@ -242,14 +266,17 @@ export function ComposioSection({
 
   const disconnectAccount = async (connection: ComposioConnection) => {
     const name = connection.alias ?? connection.toolkitSlug;
+
     const confirmed = await ensureLocalApi().dialogs.confirm(
       t("Disconnect {name}? Bots stop using this account.", { name }),
       { variant: "destructive" },
     );
+
     if (!confirmed) return;
     setPendingId(connection.id);
     const result = await disconnect({ environmentId, input: { connectionId: connection.id } });
     setPendingId(null);
+
     if (!reportFailure(t("Could not disconnect {name}", { name }), result)) status.refresh();
   };
 
@@ -260,6 +287,7 @@ export function ComposioSection({
   };
 
   const connectedToolkitIds = activeComposioToolkitIds(connections);
+
   const results = composioSearchResults(
     toolkits.data ?? [],
     catalog,
@@ -297,7 +325,7 @@ export function ComposioSection({
           </Button>
         </div>
         {status.error ? (
-          <p className="text-[13px] text-destructive-foreground">
+          <p className="text-13px text-destructive-foreground">
             {t("Could not reach Composio: {error}", { error: String(status.error) })}
           </p>
         ) : null}
@@ -344,7 +372,7 @@ export function ComposioSection({
         ) : null}
       </section>
       {searching && toolkits.error ? (
-        <p className="px-1 text-[13px] text-destructive-foreground">
+        <p className="px-1 text-13px text-destructive-foreground">
           {t("Could not search Composio: {error}", { error: String(toolkits.error) })}
         </p>
       ) : null}

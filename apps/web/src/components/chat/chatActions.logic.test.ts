@@ -10,6 +10,7 @@ import {
 } from "./chatActions.logic";
 
 const NOW = "2026-09-27T12:00:00.000Z";
+
 const ALL_SUPPORTED: ChatActionSupport = {
   settlement: true,
   snooze: true,
@@ -168,6 +169,7 @@ describe("resolveChatMenuState", () => {
       lastVisitedAt: "2026-09-27T10:00:59.999Z",
       now: NOW,
     });
+
     const noTurn = resolveChatMenuState({
       shell: shell({ latestTurn: null }),
       supports: ALL_SUPPORTED,
@@ -195,6 +197,7 @@ describe("hasUnseenCompletion", () => {
 function fakePage(initial: { visible: boolean; focused: boolean }) {
   const listeners = { visibilitychange: new Set<() => void>(), focus: new Set<() => void>() };
   const state = { ...initial };
+
   return {
     state,
     listeners,
@@ -220,6 +223,7 @@ describe("watchChatVisits", () => {
   it("records a visit before the first reply, so a reply that lands after leaving is unread", () => {
     const fake = fakePage({ visible: true, focused: true });
     const markVisited = vi.fn();
+
     const stop = watchChatVisits({
       page: fake.page,
       window: fake.window,
@@ -227,6 +231,7 @@ describe("watchChatVisits", () => {
       now: () => new Date("2026-09-27T10:00:00.000Z"),
       markVisited,
     });
+
     expect(markVisited).toHaveBeenCalledWith("2026-09-27T10:00:00.000Z");
     stop();
     // The user opened another bot; the first reply finished later.
@@ -251,6 +256,7 @@ describe("watchChatVisits", () => {
   it("leaves a completion unread while the page is hidden or unfocused, then marks it on return", () => {
     const fake = fakePage({ visible: false, focused: false });
     const markVisited = vi.fn();
+
     const stop = watchChatVisits({
       page: fake.page,
       window: fake.window,
@@ -258,13 +264,16 @@ describe("watchChatVisits", () => {
       now: () => new Date("2026-09-27T10:05:00.000Z"),
       markVisited,
     });
+
     expect(markVisited).not.toHaveBeenCalled();
 
     fake.state.visible = true;
+
     for (const listener of fake.listeners.visibilitychange) listener();
     expect(markVisited).not.toHaveBeenCalled();
 
     fake.state.focused = true;
+
     for (const listener of fake.listeners.focus) listener();
     expect(markVisited).toHaveBeenCalledExactlyOnceWith("2026-09-27T10:05:00.000Z");
 

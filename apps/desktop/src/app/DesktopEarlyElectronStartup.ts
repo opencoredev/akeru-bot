@@ -31,6 +31,7 @@ export interface EarlyLinuxElectronOptions {
 
 const trimNonEmpty = (value: string | undefined): string | null => {
   const trimmed = value?.trim();
+
   return trimmed && trimmed.length > 0 ? trimmed : null;
 };
 
@@ -39,6 +40,7 @@ const EarlyDesktopSettingsJson = fromLenientJson(
     linuxPasswordStore: Schema.optionalKey(Schema.Unknown),
   }),
 );
+
 const decodeEarlyDesktopSettingsJson = Schema.decodeSync(EarlyDesktopSettingsJson);
 
 const isDevelopmentEnvironment = (env: NodeJS.ProcessEnv): boolean =>
@@ -50,17 +52,20 @@ function resolveEarlyDesktopSettingsPath(input: {
   readonly joinPath: JoinPath;
 }): string {
   const t3Home = Option.fromUndefinedOr(input.env.AKERU_HOME ?? input.env.T3CODE_HOME);
+
   const baseDir = resolveDesktopBaseDir({
     homeDirectory: input.homeDirectory,
     joinPath: input.joinPath,
     t3Home,
   });
+
   const stateDir = resolveDesktopStateDir({
     baseDir,
     isDevelopment: isDevelopmentEnvironment(input.env),
     joinPath: input.joinPath,
     t3Home,
   });
+
   return input.joinPath(stateDir, "desktop-settings.json");
 }
 
@@ -68,8 +73,10 @@ export function resolveEarlyLinuxPasswordStorePreference(
   input: EarlyDesktopSettingsInput,
 ): LinuxPasswordStorePreference {
   const settingsPath = resolveEarlyDesktopSettingsPath(input);
+
   try {
     const parsed = decodeEarlyDesktopSettingsJson(input.readFileString(settingsPath));
+
     return normalizeLinuxPasswordStorePreference(parsed.linuxPasswordStore);
   } catch {
     return DEFAULT_LINUX_PASSWORD_STORE;
@@ -80,6 +87,7 @@ export function resolveEarlyLinuxElectronOptions(
   input: EarlyLinuxElectronOptionsInput,
 ): EarlyLinuxElectronOptions {
   const preference = resolveEarlyLinuxPasswordStorePreference(input);
+
   return {
     linuxWmClass: isDevelopmentEnvironment(input.env) ? "akeru-bot-dev" : "akeru-bot",
     passwordStore: resolveLinuxPasswordStoreSwitch({

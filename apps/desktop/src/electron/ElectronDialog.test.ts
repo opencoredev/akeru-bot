@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import { assert, describe, it } from "@effect/vitest";
 import * as Cause from "effect/Cause";
 import * as Effect from "effect/Effect";
@@ -128,8 +129,9 @@ describe("ElectronDialog", () => {
 
       const exit = yield* Effect.exit(dialog.showErrorBox("Startup failed", "Could not start."));
 
-      assert.isTrue(exit._tag === "Failure");
-      if (exit._tag === "Success") return;
+      assert.isTrue(Predicate.isTagged(exit, "Failure"));
+
+      if (Predicate.isTagged(exit, "Success")) return;
       const error = Cause.squash(exit.cause);
       assert.instanceOf(error, ElectronDialog.ElectronDialogShowErrorBoxError);
       assert.strictEqual(error.titleLength, "Startup failed".length);

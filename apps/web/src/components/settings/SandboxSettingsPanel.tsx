@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 import { squashAtomCommandFailure } from "@akeru/client-runtime/state/runtime";
 import type { EnvironmentId, SandboxProvider, SandboxSettings } from "@akeru/contracts";
 import { useState } from "react";
@@ -52,12 +53,14 @@ function errorMessage(
   fallback: string,
 ): string {
   const error = squashAtomCommandFailure(result);
+
   return error instanceof Error && error.message.trim() ? error.message : fallback;
 }
 
 export function SandboxSettingsPanel() {
   const { t } = useI18n();
   const environmentId = useSettingsEnvironmentId();
+
   if (environmentId === null) {
     return (
       <SettingsSection title={t("Sandbox")}>
@@ -65,6 +68,7 @@ export function SandboxSettingsPanel() {
       </SettingsSection>
     );
   }
+
   return <EnvironmentSandboxSettingsPanel key={environmentId} environmentId={environmentId} />;
 }
 
@@ -87,10 +91,13 @@ function EnvironmentSandboxSettingsPanel({
     setError(null);
     const result = await updateSettings({ environmentId, input: { patch: { sandbox: next } } });
     setSaving(false);
-    if (result._tag === "Failure") {
+
+    if (Predicate.isTagged(result, "Failure")) {
       setError(errorMessage(result, t("The server rejected these sandbox settings.")));
+
       return false;
     }
+
     return true;
   };
 
@@ -109,21 +116,27 @@ function EnvironmentSandboxSettingsPanel({
 
   const saveConnection = async () => {
     if (editingProvider === null) return;
+
     const next = saveSandboxProviderConnection({
       settings: sandbox,
       provider: editingProvider,
       draft,
     });
+
     if (editingProvider === "railway" && isSandboxProviderConnected(sandbox, "railway")) {
       setRailwayChange({ kind: "save", draft: { ...draft } });
+
       return;
     }
+
     if (await persist(next)) closeConnection();
   };
 
   const editingDefinition = editingProvider ? sandboxProviderDefinition(editingProvider) : null;
+
   const providerLabel = (provider: SandboxProvider) =>
     provider === "local" ? t("Local") : SANDBOX_PROVIDER_LABELS[provider];
+
   const canSave =
     editingProvider !== null &&
     canSaveSandboxProviderConnection({ settings: sandbox, provider: editingProvider, draft });
@@ -139,7 +152,9 @@ function EnvironmentSandboxSettingsPanel({
               value={sandbox.defaultProvider}
               onValueChange={(value) => {
                 if (value === null) return;
+                // SAFETY: the value is checked against selectableSandboxProviders before persistence.
                 const provider = value as SandboxProvider;
+
                 if (!selectableSandboxProviders(sandbox).includes(provider)) return;
                 void persist({ ...sandbox, defaultProvider: provider });
               }}
@@ -176,6 +191,7 @@ function EnvironmentSandboxSettingsPanel({
         />
         {SANDBOX_PROVIDER_DEFINITIONS.map((definition) => {
           const connected = isSandboxProviderConnected(sandbox, definition.id);
+
           return (
             <SettingsRow
               key={definition.id}

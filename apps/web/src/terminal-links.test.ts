@@ -22,6 +22,7 @@ describe("extractTerminalLinks", () => {
   it("finds http urls and path tokens", () => {
     const line =
       "failed at https://example.com/docs and src/components/ThreadTerminalDrawer.tsx:42";
+
     expect(extractTerminalLinks(line)).toEqual([
       {
         kind: "url",
@@ -105,6 +106,7 @@ describe("collectWrappedTerminalLinkLine", () => {
   it("reconstructs a wrapped line from any physical row", () => {
     const firstSegment = "see https://example.com/a";
     const secondSegment = "/bc?x=1";
+
     const lines = [
       createBufferLine("prompt> "),
       createBufferLine(firstSegment),
@@ -159,14 +161,17 @@ describe("resolveWrappedTerminalLinkRange", () => {
     const prefix = "see ";
     const firstSegment = `${prefix}https://example.com/a`;
     const secondSegment = "/bc?x=1";
+
     const lines = [
       createBufferLine("prompt> "),
       createBufferLine(firstSegment),
       createBufferLine(secondSegment, true),
     ];
+
     const wrappedLine = collectWrappedTerminalLinkLine(2, (index) => lines[index]);
 
     expect(wrappedLine).not.toBeNull();
+
     if (!wrappedLine) {
       throw new Error("Expected wrapped terminal line to be present.");
     }
@@ -178,6 +183,7 @@ describe("resolveWrappedTerminalLinkRange", () => {
       start: prefix.length,
       end: firstSegment.length + secondSegment.length,
     });
+
     if (!match) {
       throw new Error("Expected wrapped URL match to be present.");
     }

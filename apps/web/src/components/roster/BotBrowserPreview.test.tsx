@@ -7,12 +7,15 @@ import { BotBrowserPreview, isLiveBrowserStatus } from "./BotBrowserPreview";
 const mocks = vi.hoisted(() => ({ nativeSupported: false }));
 
 vi.mock("../preview/usePreviewSession", () => ({ usePreviewSession: vi.fn() }));
+
 vi.mock("../preview/PreviewPanel", () => ({
   PreviewPanel: () => <div data-testid="native-preview-panel" />,
 }));
+
 vi.mock("../../browser/BrowserSurfaceSlot", () => ({
   BrowserSurfaceSlot: () => <div data-testid="native-browser-surface" />,
 }));
+
 vi.mock("../../previewStateStore", () => ({
   isPreviewSupportedInRuntime: () => mocks.nativeSupported,
   useThreadPreviewState: () => ({
@@ -79,7 +82,7 @@ describe("BotBrowserPreview", () => {
       />,
     );
 
-    expect(markup).toContain("bg-zinc-950");
+    expect(markup).toContain("bg-media-mat");
     expect(markup).toContain('data-testid="bot-browser-preview"');
     expect(markup).toContain('aria-label="Expand Akeru browser"');
     expect(markup).toContain('aria-label="Open Akeru browser"');
@@ -105,6 +108,7 @@ describe("BotBrowserPreview", () => {
 
   it("preserves the native preview panel when expanded in Electron", () => {
     mocks.nativeSupported = true;
+
     const markup = renderToStaticMarkup(
       <BotBrowserPreview
         botName="Akeru"

@@ -48,6 +48,7 @@ export function useComposerDictation(
   applyDraft.current = input.applyDraft;
   const transcribe = useRef(input.transcribe);
   transcribe.current = input.transcribe;
+
   const unavailableReason = dictationUnavailableReason({
     callActive: input.callActive,
     connected: input.connected,
@@ -57,22 +58,27 @@ export function useComposerDictation(
     transcriptionReason:
       input.transcription && !input.transcription.available ? input.transcription.reason : null,
   });
+
   const session = useMemo(
     () =>
       (input.createSession ?? nativeSession)({
         schedule: (callback, milliseconds) => globalThis.setTimeout(callback, milliseconds),
+        // SAFETY: The session returns the exact handle allocated by this schedule callback.
         cancelSchedule: (timer) => globalThis.clearTimeout(timer as ReturnType<typeof setTimeout>),
         transcribe: (request) => {
           const operation = transcribe.current;
+
           if (!operation) {
             return Promise.reject(new Error(DICTATION_UNAVAILABLE.transcription));
           }
+
           return operation(request);
         },
         updateDraft: (update) => applyDraft.current(update(getDraft.current())),
       }),
     [input.createSession],
   );
+
   const [status, setStatus] = useState(() => dictationControlStatus(session.status));
   useEffect(
     () => session.subscribe(() => setStatus(dictationControlStatus(session.status))),
@@ -85,11 +91,14 @@ export function useComposerDictation(
 
   const onStart = useCallback(() => {
     if (unavailableReason) return;
+
     return session.start(getDraft.current());
   }, [session, unavailableReason]);
+
   const onRelease = useCallback(() => {
     return session.finish();
   }, [session]);
+
   const onCancel = useCallback(() => {
     session.cancel();
   }, [session]);
@@ -104,7 +113,8 @@ export function useComposerDictation(
   };
 }
 
-function describeDictationFailure(error: unknown): string {
-  if (error instanceof Error && error.message.trim()) return error.message;
+function describeDictationFailure(cause: unknown): string {
+  if (cause instanceof Error && cause.message.trim()) return cause.message;
+
   return "Dictation failed.";
 }

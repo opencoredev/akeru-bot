@@ -21,8 +21,9 @@ export function MobilePolicyNotice() {
   const updatePreferences = useAtomSet(updateMobilePreferencesAtom);
   const pressedOverlay = useThemeColor("--color-subtle");
   const loaded = AsyncResult.isSuccess(preferences);
-  const appVariant =
-    (Constants.expoConfig?.extra?.appVariant as string | undefined) ?? "development";
+
+  const appVariant = Constants.expoConfig?.extra?.appVariant ?? "development";
+
   const visible = shouldShowMobilePolicyNotice({
     appVariant,
     loaded,
@@ -74,7 +75,7 @@ function PolicyButton({
 }: {
   readonly label: string;
   readonly onPress: () => void;
-  readonly pressedOverlay: ColorValue;
+  readonly pressedOverlay: ColorValue | undefined;
 }) {
   return (
     <View className="overflow-hidden rounded-full">

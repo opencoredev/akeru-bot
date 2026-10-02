@@ -59,6 +59,7 @@ describe("listenForPairingHash", () => {
     let token: string | null = null;
     let busy = false;
     const calls: string[] = [];
+
     const stop = listenForPairingHash(target, {
       read: () => token,
       isBusy: () => busy,
@@ -88,6 +89,7 @@ describe("takePairingHash", () => {
   it("leaves a link opened mid-submission for the next take", () => {
     let busy = true;
     const calls: string[] = [];
+
     const options = {
       read: () => "def",
       isBusy: () => busy,

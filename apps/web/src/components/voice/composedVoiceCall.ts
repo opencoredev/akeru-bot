@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 import type { AtomCommandResult } from "@akeru/client-runtime/state/runtime";
 import { squashAtomCommandFailure } from "@akeru/client-runtime/state/runtime";
 import {
@@ -32,7 +33,13 @@ export interface ComposedVoiceCallDependencies {
   readonly synthesize: (
     input: VoiceSynthesizeInput,
   ) => Promise<AtomCommandResult<VoiceAudio, unknown>>;
-  readonly cancel: (operationId: string) => Promise<unknown>;
+  readonly cancel: (
+    operationId: string,
+  ) => Promise<
+    | AtomCommandResult<{ readonly cancelled: boolean }, unknown>
+    | { readonly cancelled: boolean }
+    | void
+  >;
   /** Starts a chat turn and returns its user message id, or null when the chat refused it. */
   readonly sendMessage: (text: string) => Promise<string | null>;
   readonly readTurn: () => ComposedVoiceTurnState;
@@ -41,7 +48,7 @@ export interface ComposedVoiceCallDependencies {
 }
 
 function commandValue<A>(result: AtomCommandResult<A, unknown>, fallback: string): A {
-  if (result._tag === "Success") return result.value;
+  if (Predicate.isTagged(result, "Success")) return result.value;
   const error = squashAtomCommandFailure(result);
   throw error instanceof Error ? error : new Error(fallback);
 }
@@ -49,6 +56,7 @@ function commandValue<A>(result: AtomCommandResult<A, unknown>, fallback: string
 /** Adapts the environment's voice RPCs and the bot's chat turn to the shared composed loop. */
 export function composedVoiceAdapters(deps: ComposedVoiceCallDependencies): ComposedVoiceAdapters {
   const newOperationId = deps.newOperationId ?? (() => `voice-${randomUUID()}`);
+
   return {
     capture: deps.capture,
     play: deps.play,
@@ -82,17 +90,22 @@ export function composedVoiceAdapters(deps: ComposedVoiceCallDependencies): Comp
     sendAndWait: async (text, signal) => {
       const messageId = await deps.sendMessage(text);
       signal.throwIfAborted();
+
       if (messageId === null) {
         throw new Error("The chat did not accept the message. Continue in chat.");
       }
+
       let observedTurnId: OrchestrationLatestTurn["turnId"] | null = null;
+
       return waitForVoiceReply(
         signal,
         () => {
           const turn = deps.readTurn();
+
           if (turn.latestTurn?.requestMessageId === messageId) {
             observedTurnId = turn.latestTurn.turnId;
           }
+
           return correlatedVoiceReply(messageId, turn.latestTurn, turn.messages, observedTurnId);
         },
         deps.subscribeTurn,

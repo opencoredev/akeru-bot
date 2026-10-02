@@ -6,7 +6,7 @@ import * as Schema from "effect/Schema";
 
 import type * as Electron from "electron";
 
-import { makeComponentLogger } from "../app/DesktopObservability.ts";
+import { componentLogger } from "../app/DesktopObservability.ts";
 import * as ElectronApp from "../electron/ElectronApp.ts";
 import * as ElectronDialog from "../electron/ElectronDialog.ts";
 import * as ElectronMenu from "../electron/ElectronMenu.ts";
@@ -38,9 +38,9 @@ type DesktopApplicationMenuRuntimeServices =
   | DesktopWindow.DesktopWindow
   | ElectronDialog.ElectronDialog;
 
-const { logInfo: logUpdaterInfo } = makeComponentLogger("desktop-updater");
+const { logInfo: logUpdaterInfo } = componentLogger("desktop-updater");
 
-const { logError: logMenuError } = makeComponentLogger("desktop-menu");
+const { logError: logMenuError } = componentLogger("desktop-menu");
 
 const dispatchMenuAction = Effect.fn("desktop.menu.dispatchMenuAction")(function* (
   action: string,
@@ -84,6 +84,7 @@ const handleCheckForUpdatesMenuClick = Effect.gen(function* () {
   const updates = yield* DesktopUpdates.DesktopUpdates;
   const electronDialog = yield* ElectronDialog.ElectronDialog;
   const disabledReason = yield* updates.disabledReason;
+
   if (Option.isSome(disabledReason)) {
     yield* logUpdaterInfo("manual update check requested, but updates are disabled", {
       disabledReason: disabledReason.value,
@@ -95,6 +96,7 @@ const handleCheckForUpdatesMenuClick = Effect.gen(function* () {
       detail: disabledReason.value,
       buttons: ["OK"],
     });
+
     return;
   }
 
@@ -121,6 +123,7 @@ export const make = Effect.gen(function* () {
         Effect.withSpan("desktop.menu.action"),
         Effect.catchCause((cause) => {
           const error = new DesktopApplicationMenuActionError({ action, cause });
+
           return logMenuError(error.message, { error });
         }),
       ),
@@ -131,15 +134,19 @@ export const make = Effect.gen(function* () {
     const checkForUpdatesClick = () => {
       runMenuEffect("check-for-updates", handleCheckForUpdatesMenuClick);
     };
+
     const settingsClick = () => {
       runMenuEffect("open-settings", dispatchMenuAction("open-settings"));
     };
+
     const feedbackClick = () => {
       runMenuEffect("open-feedback", dispatchMenuAction("open-feedback"));
     };
+
     const zoomClick = (direction: DesktopWindow.MainWindowZoomDirection) => () => {
       runMenuEffect(`zoom-${direction}`, zoomMainWindow(direction));
     };
+
     const template: Electron.MenuItemConstructorOptions[] = [];
 
     if (environment.platform === "darwin") {

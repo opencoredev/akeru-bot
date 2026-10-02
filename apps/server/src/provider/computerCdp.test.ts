@@ -1,4 +1,3 @@
-// @effect-diagnostics nodeBuiltinImport:off
 import * as NodeHttp from "node:http";
 import type * as NodeNet from "node:net";
 import { afterEach, describe, expect, it } from "vite-plus/test";
@@ -21,9 +20,11 @@ async function browserThatDropsHandshakes() {
       JSON.stringify([{ type: "page", webSocketDebuggerUrl: "ws://ignored/devtools/page/1" }]),
     );
   });
+
   server.on("upgrade", (_request, socket) => socket.destroy());
   servers.push(server);
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+
   return `http://127.0.0.1:${(server.address() as NodeNet.AddressInfo).port}`;
 }
 
@@ -35,4 +36,29 @@ describe("ComputerCdp.connect", () => {
       /Graphical browser connection (failed|closed)/,
     );
   });
+});
+
+it("follows discovery redirects and preserves headers", async () => {
+  const server = NodeHttp.createServer((request, response) => {
+    if (request.url === "/json/list") {
+      response.writeHead(302, { location: "/targets" });
+      response.end();
+
+      return;
+    }
+
+    expect(request.headers["x-daytona-preview-token"]).toBe("token");
+    response.setHeader("content-type", "application/json");
+    response.end(JSON.stringify([{ type: "worker" }]));
+  });
+
+  servers.push(server);
+  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+  const url = `http://127.0.0.1:${(server.address() as NodeNet.AddressInfo).port}/json/list`;
+  await expect(
+    ComputerCdp.connect({
+      url: url.replace("/json/list", ""),
+      requestHeaders: { "x-daytona-preview-token": "token" },
+    }),
+  ).rejects.toThrow("Graphical browser page is unavailable.");
 });

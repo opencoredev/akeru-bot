@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import type { ContextMenuItem } from "@akeru/contracts";
 import { HostProcessPlatform } from "@akeru/shared/hostProcess";
 import * as Context from "effect/Context";
@@ -43,6 +44,7 @@ export class ElectronMenuOperationError extends Schema.TaggedErrorClass<Electron
 ) {
   override get message(): string {
     const window = this.windowId === null ? "" : ` for window ${this.windowId}`;
+
     return `Electron menu operation ${JSON.stringify(this.operation)} failed${window} with ${this.itemCount} items on ${this.platform}.`;
   }
 }
@@ -64,7 +66,7 @@ function normalizeContextMenuItems(source: readonly ContextMenuItem[]): ContextM
   const normalizedItems: ContextMenuItem[] = [];
 
   for (const sourceItem of source) {
-    if (typeof sourceItem.id !== "string" || typeof sourceItem.label !== "string") {
+    if (!Predicate.isString(sourceItem.id) || !Predicate.isString(sourceItem.label)) {
       continue;
     }
 
@@ -84,9 +86,11 @@ function normalizeContextMenuItems(source: readonly ContextMenuItem[]): ContextM
 
     if (sourceItem.children) {
       const normalizedChildren = normalizeContextMenuItems(sourceItem.children);
+
       if (normalizedChildren.length === 0) {
         continue;
       }
+
       normalizedItem.children = normalizedChildren;
     }
 
@@ -119,6 +123,7 @@ export const make = Effect.gen(function* () {
     if (platform !== "darwin") {
       return Option.none();
     }
+
     if (destructiveMenuIconCache !== undefined) {
       return destructiveMenuIconCache;
     }
@@ -128,6 +133,7 @@ export const make = Effect.gen(function* () {
         width: 12,
         height: 12,
       });
+
       icon.setTemplateImage(true);
       destructiveMenuIconCache = icon.isEmpty() ? Option.none() : Option.some(icon);
     } catch {
@@ -144,6 +150,7 @@ export const make = Effect.gen(function* () {
     const template: Electron.MenuItemConstructorOptions[] = [];
     let hasInsertedDestructiveSeparator = false;
     let sectionStartedByExplicitSeparator = false;
+
     const appendSeparator = () => {
       if (template.length === 0 || template.at(-1)?.type === "separator") return;
       template.push({ type: "separator" });
@@ -154,6 +161,7 @@ export const make = Effect.gen(function* () {
         appendSeparator();
         sectionStartedByExplicitSeparator = true;
       }
+
       if (
         item.destructive &&
         !hasInsertedDestructiveSeparator &&
@@ -168,13 +176,16 @@ export const make = Effect.gen(function* () {
         label: item.label,
         enabled: !item.disabled,
       };
+
       if (item.children && item.children.length > 0) {
         itemOption.submenu = buildTemplate(item.children, complete);
       } else {
         itemOption.click = () => complete(Option.some(item.id));
       }
+
       if (item.destructive && (!item.children || item.children.length === 0)) {
         const destructiveIcon = getDestructiveMenuIcon();
+
         if (Option.isSome(destructiveIcon)) {
           itemOption.icon = destructiveIcon.value;
         }
@@ -222,26 +233,32 @@ export const make = Effect.gen(function* () {
     showContextMenu: (input) =>
       Effect.callback<Option.Option<string>>((resume) => {
         const normalizedItems = normalizeContextMenuItems(input.items);
+
         if (normalizedItems.length === 0) {
           resume(Effect.succeed(Option.none()));
+
           return;
         }
 
         let completed = false;
+
         const complete = (selectedItemId: Option.Option<string>) => {
           if (completed) {
             return;
           }
+
           completed = true;
           resume(Effect.succeed(selectedItemId));
         };
 
         try {
           const menu = Electron.Menu.buildFromTemplate(buildTemplate(normalizedItems, complete));
+
           const popupPosition = normalizePosition(
             input.position,
             input.window.webContents.getZoomFactor(),
           );
+
           const popupOptions = Option.match(popupPosition, {
             onNone: (): Electron.PopupOptions => ({
               window: input.window,
@@ -254,11 +271,13 @@ export const make = Effect.gen(function* () {
               callback: () => complete(Option.none()),
             }),
           });
+
           menu.popup(popupOptions);
         } catch (cause) {
           if (completed) {
             return;
           }
+
           completed = true;
           resume(
             Effect.die(

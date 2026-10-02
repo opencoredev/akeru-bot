@@ -21,12 +21,19 @@ import * as ElectronApp from "../electron/ElectronApp.ts";
 import * as ElectronPowerMonitor from "../electron/ElectronPowerMonitor.ts";
 
 const LIVE_SAMPLE_INTERVAL = Duration.seconds(1);
+
 const BATTERY_SAMPLE_INTERVAL = Duration.seconds(5);
+
 const CONSTRAINED_SAMPLE_INTERVAL = Duration.seconds(15);
+
 const DEFAULT_HOST_POWER_ACTIVE_INTERVAL = Duration.seconds(30);
+
 const DEFAULT_HOST_POWER_IDLE_INTERVAL = Duration.minutes(2);
+
 const IDLE_THRESHOLD_SECONDS = 60;
+
 const encodeMessage = Schema.encodeSync(Schema.fromJsonString(DesktopHostTelemetryMessage));
+
 const textEncoder = new TextEncoder();
 
 type PowerEvent =
@@ -121,6 +128,7 @@ function sampleInterval(
       ? hostPowerIntervals.idle
       : hostPowerIntervals.active;
   }
+
   if (
     power.suspended ||
     power.locked === "true" ||
@@ -129,7 +137,9 @@ function sampleInterval(
   ) {
     return CONSTRAINED_SAMPLE_INTERVAL;
   }
+
   if (power.onBattery === "true") return BATTERY_SAMPLE_INTERVAL;
+
   return LIVE_SAMPLE_INTERVAL;
 }
 
@@ -149,11 +159,14 @@ export const make = Effect.fn("desktop.telemetryPublisher.make")(function* () {
     thermalState: yield* powerMonitor.getCurrentThermalState,
     speedLimitPercent: Option.none(),
   };
+
   const powerState = yield* Ref.make(initialPowerState);
+
   const hostPowerIntervals = yield* Ref.make<HostPowerIntervals>({
     active: DEFAULT_HOST_POWER_ACTIVE_INTERVAL,
     idle: DEFAULT_HOST_POWER_IDLE_INTERVAL,
   });
+
   const powerEvents = yield* Queue.unbounded<PowerEvent>();
   const sampleTriggers = yield* Queue.sliding<void>(1);
   const diagnosticsDemandSources = yield* Ref.make<ReadonlySet<string>>(new Set());
@@ -164,6 +177,7 @@ export const make = Effect.fn("desktop.telemetryPublisher.make")(function* () {
   const offer = (event: PowerEvent): void => {
     Queue.offerUnsafe(powerEvents, event);
   };
+
   yield* Effect.all(
     [
       powerMonitor.onSimpleEvent("lock-screen", () => offer({ type: "locked", value: true })),
@@ -189,6 +203,7 @@ export const make = Effect.fn("desktop.telemetryPublisher.make")(function* () {
       const sampledAt = yield* DateTime.now;
       const sampledAtUnixMs = DateTime.toEpochMillis(sampledAt);
       const demand = (yield* Ref.get(diagnosticsDemandSources)).size > 0;
+
       const [currentPower, idleSeconds, systemIdleState, onBattery, metrics] = yield* Effect.all(
         [
           Ref.get(powerState),
@@ -199,24 +214,30 @@ export const make = Effect.fn("desktop.telemetryPublisher.make")(function* () {
         ],
         { concurrency: "unbounded" },
       );
+
       const polledLocked =
         systemIdleState === "unknown"
           ? currentPower.locked
           : booleanState(systemIdleState === "locked");
+
       const polledOnBattery = booleanState(onBattery);
+
       const observedPower = yield* Ref.modify(powerState, (latestPower) => {
         const preserveEventLocked =
           latestPower.lockedEventPending ||
           latestPower.locked !== currentPower.locked ||
           latestPower.lockedEventPending !== currentPower.lockedEventPending;
+
         const preserveEventOnBattery =
           latestPower.onBatteryEventPending ||
           latestPower.onBattery !== currentPower.onBattery ||
           latestPower.onBatteryEventPending !== currentPower.onBatteryEventPending;
+
         const preserveEventSuspended =
           latestPower.suspendedEventPending ||
           latestPower.suspended !== currentPower.suspended ||
           latestPower.suspendedEventPending !== currentPower.suspendedEventPending;
+
         const next: PowerState = {
           ...latestPower,
           idle: idleState(systemIdleState),
@@ -231,9 +252,12 @@ export const make = Effect.fn("desktop.telemetryPublisher.make")(function* () {
           onBatteryEventPending:
             latestPower.onBatteryEventPending && polledOnBattery !== latestPower.onBattery,
         };
+
         return [next, next] as const;
       });
+
       const nextSequence = yield* Ref.modify(sequence, (current) => [current + 1, current + 1]);
+
       const snapshot: DesktopHostTelemetrySnapshot = {
         version: 1,
         type: "desktopTelemetry",
@@ -283,16 +307,19 @@ export const make = Effect.fn("desktop.telemetryPublisher.make")(function* () {
 
   yield* Effect.gen(function* () {
     yield* sampleOnce(false);
+
     while (true) {
       const [currentPower, demand, intervals] = yield* Effect.all([
         Ref.get(powerState),
         Ref.get(diagnosticsDemandSources).pipe(Effect.map((sources) => sources.size > 0)),
         Ref.get(hostPowerIntervals),
       ]);
+
       const allowSuspendRecovery = yield* Effect.raceFirst(
         Queue.take(sampleTriggers).pipe(Effect.as(false)),
         Effect.sleep(sampleInterval(currentPower, demand, intervals)).pipe(Effect.as(true)),
       );
+
       yield* sampleOnce(allowSuspendRecovery);
     }
   }).pipe(Effect.forkScoped);
@@ -306,11 +333,13 @@ export const make = Effect.fn("desktop.telemetryPublisher.make")(function* () {
         return Ref.modify(diagnosticsDemandSources, (sources) => {
           const previous = sources.size > 0;
           const next = new Set(sources);
+
           if (message.enabled) {
             next.add(sourceId);
           } else {
             next.delete(sourceId);
           }
+
           return [[previous, next.size > 0] as const, next] as const;
         }).pipe(
           Effect.flatMap(([previous, enabled]) =>
@@ -326,6 +355,7 @@ export const make = Effect.fn("desktop.telemetryPublisher.make")(function* () {
         }).pipe(Effect.andThen(Queue.offer(sampleTriggers, undefined)), Effect.asVoid);
     }
   };
+
   const removeControlSource: DesktopTelemetryPublisher["Service"]["removeControlSource"] = (
     sourceId,
   ) =>
@@ -333,6 +363,7 @@ export const make = Effect.fn("desktop.telemetryPublisher.make")(function* () {
       const previous = sources.size > 0;
       const next = new Set(sources);
       next.delete(sourceId);
+
       return [[previous, next.size > 0] as const, next] as const;
     }).pipe(
       Effect.flatMap(([previous, enabled]) =>
@@ -341,6 +372,7 @@ export const make = Effect.fn("desktop.telemetryPublisher.make")(function* () {
           : Queue.offer(sampleTriggers, undefined).pipe(Effect.asVoid),
       ),
     );
+
   const handleControl: DesktopTelemetryPublisher["Service"]["handleControl"] = (message) =>
     handleControlForSource("legacy", message);
 
@@ -348,6 +380,7 @@ export const make = Effect.fn("desktop.telemetryPublisher.make")(function* () {
     Effect.gen(function* () {
       const subscription = yield* PubSub.subscribe(changes);
       const initial = yield* Ref.get(latest);
+
       return Stream.concat(
         Option.match(initial, {
           onNone: () => Stream.empty,
@@ -357,6 +390,7 @@ export const make = Effect.fn("desktop.telemetryPublisher.make")(function* () {
       );
     }),
   );
+
   const encoded = Stream.concat(
     Stream.make({
       version: 1,

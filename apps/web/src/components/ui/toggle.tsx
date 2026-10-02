@@ -14,6 +14,8 @@ const toggleVariants = cva(
     },
     variants: {
       size: {
+        "keybinding-filter":
+          "h-9 min-w-9 px-[calc(--spacing(2)-1px)] sm:h-8 sm:min-w-8 gap-1.5 px-2.5",
         compact:
           "h-7 min-w-7 rounded-md px-[calc(--spacing(1)-1px)] text-xs before:rounded-[calc(var(--radius-md)-1px)] [&_svg:not([class*='size-'])]:size-3.5",
         default: "h-9 min-w-9 px-[calc(--spacing(2)-1px)] sm:h-8 sm:min-w-8",

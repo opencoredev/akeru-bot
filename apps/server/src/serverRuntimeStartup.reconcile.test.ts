@@ -8,6 +8,7 @@ import {
 } from "@akeru/contracts";
 import { assert, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as Stream from "effect/Stream";
 
@@ -20,6 +21,7 @@ import * as ProviderSessionDirectory from "./provider/Services/ProviderSessionDi
 import * as ServerRuntimeStartup from "./serverRuntimeStartup.ts";
 
 const providerInstanceId = ProviderInstanceId.make("codex");
+
 const updatedAt = "2026-08-20T12:00:00.000Z";
 
 const makeThread = (
@@ -61,9 +63,9 @@ const makeAgentController = (liveThreadIds: ReadonlyArray<ThreadId> = []) =>
   }) satisfies AgentController.AgentController["Service"];
 
 const queryWithThreads = (threads: ReadonlyArray<ReturnType<typeof makeThread>>) =>
-  ({
+  Layer.mock(ProjectionSnapshotQuery.ProjectionSnapshotQuery)({
     getCommandReadModel: () => Effect.succeed({ threads } as never),
-  }) as unknown as ProjectionSnapshotQuery.ProjectionSnapshotQuery["Service"];
+  });
 
 const runReconciliation = (input: {
   readonly threads: ReadonlyArray<ReturnType<typeof makeThread>>;
@@ -72,10 +74,7 @@ const runReconciliation = (input: {
   readonly dispatch: OrchestrationEngine.OrchestrationEngineService["Service"]["dispatch"];
 }) =>
   ServerRuntimeStartup.reconcileProviderSessions.pipe(
-    Effect.provideService(
-      ProjectionSnapshotQuery.ProjectionSnapshotQuery,
-      queryWithThreads(input.threads),
-    ),
+    Effect.provide(queryWithThreads(input.threads)),
     Effect.provideService(
       AgentController.AgentController,
       makeAgentController(input.liveThreadIds),
@@ -96,17 +95,20 @@ const runReconciliation = (input: {
 it.effect("reconciles multiple active and archived orphans but skips live sessions", () => {
   const starting = makeThread("thread-starting", "starting");
   const running = makeThread("thread-running", "running", TurnId.make("turn-running"));
+
   const staleActiveTurn = makeThread(
     "thread-stale-active-turn",
     "ready",
     TurnId.make("turn-stale-active"),
   );
+
   const archived = makeThread(
     "thread-archived",
     "running",
     TurnId.make("turn-archived"),
     updatedAt,
   );
+
   const live = makeThread("thread-live", "running", TurnId.make("turn-live"));
   const settled = makeThread("thread-ready", "ready");
   const dispatched: OrchestrationCommand[] = [];
@@ -158,6 +160,7 @@ it.effect("reconciles multiple active and archived orphans but skips live sessio
           orphanIds.map(() => ({ status: "error" as const, activeTurnId: null })),
         );
         assert.equal(upserts.length, orphanIds.length);
+
         for (const binding of upserts) {
           assert.equal(binding.status, "stopped");
           assert.deepStrictEqual(binding.runtimePayload, { activeTurnId: null });
@@ -175,10 +178,12 @@ it.effect(
     const corrupt = makeThread("thread-binding-corrupt", "running");
     const upsertFailure = makeThread("thread-binding-upsert-failure", "running");
     const dispatched: OrchestrationCommand[] = [];
+
     const corruptFailure = new ProviderSessionDirectoryPersistenceError({
       operation: "ProviderSessionDirectory.getBinding",
       detail: "corrupt persisted binding",
     });
+
     const writeFailure = new ProviderSessionDirectoryPersistenceError({
       operation: "ProviderSessionDirectory.upsert",
       detail: "failed binding write",
@@ -227,6 +232,7 @@ it.effect("retries failed projections and continues after a persistent failure",
   const later = makeThread("thread-dispatch-success", "running");
   const attempted: ThreadId[] = [];
   let transientAttempts = 0;
+
   const failure = new OrchestrationCommandInvariantError({
     commandType: "thread.session.set",
     detail: "simulated startup reconciliation failure",
@@ -245,10 +251,13 @@ it.effect("retries failed projections and continues after a persistent failure",
       if (command.type !== "thread.session.set") {
         return Effect.die("unexpected command");
       }
+
       attempted.push(command.threadId);
+
       if (command.threadId === transient.id && transientAttempts++ === 0) {
         return Effect.fail(failure);
       }
+
       return command.threadId === persistent.id
         ? Effect.fail(failure)
         : Effect.succeed({ sequence: attempted.length });
@@ -270,14 +279,18 @@ it.effect("retries failed projections and continues after a persistent failure",
 
 it.effect("does not fail startup when the live provider session inventory cannot be read", () => {
   let queried = false;
+
   return ServerRuntimeStartup.reconcileProviderSessions.pipe(
-    Effect.provideService(ProjectionSnapshotQuery.ProjectionSnapshotQuery, {
-      getCommandReadModel: () =>
-        Effect.sync(() => {
-          queried = true;
-          return { threads: [] } as never;
-        }),
-    } as unknown as ProjectionSnapshotQuery.ProjectionSnapshotQuery["Service"]),
+    Effect.provide(
+      Layer.mock(ProjectionSnapshotQuery.ProjectionSnapshotQuery)({
+        getCommandReadModel: () =>
+          Effect.sync(() => {
+            queried = true;
+
+            return { threads: [] } as never;
+          }),
+      }),
+    ),
     Effect.provideService(AgentController.AgentController, {
       ...makeAgentController(),
       listSessions: () => Effect.die("provider inventory unavailable"),

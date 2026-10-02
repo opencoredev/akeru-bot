@@ -37,8 +37,10 @@ const runWithEnvironmentAuth = <A, E>(
     const logLevel = yield* GlobalFlag.LogLevel;
     const config = yield* resolveCliAuthConfig(flags, logLevel);
     const minimumLogLevel = options?.quietLogs ? "Error" : config.logLevel;
+
     return yield* Effect.gen(function* () {
       const environmentAuth = yield* EnvironmentAuth.EnvironmentAuth;
+
       return yield* run(environmentAuth);
     }).pipe(
       Effect.provide(
@@ -100,10 +102,12 @@ const pairingCreateCommand = Command.make("create", {
             ...(Option.isSome(flags.ttl) ? { ttl: flags.ttl.value } : {}),
             ...(Option.isSome(flags.label) ? { label: flags.label.value } : {}),
           });
+
           const output = formatIssuedPairingCredential(issued, {
             json: flags.json,
             ...(Option.isSome(flags.baseUrl) ? { baseUrl: flags.baseUrl.value } : {}),
           });
+
           yield* Console.log(output);
         }),
       {
@@ -126,6 +130,7 @@ const pairingListCommand = Command.make("list", {
           const pairingLinks = yield* environmentAuth.listPairingLinks({
             excludeSubjects: [EnvironmentAuth.INTERNAL_ADMINISTRATIVE_BOOTSTRAP_SUBJECT],
           });
+
           yield* Console.log(formatPairingCredentialList(pairingLinks, { json: flags.json }));
         }),
       {
@@ -179,6 +184,7 @@ const sessionIssueCommand = Command.make("issue", {
             ...(Option.isSome(flags.label) ? { label: flags.label.value } : {}),
             ...(Option.isSome(flags.subject) ? { subject: flags.subject.value } : {}),
           });
+
           yield* Console.log(
             formatIssuedSession(issued, {
               json: flags.json,

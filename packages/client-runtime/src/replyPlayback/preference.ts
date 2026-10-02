@@ -14,22 +14,28 @@ export function createReplyReadoutPreference(storage: ReplyReadoutStorage, onDis
   let revision = 0;
   let writes = Promise.resolve();
   const listeners = new Set<() => void>();
+
   const publish = (enabled: boolean, persistenceError: boolean) => {
     snapshot = { enabled, persistenceError };
+
     for (const listener of listeners) listener();
   };
+
   return {
     getSnapshot: () => snapshot,
     subscribe: (listener: () => void) => {
       listeners.add(listener);
+
       return () => {
         listeners.delete(listener);
       };
     },
     load: async () => {
       const current = revision;
+
       try {
         const value = await storage.getItem(AUTOMATIC_READOUT_STORAGE_KEY);
+
         if (current === revision) publish(decodeAutomaticReadoutPreference(value), false);
       } catch {
         if (current === revision) publish(false, true);
@@ -38,6 +44,7 @@ export function createReplyReadoutPreference(storage: ReplyReadoutStorage, onDis
     setEnabled: (enabled: boolean) => {
       revision += 1;
       const current = revision;
+
       if (!enabled) onDisable();
       publish(enabled, false);
       writes = writes.then(async () => {
@@ -47,6 +54,7 @@ export function createReplyReadoutPreference(storage: ReplyReadoutStorage, onDis
           if (current === revision) publish(enabled, true);
         }
       });
+
       return writes;
     },
   };

@@ -1,3 +1,4 @@
+import type * as Schema from "effect/Schema";
 /**
  * Subscription provider OAuth types.
  *
@@ -12,7 +13,7 @@ export interface OAuthCredentials {
   access: string;
   /** ms epoch after which `access` must be refreshed. */
   expires: number;
-  [key: string]: unknown;
+  [key: string]: Schema.Json | undefined;
 }
 
 export type OAuthCredential = {

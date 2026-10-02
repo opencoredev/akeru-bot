@@ -28,7 +28,9 @@ function key(input: Pick<ResourceAttributionRecord, "component" | "operation">):
 
 function nonNegativeInteger(value: number | undefined, fallback: number): number {
   if (value === undefined) return fallback;
+
   if (!Number.isFinite(value)) return 0;
+
   return Math.max(0, Math.round(value));
 }
 
@@ -50,6 +52,7 @@ export const make = Effect.fn("resourceTelemetry.resourceAttribution.make")(func
         count: (existing?.count ?? 0) + nonNegativeInteger(input.count, 1),
         durationMs: (existing?.durationMs ?? 0) + nonNegativeInteger(input.durationMs, 0),
       });
+
       return next;
     });
 
@@ -58,6 +61,7 @@ export const make = Effect.fn("resourceTelemetry.resourceAttribution.make")(func
     snapshot: Effect.gen(function* () {
       const readAt = yield* DateTime.now;
       const current = yield* Ref.get(entries);
+
       return {
         readAt,
         entries: [...current.values()].toSorted(

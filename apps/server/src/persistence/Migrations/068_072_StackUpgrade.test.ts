@@ -42,9 +42,11 @@ it.layer(Layer.mergeAll(NodeSqliteClient.layerMemory()))("stacked schema migrati
       );
 
       const sql = yield* SqlClient.SqlClient;
+
       const messageColumns = yield* sql<{ readonly name: string }>`
         SELECT name FROM pragma_table_info('projection_thread_messages')
       `;
+
       assert.isTrue(messageColumns.some(({ name }) => name === "channel_delivery"));
     }),
   );

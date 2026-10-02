@@ -12,6 +12,7 @@ import { useBotChatTarget, useBotThreadCandidate } from "./useBotThreadRef";
  */
 export function useBotPresence(botId: string): RosterPresence {
   const candidate = useBotThreadCandidate(botId);
+
   return resolveBotPresence(useBotChatTarget(botId, candidate).shell);
 }
 
@@ -19,9 +20,11 @@ export function useBotPresence(botId: string): RosterPresence {
 export function useGroupPresence(groupId: string): RosterPresence {
   const environmentId = usePrimaryEnvironmentId();
   const threadId = useLatestGroupThreadId(environmentId, groupId);
+
   const ref = useMemo<ScopedThreadRef | null>(
     () => (environmentId && threadId ? scopeThreadRef(environmentId, threadId) : null),
     [environmentId, threadId],
   );
+
   return resolveBotPresence(useThreadShell(ref));
 }

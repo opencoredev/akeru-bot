@@ -1,4 +1,3 @@
-// @effect-diagnostics nodeBuiltinImport:off - Tests pin installer shell text and exercise its arg parsing.
 import * as NodeAssert from "node:assert/strict";
 import * as NodeChildProcess from "node:child_process";
 import * as NodeFS from "node:fs";
@@ -6,6 +5,7 @@ import * as NodePath from "node:path";
 import { describe, it } from "vite-plus/test";
 
 const scriptPath = NodePath.resolve(import.meta.dirname, "./install-macos.sh");
+
 const script = NodeFS.readFileSync(scriptPath, "utf8");
 
 function tryBash(args: string[]): { status: number; stdout: string; stderr: string } | null {
@@ -14,6 +14,7 @@ function tryBash(args: string[]): { status: number; stdout: string; stderr: stri
       encoding: "utf8",
       stdio: ["ignore", "pipe", "pipe"],
     });
+
     return { status: 0, stdout, stderr: "" };
   } catch (error) {
     const failure = error as {
@@ -22,7 +23,9 @@ function tryBash(args: string[]): { status: number; stdout: string; stderr: stri
       stderr?: unknown;
       code?: string;
     };
+
     if (failure.code === "ENOENT") return null;
+
     return {
       status: failure.status ?? 1,
       stdout: String(failure.stdout ?? ""),
@@ -63,6 +66,7 @@ describe("install-macos.sh", () => {
 
   it("parses --tag, --tag=, --help, and rejects unknown args", () => {
     const help = tryBash(["--help"]);
+
     if (help === null) return;
     NodeAssert.equal(help.status, 0);
     NodeAssert.match(help.stdout, /usage: install-macos\.sh \[--tag vX\.Y\.Z\]/);
@@ -140,6 +144,7 @@ describe("install-macos.sh", () => {
   it("keeps output to milestone lines only", () => {
     const echoes = script.split("\n").filter((line) => /^\s*echo /.test(line));
     NodeAssert.ok(echoes.length > 0 && echoes.length <= 8);
+
     for (const line of echoes) {
       NodeAssert.match(
         line,

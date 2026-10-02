@@ -20,6 +20,7 @@ export function resolveThreadWorkspaceCwd(input: {
   }>;
 }): string | undefined {
   const worktreeCwd = input.thread.worktreePath ?? undefined;
+
   if (worktreeCwd) {
     return worktreeCwd;
   }

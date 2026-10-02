@@ -5,13 +5,13 @@ import * as Queue from "effect/Queue";
 import * as Stream from "effect/Stream";
 import { describe, expect } from "vite-plus/test";
 
-import { makeLiveStreamBudget, type RetainedLiveItem } from "./LiveStreamBudget.ts";
+import { liveStreamBudget, type RetainedLiveItem } from "./LiveStreamBudget.ts";
 
 describe("LiveStreamBudget", () => {
   it.effect("closes the source without releasing a batch still waiting for an ACK", () =>
     Effect.scoped(
       Effect.gen(function* () {
-        const budget = yield* makeLiveStreamBudget({ maxItems: 3 });
+        const budget = yield* liveStreamBudget({ maxItems: 3 });
         const queue = yield* Queue.unbounded<RetainedLiveItem<{ text: string }>>();
         const sourceClosed = yield* Deferred.make<void>();
         const first = yield* budget.retain({ text: "first" });
@@ -28,6 +28,7 @@ describe("LiveStreamBudget", () => {
                 ),
               ),
             );
+
             expect(yield* pull).toEqual([{ text: "first" }]);
             // The other two items are in the source's pull state, not its queue.
             expect(yield* Queue.size(queue)).toBe(0);

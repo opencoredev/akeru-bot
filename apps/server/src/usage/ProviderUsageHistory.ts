@@ -47,7 +47,9 @@ const UsageRow = Schema.Struct({
   createdAt: Schema.String,
   settledAt: Schema.NullOr(Schema.String),
 });
+
 type UsageRow = typeof UsageRow.Type;
+
 const decodeUsageEntry = Schema.decodeUnknownEffect(AkeruUsageEntry);
 
 const make = Effect.gen(function* () {

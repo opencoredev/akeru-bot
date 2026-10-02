@@ -1,0 +1,289 @@
+@keyframes prompt-stash-count-enter {
+  from {
+    opacity: 0;
+    transform: translateY(2px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes provider-update-pill-countdown {
+  from {
+    transform: scaleX(1);
+  }
+  to {
+    transform: scaleX(0);
+  }
+}
+
+.diff-render-surface diffs-container {
+  border: 0;
+  border-radius: 0;
+  overflow: clip;
+  background: var(--code-background);
+  color: var(--code-foreground);
+}
+
+/* Pierre's file renderer owns its own surface tokens. Keep the root of a file
+   preview on the same themeable code surface as the diff panel. */
+
+.diff-render-surface diffs-container,
+.file-preview-virtualizer diffs-container {
+  --diffs-bg: var(--code-background) !important;
+  --diffs-light-bg: var(--code-background) !important;
+  --diffs-dark-bg: var(--code-background) !important;
+  background-color: var(--code-background) !important;
+  color: var(--code-foreground) !important;
+}
+
+@keyframes ultrathink-rainbow {
+  0% {
+    background-position: 0% 50%;
+  }
+  100% {
+    background-position: 200% 50%;
+  }
+}
+
+@keyframes ultrathink-chroma-shift {
+  0% {
+    filter: hue-rotate(0deg) saturate(1.2);
+  }
+  100% {
+    filter: hue-rotate(360deg) saturate(1.2);
+  }
+}
+
+.ultrathink-frame {
+  --ultrathink-spectrum: linear-gradient(
+    120deg,
+    #ff6b6b 0%,
+    #f59e0b 18%,
+    #22c55e 36%,
+    #14b8a6 54%,
+    #3b82f6 72%,
+    #ec4899 90%,
+    #ff6b6b 100%
+  );
+  position: relative;
+}
+
+.ultrathink-frame::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 2px;
+  background-image: var(--ultrathink-spectrum);
+  background-size: 220% 220%;
+  pointer-events: none;
+  filter: saturate(0.82) brightness(0.92);
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  mask-composite: exclude;
+  /* Stepped to about 10fps: the slow drift reads the same and stops a
+     per-frame repaint of the masked ring. */
+  animation: ultrathink-rainbow 10s steps(100) infinite;
+}
+
+.ultrathink-frame > * {
+  position: relative;
+}
+
+.ultrathink-chroma {
+  animation: ultrathink-chroma-shift 10s steps(60) infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ultrathink-frame::before,
+  .ultrathink-chroma {
+    animation: none;
+  }
+}
+
+@keyframes preview-loading-progress {
+  from {
+    transform: scaleX(0.04);
+  }
+
+  to {
+    transform: scaleX(0.9);
+  }
+}
+
+.preview-loading-progress {
+  opacity: 0;
+  transform: scaleX(1);
+  transition:
+    transform 150ms ease-out,
+    opacity 150ms ease-out 220ms;
+}
+
+.preview-loading-progress[data-loading="true"] {
+  opacity: 1;
+  animation: preview-loading-progress 5.3s cubic-bezier(0.1, 0.5, 0.2, 1) forwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .preview-loading-progress,
+  .preview-loading-progress[data-loading="true"] {
+    transition: none;
+    animation: none;
+  }
+
+  .preview-loading-progress[data-loading="true"] {
+    transform: scaleX(0.9);
+  }
+}
+
+/* Bot avatars. Flat SVG blobs moved by the spring engine in
+   botAvatarMotion.ts, which writes the body transform here and the eye
+   transforms on the SVG. The body transform stays on an HTML wrapper so it
+   composites; cutout eyes live in an SVG mask, which repaints only while
+   they move. */
+
+.bot-avatar .bot-body,
+.bot-avatar svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.bot-avatar .bot-body {
+  transform-origin: 50% 50%;
+}
+
+.bot-status-shimmer {
+  color: transparent;
+  background-image: linear-gradient(
+    100deg,
+    color-mix(in srgb, var(--foreground) 48%, transparent) 20%,
+    var(--foreground) 48%,
+    color-mix(in srgb, var(--foreground) 48%, transparent) 76%
+  );
+  background-position: 120% 0;
+  background-size: 240% 100%;
+  background-clip: text;
+}
+
+/* The thinking glyph: a comet head steps clockwise around eight pixel cells
+   and its tail fades behind it. Stepped opacity only, about eleven frames a second. */
+
+.bot-thinking-glyph rect {
+  opacity: 0.12;
+  animation: bot-thinking-comet 720ms step-end infinite;
+  animation-delay: calc(var(--cell) * 90ms - 720ms);
+}
+
+@keyframes bot-thinking-comet {
+  0% {
+    opacity: 1;
+  }
+  12.5% {
+    opacity: 0.7;
+  }
+  25% {
+    opacity: 0.45;
+  }
+  37.5% {
+    opacity: 0.25;
+  }
+  50%,
+  100% {
+    opacity: 0.12;
+  }
+}
+
+/* A light band slides across in-progress text. The band is a masked copy of the
+   text that moves with transform while its inner text counter-moves to stay aligned. */
+
+.bot-shimmer-text {
+  position: relative;
+  overflow: hidden;
+  --bot-shimmer-duration: 1800ms;
+}
+
+.bot-shimmer-sheen {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  mask-image: linear-gradient(90deg, transparent 25%, #000 50%, transparent 75%);
+}
+
+.bot-shimmer-sheen-text {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: color-mix(in srgb, var(--background) 62%, transparent);
+}
+
+@keyframes bot-shimmer-sheen {
+  from {
+    transform: translateX(-75%);
+  }
+  to {
+    transform: translateX(75%);
+  }
+}
+
+@keyframes bot-shimmer-sheen-counter {
+  from {
+    transform: translateX(75%);
+  }
+  to {
+    transform: translateX(-75%);
+  }
+}
+
+/* Loading meter pixels ("Drive" wavefront), played once: each cell flashes lit,
+   then settles to its resting opacity. Lit cells rest as a chevron, the rest dim.
+   The sweep replays only when the meter remounts on a step change. */
+
+.response-loading-pixel {
+  --response-loading-pixel-rest: 0.15;
+  opacity: var(--response-loading-pixel-rest);
+  animation: response-loading-pixel-sweep 650ms ease-in-out both;
+  animation-delay: var(--response-loading-pixel-delay, 0ms);
+}
+
+.response-loading-pixel[data-lit] {
+  --response-loading-pixel-rest: 1;
+}
+
+@keyframes response-loading-pixel-sweep {
+  0% {
+    opacity: 0.15;
+  }
+  18%,
+  42% {
+    opacity: 1;
+  }
+  100% {
+    opacity: var(--response-loading-pixel-rest);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .response-loading-pixel {
+    animation: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bot-thinking-glyph rect {
+    animation: none;
+    opacity: calc(1 - var(--cell) * 0.11);
+  }
+  .bot-shimmer-sheen {
+    display: none;
+  }
+}

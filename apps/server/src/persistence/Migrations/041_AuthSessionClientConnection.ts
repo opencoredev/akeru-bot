@@ -6,6 +6,7 @@ import * as SqlClient from "effect/unstable/sql/SqlClient";
 // of freezing at session issuance. Nullable: old clients never report them.
 export default Effect.gen(function* () {
   const sql = yield* SqlClient.SqlClient;
+
   const columns = yield* sql<{ readonly name: string }>`
     PRAGMA table_info(auth_sessions)
   `;

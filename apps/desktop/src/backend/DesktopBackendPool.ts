@@ -1,3 +1,5 @@
+import * as Data from "effect/Data";
+import * as Predicate from "effect/Predicate";
 // Pool registry for multiple backend processes. This file is the entry
 // point for the concurrent-Windows+WSL-backend feature; see the design
 // notes below before extending it.
@@ -102,12 +104,16 @@ import * as DesktopWindow from "../window/DesktopWindow.ts";
 import * as ElectronDialog from "../electron/ElectronDialog.ts";
 
 const { logWarning: logBackendPoolWarning } =
-  DesktopObservability.makeComponentLogger("desktop-backend-pool");
+  DesktopObservability.componentLogger("desktop-backend-pool");
 
 export type BackendInstanceId = DesktopBackendManager.BackendInstanceId;
+
 export const BackendInstanceId = DesktopBackendManager.BackendInstanceId;
+
 export const PRIMARY_INSTANCE_ID = DesktopBackendManager.PRIMARY_INSTANCE_ID;
+
 export type DesktopBackendInstance = DesktopBackendManager.DesktopBackendInstance;
+
 export type BackendInstanceSpec = DesktopBackendManager.BackendInstanceSpec;
 
 // Caller tried to register an id that's already in the pool. The pool
@@ -205,6 +211,12 @@ type UnregisterAction =
   | { readonly _tag: "Wait"; readonly done: Deferred.Deferred<void> }
   | { readonly _tag: "Close"; readonly entry: ActiveRegisteredInstance };
 
+const RegisteredInstance = Data.taggedEnum<RegisteredInstance>();
+
+const RegisterAction = Data.taggedEnum<RegisterAction>();
+
+const UnregisterAction = Data.taggedEnum<UnregisterAction>();
+
 export const layer = Layer.effect(
   DesktopBackendPool,
   Effect.gen(function* () {
@@ -234,6 +246,7 @@ export const layer = Layer.effect(
     const handlePrimaryPreflightFailure = Effect.fn("desktop.backendPool.primaryPreflightFailed")(
       function* (failure: DesktopBackendManager.PreflightFailure) {
         const { reason, fatal } = failure;
+
         if (!fatal) {
           yield* logBackendPoolWarning(
             "primary WSL preflight retry window exhausted; using Windows for this launch",
@@ -244,6 +257,7 @@ export const layer = Layer.effect(
             `${reason}\n\nAkeru Bot will use the Windows backend for this launch and retry WSL the next time the app starts.`,
           );
           yield* appSettings.applyWslWindowsFallbackInMemory;
+
           return true;
         }
 
@@ -271,6 +285,7 @@ export const layer = Layer.effect(
             ).pipe(Effect.andThen(appSettings.applyWslWindowsFallbackInMemory)),
           ),
         );
+
         return true;
       },
     );
@@ -307,7 +322,7 @@ export const layer = Layer.effect(
       new Map([
         [
           DesktopBackendManager.PRIMARY_INSTANCE_ID,
-          { _tag: "Active", instance: primary, scope: Option.none() },
+          RegisteredInstance.Active({ instance: primary, scope: Option.none() }),
         ],
       ]),
     );
@@ -323,40 +338,42 @@ export const layer = Layer.effect(
             DesktopBackendPoolInstanceAlreadyRegisteredError
           > => {
             const existing = current.get(spec.id);
-            if (existing?._tag === "Active") {
+
+            if (Predicate.isTagged(existing, "Active")) {
               return Effect.fail(
                 new DesktopBackendPoolInstanceAlreadyRegisteredError({ id: spec.id }),
               );
             }
-            if (existing?._tag === "Closing") {
+
+            if (Predicate.isTagged(existing, "Closing")) {
               return Effect.succeed([
-                { _tag: "Wait", done: existing.done } as const,
+                UnregisterAction.Wait({ done: existing.done }),
                 current,
               ] as const);
             }
+
             return Effect.gen(function* () {
               // Provide the captured factory services first, then the child scope
               // last so instance finalizers are owned by the unregisterable scope.
               const instanceScope = yield* Scope.fork(layerScope, "sequential");
+
               const instance = yield* DesktopBackendManager.makeBackendInstance(spec).pipe(
                 Effect.provide(factoryContext),
                 Scope.provide(instanceScope),
               );
+
               const next = new Map(current);
-              next.set(spec.id, {
-                _tag: "Active",
-                instance,
-                scope: Option.some(instanceScope),
-              });
-              return [
-                { _tag: "Registered", instance } as const,
-                next as ReadonlyMap<BackendInstanceId, RegisteredInstance>,
-              ] as const;
+              next.set(
+                spec.id,
+                RegisteredInstance.Active({ instance, scope: Option.some(instanceScope) }),
+              );
+
+              return [RegisterAction.Registered({ instance }), next] as const;
             });
           },
         ).pipe(
           Effect.flatMap((result) =>
-            result._tag === "Registered"
+            Predicate.isTagged(result, "Registered")
               ? Effect.succeed(result.instance)
               : Deferred.await(result.done).pipe(Effect.andThen(register(spec))),
           ),
@@ -368,7 +385,9 @@ export const layer = Layer.effect(
         if (id === DesktopBackendManager.PRIMARY_INSTANCE_ID) {
           return yield* new DesktopBackendPoolCannotUnregisterPrimaryError();
         }
+
         const done = yield* Deferred.make<void>();
+
         const action = yield* SynchronizedRef.modifyEffect(
           instancesRef,
           (
@@ -377,42 +396,46 @@ export const layer = Layer.effect(
             readonly [UnregisterAction, ReadonlyMap<BackendInstanceId, RegisteredInstance>]
           > => {
             const entry = current.get(id);
+
             if (entry === undefined) {
-              return Effect.succeed([{ _tag: "Absent" } as const, current] as const);
+              return Effect.succeed([UnregisterAction.Absent(), current] as const);
             }
-            if (entry._tag === "Closing") {
+
+            if (Predicate.isTagged(entry, "Closing")) {
               return Effect.succeed([
-                { _tag: "Wait", done: entry.done } as const,
+                UnregisterAction.Wait({ done: entry.done }),
                 current,
               ] as const);
             }
+
             const next = new Map(current);
-            next.set(id, { _tag: "Closing", done });
-            return Effect.succeed([
-              { _tag: "Close", entry } as const,
-              next as ReadonlyMap<BackendInstanceId, RegisteredInstance>,
-            ] as const);
+            next.set(id, RegisteredInstance.Closing({ done }));
+
+            return Effect.succeed([UnregisterAction.Close({ entry }), next] as const);
           },
         );
 
-        if (action._tag === "Absent") return;
-        if (action._tag === "Wait") {
+        if (UnregisterAction.$is("Absent")(action)) return;
+
+        if (UnregisterAction.$is("Wait")(action)) {
           yield* Deferred.await(action.done);
+
           return;
         }
 
         const finish = SynchronizedRef.modifyEffect(instancesRef, (current) => {
           const closing = current.get(id);
-          if (closing?._tag !== "Closing" || closing.done !== done) {
+
+          if (!Predicate.isTagged(closing, "Closing") || closing.done !== done) {
             return Effect.succeed([undefined, current] as const);
           }
+
           const next = new Map(current);
           next.delete(id);
-          return Effect.succeed([
-            undefined,
-            next as ReadonlyMap<BackendInstanceId, RegisteredInstance>,
-          ] as const);
+
+          return Effect.succeed([undefined, next] as const);
         }).pipe(Effect.andThen(Deferred.succeed(done, undefined)), Effect.asVoid);
+
         yield* Option.match(action.entry.scope, {
           onNone: () => Effect.void,
           onSome: (scope) => Scope.close(scope, Exit.void).pipe(Effect.ignore),
@@ -424,13 +447,16 @@ export const layer = Layer.effect(
         SynchronizedRef.get(instancesRef).pipe(
           Effect.map((instances) => {
             const entry = instances.get(id);
-            return entry?._tag === "Active" ? Option.some(entry.instance) : Option.none();
+
+            return Predicate.isTagged(entry, "Active")
+              ? Option.some(entry.instance)
+              : Option.none();
           }),
         ),
       list: SynchronizedRef.get(instancesRef).pipe(
         Effect.map((instances) =>
           Array.from(instances.values()).flatMap((entry) =>
-            entry._tag === "Active" ? [entry.instance] : [],
+            Predicate.isTagged(entry, "Active") ? [entry.instance] : [],
           ),
         ),
       ),
@@ -457,10 +483,13 @@ export const layerTest = (
       if (instances.length === 0) {
         return yield* Effect.die("DesktopBackendPool.layerTest requires at least one instance");
       }
+
       const byId = new Map<BackendInstanceId, DesktopBackendInstance>(
         instances.map((instance) => [instance.id, instance] as const),
       );
+
       const primary = instances[0]!;
+
       return DesktopBackendPool.of({
         get: (id) => Effect.succeed(Option.fromNullishOr(byId.get(id))),
         list: Effect.succeed(Array.from(byId.values())),

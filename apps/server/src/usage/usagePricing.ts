@@ -1,3 +1,6 @@
+import { isJsonObject } from "../json.ts";
+import * as Predicate from "effect/Predicate";
+import * as Schema from "effect/Schema";
 /**
  * Model rate lookup and cost arithmetic.
  *
@@ -26,16 +29,8 @@ export interface ModelRate {
 
 export type RateTable = ReadonlyMap<string, ModelRate>;
 
-/** Raw shape of one LiteLLM entry, narrowed to the fields we read. */
-interface LiteLlmEntry {
-  readonly input_cost_per_token?: unknown;
-  readonly output_cost_per_token?: unknown;
-  readonly cache_read_input_token_cost?: unknown;
-  readonly cache_creation_input_token_cost?: unknown;
-}
-
-function finiteNumber(value: unknown): number | null {
-  return typeof value === "number" && Number.isFinite(value) ? value : null;
+function finiteNumber(value: Schema.Json | undefined): number | null {
+  return Predicate.isNumber(value) && Number.isFinite(value) ? value : null;
 }
 
 /**
@@ -48,18 +43,21 @@ function finiteNumber(value: unknown): number | null {
  * Entries keep their full normalized key; a bare name is aliased only when no
  * canonical entry exists and every qualified entry has the same rate.
  */
-export function parseRateTable(document: unknown): RateTable {
+export function parseRateTable(document: Schema.Json): RateTable {
   const table = new Map<string, ModelRate>();
-  if (typeof document !== "object" || document === null) return table;
 
-  for (const [name, raw] of Object.entries(document as Record<string, unknown>)) {
-    if (typeof raw !== "object" || raw === null) continue;
-    const entry = raw as LiteLlmEntry;
+  if (!isJsonObject(document)) return table;
+
+  for (const [name, raw] of Object.entries(document)) {
+    if (!isJsonObject(raw)) continue;
+    const entry = raw;
     const input = finiteNumber(entry.input_cost_per_token);
     const output = finiteNumber(entry.output_cost_per_token);
+
     if (input === null || output === null) continue;
 
     const key = normalizeRateKey(name);
+
     if (key.length === 0) continue;
     table.set(key, {
       inputCostPerToken: input,
@@ -74,16 +72,20 @@ export function parseRateTable(document: unknown): RateTable {
 
   // `null` marks a bare name claimed at conflicting rates: no alias for it.
   const aliasCandidates = new Map<string, ModelRate | null>();
+
   for (const [key, rate] of table) {
     const alias = bareModelName(key);
+
     if (alias.length === 0 || alias === key || table.has(alias)) continue;
     const held = aliasCandidates.get(alias);
+
     if (held === undefined) {
       aliasCandidates.set(alias, rate);
     } else if (held !== null && !sameRate(held, rate)) {
       aliasCandidates.set(alias, null);
     }
   }
+
   for (const [alias, rate] of aliasCandidates) {
     if (rate !== null) table.set(alias, rate);
   }
@@ -116,6 +118,7 @@ export function normalizeModelName(model: string): string {
 
 function bareModelName(key: string): string {
   const slash = key.lastIndexOf("/");
+
   return slash === -1 ? key : key.slice(slash + 1);
 }
 
@@ -138,7 +141,9 @@ const UNPRICEABLE_MODELS = new Set([
 export function lookupRate(table: RateTable, model: string): ModelRate | null {
   const key = normalizeRateKey(model);
   const bareName = bareModelName(key);
+
   if (bareName.length === 0 || UNPRICEABLE_MODELS.has(bareName)) return null;
+
   return table.get(key) ?? table.get(bareName) ?? null;
 }
 
@@ -164,6 +169,7 @@ export function priceUsage(
   }
 
   const rate = lookupRate(table, model);
+
   if (rate === null) return { costUsd: 0, costSource: "unpriced" };
 
   const costUsd =
@@ -181,6 +187,8 @@ export function priceUsage(
  */
 export function cacheSavingsUsd(table: RateTable, model: string, totals: UsageTokenTotals): number {
   const rate = lookupRate(table, model);
+
   if (rate === null) return 0;
+
   return totals.cachedInputTokens * (rate.inputCostPerToken - rate.cacheReadCostPerToken);
 }

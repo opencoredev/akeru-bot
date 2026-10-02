@@ -1,4 +1,3 @@
-// @effect-diagnostics nodeBuiltinImport:off - Tests pin installer shell text and exercise its arg parsing.
 import * as NodeAssert from "node:assert/strict";
 import * as NodeChildProcess from "node:child_process";
 import * as NodeCrypto from "node:crypto";
@@ -10,6 +9,7 @@ import { HostProcessArchitecture, HostProcessPlatform } from "@akeru/shared/host
 import { describe, it } from "vite-plus/test";
 
 const scriptPath = NodePath.resolve(import.meta.dirname, "./install-linux.sh");
+
 const script = NodeFS.readFileSync(scriptPath, "utf8");
 
 function tryBash(args: string[]): { status: number; stdout: string; stderr: string } | null {
@@ -18,6 +18,7 @@ function tryBash(args: string[]): { status: number; stdout: string; stderr: stri
       encoding: "utf8",
       stdio: ["ignore", "pipe", "pipe"],
     });
+
     return { status: 0, stdout, stderr: "" };
   } catch (error) {
     const failure = error as {
@@ -26,7 +27,9 @@ function tryBash(args: string[]): { status: number; stdout: string; stderr: stri
       stderr?: unknown;
       code?: string;
     };
+
     if (failure.code === "ENOENT") return null;
+
     return {
       status: failure.status ?? 1,
       stdout: String(failure.stdout ?? ""),
@@ -49,14 +52,17 @@ describe.runIf(
   ]) {
     it(`handles ${scenario} without leaving staging files`, () => {
       const root = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "akeru-install-test-"));
+
       try {
         const bin = NodePath.join(root, "bin");
         const home = NodePath.join(root, "home");
         const temp = NodePath.join(root, "tmp");
         const destination = NodePath.join(home, ".local/bin/akeru-bot");
+
         for (const directory of [bin, temp, NodePath.dirname(destination)]) {
           NodeFS.mkdirSync(directory, { recursive: true });
         }
+
         const payload = "fixture AppImage bytes\n";
         const asset = "Akeru-Bot-1.2.3-x64.AppImage";
         const digest = NodeCrypto.createHash("sha256").update(payload).digest("hex");
@@ -88,11 +94,13 @@ esac
 `,
           { mode: 0o755 },
         );
+
         if (scenario === "directory") {
           NodeFS.mkdirSync(destination);
         } else if (scenario !== "fresh") {
           NodeFS.writeFileSync(destination, "previous installation");
         }
+
         const result = NodeChildProcess.spawnSync("bash", [scriptPath, "--tag", "v1.2.3"], {
           encoding: "utf8",
           env: {
@@ -104,7 +112,9 @@ esac
             FIXTURE_SCENARIO: scenario,
           },
         });
+
         NodeAssert.ifError(result.error);
+
         if (scenario === "fresh" || scenario === "replacement") {
           NodeAssert.equal(result.status, 0, result.stderr);
           NodeAssert.equal(NodeFS.readFileSync(destination, "utf8"), payload);
@@ -113,12 +123,14 @@ esac
         } else {
           NodeAssert.notEqual(result.status, 0);
           NodeAssert.doesNotMatch(result.stdout, /Installed Akeru Bot/);
+
           if (scenario === "directory") {
             NodeAssert.ok(NodeFS.statSync(destination).isDirectory());
           } else {
             NodeAssert.equal(NodeFS.readFileSync(destination, "utf8"), "previous installation");
           }
         }
+
         NodeAssert.deepEqual(NodeFS.readdirSync(NodePath.dirname(destination)), ["akeru-bot"]);
         NodeAssert.deepEqual(NodeFS.readdirSync(temp), []);
       } finally {
@@ -157,6 +169,7 @@ describe("install-linux.sh", () => {
 
   it("parses --tag, --tag=, --help, and rejects unknown args", () => {
     const help = tryBash(["--help"]);
+
     if (help === null) return;
     NodeAssert.equal(help.status, 0);
     NodeAssert.match(help.stdout, /usage: install-linux\.sh \[--tag vX\.Y\.Z\]/);
@@ -237,6 +250,7 @@ describe("install-linux.sh", () => {
   it("keeps output to milestone lines only", () => {
     const echoes = script.split("\n").filter((line) => /^\s*echo /.test(line));
     NodeAssert.ok(echoes.length > 0 && echoes.length <= 12);
+
     for (const line of echoes) {
       NodeAssert.match(
         line,

@@ -1,4 +1,3 @@
-// @effect-diagnostics nodeBuiltinImport:off
 import * as NodePath from "node:path";
 import * as NodeOS from "node:os";
 import * as NodeURL from "node:url";
@@ -17,9 +16,11 @@ import * as ServerConfig from "../config.ts";
 import * as TextGeneration from "./TextGeneration.ts";
 import { makeGrokTextGeneration } from "./GrokTextGeneration.ts";
 import { testSubscriptionAuthServiceForSecretsDir } from "../subscription-auth/testUtils/subscriptionAuthService.ts";
+
 const decodeGrokSettings = Schema.decodeSync(GrokSettings);
 
 const __dirname = NodePath.dirname(NodeURL.fileURLToPath(import.meta.url));
+
 const mockAgentPath = NodePath.join(__dirname, "../../scripts/acp-mock-agent.ts");
 
 function shellSingleQuote(value: string): string {
@@ -50,6 +51,7 @@ function makeAcpGrokWrapper(dir: string, env: Record<string, string>): string {
     "utf8",
   );
   NodeFS.chmodSync(grokPath, 0o755);
+
   return grokPath;
 }
 
@@ -67,24 +69,26 @@ function withFakeAcpGrok<A, E, R>(
     );
     const binaryPath = makeAcpGrokWrapper(tempDir, env);
     const config = decodeGrokSettings({ binaryPath });
+
     const textGeneration = yield* makeGrokTextGeneration(
       config,
       {},
       credentials?.secretsDir,
       credentials?.instanceId,
     );
+
     return yield* effectFn(textGeneration);
   }).pipe(Effect.scoped);
 }
 
 function readJsonRpcRequests(
   filePath: string,
-): ReadonlyArray<{ readonly method?: string; readonly params?: Record<string, unknown> }> {
+): ReadonlyArray<{ readonly method?: string; readonly params?: Schema.JsonObject }> {
   return NodeFS.readFileSync(filePath, "utf8")
     .trim()
     .split("\n")
     .filter((line) => line.length > 0)
-    .map((line) => JSON.parse(line) as { method?: string; params?: Record<string, unknown> });
+    .map((line) => JSON.parse(line) as { method?: string; params?: Schema.JsonObject });
 }
 
 it.layer(GrokTextGenerationTestLayer)("GrokTextGeneration", (it) => {
@@ -92,6 +96,7 @@ it.layer(GrokTextGenerationTestLayer)("GrokTextGeneration", (it) => {
     const requestLogDir = NodeFS.mkdtempSync(
       NodePath.join(NodeOS.tmpdir(), "t3code-grok-text-log-"),
     );
+
     const requestLogPath = NodePath.join(requestLogDir, "requests.ndjson");
 
     return withFakeAcpGrok(
@@ -144,6 +149,7 @@ it.layer(GrokTextGenerationTestLayer)("GrokTextGeneration", (it) => {
             message: "the lint job is red",
             modelSelection: createModelSelection(ProviderInstanceId.make("grok"), "grok-mock-alt"),
           });
+
           expect(generated.title).toBe("Investigate failing CI");
         }),
     ),
@@ -166,6 +172,7 @@ it.layer(GrokTextGenerationTestLayer)("GrokTextGeneration", (it) => {
               ),
             }),
           );
+
           expect(error._tag).toBe("TextGenerationError");
           expect(error.detail).toContain("Grok ACP base model");
         }),
@@ -186,6 +193,7 @@ it.layer(GrokTextGenerationTestLayer)("GrokTextGeneration", (it) => {
               modelSelection: createModelSelection(ProviderInstanceId.make("grok"), "grok-build"),
             }),
           );
+
           expect(error._tag).toBe("TextGenerationError");
           expect(error.detail).toMatch(/empty/i);
         }),
@@ -206,6 +214,7 @@ it.layer(GrokTextGenerationTestLayer)("GrokTextGeneration", (it) => {
               modelSelection: createModelSelection(ProviderInstanceId.make("grok"), "grok-build"),
             }),
           );
+
           expect(error._tag).toBe("TextGenerationError");
           expect(error.detail).toMatch(/invalid structured output/i);
         }),
@@ -215,6 +224,7 @@ it.layer(GrokTextGenerationTestLayer)("GrokTextGeneration", (it) => {
   it.effect("uses the saved key of the instance it is bound to", () => {
     const secretsDir = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "t3code-grok-text-auth-"));
     const keyLogPath = NodePath.join(secretsDir, "xai-key.txt");
+
     return Effect.gen(function* () {
       yield* Effect.addFinalizer(() =>
         Effect.sync(() => NodeFS.rmSync(secretsDir, { recursive: true, force: true })),
@@ -223,10 +233,12 @@ it.layer(GrokTextGenerationTestLayer)("GrokTextGeneration", (it) => {
         const auth = await testSubscriptionAuthServiceForSecretsDir(secretsDir);
         const personal = await auth.startLogin("xai", { authMode: "api-key" });
         await auth.completeLogin(personal.loginId, "personal-key");
+
         const work = await auth.startLogin("xai", {
           authMode: "api-key",
           instanceId: ProviderInstanceId.make("grok_work"),
         });
+
         await auth.completeLogin(work.loginId, "work-key");
       });
       yield* withFakeAcpGrok(

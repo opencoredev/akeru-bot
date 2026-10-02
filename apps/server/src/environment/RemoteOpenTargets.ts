@@ -39,6 +39,7 @@ export const make = Effect.gen(function* () {
       net.hasListenerOnHost(SSH_PORT, "::1"),
       (ipv4, ipv6) => ipv4 || ipv6,
     );
+
     if (!sshdListening) {
       return [];
     }
@@ -51,6 +52,7 @@ export const make = Effect.gen(function* () {
       Effect.orElseSucceed(() => null),
       Effect.provideService(ChildProcessSpawner.ChildProcessSpawner, spawner),
     );
+
     if (magicDnsName !== null) {
       targets.push({ kind: "tailscale", host: magicDnsName });
     }
@@ -59,6 +61,7 @@ export const make = Effect.gen(function* () {
     // "Name.local"); mDNS names are always `<first-label>.local`.
     const hostname = yield* HostProcessHostname;
     const shortHostname = hostname.split(".")[0]?.trim();
+
     if (shortHostname !== undefined && shortHostname.length > 0) {
       targets.push({ kind: "mdns", host: `${shortHostname}.local` });
     }

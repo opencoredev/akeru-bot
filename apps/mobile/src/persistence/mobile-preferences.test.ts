@@ -18,9 +18,11 @@ describe("mobile preferences fallback migration", () => {
           JSON.stringify({ payload: JSON.stringify({ baseFontSize: 17 }), updatedAt: 17 }),
         ],
       ]);
+
       let available = true;
       let stored: StoredPreferencesJson | null = null;
       const outage = new MobileDatabaseError({ operation: "load-preferences", cause: "offline" });
+
       const database = MobileDatabase.of({
         loadCache: () => Effect.succeed(Option.none()),
         saveCache: () => Effect.void,
@@ -39,11 +41,13 @@ describe("mobile preferences fallback migration", () => {
             stored = { payload, updatedAt };
           }),
       });
+
       const secureStorage = MobileSecureStorage.of({
         getItem: (key) => Effect.sync(() => secure.get(key) ?? null),
         setItem: (key, value) => Effect.sync(() => void secure.set(key, value)),
         removeItem: (key) => Effect.sync(() => void secure.delete(key)),
       });
+
       const preferences = yield* make().pipe(
         Effect.provideService(MobileDatabase, database),
         Effect.provideService(MobileSecureStorage, secureStorage),

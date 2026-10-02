@@ -11,13 +11,13 @@ import * as Queue from "effect/Queue";
 import * as Stream from "effect/Stream";
 
 import { ProviderAdapterRegistry } from "../src/provider/Services/ProviderAdapterRegistry.ts";
-import { makeAdapterRegistryMock } from "../src/provider/testUtils/providerAdapterRegistryMock.ts";
+import { adapterRegistryMock } from "../src/provider/testUtils/providerAdapterRegistryMock.ts";
 import { ProviderSessionDirectoryLive } from "../src/provider/Layers/ProviderSessionDirectory.ts";
 import {
   NoOpProviderEventLoggers,
   ProviderEventLoggers,
 } from "../src/provider/Layers/ProviderEventLoggers.ts";
-import { makeProviderServiceLive } from "../src/provider/Layers/ProviderService.ts";
+import { providerServiceLayerWith } from "../src/provider/Layers/ProviderService.ts";
 import {
   ProviderService,
   type ProviderServiceShape,
@@ -28,7 +28,7 @@ import { SqlitePersistenceMemory } from "../src/persistence/Layers/Sqlite.ts";
 import * as ProviderSessionRuntime from "../src/persistence/ProviderSessionRuntime.ts";
 
 import {
-  makeTestProviderAdapterHarness,
+  testProviderAdapterHarness,
   type TestProviderAdapterHarness,
   type TestTurnResponse,
 } from "./TestProviderAdapter.integration.ts";
@@ -45,6 +45,7 @@ const makeWorkspaceDirectory = Effect.gen(function* () {
   const pathService = yield* Path.Path;
   const cwd = yield* fs.makeTempDirectory();
   yield* fs.writeFileString(pathService.join(cwd, "README.md"), "v1\n");
+
   return cwd;
 }).pipe(Effect.provide(NodeServices.layer));
 
@@ -57,9 +58,9 @@ interface IntegrationFixture {
 const makeIntegrationFixture = () =>
   Effect.gen(function* () {
     const cwd = yield* makeWorkspaceDirectory;
-    const harness = yield* makeTestProviderAdapterHarness();
+    const harness = yield* testProviderAdapterHarness();
 
-    const registry = makeAdapterRegistryMock({
+    const registry = adapterRegistryMock({
       [ProviderDriverKind.make("codex")]: harness.adapter,
     });
 
@@ -75,7 +76,7 @@ const makeIntegrationFixture = () =>
       Layer.succeed(ProviderEventLoggers, NoOpProviderEventLoggers),
     ).pipe(Layer.provide(SqlitePersistenceMemory));
 
-    const layer = makeProviderServiceLive().pipe(Layer.provide(shared));
+    const layer = providerServiceLayerWith().pipe(Layer.provide(shared));
 
     return {
       cwd,
@@ -114,6 +115,7 @@ const runTurn = (input: {
 }) =>
   Effect.gen(function* () {
     yield* input.harness.queueTurnResponse(input.threadId, input.response);
+
     return yield* collectEventsDuring(
       input.provider.streamEvents,
       input.response.events.length,
@@ -131,6 +133,7 @@ it.live("replays typed runtime fixture events", () =>
 
     yield* Effect.gen(function* () {
       const provider = yield* ProviderService;
+
       const session = yield* provider.startSession(ThreadId.make("thread-integration-typed"), {
         threadId: ThreadId.make("thread-integration-typed"),
         provider: ProviderDriverKind.make("codex"),
@@ -138,6 +141,7 @@ it.live("replays typed runtime fixture events", () =>
         cwd: fixture.cwd,
         runtimeMode: "full-access",
       });
+
       assert.equal((session.threadId ?? "").length > 0, true);
 
       const observedEvents = yield* runTurn({
@@ -168,6 +172,7 @@ it.live("replays file-changing fixture turn events", () =>
 
     yield* Effect.gen(function* () {
       const provider = yield* ProviderService;
+
       const session = yield* provider.startSession(ThreadId.make("thread-integration-tools"), {
         threadId: ThreadId.make("thread-integration-tools"),
         provider: ProviderDriverKind.make("codex"),
@@ -175,6 +180,7 @@ it.live("replays file-changing fixture turn events", () =>
         cwd: fixture.cwd,
         runtimeMode: "full-access",
       });
+
       assert.equal((session.threadId ?? "").length > 0, true);
 
       const observedEvents = yield* runTurn({
@@ -205,6 +211,7 @@ it.live("runs multi-turn tool/approval flow", () =>
 
     yield* Effect.gen(function* () {
       const provider = yield* ProviderService;
+
       const session = yield* provider.startSession(ThreadId.make("thread-integration-multi"), {
         threadId: ThreadId.make("thread-integration-multi"),
         provider: ProviderDriverKind.make("codex"),
@@ -212,6 +219,7 @@ it.live("runs multi-turn tool/approval flow", () =>
         cwd: fixture.cwd,
         runtimeMode: "full-access",
       });
+
       assert.equal((session.threadId ?? "").length > 0, true);
 
       const firstTurnEvents = yield* runTurn({
@@ -225,6 +233,7 @@ it.live("runs multi-turn tool/approval flow", () =>
             writeFileString(join(cwd, "README.md"), "v2\n").pipe(Effect.asVoid, Effect.ignore),
         },
       });
+
       assert.deepEqual(
         firstTurnEvents.map((event) => event.type),
         codexTurnToolFixture.map((event) => event.type),
@@ -241,6 +250,7 @@ it.live("runs multi-turn tool/approval flow", () =>
             writeFileString(join(cwd, "README.md"), "v3\n").pipe(Effect.asVoid, Effect.ignore),
         },
       });
+
       assert.deepEqual(
         secondTurnEvents.map((event) => event.type),
         codexTurnApprovalFixture.map((event) => event.type),
@@ -257,6 +267,7 @@ it.live("rolls back provider conversation state only", () =>
 
     yield* Effect.gen(function* () {
       const provider = yield* ProviderService;
+
       const session = yield* provider.startSession(ThreadId.make("thread-integration-rollback"), {
         threadId: ThreadId.make("thread-integration-rollback"),
         provider: ProviderDriverKind.make("codex"),
@@ -264,6 +275,7 @@ it.live("rolls back provider conversation state only", () =>
         cwd: fixture.cwd,
         runtimeMode: "full-access",
       });
+
       assert.equal((session.threadId ?? "").length > 0, true);
 
       yield* runTurn({

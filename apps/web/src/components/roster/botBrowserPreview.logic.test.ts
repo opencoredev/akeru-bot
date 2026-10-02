@@ -65,11 +65,13 @@ describe("bot browser preview", () => {
 
   it("uses the environment and thread in each browser surface id", () => {
     const environmentId = EnvironmentId.make("environment-1");
+
     const first = botBrowserPreviewRuntimeTabId(
       { environmentId, threadId: ThreadId.make("thread-1") },
       "epoch-1",
       "tab-1",
     );
+
     const second = botBrowserPreviewRuntimeTabId(
       { environmentId, threadId: ThreadId.make("thread-2") },
       "epoch-1",

@@ -7,15 +7,17 @@ import type {
 import { describe, expect, it } from "@effect/vitest";
 import * as DateTime from "effect/DateTime";
 import * as Option from "effect/Option";
-
 import {
   buildResourceTelemetryHistory,
   normalizeResourceTelemetryHistoryInput,
 } from "./ResourceTelemetryHistory.ts";
 
 const SERVER_PID = 100;
+
 const ELECTRON_PID = 200;
+
 const CHILD_PID = 300;
+
 const STARTED_AT_MS = DateTime.toEpochMillis(DateTime.makeUnsafe("2026-06-17T12:00:00.000Z"));
 
 function processSample(
@@ -63,6 +65,7 @@ function snapshot(
       ioWriteBytes: childWriteBytes,
     }),
   ];
+
   return {
     version: 3,
     type: "snapshot",
@@ -98,6 +101,7 @@ const health: ResourceTelemetryHealth = {
 
 function desktopSnapshot(): DesktopHostTelemetrySnapshot {
   const sampledAt = DateTime.makeUnsafe(STARTED_AT_MS + 1_000);
+
   return {
     version: 1,
     type: "desktopTelemetry",
@@ -168,6 +172,7 @@ describe("buildResourceTelemetryHistory", () => {
   it("uses observed RSS for the history-window peak instead of the lifetime process peak", () => {
     const first = snapshot(1, STARTED_AT_MS, 100, 1_000);
     const second = snapshot(2, STARTED_AT_MS + 1_000, 200, 2_000);
+
     const history = buildResourceTelemetryHistory({
       readAt: DateTime.makeUnsafe(STARTED_AT_MS + 2_000),
       windowMs: 10_000,
@@ -206,6 +211,7 @@ describe("buildResourceTelemetryHistory", () => {
     const first = snapshot(1, STARTED_AT_MS, 100, 1_000);
     const absent = snapshot(2, STARTED_AT_MS + 1_000, 0, 0);
     const returned = snapshot(3, STARTED_AT_MS + 2_000, 350, 5_000);
+
     const history = buildResourceTelemetryHistory({
       readAt: DateTime.makeUnsafe(STARTED_AT_MS + 3_000),
       windowMs: 10_000,
@@ -250,6 +256,7 @@ describe("buildResourceTelemetryHistory", () => {
 
   it("uses the preceding sample as a baseline without attributing pre-window deltas", () => {
     const readAtMs = STARTED_AT_MS + 10_000;
+
     const history = buildResourceTelemetryHistory({
       readAt: DateTime.makeUnsafe(readAtMs),
       windowMs: 5_000,
@@ -278,6 +285,7 @@ describe("buildResourceTelemetryHistory", () => {
 
   it("prorates a cumulative delta that crosses the history window boundary", () => {
     const readAtMs = STARTED_AT_MS + 10_000;
+
     const history = buildResourceTelemetryHistory({
       readAt: DateTime.makeUnsafe(readAtMs),
       windowMs: 5_000,
@@ -302,6 +310,7 @@ describe("buildResourceTelemetryHistory", () => {
   it("replays the Electron root identity recorded with each native sample", () => {
     const oldElectron = snapshot(1, STARTED_AT_MS, 100, 1_000);
     const restartedElectron = snapshot(2, STARTED_AT_MS + 1_000, 200, 2_000);
+
     const history = buildResourceTelemetryHistory({
       readAt: DateTime.makeUnsafe(STARTED_AT_MS + 2_000),
       windowMs: 10_000,

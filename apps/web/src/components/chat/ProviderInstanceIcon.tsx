@@ -6,8 +6,11 @@ import { cn } from "~/lib/utils";
 
 export function providerInstanceInitials(label: string): string {
   const words = label.replace(/[_-]+/g, " ").split(/\s+/u).filter(Boolean);
+
   if (words.length === 0) return "";
+
   if (words.length === 1) return words[0]!.slice(0, 2).toUpperCase();
+
   return words
     .slice(0, 2)
     .map((word) => word[0]?.toUpperCase() ?? "")
@@ -28,9 +31,12 @@ export const ProviderInstanceIcon = memo(function ProviderInstanceIcon(props: {
 }) {
   const Icon = PROVIDER_ICON_BY_PROVIDER[props.driverKind] ?? null;
   const indicatorBackground = props.indicatorBackground ?? "var(--card)";
+
+  // SAFETY: React CSSProperties omits custom properties; these values are CSS variables consumed by the component stylesheet.
   const accentStyle = props.accentColor
     ? ({ "--provider-accent": props.accentColor } as CSSProperties)
     : undefined;
+
   const badgeContent = props.badgeContent ?? "initials";
 
   return (
@@ -45,30 +51,30 @@ export const ProviderInstanceIcon = memo(function ProviderInstanceIcon(props: {
       {Icon ? (
         <Icon className={cn("size-5 shrink-0", props.iconClassName)} aria-hidden />
       ) : (
-        <span className={cn("text-[10px] font-semibold leading-none", props.iconClassName)}>
+        <span className={cn("text-10px font-semibold leading-none", props.iconClassName)}>
           {providerInstanceInitials(props.displayName)}
         </span>
       )}
       {props.statusDotClassName ? (
         <span
           className={cn(
-            "pointer-events-none absolute -left-0.5 -top-0.5 z-10 size-2 rounded-full",
+            "pointer-events-none absolute -left-0.5 -top-0.5 z-10 size-2 rounded-full indicator-ring",
             props.statusDotClassName,
           )}
-          style={{ boxShadow: `0 0 0 2px ${indicatorBackground}` }}
+          style={{ "--indicator-background": indicatorBackground }}
           aria-hidden
         />
       ) : null}
       {props.showBadge ? (
         <span
           className={cn(
-            "pointer-events-none absolute right-0 bottom-0 z-10 flex h-3.5 min-w-3.5 items-center justify-center rounded-full border px-0.5 text-[8px] font-semibold leading-none shadow-sm",
+            "pointer-events-none absolute right-0 bottom-0 z-10 flex h-3.5 min-w-3.5 items-center justify-center rounded-full border indicator-border px-0.5 text-8px font-semibold leading-none shadow-sm",
             props.accentColor
-              ? "bg-[var(--provider-accent)] text-white"
+              ? "bg-(--provider-accent) text-on-solid"
               : "bg-card text-muted-foreground",
             props.badgeClassName,
           )}
-          style={{ borderColor: indicatorBackground }}
+          style={{ "--indicator-background": indicatorBackground }}
           aria-hidden
         >
           {badgeContent === "initials" ? providerInstanceInitials(props.displayName) : null}

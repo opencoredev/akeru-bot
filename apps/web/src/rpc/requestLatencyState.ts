@@ -5,13 +5,16 @@ import { Atom } from "effect/unstable/reactivity";
 import { appAtomRegistry } from "./atomRegistry";
 
 export const SLOW_RPC_ACK_THRESHOLD_MS = 15_000;
+
 /**
  * Some requests are slow by design — they shell out to a package manager on the
  * server and only respond once the install finishes. Warning about those after
  * 15s is noise, so they get a much longer leash.
  */
 export const LONG_RUNNING_RPC_ACK_THRESHOLD_MS = 120_000;
+
 export const MAX_TRACKED_RPC_ACK_REQUESTS = 256;
+
 let slowRpcAckThresholdMs = SLOW_RPC_ACK_THRESHOLD_MS;
 
 export interface SlowRpcAckRequest {
@@ -28,7 +31,9 @@ interface PendingRpcAckRequest {
 }
 
 const pendingRpcAckRequests = new Map<string, PendingRpcAckRequest>();
+
 const untrackedRpcAckMethods = new Set<string>([WS_METHODS.previewAutomationConnect]);
+
 const longRunningRpcAckMethods = new Set<string>([
   WS_METHODS.serverUpdateProvider,
   WS_METHODS.serverRefreshProviders,
@@ -81,6 +86,7 @@ export function trackRpcRequestSent(requestId: string, method: string, tag = met
 
   const startedAtMs = Date.now();
   const thresholdMs = rpcAckThresholdMs(method);
+
   const request: SlowRpcAckRequest = {
     requestId,
     startedAt: new Date(startedAtMs).toISOString(),
@@ -88,6 +94,7 @@ export function trackRpcRequestSent(requestId: string, method: string, tag = met
     tag,
     thresholdMs,
   };
+
   const timeoutId = setTimeout(() => {
     pendingRpcAckRequests.delete(requestId);
     appendSlowRpcAckRequest(request);
@@ -102,6 +109,7 @@ export function trackRpcRequestSent(requestId: string, method: string, tag = met
 export function acknowledgeRpcRequest(requestId: string): void {
   clearTrackedRpcRequest(requestId);
   const slowRequests = getSlowRpcAckRequestsValue();
+
   if (!slowRequests.some((request) => request.requestId === requestId)) {
     return;
   }
@@ -113,12 +121,14 @@ export function clearAllTrackedRpcRequests(): void {
   for (const pending of pendingRpcAckRequests.values()) {
     clearTimeout(pending.timeoutId);
   }
+
   pendingRpcAckRequests.clear();
   setSlowRpcAckRequests([]);
 }
 
 function clearTrackedRpcRequest(requestId: string): void {
   const pending = pendingRpcAckRequests.get(requestId);
+
   if (!pending) {
     return;
   }
@@ -129,8 +139,10 @@ function clearTrackedRpcRequest(requestId: string): void {
 
 function appendSlowRpcAckRequest(request: SlowRpcAckRequest): void {
   const requests = [...getSlowRpcAckRequestsValue(), request];
+
   if (requests.length <= MAX_TRACKED_RPC_ACK_REQUESTS) {
     setSlowRpcAckRequests(requests);
+
     return;
   }
 
@@ -140,6 +152,7 @@ function appendSlowRpcAckRequest(request: SlowRpcAckRequest): void {
 function evictOldestPendingRpcRequestIfNeeded(): void {
   while (pendingRpcAckRequests.size >= MAX_TRACKED_RPC_ACK_REQUESTS) {
     const oldestRequestId = pendingRpcAckRequests.keys().next().value;
+
     if (oldestRequestId === undefined) {
       return;
     }

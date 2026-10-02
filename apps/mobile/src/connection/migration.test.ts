@@ -9,6 +9,7 @@ describe("migrateLegacyConnectionCatalog", () => {
     Effect.gen(function* () {
       const bearerEnvironmentId = EnvironmentId.make("bearer-environment");
       const relayEnvironmentId = EnvironmentId.make("relay-environment");
+
       const catalog = yield* migrateLegacyConnectionCatalog(
         JSON.stringify({
           connections: [

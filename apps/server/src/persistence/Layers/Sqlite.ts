@@ -10,12 +10,13 @@ import { ServerConfig } from "../../config.ts";
 
 type RuntimeSqliteLayerConfig = {
   readonly filename: string;
-  readonly spanAttributes?: Record<string, unknown>;
+  readonly spanAttributes?: import("@effect/sql-sqlite-bun/SqliteClient").SqliteClientConfig["spanAttributes"];
 };
 
 type Loader = {
   layer: (config: RuntimeSqliteLayerConfig) => Layer.Layer<SqlClient.SqlClient, SqlError>;
 };
+
 const defaultSqliteClientLoaders = {
   bun: () => import("@effect/sql-sqlite-bun/SqliteClient"),
   node: () => import("../NodeSqliteClient.ts"),
@@ -27,6 +28,7 @@ const makeRuntimeSqliteLayer = Effect.fn("makeRuntimeSqliteLayer")(function* (
   const runtime = process.versions.bun !== undefined ? "bun" : "node";
   const loader = defaultSqliteClientLoaders[runtime];
   const clientModule = yield* Effect.promise<Loader>(loader);
+
   return clientModule.layer(config);
 }, Layer.unwrap);
 
@@ -41,7 +43,7 @@ const setup = Layer.effectDiscard(
   }),
 );
 
-export const makeSqlitePersistenceLive = Effect.fn("makeSqlitePersistenceLive")(function* (
+export const sqlitePersistenceLayer = Effect.fn("makeSqlitePersistenceLive")(function* (
   dbPath: string,
   serviceName: string = "akeru-server",
 ) {
@@ -69,6 +71,7 @@ export const SqlitePersistenceMemory = Layer.provideMerge(
 export const layerConfig = Layer.unwrap(
   Effect.gen(function* () {
     const { dbPath, otlpServiceName } = yield* ServerConfig;
-    return makeSqlitePersistenceLive(dbPath, otlpServiceName);
+
+    return sqlitePersistenceLayer(dbPath, otlpServiceName);
   }),
 );

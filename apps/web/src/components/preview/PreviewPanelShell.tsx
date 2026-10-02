@@ -16,28 +16,35 @@ import { RightPanelResizeHandle } from "./RightPanelResizeHandle";
 export type PreviewPanelMode = "inline" | "sheet" | "sidebar" | "embedded";
 
 const PREVIEW_PANEL_WIDTH_STORAGE_KEY = "akeru:preview-panel-width";
+
 // Pre-rebrand key, drained on module load below.
 const LEGACY_PREVIEW_PANEL_WIDTH_STORAGE_KEY = "t3code:preview-panel-width";
+
 const PREVIEW_PANEL_MIN_WIDTH = 360;
 
 if (typeof window !== "undefined") {
   try {
     const legacy = window.localStorage.getItem(LEGACY_PREVIEW_PANEL_WIDTH_STORAGE_KEY);
+
     if (legacy !== null && window.localStorage.getItem(PREVIEW_PANEL_WIDTH_STORAGE_KEY) === null) {
       window.localStorage.setItem(PREVIEW_PANEL_WIDTH_STORAGE_KEY, legacy);
     }
+
     window.localStorage.removeItem(LEGACY_PREVIEW_PANEL_WIDTH_STORAGE_KEY);
   } catch {
     // Storage can be unavailable; the panel falls back to its default width.
   }
 }
+
 /**
  * Upper bound as a fraction of the viewport; only binds on wide screens.
  * On narrow windows the container clamp below is what preserves the
  * sibling column's space.
  */
 const PREVIEW_PANEL_MAX_WIDTH_FRACTION = 0.7;
+
 const PREVIEW_PANEL_DEFAULT_WIDTH = 540;
+
 /**
  * Width reserved for the sibling column (the chat) sharing the
  * panel's flex row. The viewport fraction alone is not enough: the app
@@ -49,8 +56,10 @@ const SIBLING_COLUMN_MIN_WIDTH = 360;
 
 export function getPreviewPanelMaxWidth(viewportWidth: number, containerWidth?: number): number {
   const fractionCap = Math.floor(viewportWidth * PREVIEW_PANEL_MAX_WIDTH_FRACTION);
+
   const containerCap =
     containerWidth === undefined ? Infinity : Math.floor(containerWidth) - SIBLING_COLUMN_MIN_WIDTH;
+
   // Never below the panel's own minimum: when the row cannot fit both
   // columns' minimums the sibling yields, and useResizableWidth's clamp
   // must not see max < min (it would resolve the inversion to min and,
@@ -82,6 +91,7 @@ export function PreviewPanelShell(props: {
   // Only inline non-maximized mode applies `width`/`maxWidth`; skip the
   // container measurement (and its re-renders) everywhere else.
   const maxWidth = useClampedMaxWidth(hostRef, isInline && !props.maximized);
+
   const { width, handlers } = useResizableWidth({
     storageKey: props.widthStorageKey ?? PREVIEW_PANEL_WIDTH_STORAGE_KEY,
     defaultWidth: props.defaultWidth ?? PREVIEW_PANEL_DEFAULT_WIDTH,
@@ -98,10 +108,10 @@ export function PreviewPanelShell(props: {
         isInline
           ? props.maximized
             ? "flex-1 border-l border-border"
-            : "shrink-0 border-l border-border"
+            : "w-(--preview-panel-width) shrink-0 border-l border-border"
           : "w-full",
       )}
-      style={isInline && !props.maximized ? { width: `${width}px` } : undefined}
+      style={isInline && !props.maximized ? { "--preview-panel-width": `${width}px` } : undefined}
       data-preview-panel-mode={props.mode}
       data-preview-panel-maximized={props.maximized ? "true" : "false"}
     >
@@ -127,6 +137,7 @@ function useClampedMaxWidth(hostRef: RefObject<HTMLDivElement | null>, enabled: 
   useEffect(() => {
     if (typeof window === "undefined") return;
     let frame = 0;
+
     const onResize = () => {
       // Coalesce rapid resize events into one rAF tick.
       if (frame !== 0) return;
@@ -135,16 +146,21 @@ function useClampedMaxWidth(hostRef: RefObject<HTMLDivElement | null>, enabled: 
         setVw(window.innerWidth);
       });
     };
+
     window.addEventListener("resize", onResize);
+
     return () => {
       window.removeEventListener("resize", onResize);
+
       if (frame !== 0) window.cancelAnimationFrame(frame);
     };
   }, []);
   useLayoutEffect(() => {
     if (!enabled) return;
     const parent = hostRef.current?.parentElement;
+
     if (!parent) return;
+
     // Measure before first paint: the persisted width must be clamped
     // against the row on the initial render, not one observer tick later
     // (the panel would flash over-wide on every mount). clientWidth is
@@ -152,13 +168,17 @@ function useClampedMaxWidth(hostRef: RefObject<HTMLDivElement | null>, enabled: 
     const measure = () => {
       setContainerWidth(parent.clientWidth);
     };
+
     measure();
+
     if (typeof ResizeObserver === "undefined") return;
     const observer = new ResizeObserver(measure);
     observer.observe(parent);
+
     return () => {
       observer.disconnect();
     };
   }, [hostRef, enabled]);
+
   return getPreviewPanelMaxWidth(vw, containerWidth);
 }

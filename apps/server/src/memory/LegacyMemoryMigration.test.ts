@@ -1,4 +1,4 @@
-// @effect-diagnostics nodeBuiltinImport:off
+import * as Match from "effect/Match";
 import * as NodeFSP from "node:fs/promises";
 import * as NodeOS from "node:os";
 import * as NodePath from "node:path";
@@ -45,7 +45,11 @@ const revision = (
   id: string,
   scope: AkeruMemoryScope,
   fact: string,
-  entityId = scope === "group" ? "group-1" : scope === "bot" ? "bot-1" : "owner",
+  entityId = Match.value(scope).pipe(
+    Match.when("group", () => "group-1"),
+    Match.when("bot", () => "bot-1"),
+    Match.orElse(() => "owner"),
+  ),
   overrides: Partial<AkeruMemoryRevision> = {},
 ): AkeruMemoryRevision => ({
   id: AkeruMemoryId.make(id),
@@ -56,7 +60,11 @@ const revision = (
     scope,
     partitionId: AkeruMemoryPartitionId.make(`${scope}:${entityId}`),
   },
-  entityKind: scope === "bot" ? "bot" : scope === "group" ? "group" : "user",
+  entityKind: Match.value(scope).pipe(
+    Match.when("bot", (): "bot" => "bot"),
+    Match.when("group", (): "group" => "group"),
+    Match.orElse((): "user" => "user"),
+  ),
   entityId: AkeruMemoryEntityId.make(entityId),
   kind: "fact",
   value: {},
@@ -83,6 +91,7 @@ const revision = (
 async function fixture() {
   const directory = await NodeFS.mkdtemp(NodePath.join(NodeOS.tmpdir(), "akeru-migration-"));
   directories.push(directory);
+
   return new BotMemoryStore(NodePath.join(directory, "userdata"));
 }
 
@@ -98,12 +107,15 @@ describe("legacy Markdown memory migration", () => {
     () =>
       Effect.gen(function* () {
         const groupAccess = access();
+
         const available = [
           revision("private-user", "bot-user", "Keep my concise-answer preference."),
           revision("private-bot", "bot", "Keep this bot's convention."),
           revision("group-note", "group", "Keep the group note."),
         ];
+
         const revisions: AkeruMemoryRevision[] = [];
+
         for (const scopeAccess of legacyMemoryMigrationAccesses(groupAccess)) {
           const partitions = yield* resolveAuthorizedMemoryPartitions(scopeAccess);
           revisions.push(
@@ -112,23 +124,28 @@ describe("legacy Markdown memory migration", () => {
             ),
           );
         }
+
         yield* Effect.promise(async () => {
           const store = await fixture();
           await migrateLegacyBotMemory({ store, access: groupAccess, revisions });
+
           const snapshot = await store.readSnapshot({
             botId: BotId.make("bot-1"),
             groupId: groupAccess.groupId,
             groupMemberBotIds: groupAccess.groupMemberBotIds,
           });
+
           assert.equal(snapshot.user.content, "Keep my concise-answer preference.");
           assert.equal(snapshot.memory.content, "Keep this bot's convention.");
           assert.equal(snapshot.group?.content, "Keep the group note.");
           const privateAccess = legacyMemoryMigrationAccesses(groupAccess)[0]!;
+
           const reports = await migrateLegacyBotMemory({
             store,
             access: privateAccess,
             revisions: [],
           });
+
           assert.isTrue(reports[0]!.alreadyComplete);
           assert.equal(
             (
@@ -146,6 +163,7 @@ describe("legacy Markdown memory migration", () => {
 
   it("maps approved user, bot, and active-group facts to the responding bot", async () => {
     const store = await fixture();
+
     const reports = await migrateLegacyBotMemory({
       store,
       access: access(),
@@ -165,6 +183,7 @@ describe("legacy Markdown memory migration", () => {
       groupId: GroupId.make("group-1"),
       groupMemberBotIds: [BotId.make("bot-1")],
     });
+
     assert.equal(snapshot.user.content, "Leo prefers short status updates.");
     assert.equal(snapshot.memory.content, "Track verification evidence.");
     assert.equal(snapshot.group?.content, "This group is preparing release 1.0.");
@@ -179,6 +198,7 @@ describe("legacy Markdown memory migration", () => {
     const groupFact = revision("group", "group", "Remember the shared launch date.");
     await migrateLegacyBotMemory({ store, access: access("bot-1"), revisions: [groupFact] });
     await migrateLegacyBotMemory({ store, access: access("bot-2"), revisions: [groupFact] });
+
     const repeated = await migrateLegacyBotMemory({
       store,
       access: access("bot-1"),
@@ -216,6 +236,7 @@ describe("legacy Markdown memory migration", () => {
 
   it("archives unsupported, unsafe, and overflowing facts without injecting them", async () => {
     const store = await fixture();
+
     const reports = await migrateLegacyBotMemory({
       store,
       access: access(),
@@ -231,9 +252,11 @@ describe("legacy Markdown memory migration", () => {
       groupId: GroupId.make("group-1"),
       groupMemberBotIds: [BotId.make("bot-1")],
     });
+
     assert.equal(snapshot.user.content, "");
     assert.equal(snapshot.memory.content, "");
     assert.equal(reports[0]?.archived, 3);
+
     const archive = await NodeFS.readFile(
       NodePath.join(
         store.memoryRoot,
@@ -244,6 +267,7 @@ describe("legacy Markdown memory migration", () => {
       ),
       "utf8",
     );
+
     assert.include(archive, "Project-only legacy context.");
     assert.include(archive, "unsafe");
     assert.include(archive, "overflow");

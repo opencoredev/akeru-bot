@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 import { useNavigation, type ParamListBase } from "@react-navigation/native";
 import type {
   NativeStackHeaderItem,
@@ -48,95 +49,100 @@ function normalizeScreenOptions(
     return options;
   }
 
-  const normalized = { ...options } as NativeStackNavigationOptions & {
-    unstable_navigationItemStyle?: unknown;
-    unstable_headerCenterItems?: unknown;
-    unstable_headerSubtitle?: unknown;
-    unstable_headerToolbarItems?: unknown;
-  };
-
-  if (normalized.headerTintColor !== undefined) {
-    normalized.headerTintColor = String(normalized.headerTintColor);
-  }
-
-  return normalized as NativeStackNavigationOptions;
+  // SAFETY: Present tint colors are converted to strings; experimental items are supported by the bundled native-stack patch.
+  return {
+    ...options,
+    ...(options.headerTintColor === undefined
+      ? {}
+      : { headerTintColor: String(options.headerTintColor) }),
+  } as NativeStackNavigationOptions;
 }
 
-function optionsSignature(value: unknown, seen = new WeakSet<object>()): string {
+function optionsSignature<T>(value: T, seen = new WeakSet<object>()): string {
   if (value === null) return "null";
-  switch (typeof value) {
-    case "boolean":
-    case "number":
-    case "string":
-      return JSON.stringify(value);
-    case "undefined":
-      return "undefined";
-    case "function":
-      // Header factories are frequently recreated inline. Their source is
-      // stable across equivalent renders, while a reference comparison would
-      // make navigation.setOptions re-enter the navigator indefinitely.
-      return `function:${Function.prototype.toString.call(value)}`;
-    case "symbol":
-      return `symbol:${String(value)}`;
-    case "bigint":
-      return `bigint:${String(value)}`;
-    case "object": {
-      const object = value as object;
-      if (seen.has(object)) return "[circular]";
-      seen.add(object);
-      if (Array.isArray(value)) {
-        return `[${value.map((entry) => optionsSignature(entry, seen)).join(",")}]`;
-      }
-      // React refs carry mutable native instances that must not make static
-      // screen options appear different after every render.
-      if ("current" in object) return "[ref]";
-      return `{${Object.keys(value as Record<string, unknown>)
-        .sort()
-        .map(
-          (key) =>
-            `${JSON.stringify(key)}:${optionsSignature((value as Record<string, unknown>)[key], seen)}`,
-        )
-        .join(",")}}`;
-    }
+
+  if (Predicate.isBoolean(value) || Predicate.isNumber(value) || Predicate.isString(value))
+    return JSON.stringify(value);
+
+  if (Predicate.isUndefined(value)) return "undefined";
+
+  if (Predicate.isFunction(value)) return `function:${Function.prototype.toString.call(value)}`;
+
+  if (Predicate.isSymbol(value)) return `symbol:${String(value)}`;
+
+  if (Predicate.isBigInt(value)) return `bigint:${String(value)}`;
+
+  if (Predicate.isObjectOrArray(value)) {
+    if (seen.has(value)) return "[circular]";
+    seen.add(value);
+
+    if (Array.isArray(value))
+      return `[${value.map((entry) => optionsSignature(entry, seen)).join(",")}]`;
+
+    if ("current" in value) return "[ref]";
+
+    return `{${Object.entries(value)
+      .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+      .map(([key, entry]) => `${JSON.stringify(key)}:${optionsSignature(entry, seen)}`)
+      .join(",")}}`;
   }
+
   return String(value);
 }
 
-function stabilizeOptionFunctions(
-  value: unknown,
+type OptionFunction = (
+  ...args: ReadonlyArray<unknown>
+) => ReturnType<
+  Extract<NativeStackNavigationOptions[keyof NativeStackNavigationOptions], Function>
+>;
+
+function stabilizeOptionFunctions<T>(
+  value: T,
   path: string,
-  latestFunctions: Map<string, (...args: unknown[]) => unknown>,
-  wrappers: Map<string, (...args: unknown[]) => unknown>,
+  latestFunctions: Map<string, OptionFunction>,
+  wrappers: Map<string, OptionFunction>,
   seen = new WeakSet<object>(),
-): unknown {
-  if (typeof value === "function") {
-    latestFunctions.set(path, value as (...args: unknown[]) => unknown);
+): T {
+  if (Predicate.isFunction(value)) {
+    // SAFETY: The runtime function check allows forwarding arbitrary header factory arguments.
+    latestFunctions.set(path, value as OptionFunction);
     let wrapper = wrappers.get(path);
+
     if (!wrapper) {
       wrapper = (...args: unknown[]) => {
         return latestFunctions.get(path)?.(...args);
       };
+
       wrappers.set(path, wrapper);
     }
-    return wrapper;
+
+    // SAFETY: The wrapper forwards the original factory arguments and result, preserving its type.
+    return wrapper as T;
   }
+
   if (Array.isArray(value)) {
     if (seen.has(value)) return value;
     seen.add(value);
+
+    // SAFETY: Recursion preserves every array entry and only substitutes equivalent function wrappers.
     return value.map((entry, index) =>
       stabilizeOptionFunctions(entry, `${path}[${index}]`, latestFunctions, wrappers, seen),
-    );
+    ) as T;
   }
-  if (value !== null && typeof value === "object") {
+
+  if (value !== null && Predicate.isObjectOrArray(value)) {
     if (seen.has(value) || "current" in value) return value;
     seen.add(value);
+
+    // SAFETY: Every own enumerable option is copied with its type-preserving stabilized value.
     return Object.fromEntries(
-      Object.entries(value as Record<string, unknown>).map(([key, entry]) => [
+      Object.entries(value).map(([key, entry]) => [
         key,
         stabilizeOptionFunctions(entry, `${path}.${key}`, latestFunctions, wrappers, seen),
       ]),
-    );
+    ) as T;
   }
+
   return value;
 }
 
@@ -154,20 +160,21 @@ export function NativeStackScreenOptions(props: {
 }) {
   const navigation = useNativeStackNavigation();
   const lastAppliedOptionsSignatureRef = useRef<string | undefined>(undefined);
-  const latestOptionFunctionsRef = useRef(new Map<string, (...args: unknown[]) => unknown>());
-  const optionFunctionWrappersRef = useRef(new Map<string, (...args: unknown[]) => unknown>());
+  const latestOptionFunctionsRef = useRef(new Map<string, OptionFunction>());
+  const optionFunctionWrappersRef = useRef(new Map<string, OptionFunction>());
   const normalizedOptions = useMemo(() => normalizeScreenOptions(props.options), [props.options]);
+
   // Keyed on the options identity: callers that memoize their options skip the
   // deep copy and the signature walk below on unrelated re-renders.
   const stableOptions = useMemo(
     () =>
       normalizedOptions
-        ? (stabilizeOptionFunctions(
+        ? stabilizeOptionFunctions(
             normalizedOptions,
             "options",
             latestOptionFunctionsRef.current,
             optionFunctionWrappersRef.current,
-          ) as NativeStackNavigationOptions)
+          )
         : undefined,
     [normalizedOptions],
   );
@@ -176,12 +183,15 @@ export function NativeStackScreenOptions(props: {
     if (!navigation || !stableOptions) {
       return;
     }
+
     const signature = optionsSignature([stableOptions, props.optionsVersion]);
+
     // Avoid re-entering navigation state when semantically equal options are
     // reapplied every layout (common when callers pass unstable object literals).
     if (lastAppliedOptionsSignatureRef.current === signature) {
       return;
     }
+
     lastAppliedOptionsSignatureRef.current = signature;
     navigation.setOptions(stableOptions);
   }, [navigation, props.optionsVersion, stableOptions]);
@@ -190,9 +200,12 @@ export function NativeStackScreenOptions(props: {
     if (!navigation || !props.listeners) {
       return;
     }
+
+    // SAFETY: Listener names include native-stack patch events omitted from the upstream event map.
     const subscriptions = Object.entries(props.listeners).map(([eventName, listener]) =>
       navigation.addListener(eventName as never, listener as never),
     );
+
     return () => {
       for (const unsubscribe of subscriptions) {
         unsubscribe();
@@ -206,36 +219,61 @@ export function NativeStackScreenOptions(props: {
 function labelFromChildren(children: ReactNode): string {
   const parts: string[] = [];
   Children.forEach(children, (child) => {
-    if (typeof child === "string" || typeof child === "number") {
+    if (Predicate.isString(child) || Predicate.isNumber(child)) {
       parts.push(String(child));
     } else if (isValidElement<{ children?: ReactNode }>(child)) {
       parts.push(labelFromChildren(child.props.children));
     }
   });
+
   return parts.join("");
 }
 
 type NativeStackHeaderIcon = NonNullable<
   Extract<NativeStackHeaderItem, { type: "button" }>["icon"]
 >;
+
 type NativeStackOptionsWithToolbar = NativeStackNavigationOptions & {
   unstable_headerToolbarItems?: () => NativeStackHeaderItem[];
 };
 
-function iconFromProp(icon: unknown): NativeStackHeaderIcon | undefined {
-  if (typeof icon !== "string") {
+function iconFromProp(icon: string | undefined): NativeStackHeaderIcon | undefined {
+  if (!Predicate.isString(icon)) {
     return undefined;
   }
+
+  // SAFETY: Toolbar icons are app-owned SF Symbol names; the native bridge accepts the platform symbol string.
   return { type: "sfSymbol", name: icon as never };
 }
 
-type ToolbarElementProps = Record<string, unknown> & { readonly children?: ReactNode };
+type ToolbarElementProps = {
+  readonly children?: ReactNode;
+  readonly subtitle?: string;
+  readonly disabled?: boolean;
+  readonly icon?: string;
+  readonly onPress?: () => void;
+  readonly isOn?: boolean;
+  readonly destructive?: boolean;
+  readonly discoverabilityLabel?: string;
+  readonly title?: string;
+  readonly label?: string;
+  readonly accessibilityLabel?: string;
+  readonly separateBackground?: boolean;
+  readonly tintColor?: ColorValue;
+  readonly width?: number;
+  readonly flexible?: boolean;
+  readonly inline?: boolean;
+};
 
 function elementTypeName(element: ReactElement): string | undefined {
   const type = element.type;
-  if (typeof type === "function") {
-    return (type as { displayName?: string; name?: string }).displayName ?? type.name;
+
+  if (Predicate.isFunction(type)) {
+    return "displayName" in type && Predicate.isString(type.displayName)
+      ? type.displayName
+      : type.name;
   }
+
   return undefined;
 }
 
@@ -243,34 +281,33 @@ function convertMenuAction(
   element: ReactElement<ToolbarElementProps>,
 ): NativeStackHeaderItemMenu["menu"]["items"][number] | null {
   const typeName = elementTypeName(element);
+
   if (typeName === "NativeHeaderToolbarMenuAction") {
     const label = labelFromChildren(element.props.children);
+
     return {
       type: "action",
       label,
-      description: typeof element.props.subtitle === "string" ? element.props.subtitle : undefined,
+      description: Predicate.isString(element.props.subtitle) ? element.props.subtitle : undefined,
       disabled: Boolean(element.props.disabled),
       icon: iconFromProp(element.props.icon),
-      onPress:
-        typeof element.props.onPress === "function"
-          ? (element.props.onPress as () => void)
-          : () => undefined,
+      onPress: Predicate.isFunction(element.props.onPress)
+        ? element.props.onPress
+        : () => undefined,
       state: element.props.isOn === true ? "on" : undefined,
       destructive: Boolean(element.props.destructive),
-      discoverabilityLabel:
-        typeof element.props.discoverabilityLabel === "string"
-          ? element.props.discoverabilityLabel
-          : undefined,
+      discoverabilityLabel: Predicate.isString(element.props.discoverabilityLabel)
+        ? element.props.discoverabilityLabel
+        : undefined,
     };
   }
 
   if (typeName === "NativeHeaderToolbarMenu") {
     return {
       type: "submenu",
-      label:
-        typeof element.props.title === "string"
-          ? element.props.title
-          : labelFromChildren(element.props.children),
+      label: Predicate.isString(element.props.title)
+        ? element.props.title
+        : labelFromChildren(element.props.children),
       icon: iconFromProp(element.props.icon),
       inline: Boolean(element.props.inline),
       items: collectMenuItems(element.props.children),
@@ -286,38 +323,42 @@ function collectMenuItems(children: ReactNode): NativeStackHeaderItemMenu["menu"
     if (!isValidElement<ToolbarElementProps>(child)) {
       return;
     }
+
     const item = convertMenuAction(child);
+
     if (item) {
       items.push(item);
+
       return;
     }
+
     items.push(...collectMenuItems(child.props.children));
   });
+
   return items;
 }
 
-function convertToolbarChild(child: ReactNode): NativeStackHeaderItem | null {
+type ToolbarHeaderItem = NativeStackHeaderItem & { flexible?: boolean; index?: number };
+
+function convertToolbarChild(child: ReactNode): ToolbarHeaderItem | null {
   if (!isValidElement<ToolbarElementProps>(child)) {
     return null;
   }
 
   const typeName = elementTypeName(child);
+
   if (typeName === "NativeHeaderToolbarButton") {
     return {
       type: "button",
-      label: typeof child.props.label === "string" ? child.props.label : "",
-      accessibilityLabel:
-        typeof child.props.accessibilityLabel === "string"
-          ? child.props.accessibilityLabel
-          : undefined,
+      label: Predicate.isString(child.props.label) ? child.props.label : "",
+      accessibilityLabel: Predicate.isString(child.props.accessibilityLabel)
+        ? child.props.accessibilityLabel
+        : undefined,
       disabled: Boolean(child.props.disabled),
       icon: iconFromProp(child.props.icon),
-      onPress:
-        typeof child.props.onPress === "function"
-          ? (child.props.onPress as () => void)
-          : () => undefined,
+      onPress: Predicate.isFunction(child.props.onPress) ? child.props.onPress : () => undefined,
       sharesBackground: !child.props.separateBackground,
-      tintColor: child.props.tintColor as ColorValue | undefined,
+      tintColor: child.props.tintColor,
       variant: "plain",
     };
   }
@@ -325,19 +366,18 @@ function convertToolbarChild(child: ReactNode): NativeStackHeaderItem | null {
   if (typeName === "NativeHeaderToolbarMenu") {
     return {
       type: "menu",
-      label: typeof child.props.title === "string" ? child.props.title : "",
-      accessibilityLabel:
-        typeof child.props.accessibilityLabel === "string"
-          ? child.props.accessibilityLabel
-          : undefined,
+      label: Predicate.isString(child.props.title) ? child.props.title : "",
+      accessibilityLabel: Predicate.isString(child.props.accessibilityLabel)
+        ? child.props.accessibilityLabel
+        : undefined,
       disabled: Boolean(child.props.disabled),
       icon: iconFromProp(child.props.icon),
       menu: {
-        title: typeof child.props.title === "string" ? child.props.title : undefined,
+        title: Predicate.isString(child.props.title) ? child.props.title : undefined,
         items: collectMenuItems(child.props.children),
       },
       sharesBackground: !child.props.separateBackground,
-      tintColor: child.props.tintColor as ColorValue | undefined,
+      tintColor: child.props.tintColor,
       variant: "plain",
     };
   }
@@ -345,9 +385,9 @@ function convertToolbarChild(child: ReactNode): NativeStackHeaderItem | null {
   if (typeName === "NativeHeaderToolbarSpacer") {
     return {
       type: "spacing",
-      spacing: typeof child.props.width === "number" ? child.props.width : 8,
+      spacing: Predicate.isNumber(child.props.width) ? child.props.width : 8,
       flexible: Boolean(child.props.flexible),
-    } as NativeStackHeaderItem;
+    };
   }
 
   return null;
@@ -357,15 +397,18 @@ function collectToolbarItems(children: ReactNode): NativeStackHeaderItem[] {
   const items: NativeStackHeaderItem[] = [];
   Children.forEach(children, (child) => {
     const item = convertToolbarChild(child);
+
     if (item) {
       if (item.type === "spacing") {
         // Native inserts spacing items at `index`, treating a missing index
         // as 0 — which would move the spacer in front of earlier siblings.
-        (item as { index?: number }).index = items.length;
+        item.index = items.length;
       }
+
       items.push(item);
     }
   });
+
   return items;
 }
 
@@ -381,23 +424,27 @@ function NativeHeaderToolbarRoot(props: {
     if (!navigation) {
       return;
     }
+
     if (props.placement === "bottom") {
-      navigation.setOptions({
-        unstable_headerToolbarItems: () => items,
-      } as NativeStackOptionsWithToolbar);
+      const options: NativeStackOptionsWithToolbar = { unstable_headerToolbarItems: () => items };
+      navigation.setOptions(options);
+
       return () => {
-        navigation.setOptions({
-          unstable_headerToolbarItems: () => [],
-        } as NativeStackOptionsWithToolbar);
+        const options: NativeStackOptionsWithToolbar = { unstable_headerToolbarItems: () => [] };
+        navigation.setOptions(options);
       };
     }
+
     if (props.placement === "left") {
       navigation.setOptions({ unstable_headerLeftItems: () => items });
+
       return () => {
         navigation.setOptions({ unstable_headerLeftItems: () => [] });
       };
     }
+
     navigation.setOptions({ unstable_headerRightItems: () => items });
+
     return () => {
       navigation.setOptions({ unstable_headerRightItems: () => [] });
     };
@@ -417,6 +464,7 @@ function NativeHeaderToolbarButton(_props: {
 }) {
   return null;
 }
+
 NativeHeaderToolbarButton.displayName = "NativeHeaderToolbarButton";
 
 function NativeHeaderToolbarMenu(_props: {
@@ -431,6 +479,7 @@ function NativeHeaderToolbarMenu(_props: {
 }) {
   return null;
 }
+
 NativeHeaderToolbarMenu.displayName = "NativeHeaderToolbarMenu";
 
 function NativeHeaderToolbarMenuAction(_props: {
@@ -445,11 +494,13 @@ function NativeHeaderToolbarMenuAction(_props: {
 }) {
   return null;
 }
+
 NativeHeaderToolbarMenuAction.displayName = "NativeHeaderToolbarMenuAction";
 
 function NativeHeaderToolbarLabel(_props: { readonly children?: ReactNode }) {
   return null;
 }
+
 NativeHeaderToolbarLabel.displayName = "NativeHeaderToolbarLabel";
 
 function NativeHeaderToolbarSpacer(_props: {
@@ -459,11 +510,13 @@ function NativeHeaderToolbarSpacer(_props: {
 }) {
   return null;
 }
+
 NativeHeaderToolbarSpacer.displayName = "NativeHeaderToolbarSpacer";
 
 function NativeHeaderToolbarSearchBarSlot() {
   return null;
 }
+
 NativeHeaderToolbarSearchBarSlot.displayName = "NativeHeaderToolbarSearchBarSlot";
 
 export const NativeHeaderToolbar = Object.assign(NativeHeaderToolbarRoot, {

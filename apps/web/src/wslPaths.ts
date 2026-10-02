@@ -24,14 +24,18 @@ export interface WslProjectSelection<TEnvironmentId extends string = string> ext
 }
 
 const WSL_UNC_PREFIXES = ["\\\\wsl.localhost\\", "\\\\wsl$\\"] as const;
+
 const WSL_DISTRO_NAME_PATTERN = /^[A-Za-z0-9._-]+$/;
+
 const WSL_DEFAULT_BACKEND_ID = "wsl:default";
 
 export function parseWslUncPath(input: string): WslUncPath | null {
   const normalized = input.trim().replaceAll("/", "\\");
+
   const prefix = WSL_UNC_PREFIXES.find((candidate) =>
     normalized.toLowerCase().startsWith(candidate.toLowerCase()),
   );
+
   if (!prefix) {
     return null;
   }
@@ -39,6 +43,7 @@ export function parseWslUncPath(input: string): WslUncPath | null {
   const rest = normalized.slice(prefix.length);
   const segments = rest.split("\\").filter((segment) => segment.length > 0);
   const distro = segments.shift();
+
   if (!distro || !WSL_DISTRO_NAME_PATTERN.test(distro)) {
     return null;
   }
@@ -54,6 +59,7 @@ export function resolveWslProjectSelection<TEnvironmentId extends string>(
   candidates: ReadonlyArray<WslEnvironmentCandidate<TEnvironmentId>>,
 ): WslProjectSelection<TEnvironmentId> | null {
   const parsed = parseWslUncPath(input);
+
   if (!parsed) {
     return null;
   }
@@ -64,13 +70,16 @@ export function resolveWslProjectSelection<TEnvironmentId extends string>(
     }
 
     const backendDistro = candidate.backendId.slice("wsl:".length);
+
     const runningDistro =
       candidate.runningDistro ??
       (backendDistro.length > 0 && backendDistro.toLowerCase() !== "default"
         ? backendDistro
         : null);
+
     return runningDistro?.toLowerCase() === parsed.distro.toLowerCase();
   });
+
   return exact ? { ...parsed, environmentId: exact.environmentId } : null;
 }
 
@@ -91,6 +100,7 @@ function resolveConfiguredWslBackend(
   }
 
   const configuredDistro = configuration.distro.trim();
+
   if (configuredDistro.length === 0) {
     return null;
   }
@@ -98,7 +108,9 @@ function resolveConfiguredWslBackend(
   const installedDistro = configuration.distros.find(
     (distro) => distro.name.toLowerCase() === configuredDistro.toLowerCase(),
   );
+
   const resolvedDistro = installedDistro?.name ?? configuredDistro;
+
   return { backendId: `wsl:${resolvedDistro}`, runningDistro: resolvedDistro };
 }
 
@@ -135,6 +147,7 @@ export function applyWslEnvironmentConfiguration<TEnvironmentId extends string>(
   }
 
   const configuredBackend = resolveConfiguredWslBackend(configuration);
+
   if (!configuredBackend) {
     return candidates;
   }

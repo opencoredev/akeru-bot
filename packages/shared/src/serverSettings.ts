@@ -20,21 +20,31 @@ import {
 } from "./backgroundActivitySettings.ts";
 
 const ServerSettingsJson = fromLenientJson(ServerSettings);
+
 const decodeServerSettingsJson = Schema.decodeUnknownOption(ServerSettingsJson);
 
 type LegacyProviderSettings = ServerSettings["providers"][keyof ServerSettings["providers"]];
 
+const hasLegacyProviderSettings = (
+  settings: ServerSettings,
+  provider: string,
+): provider is keyof ServerSettings["providers"] => provider in settings.providers;
+
 const getLegacyProviderSettings = (
   settings: ServerSettings,
   provider: ProviderDriverKind,
-): LegacyProviderSettings | undefined =>
-  (settings.providers as Record<string, LegacyProviderSettings | undefined>)[provider];
+): LegacyProviderSettings | undefined => {
+  const key = String(provider);
+
+  return hasLegacyProviderSettings(settings, key) ? settings.providers[key] : undefined;
+};
 
 export function isModelSelectionProviderEnabled(
   settings: ServerSettings,
   selection: ModelSelection,
 ): boolean {
   const instanceConfig = settings.providerInstances[selection.instanceId];
+
   if (instanceConfig !== undefined) {
     return resolveProviderInstanceEnabled(instanceConfig);
   }
@@ -50,7 +60,9 @@ function providerDriverForSelection(
   selection: ModelSelection,
 ): ProviderDriverKind | undefined {
   const instance = settings.providerInstances[selection.instanceId];
+
   if (instance !== undefined) return instance.driver;
+
   return isProviderDriverKind(selection.instanceId) ? selection.instanceId : undefined;
 }
 
@@ -64,9 +76,11 @@ export function textGenerationSelectionForTarget(
   targetSettings: ServerSettings,
 ): ModelSelection | undefined {
   const sourceDriver = providerDriverForSelection(sourceSettings, selection);
+
   if (sourceDriver === undefined) return undefined;
 
   const sameId = targetSettings.providerInstances[selection.instanceId];
+
   if (
     sameId !== undefined &&
     sameId.driver === sourceDriver &&
@@ -76,9 +90,11 @@ export function textGenerationSelectionForTarget(
   }
 
   const targetInstances = Object.entries(targetSettings.providerInstances);
+
   const matched = targetInstances.find(
     ([, instance]) => instance.driver === sourceDriver && resolveProviderInstanceEnabled(instance),
   );
+
   if (matched !== undefined) {
     return createModelSelection(
       ProviderInstanceId.make(matched[0]),
@@ -92,12 +108,14 @@ export function textGenerationSelectionForTarget(
   }
 
   const legacyInstanceId = ProviderInstanceId.make(sourceDriver);
+
   if (
     targetSettings.providerInstances[legacyInstanceId] === undefined &&
     getLegacyProviderSettings(targetSettings, sourceDriver)?.enabled === true
   ) {
     return createModelSelection(legacyInstanceId, selection.model, selection.options);
   }
+
   return undefined;
 }
 
@@ -110,6 +128,7 @@ export function normalizePersistedServerSettingString(
   value: string | null | undefined,
 ): string | undefined {
   const trimmed = value?.trim();
+
   return trimmed && trimmed.length > 0 ? trimmed : undefined;
 }
 
@@ -129,9 +148,11 @@ export function parsePersistedServerObservabilitySettings(
   raw: string,
 ): PersistedServerObservabilitySettings {
   const decoded = decodeServerSettingsJson(raw);
+
   if (Option.isSome(decoded)) {
     return extractPersistedServerObservabilitySettings(decoded.value);
   }
+
   return { otlpTracesUrl: undefined, otlpMetricsUrl: undefined };
 }
 
@@ -142,14 +163,17 @@ function mergeModelSelectionOptionsById(input: {
   if (input.patch === undefined) {
     return input.current ? [...input.current] : undefined;
   }
+
   if (input.patch.length === 0) {
     return undefined;
   }
 
   const merged = new Map((input.current ?? []).map((selection) => [selection.id, selection.value]));
+
   for (const selection of input.patch) {
     merged.set(selection.id, selection.value);
   }
+
   return [...merged.entries()].map(([id, value]) => ({ id, value }));
 }
 
@@ -158,6 +182,7 @@ export function applyServerSettingsPatch(
   patch: ServerSettingsPatch,
 ): ServerSettings {
   const selectionPatch = patch.textGenerationModelSelection;
+
   const {
     automaticGitFetchInterval,
     providerHealthRefreshInterval,
@@ -165,7 +190,9 @@ export function applyServerSettingsPatch(
     backgroundActivity,
     ...patchForMerge
   } = patch;
+
   const currentBackgroundActivity = normalizeServerBackgroundActivitySettings(current);
+
   const backgroundActivityPatch =
     backgroundActivityProfile !== undefined
       ? {
@@ -200,7 +227,9 @@ export function applyServerSettingsPatch(
             },
           }
         : undefined;
+
   const next = deepMerge(current, patchForMerge);
+
   const nextWithReplacementsBase = {
     ...next,
     ...(backgroundActivity !== undefined
@@ -226,12 +255,15 @@ export function applyServerSettingsPatch(
       ? { sourceControlWriterModelSelection: patch.sourceControlWriterModelSelection }
       : {}),
   };
+
   const normalizedBackgroundActivity = normalizeBackgroundActivitySettings(
     nextWithReplacementsBase.backgroundActivity,
   );
+
   const resolvedBackgroundActivity = resolveBackgroundActivitySettings(
     normalizedBackgroundActivity,
   );
+
   const nextWithReplacements = {
     ...nextWithReplacementsBase,
     backgroundActivity: normalizedBackgroundActivity,
@@ -239,12 +271,14 @@ export function applyServerSettingsPatch(
     providerHealthRefreshInterval: resolvedBackgroundActivity.providerHealthRefreshInterval,
     backgroundActivityProfile: resolvedBackgroundActivity.profile,
   };
+
   if (!selectionPatch) {
     return nextWithReplacements;
   }
 
   const instanceId = selectionPatch.instanceId ?? current.textGenerationModelSelection.instanceId;
   const model = selectionPatch.model ?? current.textGenerationModelSelection.model;
+
   const options =
     selectionPatch.instanceId !== undefined || selectionPatch.model !== undefined
       ? selectionPatch.options

@@ -16,12 +16,14 @@ it("derives checkpoint messages from structured context", () => {
     requestedTurnCount: 4,
     availableTurnCount: 2,
   });
+
   const checkpoint = new CheckpointRefUnavailableError({
     operation: "CheckpointDiffQuery.getTurnDiff",
     threadId,
     turnCount: 2,
     checkpoint: "to",
   });
+
   const workspace = new CheckpointWorkspacePathMissingError({
     operation: "CheckpointDiffQuery.getFullThreadDiff",
     threadId,

@@ -27,40 +27,53 @@ import { allEnvironmentShellsBootstrappedAtom } from "./shell";
 import { environmentThreadDetails, environmentThreadShells } from "./threads";
 
 const EMPTY_PROJECT_REFS: ReadonlyArray<ScopedProjectRef> = Object.freeze([]);
+
 const EMPTY_THREAD_REFS: ReadonlyArray<ScopedThreadRef> = Object.freeze([]);
+
 const EMPTY_MESSAGES: ReadonlyArray<OrchestrationMessage> = Object.freeze([]);
+
 const EMPTY_ACTIVITIES: ReadonlyArray<OrchestrationThreadActivity> = Object.freeze([]);
 
 const EMPTY_PROJECT_ATOM = Atom.make<EnvironmentProject | null>(null).pipe(
   Atom.withLabel("web-project:empty"),
 );
+
 const EMPTY_PROJECT_REFS_ATOM = Atom.make(EMPTY_PROJECT_REFS).pipe(
   Atom.withLabel("web-project-refs:empty"),
 );
+
 const EMPTY_THREAD_REFS_ATOM = Atom.make(EMPTY_THREAD_REFS).pipe(
   Atom.withLabel("web-thread-refs:empty"),
 );
+
 const EMPTY_THREAD_SHELL_ATOM = Atom.make<EnvironmentThreadShell | null>(null).pipe(
   Atom.withLabel("web-thread-shell:empty"),
 );
+
 const EMPTY_THREAD_ID_ATOM = Atom.make<ThreadId | null>(null).pipe(
   Atom.withLabel("web-thread-id:empty"),
 );
+
 const EMPTY_BOT_CHAT_COMPLETIONS_ATOM = Atom.make<ReadonlyArray<BotChatCompletion>>([]).pipe(
   Atom.withLabel("web-bot-chat-completions:empty"),
 );
+
 const EMPTY_THREAD_DETAIL_ATOM = Atom.make<EnvironmentThread | null>(null).pipe(
   Atom.withLabel("web-thread-detail:empty"),
 );
+
 const EMPTY_THREAD_STATUS_ATOM = Atom.make<EnvironmentThreadStatus>("empty").pipe(
   Atom.withLabel("web-thread-status:empty"),
 );
+
 const EMPTY_MESSAGES_ATOM = Atom.make(EMPTY_MESSAGES).pipe(
   Atom.withLabel("web-thread-messages:empty"),
 );
+
 const EMPTY_ACTIVITIES_ATOM = Atom.make(EMPTY_ACTIVITIES).pipe(
   Atom.withLabel("web-thread-activities:empty"),
 );
+
 const EMPTY_SESSION_ATOM = Atom.make<OrchestrationSession | null>(null).pipe(
   Atom.withLabel("web-thread-session:empty"),
 );
@@ -210,12 +223,14 @@ export function useThread(
   },
 ): EnvironmentThread | null {
   const shell = useThreadShell(ref);
+
   const detail = useThreadDetail(
     resolveThreadDetailRef(ref, {
       shellExists: shell !== null,
       waitForShell: options?.waitForShell === true,
     }),
   );
+
   return useMemo(() => mergeEnvironmentThread(detail, shell), [detail, shell]);
 }
 

@@ -15,10 +15,13 @@ import * as Effect from "effect/Effect";
 import { decideOrchestrationCommand } from "./decider.ts";
 
 const NOW = "2026-01-01T00:00:00.000Z";
+
 // The decider's clock is the Effect test clock, pinned to the epoch, so
 // "future" wake times are relative to 1970-01-01T00:00:00.000Z.
 const FUTURE_WAKE = "1970-01-02T09:00:00.000Z";
+
 const PAST_WAKE = "1969-12-31T09:00:00.000Z";
+
 const SNOOZED_AT = "1969-12-30T00:00:00.000Z";
 
 function makeReadModel(input: {
@@ -76,9 +79,11 @@ it.layer(NodeServices.layer)("snoozed thread decider", (it) => {
         },
         readModel: makeReadModel({}),
       });
+
       const events = Array.isArray(event) ? event : [event];
       expect(events).toHaveLength(1);
       expect(events[0]?.type).toBe("thread.snoozed");
+
       if (events[0]?.type === "thread.snoozed") {
         expect(events[0].payload.snoozedUntil).toBe(FUTURE_WAKE);
         expect(events[0].payload.snoozedAt).toBe(events[0].payload.updatedAt);
@@ -97,6 +102,7 @@ it.layer(NodeServices.layer)("snoozed thread decider", (it) => {
         },
         readModel: makeReadModel({}),
       }).pipe(Effect.flip);
+
       expect(error._tag).toBe("OrchestrationCommandInvariantError");
     }),
   );
@@ -114,6 +120,7 @@ it.layer(NodeServices.layer)("snoozed thread decider", (it) => {
         },
         readModel: makeReadModel({}),
       }).pipe(Effect.flip);
+
       expect(error._tag).toBe("OrchestrationCommandInvariantError");
     }),
   );
@@ -129,6 +136,7 @@ it.layer(NodeServices.layer)("snoozed thread decider", (it) => {
         turnId: null,
         createdAt: NOW,
       } as OrchestrationThread["activities"][number];
+
       const error = yield* decideOrchestrationCommand({
         command: {
           type: "thread.snooze",
@@ -138,6 +146,7 @@ it.layer(NodeServices.layer)("snoozed thread decider", (it) => {
         },
         readModel: makeReadModel({ activities: [requestActivity] }),
       }).pipe(Effect.flip);
+
       expect(error._tag).toBe("OrchestrationCommandInvariantError");
     }),
   );
@@ -153,8 +162,10 @@ it.layer(NodeServices.layer)("snoozed thread decider", (it) => {
         },
         readModel: makeReadModel({ snoozedUntil: FUTURE_WAKE }),
       });
+
       const events = Array.isArray(reEmit) ? reEmit : [reEmit];
       expect(events).toHaveLength(1);
+
       if (events[0]?.type === "thread.snoozed") {
         // Original snoozedAt preserved; updatedAt must not churn.
         expect(events[0].payload.snoozedAt).toBe(SNOOZED_AT);
@@ -174,7 +185,9 @@ it.layer(NodeServices.layer)("snoozed thread decider", (it) => {
         },
         readModel: makeReadModel({ snoozedUntil: FUTURE_WAKE }),
       });
+
       const events = Array.isArray(event) ? event : [event];
+
       if (events[0]?.type === "thread.snoozed") {
         expect(events[0].payload.snoozedUntil).toBe("1970-01-03T09:00:00.000Z");
         expect(events[0].payload.updatedAt).not.toBe(NOW);
@@ -193,8 +206,10 @@ it.layer(NodeServices.layer)("snoozed thread decider", (it) => {
         },
         readModel: makeReadModel({ snoozedUntil: FUTURE_WAKE }),
       });
+
       const events = Array.isArray(event) ? event : [event];
       expect(events[0]?.type).toBe("thread.unsnoozed");
+
       if (events[0]?.type === "thread.unsnoozed") {
         expect(events[0].payload.reason).toBe("user");
         expect(events[0].payload.updatedAt).not.toBe(NOW);
@@ -209,8 +224,10 @@ it.layer(NodeServices.layer)("snoozed thread decider", (it) => {
         },
         readModel: makeReadModel({}),
       });
+
       const awakeEvents = Array.isArray(awake) ? awake : [awake];
       expect(awakeEvents[0]?.type).toBe("thread.unsnoozed");
+
       if (awakeEvents[0]?.type === "thread.unsnoozed") {
         // No state change — keep the existing updatedAt.
         expect(awakeEvents[0].payload.updatedAt).toBe(NOW);
@@ -231,6 +248,7 @@ it.layer(NodeServices.layer)("snoozed thread decider", (it) => {
         createdAt: "1969-12-31T23:59:30.000Z",
         updatedAt: "1969-12-31T23:59:30.000Z",
       } as OrchestrationThread["messages"][number];
+
       const error = yield* decideOrchestrationCommand({
         command: {
           type: "thread.snooze",
@@ -240,6 +258,7 @@ it.layer(NodeServices.layer)("snoozed thread decider", (it) => {
         },
         readModel: makeReadModel({ messages: [queuedMessage] }),
       }).pipe(Effect.flip);
+
       expect(error._tag).toBe("OrchestrationCommandInvariantError");
     }),
   );
@@ -255,6 +274,7 @@ it.layer(NodeServices.layer)("snoozed thread decider", (it) => {
         },
         readModel: makeReadModel({ archivedAt: NOW }),
       }).pipe(Effect.flip);
+
       expect(error._tag).toBe("OrchestrationCommandInvariantError");
     }),
   );
@@ -278,9 +298,11 @@ it.layer(NodeServices.layer)("snoozed thread decider", (it) => {
         },
         readModel: makeReadModel({ snoozedUntil: FUTURE_WAKE }),
       });
+
       const events = Array.isArray(result) ? result : [result];
       const unsnoozed = events.find((entry) => entry.type === "thread.unsnoozed");
       expect(unsnoozed).toBeDefined();
+
       if (unsnoozed?.type === "thread.unsnoozed") {
         expect(unsnoozed.payload.reason).toBe("activity");
       }

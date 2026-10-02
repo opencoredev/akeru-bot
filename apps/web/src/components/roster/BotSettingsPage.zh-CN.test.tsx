@@ -1,4 +1,7 @@
-import type { ReactElement } from "react";
+import type { TestProps, TestValue } from "../test-support/reactTree";
+import { decodeServerProvider } from "../test-support/fixtures";
+import { Predicate } from "effect";
+import { isValidElement, type ReactElement } from "react";
 import {
   DEFAULT_UNIFIED_SETTINGS,
   EnvironmentId,
@@ -8,7 +11,7 @@ import {
 } from "@akeru/contracts";
 import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
-import { visitElements } from "../../test/reactElementTree";
+import { visitElements } from "../test-support/reactTree";
 import { reactHookHarness as hooks } from "../../test/reactHookHarness";
 import type { Bot } from "./types";
 
@@ -27,6 +30,7 @@ const state = vi.hoisted(() => ({
 vi.mock("react", async (importOriginal) => {
   const actual = await importOriginal<typeof import("react")>();
   const { reactHookHarness } = await import("../../test/reactHookHarness");
+
   return {
     ...actual,
     useCallback: reactHookHarness.useCallback,
@@ -39,6 +43,7 @@ vi.mock("react", async (importOriginal) => {
 
 vi.mock("react/compiler-runtime", async () => {
   const { reactHookHarness } = await import("../../test/reactHookHarness");
+
   return { c: reactHookHarness.useMemoCache };
 });
 
@@ -59,41 +64,53 @@ vi.mock("../../state/server", () => ({
     subscriptionAuth: () => Symbol("subscriptionAuth"),
   },
 }));
+
 vi.mock("../../state/mcpServers", () => ({ environmentMcpServersAtom: () => atoms.mcpServers }));
+
 vi.mock("../../state/bots", () => ({ botEnvironment: { update: atoms.update } }));
+
 vi.mock("../../state/environments", () => ({
   usePrimaryEnvironmentId: () => EnvironmentId.make("environment-1"),
 }));
+
 vi.mock("../../state/use-atom-command", () => ({
   useAtomCommand: (atom: symbol) => (atom === atoms.update ? state.updateBot : vi.fn()),
 }));
+
 vi.mock("../../state/query", () => ({
   useEnvironmentQuery: () => ({ data: null, error: null, isPending: true, refresh: vi.fn() }),
 }));
+
 vi.mock("../../hooks/useSettings", () => ({
   usePrimarySettings: () => DEFAULT_UNIFIED_SETTINGS,
-  useEnvironmentSettings: (
+  useEnvironmentSettings: <T,>(
     _environmentId: EnvironmentId,
-    selector: (settings: typeof DEFAULT_UNIFIED_SETTINGS) => unknown,
+    selector: (settings: typeof DEFAULT_UNIFIED_SETTINGS) => T,
   ) => selector(DEFAULT_UNIFIED_SETTINGS),
 }));
+
 vi.mock("./rosterStore", () => ({
-  useRosterStore: (selector: (store: { bots: Bot[] }) => unknown) => selector({ bots: state.bots }),
+  useRosterStore: <T,>(selector: (store: { bots: Bot[] }) => T) => selector({ bots: state.bots }),
 }));
+
 vi.mock("./useBotThreadRef", () => ({ useBotThreadRef: () => null }));
+
 vi.mock("../ui/toast", () => ({ toastManager: { add: vi.fn() } }));
+
 vi.mock("../../i18n", async () => {
   const { catalogRegistry, createTranslator } = await import("@akeru/client-runtime/i18n");
   const translator = createTranslator("zh-CN", await catalogRegistry["zh-CN"]!());
+
   return { useI18n: () => translator };
 });
 
 import { BotSettingsPage } from "./BotSettingsPage";
+import { expandBotSettingsSections } from "./BotSettingsPage.test-support";
 
 const codexId = ProviderInstanceId.make("codex");
 
 function codexProvider(): ServerProvider {
-  return {
+  return decodeServerProvider({
     instanceId: codexId,
     driver: ProviderDriverKind.make("codex"),
     enabled: true,
@@ -108,7 +125,7 @@ function codexProvider(): ServerProvider {
     ],
     slashCommands: [],
     skills: [],
-  } as unknown as ServerProvider;
+  });
 }
 
 function makeBot(overrides: Partial<Bot> = {}): Bot {
@@ -119,7 +136,7 @@ function makeBot(overrides: Partial<Bot> = {}): Bot {
     label: null,
     description: null,
     disabledMcpServerIds: [],
-    avatar: { kind: "shape", shape: "circle", color: "blue" } as unknown as Bot["avatar"],
+    avatar: { kind: "blob", shape: "circle", color: "#2E8EFF" },
     engine: { provider: codexId, model: "gpt-5" },
     sandbox: "local",
     runtimeMode: "full-access",
@@ -136,27 +153,33 @@ function makeBot(overrides: Partial<Bot> = {}): Bot {
   };
 }
 
-type Tree = ReactElement<Record<string, unknown>>;
+type Tree = ReactElement<TestProps>;
 
 /** Renders the page, then the form it mounts, the way React would on each pass. */
 function renderForm(): Tree {
   hooks.beginRender();
   const page = BotSettingsPage({ botId: "bot-1" }) as Tree;
+
   const formElement = visitElements(
     page,
-    (element) => typeof element.props.onSave === "function" && "bot" in element.props,
+    (element) => Predicate.isFunction(element.props.onSave) && "bot" in element.props,
   );
+
   expect(formElement).not.toBeNull();
-  const Form = formElement!.type as (props: Record<string, unknown>) => Tree;
-  return Form(formElement!.props);
+  const Form = formElement!.type as (props: TestProps) => Tree;
+
+  return expandBotSettingsSections(Form(formElement!.props));
 }
 
-function textOf(node: unknown): string {
-  if (typeof node === "string" || typeof node === "number") return String(node);
+function textOf(node: TestValue): string {
+  if (Predicate.isString(node) || Predicate.isNumber(node)) return String(node);
+
   if (Array.isArray(node)) return node.map(textOf).join("");
-  if (node && typeof node === "object" && "props" in node) {
+
+  if (isValidElement<Tree["props"]>(node)) {
     return textOf((node as Tree).props.children);
   }
+
   return "";
 }
 
@@ -176,9 +199,10 @@ describe("bot settings in Simplified Chinese", () => {
 
     const titles: unknown[] = [];
     visitElements(form, (element) => {
-      if ("id" in element.props && typeof element.props.title === "string") {
+      if ("id" in element.props && Predicate.isString(element.props.title)) {
         titles.push(element.props.title);
       }
+
       return false;
     });
     expect(titles).toEqual(expect.arrayContaining(["身份", "行为", "模型与用量", "工作区"]));

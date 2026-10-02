@@ -2,12 +2,17 @@ import { DEFAULT_DICTATION_LIMITS } from "@akeru/client-runtime/dictation";
 import type { RecordingStatus } from "expo-audio";
 import type { AppStateStatus } from "react-native";
 import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
+import { DICTATION_RECORDING, startExpoDictationCapture } from "./expoDictationCapture";
 
 const native = vi.hoisted(() => ({
   granted: true,
   listenerFails: false,
-  mode: vi.fn(async (_mode: unknown) => {}),
-  prepare: vi.fn(async (_options: unknown) => {}),
+  mode: vi.fn(async (_mode: Parameters<typeof import("expo-audio").setAudioModeAsync>[0]) => {}),
+  prepare: vi.fn(
+    async (
+      _options: Parameters<import("expo-audio").AudioRecorder["prepareToRecordAsync"]>[0],
+    ) => {},
+  ),
   record: vi.fn(),
   stop: vi.fn(async () => {}),
   release: vi.fn(),
@@ -19,6 +24,7 @@ const native = vi.hoisted(() => ({
   statusRemove: vi.fn(),
   appRemove: vi.fn(),
 }));
+
 vi.mock("expo-audio", () => ({
   AudioQuality: { MEDIUM: 64 },
   IOSOutputFormat: { MPEG4AAC: "aac " },
@@ -33,10 +39,14 @@ vi.mock("expo-audio", () => ({
       addListener(_event: string, listener: typeof native.emitStatus) {
         if (native.listenerFails) throw new Error("listener registration failed");
         native.emitStatus = listener;
+
         return { remove: native.statusRemove };
       }
-      prepareToRecordAsync(options: unknown) {
+      prepareToRecordAsync(
+        options: Parameters<import("expo-audio").AudioRecorder["prepareToRecordAsync"]>[0],
+      ) {
         this.uri = "file:///cache/recording.m4a";
+
         return native.prepare(options);
       }
       record() {
@@ -53,6 +63,7 @@ vi.mock("expo-audio", () => ({
     },
   },
 }));
+
 vi.mock("expo-file-system", () => ({
   File: class {
     constructor(readonly uri: string) {}
@@ -70,19 +81,20 @@ vi.mock("expo-file-system", () => ({
     }
   },
 }));
+
 vi.mock("react-native", () => ({
   AppState: {
     addEventListener: (_event: string, listener: typeof native.emitApp) => {
       native.emitApp = listener;
+
       return { remove: native.appRemove };
     },
   },
 }));
 
-import { DICTATION_RECORDING, startExpoDictationCapture } from "./expoDictationCapture";
-
 function start(signal = new AbortController().signal) {
   const onError = vi.fn();
+
   return {
     onError,
     capture: startExpoDictationCapture({ signal, limits: DEFAULT_DICTATION_LIMITS, onError }),

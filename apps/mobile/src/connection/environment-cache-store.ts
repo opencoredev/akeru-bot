@@ -13,10 +13,12 @@ import * as Schema from "effect/Schema";
 import * as MobileDatabase from "../persistence/mobile-database";
 
 const SHELL_SNAPSHOT_CACHE_SCHEMA_VERSION = 1;
+
 // v3 adds windowed (paginated) snapshots carrying `page` metadata; the bump
 // makes pre-pagination clients discard the record instead of decoding a
 // partial thread as complete (rollback safety).
 const THREAD_SNAPSHOT_CACHE_SCHEMA_VERSION = 3;
+
 const SERVER_CONFIG_CACHE_SCHEMA_VERSION = 1;
 
 const StoredShellSnapshot = Schema.Struct({
@@ -24,12 +26,14 @@ const StoredShellSnapshot = Schema.Struct({
   environmentId: Schema.String,
   snapshot: OrchestrationShellSnapshot,
 });
+
 const StoredThreadSnapshot = Schema.Struct({
   schemaVersion: Schema.Literal(THREAD_SNAPSHOT_CACHE_SCHEMA_VERSION),
   environmentId: Schema.String,
   threadId: Schema.String,
   snapshot: OrchestrationThreadDetailSnapshot,
 });
+
 const StoredServerConfig = Schema.Struct({
   schemaVersion: Schema.Literal(SERVER_CONFIG_CACHE_SCHEMA_VERSION),
   environmentId: Schema.String,
@@ -39,14 +43,19 @@ const StoredServerConfig = Schema.Struct({
 const decodeStoredShellSnapshot = Schema.decodeUnknownEffect(
   Schema.fromJsonString(StoredShellSnapshot),
 );
+
 const encodeStoredShellSnapshot = Schema.encodeEffect(Schema.fromJsonString(StoredShellSnapshot));
+
 const decodeStoredThreadSnapshot = Schema.decodeUnknownEffect(
   Schema.fromJsonString(StoredThreadSnapshot),
 );
+
 const encodeStoredThreadSnapshot = Schema.encodeEffect(Schema.fromJsonString(StoredThreadSnapshot));
+
 const decodeStoredServerConfig = Schema.decodeUnknownEffect(
   Schema.fromJsonString(StoredServerConfig),
 );
+
 const encodeStoredServerConfig = Schema.encodeEffect(Schema.fromJsonString(StoredServerConfig));
 
 type CacheOperation = ConnectionPersistenceError["operation"];
@@ -102,6 +111,7 @@ function loadDecodedCache<A, B>(input: {
 
 export const make = Effect.fn("MobileEnvironmentCacheStore.make")(function* () {
   const database = yield* MobileDatabase.MobileDatabase;
+
   return EnvironmentCacheStore.of({
     loadShell: Effect.fn("MobileEnvironmentCache.loadShell")((environmentId) =>
       loadDecodedCache({
@@ -121,6 +131,7 @@ export const make = Effect.fn("MobileEnvironmentCacheStore.make")(function* () {
         environmentId,
         snapshot,
       }).pipe(Effect.mapError((cause) => persistenceError("save-shell", cause)));
+
       yield* database
         .saveCache(environmentId, "shell", "snapshot", SHELL_SNAPSHOT_CACHE_SCHEMA_VERSION, payload)
         .pipe(Effect.mapError(mapDatabaseError("save-shell")));
@@ -141,12 +152,14 @@ export const make = Effect.fn("MobileEnvironmentCacheStore.make")(function* () {
     ),
     saveThread: Effect.fn("MobileEnvironmentCache.saveThread")(function* (environmentId, snapshot) {
       const threadId = snapshot.thread.id;
+
       const payload = yield* encodeStoredThreadSnapshot({
         schemaVersion: THREAD_SNAPSHOT_CACHE_SCHEMA_VERSION,
         environmentId,
         threadId,
         snapshot,
       }).pipe(Effect.mapError((cause) => persistenceError("save-thread", cause)));
+
       yield* database
         .saveCache(environmentId, "thread", threadId, THREAD_SNAPSHOT_CACHE_SCHEMA_VERSION, payload)
         .pipe(Effect.mapError(mapDatabaseError("save-thread")));
@@ -175,6 +188,7 @@ export const make = Effect.fn("MobileEnvironmentCacheStore.make")(function* () {
           environmentId,
           config,
         }).pipe(Effect.mapError((cause) => persistenceError("save-server-config", cause)));
+
         yield* database
           .saveCache(
             environmentId,

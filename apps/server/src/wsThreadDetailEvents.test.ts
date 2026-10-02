@@ -6,6 +6,7 @@ import { isThreadDetailEvent } from "./ws.ts";
 describe("isThreadDetailEvent", () => {
   it("streams channel delivery updates to open chats", () => {
     const now = "2026-09-29T12:00:00.000Z";
+
     const event = {
       sequence: 1,
       type: "thread.channel-delivery-set",
@@ -24,6 +25,7 @@ describe("isThreadDetailEvent", () => {
         updatedAt: now,
       },
     } satisfies OrchestrationEvent;
+
     expect(isThreadDetailEvent(event)).toBe(true);
   });
 });

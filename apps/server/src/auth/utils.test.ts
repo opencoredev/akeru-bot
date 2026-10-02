@@ -68,6 +68,7 @@ describe("session cookie isolation", () => {
       environmentId: "environment-one",
       development: true,
     });
+
     const second = resolveSessionCookieName({
       mode: "web",
       port: 5775,
@@ -91,6 +92,7 @@ describe("session cookie isolation", () => {
       environmentId: "environment-one",
       development: false,
     });
+
     const second = resolveSessionCookieName({
       mode: "web",
       port: 5775,
@@ -114,6 +116,7 @@ describe("session cookie isolation", () => {
       environmentId: "environment-one",
       development: false,
     });
+
     const second = resolveSessionCookieName({
       mode: "web",
       port: 9090,

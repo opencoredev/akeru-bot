@@ -117,6 +117,7 @@ describe("bot conversation presentation", () => {
   it("starts a group per author run so one long answer is not a stack of replies", () => {
     const at = (minutes: number) => new Date(2026, 7, 17, 10, minutes).toISOString();
     const now = new Date(2026, 7, 17, 11, 0);
+
     const entries = buildBotConversationEntries(
       [
         { ...message("ask", "user", false), createdAt: at(0) },

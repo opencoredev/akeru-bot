@@ -8,10 +8,12 @@ export function syncConnectorIncidents(
   statuses: ReadonlyArray<ProviderStatus>,
 ): void {
   const currentIncidentKeys = new Set<string>();
+
   for (const status of statuses) {
     for (const bot of status.dependentBots) {
       const incidentKey = `connector:${status.provider}:${bot.id}`;
       currentIncidentKeys.add(incidentKey);
+
       if (
         status.health === "expired" ||
         status.health === "revoked" ||
@@ -34,6 +36,7 @@ export function syncConnectorIncidents(
         });
         continue;
       }
+
       if (
         status.health === "detected" ||
         status.health === "healthy" ||
@@ -62,15 +65,20 @@ export function syncAccessIncidents(
   const unresolvedIncidents = botInbox
     .list()
     .filter((incident) => incident.status === "open" || incident.acknowledgedAt !== undefined);
+
   const unresolvedIncidentKeys = new Set(
     unresolvedIncidents.map((incident) => incident.incidentKey),
   );
+
   const currentIncidentKeys = new Set<string>();
+
   for (const item of access) {
     if (item.accessMethod === "subscription-oauth") continue;
+
     for (const bot of item.dependentBots) {
       const incidentKey = `access:${item.id}:${bot.id}`;
       currentIncidentKeys.add(incidentKey);
+
       if (
         item.health === "failed" ||
         item.health === "failed-first-request" ||

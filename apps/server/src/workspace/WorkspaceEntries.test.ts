@@ -1,5 +1,4 @@
 import * as Deferred from "effect/Deferred";
-// @effect-diagnostics nodeBuiltinImport:off
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { FileFinder } from "@ff-labs/fff-node";
 import { it, afterEach, describe, expect } from "@effect/vitest";
@@ -17,6 +16,7 @@ import * as WorkspacePaths from "./WorkspacePaths.ts";
 
 vi.mock("node:fs/promises", async (importOriginal) => {
   const actual = await importOriginal<typeof import("node:fs/promises")>();
+
   return { ...actual, readdir: vi.fn(actual.readdir) };
 });
 
@@ -34,12 +34,15 @@ const TestLayer = Layer.empty.pipe(
 
 const makeTempDir = Effect.fn(function* (opts?: { prefix?: string; git?: boolean }) {
   const fileSystem = yield* FileSystem.FileSystem;
+
   const dir = yield* fileSystem.makeTempDirectoryScoped({
     prefix: opts?.prefix ?? "t3code-workspace-entries-",
   });
+
   if (opts?.git) {
     yield* git(dir, ["init"]);
   }
+
   return dir;
 });
 
@@ -60,6 +63,7 @@ function writeTextFile(
 const git = (cwd: string, args: ReadonlyArray<string>, env?: NodeJS.ProcessEnv) =>
   Effect.gen(function* () {
     const process = yield* VcsProcess.VcsProcess;
+
     const result = yield* process.run({
       operation: "WorkspaceEntries.test.git",
       command: "git",
@@ -68,6 +72,7 @@ const git = (cwd: string, args: ReadonlyArray<string>, env?: NodeJS.ProcessEnv) 
       ...(env ? { env } : {}),
       timeoutMs: 10_000,
     });
+
     return result.stdout.trim();
   });
 
@@ -79,6 +84,7 @@ const searchWorkspaceEntries = (input: {
 }) =>
   Effect.gen(function* () {
     const workspaceEntries = yield* WorkspaceEntries.WorkspaceEntries;
+
     return yield* workspaceEntries.search(input);
   });
 
@@ -90,6 +96,7 @@ describe("workspace refresh worker", () => {
         const startedB = yield* Deferred.make<void>();
         const releaseA = yield* Deferred.make<void>();
         const releaseB = yield* Deferred.make<void>();
+
         const worker = yield* WorkspaceEntries.makeWorkspaceRefreshWorker((cwd) =>
           cwd === "/a"
             ? Deferred.succeed(startedA, undefined).pipe(Effect.andThen(Deferred.await(releaseA)))
@@ -129,8 +136,10 @@ describe("workspace refresh worker", () => {
         const releaseFirst = yield* Deferred.make<void>();
         const releaseSecond = yield* Deferred.make<void>();
         let scans = 0;
+
         const worker = yield* WorkspaceEntries.makeWorkspaceRefreshWorker(() => {
           scans += 1;
+
           return scans === 1
             ? Deferred.succeed(firstStarted, undefined).pipe(
                 Effect.andThen(Deferred.await(releaseFirst)),
@@ -169,16 +178,19 @@ describe("workspace refresh worker", () => {
         let active = 0;
         let maximum = 0;
         let scans = 0;
+
         const worker = yield* WorkspaceEntries.makeWorkspaceRefreshWorker(() =>
           Effect.gen(function* () {
             scans += 1;
             active += 1;
             maximum = Math.max(maximum, active);
+
             if (active === 2) yield* Deferred.succeed(twoStarted, undefined);
             yield* Deferred.await(release);
             active -= 1;
           }),
         );
+
         for (const cwd of ["/a", "/b", "/c", "/d"]) yield* worker.request(cwd);
         yield* Deferred.await(twoStarted);
         yield* Deferred.succeed(release, undefined);
@@ -197,9 +209,11 @@ describe("workspace refresh worker", () => {
     Effect.scoped(
       Effect.gen(function* () {
         let scans = 0;
+
         const worker = yield* WorkspaceEntries.makeWorkspaceRefreshWorker(() =>
           Effect.sync(() => {
             scans += 1;
+
             if (scans === 1) throw new Error("scan failed");
           }),
         );
@@ -411,6 +425,7 @@ it.layer(TestLayer, { excludeTestServices: true })("WorkspaceEntries", (it) => {
           prefix: "t3code-workspace-tracked-gitignore-",
           git: true,
         });
+
         yield* writeTextFile(cwd, ".convex/local-storage/data.json", "{}");
         yield* writeTextFile(cwd, "src/keep.ts", "export {};");
         yield* git(cwd, ["add", ".convex/local-storage/data.json", "src/keep.ts"]);

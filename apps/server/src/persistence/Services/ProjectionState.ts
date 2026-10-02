@@ -19,11 +19,13 @@ export const ProjectionState = Schema.Struct({
   lastAppliedSequence: NonNegativeInt,
   updatedAt: IsoDateTime,
 });
+
 export type ProjectionState = typeof ProjectionState.Type;
 
 export const GetProjectionStateInput = Schema.Struct({
   projector: Schema.String,
 });
+
 export type GetProjectionStateInput = typeof GetProjectionStateInput.Type;
 
 /**

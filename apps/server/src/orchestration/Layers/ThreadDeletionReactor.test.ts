@@ -43,6 +43,7 @@ describe("logCleanupCauseUnlessInterrupted", () => {
     );
 
     expect(Exit.isFailure(exit)).toBe(true);
+
     if (Exit.isFailure(exit)) {
       expect(Cause.hasInterruptsOnly(exit.cause)).toBe(true);
     }

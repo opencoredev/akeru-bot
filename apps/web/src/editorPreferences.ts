@@ -13,6 +13,7 @@ import { shellEnvironment } from "./state/shell";
 import { useAtomCommand } from "./state/use-atom-command";
 
 const LAST_EDITOR_KEY = "akeru:last-editor";
+
 // Pre-rebrand key, read as a fallback then drained on the next write.
 const LEGACY_LAST_EDITOR_KEY = "t3code:last-editor";
 
@@ -46,7 +47,9 @@ export function usePreferredEditor(availableEditors: ReadonlyArray<EditorId>) {
 
   const effectiveEditor = useMemo(() => {
     if (lastEditor && availableEditors.includes(lastEditor)) return lastEditor;
+
     if (!lastEditor && legacyEditor && availableEditors.includes(legacyEditor)) return legacyEditor;
+
     return EDITORS.find((editor) => availableEditors.includes(editor.id))?.id ?? null;
   }, [lastEditor, legacyEditor, availableEditors]);
 
@@ -65,19 +68,24 @@ export function resolveAndPersistPreferredEditor(
   availableEditors: readonly EditorId[],
 ): EditorId | null {
   const availableEditorIds = new Set(availableEditors);
+
   const stored =
     getLocalStorageItem(LAST_EDITOR_KEY, EditorId) ??
     getLocalStorageItem(LEGACY_LAST_EDITOR_KEY, EditorId);
+
   if (stored && availableEditorIds.has(stored)) return stored;
   const editor = EDITORS.find((editor) => availableEditorIds.has(editor.id))?.id ?? null;
+
   if (editor) {
     setLocalStorageItem(LAST_EDITOR_KEY, editor, EditorId);
+
     try {
       window.localStorage.removeItem(LEGACY_LAST_EDITOR_KEY);
     } catch {
       // Draining the legacy key is best-effort.
     }
   }
+
   return editor ?? null;
 }
 
@@ -88,6 +96,7 @@ export function useOpenInPreferredEditor(
   const openInEditor = useAtomCommand(shellEnvironment.openInEditor, {
     reportFailure: false,
   });
+
   type OpenInEditorError = AtomCommandFailure<Awaited<ReturnType<typeof openInEditor>>>;
 
   return useCallback(
@@ -110,7 +119,9 @@ export function useOpenInPreferredEditor(
           ),
         );
       }
+
       const editor = resolveAndPersistPreferredEditor(availableEditors);
+
       if (!editor) {
         return AsyncResult.failure(
           Cause.fail(
@@ -122,6 +133,7 @@ export function useOpenInPreferredEditor(
           ),
         );
       }
+
       const result = await openInEditor({
         environmentId,
         input: {
@@ -129,6 +141,7 @@ export function useOpenInPreferredEditor(
           editor,
         },
       });
+
       return mapAtomCommandResult(result, () => editor);
     },
     [availableEditors, environmentId, openInEditor],

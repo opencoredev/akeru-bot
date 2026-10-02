@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import { it } from "@effect/vitest";
 import { type PreviewEvent, ThreadId } from "@akeru/contracts";
 import { PreviewUrlNormalizationError } from "@akeru/shared/preview";
@@ -19,6 +20,7 @@ interface EventCollector {
  * thread id to avoid bleeding state from earlier tests.
  */
 let nextThreadId = 0;
+
 const freshThreadId = () => ThreadId.make(`thread-${++nextThreadId}`);
 
 /**
@@ -29,9 +31,11 @@ const freshThreadId = () => ThreadId.make(`thread-${++nextThreadId}`);
 const collectEvents = Effect.gen(function* () {
   const manager = yield* PreviewManager.PreviewManager;
   const subscription = yield* manager.subscribeEvents;
+
   const collector: EventCollector = {
     drain: PubSub.takeUpTo(subscription, DRAIN_LIMIT),
   };
+
   return collector;
 }).pipe(Effect.withSpan("preview.test.collectEvents"));
 
@@ -45,13 +49,15 @@ it.layer(PreviewManager.layer)("PreviewManager", (it) => {
       const snapshot = yield* manager.open({ threadId, url: "localhost:5173" });
       expect(snapshot.tabId.startsWith("tab_")).toBe(true);
       expect(snapshot.navStatus._tag).toBe("Loading");
-      if (snapshot.navStatus._tag === "Loading") {
+
+      if (Predicate.isTagged(snapshot.navStatus, "Loading")) {
         expect(snapshot.navStatus.url).toBe("http://localhost:5173/");
       }
 
       const events = yield* collector.drain;
       expect(events).toHaveLength(1);
       expect(events[0]?.type).toBe("opened");
+
       if (events[0]?.type === "opened") {
         expect(events[0].tabId).toBe(snapshot.tabId);
       }
@@ -98,7 +104,8 @@ it.layer(PreviewManager.layer)("PreviewManager", (it) => {
       const threadId = freshThreadId();
       const manager = yield* PreviewManager.PreviewManager;
       const snapshot = yield* manager.open({ threadId, url: "example.com" });
-      if (snapshot.navStatus._tag === "Loading") {
+
+      if (Predicate.isTagged(snapshot.navStatus, "Loading")) {
         expect(snapshot.navStatus.url).toBe("https://example.com/");
       }
     }),
@@ -145,6 +152,7 @@ it.layer(PreviewManager.layer)("PreviewManager", (it) => {
       const collector = yield* collectEvents;
 
       const opened = yield* manager.open({ threadId, url: "http://localhost:5173" });
+
       const snapshot = yield* manager.navigate({
         threadId,
         tabId: opened.tabId,
@@ -153,10 +161,12 @@ it.layer(PreviewManager.layer)("PreviewManager", (it) => {
       });
 
       expect(snapshot.navStatus._tag).toBe("Success");
-      if (snapshot.navStatus._tag === "Success") {
+
+      if (Predicate.isTagged(snapshot.navStatus, "Success")) {
         expect(snapshot.navStatus.url).toBe("http://localhost:5173/about");
         expect(snapshot.navStatus.title).toBe("About");
       }
+
       const events = yield* collector.drain;
       expect(events.map((e) => e.type)).toEqual(["opened", "navigated"]);
     }),
@@ -166,6 +176,7 @@ it.layer(PreviewManager.layer)("PreviewManager", (it) => {
     Effect.gen(function* () {
       const threadId = freshThreadId();
       const manager = yield* PreviewManager.PreviewManager;
+
       const error = yield* Effect.flip(
         manager.navigate({
           threadId,
@@ -173,6 +184,7 @@ it.layer(PreviewManager.layer)("PreviewManager", (it) => {
           url: "http://localhost:5173",
         }),
       );
+
       expect(error._tag).toBe("PreviewSessionLookupError");
     }),
   );
@@ -189,6 +201,7 @@ it.layer(PreviewManager.layer)("PreviewManager", (it) => {
         tabId: opened.tabId,
         viewport: { _tag: "freeform", width: 1024, height: 768 },
       });
+
       expect(resized.viewport).toEqual({ _tag: "freeform", width: 1024, height: 768 });
 
       const navigated = yield* manager.navigate({
@@ -196,6 +209,7 @@ it.layer(PreviewManager.layer)("PreviewManager", (it) => {
         tabId: opened.tabId,
         url: "http://localhost:5173/resized",
       });
+
       expect(navigated.viewport).toEqual(resized.viewport);
 
       yield* manager.reportStatus({
@@ -221,6 +235,7 @@ it.layer(PreviewManager.layer)("PreviewManager", (it) => {
   it.effect("rejects resize for an unknown tab", () =>
     Effect.gen(function* () {
       const manager = yield* PreviewManager.PreviewManager;
+
       const error = yield* Effect.flip(
         manager.resize({
           threadId: freshThreadId(),
@@ -228,6 +243,7 @@ it.layer(PreviewManager.layer)("PreviewManager", (it) => {
           viewport: { _tag: "fill" },
         }),
       );
+
       expect(error._tag).toBe("PreviewSessionLookupError");
     }),
   );
@@ -256,6 +272,7 @@ it.layer(PreviewManager.layer)("PreviewManager", (it) => {
       const events = yield* collector.drain;
       const failed = events.find((e) => e.type === "failed");
       expect(failed?.type).toBe("failed");
+
       if (failed?.type === "failed") {
         expect(failed.code).toBe(-105);
         expect(failed.description).toBe("ERR_NAME_NOT_RESOLVED");
@@ -391,11 +408,13 @@ it.layer(PreviewManager.layer)("PreviewManager", (it) => {
         const threadA = freshThreadId();
         const threadB = freshThreadId();
         const manager = yield* PreviewManager.PreviewManager;
+
         // startImmediately runs each consumer up to its PubSub subscription
         // before anything below publishes.
         const scopedFiber = yield* manager
           .streamEvents({ threadId: threadA })
           .pipe(Stream.take(3), Stream.runCollect, Effect.forkScoped({ startImmediately: true }));
+
         const unscopedFiber = yield* manager
           .streamEvents({})
           .pipe(Stream.take(5), Stream.runCollect, Effect.forkScoped({ startImmediately: true }));

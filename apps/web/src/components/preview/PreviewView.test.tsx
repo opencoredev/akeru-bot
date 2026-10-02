@@ -70,8 +70,8 @@ vi.mock("~/browser/browserDefaults", () => ({
 }));
 
 vi.mock("~/composerDraftStore", () => ({
-  useComposerDraftStore: (
-    select: (store: { addPreviewAnnotation: () => void; addImage: () => void }) => unknown,
+  useComposerDraftStore: <T,>(
+    select: (store: { addPreviewAnnotation: () => void; addImage: () => void }) => T,
   ) =>
     select({
       addPreviewAnnotation: mocks.addPreviewAnnotation,
@@ -147,8 +147,8 @@ vi.mock("~/browser/browserRecording", () => ({
 }));
 
 vi.mock("~/browser/browserSurfaceStore", () => ({
-  useBrowserSurfaceStore: (
-    select: (state: { byTabId: Record<string, { rect?: unknown }> }) => unknown,
+  useBrowserSurfaceStore: <T,>(
+    select: (state: { byTabId: Record<string, { rect?: unknown }> }) => T,
   ) => select({ byTabId: {} }),
 }));
 
@@ -180,6 +180,7 @@ vi.mock("./PreviewChromeRow", () => ({
     mocks.toggleAnnotation = props.onPickElement ?? null;
     mocks.toggleNativePictureInPicture =
       props.trailingActions?.props.onNativePictureInPicture ?? null;
+
     return null;
   },
 }));
@@ -187,19 +188,27 @@ vi.mock("./PreviewChromeRow", () => ({
 vi.mock("./PreviewEmptyState", () => ({
   PreviewEmptyState: (props: { onOpenUrl: (url: string) => void }) => {
     mocks.emptyStateUrl = props.onOpenUrl;
+
     return null;
   },
 }));
+
 vi.mock("./PreviewMoreMenu", () => ({
   PreviewMoreMenu: (props: { onNativePictureInPicture: () => void }) => {
     mocks.toggleNativePictureInPicture = props.onNativePictureInPicture;
+
     return null;
   },
 }));
+
 vi.mock("./PreviewUnreachable", () => ({ PreviewUnreachable: () => null }));
+
 vi.mock("./ZoomIndicator", () => ({ ZoomIndicator: () => null }));
+
 vi.mock("./AgentBrowserCursor", () => ({ AgentBrowserCursor: () => null }));
+
 vi.mock("~/browser/BrowserSurfaceSlot", () => ({ BrowserSurfaceSlot: () => null }));
+
 vi.mock("./usePreviewSession", () => ({ usePreviewSession: vi.fn() }));
 
 import { PreviewView } from "./PreviewView";
@@ -209,6 +218,7 @@ const TEST_THREAD_REF = {
   environmentId: EnvironmentId.make("environment-1"),
   threadId: ThreadId.make("thread-1"),
 } as const;
+
 const TEST_RUNTIME_TAB_ID = previewRuntimeTabId(TEST_THREAD_REF, null, "tab-1");
 
 // ReactDOM needs a host, but this unit suite intentionally has no DOM dependency.
@@ -236,12 +246,14 @@ class TestNode {
   appendChild(child: TestNode) {
     child.parentNode = this;
     this.childNodes.push(child);
+
     return child;
   }
 
   removeChild(child: TestNode) {
     this.childNodes.splice(this.childNodes.indexOf(child), 1);
     child.parentNode = null;
+
     return child;
   }
 
@@ -256,6 +268,7 @@ class TestNode {
 
 function installTestDom() {
   const document = new TestNode("#document", null, 9);
+
   const window = {
     document,
     HTMLIFrameElement: TestNode,
@@ -266,10 +279,12 @@ function installTestDom() {
     addEventListener() {},
     removeEventListener() {},
   };
+
   vi.stubGlobal("document", document);
   vi.stubGlobal("window", window);
   vi.stubGlobal("HTMLIFrameElement", window.HTMLIFrameElement);
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+
   return document;
 }
 
@@ -297,9 +312,9 @@ describe("PreviewView navigation", () => {
   it("does not rerender while loading time passes", async () => {
     vi.useFakeTimers();
     mocks.loading = true;
-    const document = installTestDom();
+    installTestDom();
     const { createRoot } = await import("react-dom/client");
-    const root = createRoot(document.createElement("div") as unknown as Element);
+    const root = createRoot(globalThis.document.createElement("div"));
     const onRender = vi.fn();
 
     try {
@@ -450,6 +465,7 @@ describe("PreviewView navigation", () => {
       screenshot: null,
       createdAt: "2026-07-27T00:00:00.000Z",
     };
+
     const onSendAnnotation = vi.fn();
     mocks.pickElement.mockResolvedValue({ annotation, submission: "send" });
 
@@ -485,6 +501,7 @@ describe("PreviewView navigation", () => {
       },
       createdAt: "2026-07-27T00:00:00.000Z",
     };
+
     const onSendAnnotation = vi.fn();
     mocks.pickElement.mockResolvedValue({ annotation, submission: "send" });
     mocks.previewAnnotationScreenshotFile.mockRejectedValue(new Error("conversion failed"));

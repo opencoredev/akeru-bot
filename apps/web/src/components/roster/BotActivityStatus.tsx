@@ -29,13 +29,16 @@ export function botActivityUpdate(
   t: (key: MessageKey) => string = (key) => key,
 ): string | null {
   if (!turnId) return null;
+
   const activity = activities.findLast(
     (candidate) =>
       candidate.turnId === turnId &&
       !HIDDEN_ACTIVITY_KINDS.has(candidate.kind) &&
       (candidate.tone === "tool" || candidate.kind.startsWith("task.")),
   );
+
   if (!activity) return null;
+
   if (
     /(?:completed|failed|stopped)$/i.test(activity.kind) ||
     /\s+(?:completed|failed|stopped)$/i.test(activity.summary)
@@ -47,20 +50,34 @@ export function botActivityUpdate(
     .replace(/\s+started$/i, "")
     .replaceAll("_", " ")
     .trim();
+
   const normalized = summary.toLowerCase();
+
   if (/ask user|user input|structured question/.test(normalized)) return null;
+
   if (/browser snapshot|snapshot/.test(normalized)) return t("Reading the page");
+
   if (/browser navigate|preview open|open browser/.test(normalized)) return t("Opening a page");
+
   if (/browser click/.test(normalized)) return t("Using the page");
+
   if (/browser type/.test(normalized)) return t("Entering text");
+
   if (/search|web query/.test(normalized)) return t("Searching the web");
+
   if (/test|typecheck|lint|check/.test(normalized)) return t("Running checks");
+
   if (/patch|edit|write/.test(normalized)) return t("Editing files");
+
   if (/command|shell|exec/.test(normalized)) return t("Running a command");
+
   if (/read|fetch|open/.test(normalized)) return t("Reading a source");
+
   if (/task|agent/.test(normalized)) return t("Coordinating work");
+
   if (!summary) return null;
   const label = `${summary[0]?.toUpperCase() ?? ""}${summary.slice(1)}`;
+
   return label.length > 56 ? `${label.slice(0, 55).trimEnd()}…` : label;
 }
 
@@ -79,6 +96,7 @@ const GLYPH_CELLS = [
 
 /** The pixel comet from the thinking row. Opacity only, so it stays on the compositor. */
 export function PixelThinkingGlyph({ className }: { readonly className?: string }) {
+  // SAFETY: React CSSProperties omits custom properties; these values are CSS variables consumed by the component stylesheet.
   return (
     <svg
       aria-hidden="true"
@@ -130,6 +148,7 @@ export function BotActivityStatus({
   readonly silentRun?: ThreadSilentRun | null;
 }) {
   const { t } = useI18n();
+
   if (silentRun) {
     return (
       <div
@@ -148,7 +167,9 @@ export function BotActivityStatus({
       </div>
     );
   }
+
   const label = activity?.label ?? update ?? t("{name} is working", { name });
+
   return (
     <div
       aria-live="polite"

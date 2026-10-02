@@ -35,28 +35,36 @@ export function buildArchivedChatSections(input: {
   readonly groups: ReadonlyArray<OrchestrationGroup>;
 }): ArchivedChatSection[] {
   const { snapshot } = input;
+
   if (!snapshot) return [];
   const botNames = new Map<string, string>();
+
   for (const bot of [...snapshot.bots, ...input.bots]) botNames.set(bot.id, bot.name);
   const groupNames = new Map<string, string>();
+
   for (const group of [...snapshot.groups, ...input.groups]) groupNames.set(group.id, group.name);
 
   const sections = new Map<
     string,
     { section: Omit<ArchivedChatSection, "chats">; chats: ArchivedChat[] }
   >();
+
   for (const thread of snapshot.threads) {
     if (thread.parentThreadId != null || thread.archivedAt === null) continue;
+
     const owner = thread.groupId
       ? { kind: "group" as const, ownerId: thread.groupId, name: groupNames.get(thread.groupId) }
       : thread.botId
         ? { kind: "bot" as const, ownerId: thread.botId, name: botNames.get(thread.botId) }
         : { kind: "other" as const, ownerId: null, name: undefined };
+
     const key = `${owner.kind}:${owner.ownerId ?? ""}`;
+
     const entry = sections.get(key) ?? {
       section: { key, kind: owner.kind, name: owner.name ?? null },
       chats: [],
     };
+
     entry.chats.push({
       environmentId: input.environmentId,
       threadId: thread.id,
@@ -68,6 +76,7 @@ export function buildArchivedChatSections(input: {
 
   const newestFirst = (left: ArchivedChat, right: ArchivedChat) =>
     right.archivedAt.localeCompare(left.archivedAt) || right.threadId.localeCompare(left.threadId);
+
   return [...sections.values()]
     .map(({ section, chats }) => ({ ...section, chats: chats.toSorted(newestFirst) }))
     .toSorted(

@@ -13,7 +13,7 @@ import { ServerConfig } from "../../config.ts";
 import { ServerSettingsService } from "../../serverSettings.ts";
 import { instanceUsesSavedCredential } from "../../subscription-auth/runtime.ts";
 import { ProviderDriverError } from "../Errors.ts";
-import { makePendingCodexProvider } from "../Layers/CodexProvider.ts";
+import { pendingCodexProvider } from "../Layers/CodexProvider.ts";
 import { makeHarnessProviderStatus } from "../HarnessProviderStatus.ts";
 import { ProviderEventLoggers } from "../Layers/ProviderEventLoggers.ts";
 import { makeManagedServerProvider } from "../makeManagedServerProvider.ts";
@@ -26,19 +26,21 @@ import {
 } from "../ProviderInstanceEnvironment.ts";
 import {
   enrichProviderSnapshotWithVersionAdvisory,
-  makePackageManagedProviderMaintenanceResolver,
+  packageManagedProviderMaintenanceResolver,
   resolveProviderMaintenanceCapabilitiesEffect,
 } from "../providerMaintenance.ts";
 import {
   haveProviderSnapshotSettingsChanged,
-  makeProviderSnapshotSettingsSource,
+  providerSnapshotSettingsSource,
   type ProviderSnapshotSettings,
 } from "../providerUpdateSettings.ts";
 import { codexContinuationIdentity, resolveCodexHomeLayout } from "./CodexHomeLayout.ts";
+
 const decodeCodexSettings = Schema.decodeSync(CodexSettings);
 
 const DRIVER_KIND = ProviderDriverKind.make("codex");
-const UPDATE = makePackageManagedProviderMaintenanceResolver({
+
+const UPDATE = packageManagedProviderMaintenanceResolver({
   provider: DRIVER_KIND,
   npmPackageName: "@openai/codex",
   homebrewFormula: "codex",
@@ -99,17 +101,20 @@ export const CodexDriver: ProviderDriver<CodexSettings, CodexDriverEnv> = {
       const processEnv = mergeProviderInstanceEnvironment(environment);
       const homeLayout = yield* resolveCodexHomeLayout(config);
       const continuationIdentity = codexContinuationIdentity(homeLayout);
+
       const stampIdentity = withInstanceIdentity({
         instanceId,
         displayName,
         accentColor,
         continuationGroupKey: continuationIdentity.continuationKey,
       });
+
       const effectiveConfig = {
         ...config,
         enabled,
         homePath: homeLayout.effectiveHomePath ?? "",
       } satisfies CodexSettings;
+
       const connection = {
         environment: processEnv,
         instanceEnvironment: explicitProviderInstanceEnvironment(environment),
@@ -119,12 +124,14 @@ export const CodexDriver: ProviderDriver<CodexSettings, CodexDriverEnv> = {
           config,
         }),
       };
+
       const maintenanceCapabilities = yield* resolveProviderMaintenanceCapabilitiesEffect(UPDATE, {
         binaryPath: effectiveConfig.binaryPath,
         env: processEnv,
       });
 
       const adapter = undefined;
+
       const textGeneration = yield* makeHarnessTextGeneration({
         secretsDir: (yield* ServerConfig).secretsDir,
         driver: DRIVER_KIND,
@@ -138,9 +145,11 @@ export const CodexDriver: ProviderDriver<CodexSettings, CodexDriverEnv> = {
         driver: DRIVER_KIND,
         instanceId,
         connection,
-        draft: makePendingCodexProvider(effectiveConfig),
-      })).pipe(Effect.map(stampIdentity));
-      const snapshotSettings = makeProviderSnapshotSettingsSource(effectiveConfig, serverSettings);
+        draft: pendingCodexProvider(effectiveConfig),
+      })).checkProvider.pipe(Effect.map(stampIdentity));
+
+      const snapshotSettings = providerSnapshotSettingsSource(effectiveConfig, serverSettings);
+
       const snapshot = yield* makeManagedServerProvider<ProviderSnapshotSettings<CodexSettings>>({
         maintenanceCapabilities,
         getSettings: snapshotSettings.getSettings,

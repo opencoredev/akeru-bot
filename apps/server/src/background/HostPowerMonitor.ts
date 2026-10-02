@@ -60,6 +60,7 @@ export const make = Effect.fn("background.hostPower.make")(function* (
       if (DateTime.isLessThan(snapshot.updatedAt, current.updatedAt)) {
         return [Option.none<HostPowerSnapshot>(), current] as const;
       }
+
       return [
         samePowerState(current, snapshot) ? Option.none() : Option.some(snapshot),
         snapshot,
@@ -87,15 +88,18 @@ export const layer = Layer.effect(
     const desktopTelemetry = yield* DesktopTelemetryReceiver.DesktopTelemetryReceiver;
     const desktopSubscription = yield* desktopTelemetry.subscribe;
     const initial = desktopSubscription.latest;
+
     const monitor = yield* Option.match(initial, {
       onNone: () => make(),
       onSome: (snapshot) => make(snapshot.power),
     });
+
     yield* desktopSubscription.changes.pipe(
       Stream.map((snapshot) => snapshot.power),
       Stream.runForEach(monitor.report),
       Effect.forkScoped,
     );
+
     return monitor;
   }),
 );

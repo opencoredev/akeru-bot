@@ -10,6 +10,7 @@ import {
 import { ProviderInstanceId } from "./providerInstance.ts";
 
 export const BackgroundBooleanState = Schema.Literals(["true", "false", "unknown"]);
+
 export type BackgroundBooleanState = typeof BackgroundBooleanState.Type;
 
 export const HostPowerThermalState = Schema.Literals([
@@ -19,6 +20,7 @@ export const HostPowerThermalState = Schema.Literals([
   "serious",
   "critical",
 ]);
+
 export type HostPowerThermalState = typeof HostPowerThermalState.Type;
 
 export const HostPowerSource = Schema.Literals([
@@ -29,6 +31,7 @@ export const HostPowerSource = Schema.Literals([
   "node-windows",
   "electron-main",
 ]);
+
 export type HostPowerSource = typeof HostPowerSource.Type;
 
 export const HostPowerSnapshot = Schema.Struct({
@@ -43,6 +46,7 @@ export const HostPowerSnapshot = Schema.Struct({
   stale: Schema.Boolean,
   updatedAt: Schema.DateTimeUtc,
 });
+
 export type HostPowerSnapshot = typeof HostPowerSnapshot.Type;
 
 export const BackgroundScope = Schema.Union([
@@ -56,12 +60,15 @@ export const BackgroundScope = Schema.Union([
   Schema.Struct({ type: Schema.Literal("diagnostics") }),
   Schema.Struct({ type: Schema.Literal("thread"), threadId: ThreadId }),
 ]);
+
 export type BackgroundScope = typeof BackgroundScope.Type;
 
 export const ClientKind = Schema.Literals(["web", "desktop-renderer", "mobile", "unknown"]);
+
 export type ClientKind = typeof ClientKind.Type;
 
 export const ClientActivityClientId = TrimmedNonEmptyString.check(Schema.isMaxLength(128));
+
 export type ClientActivityClientId = typeof ClientActivityClientId.Type;
 
 export const ClientActivityReportInput = Schema.Struct({
@@ -79,6 +86,7 @@ export const ClientActivityReportInput = Schema.Struct({
   ttlMs: Schema.optionalKey(Schema.Number),
   observedAt: Schema.DateTimeUtc,
 });
+
 export type ClientActivityReportInput = typeof ClientActivityReportInput.Type;
 
 export const ClientActivityLease = Schema.Struct({
@@ -97,6 +105,7 @@ export const ClientActivityLease = Schema.Struct({
   updatedAt: Schema.DateTimeUtc,
   expiresAt: Schema.DateTimeUtc,
 });
+
 export type ClientActivityLease = typeof ClientActivityLease.Type;
 
 export const BackgroundPolicySnapshot = Schema.Struct({
@@ -107,4 +116,5 @@ export const BackgroundPolicySnapshot = Schema.Struct({
   shouldRunOpportunisticWork: Schema.Boolean,
   updatedAt: Schema.DateTimeUtc,
 });
+
 export type BackgroundPolicySnapshot = typeof BackgroundPolicySnapshot.Type;

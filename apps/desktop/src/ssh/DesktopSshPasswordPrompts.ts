@@ -39,6 +39,7 @@ const DesktopSshPromptPresentationOperation = Schema.Literals([
   "focus-window",
   "remove-window-close-listener",
 ]);
+
 type DesktopSshPromptPresentationOperation = typeof DesktopSshPromptPresentationOperation.Type;
 
 export class DesktopSshPromptRequestIdGenerationError extends Schema.TaggedErrorClass<DesktopSshPromptRequestIdGenerationError>()(
@@ -63,6 +64,7 @@ export class DesktopSshPromptWindowUnavailableError extends Schema.TaggedErrorCl
 ) {
   override get message(): string {
     const request = this.requestId === null ? "before a request id was assigned" : this.requestId;
+
     return `Akeru Bot window is unavailable during ${this.stage} for SSH authentication to ${this.destination} (request: ${request}).`;
   }
 }
@@ -174,6 +176,7 @@ export const DesktopSshPasswordPromptCancellation = Schema.Union([
   DesktopSshPromptServiceStoppedError,
   DesktopSshPromptTimedOutError,
 ]);
+
 export type DesktopSshPasswordPromptCancellation = typeof DesktopSshPasswordPromptCancellation.Type;
 
 export const isDesktopSshPasswordPromptCancellation = Schema.is(
@@ -208,12 +211,14 @@ const removePending = (
 ) =>
   Ref.modify(pendingRef, (pending) => {
     const entry = pending.get(requestId);
+
     if (entry === undefined) {
       return [Option.none<PendingSshPasswordPrompt>(), pending] as const;
     }
 
     const nextPending = new Map(pending);
     nextPending.delete(requestId);
+
     return [Option.some(entry), nextPending] as const;
   });
 
@@ -228,6 +233,7 @@ export const make = Effect.fn("desktop.sshPasswordPrompts.make")(function* (
   const electronWindow = yield* ElectronWindow.ElectronWindow;
   const crypto = yield* Crypto.Crypto;
   const pendingRef = yield* Ref.make(new Map<string, PendingSshPasswordPrompt>());
+
   const passwordPromptTimeoutMs =
     options.passwordPromptTimeoutMs ?? DEFAULT_SSH_PASSWORD_PROMPT_TIMEOUT_MS;
 
@@ -256,16 +262,19 @@ export const make = Effect.fn("desktop.sshPasswordPrompts.make")(function* (
     "desktop.sshPasswordPrompts.resolve",
   )(function* (input) {
     const requestId = input.requestId.trim();
+
     if (requestId.length === 0) {
       return yield* new DesktopSshPromptInvalidRequestIdError({ requestId: input.requestId });
     }
 
     const pending = yield* removePending(pendingRef, requestId);
+
     if (Option.isNone(pending)) {
       return yield* new DesktopSshPromptExpiredError({ requestId });
     }
 
     const entry = pending.value;
+
     if (input.password === null) {
       yield* failPending(
         entry,
@@ -274,6 +283,7 @@ export const make = Effect.fn("desktop.sshPasswordPrompts.make")(function* (
           destination: entry.destination,
         }),
       );
+
       return;
     }
 
@@ -284,6 +294,7 @@ export const make = Effect.fn("desktop.sshPasswordPrompts.make")(function* (
     "desktop.sshPasswordPrompts.request",
   )(function* (input) {
     const window = yield* electronWindow.main;
+
     if (Option.isNone(window)) {
       return yield* new DesktopSshPromptWindowUnavailableError({
         destination: input.destination,
@@ -302,6 +313,7 @@ export const make = Effect.fn("desktop.sshPasswordPrompts.make")(function* (
           cause,
         }),
     });
+
     if (unavailableBeforeRequest) {
       return yield* new DesktopSshPromptWindowUnavailableError({
         destination: input.destination,
@@ -319,10 +331,13 @@ export const make = Effect.fn("desktop.sshPasswordPrompts.make")(function* (
           }),
       ),
     );
+
     const now = yield* DateTime.now;
+
     const expiresAt = DateTime.formatIso(
       DateTime.add(now, { milliseconds: passwordPromptTimeoutMs }),
     );
+
     const promptRequest: DesktopSshPasswordPromptRequest = {
       requestId,
       destination: input.destination,
@@ -330,12 +345,15 @@ export const make = Effect.fn("desktop.sshPasswordPrompts.make")(function* (
       prompt: input.prompt,
       expiresAt,
     };
+
     const deferred = yield* Deferred.make<string, DesktopSshPasswordPromptRequestError>();
+
     const pending: PendingSshPasswordPrompt = {
       requestId,
       destination: input.destination,
       deferred,
     };
+
     yield* Ref.update(pendingRef, (entries) => new Map(entries).set(requestId, pending));
 
     const context = yield* Effect.context();
@@ -360,6 +378,7 @@ export const make = Effect.fn("desktop.sshPasswordPrompts.make")(function* (
         ),
       );
     };
+
     const runPresentationOperation = <A>(
       operation: DesktopSshPromptPresentationOperation,
       evaluate: () => A,
@@ -374,11 +393,13 @@ export const make = Effect.fn("desktop.sshPasswordPrompts.make")(function* (
             cause,
           }),
       });
+
     const cleanup = runPresentationOperation("remove-window-close-listener", () => {
       if (!window.value.isDestroyed()) {
         window.value.removeListener("closed", cancelOnWindowClosed);
       }
     }).pipe(Effect.orDie, Effect.ensuring(removePending(pendingRef, requestId)), Effect.asVoid);
+
     const waitForPassword = Deferred.await(deferred).pipe(
       Effect.timeoutOption(Duration.millis(passwordPromptTimeoutMs)),
       Effect.flatMap(
@@ -394,6 +415,7 @@ export const make = Effect.fn("desktop.sshPasswordPrompts.make")(function* (
         }),
       ),
     );
+
     const preferSubmittedPassword = (error: DesktopSshPasswordPromptRequestError) =>
       Deferred.poll(deferred).pipe(
         Effect.flatMap(
@@ -414,6 +436,7 @@ export const make = Effect.fn("desktop.sshPasswordPrompts.make")(function* (
         "check-window-before-presentation",
         () => window.value.isDestroyed(),
       );
+
       if (unavailableBeforePresentation) {
         return yield* new DesktopSshPromptWindowUnavailableError({
           destination: input.destination,
@@ -421,18 +444,22 @@ export const make = Effect.fn("desktop.sshPasswordPrompts.make")(function* (
           stage: "before-presentation",
         });
       }
+
       yield* runPresentationOperation("register-window-close-listener", () =>
         window.value.once("closed", cancelOnWindowClosed),
       );
+
       return yield* Effect.gen(function* () {
         yield* runPresentationOperation("send-prompt-request", () =>
           window.value.webContents.send(SSH_PASSWORD_PROMPT_CHANNEL, promptRequest),
         );
         yield* Effect.yieldNow;
+
         const unavailableAfterSend = yield* runPresentationOperation(
           "check-window-after-send",
           () => window.value.isDestroyed(),
         );
+
         if (unavailableAfterSend) {
           return yield* new DesktopSshPromptWindowUnavailableError({
             destination: input.destination,
@@ -440,16 +467,20 @@ export const make = Effect.fn("desktop.sshPasswordPrompts.make")(function* (
             stage: "after-send",
           });
         }
+
         const minimized = yield* runPresentationOperation("check-window-minimized", () =>
           window.value.isMinimized(),
         );
+
         if (minimized) {
           yield* runPresentationOperation("restore-window", () => window.value.restore());
         }
+
         const unavailableAfterRestore = yield* runPresentationOperation(
           "check-window-after-restore",
           () => window.value.isDestroyed(),
         );
+
         if (unavailableAfterRestore) {
           return yield* new DesktopSshPromptWindowUnavailableError({
             destination: input.destination,
@@ -457,7 +488,9 @@ export const make = Effect.fn("desktop.sshPasswordPrompts.make")(function* (
             stage: "after-restore",
           });
         }
+
         yield* runPresentationOperation("focus-window", () => window.value.focus());
+
         return yield* waitForPassword;
       }).pipe(Effect.catch(preferSubmittedPassword));
     }).pipe(Effect.ensuring(cleanup));

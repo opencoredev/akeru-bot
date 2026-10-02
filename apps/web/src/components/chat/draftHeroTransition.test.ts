@@ -13,9 +13,11 @@ afterEach(() => {
 describe("waitForDraftHeroTransition", () => {
   it("waits for active draft hero animations and ignores unrelated animations", async () => {
     let finishTransition: (() => void) | undefined;
+
     const transitionFinished = new Promise<void>((resolve) => {
       finishTransition = resolve;
     });
+
     vi.stubGlobal("document", {
       getAnimations: () => [
         { id: "unrelated-animation", finished: new Promise<void>(() => undefined) },
@@ -24,9 +26,11 @@ describe("waitForDraftHeroTransition", () => {
     });
 
     let handoffComplete = false;
+
     const handoff = waitForDraftHeroTransition().then(() => {
       handoffComplete = true;
     });
+
     await Promise.resolve();
     expect(handoffComplete).toBe(false);
 
@@ -52,15 +56,18 @@ describe("waitForDraftHeroTransition", () => {
 describe("runMobileComposerTransition", () => {
   it("keeps the route handoff waiting while the mobile composer morph is active", async () => {
     let finishTransition: (() => void) | undefined;
+
     const transitionFinished = new Promise<void>((resolve) => {
       finishTransition = resolve;
     });
+
     const dataset: Record<string, string> = {};
     vi.stubGlobal("document", {
       documentElement: { dataset },
       getAnimations: () => [],
       startViewTransition: (update: () => void | Promise<void>) => {
         void update();
+
         return { finished: transitionFinished };
       },
     });
@@ -72,9 +79,11 @@ describe("runMobileComposerTransition", () => {
     await Promise.resolve();
 
     let handoffComplete = false;
+
     const handoff = waitForDraftHeroTransition().then(() => {
       handoffComplete = true;
     });
+
     await Promise.resolve();
     expect(handoffComplete).toBe(false);
 
@@ -85,9 +94,11 @@ describe("runMobileComposerTransition", () => {
 
   it("uses a scoped view transition on mobile", async () => {
     const dataset: Record<string, string> = {};
+
     const startViewTransition = vi.fn((update: () => void | Promise<void>) => ({
       finished: Promise.resolve(update()).then(() => undefined),
     }));
+
     vi.stubGlobal("document", {
       documentElement: { dataset },
       startViewTransition,

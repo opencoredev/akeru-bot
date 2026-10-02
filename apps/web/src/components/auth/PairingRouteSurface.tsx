@@ -1,3 +1,4 @@
+import { Match, Predicate } from "effect";
 import type { AuthSessionState } from "@akeru/contracts";
 import type { MessageKey } from "@akeru/client-runtime/i18n";
 import type { HostedPairingRequest } from "@akeru/shared/remote";
@@ -35,6 +36,7 @@ import {
 
 export function PairingPendingSurface() {
   const environment = usePrimaryEnvironmentSummary();
+
   return <PairingPanel environment={environment} status={{ kind: "checking" }} />;
 }
 
@@ -49,14 +51,16 @@ const REJECTED_TOKEN_MESSAGE = new PrimaryEnvironmentPairingCredentialRejectedEr
 }).message;
 
 /** Sorts a pairing failure into the state the page shows for it. */
-export function pairingErrorFromUnknown(error: unknown): PairingError {
-  if (isPrimaryEnvironmentPairingCredentialRejectedError(error)) {
+export function pairingErrorFromUnknown(cause: unknown): PairingError {
+  if (isPrimaryEnvironmentPairingCredentialRejectedError(cause)) {
     return { kind: "rejected" };
   }
-  if (isPrimaryEnvironmentPairingCredentialRequiredError(error)) {
-    return { kind: "missing-token", message: error.message };
+
+  if (isPrimaryEnvironmentPairingCredentialRequiredError(cause)) {
+    return { kind: "missing-token", message: cause.message };
   }
-  return pairingErrorFromMessage(errorMessageFromUnknown(error));
+
+  return pairingErrorFromMessage(errorMessageFromUnknown(cause));
 }
 
 /** Bootstrap hands the route only a message, so match the rejection by its text. */
@@ -77,9 +81,11 @@ export function PairingRouteSurface({
   const environment = usePrimaryEnvironmentSummary();
   const autoPairTokenRef = useRef<string | null>(peekPairingTokenFromUrl());
   const [credential, setCredential] = useState(() => autoPairTokenRef.current ?? "");
+
   const [pairingError, setPairingError] = useState<PairingError | null>(() =>
     initialErrorMessage ? pairingErrorFromMessage(initialErrorMessage) : null,
   );
+
   const [isSubmitting, setIsSubmitting] = useState(false);
   const autoSubmitAttemptedRef = useRef(false);
   const submittingRef = useRef(false);
@@ -102,8 +108,10 @@ export function PairingRouteSurface({
 
       if (submitError) {
         setPairingError(submitError);
+
         // A link opened while this one was in flight waited in the address bar.
         if (hashOptionsRef.current) takePairingHash(hashOptionsRef.current);
+
         return;
       }
 
@@ -124,6 +132,7 @@ export function PairingRouteSurface({
 
   useEffect(() => {
     const token = autoPairTokenRef.current;
+
     if (!token || autoSubmitAttemptedRef.current) {
       return;
     }
@@ -145,11 +154,14 @@ export function PairingRouteSurface({
         void submitCredential(token);
       },
     };
+
     hashOptionsRef.current = options;
+
     return listenForPairingHash(window, options);
   }, [submitCredential]);
 
   const supportedMethodsNote = describeSupportedMethods(auth.bootstrapMethods);
+
   const status: PairingPanelStatus = isSubmitting
     ? { kind: "submitting" }
     : pairingError?.kind === "rejected"
@@ -192,9 +204,11 @@ export function HostedPairingRouteSurface() {
   const { t } = useI18n();
   const connect = useAtomCommand(connectPairing, { reportFailure: false });
   const requestRef = useRef(readHostedPairingLink(window.location.href));
+
   const [status, setStatus] = useState<PairingPanelStatus>(() =>
     requestRef.current ? { kind: "checking" } : { kind: "incomplete" },
   );
+
   const startedRef = useRef(false);
   const pairingRef = useRef(false);
   const hashOptionsRef = useRef<PairingHashOptions<HostedPairingRequest> | null>(null);
@@ -204,10 +218,13 @@ export function HostedPairingRouteSurface() {
     pairingRef.current = true;
     setStatus({ kind: "submitting" });
     let next: PairingPanelStatus = { kind: "checking" };
+
     try {
       next = await runHostedPairing(requestRef.current, async (input) => {
         const result = await connect(input);
-        if (result._tag === "Success") return { ok: true };
+
+        if (Predicate.isTagged(result, "Success")) return { ok: true };
+
         return {
           ok: false,
           message: `${errorMessageFromUnknown(squashAtomCommandFailure(result))} ${t(
@@ -219,6 +236,7 @@ export function HostedPairingRouteSurface() {
     } finally {
       pairingRef.current = false;
     }
+
     // A link opened while this one was in flight waited in the address bar.
     if (next.kind === "failed" && hashOptionsRef.current) takePairingHash(hashOptionsRef.current);
   }, [connect, t]);
@@ -227,6 +245,7 @@ export function HostedPairingRouteSurface() {
     if (startedRef.current) return;
     startedRef.current = true;
     stripPairingTokenFromUrl();
+
     if (requestRef.current) void pair();
   }, [pair]);
 
@@ -242,25 +261,32 @@ export function HostedPairingRouteSurface() {
         void pair();
       },
     };
+
     hashOptionsRef.current = options;
+
     return listenForPairingHash(window, options);
   }, [pair]);
 
   const request = requestRef.current;
+
   return (
     <PairingPanel
       environment={{ name: request?.label || null, address: request?.host ?? null }}
       status={status}
     >
-      {status.kind === "failed" ? (
-        <Button className="w-full" onClick={() => void pair()} size="lg">
-          {t("Try again")}
-        </Button>
-      ) : status.kind === "paired" ? (
-        <Button className="w-full" onClick={() => window.location.assign("/")} size="lg">
-          {t("Open app")}
-        </Button>
-      ) : null}
+      {Match.value(status).pipe(
+        Match.when({ kind: "failed" }, () => (
+          <Button className="w-full" onClick={() => void pair()} size="lg">
+            {t("Try again")}
+          </Button>
+        )),
+        Match.when({ kind: "paired" }, () => (
+          <Button className="w-full" onClick={() => window.location.assign("/")} size="lg">
+            {t("Open app")}
+          </Button>
+        )),
+        Match.orElse(() => null),
+      )}
     </PairingPanel>
   );
 }
@@ -285,6 +311,7 @@ export function PairingTokenForm({
   readonly tokenLabel: string;
 }) {
   const { t } = useI18n();
+
   return (
     <form className="space-y-3" onSubmit={onSubmit}>
       <div className="space-y-1.5">
@@ -298,7 +325,7 @@ export function PairingTokenForm({
           autoCapitalize="none"
           autoComplete="off"
           autoCorrect="off"
-          className="font-mono"
+          variant="mono"
           disabled={isSubmitting}
           nativeInput
           onChange={(event) => onCredentialChange(event.currentTarget.value)}
@@ -352,6 +379,7 @@ function usePrimaryEnvironmentSummary(): PairingEnvironmentSummary {
     if (name) {
       return;
     }
+
     let cancelled = false;
     resolveInitialPrimaryEnvironmentDescriptor().then(
       (descriptor) => {
@@ -361,6 +389,7 @@ function usePrimaryEnvironmentSummary(): PairingEnvironmentSummary {
       },
       () => undefined,
     );
+
     return () => {
       cancelled = true;
     };
@@ -369,13 +398,13 @@ function usePrimaryEnvironmentSummary(): PairingEnvironmentSummary {
   return { name, address: typeof window === "undefined" ? null : window.location.host || null };
 }
 
-function errorMessageFromUnknown(error: unknown): string {
-  if (error instanceof Error && error.message.trim().length > 0) {
-    return error.message;
+function errorMessageFromUnknown(cause: unknown): string {
+  if (cause instanceof Error && cause.message.trim().length > 0) {
+    return cause.message;
   }
 
-  if (typeof error === "string" && error.trim().length > 0) {
-    return error;
+  if (Predicate.isString(cause) && cause.trim().length > 0) {
+    return cause;
   }
 
   return "Authentication failed.";
