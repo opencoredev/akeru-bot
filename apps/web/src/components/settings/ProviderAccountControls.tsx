@@ -317,10 +317,7 @@ export function ActiveLoginPanel({
             aria-label={isApiKey ? t("API key") : t("Authorization code")}
             className="flex-1"
           />
-          <Button
-            disabled={pastedCode.trim().length === 0 || completing}
-            onClick={onComplete}
-          >
+          <Button disabled={pastedCode.trim().length === 0 || completing} onClick={onComplete}>
             {completing ? <LoaderIcon className="size-3.5 animate-spin" /> : null}
             {t("Connect")}
           </Button>
