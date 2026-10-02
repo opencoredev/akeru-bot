@@ -334,7 +334,7 @@ export const createWsOrchestrationHandlers = ({
             : false;
 
           const result = yield* dispatchNormalizedCommand(normalizedCommand).pipe(
-            Effect.tapError(() => cleanupFailedUploadedAttachments(command, normalizedCommand)),
+            Effect.onError(() => cleanupFailedUploadedAttachments(command, normalizedCommand)),
           );
 
           if (parkingCommand) {
