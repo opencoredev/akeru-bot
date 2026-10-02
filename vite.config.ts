@@ -221,6 +221,20 @@ export default defineConfig({
         },
       },
       {
+        // Client/native integration tests replace module-bound runtimes (Electron, Expo,
+        // React hooks). Keep that loader seam available in test harnesses only.
+        files: [
+          "**/*.test.{ts,tsx}",
+          "**/*.test-support.{ts,tsx}",
+          "**/test/**",
+          "**/testUtils/**",
+          "**/test-support/**",
+        ],
+        rules: {
+          "anti-slop/no-module-mocking": "off",
+        },
+      },
+      {
         // Composition roots for per-instance provider runtimes. Each configured provider
         // instance (or Grok text-generation request) gets its own scoped adapter, logger, and
         // session runtime, so these files call the make* constructors directly instead of

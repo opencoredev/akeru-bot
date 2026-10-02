@@ -25,6 +25,9 @@ The root `vite.config.ts` registers two entry points: `index.ts` (generic rules)
   `AKERU:`. Upstream targets `@oxlint/plugins` 1.78, whose typings allow a type annotation on a
   binding identifier. We pin 1.72 to match the Oxlint that Vite+ resolves, and its typings say
   `null`. Runtime behavior is unchanged. Drop both once Oxlint reaches 1.78 here.
+- `rules/no-module-mocking.ts`: recognize `vite-plus/test` as a Vitest source, including
+  aliased `vi` imports. Akeru uses this entry point for its tests. Regression cases cover both
+  direct and aliased imports. The root lint config documents the test-harness exception.
 - `package.json` and `tsconfig.json` are Akeru's. Tests run with `node --test` instead of `tsx`.
 
 ## Tests
