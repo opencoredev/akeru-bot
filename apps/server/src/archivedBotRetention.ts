@@ -19,7 +19,9 @@ export const deleteExpiredArchivedBots = Effect.gen(function* () {
   const { bots } = yield* query.getCommandReadModel();
 
   for (const bot of bots) {
-    if (bot.archivedAt === null || archivedBotDeletesAtMs(bot.archivedAt) > now) {
+    const { archivedAt } = bot;
+
+    if (archivedAt === null || archivedBotDeletesAtMs(archivedAt) > now) {
       continue;
     }
 
@@ -28,14 +30,18 @@ export const deleteExpiredArchivedBots = Effect.gen(function* () {
         type: "bot.delete",
         commandId: CommandId.make(yield* crypto.randomUUIDv4),
         botId: bot.id,
+        archivedAt,
       });
       yield* Effect.logInfo("archived bot deleted after retention window", {
         botId: bot.id,
-        archivedAt: bot.archivedAt,
+        archivedAt,
       });
     }).pipe(
       Effect.catch((error) =>
         Effect.logWarning("failed to delete expired archived bot", { botId: bot.id, error }),
+      ),
+      Effect.catchDefect((defect) =>
+        Effect.logWarning("failed to delete expired archived bot", { botId: bot.id, defect }),
       ),
     );
   }

@@ -35,14 +35,29 @@ export function ArchivedBotsSection({ environmentId }: { readonly environmentId:
   const restoreBot = useAtomCommand(botEnvironment.restore, { reportFailure: false });
   const deleteBot = useAtomCommand(botEnvironment.delete, { reportFailure: false });
   const archived = useMemo(() => archivedBots(bots), [bots]);
-  const [busyBotId, setBusyBotId] = useState<string | null>(null);
+  const [busyBotIds, setBusyBotIds] = useState<ReadonlySet<string>>(() => new Set());
+
+  const runForBot = async <A,>(botId: string, action: () => Promise<A>) => {
+    setBusyBotIds((current) => new Set(current).add(botId));
+
+    try {
+      return await action();
+    } finally {
+      setBusyBotIds((current) => {
+        const next = new Set(current);
+        next.delete(botId);
+
+        return next;
+      });
+    }
+  };
 
   if (archived.length === 0) return null;
 
   const handleRestore = async (bot: OrchestrationBot) => {
-    setBusyBotId(bot.id);
-    const result = await restoreBot({ environmentId, input: { botId: bot.id } });
-    setBusyBotId(null);
+    const result = await runForBot(bot.id, () =>
+      restoreBot({ environmentId, input: { botId: bot.id } }),
+    );
 
     if (Predicate.isTagged(result, "Failure")) {
       toastManager.add({
@@ -62,9 +77,10 @@ export function ArchivedBotsSection({ environmentId }: { readonly environmentId:
     );
 
     if (!confirmation || !(await confirmation)) return;
-    setBusyBotId(bot.id);
-    const result = await deleteBot({ environmentId, input: { botId: bot.id } });
-    setBusyBotId(null);
+
+    const result = await runForBot(bot.id, () =>
+      deleteBot({ environmentId, input: { botId: bot.id } }),
+    );
 
     if (Predicate.isTagged(result, "Failure")) {
       toastManager.add({
@@ -78,7 +94,7 @@ export function ArchivedBotsSection({ environmentId }: { readonly environmentId:
   return (
     <SettingsSection id="archived-bots" title={t("Archived bots")}>
       {archived.map((bot) => {
-        const busy = busyBotId === bot.id;
+        const busy = busyBotIds.has(bot.id);
         const archivedAt = bot.archivedAt ?? bot.updatedAt;
         const time = formatDate(new Date(archivedAt), { dateStyle: "medium" });
 

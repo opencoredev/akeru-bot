@@ -232,7 +232,7 @@ Open the bot's settings and choose a provider under **Workspace > Image generati
 
 Open the bot's settings page and select **Delete** under **Danger**, then confirm. On mobile, open
 the chat's settings and select **Delete bot** under **Danger**. Deleting removes the bot from the
-roster. Its chats stay in your history.
+roster. Its chats stay in your history and move to **Settings > Archived**.
 
 Deleting stops anything the bot is doing. Running replies stop, work it handed to other bots or
 received from them is canceled, and a voice call with the bot ends. In a group chat the bot was

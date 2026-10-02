@@ -64,11 +64,35 @@ it.effect("deletes bots archived for seven days or more and keeps the rest", () 
   );
 });
 
+it.effect("pins each delete to the archive time it saw", () => {
+  const dispatched: OrchestrationCommand[] = [];
+
+  return runSweep({
+    bots: [makeBot("old", "2026-09-01T00:00:00.000Z")],
+    dispatch: (command) =>
+      Effect.sync(() => dispatched.push(command)).pipe(Effect.as({ sequence: dispatched.length })),
+  }).pipe(
+    Effect.tap(() =>
+      Effect.sync(() => {
+        const [command] = dispatched;
+        assert.strictEqual(
+          command?.type === "bot.delete" ? command.archivedAt : null,
+          "2026-09-01T00:00:00.000Z",
+        );
+      }),
+    ),
+  );
+});
+
 it.effect("keeps sweeping after one bot fails to delete", () => {
   const attempted: string[] = [];
 
   return runSweep({
-    bots: [makeBot("boss", "2026-09-01T00:00:00.000Z"), makeBot("old", "2026-09-02T00:00:00.000Z")],
+    bots: [
+      makeBot("boss", "2026-09-01T00:00:00.000Z"),
+      makeBot("broken", "2026-09-01T06:00:00.000Z"),
+      makeBot("old", "2026-09-02T00:00:00.000Z"),
+    ],
     dispatch: (command) =>
       Effect.gen(function* () {
         if (command.type !== "bot.delete") return yield* Effect.die("unexpected command");
@@ -81,7 +105,13 @@ it.effect("keeps sweeping after one bot fails to delete", () => {
           });
         }
 
+        if (command.botId === "broken") return yield* Effect.die("projection crashed");
+
         return { sequence: attempted.length };
       }),
-  }).pipe(Effect.tap(() => Effect.sync(() => assert.deepStrictEqual(attempted, ["boss", "old"]))));
+  }).pipe(
+    Effect.tap(() =>
+      Effect.sync(() => assert.deepStrictEqual(attempted, ["boss", "broken", "old"])),
+    ),
+  );
 });

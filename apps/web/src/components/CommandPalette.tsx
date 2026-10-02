@@ -246,7 +246,7 @@ function OpenCommandPaletteDialog(props: { readonly setOpen: (open: boolean) => 
         "chats",
         "bots",
       ],
-      title: t("Archived chats"),
+      title: t("Archived"),
       icon: <ArchiveIcon className={ITEM_ICON_CLASS} />,
       run: async () => {
         openSettings("archived");
