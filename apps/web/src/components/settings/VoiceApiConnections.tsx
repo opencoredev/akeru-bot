@@ -259,13 +259,13 @@ export function VoiceApiProviderRow({
                 placeholder={keyLabel}
                 aria-label={keyLabel}
               />
-              <Button size="xs" type="submit" disabled={disabled || apiKey.trim().length === 0}>
+              <Button size="sm" type="submit" disabled={disabled || apiKey.trim().length === 0}>
                 {spinner("connect")}
                 {connected ? "Save key" : "Connect"}
               </Button>
               {editing ? (
                 <Button
-                  size="xs"
+                  size="sm"
                   variant="ghost-muted"
                   type="button"
                   onClick={() => {

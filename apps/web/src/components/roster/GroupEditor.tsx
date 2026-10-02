@@ -113,7 +113,6 @@ export function GroupEditor({
               onChange={(event) => setName(event.currentTarget.value)}
             />
             <Button
-              size="sm"
               disabled={busy || !name.trim() || name.trim() === group.name}
               onClick={() =>
                 void run(
