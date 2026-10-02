@@ -318,7 +318,6 @@ export function ActiveLoginPanel({
             className="flex-1"
           />
           <Button
-            size="xs"
             disabled={pastedCode.trim().length === 0 || completing}
             onClick={onComplete}
           >
