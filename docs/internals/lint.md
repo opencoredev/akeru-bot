@@ -160,6 +160,14 @@ Test files (`*.test.*`, `test/`, `testUtils/`, `test-support/`) turn off
 values, and service doubles by hand on purpose, and Proxy-based SDK doubles need `Reflect.get` to
 keep getter receivers.
 
+These test harnesses also turn off `no-module-mocking`. Existing client and native integration
+suites replace module-bound runtimes such as Electron, Expo, and React hooks, which cannot run
+in the Node test process as shipped. The exception covers test files and their shared harnesses,
+including `*.test-support.*` and the macOS signing test; production code still rejects module mocks. Prefer dependency
+injection when the code already exposes a suitable seam. The rule recognizes `vi` imports from
+both `vitest` and `vite-plus/test`, including aliases, so the exception does not depend on which
+entry point a test imports.
+
 Provider composition roots (drivers, adapters, the agent controller, and the Grok session
 runtime) turn off `no-service-constructor-imports`. Each configured provider instance builds its
 own scoped runtime by calling `make*` constructors, so there is no singleton service to yield.
