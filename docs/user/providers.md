@@ -27,8 +27,9 @@ a base URL alone is enough for them. The key is stored outside the settings file
 a client, and sent to the configured endpoint as a bearer token. On a saved instance the field shows
 that a key is stored. Type a new key to replace it, or use **Remove key**. A key belongs to its
 service: changing the base URL to a different host, or from HTTPS to HTTP, removes the stored key,
-so paste the new service's key afterwards. If the endpoint turns the key down, the instance shows
-**Not connected** with the reason until a later check succeeds.
+so paste the new service's key afterwards. If the endpoint refuses to list models with that key, the
+instance shows **Needs attention** with the reason until a later check succeeds. You can still chat
+with it, since some keys may use models without listing them.
 
 The model list comes from the endpoint's `/models` response. Models you add by hand are kept alongside
 it, and a model disappears from the picker once the endpoint stops listing it. If Akeru cannot read the

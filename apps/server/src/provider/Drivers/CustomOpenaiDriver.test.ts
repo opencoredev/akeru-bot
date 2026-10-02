@@ -205,7 +205,7 @@ describe("CustomOpenaiDriver", () => {
     );
   });
 
-  it.effect("stops reporting a connection when the endpoint rejects the key", () => {
+  it.effect("flags a refused model listing without blocking the instance", () => {
     const program = Effect.scoped(
       Effect.gen(function* () {
         const instance = yield* createInstance({
@@ -230,9 +230,9 @@ describe("CustomOpenaiDriver", () => {
       Effect.tap(({ rejected, recovered }) =>
         Effect.sync(() => {
           expect(rejected.status).toBe("warning");
-          expect(rejected.auth.status).toBe("unauthenticated");
+          expect(rejected.auth.status).toBe("unknown");
           expect(rejected.message).toBe(
-            "API key rejected by https://api.example.com (HTTP 401). Check the key in Settings.",
+            "https://api.example.com refused to list models (HTTP 401). Check the API key in Settings.",
           );
           expect(recovered.auth.status).toBe("authenticated");
           expect(recovered.status).toBe("ready");

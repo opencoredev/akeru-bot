@@ -173,7 +173,8 @@ clears the draft key, and a card edit that moves the effective URL (the `CUSTOM_
 variable when set, `baseUrl` otherwise) to another host, or from HTTPS to HTTP, drops the stored key
 in the same settings update, so the next probe never sends it to the new service. A redacted
 override cannot be compared, so any change to it drops the key too. A probe answered with 401 or 403
-reports the instance unauthenticated, so a rejected key never shows as connected.
+reports auth status `unknown`: the card stops showing the instance as connected, but preflight still
+lets turns through, because a scoped key can be refused `/models` and still chat.
 
 The model list is `GET {baseUrl}/models` plus the instance's hand-added models. Discovery is
 optional: a failed or unreadable probe keeps the last good catalog and reports a warning naming only

@@ -128,8 +128,9 @@ export const CustomOpenaiDriver: ProviderDriver<CustomOpenaiSettings, CustomOpen
 
       const catalog = yield* Ref.make<ReadonlyArray<string>>([]);
       const probeFailure = yield* Ref.make<string | null>(null);
-      // True after the endpoint answered 401 or 403: the instance cannot run
-      // turns until its key is fixed, so it must not read as connected.
+      // True after `/models` answered 401 or 403. A scoped key can be refused
+      // the listing and still chat, so this only stops the instance reading
+      // as connected; it does not block turns.
       const probeRejected = yield* Ref.make(false);
       // False until the first probe settles. The catalog is not authoritative
       // before then, so the registry keeps the models it hydrated from the
@@ -158,7 +159,8 @@ export const CustomOpenaiDriver: ProviderDriver<CustomOpenaiSettings, CustomOpen
       // servers (Ollama, llama.cpp, LM Studio) take no API key. `auth.status`
       // is the app-wide "this instance can run" signal, so it follows the base
       // URL rather than the key; the key is only sent when one is configured.
-      // An endpoint that rejects the request (401/403) clears it again.
+      // A `/models` refusal (401/403) downgrades it to "unknown", which shows
+      // the warning without gating turns the way "unauthenticated" does.
       const connected = baseUrl.length > 0;
 
       // Probe failures are published to every client. The base URL may come
@@ -198,7 +200,7 @@ export const CustomOpenaiDriver: ProviderDriver<CustomOpenaiSettings, CustomOpen
               ? "ready"
               : "warning",
           auth: {
-            status: connected && !rejected ? "authenticated" : "unauthenticated",
+            status: !connected ? "unauthenticated" : rejected ? "unknown" : "authenticated",
             type: "apiKey",
           },
           checkedAt: DateTime.formatIso(DateTime.nowUnsafe()),
@@ -225,7 +227,7 @@ export const CustomOpenaiDriver: ProviderDriver<CustomOpenaiSettings, CustomOpen
           if (response.status === 401 || response.status === 403) {
             return {
               ok: false as const,
-              failure: `API key rejected by ${endpointLabel} (HTTP ${response.status}). Check the key in Settings.`,
+              failure: `${endpointLabel} refused to list models (HTTP ${response.status}). Check the API key in Settings.`,
               rejected: true,
             } satisfies ProbeResult;
           }
