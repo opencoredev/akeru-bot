@@ -30,7 +30,11 @@ import {
   applyKnownGroupPerson,
   canManageGroupPeople,
 } from "./AuthenticatedCommand.ts";
-import { cleanupFailedUploadedAttachments, normalizeDispatchCommand } from "./Normalizer.ts";
+import {
+  cleanupFailedUploadedAttachments,
+  dispatchKeepingAcceptedUploads,
+  normalizeDispatchCommand,
+} from "./Normalizer.ts";
 import * as EnvironmentAuth from "../auth/EnvironmentAuth.ts";
 import {
   annotateEnvironmentRequest,
@@ -405,8 +409,14 @@ export const orchestrationHttpApiLayer = HttpApiBuilder.group(
             }
           }
 
-          return yield* orchestrationEngine.dispatch(normalizedCommand, { actor }).pipe(
-            Effect.onError(() => cleanupFailedUploadedAttachments(args.payload, normalizedCommand)),
+          return yield* dispatchKeepingAcceptedUploads({
+            command: args.payload,
+            normalizedCommand,
+            awaitReady: Effect.void,
+            dispatch: orchestrationEngine.dispatch(normalizedCommand, { actor }),
+            interruptible: false,
+            receipts: Option.some(commandReceipts),
+          }).pipe(
             Effect.catch((cause) =>
               failEnvironmentInternal("orchestration_dispatch_failed", cause),
             ),

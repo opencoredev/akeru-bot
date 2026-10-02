@@ -17,6 +17,9 @@ import { buildAppUnderTest } from "./serverTestApp.ts";
 import { exchangeAccessToken, getWsServerUrl, withWsRpcClient } from "./serverTestClients.ts";
 import { defaultDesktopBootstrapToken, defaultThreadId } from "./serverTestFixtures.ts";
 
+// The interruption case comes from the engine itself, so the turn never
+// committed and its claimed upload must go. A caller cancelling a turn the
+// engine still commits is covered in dispatchUploadCancellation.test.ts.
 it.layer(NodeServices.layer)("dispatch upload cleanup", (it) => {
   for (const transport of ["HTTP", "WebSocket"]) {
     it.effect.each(["defect", "interruption"])(

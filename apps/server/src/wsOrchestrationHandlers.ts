@@ -23,6 +23,7 @@ import {
 } from "./orchestration/AuthenticatedCommand.ts";
 import {
   cleanupFailedUploadedAttachments,
+  dispatchKeepingAcceptedUploads,
   normalizeDispatchCommand,
 } from "./orchestration/Normalizer.ts";
 import { resolveGroupResponderBotId } from "./orchestration/groupResponder.ts";
@@ -333,9 +334,18 @@ export const createWsOrchestrationHandlers = ({
               )
             : false;
 
-          const result = yield* dispatchNormalizedCommand(normalizedCommand).pipe(
-            Effect.onError(() => cleanupFailedUploadedAttachments(command, normalizedCommand)),
-          );
+          // Startup readiness is awaited first so the engine dispatch itself
+          // runs inline instead of from the startup queue. A bootstrap stays
+          // cancellable because it awaits its own engine dispatches.
+          const result = yield* dispatchKeepingAcceptedUploads({
+            command,
+            normalizedCommand,
+            awaitReady: startup.awaitCommandReady,
+            dispatch: dispatchNormalizedCommand(normalizedCommand),
+            interruptible:
+              normalizedCommand.type === "thread.turn.start" && !!normalizedCommand.bootstrap,
+            receipts: commandReceipts,
+          });
 
           if (parkingCommand) {
             const parkingKind = parkingCommand.type === "thread.archive" ? "archive" : "settle";

@@ -1,6 +1,7 @@
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
+import * as Option from "effect/Option";
 import * as Path from "effect/Path";
 import {
   type ClientOrchestrationCommand,
@@ -19,6 +20,7 @@ import {
   resolveAttachmentPath,
 } from "../attachmentStore.ts";
 import { ServerConfig } from "../config.ts";
+import type { OrchestrationCommandReceiptRepositoryShape } from "../persistence/Services/OrchestrationCommandReceipts.ts";
 import { parseBase64DataUrl } from "../imageMime.ts";
 import * as WorkspacePaths from "../workspace/WorkspacePaths.ts";
 
@@ -301,6 +303,15 @@ export const normalizeDispatchCommand = (command: ClientOrchestrationCommand) =>
     } satisfies OrchestrationCommand;
   });
 
+const isPendingUpload = (
+  attachment: Extract<
+    ClientOrchestrationCommand,
+    { type: "thread.turn.start" }
+  >["message"]["attachments"][number],
+) =>
+  !("dataUrl" in attachment) &&
+  parseThreadSegmentFromAttachmentId(attachment.id) === PENDING_ATTACHMENT_THREAD_SEGMENT;
+
 export const cleanupFailedUploadedAttachments = Effect.fn(
   "Normalizer.cleanupFailedUploadedAttachments",
 )(function* (command: ClientOrchestrationCommand, normalizedCommand: OrchestrationCommand) {
@@ -314,11 +325,7 @@ export const cleanupFailedUploadedAttachments = Effect.fn(
   for (const [index, attachment] of normalizedCommand.message.attachments.entries()) {
     const original = command.message.attachments[index];
 
-    if (
-      !original ||
-      "dataUrl" in original ||
-      parseThreadSegmentFromAttachmentId(original.id) !== PENDING_ATTACHMENT_THREAD_SEGMENT
-    ) {
+    if (!original || !isPendingUpload(original)) {
       continue;
     }
 
@@ -334,3 +341,68 @@ export const cleanupFailedUploadedAttachments = Effect.fn(
 
   yield* removeClaimedAttachmentPaths(claimedPaths);
 });
+
+/**
+ * Dispatches a normalized command and removes the pending uploads it claimed
+ * unless the engine accepted it. The engine commits a queued command even
+ * after its caller stops waiting, so `dispatch` runs uninterruptibly and the
+ * command receipt, not the caller's exit, decides whether a committed message
+ * references the files. `awaitReady` stays cancellable
+ * because nothing has reached the engine while it waits. Set `interruptible`
+ * only for a dispatch that already awaits its own engine results
+ * uninterruptibly, such as a thread bootstrap.
+ */
+export const dispatchKeepingAcceptedUploads = <A, E, R, E2, R2>(input: {
+  readonly command: ClientOrchestrationCommand;
+  readonly normalizedCommand: OrchestrationCommand;
+  readonly awaitReady: Effect.Effect<void, E2, R2>;
+  readonly dispatch: Effect.Effect<A, E, R>;
+  readonly interruptible: boolean;
+  readonly receipts: Option.Option<
+    Pick<OrchestrationCommandReceiptRepositoryShape, "getByCommandId">
+  >;
+}): Effect.Effect<A, E | E2, R | R2 | ServerConfig | FileSystem.FileSystem> => {
+  const { command, normalizedCommand } = input;
+
+  if (
+    command.type !== "thread.turn.start" ||
+    normalizedCommand.type !== "thread.turn.start" ||
+    !command.message.attachments.some(isPendingUpload)
+  ) {
+    return input.dispatch;
+  }
+
+  const { commandId, threadId } = normalizedCommand;
+
+  const isAccepted = Option.isSome(input.receipts)
+    ? input.receipts.value
+        .getByCommandId({ commandId })
+        .pipe(
+          Effect.map(
+            (receipt) =>
+              Option.isSome(receipt) &&
+              receipt.value.status === "accepted" &&
+              receipt.value.aggregateId === threadId,
+          ),
+        )
+    : Effect.succeed(false);
+
+  const removeUnacceptedUploads = isAccepted.pipe(
+    Effect.catchCause((cause) =>
+      Effect.logWarning("Kept claimed uploads because the turn start outcome is unknown.", {
+        commandId,
+        cause,
+      }).pipe(Effect.as(true)),
+    ),
+    Effect.flatMap((accepted) =>
+      accepted ? Effect.void : cleanupFailedUploadedAttachments(command, normalizedCommand),
+    ),
+  );
+
+  return Effect.uninterruptibleMask((restore) =>
+    restore(input.awaitReady).pipe(
+      Effect.andThen(input.interruptible ? restore(input.dispatch) : input.dispatch),
+      Effect.onError(() => removeUnacceptedUploads),
+    ),
+  );
+};
