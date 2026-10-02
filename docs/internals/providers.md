@@ -168,12 +168,16 @@ The web settings write that key for the user. The add dialog offers presets from
 `apps/web/src/components/settings/customApiPresets.ts` that fill `baseUrl` and the instance name,
 and an **API key** field that saves `CUSTOM_OPENAI_API_KEY` as a sensitive variable. Presets are a
 client convenience: the server stores only the URL, and the card matches the URL back to a preset
-to word its key hint.
+to word its key hint. A key is bound to its host on the client: switching presets in the dialog
+clears the draft key, and a card edit that moves `baseUrl` to another host drops the stored key in
+the same settings update, so the next probe never sends it to the new service.
 
 The model list is `GET {baseUrl}/models` plus the instance's hand-added models. Discovery is
 optional: a failed or unreadable probe keeps the last good catalog and reports a warning naming only
 the endpoint origin. Disabled instances never probe. The registry drops endpoint models only after a
-probe settles, and never retains a hand-added model the user removed.
+probe settles, and never retains a hand-added model the user removed. Until a probe settles, a
+hand-added model the last good catalog also listed keeps its discovered mark, so removing the
+hand-added copy leaves the endpoint's model in place.
 
 ### Harness-native readiness
 
