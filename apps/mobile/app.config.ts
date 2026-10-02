@@ -5,7 +5,7 @@ import { loadRepoEnv } from "../../scripts/lib/public-config.ts";
 
 type AppVariant = "development" | "production";
 
-const repoEnv = loadRepoEnv();
+const repoEnv: Readonly<Record<string, string | undefined>> = loadRepoEnv();
 
 Object.assign(process.env, repoEnv);
 
