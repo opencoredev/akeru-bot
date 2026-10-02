@@ -142,6 +142,20 @@ describe("currentModelIds", () => {
     assert.deepStrictEqual([...currentModelIds(catalog, CLAUDE)!], ["claude-next"]);
   });
 
+  it("keeps an undated model current instead of filing it as legacy", () => {
+    const withUndated = {
+      version: 1 as const,
+      drivers: {
+        [CODEX]: [
+          { id: "gpt-dated", name: "Dated", family: "gpt", releaseDate: "2026-09-01" },
+          { id: "gpt-undated", name: "Undated", family: "gpt" },
+        ],
+      },
+    };
+
+    assert.deepStrictEqual([...currentModelIds(withUndated, CODEX)!], ["gpt-dated", "gpt-undated"]);
+  });
+
   it("treats every non-deprecated model as current for plan providers", () => {
     assert.deepStrictEqual([...currentModelIds(catalog, KIMI)!], ["k9"]);
   });

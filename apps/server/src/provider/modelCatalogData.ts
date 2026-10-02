@@ -193,6 +193,7 @@ export function catalogModelsFor(
  * has no legacy concept. Deprecated models are never current. For drivers with
  * a legacy section, only the newest model of each family stays current, and
  * only while its release is recent relative to the provider's newest model.
+ * Undated models stay current.
  */
 export function currentModelIds(
   catalog: ModelCatalogData,
@@ -214,11 +215,14 @@ export function currentModelIds(
     if (!newestByFamily.has(family)) newestByFamily.set(family, model);
   }
 
-  return new Set(
-    [...newestByFamily.values()].flatMap((model) =>
+  // An undated model cannot be placed against its family or the window, so it
+  // stays current rather than landing in legacy the moment it appears.
+  return new Set([
+    ...[...newestByFamily.values()].flatMap((model) =>
       newest - releaseMs(model) <= CURRENT_WINDOW_MS ? [model.id] : [],
     ),
-  );
+    ...models.flatMap((model) => (releaseMs(model) === 0 ? [model.id] : [])),
+  ]);
 }
 
 /** Maps models.dev effort names onto the levels the Mastra harness accepts. */

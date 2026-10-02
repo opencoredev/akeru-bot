@@ -381,22 +381,24 @@ export function formatClaudeOpus47UpgradeMessage(version: string | null): string
 const claudeModelFamily = (slug: string) => slug.replace(/(-\d+)+$/, "");
 
 /**
- * Capabilities for a Claude model slug. A model released after this build
- * (listed by the models.dev catalog but not here) inherits the newest built-in
+ * Built-in model a Claude slug behaves like. A model released after this build
+ * (listed by the models.dev catalog but not here) maps to the newest built-in
  * model of its family, so new releases keep their reasoning controls.
  */
-export function getClaudeModelCapabilities(model: string | null | undefined): ModelCapabilities {
+function builtInClaudeModel(model: string | null | undefined) {
   const slug = model?.trim() ?? "";
   const family = claudeModelFamily(slug);
 
   return (
-    BUILT_IN_MODELS.find((candidate) => candidate.slug === slug)?.capabilities ??
+    BUILT_IN_MODELS.find((candidate) => candidate.slug === slug) ??
     (slug.startsWith("claude-") && family !== slug
       ? BUILT_IN_MODELS.find((candidate) => claudeModelFamily(candidate.slug) === family)
-          ?.capabilities
-      : undefined) ??
-    DEFAULT_CLAUDE_MODEL_CAPABILITIES
+      : undefined)
   );
+}
+
+export function getClaudeModelCapabilities(model: string | null | undefined): ModelCapabilities {
+  return builtInClaudeModel(model)?.capabilities ?? DEFAULT_CLAUDE_MODEL_CAPABILITIES;
 }
 
 export function resolveClaudeEffort(
@@ -436,19 +438,21 @@ export function normalizeClaudeCliEffort(
     return "xhigh";
   }
 
+  const slug = builtInClaudeModel(model)?.slug ?? model;
+
   if (
     effort === "xhigh" &&
-    model !== "claude-fable-5-1" &&
-    model !== "claude-fable-5" &&
-    model !== "claude-opus-5-5" &&
-    model !== "claude-opus-5" &&
-    model !== "claude-opus-4-8" &&
-    model !== "claude-sonnet-5"
+    slug !== "claude-fable-5-1" &&
+    slug !== "claude-fable-5" &&
+    slug !== "claude-opus-5-5" &&
+    slug !== "claude-opus-5" &&
+    slug !== "claude-opus-4-8" &&
+    slug !== "claude-sonnet-5"
   ) {
     return "max";
   }
 
-  if (effort === "max" && model === "claude-sonnet-4-6") {
+  if (effort === "max" && slug === "claude-sonnet-4-6") {
     return "high";
   }
 

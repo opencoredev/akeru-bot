@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vite-plus/test";
 
 import { codexModelCapabilities, harnessModelName } from "./HarnessProviderStatus.ts";
-import { getClaudeModelCapabilities } from "./Layers/claude/ClaudeModels.ts";
+import {
+  getClaudeModelCapabilities,
+  normalizeClaudeCliEffort,
+} from "./Layers/claude/ClaudeModels.ts";
 
 describe("harnessModelName", () => {
   it("formats model slugs as picker names", () => {
@@ -76,5 +79,11 @@ describe("getClaudeModelCapabilities", () => {
     expect(getClaudeModelCapabilities("claude-unknown").optionDescriptors).toEqual(
       getClaudeModelCapabilities("not-a-model").optionDescriptors,
     );
+  });
+
+  it("keeps Extra High for a newer model whose family supports it", () => {
+    expect(normalizeClaudeCliEffort("xhigh", "claude-sonnet-5-5")).toBe("xhigh");
+    expect(normalizeClaudeCliEffort("xhigh", "claude-opus-9")).toBe("xhigh");
+    expect(normalizeClaudeCliEffort("xhigh", "claude-sonnet-4-6")).toBe("max");
   });
 });
