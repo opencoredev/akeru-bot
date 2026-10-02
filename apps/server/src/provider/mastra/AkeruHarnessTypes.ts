@@ -37,6 +37,24 @@ export interface AkeruMastraState {
 
 export type AkeruMastraSession = Session<AkeruMastraState>;
 
+/** Session methods used by Akeru's injected controller boundary. */
+export type AkeruControllerSession = Pick<
+  AkeruMastraSession,
+  | "subscribe"
+  | "sendMessage"
+  | "grantTool"
+  | "abort"
+  | "respondToToolApproval"
+  | "respondToToolSuspension"
+> & {
+  readonly stream: Pick<AkeruMastraSession["stream"], "isActive" | "waitForTeardown">;
+  readonly run: Pick<AkeruMastraSession["run"], "getRunId" | "waitForTeardown">;
+  readonly state: Pick<AkeruMastraSession["state"], "get" | "set">;
+  readonly mode: Pick<AkeruMastraSession["mode"], "get" | "switch">;
+  readonly model: Pick<AkeruMastraSession["model"], "get" | "switch">;
+  readonly permissions: Pick<AkeruMastraSession["permissions"], "setForCategory" | "setForTool">;
+};
+
 export interface AkeruMastraHarnessOptions {
   readonly authStorage: AuthStorage;
   readonly getKimiAccess?: (instanceId?: string) => Promise<AkeruKimiAccess | undefined>;
@@ -100,15 +118,18 @@ export interface AkeruMastraHarnessOptions {
   }) => Promise<void> | void;
 }
 
-export interface AkeruMastraHarness {
+export type AkeruControllerHarness = AkeruMastraHarness<AkeruControllerSession>;
+
+export interface AkeruMastraHarness<SessionType = AkeruMastraSession> {
   readonly rebuildConversation?: (
     threadId: string,
     messages: ReadonlyArray<MastraDBMessage>,
   ) => Promise<() => Promise<void>>;
-  readonly controller: Pick<
-    MastraAgentController<AkeruMastraState>,
-    "init" | "createSession" | "deleteSession"
-  >;
+  readonly controller: Pick<MastraAgentController<AkeruMastraState>, "init" | "deleteSession"> & {
+    createSession(
+      ...args: Parameters<MastraAgentController<AkeruMastraState>["createSession"]>
+    ): Promise<SessionType>;
+  };
   readonly clearObservationalMemory?: (threadId: string, resourceId?: string) => Promise<void>;
   readonly readObservationalMemory?: (
     threadId: string,

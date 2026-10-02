@@ -24,7 +24,7 @@ import { ServerConfig } from "../../../config.ts";
 
 import * as McpMemoryToolSession from "../../../mcp/McpMemoryToolSession.ts";
 
-import { type AkeruMastraHarness } from "../../AkeruMastraHarness.ts";
+import type { AkeruControllerHarness } from "../../mastra/AkeruHarnessTypes.ts";
 import { createAkeruBotTurnInstructions } from "../../AkeruAgentInstructions.ts";
 
 import { AkeruMemoryTurnHarness } from "../../AkeruMemoryTurnHarness.ts";
@@ -78,7 +78,7 @@ export function createTurnRequests(deps: {
     access: AkeruMemoryThreadAccess | undefined,
   ) => Promise<AkeruMemoryThreadAccess | undefined>;
   readonly entityMemoryContext: (access: AkeruMemoryThreadAccess | undefined) => Promise<string>;
-  readonly bundle: AkeruMastraHarness;
+  readonly bundle: AkeruControllerHarness;
   readonly memoryTurnHarness: AkeruMemoryTurnHarness;
   readonly addLegacyPending: (
     key: string,

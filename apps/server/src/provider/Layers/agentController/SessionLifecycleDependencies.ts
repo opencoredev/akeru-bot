@@ -1,3 +1,4 @@
+import type { AkeruControllerHarness } from "../../mastra/AkeruHarnessTypes.ts";
 import { ProviderDriverKind } from "@akeru/contracts";
 import { ProviderInstanceId } from "@akeru/contracts";
 import { akeruToolCategory } from "../../AkeruMastraHarness.ts";
@@ -31,7 +32,7 @@ import { type AkeruMemoryToolHandler } from "../../../memory/BotMemoryToolHandle
 import { ProjectionSnapshotQuery } from "../../../orchestration/Services/ProjectionSnapshotQuery.ts";
 
 import { SubscriptionAuthService } from "../../../subscription-auth/service.ts";
-import { type AkeruMastraHarness } from "../../AkeruMastraHarness.ts";
+
 import { type AkeruChannelRuntime } from "../../AkeruChannelRuntime.ts";
 import { type AkeruBotStateRuntime } from "../../AkeruBotStateRuntime.ts";
 import type { AkeruWorkerRuntime } from "../../AkeruWorkerRuntime.ts";
@@ -148,7 +149,7 @@ export interface SessionLifecycleDependencies {
     dependentBots: { id: BotId; name: string }[];
     clearedDisabledFor: { id: BotId; name: string }[];
   }>;
-  readonly bundle: AkeruMastraHarness;
+  readonly bundle: AkeruControllerHarness;
   readonly mastraModelOptions: (
     resolved: ResolvedEngine,
   ) => { serviceTier?: string; reasoningEffort?: string } | undefined;

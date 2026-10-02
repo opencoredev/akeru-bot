@@ -175,6 +175,7 @@ export function inspectAkeruAction<Input>(toolName: string, args?: Input): Akeru
   const pending: unknown[] = [args];
   const visited = new WeakSet<object>();
   let inspected = 0;
+  let entriesInspected = 0;
   let hasUnclassifiedIntent = false;
 
   while (pending.length > 0 && inspected < 100) {
@@ -192,8 +193,8 @@ export function inspectAkeruAction<Input>(toolName: string, args?: Input): Akeru
 
     if (Array.isArray(value)) {
       for (const entry of value) {
-        if (inspected >= 100) return { action: null, hasUnclassifiedIntent: true };
-        inspected += 1;
+        if (entriesInspected >= 100_000) return { action: null, hasUnclassifiedIntent: true };
+        entriesInspected += 1;
 
         if (Predicate.isObjectOrArray(entry) && entry !== null) pending.push(entry);
       }
@@ -202,8 +203,8 @@ export function inspectAkeruAction<Input>(toolName: string, args?: Input): Akeru
     }
 
     for (const key in value) {
-      if (inspected >= 100) return { action: null, hasUnclassifiedIntent: true };
-      inspected += 1;
+      if (entriesInspected >= 100_000) return { action: null, hasUnclassifiedIntent: true };
+      entriesInspected += 1;
 
       if (!Object.hasOwn(value, key)) continue;
       const entry: unknown = value[key];
