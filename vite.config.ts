@@ -224,7 +224,7 @@ export default defineConfig({
         // Client/native integration tests replace module-bound runtimes (Electron, Expo,
         // React hooks). Keep that loader seam available in test harnesses only.
         files: [
-          "**/*.test.{ts,tsx}",
+          "**/*.test.{ts,tsx,mjs}",
           "**/*.test-support.{ts,tsx}",
           "**/test/**",
           "**/testUtils/**",
