@@ -69,12 +69,11 @@ export function BrowserSettingsSection() {
             value={apiKey}
             onChange={(event) => setApiKey(event.target.value)}
           />
-          <Button disabled={!canSave} size="sm" type="submit">
+          <Button disabled={!canSave} type="submit">
             {t("Save")}
           </Button>
           {configured ? (
             <Button
-              size="sm"
               type="button"
               variant="outline"
               onClick={() =>
