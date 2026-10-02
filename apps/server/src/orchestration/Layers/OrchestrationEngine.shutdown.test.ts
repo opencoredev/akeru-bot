@@ -29,6 +29,19 @@ import { OrchestrationEngineLive } from "./OrchestrationEngine.ts";
 import { OrchestrationProjectionSnapshotQueryLive } from "./ProjectionSnapshotQuery.ts";
 import { asMessageId, asProjectId, now } from "./test-support/OrchestrationSystem.ts";
 
+const makeEngineLayer = (projectionPipeline: OrchestrationProjectionPipelineShape) =>
+  OrchestrationEngineLive.pipe(
+    Layer.provide(OrchestrationProjectionSnapshotQueryLive),
+    Layer.provide(ThreadBackgroundLiveness.layer),
+    Layer.provide(ThreadPlanProgress.layer),
+    Layer.provide(Layer.succeed(OrchestrationProjectionPipeline, projectionPipeline)),
+    Layer.provide(OrchestrationEventStoreLive),
+    Layer.provide(OrchestrationCommandReceiptRepositoryLive),
+    Layer.provide(RepositoryIdentityResolver.layer),
+    Layer.provide(SqlitePersistenceMemory),
+    Layer.provide(NodeServices.layer),
+  );
+
 describe("OrchestrationEngine shutdown", () => {
   effectIt.effect("settles in-flight and queued commands when the engine stops", () =>
     Effect.gen(function* () {
@@ -47,20 +60,13 @@ describe("OrchestrationEngine shutdown", () => {
           blockingProjectionPipeline.projectEvent(event).pipe(Effect.as(Effect.void)),
       };
 
-      const engineLayer = OrchestrationEngineLive.pipe(
-        Layer.provide(OrchestrationProjectionSnapshotQueryLive),
-        Layer.provide(ThreadBackgroundLiveness.layer),
-        Layer.provide(ThreadPlanProgress.layer),
-        Layer.provide(Layer.succeed(OrchestrationProjectionPipeline, blockingProjectionPipeline)),
-        Layer.provide(OrchestrationEventStoreLive),
-        Layer.provide(OrchestrationCommandReceiptRepositoryLive),
-        Layer.provide(RepositoryIdentityResolver.layer),
-        Layer.provide(SqlitePersistenceMemory),
-        Layer.provide(NodeServices.layer),
+      const engineScope = yield* Scope.make();
+
+      const context = yield* Layer.buildWithScope(
+        makeEngineLayer(blockingProjectionPipeline),
+        engineScope,
       );
 
-      const engineScope = yield* Scope.make();
-      const context = yield* Layer.buildWithScope(engineLayer, engineScope);
       const engine = yield* OrchestrationEngineService.pipe(Effect.provide(context));
       const createdAt = now();
       const threadId = ThreadId.make("thread-shutdown");
@@ -141,6 +147,22 @@ describe("OrchestrationEngine shutdown", () => {
         .pipe(Effect.exit);
 
       expect(Exit.hasInterrupts(afterClose)).toBe(true);
+    }),
+  );
+
+  effectIt.effect("stops an idle engine waiting on an empty queue", () =>
+    Effect.gen(function* () {
+      const idleProjectionPipeline: OrchestrationProjectionPipelineShape = {
+        bootstrap: Effect.void,
+        projectEvent: () => Effect.void,
+        projectEventDeferred: () => Effect.succeed(Effect.void),
+      };
+
+      const engineScope = yield* Scope.make();
+      yield* Layer.buildWithScope(makeEngineLayer(idleProjectionPipeline), engineScope);
+
+      // The worker waits in an uninterruptible take; closing must still finish.
+      yield* Scope.close(engineScope, Exit.void);
     }),
   );
 });

@@ -455,15 +455,34 @@ const makeOrchestrationEngine = Effect.gen(function* () {
           yield* Deferred.failCause(envelope.result, exit.cause);
         }),
       ),
-      Effect.ensuring(Effect.sync(() => envelope.admission?.release())),
     );
   };
 
   yield* projectionPipeline.bootstrap;
   commandReadModel = yield* projectionSnapshotQuery.getCommandReadModel();
 
+  // The worker owns an envelope from the moment it is taken: the take runs
+  // uninterruptibly, and settlement and admission release are installed
+  // before processing becomes interruptible.
+  const worker = Effect.forever(
+    Effect.uninterruptibleMask((restore) =>
+      Queue.take(commandQueue).pipe(
+        Effect.flatMap((envelope) =>
+          restore(processEnvelope(envelope)).pipe(
+            Effect.onInterrupt(() => Deferred.interrupt(envelope.result)),
+            Effect.ensuring(Effect.sync(() => envelope.admission?.release())),
+          ),
+        ),
+      ),
+    ),
+  );
+
+  yield* Effect.forkScoped(worker);
+
   // Closing the engine settles every command it accepted, so callers that
   // await a result, including uninterruptible ones, cannot outlive it.
+  // Registered after the worker fork so it runs first: failing the queue wakes
+  // the worker's uninterruptible take before the scope interrupts the worker.
   yield* Effect.addFinalizer(() =>
     Effect.sync(() => {
       Queue.failCauseUnsafe(commandQueue, Cause.interrupt());
@@ -493,19 +512,6 @@ const makeOrchestrationEngine = Effect.gen(function* () {
     ),
   );
 
-  const worker = Effect.forever(
-    Effect.uninterruptibleMask((restore) =>
-      restore(Queue.take(commandQueue)).pipe(
-        Effect.flatMap((envelope) =>
-          restore(processEnvelope(envelope)).pipe(
-            Effect.onInterrupt(() => Deferred.interrupt(envelope.result)),
-          ),
-        ),
-      ),
-    ),
-  );
-
-  yield* Effect.forkScoped(worker);
   yield* Effect.logDebug("orchestration engine started").pipe(
     Effect.annotateLogs({ sequence: commandReadModel.snapshotSequence }),
   );
