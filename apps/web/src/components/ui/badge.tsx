@@ -31,7 +31,7 @@ const badgeVariants = cva(
         "telemetry-healthy":
           "border-success/25 bg-success/10 text-success-foreground dark:text-success-bright-foreground",
         "telemetry-warning":
-          "border-warning/30 bg-warning/10 text-warning-foreground dark:text-warning-bright-foreground",
+          "border-telemetry-monitor/30 bg-telemetry-monitor/10 text-telemetry-status-foreground",
         "telemetry-danger": "border-destructive/30 bg-destructive/10 text-destructive",
         default: "bg-primary text-primary-foreground [button&,a&]:hover:bg-primary/90",
         destructive: "bg-destructive text-on-solid [button&,a&]:hover:bg-destructive/90",

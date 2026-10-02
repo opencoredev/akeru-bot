@@ -41,6 +41,22 @@
   --destructive-foreground: var(--error-foreground);
   --info: var(--color-blue-500);
   --info-foreground: var(--color-blue-700);
+  /* Nominal alert and status colors preserve their original appearance. */
+  --markdown-note: var(--color-blue-500);
+  --markdown-note-foreground: var(--color-blue-600);
+  --markdown-tip: var(--color-emerald-500);
+  --markdown-tip-foreground: var(--color-emerald-600);
+  --markdown-important: var(--color-purple-500);
+  --markdown-important-foreground: var(--color-purple-600);
+  --markdown-warning: var(--color-amber-500);
+  --markdown-warning-foreground: var(--color-amber-600);
+  --markdown-caution: var(--color-red-500);
+  --markdown-caution-foreground: var(--color-red-600);
+  --computer-control-indicator: var(--color-amber-500);
+  --quit-prompt: var(--color-neutral-700);
+  --plugin-connected: var(--color-emerald-500);
+  --memory-approval-indicator: var(--color-amber-400);
+  --telemetry-status-foreground: var(--color-amber-700);
   --success: var(--color-emerald-500);
   --success-foreground: var(--color-emerald-700);
   /* Small confirmation marks, such as a connected-provider check. */
@@ -148,6 +164,12 @@
     --border: --alpha(var(--color-white) / 6%);
     --input: --alpha(var(--color-white) / 8%);
     --info-foreground: var(--color-blue-400);
+    --markdown-note-foreground: var(--color-blue-400);
+    --markdown-tip-foreground: var(--color-emerald-400);
+    --markdown-important-foreground: var(--color-purple-400);
+    --markdown-warning-foreground: var(--color-amber-500);
+    --markdown-caution-foreground: var(--color-red-400);
+    --telemetry-status-foreground: var(--color-amber-300);
     --success-foreground: var(--color-emerald-400);
     --success-indicator-foreground: var(--color-emerald-400);
     --warning-foreground: var(--color-amber-400);

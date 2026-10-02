@@ -39,12 +39,14 @@ function alertChildSlot(child: React.ReactElement): string | undefined {
 
   const type = child.type;
 
-  const displayName =
-    !Predicate.isString(type) && "displayName" in type && Predicate.isString(type.displayName)
-      ? type.displayName
-      : undefined;
+  if (!Predicate.isObject(type) && !Predicate.isFunction(type)) {
+    return undefined;
+  }
 
-  const name = !Predicate.isString(type) ? type.name : undefined;
+  const displayName =
+    "displayName" in type && Predicate.isString(type.displayName) ? type.displayName : undefined;
+
+  const name = "name" in type && Predicate.isString(type.name) ? type.name : undefined;
 
   switch (displayName ?? name) {
     case "AlertAction":

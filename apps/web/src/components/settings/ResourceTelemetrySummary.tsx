@@ -42,7 +42,7 @@ export function SourceStatusBadge({
           "size-1.5 rounded-full",
           tone === "neutral" && "bg-muted-foreground/55",
           tone === "default" && "bg-success",
-          tone === "warning" && "bg-warning",
+          tone === "warning" && "bg-telemetry-monitor",
           tone === "danger" && "bg-destructive",
         )}
       />

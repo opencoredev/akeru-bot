@@ -79,7 +79,7 @@ export function BotPromptAttachments({
         <div
           key={attachment.id}
           data-testid="bot-prompt-attachment"
-          className="relative size-16 shrink-0 overflow-hidden rounded-lg border border-border bg-background/65"
+          className="relative size-16 shrink-0 overflow-hidden rounded-lg border border-on-solid/10 bg-background/65"
         >
           {attachment.previewUrl !== null ? (
             <button

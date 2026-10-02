@@ -93,7 +93,10 @@ export function MemoryApprovalPrompt({
       data-testid="memory-approval-prompt"
     >
       <div className="flex min-w-0 items-center gap-2">
-        <span aria-hidden="true" className="size-1.5 shrink-0 rounded-full bg-warning" />
+        <span
+          aria-hidden="true"
+          className="size-1.5 shrink-0 rounded-full bg-memory-approval-indicator"
+        />
         <p className="text-sm font-semibold text-foreground">
           {memoryApprovalHeading(approval.scope, i18n)}
         </p>

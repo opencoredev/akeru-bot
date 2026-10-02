@@ -58,7 +58,7 @@ export function QuitHoldOverlay() {
       role="status"
       className="pointer-events-none fixed inset-0 z-100 flex items-center justify-center"
     >
-      <div className="rounded-full bg-popover/95 px-8 py-4 text-2xl font-bold text-popover-foreground shadow-xl">
+      <div className="rounded-full bg-quit-prompt/95 px-8 py-4 text-2xl font-bold text-on-solid shadow-xl">
         {message}
       </div>
     </div>

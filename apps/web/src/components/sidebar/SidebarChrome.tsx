@@ -341,9 +341,12 @@ function ComputerUseControlForEnvironment({
   };
 
   return (
-    <div className="rounded-xl border border-warning/30 bg-warning-surface p-2.5" role="status">
+    <div
+      className="rounded-xl border border-computer-control-indicator/30 bg-computer-control-indicator/10 p-2.5"
+      role="status"
+    >
       <div className="flex items-center gap-2 text-xs font-medium">
-        <span className="size-2 rounded-full bg-warning" aria-hidden="true" />
+        <span className="size-2 rounded-full bg-computer-control-indicator" aria-hidden="true" />
         <span className="min-w-0 truncate">
           {t("{name} controls this Mac", { name: control.botName })}
         </span>

@@ -89,12 +89,12 @@
   inset-inline: 1px;
   top: 0;
   border-radius: 3px;
-  background: var(--terminal-scrollbar);
+  background: var(--app-scrollbar-thumb);
   transition: background-color 120ms ease-out;
 
   .group:hover &,
   .group:focus-visible & {
-    background: var(--terminal-scrollbar-hover);
+    background: var(--app-scrollbar-thumb-hover);
   }
 }
 

@@ -47,7 +47,7 @@ export function ResourceHistoryProcessNameCell({
       <span
         className={cn(
           "size-1.5 shrink-0 rounded-full",
-          process.isServerRoot ? "bg-warning/90" : "bg-success/80",
+          process.isServerRoot ? "bg-telemetry-monitor/90" : "bg-success/80",
         )}
       />
       <Tooltip>

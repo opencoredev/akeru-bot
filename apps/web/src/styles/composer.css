@@ -565,10 +565,12 @@
 }
 
 @utility composer-banner-outline-error {
+  --chat-composer-attached-tint: color-mix(in srgb, var(--error) 8%, transparent);
   --chat-composer-attached-outline: color-mix(in srgb, var(--error) 32%, transparent);
 }
 
 @utility composer-banner-outline-warning {
+  --chat-composer-attached-tint: color-mix(in srgb, var(--warning) 8%, transparent);
   --chat-composer-attached-outline: color-mix(in srgb, var(--warning) 28%, transparent);
 }
 
