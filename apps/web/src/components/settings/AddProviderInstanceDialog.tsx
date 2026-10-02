@@ -24,7 +24,7 @@ import {
 } from "../ui/dialog";
 import { Input } from "../ui/input";
 import { toastManager } from "../ui/toast";
-import { DRIVER_OPTION_BY_VALUE, DRIVER_OPTIONS } from "./providerDriverMeta";
+import type { DriverOption } from "./providerDriverMeta";
 import { ProviderSettingsForm, deriveProviderSettingsFields } from "./ProviderSettingsForm";
 import { AnimatedHeight } from "../AnimatedHeight";
 import {
@@ -67,15 +67,28 @@ function slugifyLabel(value: string): string {
     .slice(0, 48);
 }
 
-function deriveInstanceId(driver: ProviderDriverKind, label: string): string {
+/**
+ * Account id from the name, or `{driver}` when the name is empty, with the
+ * first free `_{n}` suffix when that id is taken.
+ */
+function deriveInstanceId(
+  driver: ProviderDriverKind,
+  label: string,
+  existing: ReadonlySet<string>,
+): string {
   const slug = slugifyLabel(label);
+  const base = slug ? `${driver}_${slug}` : driver;
 
-  return slug ? `${driver}_${slug}` : "";
+  if (slug && !existing.has(base)) return base;
+
+  let index = 2;
+
+  while (existing.has(`${base}_${index}`)) index += 1;
+
+  return `${base}_${index}`;
 }
 
 const INSTANCE_ID_PATTERN = /^[a-zA-Z][a-zA-Z0-9_-]*$/;
-
-const DEFAULT_DRIVER_KIND = ProviderDriverKind.make("codex");
 
 const CUSTOM_API_DRIVER_KIND = ProviderDriverKind.make("customOpenai");
 
@@ -102,8 +115,10 @@ interface AddProviderInstanceDialogProps {
   readonly open: boolean;
   readonly environmentId: EnvironmentId;
   readonly environmentLabel: string;
+  /** Name of the provider page that opened the dialog, such as ChatGPT. */
+  readonly providerLabel?: string;
   /** Provider whose page opened the dialog. The new account uses its driver. */
-  readonly initialDriver?: ProviderDriverKind;
+  readonly driverOption: DriverOption;
   readonly onOpenChange: (open: boolean) => void;
 }
 
@@ -111,7 +126,8 @@ export function AddProviderInstanceDialog({
   open,
   environmentId,
   environmentLabel,
-  initialDriver,
+  providerLabel,
+  driverOption,
   onOpenChange,
 }: AddProviderInstanceDialogProps) {
   const settings = useEnvironmentSettings(environmentId);
@@ -119,8 +135,7 @@ export function AddProviderInstanceDialog({
 
   const [wizardStep, setWizardStep] = useState(0);
 
-  const driver =
-    initialDriver && DRIVER_OPTION_BY_VALUE[initialDriver] ? initialDriver : DEFAULT_DRIVER_KIND;
+  const driver = driverOption.value;
 
   const isCustomApi = driver === CUSTOM_API_DRIVER_KIND;
 
@@ -141,8 +156,8 @@ export function AddProviderInstanceDialog({
     [settings.providerInstances],
   );
 
-  const driverOption = DRIVER_OPTION_BY_VALUE[driver] ?? DRIVER_OPTIONS[0]!;
-  const instanceId = instanceIdOverride ?? deriveInstanceId(driver, label);
+  const accountLabel = providerLabel ?? driverOption.label;
+  const instanceId = instanceIdOverride ?? deriveInstanceId(driver, label, existingIds);
 
   const driverSettingsFields = useMemo(
     () => deriveProviderSettingsFields(driverOption),
@@ -232,7 +247,7 @@ export function AddProviderInstanceDialog({
       toastManager.add({
         type: "success",
         title: "Account added",
-        description: `${label.trim() || driverOption.label} is ready for your bots.`,
+        description: `${label.trim() || accountLabel} was added. Sign in or connect it from its card.`,
       });
       onOpenChange(false);
     } catch (error) {
@@ -250,12 +265,12 @@ export function AddProviderInstanceDialog({
         <div className="flex min-h-0 flex-col overflow-hidden">
           <DialogHeader>
             <DialogTitle>
-              {isCustomApi ? "Connect a service" : `Add ${driverOption.label} account`}
+              {isCustomApi ? "Connect a service" : `Add ${accountLabel} account`}
             </DialogTitle>
             <DialogDescription>
               {isCustomApi
                 ? `Add another OpenAI-compatible service on ${environmentLabel}. Each one keeps its own address and key.`
-                : `Add another ${driverOption.label} account on ${environmentLabel}. Each account keeps its own sign-in and settings.`}
+                : `Add another ${accountLabel} account on ${environmentLabel}. Each account keeps its own sign-in and settings.`}
             </DialogDescription>
             {wizardSteps.length > 1 ? (
               <AddProviderInstanceWizardSteps
@@ -273,124 +288,128 @@ export function AddProviderInstanceDialog({
             className="space-y-4 bg-inset-surface/80 px-6 py-5 ring-1 ring-tint/5 dark:bg-tint/2"
           >
             <AnimatedHeight>
-              {isCustomApi ? (
-                <div className={cn(currentStepName !== "Service" && "hidden")}>
-                  <CustomApiPresetPicker
-                    value={customApiPreset.id}
-                    onChange={chooseCustomApiPreset}
-                  />
-                </div>
-              ) : null}
-
-              <label className={cn("grid gap-2", currentStepName !== "Name" && "hidden")}>
-                <span className="text-xs font-medium text-foreground">Name</span>
-                <Input
-                  surface="background"
-                  placeholder="e.g. Work"
-                  value={label}
-                  onChange={(event) => {
-                    setLabel(event.target.value);
-                    setLabelEdited(true);
-                  }}
-                />
-                <span className="text-11px text-muted-foreground">
-                  Shown in the model picker and on this page. Optional.
-                </span>
-              </label>
-
-              <label className={cn("grid gap-2", currentStepName !== "Name" && "hidden")}>
-                <span className="text-xs font-medium text-foreground">Account ID</span>
-                <Input
-                  surface="background"
-                  placeholder={`${driver}_work`}
-                  value={instanceId}
-                  onChange={(event) => {
-                    setInstanceIdOverride(event.target.value);
-                  }}
-                  aria-invalid={showInstanceIdError}
-                />
-                {showInstanceIdError ? (
-                  <span className="text-11px text-destructive">{instanceIdError}</span>
-                ) : (
-                  <span className="text-11px text-muted-foreground">
-                    How bots and chats refer to this account. Letters, digits, '-', or '_'.
-                  </span>
-                )}
-              </label>
-
-              <div className={cn("grid gap-2", currentStepName !== "Name" && "hidden")}>
-                <span className="text-xs font-medium text-foreground">Accent color</span>
-                <div className="flex min-w-0 flex-wrap items-center gap-2">
-                  <input
-                    type="color"
-                    value={normalizeProviderAccentColor(accentColor) ?? PROVIDER_ACCENT_SWATCHES[0]}
-                    onChange={(event) => setAccentColor(event.target.value)}
-                    aria-label="Account accent color"
-                    className="h-8 w-10 cursor-pointer rounded-xl border border-input bg-background p-0.5"
-                  />
-                  <div className="flex flex-wrap gap-1.5">
-                    {PROVIDER_ACCENT_SWATCHES.map((swatch) => {
-                      const selected = accentColor.toLowerCase() === swatch;
-
-                      return (
-                        <button
-                          key={swatch}
-                          type="button"
-                          className={cn(
-                            "size-6 cursor-pointer rounded-full border swatch-fill transition",
-                            selected
-                              ? "scale-110 border-foreground ring-2 ring-ring ring-offset-1 ring-offset-background"
-                              : "border-tint/10 hover:scale-105 dark:border-tint/20",
-                          )}
-                          style={{ "--swatch": swatch }}
-                          onClick={() => setAccentColor(swatch)}
-                          aria-label={`Use ${swatch} accent`}
-                        />
-                      );
-                    })}
-                  </div>
-                  {accentColor ? (
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="ghost"
-                      presentation="wizard-preview-action"
-                      onClick={() => setAccentColor("")}
-                    >
-                      Clear
-                    </Button>
-                  ) : null}
-                </div>
-                <span className="text-11px text-muted-foreground">
-                  Optional marker shown in the picker.
-                </span>
-              </div>
-
-              {driverSettingsFields.length > 0 ? (
-                <div
-                  className={cn(
-                    "grid gap-4",
-                    currentStepName !== "Connect" && currentStepName !== "Settings" && "hidden",
-                  )}
-                >
-                  <ProviderSettingsForm
-                    definition={driverOption}
-                    value={configDraft}
-                    idPrefix={`add-provider-${driver}`}
-                    variant="dialog"
-                    onChange={setConfigDraft}
-                  />
-                  {isCustomApi ? (
-                    <CustomApiKeyDraftField
-                      id="add-provider-custom-api-key"
-                      value={customApiKey}
-                      required={customApiPreset.key.kind === "required"}
-                      hint={customApiKeyHint(customApiPreset)}
-                      onChange={setCustomApiKey}
+              <div className="grid gap-4">
+                {isCustomApi ? (
+                  <div className={cn(currentStepName !== "Service" && "hidden")}>
+                    <CustomApiPresetPicker
+                      value={customApiPreset.id}
+                      onChange={chooseCustomApiPreset}
                     />
-                  ) : null}
+                  </div>
+                ) : null}
+
+                <label className={cn("grid gap-2", currentStepName !== "Name" && "hidden")}>
+                  <span className="text-xs font-medium text-foreground">Name</span>
+                  <Input
+                    surface="background"
+                    placeholder="e.g. Work"
+                    value={label}
+                    onChange={(event) => {
+                      setLabel(event.target.value);
+                      setLabelEdited(true);
+                    }}
+                  />
+                  <span className="text-11px text-muted-foreground">
+                    Shown in the model picker and on this page. Optional.
+                  </span>
+                </label>
+
+                <label className={cn("grid gap-2", currentStepName !== "Name" && "hidden")}>
+                  <span className="text-xs font-medium text-foreground">Account ID</span>
+                  <Input
+                    surface="background"
+                    placeholder={`${driver}_work`}
+                    value={instanceId}
+                    onChange={(event) => {
+                      setInstanceIdOverride(event.target.value);
+                    }}
+                    aria-invalid={showInstanceIdError}
+                  />
+                  {showInstanceIdError ? (
+                    <span className="text-11px text-destructive">{instanceIdError}</span>
+                  ) : (
+                    <span className="text-11px text-muted-foreground">
+                      How bots and chats refer to this account. Letters, digits, '-', or '_'.
+                    </span>
+                  )}
+                </label>
+
+                <div className={cn("grid gap-2", currentStepName !== "Name" && "hidden")}>
+                  <span className="text-xs font-medium text-foreground">Accent color</span>
+                  <div className="flex min-w-0 flex-wrap items-center gap-2">
+                    <input
+                      type="color"
+                      value={
+                        normalizeProviderAccentColor(accentColor) ?? PROVIDER_ACCENT_SWATCHES[0]
+                      }
+                      onChange={(event) => setAccentColor(event.target.value)}
+                      aria-label="Account accent color"
+                      className="h-8 w-10 cursor-pointer rounded-xl border border-input bg-background p-0.5"
+                    />
+                    <div className="flex flex-wrap gap-1.5">
+                      {PROVIDER_ACCENT_SWATCHES.map((swatch) => {
+                        const selected = accentColor.toLowerCase() === swatch;
+
+                        return (
+                          <button
+                            key={swatch}
+                            type="button"
+                            className={cn(
+                              "size-6 cursor-pointer rounded-full border swatch-fill transition",
+                              selected
+                                ? "scale-110 border-foreground ring-2 ring-ring ring-offset-1 ring-offset-background"
+                                : "border-tint/10 hover:scale-105 dark:border-tint/20",
+                            )}
+                            style={{ "--swatch": swatch }}
+                            onClick={() => setAccentColor(swatch)}
+                            aria-label={`Use ${swatch} accent`}
+                          />
+                        );
+                      })}
+                    </div>
+                    {accentColor ? (
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="ghost"
+                        presentation="wizard-preview-action"
+                        onClick={() => setAccentColor("")}
+                      >
+                        Clear
+                      </Button>
+                    ) : null}
+                  </div>
+                  <span className="text-11px text-muted-foreground">
+                    Optional marker shown in the picker.
+                  </span>
                 </div>
-              ) : null}
+
+                {driverSettingsFields.length > 0 ? (
+                  <div
+                    className={cn(
+                      "grid gap-4",
+                      currentStepName !== "Connect" && currentStepName !== "Settings" && "hidden",
+                    )}
+                  >
+                    <ProviderSettingsForm
+                      definition={driverOption}
+                      value={configDraft}
+                      idPrefix={`add-provider-${driver}`}
+                      variant="dialog"
+                      onChange={setConfigDraft}
+                    />
+                    {isCustomApi ? (
+                      <CustomApiKeyDraftField
+                        id="add-provider-custom-api-key"
+                        value={customApiKey}
+                        required={customApiPreset.key.kind === "required"}
+                        hint={customApiKeyHint(customApiPreset)}
+                        onChange={setCustomApiKey}
+                      />
+                    ) : null}
+                  </div>
+                ) : null}
+              </div>
             </AnimatedHeight>
           </div>
 

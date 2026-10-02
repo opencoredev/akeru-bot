@@ -31,6 +31,7 @@ vi.mock("../../hooks/useSettings", () => ({
 }));
 
 import { AddProviderInstanceDialog } from "./AddProviderInstanceDialog";
+import { DRIVER_OPTIONS } from "./providerDriverMeta";
 
 const remoteEnvironmentId = EnvironmentId.make("remote-device");
 
@@ -47,6 +48,7 @@ describe("AddProviderInstanceDialog environment routing", () => {
       open: true,
       environmentId: remoteEnvironmentId,
       environmentLabel: "Remote device",
+      driverOption: DRIVER_OPTIONS[0]!,
       onOpenChange: vi.fn(),
     });
 
