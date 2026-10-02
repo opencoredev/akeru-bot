@@ -41,10 +41,15 @@ export const createWsOrchestrationCommands = ({
       const bootstrap = command.bootstrap;
       const { bootstrap: _bootstrap, ...finalTurnStartCommand } = command;
       let createdThread = false;
+
+      let turnStarted = false;
       let targetWorktreePath = bootstrap?.createThread?.worktreePath ?? null;
 
+      // The engine commits a queued command even when its caller stops waiting,
+      // so create and turn start await their results uninterruptibly and record
+      // them before cancellation cleanup can read these flags.
       const cleanupCreatedThread = () =>
-        createdThread
+        createdThread && !turnStarted
           ? serverCommandId("bootstrap-thread-delete").pipe(
               Effect.flatMap((commandId) =>
                 dispatchFromClient({
@@ -73,9 +78,14 @@ export const createWsOrchestrationCommands = ({
             branch: bootstrap.createThread.branch,
             worktreePath: bootstrap.createThread.worktreePath,
             createdAt: bootstrap.createThread.createdAt,
-          });
-
-          createdThread = true;
+          }).pipe(
+            Effect.tap(() =>
+              Effect.sync(() => {
+                createdThread = true;
+              }),
+            ),
+            Effect.uninterruptible,
+          );
 
           // The successful create is a fence in the engine command queue:
           // every delete for the prior incarnation committed before it.
@@ -130,11 +140,20 @@ export const createWsOrchestrationCommands = ({
           });
         }
 
-        return yield* orchestrationEngine.dispatch(finalTurnStartCommand, {
-          actor: dispatchActor,
-          ...(hasClientOrigin ? { origin: clientOrigin } : {}),
-          admission,
-        });
+        return yield* orchestrationEngine
+          .dispatch(finalTurnStartCommand, {
+            actor: dispatchActor,
+            ...(hasClientOrigin ? { origin: clientOrigin } : {}),
+            admission,
+          })
+          .pipe(
+            Effect.tap(() =>
+              Effect.sync(() => {
+                turnStarted = true;
+              }),
+            ),
+            Effect.uninterruptible,
+          );
       });
 
       return yield* Effect.uninterruptibleMask((restore) =>

@@ -44,6 +44,23 @@ it.effect("loads multiple input images and rejects empty, missing, and oversized
   }).pipe(Effect.provide(NodeServices.layer)),
 );
 
+it.effect("reads multi-chunk images byte for byte up to the size limit", () =>
+  Effect.gen(function* () {
+    const fs = yield* FileSystem.FileSystem;
+    const directory = yield* fs.makeTempDirectoryScoped({ prefix: "akeru-image-chunks-" });
+
+    for (const size of [3 * 64 * 1024 + 7, PROVIDER_SEND_TURN_MAX_IMAGE_BYTES]) {
+      const path = NodePath.join(directory, `image-${size}.png`);
+      const bytes = Uint8Array.from({ length: size }, (_, index) => (index * 31 + 7) % 251);
+      yield* fs.writeFile(path, bytes);
+
+      const result = yield* readImageFile(path);
+      expect(result?.length).toBe(size);
+      expect(result === null ? false : Buffer.from(result).equals(bytes)).toBe(true);
+    }
+  }).pipe(Effect.provide(NodeServices.layer)),
+);
+
 it.effect("returns null when closing an input image fails", () =>
   Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;

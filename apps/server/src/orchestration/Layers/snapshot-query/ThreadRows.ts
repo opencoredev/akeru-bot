@@ -518,7 +518,9 @@ export function createThreadRows({ sql }: Pick<ProjectionSnapshotDependencies, "
       `,
   });
 
-  const listUserCommandMessages = SqlSchema.findAll({
+  // julianday() compares mixed offsets and fractional seconds as instants;
+  // unparsable timestamps sort last.
+  const getLatestUserCommandMessage = SqlSchema.findAll({
     Request: ThreadIdLookupInput,
     Result: Schema.Struct({
       messageId: MessageId,
@@ -529,28 +531,9 @@ export function createThreadRows({ sql }: Pick<ProjectionSnapshotDependencies, "
       SELECT message_id AS "messageId", created_at AS "createdAt", updated_at AS "updatedAt"
       FROM projection_thread_messages
       WHERE thread_id = ${threadId} AND role = 'user'
+      ORDER BY julianday(created_at) DESC, message_id DESC
+      LIMIT 1
     `,
-  });
-
-  const getLatestUserCommandMessage = Effect.fn(
-    "ProjectionSnapshotQuery.getLatestUserCommandMessage",
-  )(function* (input: typeof ThreadIdLookupInput.Type) {
-    const messages = yield* listUserCommandMessages(input);
-
-    const latestMessage = messages.reduce<(typeof messages)[number] | undefined>(
-      (latest, message) => {
-        if (!latest) return message;
-        const latestAt = Date.parse(latest.createdAt);
-        const messageAt = Date.parse(message.createdAt);
-
-        if (Number.isNaN(latestAt)) return latest;
-
-        return Number.isNaN(messageAt) || messageAt > latestAt ? message : latest;
-      },
-      undefined,
-    );
-
-    return latestMessage ? [latestMessage] : [];
   });
 
   return {

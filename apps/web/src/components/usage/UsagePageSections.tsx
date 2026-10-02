@@ -167,7 +167,7 @@ export function UsageDeviceStrip({
 
 /**
  * Stand-in with the loaded page's shape, using the shared `Skeleton` bars so it
- * breathes with the same `animate-skeleton` pulse as every other loading state.
+ * remains static like other long-lived loading states.
  * Blocks fill in exactly once when the last device answers.
  */
 export function UsageSkeleton() {

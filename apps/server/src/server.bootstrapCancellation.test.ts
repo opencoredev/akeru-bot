@@ -22,7 +22,20 @@ import { defaultModelSelection, defaultProjectId } from "./serverTestFixtures.ts
 import { ServerRuntimeStartup } from "./startupCommandGate.ts";
 import { createWsOrchestrationCommands } from "./wsOrchestrationCommands.ts";
 
-const stages = ["fence", "remote", "fetch", "resolve", "worktree", "meta", "turn"] as const;
+const stages = [
+  "create",
+  "fence",
+  "remote",
+  "fetch",
+  "resolve",
+  "worktree",
+  "meta",
+  "turn",
+] as const;
+
+// Engine dispatches commit even when the caller is interrupted, so a blocked
+// dispatch models a committed command whose result arrives after cancellation.
+const committedStages: ReadonlySet<string> = new Set(["create", "meta", "turn"]);
 
 const makeBootstrap = Effect.fn("makeBootstrap")(function* (
   blockedStage?: (typeof stages)[number],
@@ -30,11 +43,19 @@ const makeBootstrap = Effect.fn("makeBootstrap")(function* (
   const trace: string[] = [];
   const blocked = yield* Deferred.make<void>();
 
+  const release = yield* Deferred.make<void>();
+
   const operation = Effect.fn("bootstrapOperation")(function* <A>(name: string, value: A) {
     trace.push(name);
 
     if (name === blockedStage) {
       yield* Deferred.succeed(blocked, undefined);
+
+      if (committedStages.has(name)) {
+        yield* Deferred.await(release);
+
+        return value;
+      }
 
       return yield* Effect.never;
     }
@@ -120,17 +141,23 @@ const makeBootstrap = Effect.fn("makeBootstrap")(function* (
     });
   }).pipe(Effect.provide(dependencies));
 
-  return { program, trace, blocked };
+  return { program, trace, blocked, release };
 });
 
 for (const stage of stages) {
-  it.effect(`deletes once when another fiber cancels bootstrap at ${stage}`, () =>
+  const expectedTrace =
+    stage === "turn" ? [...stages] : [...stages.slice(0, stages.indexOf(stage) + 1), "delete"];
+
+  it.effect(`cleans up only an unaccepted bootstrap cancelled at ${stage}`, () =>
     Effect.gen(function* () {
-      const { program, trace, blocked } = yield* makeBootstrap(stage);
+      const { program, trace, blocked, release } = yield* makeBootstrap(stage);
       const fiber = yield* Effect.forkChild(program);
       yield* Deferred.await(blocked);
       const interruptor = yield* Effect.fiberId;
-      yield* Fiber.interrupt(fiber);
+      const interrupting = yield* Effect.forkChild(Fiber.interruptAs(fiber, interruptor));
+      yield* Effect.yieldNow;
+      yield* Deferred.succeed(release, undefined);
+      yield* Fiber.join(interrupting);
       const exit = yield* Fiber.await(fiber);
 
       assert.isTrue(Exit.isFailure(exit));
@@ -140,7 +167,7 @@ for (const stage of stages) {
         assert.deepEqual([...Cause.interruptors(exit.cause)], [interruptor]);
       }
 
-      assert.deepEqual(trace, ["create", ...stages.slice(0, stages.indexOf(stage) + 1), "delete"]);
+      assert.deepEqual(trace, expectedTrace);
     }),
   );
 }
@@ -149,6 +176,6 @@ it.effect("does not delete a successfully bootstrapped thread", () =>
   Effect.gen(function* () {
     const { program, trace } = yield* makeBootstrap();
     yield* program;
-    assert.deepEqual(trace, ["create", ...stages]);
+    assert.deepEqual(trace, [...stages]);
   }),
 );
