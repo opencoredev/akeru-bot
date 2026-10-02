@@ -238,7 +238,7 @@ export function UsagePage() {
         <WorkspacePageHeader electron={isElectron}>{topbarContent}</WorkspacePageHeader>
 
         <ScrollArea className="min-h-0 flex-1">
-          <WorkspacePageContainer width="readable">
+          <WorkspacePageContainer width="expanded" className="px-4 sm:px-10">
             {showingLimits ? (
               <UsageLimitsOverview
                 planLimits={planLimits}
