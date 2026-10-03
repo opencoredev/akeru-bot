@@ -248,3 +248,31 @@ export const PROVIDER_DISPLAY_NAMES: Partial<Record<ProviderDriverKind, string>>
   [OPENCODE_GO_DRIVER_KIND]: "OpenCode Go",
   [CUSTOM_OPENAI_DRIVER_KIND]: "Custom API",
 };
+
+/**
+ * The account a user signs in with for each built-in driver. Use in sign-in
+ * and setup copy, where "Connect ChatGPT" means more than "Connect Codex".
+ */
+export const PROVIDER_ACCOUNT_NAMES: Partial<Record<ProviderDriverKind, string>> = {
+  [CODEX_DRIVER_KIND]: "ChatGPT",
+  [CLAUDE_DRIVER_KIND]: "Claude",
+  [GROK_DRIVER_KIND]: "Grok",
+  [KIMI_DRIVER_KIND]: "Kimi For Coding",
+  [OPENCODE_DRIVER_KIND]: "OpenCode",
+  [OPENCODE_GO_DRIVER_KIND]: "OpenCode Go",
+};
+
+/**
+ * The account name for a built-in instance still using its stock name, so a
+ * name the user chose ("Work Codex") wins over "ChatGPT". Undefined otherwise.
+ */
+export function stockProviderAccountName(
+  driver: ProviderDriverKind,
+  displayName: string | undefined,
+): string | undefined {
+  const name = displayName?.trim();
+
+  return !name || name === PROVIDER_DISPLAY_NAMES[driver]
+    ? PROVIDER_ACCOUNT_NAMES[driver]
+    : undefined;
+}

@@ -7,7 +7,8 @@ import type { EnvironmentId } from "@akeru/contracts";
 import { useI18n } from "../../i18n";
 import { openProductFeedbackWithPrefill } from "../../productFeedbackStore";
 import { Button } from "../ui/button";
-import { ProviderRepairAction } from "./ProviderUnavailableNotice";
+import type { ProviderCatalogEntry } from "../settings/providerCatalog";
+import { ProviderLogoTile, ProviderRepairAction } from "./ProviderUnavailableNotice";
 
 export function threadErrorFeedbackDraft(error: string): string {
   const presentation = presentThreadError(error);
@@ -51,8 +52,8 @@ export const ThreadErrorBanner = memo(function ThreadErrorBanner({
 }: {
   error: string | null;
   threadKey: string;
-  /** The failure's category and names, when the server reported them. */
-  context?: ThreadErrorContext;
+  /** The failure's category and names, plus the provider page that fixes it. */
+  context?: ThreadErrorContext & { readonly provider?: ProviderCatalogEntry | null };
   environmentId?: EnvironmentId | null;
   onOpenUsage?: () => void;
   onDismiss?: () => void;
@@ -72,6 +73,8 @@ export const ThreadErrorBanner = memo(function ThreadErrorBanner({
   }
 
   const presentation = presentThreadError(error, context, t);
+
+  const provider = presentation.action === "providers" ? (context?.provider ?? null) : null;
 
   const dismiss = () => {
     dismissThreadErrorBannerForSession(bannerKey);
@@ -99,27 +102,36 @@ export const ThreadErrorBanner = memo(function ThreadErrorBanner({
         </Button>
 
         <div className="flex min-w-0 items-start gap-2.5">
-          <CircleAlertIcon aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-destructive" />
+          {provider ? (
+            <ProviderLogoTile provider={provider} />
+          ) : (
+            <CircleAlertIcon
+              aria-hidden="true"
+              className="mt-0.5 size-4 shrink-0 text-destructive"
+            />
+          )}
           <div className="min-w-0 flex-1">
             <p className="text-sm font-medium leading-5">{presentation.title}</p>
             <p className="mt-0.5 text-xs leading-4.5 text-muted-foreground">
               {presentation.description}
             </p>
 
-            <div className="mt-2 flex flex-wrap items-center gap-1.5">
+            <div className="mt-2.5 flex flex-wrap items-center gap-2">
               {onResume ? (
-                <Button size="xs" type="button" onClick={onResume} disabled={resuming}>
+                <Button size="sm" type="button" onClick={onResume} disabled={resuming}>
                   {resuming ? t("Resuming…") : t("Resume")}
                 </Button>
               ) : null}
               <ProviderRepairAction
                 action={presentation.action}
+                reason={presentation.reason}
+                provider={provider}
                 environmentId={environmentId}
                 onOpenUsage={onOpenUsage}
               />
               {presentation.action === "feedback" ? (
                 <Button
-                  size="xs"
+                  size="sm"
                   type="button"
                   variant="outline"
                   onClick={() => openProductFeedbackWithPrefill(threadErrorFeedbackDraft(error))}

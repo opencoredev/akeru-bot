@@ -131,6 +131,7 @@ export function BotThreadLanding({
     stickyEngine,
     instanceEntries,
     runtime.failure?.unavailability,
+    runtime.failure?.providerInstanceId,
   );
 
   const openBotSettings = () => void navigate({ to: "/bots/$botId/settings", params: { botId } });
@@ -611,6 +612,7 @@ export function BotThreadLanding({
           />
           {sendBlocked && engineUnavailability ? (
             <ProviderUnavailableLine
+              provider={engineUnavailability.provider}
               id={engineNoticeId}
               presentation={engineUnavailability}
               environmentId={environmentId}

@@ -317,11 +317,56 @@ describe("ProviderCommandReactor", () => {
           detail: "Provider instance 'missing' is not available.",
           unavailability: "temporary-failure",
           requestId: "user-message-missing-bot-engine",
+          providerInstanceId: "missing",
         },
       }),
     );
     expect(harness.startSession).not.toHaveBeenCalled();
     expect(harness.sendTurn).not.toHaveBeenCalled();
+  });
+
+  it("keeps a missing sign-in typed so the chat can point to Settings", async () => {
+    const harness = await createHarness({
+      botEngine: { provider: "claudeAgent", model: "claude-sonnet-4-6" },
+      unavailableEngine: "missing-login",
+    });
+
+    await harness.run(
+      harness.engine.dispatch({
+        type: "thread.turn.start",
+        commandId: CommandId.make("cmd-turn-start-signed-out-bot-engine"),
+        threadId: ThreadId.make("thread-1"),
+        message: {
+          messageId: asMessageId("user-message-signed-out-bot-engine"),
+          role: "user",
+          text: "use signed out engine",
+          attachments: [],
+        },
+        interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
+        runtimeMode: "approval-required",
+        createdAt: "2026-01-01T00:00:00.000Z",
+      }),
+    );
+
+    await harness.waitFor(() => harness.resolveEngine.mock.calls.length === 1);
+    await harness.drain();
+
+    const thread = (await harness.readModel()).threads.find(
+      (entry) => entry.id === ThreadId.make("thread-1"),
+    );
+
+    expect(thread?.activities).toContainEqual(
+      expect.objectContaining({
+        kind: "provider.turn.start.failed",
+        payload: {
+          detail: "Connect Claude in Settings.",
+          unavailability: "missing-login",
+          requestId: "user-message-signed-out-bot-engine",
+          providerInstanceId: "claudeAgent",
+        },
+      }),
+    );
+    expect(harness.startSession).not.toHaveBeenCalled();
   });
 
   it("reports a disabled engine as one readable line and names the bot on its bot work", async () => {

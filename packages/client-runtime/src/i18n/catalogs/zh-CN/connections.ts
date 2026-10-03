@@ -263,6 +263,15 @@ export const connectionsCatalog = {
   Export: "导出",
   "Exporting...": "正在导出…",
   "Import Akeru archive": "导入 Akeru 归档",
+  "Open {provider} settings": "打开 {provider} 设置",
+  "{provider} needs {requirement}": "{provider} 需要 {requirement}",
+  "The provider needs {requirement}": "提供商需要 {requirement}",
+  "Add it to this provider in Settings > Providers, then send your message again.":
+    "请在“设置 > 提供商”中为此提供商添加它，然后重新发送消息。",
+  "{provider} can't use custom credentials": "{provider} 无法使用自定义凭据",
+  "The provider can't use custom credentials": "提供商无法使用自定义凭据",
+  "Use your account in Settings > Providers, or pick another model for this bot.":
+    "请在“设置 > 提供商”中改用你的账户，或为此机器人选择其他模型。",
   "{provider} is not connected": "{provider} 未连接",
   "The provider is not connected": "提供商未连接",
   "Connect your {provider} account in Settings > Providers.":

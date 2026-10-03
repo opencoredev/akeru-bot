@@ -49,3 +49,5 @@ On desktop and web, each provider row shows its state and next step. Choose **Ac
 On mobile, open **Settings > Provider connections**. Each provider shows the same state and next step, and **Access details** shows the rest.
 
 Connections belong to one environment. A provider that is ready on one Akeru server can still be missing on another.
+
+If you message a bot whose provider isn't connected, the chat says so and links to the provider settings. Connect the provider there, then send the message again.

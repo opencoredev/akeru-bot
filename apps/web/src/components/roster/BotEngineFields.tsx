@@ -45,6 +45,7 @@ export function BotEngineFields({
           <ProviderUnavailableNotice
             className="mt-3 mb-2.5 max-w-2xl"
             presentation={draft.engineUnavailability}
+            provider={draft.engineUnavailability.provider}
             environmentId={environmentId}
           />
         ) : null}

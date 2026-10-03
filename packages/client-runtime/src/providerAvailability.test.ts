@@ -206,12 +206,20 @@ describe("latestTurnFailure", () => {
           activity({
             kind: "provider.turn.start.failed",
             createdAt: "2026-01-01T00:00:02.000Z",
-            payload: { detail: "OAuth token expired", unavailability: "expired-login" },
+            payload: {
+              detail: "OAuth token expired",
+              unavailability: "expired-login",
+              providerInstanceId: "codex",
+            },
           }),
         ],
         "2026-01-01T00:00:01.000Z",
       ),
-    ).toEqual({ detail: "OAuth token expired", unavailability: "expired-login" });
+    ).toEqual({
+      detail: "OAuth token expired",
+      unavailability: "expired-login",
+      providerInstanceId: "codex",
+    });
   });
 
   it("reads a mid-turn runtime error without a category", () => {

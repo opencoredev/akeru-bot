@@ -27,6 +27,15 @@ export interface ProviderAvailabilityPresentation {
   readonly description: string;
   readonly technicalDetails: string;
   readonly action: ProviderAvailabilityAction;
+  /** Set when a known provider state caused the failure, so a client can name the fix. */
+  readonly reason?: ProviderAvailabilityReason | undefined;
+}
+
+/** Whether signing in is the fix, so a repair button can say "Connect". */
+export function providerReasonNeedsSignIn(
+  reason: ProviderAvailabilityReason | null | undefined,
+): boolean {
+  return reason === "missing-login" || reason === "expired-login" || reason === "missing-provider";
 }
 
 export function providerAvailabilityReason(
@@ -72,6 +81,13 @@ export type ProviderAvailabilityTranslate = (
 const englishTranslate: ProviderAvailabilityTranslate = createTranslator("en").t;
 
 export function presentProviderUnavailability(
+  input: Parameters<typeof presentReason>[0],
+  t: ProviderAvailabilityTranslate = englishTranslate,
+): ProviderAvailabilityPresentation & { readonly reason: ProviderAvailabilityReason } {
+  return { ...presentReason(input, t), reason: input.reason };
+}
+
+function presentReason(
   input: {
     readonly reason: ProviderAvailabilityReason;
     /** Omit when the failure did not say which provider it came from. */
@@ -218,6 +234,8 @@ export function latestTurnFailure(
 ): {
   readonly detail: string;
   readonly unavailability: ServerProviderUnavailability | null;
+  /** The provider instance that failed, when the server recorded it. */
+  readonly providerInstanceId?: string;
 } | null {
   // .sort() on a copy, not .toSorted(): Hermes doesn't ship the ES2023
   // change-by-copy array methods.
@@ -245,6 +263,9 @@ export function latestTurnFailure(
       unavailability: isServerProviderUnavailability(payload.unavailability)
         ? payload.unavailability
         : null,
+      ...(Predicate.isString(payload.providerInstanceId)
+        ? { providerInstanceId: payload.providerInstanceId }
+        : {}),
     };
   }
 

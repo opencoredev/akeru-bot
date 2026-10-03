@@ -1,5 +1,5 @@
 import {
-  PROVIDER_DISPLAY_NAMES,
+  PROVIDER_ACCOUNT_NAMES,
   isProviderDriverKind,
   type ServerProviderUnavailability,
 } from "@akeru/contracts";
@@ -27,9 +27,10 @@ export interface ThreadErrorContext {
 }
 
 function providerName(id: string): string {
-  const provider = id.toLowerCase();
+  // A legacy message may name the driver in any case, such as "Codex".
+  const driver = isProviderDriverKind(id) ? id : id.toLowerCase();
 
-  return isProviderDriverKind(provider) ? (PROVIDER_DISPLAY_NAMES[provider] ?? id) : id;
+  return isProviderDriverKind(driver) ? (PROVIDER_ACCOUNT_NAMES[driver] ?? id) : id;
 }
 
 function boundedTechnicalDetails(error: string): string {
@@ -78,6 +79,16 @@ export function presentThreadError(
     );
   }
 
+  // Older servers said "is not available" for both a missing sign-in and a
+  // deleted instance; "not set up" fits either.
+  const missingProvider = error.match(
+    /Provider instance ['"]([^'"]+)['"] is not (?:set up|available)/i,
+  );
+
+  if (missingProvider?.[1]) {
+    return present("missing-provider", context.providerName ?? providerName(missingProvider[1]));
+  }
+
   if (/Bot '[^']+' is archived/.test(error)) {
     return {
       title: t("This bot is archived"),
@@ -91,8 +102,48 @@ export function presentThreadError(
     return present("limit-reached");
   }
 
-  if (/not authenticated|authentication required|unauthorized|invalid api key/i.test(error)) {
+  if (
+    /not authenticated|authentication required|unauthorized|invalid api key|^Connect .+ in Settings/i.test(
+      error,
+    )
+  ) {
     return present("missing-login");
+  }
+
+  // A provider set up with its own credentials: signing in to an account
+  // won't fix it, so name what the instance is missing.
+  const provider = context.providerName;
+
+  const missingCredential = error.match(
+    /This .+? instance needs (.+?)(?: for the Akeru harness)?\.(?:\s|$)/,
+  );
+
+  if (missingCredential?.[1]) {
+    const requirement = missingCredential[1];
+
+    return {
+      title: provider
+        ? t("{provider} needs {requirement}", { provider, requirement })
+        : t("The provider needs {requirement}", { requirement }),
+      description: t(
+        "Add it to this provider in Settings > Providers, then send your message again.",
+      ),
+      technicalDetails: boundedTechnicalDetails(error),
+      action: "providers",
+    };
+  }
+
+  if (/Custom .+ credentials are not supported/.test(error)) {
+    return {
+      title: provider
+        ? t("{provider} can't use custom credentials", { provider })
+        : t("The provider can't use custom credentials"),
+      description: t(
+        "Use your account in Settings > Providers, or pick another model for this bot.",
+      ),
+      technicalDetails: boundedTechnicalDetails(error),
+      action: "providers",
+    };
   }
 
   if (/network|connection|socket|fetch failed|disconnected/i.test(error)) {

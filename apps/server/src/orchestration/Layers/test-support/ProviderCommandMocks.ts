@@ -61,7 +61,7 @@ export type ProviderCommandHarnessOptions = {
   };
   readonly botUsageCap?: { readonly unit: "tokens"; readonly limit: number } | null;
   readonly bindTurnFailure?: boolean;
-  readonly unavailableEngine?: boolean;
+  readonly unavailableEngine?: boolean | "missing-login";
   readonly disabledEngine?: boolean;
   readonly composioResolveRuntimeMcpServer?: ComposioServiceShape["resolveRuntimeMcpServer"];
   readonly enableAgentBrowserAccess?: boolean;
@@ -317,6 +317,17 @@ export function createProviderCommandMocks(
   const resolveEngine = observeMock(
     vi.fn<AgentControllerShape["resolveEngine"]>(({ engine, fallback, mode }) => {
       notify();
+
+      if (input?.unavailableEngine === "missing-login" && engine !== null) {
+        return Effect.fail(
+          new AgentControllerUnsupportedEngineError({
+            provider: engine.provider,
+            model: engine.model,
+            detail: "Connect Claude in Settings.",
+            unavailability: "missing-login",
+          }),
+        );
+      }
 
       if (input?.unavailableEngine === true && engine !== null) {
         return Effect.fail(

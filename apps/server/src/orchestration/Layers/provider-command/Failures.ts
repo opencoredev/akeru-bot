@@ -16,10 +16,19 @@ import {
   isBotUsageCapExceeded,
   isComposioOperationError,
   isProviderAdapterRequestError,
+  isUnsupportedEngineError,
   withoutUnavailability,
 } from "./Fields.ts";
 import type { createDependencies } from "./Dependencies.ts";
 import type { createContext } from "./Context.ts";
+
+/** A failed provider command as the chat shows it. */
+interface ProviderFailureReport {
+  readonly detail: string;
+  readonly unavailability: OrchestrationLatestTurn["unavailability"];
+  /** The instance that failed, when an engine refusal named it. */
+  readonly providerInstanceId?: string;
+}
 
 export function createFailures({
   agentController,
@@ -79,6 +88,8 @@ export function createFailures({
     readonly createdAt: string;
     readonly requestId?: string;
     readonly unavailability?: OrchestrationLatestTurn["unavailability"];
+    /** The instance that failed, so the chat repairs it even after the bot switches models. */
+    readonly providerInstanceId?: string | undefined;
   }) =>
     Effect.all({
       commandId: serverCommandId("provider-failure-activity"),
@@ -98,6 +109,7 @@ export function createFailures({
               detail: input.detail,
               ...(input.unavailability ? { unavailability: input.unavailability } : {}),
               ...(input.requestId ? { requestId: input.requestId } : {}),
+              ...(input.providerInstanceId ? { providerInstanceId: input.providerInstanceId } : {}),
             },
             turnId: input.turnId,
             createdAt: input.createdAt,
@@ -202,19 +214,32 @@ export function createFailures({
     return readableErrorDetail(failReason ? failReason.error : Cause.squash(cause));
   };
 
-  const formatFailure = (cause: Cause.Cause<unknown>) => {
+  const formatFailure = (cause: Cause.Cause<unknown>): ProviderFailureReport => {
     const detail = formatFailureDetail(cause);
     const failReason = cause.reasons.find(Cause.isFailReason);
 
     if (isBotUsageCapExceeded(failReason?.error)) {
-      return { detail, unavailability: "usage-cap" as const };
+      return { detail, unavailability: "usage-cap" };
+    }
+
+    // An engine refusal names the instance that failed, so the chat can
+    // repair that one even after the bot moves to another model.
+    if (isUnsupportedEngineError(failReason?.error)) {
+      const engineError = failReason.error;
+
+      return {
+        detail,
+        unavailability:
+          engineError.unavailability ?? providerUnavailabilityFromDetail("unknown", detail),
+        providerInstanceId: engineError.provider,
+      };
     }
 
     const provider = isProviderAdapterRequestError(failReason?.error)
       ? failReason.error.provider
       : "unknown";
 
-    return { detail, unavailability: providerUnavailabilityFromDetail(provider, detail) } as const;
+    return { detail, unavailability: providerUnavailabilityFromDetail(provider, detail) };
   };
 
   const setThreadSession = (input: {

@@ -10,11 +10,16 @@ import { stripWorktreeBranchPrefix, WORKTREE_BRANCH_PREFIX } from "@akeru/shared
 import * as Cause from "effect/Cause";
 import * as Duration from "effect/Duration";
 import * as Schema from "effect/Schema";
-import { ProviderAdapterRequestError } from "../../../provider/Errors.ts";
+import {
+  AgentControllerUnsupportedEngineError,
+  ProviderAdapterRequestError,
+} from "../../../provider/Errors.ts";
 import type { AgentControllerError } from "../../../provider/Errors.ts";
 import { BotUsageCapExceeded } from "../../../usage/BotUsageLedger.ts";
 
 export const isProviderAdapterRequestError = Schema.is(ProviderAdapterRequestError);
+
+export const isUnsupportedEngineError = Schema.is(AgentControllerUnsupportedEngineError);
 
 export const isBotUsageCapExceeded = Schema.is(BotUsageCapExceeded);
 
