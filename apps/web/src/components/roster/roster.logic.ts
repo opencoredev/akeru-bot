@@ -172,13 +172,6 @@ export function rosterZoneHeading(items: readonly RosterItemRef[]): string {
   return "Bots";
 }
 
-/** Archived bots, newest archive first, for the roster's restore list. */
-export function archivedRosterBots(bots: readonly Bot[]): Bot[] {
-  return bots
-    .filter((bot) => bot.archivedAt !== null)
-    .toSorted((left, right) => (right.archivedAt ?? "").localeCompare(left.archivedAt ?? ""));
-}
-
 export const ROSTER_TILE_LIMIT = 5;
 
 export function buildRosterStrip(

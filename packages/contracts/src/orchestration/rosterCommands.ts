@@ -139,6 +139,8 @@ export const BotDeleteCommand = Schema.Struct({
   type: Schema.Literal("bot.delete"),
   commandId: CommandId,
   botId: BotId,
+  /** Deletes only while the bot is still archived at this time, so a restore wins a race with the retention sweep. */
+  archivedAt: Schema.optional(IsoDateTime),
 });
 
 export const ChannelConnectCommand = Schema.Union([

@@ -337,6 +337,14 @@ export const decideBots = Effect.fn("decideBots")(function* ({
 
     case "bot.delete": {
       const bot = yield* requireBot({ readModel, command, botId: command.botId });
+
+      if (command.archivedAt !== undefined && bot.archivedAt !== command.archivedAt) {
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: `Bot '${command.botId}' is no longer archived at ${command.archivedAt}.`,
+        });
+      }
+
       const bossGroup = readModel.groups.find((group) => group.bossBotId === command.botId);
 
       if (bossGroup) {
@@ -503,6 +511,20 @@ export const decideBots = Effect.fn("decideBots")(function* ({
             updatedAt: occurredAt,
           },
         });
+
+        // A detached chat has no bot page, so it moves to Archived chats where it stays reachable.
+        if (owned && thread.archivedAt === null) {
+          events.push({
+            ...(yield* withEventBase({
+              aggregateKind: "thread",
+              aggregateId: thread.id,
+              occurredAt,
+              commandId: command.commandId,
+            })),
+            type: "thread.archived",
+            payload: { threadId: thread.id, archivedAt: occurredAt, updatedAt: occurredAt },
+          });
+        }
       }
 
       for (const routine of readModel.routines ?? []) {

@@ -76,8 +76,10 @@ export const rosterCatalog = {
   Groups: "Groups",
   "No bots match": "No bots match",
   "Archived bots": "Archived bots",
-  "{name} leaves the roster and stops taking messages. Its chat history is kept, and you can restore it from Archived at any time.":
-    "{name} leaves the roster and stops taking messages. Its chat history is kept, and you can restore it from Archived at any time.",
+  "{name} leaves the roster and stops taking messages. You can restore it from Settings > Archived for {days} days, then it is deleted. Its chats stay in your history.":
+    "{name} leaves the roster and stops taking messages. You can restore it from Settings > Archived for {days} days, then it is deleted. Its chats stay in your history.",
+  "Archived {time}. Deleted automatically on {date}.":
+    "Archived {time}. Deleted automatically on {date}.",
   "{count} bot": "{count} bot",
   "{count} bots": "{count} bots",
   "Bot name": "Bot name",

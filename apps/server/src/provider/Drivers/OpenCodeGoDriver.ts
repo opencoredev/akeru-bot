@@ -1,9 +1,4 @@
-import {
-  OpenCodeGoSettings,
-  ProviderDriverKind,
-  type ServerProvider,
-  type ServerProviderModel,
-} from "@akeru/contracts";
+import { OpenCodeGoSettings, ProviderDriverKind, type ServerProvider } from "@akeru/contracts";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
@@ -22,6 +17,7 @@ import type { ProviderDriver } from "../ProviderDriver.ts";
 import { explicitProviderInstanceEnvironment } from "../ProviderInstanceEnvironment.ts";
 import { defaultProviderContinuationIdentity } from "../ProviderDriver.ts";
 import { manualOnlyProviderMaintenanceCapabilities } from "../providerMaintenance.ts";
+import * as ModelCatalog from "../ModelCatalog.ts";
 
 const DRIVER_KIND = ProviderDriverKind.make("opencodeGo");
 
@@ -64,21 +60,11 @@ export const OPEN_CODE_GO_MODELS = [
   "hy3-preview",
 ] as const;
 
-function models(customModels: readonly string[]): ServerProviderModel[] {
-  const modelIds = [...OPEN_CODE_GO_MODELS, ...customModels.map((model) => model.trim())];
-
-  const uniqueModels = [...new Set(modelIds)].filter((model) => model.length > 0);
-
-  return uniqueModels.map((model, index) => ({
-    slug: model,
-    name: model,
-    isCustom: !OPEN_CODE_GO_MODELS.some((builtIn) => builtIn === model),
-    ...(index === 0 ? { isDefault: true } : {}),
-    capabilities: null,
-  }));
-}
-
-export type OpenCodeGoDriverEnv = ServerConfig | FileSystem.FileSystem | Path.Path;
+export type OpenCodeGoDriverEnv =
+  | ServerConfig
+  | FileSystem.FileSystem
+  | Path.Path
+  | ModelCatalog.ModelCatalog;
 
 export const OpenCodeGoDriver: ProviderDriver<OpenCodeGoSettings, OpenCodeGoDriverEnv> = {
   driverKind: DRIVER_KIND,
@@ -89,6 +75,7 @@ export const OpenCodeGoDriver: ProviderDriver<OpenCodeGoSettings, OpenCodeGoDriv
     Effect.gen(function* () {
       const serverConfig = yield* ServerConfig;
       const auth = yield* SubscriptionAuthService.forSecretsDir(serverConfig.secretsDir);
+      const modelCatalog = yield* ModelCatalog.ModelCatalog;
 
       const changes = yield* Effect.acquireRelease(
         PubSub.unbounded<ServerProvider>(),
@@ -106,6 +93,8 @@ export const OpenCodeGoDriver: ProviderDriver<OpenCodeGoSettings, OpenCodeGoDriv
       const readSnapshot = Effect.gen(function* () {
         yield* auth.reload();
         const connected = auth.isConnected("opencode-go", instanceId);
+        yield* modelCatalog.refreshInBackground;
+        const catalog = yield* modelCatalog.current;
 
         return {
           instanceId,
@@ -123,7 +112,12 @@ export const OpenCodeGoDriver: ProviderDriver<OpenCodeGoSettings, OpenCodeGoDriv
             ? { message: "Connect OpenCode Go in Settings." }
             : {}),
           availability: "available",
-          models: models(config.customModels),
+          models: ModelCatalog.catalogProviderModels({
+            catalog,
+            driver: DRIVER_KIND,
+            fallbackSlugs: OPEN_CODE_GO_MODELS,
+            customModels: config.customModels,
+          }),
           slashCommands: [],
           skills: [],
         } satisfies ServerProvider;
@@ -131,6 +125,12 @@ export const OpenCodeGoDriver: ProviderDriver<OpenCodeGoSettings, OpenCodeGoDriv
 
       const refresh = readSnapshot.pipe(
         Effect.tap((snapshot) => PubSub.publish(changes, snapshot)),
+      );
+
+      // No periodic health check runs for this driver, so republish when the
+      // model catalog changes to bring new models to open clients.
+      yield* Stream.runForEach(modelCatalog.changes, () => refresh).pipe(
+        Effect.forkScoped({ startImmediately: true }),
       );
 
       return {

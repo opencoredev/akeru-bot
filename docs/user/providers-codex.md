@@ -18,7 +18,7 @@ the refresh grant is rejected or **Check OAuth** reports a revoked login.
 ChatGPT image generation needs this account sign-in. An OpenAI API key for Codex chat does not
 connect the ChatGPT image provider.
 
-New bots use GPT-6 Sol when it is available to the connected account. You can choose another model
+New bots use GPT-6.1 Sol when it is available to the connected account. You can choose another model
 in the bot's settings.
 
 To use a second ChatGPT account, add a Codex instance on the same provider page, then connect its

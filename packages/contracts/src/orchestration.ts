@@ -61,6 +61,8 @@ export {
   ChannelFailureCategory,
   ChannelBinding,
   OrchestrationBot,
+  ARCHIVED_BOT_RETENTION_DAYS,
+  archivedBotDeletesAtMs,
   GroupMembershipRole,
   GroupBotMembership,
   GroupPersonMembership,
