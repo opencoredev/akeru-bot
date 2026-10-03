@@ -35,11 +35,19 @@ function slugifyLabel(driver: string, value: string): string {
     .replace(/_+$/, "");
 }
 
-/** First free `{driver}_{n}` number, starting at 2; the default account is `{driver}`. */
-export function nextAccountNumber(driver: string, existing: ReadonlySet<string>): number {
+/**
+ * First free `{driver}_{n}` number, starting at 2; the default account is
+ * `{driver}`. `nameTaken` skips numbers whose display name another account
+ * already uses, so a blank name never repeats a visible one.
+ */
+export function nextAccountNumber(
+  driver: string,
+  existing: ReadonlySet<string>,
+  nameTaken: (index: number) => boolean = () => false,
+): number {
   let index = 2;
 
-  while (existing.has(`${driver}_${index}`)) index += 1;
+  while (existing.has(`${driver}_${index}`) || nameTaken(index)) index += 1;
 
   return index;
 }
@@ -52,10 +60,11 @@ export function deriveInstanceId(
   driver: string,
   label: string,
   existing: ReadonlySet<string>,
+  nameTaken?: (index: number) => boolean,
 ): string {
   const slug = slugifyLabel(driver, label);
 
-  if (!slug) return `${driver}_${nextAccountNumber(driver, existing)}`;
+  if (!slug) return `${driver}_${nextAccountNumber(driver, existing, nameTaken)}`;
 
   const base = `${driver}_${slug}`;
 

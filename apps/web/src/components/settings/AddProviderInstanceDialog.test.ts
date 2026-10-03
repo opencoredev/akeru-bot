@@ -32,6 +32,15 @@ describe("deriveInstanceId", () => {
     expect(nextAccountNumber("claudeAgent", new Set(["claudeAgent_2"]))).toBe(3);
   });
 
+  it("skips a number whose name another account already shows", () => {
+    // "ChatGPT 2" was typed by hand, so its id is codex_chatgpt_2, not codex_2.
+    const nameTaken = (index: number) => index === 2;
+    const existing = new Set(["codex", "codex_chatgpt_2"]);
+
+    expect(nextAccountNumber("codex", existing, nameTaken)).toBe(3);
+    expect(deriveInstanceId("codex", "", existing, nameTaken)).toBe("codex_3");
+  });
+
   it("takes the first free suffix when the name is taken", () => {
     expect(
       deriveInstanceId(

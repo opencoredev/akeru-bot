@@ -2,7 +2,7 @@
 
 import type { ProviderConfig } from "./providerConfig";
 
-import { useMemo, useState } from "react";
+import { type KeyboardEvent, useMemo, useState } from "react";
 import {
   ProviderInstanceId,
   ProviderDriverKind,
@@ -24,7 +24,7 @@ import {
 import { Input } from "../ui/input";
 import { toastManager } from "../ui/toast";
 import type { DriverOption } from "./providerDriverMeta";
-import { ProviderSettingsForm } from "./ProviderSettingsForm";
+import { ProviderSettingsForm, readProviderConfigString } from "./ProviderSettingsForm";
 import { AnimatedHeight } from "../AnimatedHeight";
 import {
   addAccountWizardSteps,
@@ -85,10 +85,26 @@ export function AddProviderInstanceDialog({
   );
 
   const accountLabel = providerLabel ?? driverOption.label;
-  const instanceId = deriveInstanceId(driver, label, existingIds);
-  // A blank name still gets one, so the new account never shares the default's.
-  const fallbackName = `${accountLabel} ${nextAccountNumber(driver, existingIds)}`;
+
+  const usedNames = useMemo(
+    () =>
+      new Set(
+        Object.values(settings.providerInstances ?? {}).flatMap((instance) =>
+          instance.displayName ? [instance.displayName.trim()] : [],
+        ),
+      ),
+    [settings.providerInstances],
+  );
+
+  const nameTaken = (index: number) => usedNames.has(`${accountLabel} ${index}`);
+  const instanceId = deriveInstanceId(driver, label, existingIds, nameTaken);
+  // A blank name still gets one, so the new account never shares another's.
+  const fallbackName = `${accountLabel} ${nextAccountNumber(driver, existingIds, nameTaken)}`;
   const accountName = label.trim() || fallbackName;
+
+  // The driver cannot reach a Custom API service without its address.
+  const canSave =
+    !isCustomApi || readProviderConfigString(configDraft, "baseUrl").trim().length > 0;
 
   const wizardSteps = addAccountWizardSteps({ choosesService: isCustomApi });
 
@@ -118,6 +134,8 @@ export function AddProviderInstanceDialog({
   };
 
   const handleSave = () => {
+    if (!canSave) return;
+
     const config = configDraft;
     const hasConfig = Object.keys(config).length > 0;
 
@@ -155,6 +173,21 @@ export function AddProviderInstanceDialog({
         description: error instanceof Error ? error.message : "Update failed.",
       });
     }
+  };
+
+  const advanceOnEnter = (event: KeyboardEvent<HTMLElement>) => {
+    const isSubmit = isSubmitEnter({
+      key: event.key,
+      keyCode: event.keyCode,
+      isComposing: event.nativeEvent.isComposing,
+    });
+
+    if (!isSubmit || !(event.target instanceof HTMLInputElement)) return;
+
+    event.preventDefault();
+
+    if (wizardStep < lastStep) setWizardStep(wizardStep + 1);
+    else handleSave();
   };
 
   return (
@@ -208,22 +241,7 @@ export function AddProviderInstanceDialog({
                       setLabel(event.target.value);
                       setLabelEdited(true);
                     }}
-                    onKeyDown={(event) => {
-                      if (
-                        !isSubmitEnter({
-                          key: event.key,
-                          keyCode: event.keyCode,
-                          isComposing: event.nativeEvent.isComposing,
-                        })
-                      ) {
-                        return;
-                      }
-
-                      event.preventDefault();
-
-                      if (wizardStep < lastStep) setWizardStep(wizardStep + 1);
-                      else handleSave();
-                    }}
+                    onKeyDown={advanceOnEnter}
                   />
                   <span className="text-11px text-muted-foreground">
                     Leave it blank to call it {fallbackName}. Press Enter to continue.
@@ -231,7 +249,10 @@ export function AddProviderInstanceDialog({
                 </label>
 
                 {isCustomApi ? (
-                  <div className={cn("grid gap-4", currentStepName !== "Connect" && "hidden")}>
+                  <div
+                    className={cn("grid gap-4", currentStepName !== "Connect" && "hidden")}
+                    onKeyDown={advanceOnEnter}
+                  >
                     <ProviderSettingsForm
                       definition={driverOption}
                       value={configDraft}
@@ -273,7 +294,7 @@ export function AddProviderInstanceDialog({
                 Next
               </Button>
             ) : (
-              <Button size="sm" onClick={handleSave}>
+              <Button size="sm" disabled={!canSave} onClick={handleSave}>
                 {isCustomApi ? "Connect" : "Add account"}
               </Button>
             )}
