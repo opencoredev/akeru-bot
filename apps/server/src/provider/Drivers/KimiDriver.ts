@@ -1,9 +1,4 @@
-import {
-  KimiSettings,
-  ProviderDriverKind,
-  type ServerProvider,
-  type ServerProviderModel,
-} from "@akeru/contracts";
+import { KimiSettings, ProviderDriverKind, type ServerProvider } from "@akeru/contracts";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
@@ -22,6 +17,7 @@ import type { ProviderDriver } from "../ProviderDriver.ts";
 import { explicitProviderInstanceEnvironment } from "../ProviderInstanceEnvironment.ts";
 import { defaultProviderContinuationIdentity } from "../ProviderDriver.ts";
 import { manualOnlyProviderMaintenanceCapabilities } from "../providerMaintenance.ts";
+import * as ModelCatalog from "../ModelCatalog.ts";
 
 const DRIVER_KIND = ProviderDriverKind.make("kimi");
 
@@ -29,21 +25,11 @@ const decodeSettings = Schema.decodeSync(KimiSettings);
 
 const BUILT_IN_MODELS = ["k3", "k3-256k", "kimi-for-coding", "kimi-for-coding-highspeed"] as const;
 
-function models(customModels: readonly string[]): ServerProviderModel[] {
-  const uniqueModels = [
-    ...new Set([...BUILT_IN_MODELS, ...customModels.map((model) => model.trim())]),
-  ].filter((model) => model.length > 0);
-
-  return uniqueModels.map((model, index) => ({
-    slug: model,
-    name: model,
-    isCustom: !BUILT_IN_MODELS.some((builtIn) => builtIn === model),
-    ...(index === 0 ? { isDefault: true } : {}),
-    capabilities: null,
-  }));
-}
-
-export type KimiDriverEnv = ServerConfig | FileSystem.FileSystem | Path.Path;
+export type KimiDriverEnv =
+  | ServerConfig
+  | FileSystem.FileSystem
+  | Path.Path
+  | ModelCatalog.ModelCatalog;
 
 export const KimiDriver: ProviderDriver<KimiSettings, KimiDriverEnv> = {
   driverKind: DRIVER_KIND,
@@ -54,6 +40,7 @@ export const KimiDriver: ProviderDriver<KimiSettings, KimiDriverEnv> = {
     Effect.gen(function* () {
       const serverConfig = yield* ServerConfig;
       const auth = yield* SubscriptionAuthService.forSecretsDir(serverConfig.secretsDir);
+      const modelCatalog = yield* ModelCatalog.ModelCatalog;
 
       const changes = yield* Effect.acquireRelease(
         PubSub.unbounded<ServerProvider>(),
@@ -71,6 +58,8 @@ export const KimiDriver: ProviderDriver<KimiSettings, KimiDriverEnv> = {
       const readSnapshot = Effect.gen(function* () {
         yield* auth.reload();
         const connected = auth.isConnected("kimi-for-coding", instanceId);
+        yield* modelCatalog.refreshInBackground;
+        const catalog = yield* modelCatalog.current;
 
         return {
           instanceId,
@@ -88,7 +77,12 @@ export const KimiDriver: ProviderDriver<KimiSettings, KimiDriverEnv> = {
             ? { message: "Connect Kimi For Coding in Settings." }
             : {}),
           availability: "available",
-          models: models(config.customModels),
+          models: ModelCatalog.catalogProviderModels({
+            catalog,
+            driver: DRIVER_KIND,
+            fallbackSlugs: BUILT_IN_MODELS,
+            customModels: config.customModels,
+          }),
           slashCommands: [],
           // Kimi For Coding has no skill-loading mechanism — its CLI exposes
           // no skill catalog to report (unlike `skills/list`, `grok inspect`,
@@ -100,6 +94,12 @@ export const KimiDriver: ProviderDriver<KimiSettings, KimiDriverEnv> = {
 
       const refresh = readSnapshot.pipe(
         Effect.tap((snapshot) => PubSub.publish(changes, snapshot)),
+      );
+
+      // No periodic health check runs for this driver, so republish when the
+      // model catalog changes to bring new models to open clients.
+      yield* Stream.runForEach(modelCatalog.changes, () => refresh).pipe(
+        Effect.forkScoped({ startImmediately: true }),
       );
 
       return {

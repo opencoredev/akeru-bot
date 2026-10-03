@@ -294,6 +294,13 @@ export const SETTINGS_SEARCH_ITEMS = [
     keywords: ["archive", "unarchive", "restore", "delete"],
   },
   {
+    id: "archived-bots",
+    title: "Archived bots",
+    to: "/settings/archived",
+    targetId: "archived-bots",
+    keywords: ["archive", "restore", "delete", "bot"],
+  },
+  {
     id: "providers",
     title: "Providers",
     to: "/settings/providers",

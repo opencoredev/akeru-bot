@@ -236,9 +236,9 @@ the `model.rerouted` runtime event and ingestion projects a `model.rerouted` act
 change is visible. Today only the Codex adapter emits it. See
 [providers.md](./providers.md#model-routing).
 
-#### Model manifest
+#### Model catalog
 
-The per-driver list of current model slugs that decides which models land in the model picker's legacy section. Bundled at `apps/server/src/provider/model-manifest.json` and refreshed at runtime from the same file on `main`, so classification updates ship as commits instead of releases. See the [provider architecture][16] model manifest section.
+The per-driver model list, display names, and current-versus-legacy classification, built from models.dev. Bundled at `apps/server/src/provider/model-catalog.json` and refetched hourly by the server, so new models reach clients without a release. Replaces the older model manifest, which pre-catalog builds still read from `main`. See the [provider architecture][16] model catalog section.
 
 ### Checkpointing
 

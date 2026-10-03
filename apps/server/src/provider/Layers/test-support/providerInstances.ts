@@ -16,7 +16,7 @@ import { HttpClient, HttpClientResponse } from "effect/unstable/http";
 import * as BackgroundPolicy from "../../../background/BackgroundPolicy.ts";
 import { ServerConfig } from "../../../config.ts";
 import { ServerSettingsService } from "../../../serverSettings.ts";
-import * as ModelManifest from "../../ModelManifest.ts";
+import * as ModelCatalog from "../../ModelCatalog.ts";
 import { OpenCodeRuntimeLive } from "../../opencodeRuntime.ts";
 import { NoOpProviderEventLoggers, ProviderEventLoggers } from "../ProviderEventLoggers.ts";
 
@@ -109,7 +109,7 @@ export const testLayer = ServerConfig.layerTest(process.cwd(), {
   Layer.provideMerge(ServerSettingsService.layerTest()),
   Layer.provideMerge(TestHttpClientLive),
   Layer.provideMerge(Layer.succeed(ProviderEventLoggers, NoOpProviderEventLoggers)),
-  Layer.provideMerge(ModelManifest.layerTest),
+  Layer.provideMerge(ModelCatalog.layerTest),
 );
 
 export const infraLayer = OpenCodeRuntimeLive.pipe(Layer.provideMerge(NodeServices.layer));
@@ -122,7 +122,7 @@ export const allDriversTestLayer = ServerConfig.layerTest(process.cwd(), {
   Layer.provideMerge(ServerSettingsService.layerTest()),
   Layer.provideMerge(TestHttpClientLive),
   Layer.provideMerge(Layer.succeed(ProviderEventLoggers, NoOpProviderEventLoggers)),
-  Layer.provideMerge(ModelManifest.layerTest),
+  Layer.provideMerge(ModelCatalog.layerTest),
 );
 
 export const kimiId = ProviderInstanceId.make("kimi_default");
@@ -137,5 +137,5 @@ export const kimiTestLayer = ServerConfig.layerTest(process.cwd(), {
   Layer.provideMerge(ServerSettingsService.layerTest()),
   Layer.provideMerge(TestHttpClientLive),
   Layer.provideMerge(Layer.succeed(ProviderEventLoggers, NoOpProviderEventLoggers)),
-  Layer.provideMerge(ModelManifest.layerTest),
+  Layer.provideMerge(ModelCatalog.layerTest),
 );

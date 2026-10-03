@@ -17,7 +17,7 @@ import { pendingCodexProvider } from "../Layers/CodexProvider.ts";
 import { makeHarnessProviderStatus } from "../HarnessProviderStatus.ts";
 import { ProviderEventLoggers } from "../Layers/ProviderEventLoggers.ts";
 import { makeManagedServerProvider } from "../makeManagedServerProvider.ts";
-import * as ModelManifest from "../ModelManifest.ts";
+import * as ModelCatalog from "../ModelCatalog.ts";
 import type { ProviderDriver, ProviderInstance } from "../ProviderDriver.ts";
 import type { ServerProviderDraft } from "../providerSnapshot.ts";
 import {
@@ -58,7 +58,7 @@ export type CodexDriverEnv =
   | Crypto.Crypto
   | FileSystem.FileSystem
   | HttpClient.HttpClient
-  | ModelManifest.ModelManifest
+  | ModelCatalog.ModelCatalog
   | Path.Path
   | ProviderEventLoggers
   | ServerConfig

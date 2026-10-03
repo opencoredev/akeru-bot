@@ -35,6 +35,24 @@ it.layer(NodeServices.layer)("bot delete decider", (it) => {
     }),
   );
 
+  it.effect("rejects a delete pinned to an archive the bot no longer has", () =>
+    Effect.gen(function* () {
+      const readModel = makeReadModel({ bots: [makeBot({ id: BOT_ID })] });
+
+      const error = yield* decideOrchestrationCommand({
+        command: {
+          type: "bot.delete",
+          commandId: CommandId.make("cmd-delete-restored"),
+          botId: BOT_ID,
+          archivedAt: NOW,
+        },
+        readModel,
+      }).pipe(Effect.flip);
+
+      expect(error.message).toContain("no longer archived");
+    }),
+  );
+
   it.effect("deletes the bot's routines and skill assignments", () =>
     Effect.gen(function* () {
       const withRoutine = yield* projectEvent(createEmptyReadModel(NOW), {
