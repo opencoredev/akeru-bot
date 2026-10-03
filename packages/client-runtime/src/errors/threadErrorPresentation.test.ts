@@ -42,10 +42,30 @@ describe("presentThreadError", () => {
       title: "Claude is not connected",
       action: "providers",
     });
-    // Older servers hid the reason behind this message.
+  });
+
+  it("treats an older server's unavailable instance as not set up", () => {
+    // Older servers sent this for a missing sign-in and for a deleted instance alike.
     expect(presentThreadError("Provider instance 'claudeAgent' is not available.")).toMatchObject({
-      title: "Claude is not connected",
-      description: "Connect your Claude account in Settings > Providers.",
+      title: "Claude is not set up",
+      action: "providers",
+      reason: "missing-provider",
+    });
+  });
+
+  it("names the credential a custom instance is missing instead of asking for feedback", () => {
+    expect(
+      presentThreadError("This Codex instance needs OPENAI_API_KEY for the Akeru harness.", {
+        providerName: "Work Codex",
+      }),
+    ).toMatchObject({
+      title: "Work Codex needs OPENAI_API_KEY",
+      action: "providers",
+    });
+    expect(
+      presentThreadError("Custom Kimi credentials are not supported by the Akeru harness."),
+    ).toMatchObject({
+      title: "The provider can't use custom credentials",
       action: "providers",
     });
   });

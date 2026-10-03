@@ -282,6 +282,15 @@ export const connectionsCatalog = {
   Export: "Export",
   "Exporting...": "Exporting...",
   "Import Akeru archive": "Import Akeru archive",
+  "Open {provider} settings": "Open {provider} settings",
+  "{provider} needs {requirement}": "{provider} needs {requirement}",
+  "The provider needs {requirement}": "The provider needs {requirement}",
+  "Add it to this provider in Settings > Providers, then send your message again.":
+    "Add it to this provider in Settings > Providers, then send your message again.",
+  "{provider} can't use custom credentials": "{provider} can't use custom credentials",
+  "The provider can't use custom credentials": "The provider can't use custom credentials",
+  "Use your account in Settings > Providers, or pick another model for this bot.":
+    "Use your account in Settings > Providers, or pick another model for this bot.",
   "{provider} is not connected": "{provider} is not connected",
   "The provider is not connected": "The provider is not connected",
   "Connect your {provider} account in Settings > Providers.":

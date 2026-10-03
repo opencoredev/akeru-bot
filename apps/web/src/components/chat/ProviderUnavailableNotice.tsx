@@ -1,6 +1,7 @@
 import type { EnvironmentId } from "@akeru/contracts";
 import {
   joinProviderUnavailability,
+  providerReasonNeedsSignIn,
   type ProviderAvailabilityPresentation,
 } from "@akeru/client-runtime/provider-availability";
 import { CircleAlertIcon, Settings2Icon } from "lucide-react";
@@ -12,6 +13,17 @@ import type { ProviderCatalogEntry } from "../settings/providerCatalog";
 import { SettingsEntityIcon } from "../settings/settingsDetailLayout";
 import { subscriptionProviderTargetId } from "../settings/subscriptionProviders";
 import { Button } from "../ui/button";
+
+/** "Connect Claude" when signing in fixes it, else a plain way into Claude's settings. */
+function providerButtonLabel(
+  t: ReturnType<typeof useI18n>["t"],
+  provider: ProviderCatalogEntry,
+  reason: ProviderAvailabilityPresentation["reason"],
+) {
+  return providerReasonNeedsSignIn(reason)
+    ? t("Connect {provider}", { provider: provider.label })
+    : t("Open {provider} settings", { provider: provider.label });
+}
 
 /** Opens the provider's own settings page, or the Providers list when there is none. */
 function openProviderSettings(
@@ -41,11 +53,13 @@ export function ProviderLogoTile({ provider }: { readonly provider: ProviderCata
  */
 export function ProviderRepairAction({
   action,
+  reason,
   provider,
   environmentId,
   onOpenUsage,
 }: {
   readonly action: ProviderAvailabilityPresentation["action"];
+  readonly reason?: ProviderAvailabilityPresentation["reason"];
   readonly provider?: ProviderCatalogEntry | null | undefined;
   readonly environmentId: EnvironmentId | null;
   readonly onOpenUsage?: (() => void) | undefined;
@@ -61,7 +75,7 @@ export function ProviderRepairAction({
         onClick={() => openProviderSettings(provider, environmentId)}
       >
         {provider ? null : <Settings2Icon aria-hidden="true" />}
-        {provider ? t("Connect {provider}", { provider: provider.label }) : t("Open Providers")}
+        {provider ? providerButtonLabel(t, provider, reason) : t("Open Providers")}
       </Button>
     );
   }
@@ -91,7 +105,10 @@ export function ProviderUnavailableNotice({
   id,
 }: {
   readonly id?: string | undefined;
-  readonly presentation: Pick<ProviderAvailabilityPresentation, "title" | "description" | "action">;
+  readonly presentation: Pick<
+    ProviderAvailabilityPresentation,
+    "title" | "description" | "action" | "reason"
+  >;
   /** The provider whose settings fix this, when the bot's engine names one. */
   readonly provider?: ProviderCatalogEntry | null | undefined;
   readonly environmentId: EnvironmentId | null;
@@ -122,6 +139,7 @@ export function ProviderUnavailableNotice({
           <div className="mt-2 flex flex-wrap items-center gap-1.5">
             <ProviderRepairAction
               action={presentation.action}
+              reason={presentation.reason}
               provider={provider}
               environmentId={environmentId}
               onOpenUsage={onOpenUsage}
@@ -146,7 +164,10 @@ export function ProviderUnavailableLine({
   id,
 }: {
   readonly id?: string | undefined;
-  readonly presentation: Pick<ProviderAvailabilityPresentation, "title" | "description" | "action">;
+  readonly presentation: Pick<
+    ProviderAvailabilityPresentation,
+    "title" | "description" | "action" | "reason"
+  >;
   /** The provider whose settings fix this, when the bot's engine names one. */
   readonly provider?: ProviderCatalogEntry | null | undefined;
   readonly environmentId: EnvironmentId | null;
@@ -163,7 +184,7 @@ export function ProviderUnavailableLine({
         onClick={() => openProviderSettings(provider, environmentId)}
       >
         {provider ? <SettingsEntityIcon icon={provider.icon} className="size-3.5" /> : null}
-        {provider ? t("Connect {provider}", { provider: provider.label }) : t("Set up a provider")}
+        {provider ? providerButtonLabel(t, provider, presentation.reason) : t("Set up a provider")}
       </Button>
     ) : presentation.action === "usage" && onOpenUsage ? (
       <Button size="xs" type="button" variant="outline" onClick={onOpenUsage}>

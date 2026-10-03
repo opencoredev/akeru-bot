@@ -136,6 +136,7 @@ describe("ThreadErrorBanner", () => {
       description: "Turn ChatGPT on in Settings > Providers, then send your message again.",
       technicalDetails: "Provider instance “codex” is disabled.",
       action: "providers",
+      reason: "disabled",
     });
 
     const markup = renderToStaticMarkup(
@@ -147,6 +148,18 @@ describe("ThreadErrorBanner", () => {
     expect(markup).not.toContain("Send feedback");
     expect(markup).not.toContain("AgentController.inspectEngine");
     expect(markup).not.toContain("/home/leo");
+
+    // Signing in won't turn a provider on, so its button just opens the page.
+    const withLogo = renderToStaticMarkup(
+      <ThreadErrorBanner
+        error={error}
+        threadKey="env:thread-disabled-provider-logo"
+        context={{ provider: providerCatalogEntry("chatgpt") ?? null }}
+      />,
+    );
+
+    expect(withLogo).toContain(">Open ChatGPT settings<");
+    expect(withLogo).not.toContain("Connect ChatGPT");
   });
 
   it("uses the server's failure category to name the provider and the fix", () => {

@@ -76,18 +76,15 @@ export function providerInstanceUnavailability(
 
   if (!reason) return null;
 
-  return {
-    reason,
-    ...presentProviderUnavailability(
-      {
-        reason,
-        providerName: options.providerName ?? entry?.displayName,
-        modelName: options.modelName ?? options.model,
-        detail: entry?.snapshot.unavailabilityDetail ?? entry?.snapshot.message,
-      },
-      options.t,
-    ),
-  };
+  return presentProviderUnavailability(
+    {
+      reason,
+      providerName: options.providerName ?? entry?.displayName,
+      modelName: options.modelName ?? options.model,
+      detail: entry?.snapshot.unavailabilityDetail ?? entry?.snapshot.message,
+    },
+    options.t,
+  );
 }
 
 /** `providerInstanceUnavailability` as one sentence for a disabled row or button. */

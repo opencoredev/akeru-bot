@@ -124,6 +124,7 @@ export const ThreadErrorBanner = memo(function ThreadErrorBanner({
               ) : null}
               <ProviderRepairAction
                 action={presentation.action}
+                reason={presentation.reason}
                 provider={provider}
                 environmentId={environmentId}
                 onOpenUsage={onOpenUsage}

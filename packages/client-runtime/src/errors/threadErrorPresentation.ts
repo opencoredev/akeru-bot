@@ -79,16 +79,14 @@ export function presentThreadError(
     );
   }
 
-  // "is not available" is how older servers reported a missing sign-in.
+  // Older servers said "is not available" for both a missing sign-in and a
+  // deleted instance; "not set up" fits either.
   const missingProvider = error.match(
-    /Provider instance ['"]([^'"]+)['"] is not (set up|available)/i,
+    /Provider instance ['"]([^'"]+)['"] is not (?:set up|available)/i,
   );
 
   if (missingProvider?.[1]) {
-    return present(
-      missingProvider[2] === "available" ? "missing-login" : "missing-provider",
-      context.providerName ?? providerName(missingProvider[1]),
-    );
+    return present("missing-provider", context.providerName ?? providerName(missingProvider[1]));
   }
 
   if (/Bot '[^']+' is archived/.test(error)) {
@@ -110,6 +108,40 @@ export function presentThreadError(
     )
   ) {
     return present("missing-login");
+  }
+
+  // A provider set up with its own credentials: signing in to an account
+  // won't fix it, so name what the instance is missing.
+  const provider = context.providerName;
+
+  const missingCredential = error.match(/This .+ instance needs (.+?) for the Akeru harness/);
+
+  if (missingCredential?.[1]) {
+    const requirement = missingCredential[1];
+
+    return {
+      title: provider
+        ? t("{provider} needs {requirement}", { provider, requirement })
+        : t("The provider needs {requirement}", { requirement }),
+      description: t(
+        "Add it to this provider in Settings > Providers, then send your message again.",
+      ),
+      technicalDetails: boundedTechnicalDetails(error),
+      action: "providers",
+    };
+  }
+
+  if (/Custom .+ credentials are not supported/.test(error)) {
+    return {
+      title: provider
+        ? t("{provider} can't use custom credentials", { provider })
+        : t("The provider can't use custom credentials"),
+      description: t(
+        "Use your account in Settings > Providers, or pick another model for this bot.",
+      ),
+      technicalDetails: boundedTechnicalDetails(error),
+      action: "providers",
+    };
   }
 
   if (/network|connection|socket|fetch failed|disconnected/i.test(error)) {
