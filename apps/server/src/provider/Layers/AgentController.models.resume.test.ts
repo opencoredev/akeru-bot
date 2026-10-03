@@ -659,12 +659,11 @@ describe("AgentControllerLive", () => {
             assert.equal(error._tag, "AgentControllerUnsupportedEngineError");
 
             if (Predicate.isTagged(error, "AgentControllerUnsupportedEngineError")) {
-              assert.include(error.detail, `Provider instance '${provider}' is not available.`);
+              // The chat shows the detail, so it carries the fix, not a generic refusal.
+              assert.include(error.detail, expectedIssue);
 
-              const causeMessage =
-                error.cause instanceof Error ? error.cause.message : String(error.cause ?? "");
-
-              assert.include(causeMessage, expectedIssue);
+              // Signing in cannot fix a custom-credential instance.
+              assert.isUndefined(error.unavailability);
             }
 
             expect(bridge.startSession).not.toHaveBeenCalled();
@@ -676,6 +675,56 @@ describe("AgentControllerLive", () => {
         );
       },
     );
+
+    it.effect("asks to sign in when a saved-account provider is not connected", () => {
+      const bridge = makeBridge();
+      const mastra = mastraHarnessFixture();
+
+      const service: ProviderServiceShape = {
+        ...bridge.service,
+        getInstanceInfo: (candidate) =>
+          Effect.succeed({
+            instanceId: candidate,
+            driverKind: ProviderDriverKind.make("claudeAgent"),
+            displayName: undefined,
+            enabled: true,
+            continuationIdentity: {
+              driverKind: ProviderDriverKind.make("claudeAgent"),
+              continuationKey: `claudeAgent:instance:${candidate}`,
+            },
+            mastraConnection: {
+              environment: {},
+              instanceEnvironment: {},
+              useSavedCredential: true,
+            },
+          }),
+      };
+
+      return provideController(
+        Effect.gen(function* () {
+          const controller = yield* AgentController;
+
+          const error = yield* controller
+            .resolveEngine({
+              threadId: ThreadId.make("thread-claude-signed-out"),
+              engine: { provider: "claudeAgent", model: "claude-sonnet-4-6" },
+              fallback: codexSelection,
+              mode: "default",
+              botConversation: true,
+            })
+            .pipe(Effect.flip);
+
+          assert.equal(error._tag, "AgentControllerUnsupportedEngineError");
+
+          if (Predicate.isTagged(error, "AgentControllerUnsupportedEngineError")) {
+            assert.include(error.detail, "Connect Claude in Settings.");
+            assert.equal(error.unavailability, "missing-login");
+          }
+        }),
+        service,
+        mastra.factory,
+      );
+    });
   });
 });
 

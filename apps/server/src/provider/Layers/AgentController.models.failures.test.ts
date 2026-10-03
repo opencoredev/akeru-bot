@@ -486,6 +486,8 @@ describe("AgentControllerLive", () => {
 
           if (Predicate.isTagged(failure, "AgentControllerUnsupportedEngineError")) {
             assert.include(failure.detail, "Model 'not-a-model' is not available for codex.");
+
+            assert.equal(failure.unavailability, "unsupported-model");
           }
 
           expect(mastra.createSession).not.toHaveBeenCalled();

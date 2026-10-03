@@ -611,6 +611,7 @@ export function BotThreadLanding({
           />
           {sendBlocked && engineUnavailability ? (
             <ProviderUnavailableLine
+              provider={engineUnavailability.provider}
               id={engineNoticeId}
               presentation={engineUnavailability}
               environmentId={environmentId}

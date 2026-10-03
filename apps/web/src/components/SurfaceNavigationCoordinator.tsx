@@ -9,6 +9,7 @@ import {
 } from "../settingsDialogStore";
 import { closeUsage, useUsageDialogStore } from "../usageDialogStore";
 import { channelProviderFromSettingsTarget } from "./settings/channelProviderMeta";
+import { providerCatalogSlugFromSettingsTarget } from "./settings/providerCatalog";
 
 /** Bridges legacy imperative open helpers to the routed workspace surfaces. */
 export function SurfaceNavigationCoordinator() {
@@ -21,17 +22,24 @@ export function SurfaceNavigationCoordinator() {
 
   useEffect(() => {
     if (settingsSection !== null) {
-      // A channel target, such as a repair link, opens that provider's own page.
+      // A channel or provider target, such as a repair link, opens that provider's own page.
       const channel =
         settingsSection === "channels" ? channelProviderFromSettingsTarget(settingsTarget) : null;
 
+      const providerId =
+        settingsSection === "providers"
+          ? providerCatalogSlugFromSettingsTarget(settingsTarget)
+          : null;
+
       void (channel
         ? navigate({ to: "/settings/channels/$channel", params: { channel } })
-        : navigate({
-            to: "/settings/$section",
-            params: { section: settingsSection },
-            hash: settingsTarget ?? "",
-          }));
+        : providerId
+          ? navigate({ to: "/settings/providers/$providerId", params: { providerId } })
+          : navigate({
+              to: "/settings/$section",
+              params: { section: settingsSection },
+              hash: settingsTarget ?? "",
+            }));
       acknowledgeSettingsNavigation();
 
       return;

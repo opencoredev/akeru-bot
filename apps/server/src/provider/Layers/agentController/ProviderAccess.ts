@@ -1,6 +1,7 @@
 import { harnessCredentialIssue } from "../../HarnessProviderStatus.ts";
 import { ProviderDriverKind } from "@akeru/contracts";
 import { ProviderInstanceId } from "@akeru/contracts";
+import { PROVIDER_ACCOUNT_NAMES } from "@akeru/contracts";
 import * as NodeCrypto from "node:crypto";
 import * as Path from "effect/Path";
 import * as Effect from "effect/Effect";
@@ -114,7 +115,7 @@ export function mastraConnectionIssue(
 
     return savedCredentialConnected
       ? undefined
-      : `Connect ${provider} in Settings before starting.`;
+      : `Connect ${PROVIDER_ACCOUNT_NAMES[provider] ?? provider} in Settings.`;
   }
 
   switch (String(provider)) {

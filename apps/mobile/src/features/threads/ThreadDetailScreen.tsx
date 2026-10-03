@@ -18,7 +18,12 @@ import type {
   ServerProviderUnavailability,
   UserInputQuestion,
 } from "@akeru/contracts";
-import { PROVIDER_DISPLAY_NAMES, ProviderDriverKind } from "@akeru/contracts";
+import {
+  defaultInstanceIdForDriver,
+  PROVIDER_ACCOUNT_NAMES,
+  PROVIDER_DISPLAY_NAMES,
+  ProviderDriverKind,
+} from "@akeru/contracts";
 import * as Haptics from "expo-haptics";
 import {
   memo,
@@ -484,11 +489,15 @@ export const ThreadDetailScreen = memo(function ThreadDetailScreen(props: Thread
     (provider) => provider.instanceId === selectedInstanceId,
   );
 
+  const selectedDriver = selectedProvider?.driver ?? ProviderDriverKind.make(selectedInstanceId);
+  // Failure copy names a built-in instance by its account: "ChatGPT", not "Codex".
+
   const selectedProviderName =
+    (selectedInstanceId === defaultInstanceIdForDriver(selectedDriver)
+      ? PROVIDER_ACCOUNT_NAMES[selectedDriver]
+      : undefined) ??
     selectedProvider?.displayName ??
-    PROVIDER_DISPLAY_NAMES[
-      selectedProvider?.driver ?? ProviderDriverKind.make(selectedInstanceId)
-    ] ??
+    PROVIDER_DISPLAY_NAMES[selectedDriver] ??
     selectedInstanceId;
 
   const selectedProviderSkills = useMemo(

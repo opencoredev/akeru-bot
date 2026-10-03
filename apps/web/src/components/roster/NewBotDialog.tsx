@@ -90,6 +90,7 @@ export function NewBotDialog({
               <div className="sm:col-span-2">
                 <ProviderUnavailableNotice
                   presentation={defaultEngine.unavailability}
+                  provider={defaultEngine.unavailability.provider}
                   environmentId={environmentId}
                 />
               </div>

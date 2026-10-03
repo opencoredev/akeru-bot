@@ -1,4 +1,5 @@
 import {
+  PROVIDER_ACCOUNT_NAMES,
   ProviderDriverKind,
   ProviderInstanceId,
   type BotEngine,
@@ -15,6 +16,7 @@ import type { ProviderAvailabilityTranslate } from "@akeru/client-runtime/provid
 import { resolveAppModelSelectionForInstance } from "../../modelSelection";
 import type { ComposerProviderCatalog } from "../chat/composerProviderMenuItems";
 import { formatProviderDriverKindLabel } from "../../providerModels";
+import { providerCatalogEntryForDriver } from "../settings/providerCatalog";
 import {
   providerInstanceUnavailability,
   resolveSelectableProviderInstanceEntry,
@@ -119,8 +121,35 @@ export function resolveStickyBotEngine(input: {
 const englishTranslate: ProviderAvailabilityTranslate = createTranslator("en").t;
 
 /**
- * Why the bot's engine cannot run a turn right now, or null when it can. Feeds
- * the disabled Send button and the quiet line below the composer.
+ * What setup and failure copy calls a bot's provider: the account for a
+ * built-in instance ("ChatGPT", not "Codex"), the user's name for a custom one.
+ */
+function botProviderName(
+  instanceId: ProviderInstanceId,
+  entry: ProviderInstanceEntry | undefined,
+): string {
+  if (entry && !entry.isDefault) return entry.displayName;
+  const driver = entry?.driverKind ?? ProviderDriverKind.make(instanceId);
+
+  return (
+    PROVIDER_ACCOUNT_NAMES[driver] ?? entry?.displayName ?? formatProviderDriverKindLabel(driver)
+  );
+}
+
+/** The Providers page that can repair a bot's engine. Custom instances have none of their own. */
+function botProviderCatalogEntry(
+  instanceId: ProviderInstanceId,
+  entry: ProviderInstanceEntry | undefined,
+) {
+  if (entry && !entry.isDefault) return null;
+
+  return providerCatalogEntryForDriver(entry?.driverKind ?? instanceId) ?? null;
+}
+
+/**
+ * Why the bot's engine cannot run a turn right now, or null when it can, with
+ * the Providers page that fixes it. Feeds the disabled Send button and the
+ * quiet line below the composer.
  */
 export function botEngineUnavailability(
   selection: ModelSelection | null,
@@ -134,6 +163,7 @@ export function botEngineUnavailability(
       description: t("Connect a provider in Settings > Providers so this bot can reply."),
       technicalDetails: "",
       action: "providers" as const,
+      provider: null,
     };
   }
 
@@ -142,17 +172,22 @@ export function botEngineUnavailability(
   const modelName =
     entry?.models.find((candidate) => candidate.slug === selection.model)?.name ?? selection.model;
 
-  return providerInstanceUnavailability(entry, {
+  const unavailability = providerInstanceUnavailability(entry, {
     model: selection.model,
     modelName,
-    providerName: formatProviderDriverKindLabel(ProviderDriverKind.make(selection.instanceId)),
+    providerName: botProviderName(selection.instanceId, entry),
     t,
   });
+
+  return unavailability
+    ? { ...unavailability, provider: botProviderCatalogEntry(selection.instanceId, entry) }
+    : null;
 }
 
 /**
- * What a chat's failure copy needs to name the provider and model that failed.
- * Pass the result to `presentThreadError` or `ThreadErrorBanner`.
+ * What a chat's failure copy needs to name the provider and model that failed,
+ * plus the Providers page that fixes it. Pass the result to
+ * `presentThreadError` or `ThreadErrorBanner`.
  */
 export function botEngineFailureContext(
   selection: ModelSelection | null,
@@ -163,11 +198,8 @@ export function botEngineFailureContext(
 
   return {
     unavailability: unavailability ?? null,
-    providerName:
-      entry?.displayName ??
-      (selection
-        ? formatProviderDriverKindLabel(ProviderDriverKind.make(selection.instanceId))
-        : null),
+    providerName: selection ? botProviderName(selection.instanceId, entry) : null,
+    provider: selection ? botProviderCatalogEntry(selection.instanceId, entry) : null,
     modelName:
       entry?.models.find((model) => model.slug === selection?.model)?.name ??
       selection?.model ??

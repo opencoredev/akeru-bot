@@ -35,6 +35,28 @@ describe("presentThreadError", () => {
     });
   });
 
+  it("sends a missing sign-in to Settings instead of asking for feedback", () => {
+    expect(
+      presentThreadError("Connect Claude in Settings.", { providerName: "Claude" }),
+    ).toMatchObject({
+      title: "Claude is not connected",
+      action: "providers",
+    });
+    // Older servers hid the reason behind this message.
+    expect(presentThreadError("Provider instance 'claudeAgent' is not available.")).toMatchObject({
+      title: "Claude is not connected",
+      description: "Connect your Claude account in Settings > Providers.",
+      action: "providers",
+    });
+  });
+
+  it("names a provider instance that is not set up", () => {
+    expect(presentThreadError("Provider instance 'claudeAgent' is not set up.")).toMatchObject({
+      title: "Claude is not set up",
+      action: "providers",
+    });
+  });
+
   it("names the fix for a dropped connection instead of asking for feedback", () => {
     expect(presentThreadError("WebSocket disconnected")).toMatchObject({
       title: "Connection interrupted",

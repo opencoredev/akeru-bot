@@ -1,4 +1,5 @@
 import * as Predicate from "effect/Predicate";
+import { ServerProviderUnavailability } from "@akeru/contracts";
 import * as Schema from "effect/Schema";
 
 import type { CheckpointServiceError } from "../checkpointing/Errors.ts";
@@ -196,6 +197,9 @@ export class AgentControllerUnsupportedEngineError extends Schema.TaggedErrorCla
     provider: Schema.String,
     model: Schema.String,
     detail: Schema.String,
+    // Set when the user can fix the failure, so the chat names the fix instead
+    // of asking for feedback.
+    unavailability: Schema.optional(ServerProviderUnavailability),
     cause: Schema.optional(Schema.Defect()),
   },
 ) {

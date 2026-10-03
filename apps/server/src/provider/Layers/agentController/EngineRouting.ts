@@ -57,7 +57,7 @@ export function createEngineRouting(deps: {
       new AgentControllerUnsupportedEngineError({
         provider,
         model,
-        detail: `Provider instance '${provider}' is not available.`,
+        detail: `Provider instance '${provider}' is not set up.`,
         cause,
       });
 
@@ -94,6 +94,7 @@ export function createEngineRouting(deps: {
           provider,
           model,
           detail: `Model '${model}' is not available for ${name}.`,
+          unavailability: "unsupported-model",
         });
       }
     }
@@ -115,7 +116,18 @@ export function createEngineRouting(deps: {
           : false,
       );
 
-      if (issue) return yield* unavailable(new Error(issue));
+      if (issue) {
+        return yield* new AgentControllerUnsupportedEngineError({
+          provider,
+          model,
+          detail: issue,
+          // Signing in only fixes an instance that uses the saved account; a
+          // custom-credential instance keeps its own message.
+          ...(routing.mastraConnection?.useSavedCredential
+            ? { unavailability: "missing-login" as const }
+            : {}),
+        });
+      }
     }
 
     const capabilities = deps.usesMastraCode(routing.driverKind)

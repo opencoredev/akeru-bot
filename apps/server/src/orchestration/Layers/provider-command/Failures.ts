@@ -16,6 +16,7 @@ import {
   isBotUsageCapExceeded,
   isComposioOperationError,
   isProviderAdapterRequestError,
+  isUnsupportedEngineError,
   withoutUnavailability,
 } from "./Fields.ts";
 import type { createDependencies } from "./Dependencies.ts";
@@ -208,6 +209,10 @@ export function createFailures({
 
     if (isBotUsageCapExceeded(failReason?.error)) {
       return { detail, unavailability: "usage-cap" as const };
+    }
+
+    if (isUnsupportedEngineError(failReason?.error) && failReason.error.unavailability) {
+      return { detail, unavailability: failReason.error.unavailability };
     }
 
     const provider = isProviderAdapterRequestError(failReason?.error)

@@ -1,6 +1,7 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { presentThreadError } from "@akeru/client-runtime/errors";
 import { describe, expect, it } from "vite-plus/test";
+import { providerCatalogEntry } from "../settings/providerCatalog";
 
 import {
   dismissThreadErrorBannerForSession,
@@ -131,8 +132,8 @@ describe("ThreadErrorBanner", () => {
       "ProviderValidationError: Provider validation failed in AgentController.inspectEngine: Provider instance 'codex' is disabled in Akeru Bot settings. at DisabledProviderError (file:///home/leo/app.ts:1:2)";
 
     expect(presentThreadError(error)).toEqual({
-      title: "Codex is turned off",
-      description: "Turn Codex on in Settings > Providers, then send your message again.",
+      title: "ChatGPT is turned off",
+      description: "Turn ChatGPT on in Settings > Providers, then send your message again.",
       technicalDetails: "Provider instance “codex” is disabled.",
       action: "providers",
     });
@@ -141,8 +142,8 @@ describe("ThreadErrorBanner", () => {
       <ThreadErrorBanner error={error} threadKey="env:thread-disabled-provider" />,
     );
 
-    expect(markup).toContain("Codex is turned off");
-    expect(markup).toContain('href="grokbot://app/v1/settings?id=providers"');
+    expect(markup).toContain("ChatGPT is turned off");
+    expect(markup).toContain(">Open Providers<");
     expect(markup).not.toContain("Send feedback");
     expect(markup).not.toContain("AgentController.inspectEngine");
     expect(markup).not.toContain("/home/leo");
@@ -159,7 +160,24 @@ describe("ThreadErrorBanner", () => {
 
     expect(markup).toContain("Claude sign-in expired");
     expect(markup).toContain("Reconnect Claude in Settings &gt; Providers");
-    expect(markup).toContain('href="grokbot://app/v1/settings?id=providers"');
+    expect(markup).toContain(">Open Providers<");
     expect(markup).not.toContain("Send feedback");
+  });
+
+  it("shows the provider's logo and a button straight to its page", () => {
+    const claude = providerCatalogEntry("claude")!;
+
+    const markup = renderToStaticMarkup(
+      <ThreadErrorBanner
+        error="Connect Claude in Settings."
+        threadKey="env:thread-signed-out"
+        context={{ unavailability: "missing-login", providerName: "Claude", provider: claude }}
+      />,
+    );
+
+    expect(markup).toContain("Claude is not connected");
+    expect(markup).toContain(">Connect Claude<");
+    expect(markup).toContain("<svg");
+    expect(markup).not.toContain("Open Providers");
   });
 });

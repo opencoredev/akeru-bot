@@ -81,7 +81,7 @@ export function providerInstanceUnavailability(
     ...presentProviderUnavailability(
       {
         reason,
-        providerName: entry?.displayName ?? options.providerName,
+        providerName: options.providerName ?? entry?.displayName,
         modelName: options.modelName ?? options.model,
         detail: entry?.snapshot.unavailabilityDetail ?? entry?.snapshot.message,
       },

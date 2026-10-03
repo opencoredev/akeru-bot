@@ -1,5 +1,5 @@
 import {
-  PROVIDER_DISPLAY_NAMES,
+  PROVIDER_ACCOUNT_NAMES,
   isProviderDriverKind,
   type ServerProviderUnavailability,
 } from "@akeru/contracts";
@@ -27,9 +27,10 @@ export interface ThreadErrorContext {
 }
 
 function providerName(id: string): string {
-  const provider = id.toLowerCase();
+  // A legacy message may name the driver in any case, such as "Codex".
+  const driver = isProviderDriverKind(id) ? id : id.toLowerCase();
 
-  return isProviderDriverKind(provider) ? (PROVIDER_DISPLAY_NAMES[provider] ?? id) : id;
+  return isProviderDriverKind(driver) ? (PROVIDER_ACCOUNT_NAMES[driver] ?? id) : id;
 }
 
 function boundedTechnicalDetails(error: string): string {
@@ -78,6 +79,18 @@ export function presentThreadError(
     );
   }
 
+  // "is not available" is how older servers reported a missing sign-in.
+  const missingProvider = error.match(
+    /Provider instance ['"]([^'"]+)['"] is not (set up|available)/i,
+  );
+
+  if (missingProvider?.[1]) {
+    return present(
+      missingProvider[2] === "available" ? "missing-login" : "missing-provider",
+      context.providerName ?? providerName(missingProvider[1]),
+    );
+  }
+
   if (/Bot '[^']+' is archived/.test(error)) {
     return {
       title: t("This bot is archived"),
@@ -91,7 +104,11 @@ export function presentThreadError(
     return present("limit-reached");
   }
 
-  if (/not authenticated|authentication required|unauthorized|invalid api key/i.test(error)) {
+  if (
+    /not authenticated|authentication required|unauthorized|invalid api key|^Connect .+ in Settings/i.test(
+      error,
+    )
+  ) {
     return present("missing-login");
   }
 
