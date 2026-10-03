@@ -317,6 +317,7 @@ describe("ProviderCommandReactor", () => {
           detail: "Provider instance 'missing' is not available.",
           unavailability: "temporary-failure",
           requestId: "user-message-missing-bot-engine",
+          providerInstanceId: "missing",
         },
       }),
     );
@@ -361,6 +362,7 @@ describe("ProviderCommandReactor", () => {
           detail: "Connect Claude in Settings.",
           unavailability: "missing-login",
           requestId: "user-message-signed-out-bot-engine",
+          providerInstanceId: "claudeAgent",
         },
       }),
     );

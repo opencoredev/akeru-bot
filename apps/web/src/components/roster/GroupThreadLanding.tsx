@@ -124,6 +124,7 @@ export function GroupThreadLanding({ groupId }: { readonly groupId: string }) {
     respondingEngine.selection,
     respondingEngine.instanceEntries,
     runtime.failure?.unavailability,
+    runtime.failure?.providerInstanceId,
   );
 
   const members = group

@@ -87,6 +87,8 @@ export function latestThreadRuntimeError(
 export interface BotThreadFailure {
   readonly message: string;
   readonly unavailability: ServerProviderUnavailability | null;
+  /** The provider instance that failed, so its repair survives a model change. */
+  readonly providerInstanceId?: string;
 }
 
 /** A failed command, keeping the category the server attached to a provider failure. */
@@ -136,13 +138,13 @@ export function latestBotThreadFailure(input: {
 
     if (!message) return null;
 
+    const failure = latestTurnFailure(activities, latestTurn.requestedAt);
+
     return {
       message,
       unavailability:
-        latestTurn.unavailability ??
-        session?.unavailability ??
-        latestTurnFailure(activities, latestTurn.requestedAt)?.unavailability ??
-        null,
+        latestTurn.unavailability ?? session?.unavailability ?? failure?.unavailability ?? null,
+      ...(failure?.providerInstanceId ? { providerInstanceId: failure.providerInstanceId } : {}),
     };
   }
 
@@ -159,5 +161,6 @@ export function latestBotThreadFailure(input: {
   return {
     message,
     unavailability: failure?.unavailability ?? session.unavailability ?? null,
+    ...(failure?.providerInstanceId ? { providerInstanceId: failure.providerInstanceId } : {}),
   };
 }

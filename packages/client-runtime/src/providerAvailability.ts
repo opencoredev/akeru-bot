@@ -234,6 +234,8 @@ export function latestTurnFailure(
 ): {
   readonly detail: string;
   readonly unavailability: ServerProviderUnavailability | null;
+  /** The provider instance that failed, when the server recorded it. */
+  readonly providerInstanceId?: string;
 } | null {
   // .sort() on a copy, not .toSorted(): Hermes doesn't ship the ES2023
   // change-by-copy array methods.
@@ -261,6 +263,9 @@ export function latestTurnFailure(
       unavailability: isServerProviderUnavailability(payload.unavailability)
         ? payload.unavailability
         : null,
+      ...(Predicate.isString(payload.providerInstanceId)
+        ? { providerInstanceId: payload.providerInstanceId }
+        : {}),
     };
   }
 

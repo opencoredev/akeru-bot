@@ -276,6 +276,25 @@ describe("botEngineFailureContext", () => {
     });
   });
 
+  it("keeps naming the provider that failed after the bot switches models", () => {
+    const instanceEntries = deriveProviderInstanceEntries([makeComposerTestProvider()]);
+    const entry = instanceEntries[0]!;
+
+    expect(
+      botEngineFailureContext(
+        { instanceId: entry.instanceId, model: entry.models[0]!.slug },
+        instanceEntries,
+        "missing-login",
+        "claudeAgent",
+      ),
+    ).toEqual({
+      unavailability: "missing-login",
+      providerName: "Claude",
+      provider: providerCatalogEntry("claude"),
+      modelName: null,
+    });
+  });
+
   it("keeps a name the user gave the built-in instance", () => {
     const instanceEntries = deriveProviderInstanceEntries([
       { ...makeComposerTestProvider(), displayName: "Work Codex" },

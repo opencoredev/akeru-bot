@@ -188,24 +188,29 @@ export function botEngineUnavailability(
 
 /**
  * What a chat's failure copy needs to name the provider and model that failed,
- * plus the Providers page that fixes it. Pass the result to
- * `presentThreadError` or `ThreadErrorBanner`.
+ * plus the Providers page that fixes it. A failure that recorded its instance
+ * keeps naming that one after the bot moves to another model. Pass the result
+ * to `presentThreadError` or `ThreadErrorBanner`.
  */
 export function botEngineFailureContext(
   selection: ModelSelection | null,
   instanceEntries: ReadonlyArray<ProviderInstanceEntry>,
   unavailability: ServerProviderUnavailability | null | undefined,
+  failedInstanceId?: string | null,
 ) {
-  const entry = instanceEntries.find((candidate) => candidate.instanceId === selection?.instanceId);
+  const instanceId = failedInstanceId
+    ? ProviderInstanceId.make(failedInstanceId)
+    : (selection?.instanceId ?? null);
+
+  // The bot's current model only describes the failure when it ran on the same instance.
+  const model = selection?.instanceId === instanceId ? selection.model : null;
+  const entry = instanceEntries.find((candidate) => candidate.instanceId === instanceId);
 
   return {
     unavailability: unavailability ?? null,
-    providerName: selection ? botProviderName(selection.instanceId, entry) : null,
-    provider: selection ? botProviderCatalogEntry(selection.instanceId, entry) : null,
-    modelName:
-      entry?.models.find((model) => model.slug === selection?.model)?.name ??
-      selection?.model ??
-      null,
+    providerName: instanceId ? botProviderName(instanceId, entry) : null,
+    provider: instanceId ? botProviderCatalogEntry(instanceId, entry) : null,
+    modelName: entry?.models.find((candidate) => candidate.slug === model)?.name ?? model ?? null,
   };
 }
 
