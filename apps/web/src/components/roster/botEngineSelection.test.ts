@@ -276,6 +276,22 @@ describe("botEngineFailureContext", () => {
     });
   });
 
+  it("keeps a name the user gave the built-in instance", () => {
+    const instanceEntries = deriveProviderInstanceEntries([
+      { ...makeComposerTestProvider(), displayName: "Work Codex" },
+    ]);
+
+    const entry = instanceEntries[0]!;
+
+    expect(
+      botEngineFailureContext(
+        { instanceId: entry.instanceId, model: entry.models[0]!.slug },
+        instanceEntries,
+        "missing-login",
+      ),
+    ).toMatchObject({ providerName: "Work Codex", provider: providerCatalogEntry("chatgpt") });
+  });
+
   it("keeps a custom instance's own name and has no single provider page for it", () => {
     const instanceEntries = deriveProviderInstanceEntries([
       {

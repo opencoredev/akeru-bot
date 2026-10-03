@@ -20,8 +20,8 @@ import type {
 } from "@akeru/contracts";
 import {
   defaultInstanceIdForDriver,
-  PROVIDER_ACCOUNT_NAMES,
   PROVIDER_DISPLAY_NAMES,
+  stockProviderAccountName,
   ProviderDriverKind,
 } from "@akeru/contracts";
 import * as Haptics from "expo-haptics";
@@ -490,11 +490,11 @@ export const ThreadDetailScreen = memo(function ThreadDetailScreen(props: Thread
   );
 
   const selectedDriver = selectedProvider?.driver ?? ProviderDriverKind.make(selectedInstanceId);
-  // Failure copy names a built-in instance by its account: "ChatGPT", not "Codex".
 
+  // Failure copy names a built-in instance by its account: "ChatGPT", not "Codex".
   const selectedProviderName =
     (selectedInstanceId === defaultInstanceIdForDriver(selectedDriver)
-      ? PROVIDER_ACCOUNT_NAMES[selectedDriver]
+      ? stockProviderAccountName(selectedDriver, selectedProvider?.displayName)
       : undefined) ??
     selectedProvider?.displayName ??
     PROVIDER_DISPLAY_NAMES[selectedDriver] ??

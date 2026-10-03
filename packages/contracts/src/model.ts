@@ -261,3 +261,18 @@ export const PROVIDER_ACCOUNT_NAMES: Partial<Record<ProviderDriverKind, string>>
   [OPENCODE_DRIVER_KIND]: "OpenCode",
   [OPENCODE_GO_DRIVER_KIND]: "OpenCode Go",
 };
+
+/**
+ * The account name for a built-in instance still using its stock name, so a
+ * name the user chose ("Work Codex") wins over "ChatGPT". Undefined otherwise.
+ */
+export function stockProviderAccountName(
+  driver: ProviderDriverKind,
+  displayName: string | undefined,
+): string | undefined {
+  const name = displayName?.trim();
+
+  return !name || name === PROVIDER_DISPLAY_NAMES[driver]
+    ? PROVIDER_ACCOUNT_NAMES[driver]
+    : undefined;
+}

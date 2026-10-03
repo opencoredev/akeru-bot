@@ -1,5 +1,5 @@
 import {
-  PROVIDER_ACCOUNT_NAMES,
+  stockProviderAccountName,
   ProviderDriverKind,
   ProviderInstanceId,
   type BotEngine,
@@ -122,7 +122,7 @@ const englishTranslate: ProviderAvailabilityTranslate = createTranslator("en").t
 
 /**
  * What setup and failure copy calls a bot's provider: the account for a
- * built-in instance ("ChatGPT", not "Codex"), the user's name for a custom one.
+ * built-in instance ("ChatGPT", not "Codex"), else the name the user gave it.
  */
 function botProviderName(
   instanceId: ProviderInstanceId,
@@ -132,7 +132,9 @@ function botProviderName(
   const driver = entry?.driverKind ?? ProviderDriverKind.make(instanceId);
 
   return (
-    PROVIDER_ACCOUNT_NAMES[driver] ?? entry?.displayName ?? formatProviderDriverKindLabel(driver)
+    stockProviderAccountName(driver, entry?.displayName) ??
+    entry?.displayName ??
+    formatProviderDriverKindLabel(driver)
   );
 }
 
