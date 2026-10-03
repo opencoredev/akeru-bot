@@ -172,7 +172,8 @@ to word its key hint. A key is bound to its endpoint on the client: switching pr
 clears the draft key, and a card edit that moves the effective URL (the `CUSTOM_OPENAI_BASE_URL`
 variable when set, `baseUrl` otherwise) to another host, or from HTTPS to HTTP, drops the stored key
 in the same settings update, so the next probe never sends it to the new service. A redacted
-override cannot be compared, so any change to it drops the key too. A probe answered with 401 or 403
+override cannot be read, so any change to it, or a `baseUrl` move behind it, drops the key too. When
+the variable repeats, the last row wins, as it does in the driver. A probe answered with 401 or 403
 reports auth status `unknown`: the card stops showing the instance as connected, but preflight still
 lets turns through, because a scoped key can be refused `/models` and still chat.
 

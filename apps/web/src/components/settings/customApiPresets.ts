@@ -228,22 +228,26 @@ function urlLeaves(previousBaseUrl: string, nextBaseUrl: string): boolean {
 /**
  * A stored key belongs to the endpoint it was saved for. The driver sends it to
  * `CUSTOM_OPENAI_BASE_URL` when that variable is set and to the configured base
- * URL otherwise, so the key must go when that address moves to another host or
- * drops from HTTPS to HTTP. A first URL on an instance that had none keeps the
- * key. A redacted override cannot be compared, so any change to it drops the key.
+ * URL otherwise (the last row wins when the variable repeats), so the key must
+ * go when that address moves to another host or drops from HTTPS to HTTP. A
+ * first URL on an instance that had none keeps the key. A redacted override
+ * cannot be read, so any change to it drops the key, and so does a base URL
+ * move behind it, since a blank override falls back to the base URL.
  */
 export function customApiKeyLeavesEndpoint(
   previous: CustomApiEndpoint,
   next: CustomApiEndpoint,
 ): boolean {
   const override = (endpoint: CustomApiEndpoint) =>
-    endpoint.environment.find((variable) => variable.name === CUSTOM_API_BASE_URL_ENV);
+    endpoint.environment.findLast((variable) => variable.name === CUSTOM_API_BASE_URL_ENV);
 
   const previousOverride = override(previous);
   const nextOverride = override(next);
 
   if (previousOverride?.valueRedacted === true || nextOverride?.valueRedacted === true) {
-    return !sameVariable(previousOverride, nextOverride);
+    return (
+      !sameVariable(previousOverride, nextOverride) || urlLeaves(previous.baseUrl, next.baseUrl)
+    );
   }
 
   const effective = (endpoint: CustomApiEndpoint) =>

@@ -141,4 +141,35 @@ describe("customApiKeyLeavesEndpoint", () => {
       customApiKeyLeavesEndpoint(endpoint(configured, redacted), endpoint(configured, redacted)),
     ).toBe(false);
   });
+
+  it("drops the key when the base URL moves behind an unreadable override", () => {
+    // A redacted override may be blank, which sends requests to the base URL.
+    const redacted = { value: "", valueRedacted: true };
+
+    expect(
+      customApiKeyLeavesEndpoint(
+        endpoint("https://openrouter.ai/api/v1", redacted),
+        endpoint("https://evil.example/v1", redacted),
+      ),
+    ).toBe(true);
+  });
+
+  it("follows the last override row, as the driver does", () => {
+    const configured = "https://openrouter.ai/api/v1";
+
+    const withOverrides = (last: string) => ({
+      baseUrl: configured,
+      environment: [
+        { name: "CUSTOM_OPENAI_BASE_URL", value: configured, sensitive: false },
+        { name: "CUSTOM_OPENAI_BASE_URL", value: last, sensitive: false },
+      ],
+    });
+
+    expect(
+      customApiKeyLeavesEndpoint(
+        withOverrides("https://openrouter.ai/api/v1"),
+        withOverrides("https://evil.example/v1"),
+      ),
+    ).toBe(true);
+  });
 });
