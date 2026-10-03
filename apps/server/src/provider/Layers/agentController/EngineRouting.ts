@@ -121,9 +121,10 @@ export function createEngineRouting(deps: {
           provider,
           model,
           detail: issue,
-          // Signing in only fixes an instance that uses the saved account; a
-          // custom-credential instance keeps its own message.
-          ...(routing.mastraConnection?.useSavedCredential
+          // Signing in only fixes an instance that uses a saved account. A
+          // custom-credential instance, or a driver with no account such as
+          // Custom API, keeps its own message.
+          ...(subscriptionProvider && routing.mastraConnection?.useSavedCredential
             ? { unavailability: "missing-login" as const }
             : {}),
         });

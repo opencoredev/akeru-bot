@@ -9,9 +9,8 @@ import { CircleAlertIcon, Settings2Icon } from "lucide-react";
 import { useI18n } from "../../i18n";
 import { cn } from "../../lib/utils";
 import { openSettings } from "../../settingsDialogStore";
-import type { ProviderCatalogEntry } from "../settings/providerCatalog";
+import { providerCatalogTargetId, type ProviderCatalogEntry } from "../settings/providerCatalog";
 import { SettingsEntityIcon } from "../settings/settingsDetailLayout";
-import { subscriptionProviderTargetId } from "../settings/subscriptionProviders";
 import { Button } from "../ui/button";
 
 /** "Connect Claude" when signing in fixes it, else a plain way into Claude's settings. */
@@ -30,11 +29,7 @@ function openProviderSettings(
   provider: ProviderCatalogEntry | null | undefined,
   environmentId: EnvironmentId | null,
 ) {
-  openSettings(
-    "providers",
-    provider?.account ? subscriptionProviderTargetId(provider.account.id) : null,
-    environmentId,
-  );
+  openSettings("providers", provider ? providerCatalogTargetId(provider) : null, environmentId);
 }
 
 /** The provider's logo in a small tile, so a failure card says which account it means. */

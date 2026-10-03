@@ -63,6 +63,12 @@ describe("presentThreadError", () => {
       action: "providers",
     });
     expect(
+      presentThreadError(
+        "ProviderError: This Custom API instance needs a base URL. at inspectEngine (file:///x.ts:1:2)",
+        { providerName: "Custom API" },
+      ),
+    ).toMatchObject({ title: "Custom API needs a base URL", action: "providers" });
+    expect(
       presentThreadError("Custom Kimi credentials are not supported by the Akeru harness."),
     ).toMatchObject({
       title: "The provider can't use custom credentials",

@@ -114,7 +114,9 @@ export function presentThreadError(
   // won't fix it, so name what the instance is missing.
   const provider = context.providerName;
 
-  const missingCredential = error.match(/This .+ instance needs (.+?) for the Akeru harness/);
+  const missingCredential = error.match(
+    /This .+? instance needs (.+?)(?: for the Akeru harness)?\.(?:\s|$)/,
+  );
 
   if (missingCredential?.[1]) {
     const requirement = missingCredential[1];

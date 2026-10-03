@@ -71,13 +71,14 @@ export function providerCatalogEntryForDriver(
     : undefined;
 }
 
+/** The Settings target that opens an entry's own page, used by repair buttons. */
+export function providerCatalogTargetId(entry: ProviderCatalogEntry): string {
+  return entry.account ? subscriptionProviderTargetId(entry.account.id) : `provider-${entry.slug}`;
+}
+
 /** The provider page a Settings target opens, so a repair link lands on that provider. */
 export function providerCatalogSlugFromSettingsTarget(target: string | null): string | null {
   if (!target) return null;
 
-  return (
-    PROVIDER_CATALOG.find(
-      (entry) => entry.account && subscriptionProviderTargetId(entry.account.id) === target,
-    )?.slug ?? null
-  );
+  return PROVIDER_CATALOG.find((entry) => providerCatalogTargetId(entry) === target)?.slug ?? null;
 }

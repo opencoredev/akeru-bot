@@ -725,6 +725,57 @@ describe("AgentControllerLive", () => {
         mastra.factory,
       );
     });
+
+    it.effect("does not ask to sign in to a provider that has no account", () => {
+      const bridge = makeBridge();
+      const mastra = mastraHarnessFixture();
+
+      const service: ProviderServiceShape = {
+        ...bridge.service,
+        getInstanceInfo: (candidate) =>
+          Effect.succeed({
+            instanceId: candidate,
+            driverKind: ProviderDriverKind.make("customOpenai"),
+            displayName: undefined,
+            enabled: true,
+            continuationIdentity: {
+              driverKind: ProviderDriverKind.make("customOpenai"),
+              continuationKey: `customOpenai:instance:${candidate}`,
+            },
+            mastraConnection: {
+              environment: {},
+              instanceEnvironment: {},
+              useSavedCredential: true,
+            },
+          }),
+      };
+
+      return provideController(
+        Effect.gen(function* () {
+          const controller = yield* AgentController;
+
+          const error = yield* controller
+            .resolveEngine({
+              threadId: ThreadId.make("thread-custom-api-no-url"),
+              engine: { provider: "customOpenai", model: "llama-3.3" },
+              fallback: codexSelection,
+              mode: "default",
+              botConversation: true,
+            })
+            .pipe(Effect.flip);
+
+          assert.equal(error._tag, "AgentControllerUnsupportedEngineError");
+
+          if (Predicate.isTagged(error, "AgentControllerUnsupportedEngineError")) {
+            assert.include(error.detail, "This Custom API instance needs a base URL.");
+
+            assert.isUndefined(error.unavailability);
+          }
+        }),
+        service,
+        mastra.factory,
+      );
+    });
   });
 });
 
