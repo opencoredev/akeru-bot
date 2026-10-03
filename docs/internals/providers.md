@@ -28,6 +28,12 @@ transport, config, and event shapes are mapped.
 
 ## Registry and routing
 
+Settings calls a provider instance an account. **Add account** on a provider's page creates another
+instance of that page's driver; it never asks for a driver. Subscription accounts only take a name and
+sign in from their card afterwards. The dialog does not show the inherited CLI fields (binary path,
+home paths, launch arguments), because Mastra-routed drivers do not start the CLI to run turns.
+Custom API asks for a service, a name, then its address and key.
+
 Two registries separate configuration from live processes:
 
 - [`ProviderInstanceRegistry`][instances] keys configured instances by `ProviderInstanceId`. Creating

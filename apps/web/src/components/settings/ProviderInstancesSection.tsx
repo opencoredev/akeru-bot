@@ -164,6 +164,8 @@ export function ProviderInstancesSection({
   const updatingDriversRef = useRef<Set<ProviderDriverKind>>(new Set());
 
   const rows = instanceRowsForDrivers(settings, drivers);
+  // New accounts use the page's primary driver; pages without a known driver cannot add one.
+  const addDriverOption = getDriverOption(drivers[0]);
 
   const updateCandidateByInstanceId = useMemo(
     () =>
@@ -325,7 +327,7 @@ export function ProviderInstancesSection({
     <>
       <SettingsSection
         id="provider-instances"
-        title={rows.length > 1 ? t("Instances") : t("Configuration")}
+        title={rows.length > 1 ? t("Accounts") : t("Configuration")}
         headerAction={
           <div className="flex items-center gap-1">
             <Button
@@ -342,10 +344,12 @@ export function ProviderInstancesSection({
               )}
               {t("Refresh")}
             </Button>
-            <Button size="xs" variant="ghost-muted" onClick={() => setIsAddDialogOpen(true)}>
-              <PlusIcon className="size-3.5" />
-              {t("Add instance")}
-            </Button>
+            {addDriverOption ? (
+              <Button size="xs" variant="ghost-muted" onClick={() => setIsAddDialogOpen(true)}>
+                <PlusIcon className="size-3.5" />
+                {t("Add account")}
+              </Button>
+            ) : null}
           </div>
         }
       >
@@ -452,12 +456,13 @@ export function ProviderInstancesSection({
         )}
       </SettingsSection>
 
-      {isAddDialogOpen ? (
+      {isAddDialogOpen && addDriverOption ? (
         <AddProviderInstanceDialog
           open
           environmentId={environmentId}
           environmentLabel={environment?.label ?? t("this environment")}
-          {...(drivers[0] ? { initialDriver: drivers[0] } : {})}
+          providerLabel={providerLabel}
+          driverOption={addDriverOption}
           onOpenChange={setIsAddDialogOpen}
         />
       ) : null}

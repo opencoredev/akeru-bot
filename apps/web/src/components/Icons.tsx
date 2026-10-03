@@ -12,15 +12,6 @@ export {
 } from "./icons/ProviderIcons";
 
 export {
-  ACPRegistryIcon,
-  ANTIGRAVITY_ICON_DATA_URL,
-  AntigravityIcon,
-  Gemini,
-  GithubCopilotIcon,
-  PiAgentIcon,
-} from "./icons/AgentCatalogIcons";
-
-export {
   DiscordIcon,
   IMessageIcon,
   SlackIcon,

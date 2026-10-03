@@ -1,36 +1,81 @@
-export type WizardNavigation =
-  | { readonly kind: "navigate"; readonly step: number }
-  | { readonly kind: "blocked"; readonly step: number; readonly error: string };
-
-const IDENTITY_STEP = 1;
-
-export const ADD_PROVIDER_WIZARD_STEPS = ["Driver", "Identity", "Config"] as const;
+export type AddAccountWizardStep = "Service" | "Name" | "Connect";
 
 /**
- * Resolve navigation within the add-provider wizard.
- *
- * Moving forward past Identity requires a valid instance id, whether the user
- * advances one step at a time or skips directly to Config from a step header.
- * A blocked skip lands on Identity so its existing inline validation is
- * visible. Backward navigation is always preserved.
+ * Steps of the add-account dialog. The dialog is opened from one provider's
+ * page, so it never asks which provider. Custom API asks which service and
+ * how to reach it; a subscription account only needs a name, and the user
+ * signs in from its card afterwards.
  */
-export function resolveWizardNavigation(
-  currentStep: number,
-  requestedStep: number,
-  stepCount: number,
-  validation: { readonly instanceIdError: string | null },
-): WizardNavigation {
-  const lastStep = Math.max(0, stepCount - 1);
-  const targetStep = Math.max(0, Math.min(lastStep, requestedStep));
-  const movesForwardPastIdentity = currentStep <= IDENTITY_STEP && targetStep > IDENTITY_STEP;
+export function addAccountWizardSteps(options: {
+  readonly choosesService: boolean;
+}): readonly AddAccountWizardStep[] {
+  return options.choosesService ? ["Service", "Name", "Connect"] : ["Name"];
+}
 
-  if (movesForwardPastIdentity && validation.instanceIdError !== null) {
-    return {
-      kind: "blocked",
-      step: Math.min(IDENTITY_STEP, lastStep),
-      error: validation.instanceIdError,
-    };
-  }
+// `ProviderInstanceId` in `@akeru/contracts` caps ids at 64 characters.
+const MAX_INSTANCE_ID_LENGTH = 64;
 
-  return { kind: "navigate", step: targetStep };
+// Room kept for a `_{n}` suffix when the name is already taken.
+const SUFFIX_RESERVE = "_99999".length;
+
+/**
+ * Normalize a name into the slug part of an account id, so "Work" on driver
+ * "codex" becomes `codex_work`. The slug is cut short enough that the driver
+ * prefix and a collision suffix still fit the id length cap.
+ */
+function slugifyLabel(driver: string, value: string): string {
+  const maxLength = Math.min(48, MAX_INSTANCE_ID_LENGTH - driver.length - 1 - SUFFIX_RESERVE);
+
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "")
+    .slice(0, maxLength)
+    .replace(/_+$/, "");
+}
+
+/**
+ * First free `{driver}_{n}` number, starting at 2; the default account is
+ * `{driver}`. `nameTaken` skips numbers whose display name another account
+ * already uses, so a blank name never repeats a visible one.
+ */
+export function nextAccountNumber(
+  driver: string,
+  existing: ReadonlySet<string>,
+  nameTaken: (index: number) => boolean = () => false,
+): number {
+  let index = 2;
+
+  while (existing.has(`${driver}_${index}`) || nameTaken(index)) index += 1;
+
+  return index;
+}
+
+/**
+ * Account id from the name, or `{driver}_{n}` when the name is empty, with the
+ * first free `_{n}` suffix when that id is taken.
+ */
+export function deriveInstanceId(
+  driver: string,
+  label: string,
+  existing: ReadonlySet<string>,
+  nameTaken?: (index: number) => boolean,
+): string {
+  const slug = slugifyLabel(driver, label);
+
+  if (!slug) return `${driver}_${nextAccountNumber(driver, existing, nameTaken)}`;
+
+  const base = `${driver}_${slug}`;
+
+  return existing.has(base) ? `${base}_${nextAccountNumber(base, existing)}` : base;
+}
+
+/** Enter that submits, not one that confirms an IME candidate. */
+export function isSubmitEnter(event: {
+  readonly key: string;
+  readonly keyCode: number;
+  readonly isComposing: boolean;
+}): boolean {
+  return event.key === "Enter" && !event.isComposing && event.keyCode !== 229;
 }

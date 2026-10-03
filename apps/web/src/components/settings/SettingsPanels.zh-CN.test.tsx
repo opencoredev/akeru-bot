@@ -157,8 +157,8 @@ describe("settings panels in Simplified Chinese", () => {
     environment.id = ENVIRONMENT_ID;
     expectTranslated(
       renderInChinese(<ProviderDetailPage entry={PROVIDER_CATALOG[0]!} />),
-      [">配置<", "添加实例", "刷新 ChatGPT 状态", ">刷新<"],
-      [">Configuration<", "Add instance", ">Refresh<", "Refresh ChatGPT status"],
+      [">配置<", "添加账户", "刷新 ChatGPT 状态", ">刷新<"],
+      [">Configuration<", "Add account", ">Refresh<", "Refresh ChatGPT status"],
     );
   });
 
@@ -177,7 +177,7 @@ describe("settings panels in Simplified Chinese", () => {
           "This environment has no {provider} runtime. Update the environment server to configure it here."
         ]!.replace("{provider}", "Example"),
       ],
-      [">Configuration<", "This environment has no", "Add instance"],
+      [">Configuration<", "This environment has no", "Add account"],
     );
   });
 });
