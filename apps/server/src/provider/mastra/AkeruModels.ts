@@ -62,6 +62,7 @@ export const MASTRA_MODEL_PREFIX = {
   grok: "xai",
   kimi: "kimi-for-coding",
   opencodeGo: "opencode-go",
+  customOpenai: "custom-openai",
 } as const;
 
 export function mastraModelId(provider: ProviderDriverKind, model: string): string {
@@ -286,6 +287,19 @@ export function resolveAkeruMastraModel(
         inlineConnection.baseUrl ||
         (useSavedCredential ? savedApiKey("opencode-go")?.baseUrl : undefined),
     );
+  }
+
+  if (trimmed.startsWith("custom-openai/")) {
+    const apiKey = environment?.CUSTOM_OPENAI_API_KEY?.trim();
+    const baseUrl = environment?.CUSTOM_OPENAI_BASE_URL?.trim();
+
+    if (!baseUrl) throw new Error("This Custom API instance needs a base URL.");
+
+    return createOpenAICompatible({
+      name: "custom-openai",
+      ...(apiKey ? { apiKey } : {}),
+      baseURL: baseUrl,
+    })(trimmed.slice("custom-openai/".length));
   }
 
   throw new Error(`Mastra has no subscription transport for model '${modelId}'.`);

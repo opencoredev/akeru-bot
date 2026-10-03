@@ -36,6 +36,7 @@ const CUSTOM_MODEL_PLACEHOLDER_BY_KIND: Partial<Record<ProviderDriverKind, strin
   [ProviderDriverKind.make("kimi")]: "k3-256k",
   [ProviderDriverKind.make("opencode")]: "openai/gpt-5",
   [ProviderDriverKind.make("opencodeGo")]: "gpt-5.6-luna",
+  [ProviderDriverKind.make("customOpenai")]: "gpt-4o-mini",
 };
 
 interface ProviderModelsSectionProps {
@@ -118,6 +119,10 @@ export function ProviderModelsSection({
   const listRef = useRef<HTMLDivElement | null>(null);
   const hiddenModelSet = useMemo(() => new Set(hiddenModels), [hiddenModels]);
   const favoriteModelSet = useMemo(() => new Set(favoriteModels), [favoriteModels]);
+  // A slug can be both hand-added and reported by the endpoint (a catalog that
+  // later gained the model). It renders as one row, and that row still needs the
+  // remove control for the saved entry.
+  const savedCustomModelSet = useMemo(() => new Set(customModels), [customModels]);
 
   const orderedModels = useMemo(() => {
     return sortModelsForProviderInstance(models, {
@@ -182,10 +187,16 @@ export function ProviderModelsSection({
     setTimeout(() => observer.disconnect(), 2_000);
   };
 
-  const handleRemove = (slug: string) => {
+  // A hand-added entry for a model the endpoint also lists only drops the
+  // entry; the model stays, so its favorite and position stay with it.
+  const handleRemove = (slug: string, stillListed: boolean) => {
     onChange(customModels.filter((model) => model !== slug));
-    onModelOrderChange(modelOrder.filter((model) => model !== slug));
-    onFavoriteModelsChange(favoriteModels.filter((model) => model !== slug));
+
+    if (!stillListed) {
+      onModelOrderChange(modelOrder.filter((model) => model !== slug));
+      onFavoriteModelsChange(favoriteModels.filter((model) => model !== slug));
+    }
+
     setError(null);
   };
 
@@ -331,7 +342,7 @@ export function ProviderModelsSection({
                   </Tooltip>
                 ) : null}
                 {isHidden ? <span className="text-10px text-muted-foreground">hidden</span> : null}
-                {model.isCustom ? (
+                {model.isCustom || savedCustomModelSet.has(model.slug) ? (
                   <span className="text-10px text-muted-foreground">custom</span>
                 ) : null}
               </div>
@@ -411,7 +422,7 @@ export function ProviderModelsSection({
                     </TooltipPopup>
                   </Tooltip>
                 ) : null}
-                {model.isCustom ? (
+                {model.isCustom || savedCustomModelSet.has(model.slug) ? (
                   <Tooltip>
                     <TooltipTrigger
                       render={
@@ -419,7 +430,7 @@ export function ProviderModelsSection({
                           size="icon-micro"
                           variant="ghost-muted"
                           aria-label={`Remove ${model.slug}`}
-                          onClick={() => handleRemove(model.slug)}
+                          onClick={() => handleRemove(model.slug, !model.isCustom)}
                         />
                       }
                     >

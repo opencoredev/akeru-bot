@@ -92,6 +92,14 @@ export function mastraConnectionIssue(
     ? connection.environment
     : connection.instanceEnvironment;
 
+  // A custom endpoint has no subscription account to connect: the base URL is
+  // the whole credential story, so neither branch below applies.
+  if (String(provider) === "customOpenai") {
+    return env.CUSTOM_OPENAI_BASE_URL?.trim()
+      ? undefined
+      : "This Custom API instance needs a base URL.";
+  }
+
   if (connection.useSavedCredential) {
     const hasAmbientCredential = (() => {
       switch (String(provider)) {

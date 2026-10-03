@@ -17,7 +17,7 @@ import {
   type ProviderInstanceConfig,
   type ProviderInstanceEnvironmentVariable,
   type ProviderInstanceId,
-  type ProviderDriverKind,
+  ProviderDriverKind,
   type ServerProvider,
 } from "@akeru/contracts";
 import { cn } from "../../lib/utils";
@@ -33,7 +33,7 @@ import { Switch } from "../ui/switch";
 import { stackedThreadToast, toastManager } from "../ui/toast";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import type { DriverOption } from "./providerDriverMeta";
-import { ProviderSettingsForm } from "./ProviderSettingsForm";
+import { ProviderSettingsForm, readProviderConfigString } from "./ProviderSettingsForm";
 import { ProviderModelsSection } from "./ProviderModelsSection";
 import { ProviderInstanceIcon } from "../chat/ProviderInstanceIcon";
 import { ProviderAccentColorPicker } from "./ProviderAccentColorPicker";
@@ -45,6 +45,16 @@ import {
   type ProviderStatusKey,
 } from "./providerStatus";
 import { ProviderEnvironmentSection } from "./ProviderEnvironmentSection";
+import { CustomApiKeyField } from "./CustomApiKeyField";
+import {
+  customApiKeyHint,
+  customApiKeyLeavesEndpoint,
+  customApiPresetForBaseUrl,
+  readCustomApiKey,
+  withCustomApiKey,
+  withoutCustomApiKey,
+  withStoredCustomApiKey,
+} from "./customApiPresets";
 import { ProviderAuthEmail } from "./ProviderAuthEmail";
 import {
   readConfigStringArray,
@@ -210,9 +220,43 @@ export function ProviderInstanceCard({
     onUpdate(normalized ? { ...rest, accentColor: normalized } : rest);
   };
 
+  // Every edit that can move a Custom API endpoint goes through here, so a
+  // stored key is never probed against a host it was not saved for.
+  const commitEndpointEdit = (next: ProviderInstanceConfig) => {
+    const dropsCustomApiKey =
+      instance.driver === ProviderDriverKind.make("customOpenai") &&
+      readCustomApiKey(next.environment ?? []) !== undefined &&
+      customApiKeyLeavesEndpoint(
+        {
+          baseUrl: readProviderConfigString(instance.config, "baseUrl"),
+          environment: instance.environment ?? [],
+        },
+        {
+          baseUrl: readProviderConfigString(next.config, "baseUrl"),
+          environment: next.environment ?? [],
+        },
+      );
+
+    if (!dropsCustomApiKey) {
+      onUpdate(next);
+
+      return;
+    }
+
+    // Save the new address and drop the old key together.
+    const environment = withoutCustomApiKey(next.environment ?? []);
+    const { environment: _omitEnvironment, ...withoutEnvironment } = next;
+    onUpdate(environment.length > 0 ? { ...next, environment } : withoutEnvironment);
+    toastManager.add({
+      type: "info",
+      title: "API key removed",
+      description: "The new address is a different service. Paste its key to connect.",
+    });
+  };
+
   const updateConfig = (nextConfig: ProviderConfig | undefined) => {
     const { config: _omit, ...rest } = instance;
-    onUpdate(nextConfig !== undefined ? { ...rest, config: nextConfig } : rest);
+    commitEndpointEdit(nextConfig !== undefined ? { ...rest, config: nextConfig } : rest);
   };
 
   const updateCustomModels = (next: ReadonlyArray<string>) => {
@@ -221,11 +265,25 @@ export function ProviderInstanceCard({
     onUpdate({ ...rest, config: nextConfig });
   };
 
-  const updateEnvironment = (environment: ReadonlyArray<ProviderInstanceEnvironmentVariable>) => {
+  const withEnvironment = (environment: ReadonlyArray<ProviderInstanceEnvironmentVariable>) => {
     const cleaned = environment.filter((variable) => variable.name.trim().length > 0);
     const { environment: _omit, ...rest } = instance;
-    onUpdate(cleaned.length > 0 ? { ...rest, environment: cleaned } : rest);
+
+    return cleaned.length > 0 ? { ...rest, environment: cleaned } : rest;
   };
+
+  const updateEnvironment = (environment: ReadonlyArray<ProviderInstanceEnvironmentVariable>) =>
+    onUpdate(withEnvironment(environment));
+
+  // Custom API keeps its key in a dedicated field, so the generic variable
+  // table hides it and merges it back on edit.
+  const isCustomApi = instance.driver === ProviderDriverKind.make("customOpenai");
+  const environment = instance.environment ?? [];
+  const customApiKey = isCustomApi ? readCustomApiKey(environment) : undefined;
+
+  const customApiPreset = customApiPresetForBaseUrl(
+    readProviderConfigString(instance.config, "baseUrl"),
+  );
 
   const titleIconNode = driverKind ? (
     <ProviderInstanceIcon
@@ -480,8 +538,14 @@ export function ProviderInstanceCard({
 
             <div>
               <ProviderEnvironmentSection
-                environment={instance.environment ?? []}
-                onChange={updateEnvironment}
+                environment={isCustomApi ? withoutCustomApiKey(environment) : environment}
+                onChange={(next) =>
+                  commitEndpointEdit(
+                    withEnvironment(
+                      isCustomApi ? withStoredCustomApiKey(next, customApiKey) : next,
+                    ),
+                  )
+                }
               />
             </div>
 
@@ -492,6 +556,17 @@ export function ProviderInstanceCard({
                 idPrefix={`provider-instance-${instanceId}`}
                 variant="card"
                 onChange={updateConfig}
+              />
+            ) : null}
+
+            {isCustomApi ? (
+              <CustomApiKeyField
+                id={`provider-instance-${instanceId}-api-key`}
+                variable={customApiKey}
+                required={customApiPreset.key.kind === "required"}
+                hint={customApiKeyHint(customApiPreset)}
+                onCommit={(value) => updateEnvironment(withCustomApiKey(environment, value))}
+                onRemove={() => updateEnvironment(withCustomApiKey(environment, ""))}
               />
             ) : null}
 

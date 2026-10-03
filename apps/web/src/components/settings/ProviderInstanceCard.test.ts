@@ -33,4 +33,18 @@ describe("deriveProviderModelsForDisplay", () => {
       }).map((model) => model.slug),
     ).toEqual(["server-model", "kept-custom"]);
   });
+
+  it("does not repeat a hand-added slug the live catalog already reports", () => {
+    const liveModels: ReadonlyArray<ServerProviderModel> = [
+      { slug: "gpt-4o-mini", name: "gpt-4o-mini", isCustom: false, capabilities: null },
+      { slug: "local-only", name: "local-only", isCustom: true, capabilities: null },
+    ];
+
+    expect(
+      deriveProviderModelsForDisplay({
+        liveModels,
+        customModels: ["gpt-4o-mini", "local-only"],
+      }).map((model) => model.slug),
+    ).toEqual(["gpt-4o-mini", "local-only"]);
+  });
 });

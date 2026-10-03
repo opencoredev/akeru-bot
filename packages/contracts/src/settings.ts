@@ -88,6 +88,7 @@ export {
   GrokSettings,
   KimiSettings,
   OpenCodeGoSettings,
+  CustomOpenaiSettings,
   OpenCodeSettings,
   providerInstanceConfigEnabledFlag,
 } from "./settings/providers.ts";

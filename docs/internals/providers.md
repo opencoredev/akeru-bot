@@ -7,20 +7,21 @@ orchestration layer does not know which one is behind a thread.
 
 ## Built-in drivers
 
-[`builtInDrivers.ts`][drivers] exports `BUILT_IN_DRIVERS` with six entries:
+[`builtInDrivers.ts`][drivers] exports `BUILT_IN_DRIVERS` with seven entries:
 
-| Driver kind   | Driver source                                |
-| ------------- | -------------------------------------------- |
-| `codex`       | [`Drivers/CodexDriver.ts`][codex]            |
-| `claudeAgent` | [`Drivers/ClaudeDriver.ts`][claude]          |
-| `grok`        | [`Drivers/GrokDriver.ts`][grok]              |
-| `kimi`        | [`Drivers/KimiDriver.ts`][kimi]              |
-| `opencode`    | [`Drivers/OpenCodeDriver.ts`][opencode]      |
-| `opencodeGo`  | [`Drivers/OpenCodeGoDriver.ts`][opencode-go] |
+| Driver kind    | Driver source                                    |
+| -------------- | ------------------------------------------------ |
+| `codex`        | [`Drivers/CodexDriver.ts`][codex]                |
+| `claudeAgent`  | [`Drivers/ClaudeDriver.ts`][claude]              |
+| `grok`         | [`Drivers/GrokDriver.ts`][grok]                  |
+| `kimi`         | [`Drivers/KimiDriver.ts`][kimi]                  |
+| `opencode`     | [`Drivers/OpenCodeDriver.ts`][opencode]          |
+| `opencodeGo`   | [`Drivers/OpenCodeGoDriver.ts`][opencode-go]     |
+| `customOpenai` | [`Drivers/CustomOpenaiDriver.ts`][custom-openai] |
 
 Each driver declares its `driverKind`, a `configSchema`, and a `create` function that builds a
-provider instance in a child scope. The five subscription drivers supply a Mastra connection;
-standard OpenCode supplies a legacy adapter. Adapter implementations live beside them in
+provider instance in a child scope. The five subscription drivers and Custom API supply a Mastra
+connection; standard OpenCode supplies a legacy adapter. Adapter implementations live beside them in
 `apps/server/src/provider/Layers/` (`CodexAdapter.ts`, `ClaudeAdapter.ts`, and so on) and conform to
 [`ProviderAdapter.ts`][adapter]. Read the driver plus its adapter to see how a specific agent's
 transport, config, and event shapes are mapped.
@@ -39,7 +40,7 @@ Two registries separate configuration from live processes:
 directory to route session and turn operations for a thread, so callers name a thread, not an agent.
 
 Desktop chat does not call `ProviderService` directly from orchestration. The command reactor calls
-Akeru's [`AgentController`][controller]. Codex, Claude, Grok, Kimi, and OpenCode Go threads run
+Akeru's [`AgentController`][controller]. Codex, Claude, Grok, Kimi, OpenCode Go, and Custom API threads run
 through Akeru's custom Mastra Core controller and call `Session.sendMessage()`. The backing agent is a general-purpose Akeru assistant
 with Akeru-owned observational memory, workspace, tools, approval policy, and lifecycle. Akeru builds
 workspace and enabled plugin tools per thread, and resolves the selected subscription model through
@@ -152,6 +153,36 @@ Legacy OpenCode rollback targets the first removed assistant message and then re
 revert boundary. OpenCode keeps reverted messages in the transcript until the next prompt, so
 `readThread` stops at `session.revert.messageID` rather than slicing the local copy. OpenCode Go
 stays on Mastra and does not use this adapter path.
+
+### Custom API
+
+Custom API (`customOpenai`) is not a subscription. Each instance points at one OpenAI-compatible
+endpoint, and Mastra reaches it through the `custom-openai/` model prefix with
+`createOpenAICompatible`. The base URL comes from the instance's `CUSTOM_OPENAI_BASE_URL` variable or
+its `baseUrl` config. The optional key comes only from the instance's sensitive
+`CUSTOM_OPENAI_API_KEY` variable, never from the process environment, so a process-wide key is
+never sent to an arbitrary URL. A base URL alone makes the instance ready, because local servers
+such as Ollama take no key.
+
+The web settings write that key for the user. The add dialog offers presets from
+`apps/web/src/components/settings/customApiPresets.ts` that fill `baseUrl` and the instance name,
+and an **API key** field that saves `CUSTOM_OPENAI_API_KEY` as a sensitive variable. Presets are a
+client convenience: the server stores only the URL, and the card matches the URL back to a preset
+to word its key hint. A key is bound to its endpoint on the client: switching presets in the dialog
+clears the draft key, and a card edit that moves the effective URL (the `CUSTOM_OPENAI_BASE_URL`
+variable when set, `baseUrl` otherwise) to another host, or from HTTPS to HTTP, drops the stored key
+in the same settings update, so the next probe never sends it to the new service. A redacted
+override cannot be read, so any change to it, or a `baseUrl` move behind it, drops the key too. When
+the variable repeats, the last row wins, as it does in the driver. A probe answered with 401 or 403
+reports auth status `unknown`: the card stops showing the instance as connected, but preflight still
+lets turns through, because a scoped key can be refused `/models` and still chat.
+
+The model list is `GET {baseUrl}/models` plus the instance's hand-added models. Discovery is
+optional: a failed or unreadable probe keeps the last good catalog and reports a warning naming only
+the endpoint origin. Disabled instances never probe. The registry drops endpoint models only after a
+probe settles, and never retains a hand-added model the user removed. Until a probe settles, a
+hand-added model the last good catalog also listed keeps its discovered mark, so removing the
+hand-added copy leaves the endpoint's model in place.
 
 ### Harness-native readiness
 
@@ -454,6 +485,7 @@ when a request opens (approval) or user input is requested, via
 [kimi]: ../../apps/server/src/provider/Drivers/KimiDriver.ts
 [opencode]: ../../apps/server/src/provider/Drivers/OpenCodeDriver.ts
 [opencode-go]: ../../apps/server/src/provider/Drivers/OpenCodeGoDriver.ts
+[custom-openai]: ../../apps/server/src/provider/Drivers/CustomOpenaiDriver.ts
 [adapter]: ../../apps/server/src/provider/Services/ProviderAdapter.ts
 [instances]: ../../apps/server/src/provider/Services/ProviderInstanceRegistry.ts
 [registry]: ../../apps/server/src/provider/Services/ProviderAdapterRegistry.ts

@@ -13,6 +13,15 @@ export const shouldRetainMissingProviderModels = (provider: ServerProvider): boo
     return provider.enabled && provider.status !== "ready";
   }
 
+  if (provider.driver === ProviderDriverKind.make("customOpenai")) {
+    // A Custom API endpoint is the whole inventory: once a `/models` probe
+    // settles, a model it no longer reports is genuinely gone. While the first
+    // probe is still in flight, the instance has no base URL, or the last probe
+    // failed, the snapshot is not authoritative and keeps the last good list
+    // (including the models hydrated from the on-disk cache at boot).
+    return provider.enabled && provider.status !== "ready";
+  }
+
   if (provider.driver !== ProviderDriverKind.make("opencode")) {
     return true;
   }
@@ -38,14 +47,32 @@ export const mergeProviderModels = (
 ): ReadonlyArray<ServerProvider["models"][number]> => {
   const shouldRetainMissingModels = shouldRetainMissingProviderModels(provider);
 
-  if (shouldRetainMissingModels && nextModels.length === 0 && previousModels.length > 0) {
-    return previousModels;
+  // Custom API models added by hand come from settings, not discovery, so the
+  // driver always reports the current list. A removed one must not be kept.
+  const retainableModels =
+    provider.driver === ProviderDriverKind.make("customOpenai")
+      ? previousModels.filter((model) => !model.isCustom)
+      : previousModels;
+
+  if (shouldRetainMissingModels && nextModels.length === 0 && retainableModels.length > 0) {
+    return retainableModels;
   }
 
   const previousBySlug = new Map(previousModels.map((model) => [model.slug, model] as const));
 
-  const mergedModels = nextModels.map((model) => {
-    const previousModel = previousBySlug.get(model.slug);
+  // Before a Custom API probe settles, the driver marks every hand-added model
+  // custom, even one the last good catalog also listed. Keep the endpoint's
+  // claim so removing the hand-added copy does not drop the model.
+  const keepsDiscoveredModels =
+    shouldRetainMissingModels && provider.driver === ProviderDriverKind.make("customOpenai");
+
+  const mergedModels = nextModels.map((nextModel) => {
+    const previousModel = previousBySlug.get(nextModel.slug);
+
+    const model =
+      keepsDiscoveredModels && nextModel.isCustom && previousModel?.isCustom === false
+        ? { ...nextModel, isCustom: false }
+        : nextModel;
 
     if (!previousModel || hasModelCapabilities(model) || !hasModelCapabilities(previousModel)) {
       return model;
@@ -60,7 +87,7 @@ export const mergeProviderModels = (
   const nextSlugs = new Set(nextModels.map((model) => model.slug));
 
   return shouldRetainMissingModels
-    ? [...mergedModels, ...previousModels.filter((model) => !nextSlugs.has(model.slug))]
+    ? [...mergedModels, ...retainableModels.filter((model) => !nextSlugs.has(model.slug))]
     : mergedModels;
 };
 

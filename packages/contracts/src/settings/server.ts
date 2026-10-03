@@ -38,12 +38,14 @@ import {
   GrokSettings,
   KimiSettings,
   OpenCodeGoSettings,
+  CustomOpenaiSettings,
   OpenCodeSettings,
   CodexSettingsPatch,
   ClaudeSettingsPatch,
   GrokSettingsPatch,
   KimiSettingsPatch,
   OpenCodeGoSettingsPatch,
+  CustomOpenaiSettingsPatch,
   OpenCodeSettingsPatch,
 } from "./providers.ts";
 import { SandboxSettings, BrowserProviderSettings, SandboxSettingsPatch } from "./sandbox.ts";
@@ -228,6 +230,7 @@ export const ServerSettings = Schema.Struct({
     kimi: KimiSettings.pipe(Schema.withDecodingDefault(Effect.succeed({}))),
     opencode: OpenCodeSettings.pipe(Schema.withDecodingDefault(Effect.succeed({}))),
     opencodeGo: OpenCodeGoSettings.pipe(Schema.withDecodingDefault(Effect.succeed({}))),
+    customOpenai: CustomOpenaiSettings.pipe(Schema.withDecodingDefault(Effect.succeed({}))),
   }).pipe(Schema.withDecodingDefault(Effect.succeed({}))),
   // New driver-agnostic instance map. Keyed by `ProviderInstanceId`; values
   // are `ProviderInstanceConfig` envelopes. The driver-specific config blob
@@ -366,6 +369,7 @@ const ServerSettingsPatchFields = {
       kimi: Schema.optionalKey(KimiSettingsPatch),
       opencode: Schema.optionalKey(OpenCodeSettingsPatch),
       opencodeGo: Schema.optionalKey(OpenCodeGoSettingsPatch),
+      customOpenai: Schema.optionalKey(CustomOpenaiSettingsPatch),
     }),
   ),
   // Whole-map replacement for the new instance config. Patching individual

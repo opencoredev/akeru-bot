@@ -185,6 +185,40 @@ export const OpenCodeGoSettings = providerSettingsSchema({
 
 export type OpenCodeGoSettings = typeof OpenCodeGoSettings.Type;
 
+/**
+ * Any OpenAI-compatible HTTP endpoint: a base URL plus a user-authored model
+ * list. There is no account to sign in to, and no secret here: the API key is
+ * an instance environment variable (`CUSTOM_OPENAI_API_KEY`), because only
+ * sensitive environment variables are kept in the secret store and redacted
+ * before settings reach a client.
+ */
+export const CustomOpenaiSettings = providerSettingsSchema(
+  {
+    enabled: Schema.Boolean.pipe(
+      Schema.withDecodingDefault(Effect.succeed(true)),
+      Schema.annotateKey({ providerSettingsForm: { hidden: true } }),
+    ),
+    baseUrl: TrimmedString.pipe(
+      Schema.withDecodingDefault(Effect.succeed("")),
+      Schema.annotateKey({
+        title: "Base URL",
+        description: "The API root of any OpenAI-compatible service.",
+        providerSettingsForm: {
+          placeholder: "https://api.example.com/v1",
+          clearWhenEmpty: "omit",
+        },
+      }),
+    ),
+    customModels: Schema.Array(Schema.String).pipe(
+      Schema.withDecodingDefault(Effect.succeed([])),
+      Schema.annotateKey({ providerSettingsForm: { hidden: true } }),
+    ),
+  },
+  { order: ["baseUrl"] },
+);
+
+export type CustomOpenaiSettings = typeof CustomOpenaiSettings.Type;
+
 export const OpenCodeSettings = providerSettingsSchema(
   {
     // Off by default: the binding is not yet stable
@@ -296,6 +330,12 @@ export const KimiSettingsPatch = Schema.Struct({
 
 export const OpenCodeGoSettingsPatch = Schema.Struct({
   enabled: Schema.optionalKey(Schema.Boolean),
+  customModels: Schema.optionalKey(Schema.Array(Schema.String)),
+});
+
+export const CustomOpenaiSettingsPatch = Schema.Struct({
+  enabled: Schema.optionalKey(Schema.Boolean),
+  baseUrl: Schema.optionalKey(TrimmedString),
   customModels: Schema.optionalKey(Schema.Array(Schema.String)),
 });
 

@@ -41,4 +41,17 @@
   --color-brand-opencode-light-outer: #211e1e;
   --color-brand-opencode-dark-inner: #4b4646;
   --color-brand-opencode-dark-outer: #f1ecec;
+
+  --color-brand-together-pink: #ef2cc1;
+  --color-brand-together-lilac: #caaef5;
+  --color-brand-together-orange: #fc4c02;
+  --color-brand-deepseek: #4d6bfe;
+  --color-brand-mistral-yellow: #ffd700;
+  --color-brand-mistral-amber: #ffaf00;
+  --color-brand-mistral-orange: #ff8205;
+  --color-brand-mistral-red-orange: #fa500f;
+  --color-brand-mistral-red: #e10500;
+  --color-brand-fireworks: #5019c5;
+  --color-brand-vllm-yellow: #fdb515;
+  --color-brand-vllm-blue: #30a2ff;
 }
