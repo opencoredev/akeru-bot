@@ -27,6 +27,9 @@ export type AkeruModelOptions = typeof AkeruModelOptions.Type;
 
 const NATIVE_EFFORTS = new Set(["none", "minimal", "low", "medium", "high", "xhigh", "max"]);
 
+/** Claude CLI workflow modes older bots may have saved; harness turns run them at provider default. */
+const LEGACY_CLAUDE_WORKFLOW_EFFORTS = new Set(["ultrathink", "ultracode"]);
+
 export function reasoningCapabilities(
   driver: ProviderDriverKind,
   slug: string,
@@ -139,6 +142,14 @@ export function invalidReasoningSelection(
     );
 
     if (option.value === "default" && option.id !== "thinking") continue;
+
+    if (
+      option.id === "effort" &&
+      Predicate.isString(option.value) &&
+      LEGACY_CLAUDE_WORKFLOW_EFFORTS.has(option.value)
+    ) {
+      continue;
+    }
 
     if (!descriptor) {
       if (capabilities?.optionDescriptors === undefined) continue;

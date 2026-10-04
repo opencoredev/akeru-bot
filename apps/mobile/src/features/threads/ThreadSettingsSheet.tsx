@@ -7,6 +7,8 @@ import { useMobileI18n } from "../../lib/i18n";
 import { buildModelOptions } from "../../lib/modelOptions";
 import { useThreadEngineBot } from "../../state/use-thread-engine-bot";
 import { useRemoteEnvironmentRuntime } from "../../state/use-remote-environment-registry";
+import { useEnvironmentQuery } from "../../state/query";
+import { serverEnvironment } from "../../state/server";
 import { resolveProviderOptionDescriptors } from "../../lib/providerOptions";
 import { useNewTaskFlow } from "./new-task-flow-provider";
 import {
@@ -34,9 +36,19 @@ export function ExistingThreadSettingsRouteScreen() {
   const runtime = useRemoteEnvironmentRuntime(engineBotRef?.environmentId ?? null);
   const selection = bot?.engine ? botEngineModelSelection(bot.engine) : session?.selectedModel;
 
+  // Same account check as the composer, so the sheet never offers a model Send would block.
+  const subscriptionAuth = useEnvironmentQuery(
+    engineBotRef
+      ? serverEnvironment.subscriptionAuth({ environmentId: engineBotRef.environmentId, input: {} })
+      : null,
+  );
+
+  const subscriptionStatuses = subscriptionAuth.data?.providers;
+
   const liveModels = useMemo(
-    () => buildModelOptions(runtime?.serverConfig ?? null, selection ?? null, undefined, t),
-    [runtime?.serverConfig, selection, t],
+    () =>
+      buildModelOptions(runtime?.serverConfig ?? null, selection ?? null, subscriptionStatuses, t),
+    [runtime?.serverConfig, selection, subscriptionStatuses, t],
   );
 
   useEffect(() => {

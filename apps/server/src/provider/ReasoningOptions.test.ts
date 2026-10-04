@@ -269,6 +269,16 @@ describe("reasoning capability and state boundaries", () => {
       }).optionDescriptors?.find((option) => option.id === "effort"),
     ).toBeUndefined();
   });
+  it("runs saved Claude workflow efforts at provider default instead of rejecting them", () => {
+    const caps = claudeHarnessCapabilities("claude-opus-5-5", undefined);
+
+    for (const value of ["ultrathink", "ultracode"]) {
+      const saved = selection("claude-opus-5-5", [{ id: "effort", value }]);
+
+      expect(invalidReasoningSelection(saved, caps)).toBeUndefined();
+      expect(nativeModelOptions(driver("claudeAgent"), saved)?.effort).toBeUndefined();
+    }
+  });
   it("decodes stored native fields including explicit false, and old Codex fields", () => {
     const context = new RequestContext();
 
