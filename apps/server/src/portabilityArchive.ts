@@ -113,7 +113,6 @@ export function portableRecords(
         engine: bot.engine,
         sandbox: bot.sandbox,
         runtimeMode: bot.runtimeMode,
-        usageCap: bot.usageCap,
         imageProvider: bot.imageProvider,
         personalityTone: bot.personalityTone ?? BALANCED_BOT_PERSONALITY_TONE,
         voiceEnabled: bot.voiceEnabled,

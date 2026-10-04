@@ -52,7 +52,6 @@ export function BotZeroState() {
         engine: null,
         sandbox: null,
         runtimeMode: DEFAULT_BOT_RUNTIME_MODE,
-        usageCap: null,
         groupId: null,
       },
     });

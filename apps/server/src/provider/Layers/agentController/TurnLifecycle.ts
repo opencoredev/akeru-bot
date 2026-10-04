@@ -74,10 +74,7 @@ export function createTurnLifecycle(deps: {
     createdAt: string;
   };
   readonly toolRuntime: AkeruToolRuntime;
-  readonly memoryUsageByThread: Map<
-    string,
-    { readonly botId: BotId; readonly capLimit: number; turnId: TurnId }
-  >;
+  readonly memoryUsageByThread: Map<string, { readonly botId: BotId; turnId: TurnId }>;
   readonly publishSessionState: (
     threadId: ThreadId,
     active: ActiveSession,

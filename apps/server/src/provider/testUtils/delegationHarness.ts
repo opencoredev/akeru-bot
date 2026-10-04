@@ -67,7 +67,6 @@ export function bot(id: BotId, overrides: Partial<OrchestrationBot> = {}): Orche
     engine: null,
     sandbox: "local",
     runtimeMode: "approval-required",
-    usageCap: null,
     imageProvider: null,
     voiceEnabled: false,
     channelBindings: [],

@@ -1,5 +1,6 @@
 import * as Predicate from "effect/Predicate";
 import {
+  type BotEngine,
   DEFAULT_MODEL,
   DEFAULT_MODEL_BY_PROVIDER,
   MODEL_SLUG_ALIASES_BY_PROVIDER,
@@ -81,21 +82,36 @@ export function getModelSelectionBooleanOptionValue(
   return getProviderOptionBooleanSelectionValue(modelSelection?.options, id);
 }
 
+function normalizeDescriptorSelectionValue(
+  descriptor: ProviderOptionDescriptor,
+  value: string | boolean,
+): string | boolean {
+  return descriptor.type === "select" &&
+    descriptor.id === "reasoningEffort" &&
+    value === "off" &&
+    !descriptor.options.some((option) => option.id === "off") &&
+    descriptor.options.some((option) => option.id === "none")
+    ? "none"
+    : value;
+}
+
 function resolveDescriptorChoiceValue(
   descriptor: Extract<ProviderOptionDescriptor, { type: "select" }>,
   raw: string | null | undefined,
 ): string | undefined {
-  const trimmed = trimOrNull(raw);
+  const trimmedRaw = trimOrNull(raw);
+  const trimmed = trimmedRaw ? normalizeDescriptorSelectionValue(descriptor, trimmedRaw) : null;
 
   if (!trimmed) {
     return descriptor.currentValue ?? descriptor.options.find((option) => option.isDefault)?.id;
   }
 
   if (descriptor.options.length === 0) {
-    return trimmed;
+    return Predicate.isString(trimmed) ? trimmed : undefined;
   }
 
   if (
+    Predicate.isString(trimmed) &&
     descriptor.promptInjectedValues?.includes(trimmed) &&
     descriptor.options.some((option) => option.id === trimmed)
   ) {
@@ -103,7 +119,7 @@ function resolveDescriptorChoiceValue(
   }
 
   if (descriptor.options.some((option) => option.id === trimmed)) {
-    return trimmed;
+    return Predicate.isString(trimmed) ? trimmed : undefined;
   }
 
   return descriptor.currentValue ?? descriptor.options.find((option) => option.isDefault)?.id;
@@ -365,6 +381,99 @@ export function createModelSelection(
   };
 
   return selections.length > 0 ? { ...base, options: selections } : base;
+}
+
+function isChosenProviderOption(
+  descriptor: ProviderOptionDescriptor,
+  value: string | boolean,
+): boolean {
+  if (descriptor.type === "boolean") {
+    return Predicate.isBoolean(value) && value !== descriptor.currentValue;
+  }
+
+  return (
+    Predicate.isString(value) &&
+    descriptor.options.some((option) => option.id === value && option.isDefault !== true) &&
+    !descriptor.promptInjectedValues?.includes(value)
+  );
+}
+
+/**
+ * The options a user actually chose for a model: each names an advertised
+ * descriptor and choice and differs from that descriptor's default, so picking
+ * the default removes the option. Capabilities that are unknown (`null`, or a
+ * snapshot without a descriptor list) cannot reject anything, so the options
+ * are kept as they are. Returns undefined when nothing remains.
+ */
+export function retainChosenProviderOptions(
+  options: ReadonlyArray<ProviderOptionSelection> | null | undefined,
+  caps: ModelCapabilities | null | undefined,
+): Array<ProviderOptionSelection> | undefined {
+  if (!options || options.length === 0) return undefined;
+
+  const descriptors = caps?.optionDescriptors;
+
+  if (descriptors === undefined) return cloneSelections(options);
+
+  const seen = new Set<string>();
+
+  const kept = options.flatMap((option) => {
+    if (seen.has(option.id)) return [];
+    seen.add(option.id);
+    const descriptor = descriptors.find((candidate) => candidate.id === option.id);
+
+    if (!descriptor) return [];
+
+    const value = normalizeDescriptorSelectionValue(descriptor, option.value);
+
+    return isChosenProviderOption(descriptor, value) ? [{ id: option.id, value }] : [];
+  });
+
+  return kept.length > 0 ? cloneSelections(kept) : undefined;
+}
+
+/**
+ * The options a model pick carries over from `previous`. Another provider
+ * instance starts clean. The same instance keeps the choices the next model
+ * supports; a next model with unknown capabilities starts clean, because
+ * nothing confirms the old choices apply to it.
+ */
+export function providerOptionsForModelChange(input: {
+  readonly previous: ModelSelection | null | undefined;
+  readonly instanceId: string;
+  readonly nextCaps: ModelCapabilities | null | undefined;
+}): Array<ProviderOptionSelection> | undefined {
+  if (!input.previous || input.previous.instanceId !== input.instanceId) return undefined;
+
+  if (input.nextCaps?.optionDescriptors === undefined) return undefined;
+
+  return retainChosenProviderOptions(input.previous.options, input.nextCaps);
+}
+
+/**
+ * A bot's saved engine as the selection it runs with. The saved options are
+ * the bot's own: the app's default selection never fills them in.
+ */
+export function botEngineModelSelection(engine: BotEngine): ModelSelection {
+  return createModelSelection(
+    ProviderInstanceId.make(engine.provider),
+    engine.model,
+    engine.options,
+  );
+}
+
+/** The engine to save for a selection, keeping only options the user chose. */
+export function botEngineFromModelSelection(
+  selection: ModelSelection,
+  caps: ModelCapabilities | null | undefined,
+): BotEngine {
+  const options = retainChosenProviderOptions(selection.options, caps);
+
+  return {
+    provider: selection.instanceId,
+    model: selection.model,
+    ...(options ? { options } : {}),
+  };
 }
 
 /**

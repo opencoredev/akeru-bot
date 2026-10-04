@@ -14,7 +14,6 @@ const mocks = vi.hoisted(() => ({
     engine: null,
     sandbox: null,
     runtimeMode: "full-access",
-    usageCap: null,
     voiceEnabled: true,
     groupId: null,
     pinned: false,

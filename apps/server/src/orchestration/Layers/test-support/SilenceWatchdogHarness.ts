@@ -214,7 +214,6 @@ export function makeSilenceWatchdogHarness() {
         },
         sandbox: null,
         runtimeMode: "approval-required",
-        usageCap: null,
         groupId: null,
         createdAt,
       });

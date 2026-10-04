@@ -5,7 +5,7 @@ import { HeaderHeightContext } from "@react-navigation/elements";
 import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { use, useCallback, useMemo, useState, type ReactNode } from "react";
-import { Alert, Platform, Pressable, TextInput, View } from "react-native";
+import { Platform, Pressable, TextInput, View } from "react-native";
 import Animated, { FadeIn, FadeOut, LinearTransition } from "react-native-reanimated";
 import { SymbolView } from "../../components/AppSymbol";
 import { AppText as Text } from "../../components/AppText";
@@ -446,24 +446,12 @@ export function ThreadSettingsModelsScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<ThreadSettingsPickerStackParams>>();
   const usesNativeMailSearchToolbar = Platform.OS === "ios" && NATIVE_MAIL_SEARCH_TOOLBAR_SUPPORTED;
   const hasCustomCatalogFilter = session.providerFilter !== null || session.showLegacy;
-  const [saving, setSaving] = useState(false);
-  const hasPendingChanges = session.pendingModel !== null || session.botUsageCapDirty;
+  const hasPendingChanges = session.pendingModel !== null;
 
-  const commitAndClose = useCallback(async () => {
-    if (!session.botUsageCapValid || saving) return;
-    setSaving(true);
-    const saved = await session.commitBotUsageCap();
-    setSaving(false);
-
-    if (!saved) {
-      Alert.alert(t("Could not save bot settings"));
-
-      return;
-    }
-
+  const commitAndClose = useCallback(() => {
     session.commitPendingModel();
     presentation.onClose();
-  }, [presentation, saving, session, t]);
+  }, [presentation, session]);
 
   const filterMenu = useMemo(
     () => ({
@@ -510,9 +498,8 @@ export function ThreadSettingsModelsScreen() {
           actions={[
             {
               accessibilityLabel: hasPendingChanges ? t("Save chat settings") : t("Done"),
-              disabled: saving || !session.botUsageCapValid,
               icon: "checkmark",
-              onPress: () => void commitAndClose(),
+              onPress: commitAndClose,
             },
           ]}
           onBack={presentation.onClose}
@@ -593,9 +580,8 @@ export function ThreadSettingsModelsScreen() {
       <NativeHeaderToolbar placement="right">
         <NativeHeaderToolbar.Button
           accessibilityLabel={hasPendingChanges ? t("Save chat settings") : t("Done")}
-          disabled={saving || !session.botUsageCapValid}
           label={hasPendingChanges ? t("Save") : t("Done")}
-          onPress={() => void commitAndClose()}
+          onPress={commitAndClose}
         />
       </NativeHeaderToolbar>
       {Platform.OS === "ios" && !usesNativeMailSearchToolbar ? (

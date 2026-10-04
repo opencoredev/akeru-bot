@@ -59,7 +59,6 @@ export type ProviderCommandHarnessOptions = {
     readonly engine: { readonly provider: string; readonly model: string };
     readonly modelSelection?: ModelSelection;
   };
-  readonly botUsageCap?: { readonly unit: "tokens"; readonly limit: number } | null;
   readonly bindTurnFailure?: boolean;
   readonly unavailableEngine?: boolean | "missing-login";
   readonly disabledEngine?: boolean;

@@ -42,8 +42,6 @@ export const settingsCatalog = {
   "Stream token by token (legacy)": "Stream token by token (legacy)",
   "Terminal font": "Terminal font",
   Themes: "Themes",
-  "Token hard stop": "Token hard stop",
-  "Unavailable for this provider": "Unavailable for this provider",
   "Update ready": "Update ready",
   "Voice provider": "Voice provider",
   "OpenAI API voice": "OpenAI API voice",
@@ -80,6 +78,7 @@ export const settingsCatalog = {
   "No response from {provider}": "No response from {provider}",
   "No response from {provider} for {duration}": "No response from {provider} for {duration}",
   "Could not change the model": "Could not change the model",
+  "Could not change the reasoning": "Could not change the reasoning",
   "Change model": "Change model",
   "Nothing stashed yet. Press {shortcut} with a prompt in the composer to stash it.":
     "Nothing stashed yet. Press {shortcut} with a prompt in the composer to stash it.",
@@ -124,8 +123,6 @@ export const settingsCatalog = {
   "The provider and model this bot runs on.": "The provider and model this bot runs on.",
   "No model yet": "No model yet",
   Reasoning: "Reasoning",
-  "Stop this bot once it has spent this many tokens. Leave empty for no limit.":
-    "Stop this bot once it has spent this many tokens. Leave empty for no limit.",
   "Which subscription this bot uses to create images. The chat model above stays the same.":
     "Which subscription this bot uses to create images. The chat model above stays the same.",
   "Image provider": "Image provider",
@@ -229,8 +226,12 @@ export const settingsCatalog = {
     "Your {provider} plan hit its usage or rate limit. Wait for it to reset, then send your message again.",
   "Your provider plan hit its usage or rate limit. Wait for it to reset, then send your message again.":
     "Your provider plan hit its usage or rate limit. Wait for it to reset, then send your message again.",
-  "Raise this bot's usage cap in its settings to keep chatting.":
-    "Raise this bot's usage cap in its settings to keep chatting.",
+  "{provider} account limit reached": "{provider} account limit reached",
+  "Provider account limit reached": "Provider account limit reached",
+  "Your {provider} account hit its quota or spending limit. Raise it with {provider}, or switch this bot to another provider in bot settings.":
+    "Your {provider} account hit its quota or spending limit. Raise it with {provider}, or switch this bot to another provider in bot settings.",
+  "Your provider account hit its quota or spending limit. Raise it with the provider, or switch this bot to another provider in bot settings.":
+    "Your provider account hit its quota or spending limit. Raise it with the provider, or switch this bot to another provider in bot settings.",
   "{provider} could not respond": "{provider} could not respond",
   "The provider could not respond": "The provider could not respond",
   Models: "Models",

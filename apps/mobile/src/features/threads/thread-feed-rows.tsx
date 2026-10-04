@@ -368,9 +368,7 @@ export function renderFeedEntry(
 function BotStepMeter(props: { readonly meter: BotStepMeterData }) {
   const label = `${formatBotStepEngine(props.meter.engine)} · ${
     props.meter.tokens === null ? "—" : formatTokens(props.meter.tokens)
-  } tokens · ${props.meter.costUsd === null ? "$—" : formatUsd(props.meter.costUsd)}${
-    props.meter.hardStopReached ? " · Hard stop" : ""
-  }`;
+  } tokens · ${props.meter.costUsd === null ? "$—" : formatUsd(props.meter.costUsd)}`;
 
   return (
     <Text

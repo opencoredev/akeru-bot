@@ -41,7 +41,6 @@ const snapshotFor = (botId: BotId) => ({
     reflector: { tokens: 0, unavailableEntries: 0 },
   },
   entries: [],
-  usageCap: null,
   estimatedCost: { status: "unavailable" as const, usd: null },
   subscriptionPool: { status: "unavailable" as const, used: null, limit: null, unit: null },
 });
@@ -140,7 +139,6 @@ describe("bot usage environment atoms", () => {
                   reflector: { tokens: 0, unavailableEntries: 0 },
                 },
                 entries: [],
-                usageCap: null,
                 estimatedCost: { status: "unavailable" as const, usd: null },
                 subscriptionPool: {
                   status: "unavailable" as const,

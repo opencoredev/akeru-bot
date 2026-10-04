@@ -48,7 +48,6 @@ export interface Bot {
     | "tenki"
     | null;
   runtimeMode: "approval-required" | "auto-accept-edits" | "auto" | "full-access";
-  usageCap: { unit: "tokens"; limit: number } | null;
   /** Personality baseline, 0 (chill) to 100 (professional). Absent on bots saved before the field existed. */
   personalityTone?: number;
   voiceEnabled: boolean;

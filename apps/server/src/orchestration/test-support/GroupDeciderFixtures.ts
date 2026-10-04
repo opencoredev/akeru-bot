@@ -73,7 +73,6 @@ export function makeBot(input: {
     engine: input.provider && input.model ? { provider: input.provider, model: input.model } : null,
     sandbox: "local",
     runtimeMode: "full-access",
-    usageCap: null,
     imageProvider: null,
     voiceEnabled: false,
     channelBindings: [],

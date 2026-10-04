@@ -1,4 +1,3 @@
-import * as Schema from "effect/Schema";
 import * as Predicate from "effect/Predicate";
 import * as NodeHttpServer from "@effect/platform-node/NodeHttpServer";
 import * as NodeServices from "@effect/platform-node/NodeServices";
@@ -20,7 +19,6 @@ import { HttpBody, HttpClient } from "effect/unstable/http";
 import { vi } from "vite-plus/test";
 import * as OrchestrationEngine from "./orchestration/Services/OrchestrationEngine.ts";
 import * as ProjectionBots from "./persistence/Services/ProjectionBots.ts";
-import * as ProjectionGroups from "./persistence/Services/ProjectionGroups.ts";
 
 import {
   makeChannelTestBot,
@@ -309,162 +307,6 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
       );
 
       assert.equal(result.sequence, 7);
-      assert.equal(dispatch.mock.calls.length, 1);
-    }).pipe(Effect.provide(NodeHttpServer.layerTest)),
-  );
-
-  it.effect("rejects capped group responders selected by boss or mention", () =>
-    Effect.gen(function* () {
-      const groupId = GroupId.make("group-usage-cap");
-      const bossId = BotId.make("bot-capped-boss");
-      const memberId = BotId.make("bot-capped-member");
-
-      const bots = [
-        { ...makeChannelTestBot(), botId: bossId, name: "Boss", groupId },
-        { ...makeChannelTestBot(), botId: memberId, name: "Member", groupId },
-      ].map((bot) => ({
-        ...bot,
-        imageProvider: null,
-        usageCap: { unit: "tokens" as const, limit: 100 },
-      })) satisfies ProjectionBots.ProjectionBot[];
-
-      const group = {
-        groupId,
-        name: "Team",
-        bossBotId: bossId,
-        members: [
-          { kind: "bot" as const, botId: bossId, role: "boss" as const },
-          { kind: "bot" as const, botId: memberId, role: "specialist" as const },
-        ],
-        createdAt: "2026-01-01T00:00:00.000Z",
-        updatedAt: "2026-01-01T00:00:00.000Z",
-      } satisfies ProjectionGroups.ProjectionGroup;
-
-      let memberCapped = true;
-
-      const dispatch = vi.fn<OrchestrationEngine.OrchestrationEngineService["Service"]["dispatch"]>(
-        () => Effect.succeed({ sequence: 1 }),
-      );
-
-      yield* buildAppUnderTest({
-        layers: {
-          providerRegistry: { getProviders: Effect.succeed([readyDefaultProvider]) },
-          projectionSnapshotQuery: {
-            getThreadShellById: () =>
-              Effect.succeed(
-                Option.some(makeDefaultOrchestrationThreadShell({ groupId, botId: null })),
-              ),
-          },
-          projectionGroups: { getById: () => Effect.succeed(Option.some(group)) },
-          projectionBots: {
-            getById: ({ botId }) => {
-              const bot = bots.find((candidate) => candidate.botId === botId);
-
-              return Effect.succeed(bot ? Option.some(bot) : Option.none());
-            },
-            listAll: () => Effect.succeed(bots),
-          },
-          botUsageLedger: {
-            summarize: (botId) =>
-              Effect.succeed({
-                botId,
-                consumedTokens: botId === memberId && !memberCapped ? 0 : 100,
-                reservedTokens: 0,
-                measurements: {
-                  input: { tokens: 100, unavailableEntries: 0 },
-                  output: { tokens: 0, unavailableEntries: 0 },
-                  observer: { tokens: 0, unavailableEntries: 0 },
-                  reflector: { tokens: 0, unavailableEntries: 0 },
-                },
-                entries: [],
-              }),
-          },
-          orchestrationEngine: { dispatch, readEvents: () => Stream.empty },
-        },
-      });
-
-      const wsUrl = yield* getWsServerUrl("/ws");
-
-      for (const [index, text] of ["Ask the team", `Ask @bot:${memberId} now`].entries()) {
-        const error = yield* Effect.scoped(
-          withWsRpcClient(wsUrl, (client) =>
-            client[ORCHESTRATION_WS_METHODS.dispatchCommand]({
-              type: "thread.turn.start",
-              commandId: CommandId.make(`cmd-group-cap-${index}`),
-              threadId: defaultThreadId,
-              message: {
-                messageId: MessageId.make(`msg-group-cap-${index}`),
-                role: "user",
-                text,
-                attachments: [],
-              },
-              modelSelection: defaultModelSelection,
-              runtimeMode: "full-access",
-              interactionMode: "default",
-              createdAt: "2026-01-01T00:00:00.000Z",
-            }).pipe(Effect.flip),
-          ),
-        );
-
-        assert.equal(error._tag, "OrchestrationDispatchCommandError");
-
-        if (Predicate.isTagged(error, "OrchestrationDispatchCommandError")) {
-          assert.equal(error.unavailability, "usage-cap");
-        }
-      }
-
-      assert.equal(dispatch.mock.calls.length, 0);
-
-      const { body: tokenBody } = yield* exchangeAccessToken(defaultDesktopBootstrapToken, {
-        scope: "orchestration:operate",
-      });
-
-      for (const [index, text] of ["Ask the team", `Ask @bot:${memberId} now`].entries()) {
-        const response = yield* HttpClient.post("/api/orchestration/dispatch", {
-          headers: { authorization: `Bearer ${tokenBody.access_token ?? ""}` },
-          body: yield* HttpBody.json({
-            type: "thread.turn.start",
-            commandId: CommandId.make(`cmd-http-group-cap-${index}`),
-            threadId: defaultThreadId,
-            message: {
-              messageId: MessageId.make(`msg-http-group-cap-${index}`),
-              role: "user",
-              text,
-              attachments: [],
-            },
-            modelSelection: defaultModelSelection,
-            runtimeMode: "full-access",
-            interactionMode: "default",
-            createdAt: "2026-01-01T00:00:00.000Z",
-          }),
-        });
-
-        assert.equal(response.status, 400);
-        const error = (yield* response.json) as Schema.JsonObject;
-        assert.equal(error.unavailability, "usage-cap");
-      }
-
-      assert.equal(dispatch.mock.calls.length, 0);
-      memberCapped = false;
-      yield* Effect.scoped(
-        withWsRpcClient(wsUrl, (client) =>
-          client[ORCHESTRATION_WS_METHODS.dispatchCommand]({
-            type: "thread.turn.start",
-            commandId: CommandId.make("cmd-group-cap-uncapped"),
-            threadId: defaultThreadId,
-            message: {
-              messageId: MessageId.make("msg-group-cap-uncapped"),
-              role: "user",
-              text: `Ask @bot:${memberId} now`,
-              attachments: [],
-            },
-            modelSelection: defaultModelSelection,
-            runtimeMode: "full-access",
-            interactionMode: "default",
-            createdAt: "2026-01-01T00:00:00.000Z",
-          }),
-        ),
-      );
       assert.equal(dispatch.mock.calls.length, 1);
     }).pipe(Effect.provide(NodeHttpServer.layerTest)),
   );

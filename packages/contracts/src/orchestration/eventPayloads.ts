@@ -35,7 +35,6 @@ import {
   BotAvatar,
   BotEngine,
   PersistedBotSandbox,
-  BotUsageCap,
   BALANCED_BOT_PERSONALITY_TONE,
   BotPersonalityTone,
   ChannelBinding,
@@ -189,7 +188,6 @@ export const BotCreatedPayload = Schema.Struct({
   engine: Schema.NullOr(BotEngine),
   sandbox: PersistedBotSandbox,
   runtimeMode: RuntimeMode.pipe(Schema.withDecodingDefault(Effect.succeed(DEFAULT_RUNTIME_MODE))),
-  usageCap: Schema.NullOr(BotUsageCap).pipe(Schema.withDecodingDefault(Effect.succeed(null))),
   imageProvider: Schema.NullOr(ImageProviderId).pipe(
     Schema.withDecodingDefault(Effect.succeed(null)),
   ),
@@ -216,7 +214,6 @@ export const BotUpdatedPayload = Schema.Struct({
   engine: Schema.optional(Schema.NullOr(BotEngine)),
   sandbox: Schema.optional(PersistedBotSandbox),
   runtimeMode: Schema.optional(RuntimeMode),
-  usageCap: Schema.optional(Schema.NullOr(BotUsageCap)),
   imageProvider: Schema.optional(Schema.NullOr(ImageProviderId)),
   personalityTone: Schema.optional(BotPersonalityTone),
   voiceEnabled: Schema.optional(Schema.Boolean),

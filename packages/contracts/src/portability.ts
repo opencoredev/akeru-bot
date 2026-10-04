@@ -20,7 +20,6 @@ import {
   BotPersonalityTone,
   BotSandboxBrowserSharing,
   PersistedBotSandbox,
-  BotUsageCap,
   GroupBotMembership,
 } from "./orchestration/roster.ts";
 import {
@@ -98,7 +97,6 @@ export const PortabilityBotData = Schema.Struct({
   engine: Schema.NullOr(BotEngine),
   sandbox: PersistedBotSandbox,
   runtimeMode: RuntimeMode,
-  usageCap: Schema.NullOr(BotUsageCap),
   imageProvider: Schema.NullOr(ImageProviderId).pipe(
     Schema.withDecodingDefault(Effect.succeed(null)),
   ),

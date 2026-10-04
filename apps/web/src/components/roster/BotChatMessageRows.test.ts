@@ -28,7 +28,7 @@ function props(overrides: Partial<RowProps> = {}): RowProps {
     testId: "row",
     cwd: "/work",
     threadRef: { environmentId: EnvironmentId.make("env"), threadId: ThreadId.make("thread") },
-    stepMeter: { engine, tokens: 10, costUsd: null, hardStopReached: false },
+    stepMeter: { engine, tokens: 10, costUsd: null },
     pluginResults: [{ id: "entry-1", result }],
     currentPersonId: "person",
     playback: null,

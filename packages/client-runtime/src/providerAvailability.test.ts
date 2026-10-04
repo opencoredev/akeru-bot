@@ -147,8 +147,13 @@ describe("presentProviderUnavailability", () => {
       action: "providers",
     });
     expect(
-      presentProviderUnavailability({ reason: "usage-cap", providerName: "Codex" }).action,
-    ).toBe("usage");
+      presentProviderUnavailability({ reason: "usage-cap", providerName: "Codex" }),
+    ).toMatchObject({
+      title: "Codex account limit reached",
+      description:
+        "Your Codex account hit its quota or spending limit. Raise it with Codex, or switch this bot to another provider in bot settings.",
+      action: "usage",
+    });
   });
 
   it("renders every reason in the active interface language", () => {

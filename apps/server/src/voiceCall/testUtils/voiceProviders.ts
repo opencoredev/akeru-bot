@@ -31,7 +31,6 @@ const repository = {
         engine: null,
         sandbox: null,
         runtimeMode: "full-access" as const,
-        usageCap: null,
         imageProvider: null,
         voiceEnabled: true,
         groupId: null,

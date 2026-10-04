@@ -36,6 +36,16 @@ next message. Select it to change the bot's model without leaving the chat. The 
 shows providers that cannot run right now, such as one that is signed out or turned off. Their
 models are dimmed and say why.
 
+Reasoning controls how much thinking the bot spends before answering. Change it under **Reasoning**
+in the bot's settings on web or desktop. On mobile, open **Model and reasoning settings** in the
+chat. The choices depend on the selected model: some offer levels, some offer a thinking switch,
+and models with fixed reasoning have no control.
+
+The choice is saved with the bot and appears on other clients connected to the same environment.
+Select **Provider default** to clear a chosen level and use the provider runtime's default. Changing
+models on the same provider keeps choices the new model supports; changing provider starts with
+its defaults. Group chat controls do not change a member bot's saved reasoning.
+
 A bot keeps its model when that model stops working. Akeru never switches it for you. Instead, the
 chat and the bot's settings mark the model unavailable, and **Send** stays off until you fix the
 cause or pick another model. A line below the composer names the provider, says what went wrong,
@@ -48,7 +58,7 @@ and gives one next step. **Set up a provider** opens **Settings > Providers**.
 | Account is not connected, or its sign-in expired     | Connect or reconnect it in **Settings > Providers** |
 | Provider no longer offers the model                  | Pick another model for the bot                      |
 | Your provider plan hit its usage or rate limit       | Wait for the limit to reset                         |
-| The bot hit its Akeru usage cap                      | Raise the cap in the bot's settings                 |
+| Your provider account hit its quota or spending cap  | Raise it with the provider, or switch providers     |
 
 When a provider reports that it rerouted a message to a different model while the chat is running,
 the work log notes it as `Model rerouted from <requested> to <effective>`. Providers that run
@@ -74,9 +84,8 @@ Avatars rest on a still frame. A working bot sways, glances down at its work, an
 its face around its body. Point at a bot and its eyes widen and follow the pointer. Now and then one
 resting bot on screen blinks or glances around. With reduced motion turned on, avatars stay still.
 
-Set **Token hard stop** to interrupt the current step when it reaches the selected limit. A settled
-reply shows its engine, step tokens, and estimated USD cost when the provider reports enough usage
-data.
+A settled reply shows its engine, step tokens, and estimated USD cost when the provider reports
+enough usage data.
 
 Akeru stores bot profiles on the connected environment. Every client connected to that environment
 sees the same profile.
@@ -204,8 +213,8 @@ work that is still running always stay. For finished, failed, or canceled work, 
 read the full result.
 
 When a request fails, the chat shows a short card that says what went wrong and what to do next. A
-provider that is turned off or signed out gets a **Settings > Providers** link. An Akeru usage cap
-gets a **Bot settings** button. When the cause is unknown, select **Send feedback** to report it
+provider that is turned off or signed out gets a **Settings > Providers** link. A provider account
+limit gets a **Bot settings** button so you can switch the bot to another provider. When the cause is unknown, select **Send feedback** to report it
 with its details. Expand **Technical details** to see the underlying error, or select **Resume**
 when an interrupted request can continue. If your message was saved but the bot never started, the
 chat says so under your message instead of leaving the reply empty. Group chats do the same and name the bot that was asked to reply. On mobile, the resume card

@@ -10,7 +10,6 @@ export function bot(input: Partial<Bot> & Pick<Bot, "id" | "name">): Bot {
     engine: null,
     sandbox: null,
     runtimeMode: "full-access",
-    usageCap: null,
     voiceEnabled: false,
     groupId: null,
     pinned: false,

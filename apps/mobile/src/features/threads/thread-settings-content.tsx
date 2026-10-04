@@ -2,7 +2,7 @@ import { useMobileI18n } from "../../lib/i18n";
 import { getProviderOptionCurrentLabel, getProviderOptionCurrentValue } from "@akeru/shared/model";
 import * as Haptics from "expo-haptics";
 import { useState } from "react";
-import { Alert, Platform, Pressable, ScrollView, TextInput, View } from "react-native";
+import { Alert, Platform, Pressable, ScrollView, View } from "react-native";
 import Animated, { FadeIn, FadeOut, LinearTransition } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { SymbolView } from "../../components/AppSymbol";
@@ -179,11 +179,7 @@ export function ThreadSettingsOptionsItem(props: {
         })}
         <Animated.View layout={THREAD_SETTINGS_OPTIONS_LAYOUT_TRANSITION}>
           <DisclosureRow
-            isLast={
-              session.botUsageCapInput === undefined &&
-              !session.memoryThreadRef &&
-              !session.routinesRef
-            }
+            isLast={!session.memoryThreadRef && !session.routinesRef}
             label={t("Runtime")}
             value={
               RUNTIME_MODE_CHOICES.find((choice) => choice.mode === session.runtimeMode)?.label
@@ -194,7 +190,7 @@ export function ThreadSettingsOptionsItem(props: {
         {session.memoryThreadRef ? (
           <Animated.View layout={THREAD_SETTINGS_OPTIONS_LAYOUT_TRANSITION}>
             <DisclosureRow
-              isLast={session.botUsageCapInput === undefined && !session.routinesRef}
+              isLast={!session.routinesRef}
               label={t("Memory")}
               value={t("Markdown and observations")}
               onPress={() => props.onOpenSubmenu({ kind: "memory" })}
@@ -204,35 +200,12 @@ export function ThreadSettingsOptionsItem(props: {
         {session.routinesRef ? (
           <Animated.View layout={THREAD_SETTINGS_OPTIONS_LAYOUT_TRANSITION}>
             <DisclosureRow
-              isLast={session.botUsageCapInput === undefined}
+              isLast
               label={t("Routines")}
               value={session.routinesRef.botName}
               onPress={() => props.onOpenSubmenu({ kind: "routines" })}
             />
           </Animated.View>
-        ) : null}
-        {session.botUsageCapInput !== undefined && session.botUsageCapAvailable ? (
-          <View className="min-h-14 flex-row items-center gap-3 bg-card px-4 py-2">
-            <Text className="text-sm font-t3-medium text-foreground">{t("Token hard stop")}</Text>
-            <TextInput
-              accessibilityLabel={t("Token hard stop")}
-              className="min-w-24 flex-1 text-right text-base tabular-nums text-foreground"
-              inputMode="numeric"
-              keyboardType="number-pad"
-              onChangeText={session.setBotUsageCapInput}
-              placeholder={t("No limit")}
-              placeholderTextColorClassName="accent-placeholder"
-              returnKeyType="done"
-              value={session.botUsageCapInput}
-            />
-          </View>
-        ) : session.botUsageCapInput !== undefined ? (
-          <View className="min-h-14 flex-row items-center justify-between gap-3 bg-card px-4 py-2">
-            <Text className="text-sm font-t3-medium text-foreground">{t("Token hard stop")}</Text>
-            <Text className="text-sm text-foreground-muted">
-              {t("Unavailable for this provider")}
-            </Text>
-          </View>
         ) : null}
       </Animated.View>
       {session.canDelegate ? null : (

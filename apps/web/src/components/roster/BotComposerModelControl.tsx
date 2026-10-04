@@ -1,6 +1,6 @@
 import { Predicate } from "effect";
 import { useAtomValue } from "@effect/atom-react";
-import { BotId, ProviderInstanceId } from "@akeru/contracts";
+import { BotId, ProviderInstanceId, type BotEngine } from "@akeru/contracts";
 import { useEffect, useMemo, useState } from "react";
 
 import { usePrimarySettings } from "../../hooks/useSettings";
@@ -22,13 +22,13 @@ import { primaryServerKeybindingsAtom, primaryServerProvidersAtom } from "../../
 import { useAtomCommand } from "../../state/use-atom-command";
 import { ProviderModelPicker } from "../chat/ProviderModelPicker";
 import { toastManager } from "../ui/toast";
-import { resolveStickyBotEngine } from "./botEngineSelection";
+import { botEngineForModelPick, resolveStickyBotEngine } from "./botEngineSelection";
 import { useRosterStore } from "./rosterStore";
 
 /**
  * The bot's engine at the composer: shows which model answers the next message
- * and opens the shared model picker to change it. Changing the model here
- * writes the bot's engine, the same field the details panel edits.
+ * and opens the shared model picker. Model changes retain the bot's saved
+ * reasoning when the selected model supports it.
  */
 export function BotComposerModelControl({
   botId,
@@ -110,26 +110,19 @@ export function BotComposerModelControl({
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [keybindings, pickerOpen, selectable]);
 
-  if (selection === null) return null;
+  // Only a live bot's own composer edits an engine; a group or archived bot never does.
+  if (selection === null || !bot || bot.archivedAt !== null) return null;
 
-  const changeModel = async (instanceId: ProviderInstanceId, model: string) => {
-    if (environmentId === null || !bot) return;
-
-    const options =
-      defaultSelection.instanceId === instanceId && defaultSelection.model === model
-        ? defaultSelection.options
-        : undefined;
+  const saveEngine = async (engine: BotEngine, failureTitle: string) => {
+    if (environmentId === null) return;
 
     const result = await updateBot({
       environmentId,
-      input: {
-        botId: BotId.make(bot.id),
-        engine: { provider: instanceId, model, ...(options ? { options } : {}) },
-      },
+      input: { botId: BotId.make(bot.id), engine },
     });
 
     if (Predicate.isTagged(result, "Failure")) {
-      toastManager.add({ type: "error", title: t("Could not change the model") });
+      toastManager.add({ type: "error", title: failureTitle });
     }
   };
 
@@ -149,7 +142,10 @@ export function BotComposerModelControl({
       triggerFit="capped"
       onOpenChange={setPickerOpen}
       onInstanceModelChange={(instanceId, model) => {
-        void changeModel(instanceId, model);
+        void saveEngine(
+          botEngineForModelPick({ previous: selection, instanceId, model, instanceEntries }),
+          t("Could not change the model"),
+        );
       }}
     />
   );

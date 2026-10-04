@@ -114,7 +114,6 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
         engine: { provider: "codex-work", model: "gpt-5.6-sol" },
         sandbox: "local",
         runtimeMode: "approval-required" as const,
-        usageCap: { unit: "tokens" as const, limit: 64_000 },
         imageProvider: null,
         voiceEnabled: false,
         groupId: null,
@@ -152,7 +151,6 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
         ),
       );
 
-      assert.deepEqual(result.usage.usageCap, { unit: "tokens", limit: 64_000 });
       assert.equal(result.usage.consumedTokens, 1_500);
       assert.equal(result.usage.reservedTokens, 32_000);
       assert.deepEqual(result.usage.measurements, {
@@ -186,7 +184,6 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
         engine: { provider: "grok", model: "grok-4.6" },
         sandbox: null,
         runtimeMode: "approval-required" as const,
-        usageCap: null,
         imageProvider: null,
         voiceEnabled: false,
         groupId: null,

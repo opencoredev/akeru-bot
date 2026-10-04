@@ -228,6 +228,7 @@ export function createSessionLifecycle(deps: SessionLifecycleDependencies) {
       existing.cwd = input.cwd;
       yield* deps.runMastra("state.set", () =>
         existing.session.state.set({
+          modelOptions: deps.mastraModelOptions(resolved) ?? {},
           projectPath: input.cwd || undefined,
           yolo: false,
           botConversation: resolved.botConversation,
@@ -582,7 +583,7 @@ export function createSessionLifecycle(deps: SessionLifecycleDependencies) {
           ...(input.botName ? { botName: input.botName } : {}),
           personalityTone,
           mcpInstructions: formatMcpServerInstructions(mcpServers),
-          ...(modelOptions ? { modelOptions } : {}),
+          modelOptions: modelOptions ?? {},
         }),
       );
       yield* deps.runMastra("model.switch", () =>

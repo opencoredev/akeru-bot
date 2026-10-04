@@ -350,7 +350,6 @@ export function commandsForPortabilityImport(
       engine: record.data.engine,
       sandbox: record.data.sandbox,
       runtimeMode: record.data.runtimeMode,
-      usageCap: record.data.usageCap,
       imageProvider: record.data.imageProvider,
       personalityTone: record.data.personalityTone ?? BALANCED_BOT_PERSONALITY_TONE,
       voiceEnabled: record.data.voiceEnabled,

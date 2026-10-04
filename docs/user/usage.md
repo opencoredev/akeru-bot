@@ -42,8 +42,8 @@ Web and desktop charts stay still when idle. Hover over a chart to inspect a val
 ## Per-bot usage
 
 On mobile, **Settings > General > Usage** lists the bots in each connected environment below the plan
-limits. Open a bot to see its input, output, Observer, and Reflector tokens, its cap, an estimated
-cost, subscription pool use, and reserved tokens. Archived bots remain in the list with an
+limits. Open a bot to see its input, output, Observer, and Reflector tokens, an estimated cost,
+subscription pool use, and reserved tokens. Archived bots remain in the list with an
 **archived** label so you can review their earlier usage.
 
 A measurement a provider did not report reads **Unavailable** rather than zero, and a measurement
@@ -53,8 +53,6 @@ snapshot as incomplete when any provider measurement is missing.
 Estimated cost comes from the model rate table. It is not subscription spend and not an amount
 billed. Subscription pool use is provider-reported as either a percentage or a token count; when a
 provider reports no meter, the row reads Unavailable.
-
-The cap is read-only here. Change a bot's cap in a chat with that bot, under chat settings.
 
 Per-bot usage reads when you open it, when the app returns to the foreground, and when you pull to
 refresh. It does not poll in the background.

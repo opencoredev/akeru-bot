@@ -83,7 +83,6 @@ function makeBot(id: string, name: string): Bot {
     engine: null,
     sandbox: null,
     runtimeMode: "full-access",
-    usageCap: null,
     voiceEnabled: false,
     groupId: null,
     pinned: false,
@@ -141,16 +140,13 @@ describe("roster in Simplified Chinese", () => {
           engine: { provider: ProviderInstanceId.make("codex"), model: "gpt-5" },
           tokens: 1200,
           costUsd: null,
-          hardStopReached: true,
         }}
       />,
     );
 
     expect(markup).toContain("codex/gpt-5");
     expect(markup).toContain("个令牌");
-    expect(markup).toContain("强制停止");
     expect(markup).not.toContain("tokens");
-    expect(markup).not.toContain("Hard stop");
   });
 
   it("translates the usage section", () => {

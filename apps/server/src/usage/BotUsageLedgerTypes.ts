@@ -9,23 +9,7 @@ import {
   type TurnId,
 } from "@akeru/contracts";
 import * as Effect from "effect/Effect";
-import * as Schema from "effect/Schema";
 import { type PersistenceDecodeError, PersistenceSqlError } from "../persistence/Errors.ts";
-
-export class BotUsageCapExceeded extends Schema.TaggedErrorClass<BotUsageCapExceeded>()(
-  "BotUsageCapExceeded",
-  {
-    botId: Schema.String,
-    limit: Schema.Number,
-    consumedTokens: Schema.Number,
-    reservedTokens: Schema.Number,
-    requestedTokens: Schema.Number,
-  },
-) {
-  override get message(): string {
-    return `Bot ${this.botId} reached its ${this.limit}-token usage cap.`;
-  }
-}
 
 export const AKERU_TURN_USAGE_RESERVATION_TOKENS = 32_000;
 
@@ -37,7 +21,6 @@ export interface ReserveBotUsageInput {
   readonly turnId: TurnId | null;
   readonly category: AkeruUsageCategory;
   readonly maximumTokens: number;
-  readonly capLimit: number;
   readonly provider: ProviderDriverKind | null;
   readonly model: string | null;
   readonly createdAt: string;
@@ -67,10 +50,7 @@ export type SettleBotUsageForTurnInput = SettleBotUsageDetails & {
   readonly settledAt: string;
 };
 
-export type BotUsageLedgerError =
-  | BotUsageCapExceeded
-  | PersistenceSqlError
-  | PersistenceDecodeError;
+export type BotUsageLedgerError = PersistenceSqlError | PersistenceDecodeError;
 
 export interface BotUsageLedgerShape {
   readonly pricingTotals: (botId: BotId) => Effect.Effect<
@@ -85,34 +65,28 @@ export interface BotUsageLedgerShape {
         readonly reasoningTokens: number;
       }>;
     },
-    Exclude<BotUsageLedgerError, BotUsageCapExceeded>
+    BotUsageLedgerError
   >;
   readonly reserve: (
     input: ReserveBotUsageInput,
   ) => Effect.Effect<AkeruUsageEntry, BotUsageLedgerError>;
   readonly settle: (
     input: SettleBotUsageInput,
-  ) => Effect.Effect<AkeruUsageEntry, Exclude<BotUsageLedgerError, BotUsageCapExceeded>>;
+  ) => Effect.Effect<AkeruUsageEntry, BotUsageLedgerError>;
   readonly bindTurn: (input: {
     readonly reservationId: AkeruUsageReservationId;
     readonly turnId: TurnId;
-  }) => Effect.Effect<AkeruUsageEntry, Exclude<BotUsageLedgerError, BotUsageCapExceeded>>;
+  }) => Effect.Effect<AkeruUsageEntry, BotUsageLedgerError>;
   readonly settleForTurn: (
     input: SettleBotUsageForTurnInput,
-  ) => Effect.Effect<
-    ReadonlyArray<AkeruUsageEntry>,
-    Exclude<BotUsageLedgerError, BotUsageCapExceeded>
-  >;
+  ) => Effect.Effect<ReadonlyArray<AkeruUsageEntry>, BotUsageLedgerError>;
   readonly finalizeForTurn: (input: {
     readonly botId: BotId;
     readonly threadId: ThreadId;
     readonly turnId: TurnId;
     readonly settledAt: string;
     readonly cancelled?: boolean;
-  }) => Effect.Effect<
-    ReadonlyArray<AkeruUsageEntry>,
-    Exclude<BotUsageLedgerError, BotUsageCapExceeded>
-  >;
+  }) => Effect.Effect<ReadonlyArray<AkeruUsageEntry>, BotUsageLedgerError>;
   readonly recordMeasurement: (input: {
     readonly reservationId: AkeruUsageReservationId;
     readonly sourceKey: string;
@@ -129,12 +103,10 @@ export interface BotUsageLedgerShape {
     readonly model: string | null;
     readonly includedInReservation?: boolean;
     readonly createdAt: string;
-  }) => Effect.Effect<AkeruUsageEntry, Exclude<BotUsageLedgerError, BotUsageCapExceeded>>;
+  }) => Effect.Effect<AkeruUsageEntry, BotUsageLedgerError>;
   /** Records work that charges no tokens so a restart before it settles marks it interrupted. */
   readonly recordStart: (
-    input: Omit<ReserveBotUsageInput, "maximumTokens" | "capLimit">,
-  ) => Effect.Effect<AkeruUsageEntry, Exclude<BotUsageLedgerError, BotUsageCapExceeded>>;
-  readonly summarize: (
-    botId: BotId,
-  ) => Effect.Effect<AkeruBotUsageSummary, Exclude<BotUsageLedgerError, BotUsageCapExceeded>>;
+    input: Omit<ReserveBotUsageInput, "maximumTokens">,
+  ) => Effect.Effect<AkeruUsageEntry, BotUsageLedgerError>;
+  readonly summarize: (botId: BotId) => Effect.Effect<AkeruBotUsageSummary, BotUsageLedgerError>;
 }

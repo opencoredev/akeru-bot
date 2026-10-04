@@ -26,7 +26,6 @@ export function makeMobileBot(overrides: Partial<OrchestrationBot> = {}): Orches
     engine: null,
     sandbox: null,
     runtimeMode: "full-access",
-    usageCap: null,
     imageProvider: null,
     voiceEnabled: false,
     channelBindings: [],

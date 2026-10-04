@@ -140,7 +140,6 @@ function makeBot(overrides: Partial<Bot> = {}): Bot {
     engine: { provider: codexId, model: "gpt-5" },
     sandbox: "local",
     runtimeMode: "full-access",
-    usageCap: null,
     personalityTone: 50,
     voiceEnabled: false,
     imageProvider: null,

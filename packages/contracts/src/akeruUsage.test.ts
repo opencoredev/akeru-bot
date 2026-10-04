@@ -21,12 +21,11 @@ it.effect("decodes bot usage with unavailable provider totals", () =>
         reflector: { tokens: 0, unavailableEntries: 1 },
       },
       entries: [],
-      usageCap: { unit: "tokens", limit: 1_000 },
       estimatedCost: { status: "unavailable", usd: null },
       subscriptionPool: { status: "unavailable", used: null, limit: null, unit: null },
     });
 
-    assert.strictEqual(snapshot.usageCap?.limit, 1_000);
+    assert.strictEqual(snapshot.consumedTokens, 12);
     assert.strictEqual(snapshot.estimatedCost.status, "unavailable");
   }),
 );
