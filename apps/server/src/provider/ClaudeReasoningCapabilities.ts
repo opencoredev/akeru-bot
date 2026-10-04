@@ -20,9 +20,11 @@ export function claudeHarnessCapabilities(slug: string, entry: CatalogModel | un
       : undefined;
 
   const driver = ProviderDriverKind.make("claudeAgent");
+
   const bundled = catalogModelsFor(BUNDLED_MODEL_CATALOG, driver).find(
     (model) => model.id === slug,
   );
+
   const native = reasoningCapabilities(driver, slug, entry ?? bundled ?? fallback);
 
   return createModelCapabilities({
