@@ -115,7 +115,6 @@ const seedProjectsAndBot = Effect.fn("seedProjectsAndBot")(function* (root: stri
     engine: null,
     sandbox: "local",
     runtimeMode: "full-access",
-    usageCap: null,
     groupId: null,
     createdAt: NOW,
   });

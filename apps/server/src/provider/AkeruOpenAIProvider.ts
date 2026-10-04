@@ -1,3 +1,8 @@
+import {
+  buildOpenAICodexOAuthFetch,
+  createCodexMiddleware,
+} from "@mastra/code-sdk/providers/openai-codex";
+import type { AuthStorage } from "@mastra/code-sdk/auth/storage";
 import { createOpenAI } from "@ai-sdk/openai";
 import type { ApiKeyCredential } from "../subscription-auth/types.ts";
 import { subscriptionRequestUrl } from "../subscription-auth/runtime.ts";
@@ -40,4 +45,38 @@ export function akeruOpenAIProvider(
       NonNullable<Parameters<typeof createOpenAI>[0]>["fetch"]
     >,
   }).responses(modelId);
+}
+
+/** Preserves the SDK's OAuth default while accepting raw native efforts without coercion. */
+export function akeruCodexOAuthProvider(modelId: string, authStorage: AuthStorage) {
+  const model = createOpenAI({
+    apiKey: "oauth-placeholder",
+    fetch: buildOpenAICodexOAuthFetch({ authStorage }),
+  }).responses(modelId);
+
+  const middleware = createCodexMiddleware();
+  const defaultMiddleware = createCodexMiddleware("medium");
+
+  const transform = (params: Parameters<typeof model.doGenerate>[0], type: "generate" | "stream") =>
+    (params.providerOptions?.openai?.reasoningEffort === undefined
+      ? defaultMiddleware
+      : middleware
+    ).transformParams?.({ type, params, model });
+
+  return {
+    specificationVersion: model.specificationVersion,
+    provider: model.provider,
+    modelId: model.modelId,
+    supportedUrls: model.supportedUrls,
+    async doGenerate(params: Parameters<typeof model.doGenerate>[0]) {
+      const transformed = await transform(params, "generate");
+
+      return model.doGenerate(transformed ?? params);
+    },
+    async doStream(params: Parameters<typeof model.doStream>[0]) {
+      const transformed = await transform(params, "stream");
+
+      return model.doStream(transformed ?? params);
+    },
+  };
 }

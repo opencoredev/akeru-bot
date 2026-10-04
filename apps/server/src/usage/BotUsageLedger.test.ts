@@ -1,4 +1,3 @@
-import * as Predicate from "effect/Predicate";
 import { layer, reserveInput } from "./testUtils/botUsageLedger.ts";
 import { assert, it } from "@effect/vitest";
 import {
@@ -60,7 +59,6 @@ it.layer(layer)("BotUsageLedger", (it) => {
           sourceKey,
           botId: firstBotId,
           maximumTokens: 60,
-          capLimit: 100,
         }),
       );
       yield* ledger.reserve(
@@ -68,7 +66,6 @@ it.layer(layer)("BotUsageLedger", (it) => {
           sourceKey,
           botId: secondBotId,
           maximumTokens: 60,
-          capLimit: 100,
         }),
       );
 
@@ -81,57 +78,13 @@ it.layer(layer)("BotUsageLedger", (it) => {
     }),
   );
 
-  it.effect("rejects a second reservation when a cap is fully reserved", () =>
-    Effect.gen(function* () {
-      const ledger = yield* BotUsageLedger;
-      const botId = BotId.make("bot-cap");
-      yield* ledger.reserve(
-        reserveInput("cap-first", { botId, maximumTokens: 100, capLimit: 100 }),
-      );
-
-      const exit = yield* ledger
-        .reserve(reserveInput("cap-second", { botId, maximumTokens: 100, capLimit: 100 }))
-        .pipe(Effect.exit);
-
-      assert.isTrue(Predicate.isTagged(exit, "Failure"));
-      const summary = yield* ledger.summarize(botId);
-      assert.equal(summary.reservedTokens, 100);
-      assert.equal(summary.entries.length, 1);
-    }),
-  );
-
-  it.effect("reserves the remaining cap when a request exceeds it", () =>
-    Effect.gen(function* () {
-      const ledger = yield* BotUsageLedger;
-      const botId = BotId.make("bot-partial-cap");
-      yield* ledger.reserve(
-        reserveInput("partial-first", { botId, maximumTokens: 60, capLimit: 100 }),
-      );
-
-      const reservation = yield* ledger.reserve(
-        reserveInput("partial-second", { botId, maximumTokens: 50, capLimit: 100 }),
-      );
-
-      assert.equal(reservation.reservedTokens, 40);
-
-      const failure = yield* ledger
-        .reserve(reserveInput("partial-third", { botId, maximumTokens: 1, capLimit: 100 }))
-        .pipe(Effect.flip);
-
-      assert.equal(failure._tag, "BotUsageCapExceeded");
-      const summary = yield* ledger.summarize(botId);
-      assert.equal(summary.reservedTokens, 100);
-      assert.equal(summary.entries.length, 2);
-    }),
-  );
-
   it.effect("charges the reservation when provider usage is unavailable", () =>
     Effect.gen(function* () {
       const ledger = yield* BotUsageLedger;
       const botId = BotId.make("bot-unavailable");
 
       const reservation = yield* ledger.reserve(
-        reserveInput("unavailable", { botId, maximumTokens: 500, capLimit: 500 }),
+        reserveInput("unavailable", { botId, maximumTokens: 500 }),
       );
 
       yield* ledger.settle({
@@ -161,9 +114,7 @@ it.layer(layer)("BotUsageLedger", (it) => {
     Effect.gen(function* () {
       const ledger = yield* BotUsageLedger;
       const botId = BotId.make("bot-cancelled");
-      yield* ledger.reserve(
-        reserveInput("cancelled", { botId, maximumTokens: 500, capLimit: 500 }),
-      );
+      yield* ledger.reserve(reserveInput("cancelled", { botId, maximumTokens: 500 }));
       yield* ledger.finalizeForTurn({
         botId,
         threadId: ThreadId.make("thread-1"),
@@ -184,9 +135,7 @@ it.layer(layer)("BotUsageLedger", (it) => {
       const botId = BotId.make("bot-late-cancellation");
       const threadId = ThreadId.make("thread-1");
       const oldTurnId = TurnId.make("turn-old");
-      yield* ledger.reserve(
-        reserveInput("old-turn", { botId, threadId, maximumTokens: 500, capLimit: 1_000 }),
-      );
+      yield* ledger.reserve(reserveInput("old-turn", { botId, threadId, maximumTokens: 500 }));
       yield* ledger.finalizeForTurn({
         botId,
         threadId,
@@ -194,9 +143,7 @@ it.layer(layer)("BotUsageLedger", (it) => {
         settledAt: "2026-08-30T20:01:00.000Z",
         cancelled: true,
       });
-      yield* ledger.reserve(
-        reserveInput("new-turn", { botId, threadId, maximumTokens: 500, capLimit: 1_000 }),
-      );
+      yield* ledger.reserve(reserveInput("new-turn", { botId, threadId, maximumTokens: 500 }));
       yield* ledger.finalizeForTurn({
         botId,
         threadId,
@@ -223,9 +170,7 @@ it.layer(layer)("BotUsageLedger", (it) => {
       const ledger = yield* BotUsageLedger;
       const botId = BotId.make("bot-cancelled-after-report");
       const turnId = TurnId.make("turn-cancelled-after-report");
-      yield* ledger.reserve(
-        reserveInput("cancelled-after-report", { botId, maximumTokens: 500, capLimit: 500 }),
-      );
+      yield* ledger.reserve(reserveInput("cancelled-after-report", { botId, maximumTokens: 500 }));
       yield* ledger.settleForTurn({
         botId,
         threadId: ThreadId.make("thread-1"),
@@ -258,7 +203,7 @@ it.layer(layer)("BotUsageLedger", (it) => {
       const botId = BotId.make("bot-reported-overage");
 
       const reservation = yield* ledger.reserve(
-        reserveInput("reported-overage", { botId, maximumTokens: 100, capLimit: 100 }),
+        reserveInput("reported-overage", { botId, maximumTokens: 100 }),
       );
 
       yield* ledger.settle({
@@ -322,7 +267,6 @@ it.layer(layer)("BotUsageLedger", (it) => {
             sourceKey: reservationId,
             category,
             maximumTokens: 100,
-            capLimit: 1_000,
           }),
         );
 
@@ -354,7 +298,6 @@ it.layer(layer)("BotUsageLedger", (it) => {
           sourceKey: "delegate:chief:research",
           category: "delegated",
           maximumTokens: 200,
-          capLimit: 1_000,
         }),
       );
 

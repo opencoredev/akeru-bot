@@ -74,7 +74,6 @@ describe("sidebar footer", () => {
           engine: null,
           sandbox: null,
           runtimeMode: "approval-required",
-          usageCap: null,
           imageProvider: null,
           voiceEnabled: false,
           channelBindings: [],

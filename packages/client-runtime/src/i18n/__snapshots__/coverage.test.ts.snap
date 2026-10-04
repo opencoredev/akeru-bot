@@ -2,7 +2,7 @@
 
 exports[`discovered interface message coverage > covers static calls and finite label sources without translating identifiers 1`] = `
 {
-  "directMessageCount": 1776,
+  "directMessageCount": 1766,
   "expressions": {
     "apps/mobile/src/components/DictationControls.tsx": [
       "announcements[status]);",
@@ -363,6 +363,7 @@ exports[`discovered interface message coverage > covers static calls and finite 
     "apps/mobile/src/features/threads/ThreadNavigationSidebar.tsx",
     "apps/mobile/src/features/threads/ThreadRouteScreen.tsx",
     "apps/mobile/src/features/threads/ThreadRoutinesScreen.tsx",
+    "apps/mobile/src/features/threads/ThreadSettingsSheet.tsx",
     "apps/mobile/src/features/threads/new-task-flow-provider.tsx",
     "apps/mobile/src/features/threads/sidebar-header-actions.tsx",
     "apps/mobile/src/features/threads/thread-detail-status.tsx",
@@ -378,6 +379,7 @@ exports[`discovered interface message coverage > covers static calls and finite 
     "apps/mobile/src/features/threads/thread-settings-picker.tsx",
     "apps/mobile/src/features/threads/thread-work-log.tsx",
     "apps/mobile/src/features/threads/use-new-task-share-import.ts",
+    "apps/mobile/src/features/threads/use-thread-composer-settings.ts",
     "apps/mobile/src/features/updates/app-updates.ts",
     "apps/mobile/src/lib/useEnvironmentComposerDictation.ts",
     "apps/mobile/src/settings-stack.tsx",

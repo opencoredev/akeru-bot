@@ -58,6 +58,9 @@ import { enqueueThreadOutboxMessage } from "./thread-outbox";
 import { useThreadOutboxMessages } from "./use-thread-outbox";
 import { threadEnvironment } from "./threads";
 import { useAtomCommand } from "./use-atom-command";
+import { botEnvironment } from "./bots";
+import { effectiveThreadModelSelection, threadBotEngineUpdate } from "./thread-bot-engine";
+import { useThreadEngineBot } from "./use-thread-engine-bot";
 
 const decodeFeedDelegations = Schema.decodeUnknownSync(
   Schema.Struct({
@@ -115,6 +118,8 @@ export function useThreadComposerState() {
   const uploadThreadFeedback = useAtomCommand(threadEnvironment.uploadFeedback, {
     reportFailure: false,
   });
+
+  const updateBot = useAtomCommand(botEnvironment.update, { reportFailure: false });
 
   useEffect(() => {
     ensureComposerDraftsLoaded();
@@ -216,7 +221,17 @@ export function useThreadComposerState() {
   const selectedDraft = useComposerDraftSettings(selectedThreadKey);
   const selectedThreadQueueCount = selectedThreadQueuedMessages.length;
   const selectedThread = selectedThreadDetail ?? selectedThreadShell;
-  const modelSelection = selectedDraft.modelSelection ?? selectedThread?.modelSelection ?? null;
+  // A direct bot chat shows and sends with the bot's engine, never a stale draft.
+  const engineBot = useThreadEngineBot(selectedThreadShell?.environmentId, selectedThread);
+
+  const modelSelection = selectedThread
+    ? effectiveThreadModelSelection({
+        bot: engineBot,
+        draftSelection: selectedDraft.modelSelection,
+        threadSelection: selectedThread.modelSelection,
+      })
+    : null;
+
   const runtimeMode = selectedDraft.runtimeMode ?? selectedThread?.runtimeMode ?? null;
 
   const selectedThreadSessionActivity = useMemo(() => {
@@ -351,7 +366,11 @@ export function useThreadComposerState() {
       commandId: CommandId.make(metadata.commandId),
       text,
       attachments,
-      modelSelection: draft.modelSelection ?? thread.modelSelection,
+      modelSelection: effectiveThreadModelSelection({
+        bot: engineBot,
+        draftSelection: draft.modelSelection,
+        threadSelection: thread.modelSelection,
+      }),
       runtimeMode: draft.runtimeMode ?? thread.runtimeMode,
       interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
       createdAt: metadata.createdAt,
@@ -372,6 +391,7 @@ export function useThreadComposerState() {
 
     return messageId;
   }, [
+    engineBot,
     selectedEnvironmentRuntime?.serverConfig?.providers,
     selectedThreadDetail,
     selectedThreadShell,
@@ -476,15 +496,40 @@ export function useThreadComposerState() {
     [selectedThreadShell],
   );
 
+  // A direct bot chat saves the pick to the bot, model and options together;
+  // every other chat keeps it on its own draft.
   const onUpdateModelSelection = useCallback(
     (value: ModelSelection) => {
-      if (!selectedThreadKey) {
+      if (!selectedThreadKey || !selectedThreadShell) {
         return;
       }
 
-      updateComposerDraftSettings(selectedThreadKey, { modelSelection: value });
+      if (!engineBot) {
+        updateComposerDraftSettings(selectedThreadKey, { modelSelection: value });
+
+        return;
+      }
+
+      void updateBot({
+        environmentId: selectedThreadShell.environmentId,
+        input: {
+          botId: engineBot.id,
+          engine: threadBotEngineUpdate(selectedEnvironmentRuntime?.serverConfig, value),
+        },
+      }).then((result) => {
+        if (Predicate.isTagged(result, "Failure") && !isAtomCommandInterrupted(result)) {
+          Alert.alert(t("Could not change the model"));
+        }
+      });
     },
-    [selectedThreadKey],
+    [
+      engineBot,
+      selectedEnvironmentRuntime?.serverConfig,
+      selectedThreadKey,
+      selectedThreadShell,
+      t,
+      updateBot,
+    ],
   );
 
   const onUpdateRuntimeMode = useCallback(

@@ -13,7 +13,6 @@ export function BotStepMeter({ meter }: { readonly meter: BotStepMeterData | und
     formatBotStepEngine(meter.engine),
     meter.tokens === null ? null : t("{tokens} tokens", { tokens: formatTokens(meter.tokens) }),
     meter.costUsd === null ? null : formatUsd(meter.costUsd),
-    meter.hardStopReached ? t("Hard stop") : null,
   ].filter((part) => part !== null);
 
   return (

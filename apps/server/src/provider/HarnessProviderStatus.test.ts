@@ -44,26 +44,26 @@ describe("codexModelCapabilities", () => {
       options("gpt-next", {
         id: "gpt-next",
         name: "GPT Next",
-        efforts: ["none", "low", "medium", "xhigh"],
+        efforts: ["default", "none", "low", "medium", "xhigh"],
         fast: true,
       }),
     ).toEqual([
-      ["reasoningEffort", ["off", "low", "medium", "xhigh"]],
+      ["reasoningEffort", ["default", "none", "low", "medium", "xhigh"]],
       ["serviceTier", ["default", "priority"]],
     ]);
     expect(options("gpt-slow", { id: "gpt-slow", name: "GPT Slow", efforts: ["high"] })).toEqual([
-      ["reasoningEffort", ["high"]],
+      ["reasoningEffort", ["default", "high"]],
     ]);
   });
 
-  it("drops Max where the Codex transport would send Extra High instead", () => {
+  it("retains catalog levels without the SDK thinking-level coercion", () => {
     const efforts = ["low", "medium", "high", "xhigh", "max"];
 
     expect(options("gpt-daybreak-blue-latest", { id: "x", name: "X", efforts })).toEqual([
-      ["reasoningEffort", ["low", "medium", "high", "xhigh"]],
+      ["reasoningEffort", ["default", ...efforts]],
     ]);
     expect(options("gpt-6.1-sol", { id: "x", name: "X", efforts })).toEqual([
-      ["reasoningEffort", efforts],
+      ["reasoningEffort", ["default", ...efforts]],
     ]);
   });
 });

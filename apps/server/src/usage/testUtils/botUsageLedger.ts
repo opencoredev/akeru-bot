@@ -16,7 +16,6 @@ const reserveInput = (
   turnId: null,
   category: "turn",
   maximumTokens: 1_000,
-  capLimit: 1_000,
   provider: ProviderDriverKind.make("codex"),
   model: "gpt-5.6-sol",
   createdAt: "2026-08-30T20:00:00.000Z",

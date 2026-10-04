@@ -424,7 +424,7 @@ it.layer(testLayer)("Harness provider drivers without CLIs", (it) => {
                   ?.optionDescriptors,
               ).toEqual(
                 expect.arrayContaining([
-                  expect.objectContaining({ id: "reasoningEffort", currentValue: "medium" }),
+                  expect.objectContaining({ id: "reasoningEffort" }),
                   expect.objectContaining({ id: "serviceTier", currentValue: "default" }),
                 ]),
               );

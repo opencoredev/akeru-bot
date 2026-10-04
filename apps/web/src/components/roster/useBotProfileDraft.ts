@@ -23,7 +23,12 @@ import {
 } from "../../providerInstances";
 import { primaryServerProvidersAtom } from "../../state/server";
 import { shouldRenderTraitsControls } from "../chat/TraitsPicker";
-import { botEngineUnavailability } from "./botEngineSelection";
+import {
+  botDraftModelOptions,
+  botEngineForModelPick,
+  botEngineForOptions,
+  botEngineUnavailability,
+} from "./botEngineSelection";
 import { canonicalizeBotPersonalityTone } from "./botPersonalityTone";
 import { botSandboxChoice, type BotSandboxChoice } from "./botSandbox";
 import type { Bot } from "./types";
@@ -50,7 +55,6 @@ export interface BotProfileUpdate {
   readonly label: string | null;
   readonly description: string | null;
   readonly engine: Bot["engine"];
-  readonly usageCap: Bot["usageCap"];
   readonly sandbox: Bot["sandbox"];
   readonly personalityTone: number;
   readonly voiceEnabled: boolean;
@@ -64,23 +68,6 @@ export const BOT_IMAGE_PROVIDER_DEFAULT = "default";
 /** Maps the bot image provider picker value to the saved field; anything unknown means the global default. */
 export function botImageProviderFromSelectValue(value: string | null): ImageProviderId | null {
   return value !== null && isImageProviderId(value) ? value : null;
-}
-
-export function parseBotUsageCapInput(input: string) {
-  if (input.trim().length === 0) return { valid: true, value: null };
-  const limit = Number(input);
-
-  if (!Number.isSafeInteger(limit) || limit <= 0) return { valid: false, value: null };
-
-  return { valid: true, value: { unit: "tokens" as const, limit } };
-}
-
-export function resolveBotUsageCapForProvider(input: string, providerDriver?: string) {
-  if (providerDriver === "grok") {
-    return { available: false, valid: true, value: null };
-  }
-
-  return { available: true, ...parseBotUsageCapInput(input) };
 }
 
 /**
@@ -99,7 +86,6 @@ export function useBotProfileDraft(
   const [name, setName] = useState(bot.name);
   const [label, setLabel] = useState(bot.label ?? "");
   const [description, setDescription] = useState(bot.description ?? "");
-  const [usageCap, setUsageCap] = useState(() => bot.usageCap?.limit.toString() ?? "");
   const [sandbox, setSandbox] = useState<BotSandboxChoice>(() => botSandboxChoice(bot.sandbox));
 
   const [personalityTone, setPersonalityTone] = useState(() =>
@@ -161,13 +147,9 @@ export function useBotProfileDraft(
       defaultSelection.model,
   );
 
-  const [modelOptions, setModelOptions] = useState<BotModelOptions>(
-    () =>
-      bot.engine?.options ??
-      (bot.engine?.provider === defaultSelection.instanceId &&
-      bot.engine.model === defaultSelection.model
-        ? defaultSelection.options
-        : undefined),
+  // A saved engine shows its own options, never the app default's.
+  const [modelOptions, setModelOptions] = useState<BotModelOptions>(() =>
+    botDraftModelOptions(bot.engine, defaultSelection, provider, model),
   );
 
   const modelOptionsByInstance = useMemo(
@@ -197,13 +179,14 @@ export function useBotProfileDraft(
 
     if (bot.engine?.model) setModel(bot.engine.model);
     setModelOptions(
-      bot.engine?.options ??
-        (bot.engine?.provider === defaultSelection.instanceId &&
-        bot.engine.model === defaultSelection.model
-          ? defaultSelection.options
-          : undefined),
+      botDraftModelOptions(
+        bot.engine,
+        defaultSelection,
+        bot.engine?.provider ?? defaultSelection.instanceId,
+        bot.engine?.model ?? model,
+      ),
     );
-  }, [bot.engine, defaultSelection, engineChanged]);
+  }, [bot.engine, defaultSelection, engineChanged, model]);
 
   useEffect(() => {
     const previous = previousBot.current;
@@ -215,13 +198,6 @@ export function useBotProfileDraft(
     setLabel((current) => rebaseUneditedValue(current, previous.label ?? "", bot.label ?? ""));
     setDescription((current) =>
       rebaseUneditedValue(current, previous.description ?? "", bot.description ?? ""),
-    );
-    setUsageCap((current) =>
-      rebaseUneditedValue(
-        current,
-        previous.usageCap?.limit.toString() ?? "",
-        bot.usageCap?.limit.toString() ?? "",
-      ),
     );
     setSandbox((current) =>
       rebaseUneditedValue(
@@ -276,11 +252,6 @@ export function useBotProfileDraft(
       allowPromptInjectedEffort: false,
     });
 
-  const resolvedUsageCap = resolveBotUsageCapForProvider(usageCap, activeEntry?.driverKind);
-
-  const usageCapDirty =
-    !resolvedUsageCap.valid || resolvedUsageCap.value?.limit !== bot.usageCap?.limit;
-
   const toolOverridesDirty =
     mcpServerIdsKey(disabledMcpServerIds) !== mcpServerIdsKey(bot.disabledMcpServerIds);
 
@@ -291,14 +262,13 @@ export function useBotProfileDraft(
     normalizedLabel !== bot.label ||
     normalizedDescription !== bot.description ||
     engineChanged ||
-    usageCapDirty ||
     sandboxDirty ||
     personalityTone !== savedTone ||
     voiceEnabled !== bot.voiceEnabled ||
     imageProvider !== (bot.imageProvider ?? null) ||
     toolOverridesDirty;
 
-  const canSave = Boolean(onSave) && dirty && name.trim().length > 0 && resolvedUsageCap.valid;
+  const canSave = Boolean(onSave) && dirty && name.trim().length > 0;
 
   return {
     // Provider context shared by both model pickers.
@@ -317,9 +287,6 @@ export function useBotProfileDraft(
     setLabel,
     description,
     setDescription,
-    usageCap,
-    setUsageCap,
-    resolvedUsageCap,
     sandbox,
     setSandbox,
     personalityTone,
@@ -335,18 +302,31 @@ export function useBotProfileDraft(
 
     /** Applies a model pick, including the option reset the picker implies. */
     selectModel: (instanceId: string, nextModel: string) => {
+      const engine = botEngineForModelPick({
+        previous: {
+          instanceId: providerInstanceId,
+          model,
+          ...(modelOptions ? { options: modelOptions } : {}),
+        },
+        instanceId,
+        model: nextModel,
+        instanceEntries,
+      });
+
       setProvider(instanceId);
       setModel(nextModel);
-      setModelOptions(
-        defaultSelection.instanceId === instanceId && defaultSelection.model === nextModel
-          ? defaultSelection.options
-          : undefined,
-      );
+      setModelOptions(engine.options);
       setEngineChanged(true);
       markChanged();
     },
     selectModelOptions: (nextOptions: BotModelOptions) => {
-      setModelOptions(nextOptions);
+      setModelOptions(
+        botEngineForOptions({
+          selection: { instanceId: providerInstanceId, model },
+          options: nextOptions,
+          instanceEntries,
+        }).options,
+      );
       setEngineChanged(true);
       markChanged();
     },
@@ -364,7 +344,6 @@ export function useBotProfileDraft(
         label: normalizedLabel,
         description: normalizedDescription,
         engine: nextEngine,
-        usageCap: resolvedUsageCap.value,
         sandbox: sandbox === "default" ? null : sandbox,
         personalityTone,
         voiceEnabled,

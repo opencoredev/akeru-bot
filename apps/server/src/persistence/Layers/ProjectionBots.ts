@@ -1,4 +1,4 @@
-import { BotAvatar, BotEngine, BotUsageCap, ChannelBinding, McpServerId } from "@akeru/contracts";
+import { BotAvatar, BotEngine, ChannelBinding, McpServerId } from "@akeru/contracts";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
@@ -19,7 +19,6 @@ const ProjectionBotDbRow = ProjectionBot.mapFields(
   Struct.assign({
     avatar: Schema.fromJsonString(BotAvatar),
     engine: Schema.NullOr(Schema.fromJsonString(BotEngine)),
-    usageCap: Schema.NullOr(Schema.fromJsonString(BotUsageCap)),
     personalityTone: Schema.Number,
     disabledMcpServerIds: Schema.fromJsonString(Schema.Array(McpServerId)),
     channelBindings: Schema.fromJsonString(Schema.Array(ChannelBinding)),
@@ -39,15 +38,14 @@ const makeProjectionBotRepository = Effect.gen(function* () {
     execute: (row) => sql`
       INSERT INTO projection_bots (
         bot_id, name, title, label, description, disabled_mcp_server_ids_json,
-        avatar_json, engine_json, sandbox, runtime_mode, usage_cap_json, image_provider,
+        avatar_json, engine_json, sandbox, runtime_mode, image_provider,
         voice_enabled, personality_tone, channel_bindings_json,
         group_id, archived_at, created_at, updated_at
       ) VALUES (
         ${row.botId}, ${row.name}, ${row.title}, ${row.label}, ${row.description},
         ${JSON.stringify(row.disabledMcpServerIds)}, ${JSON.stringify(row.avatar)},
         ${row.engine === null ? null : JSON.stringify(row.engine)}, ${row.sandbox},
-        ${row.runtimeMode}, ${row.usageCap === null ? null : JSON.stringify(row.usageCap)},
-        ${row.imageProvider},
+        ${row.runtimeMode}, ${row.imageProvider},
         ${row.voiceEnabled ? 1 : 0}, ${row.personalityTone ?? 50},
         ${JSON.stringify(row.channelBindings ?? [])}, ${row.groupId},
         ${row.archivedAt}, ${row.createdAt},
@@ -63,7 +61,6 @@ const makeProjectionBotRepository = Effect.gen(function* () {
         engine_json = excluded.engine_json,
         sandbox = excluded.sandbox,
         runtime_mode = excluded.runtime_mode,
-        usage_cap_json = excluded.usage_cap_json,
         image_provider = excluded.image_provider,
         voice_enabled = excluded.voice_enabled,
         personality_tone = excluded.personality_tone,
@@ -83,7 +80,7 @@ const makeProjectionBotRepository = Effect.gen(function* () {
         bot_id AS "botId", name, title, label, description,
         disabled_mcp_server_ids_json AS "disabledMcpServerIds", avatar_json AS "avatar",
         engine_json AS "engine", sandbox, runtime_mode AS "runtimeMode",
-        usage_cap_json AS "usageCap", image_provider AS "imageProvider", voice_enabled AS "voiceEnabled",
+        image_provider AS "imageProvider", voice_enabled AS "voiceEnabled",
         personality_tone AS "personalityTone",
         channel_bindings_json AS "channelBindings", group_id AS "groupId",
         archived_at AS "archivedAt", created_at AS "createdAt", updated_at AS "updatedAt"
@@ -100,7 +97,7 @@ const makeProjectionBotRepository = Effect.gen(function* () {
         bot_id AS "botId", name, title, label, description,
         disabled_mcp_server_ids_json AS "disabledMcpServerIds", avatar_json AS "avatar",
         engine_json AS "engine", sandbox, runtime_mode AS "runtimeMode",
-        usage_cap_json AS "usageCap", image_provider AS "imageProvider", voice_enabled AS "voiceEnabled",
+        image_provider AS "imageProvider", voice_enabled AS "voiceEnabled",
         personality_tone AS "personalityTone",
         channel_bindings_json AS "channelBindings", group_id AS "groupId",
         archived_at AS "archivedAt", created_at AS "createdAt", updated_at AS "updatedAt"

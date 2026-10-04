@@ -166,8 +166,6 @@ export const connectionsCatalog = {
   "MCP servers: {count}": "MCP servers: {count}",
   "no sandbox": "no sandbox",
   "{sandbox} sandbox": "{sandbox} sandbox",
-  "This provider reports occupancy rather than tokens, so a token limit does not apply.":
-    "This provider reports occupancy rather than tokens, so a token limit does not apply.",
   "Sandbox provider": "Sandbox provider",
   "Which workspace tools this bot may reach.": "Which workspace tools this bot may reach.",
   "No workspace tools": "No workspace tools",

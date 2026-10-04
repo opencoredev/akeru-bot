@@ -244,7 +244,6 @@ describe("ProviderRuntimeIngestion", () => {
         engine: { provider: ProviderInstanceId.make("codex"), model: "gpt-5-codex" },
         sandbox: null,
         runtimeMode: "approval-required",
-        usageCap: null,
         groupId: null,
         createdAt,
       });

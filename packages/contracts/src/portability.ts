@@ -20,7 +20,6 @@ import {
   BotPersonalityTone,
   BotSandboxBrowserSharing,
   PersistedBotSandbox,
-  BotUsageCap,
   GroupBotMembership,
 } from "./orchestration/roster.ts";
 import {
@@ -98,7 +97,14 @@ export const PortabilityBotData = Schema.Struct({
   engine: Schema.NullOr(BotEngine),
   sandbox: PersistedBotSandbox,
   runtimeMode: RuntimeMode,
-  usageCap: Schema.NullOr(BotUsageCap),
+  /**
+   * The retired token hard stop. Archives exported before its removal still
+   * carry it and sign it, so it decodes as-is to keep their checksums valid;
+   * import ignores it and new exports omit it.
+   */
+  usageCap: Schema.optionalKey(
+    Schema.NullOr(Schema.Struct({ unit: Schema.Literal("tokens"), limit: Schema.Number })),
+  ),
   imageProvider: Schema.NullOr(ImageProviderId).pipe(
     Schema.withDecodingDefault(Effect.succeed(null)),
   ),

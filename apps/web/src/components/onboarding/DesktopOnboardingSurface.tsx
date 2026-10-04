@@ -258,7 +258,6 @@ export function OnboardingSurface({
         engine: providerReadiness.engine,
         sandbox: null,
         runtimeMode: DEFAULT_BOT_RUNTIME_MODE,
-        usageCap: null,
         groupId: null,
       },
     });

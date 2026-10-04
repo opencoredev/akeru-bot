@@ -56,12 +56,7 @@ function stepMetersEqual(a: BotStepMeterData | undefined, b: BotStepMeterData | 
 
   if (!a || !b) return false;
 
-  return (
-    a.tokens === b.tokens &&
-    a.costUsd === b.costUsd &&
-    a.hardStopReached === b.hardStopReached &&
-    shallowEqual(a.engine, b.engine)
-  );
+  return a.tokens === b.tokens && a.costUsd === b.costUsd && shallowEqual(a.engine, b.engine);
 }
 
 function pluginResultsEqual(

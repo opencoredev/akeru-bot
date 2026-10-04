@@ -1,3 +1,10 @@
+import type { ModelSelection } from "@akeru/contracts";
+import {
+  buildProviderOptionSelectionsFromDescriptors,
+  getProviderOptionDescriptors,
+  providerOptionsForModelChange,
+} from "@akeru/shared/model";
+
 import type { ModelOption } from "../../lib/modelOptions";
 
 /** Match the terms a user can actually see or recognize in the model picker. */
@@ -31,6 +38,30 @@ export function pendingModelAfterPress(input: {
   }
 
   return input.current?.key === input.pressed.key ? input.current : input.pressed;
+}
+
+/**
+ * A model staged on the applied model's instance keeps the applied choices it
+ * supports, so Save writes the model and those options together. Another
+ * instance, or a model with unknown options, starts on its own defaults.
+ */
+export function stageModelWithAppliedOptions(
+  pressed: ModelOption,
+  applied: ModelSelection | null,
+): ModelOption {
+  const carried = providerOptionsForModelChange({
+    previous: applied,
+    instanceId: pressed.selection.instanceId,
+    nextCaps: pressed.capabilities,
+  });
+
+  if (!carried || !pressed.capabilities) return pressed;
+
+  const options = buildProviderOptionSelectionsFromDescriptors(
+    getProviderOptionDescriptors({ caps: pressed.capabilities, selections: carried }),
+  );
+
+  return options ? { ...pressed, selection: { ...pressed.selection, options } } : pressed;
 }
 
 /**

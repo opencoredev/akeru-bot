@@ -4,7 +4,6 @@ import {
   BotAvatar,
   BotEngine,
   BotId,
-  BotUsageCap,
   GroupId,
   ChannelBinding,
   ChannelDeliveryState,
@@ -86,7 +85,6 @@ export const ProjectionBotDbRowSchema = ProjectionBot.mapFields(
   Struct.assign({
     avatar: Schema.fromJsonString(BotAvatar),
     engine: Schema.NullOr(Schema.fromJsonString(BotEngine)),
-    usageCap: Schema.NullOr(Schema.fromJsonString(BotUsageCap)),
     personalityTone: Schema.Number,
     disabledMcpServerIds: Schema.fromJsonString(Schema.Array(McpServerId)),
     channelBindings: Schema.fromJsonString(Schema.Array(ChannelBinding)),
@@ -472,7 +470,6 @@ export function mapBotRow(
     engine: row.engine,
     sandbox: row.sandbox,
     runtimeMode: row.runtimeMode,
-    usageCap: row.usageCap,
     imageProvider: row.imageProvider,
     personalityTone: row.personalityTone,
     voiceEnabled: row.voiceEnabled === 1,

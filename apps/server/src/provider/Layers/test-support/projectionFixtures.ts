@@ -29,7 +29,6 @@ export function providerBotFixture(
     engine: null,
     sandbox: "local",
     runtimeMode: "full-access",
-    usageCap: null,
     imageProvider: null,
     voiceEnabled: false,
     channelBindings: [],

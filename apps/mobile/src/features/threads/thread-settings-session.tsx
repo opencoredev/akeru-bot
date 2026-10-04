@@ -1,6 +1,5 @@
 import { driverSupportsDelegation } from "@akeru/shared/delegationProviders";
 import type {
-  BotUsageCap,
   EnvironmentId,
   ModelSelection,
   ProviderOptionDescriptor,
@@ -13,8 +12,10 @@ import * as Haptics from "expo-haptics";
 import { createContext, use, useCallback, useMemo, useState, type ReactNode } from "react";
 import type { ModelOption, ProviderGroup } from "../../lib/modelOptions";
 import { applyProviderOptionSelection } from "../../lib/providerOptions";
-import { pendingModelAfterPress } from "./thread-settings-sheet-state";
-import { resolveBotUsageCapForProvider } from "./botStepUsage";
+import {
+  pendingModelAfterPress,
+  stageModelWithAppliedOptions,
+} from "./thread-settings-sheet-state";
 
 export type ThreadSettingsSubmenuPage =
   | { readonly kind: "descriptor"; readonly id: string }
@@ -30,9 +31,6 @@ export type ThreadSettingsSessionProps = {
   readonly onUpdateOptionSelections: (selections: ReadonlyArray<ProviderOptionSelection>) => void;
   readonly runtimeMode: RuntimeMode;
   readonly onUpdateRuntimeMode: (mode: RuntimeMode) => void;
-  readonly botUsageCap?: BotUsageCap | null;
-  readonly botUsageCapProviderDriver?: string;
-  readonly onUpdateBotUsageCap?: (input: string) => Promise<boolean>;
   readonly memoryThreadRef?: {
     readonly environmentId: EnvironmentId;
     readonly threadId: ThreadId;
@@ -49,6 +47,10 @@ export type ThreadSettingsSessionProps = {
 
 export type ExistingThreadSettingsRouteSession = ThreadSettingsSessionProps & {
   readonly ownerId: string;
+  readonly engineBotRef?: {
+    readonly environmentId: EnvironmentId;
+    readonly botId: string;
+  };
 };
 
 type ExistingThreadSettingsRouteContextValue = {
@@ -97,10 +99,6 @@ export type ThreadSettingsSessionValue = {
   readonly providerGroups: ReadonlyArray<ProviderGroup>;
   readonly runtimeMode: RuntimeMode;
   readonly onUpdateRuntimeMode: (mode: RuntimeMode) => void;
-  readonly botUsageCapInput: string | undefined;
-  readonly botUsageCapAvailable: boolean;
-  readonly botUsageCapDirty: boolean;
-  readonly botUsageCapValid: boolean;
   readonly displayedDescriptors: ReadonlyArray<ProviderOptionDescriptor>;
   readonly providerExpansionOverrides: ReadonlySet<string>;
   readonly hasLegacyModels: boolean;
@@ -110,14 +108,12 @@ export type ThreadSettingsSessionValue = {
   readonly showLegacy: boolean;
   readonly applyOptionChange: (id: string, value: string | boolean) => void;
   readonly commitPendingModel: () => void;
-  readonly commitBotUsageCap: () => Promise<boolean>;
   readonly isApplied: (option: ModelOption) => boolean;
   readonly isDisplayed: (option: ModelOption) => boolean;
   readonly pressModel: (option: ModelOption) => void;
   readonly setProviderFilter: (providerKey: string | null) => void;
   readonly setSearchQuery: (query: string) => void;
   readonly setShowLegacy: (showLegacy: boolean) => void;
-  readonly setBotUsageCapInput: (input: string) => void;
   readonly toggleProvider: (providerKey: string) => void;
   readonly memoryThreadRef: ThreadSettingsSessionProps["memoryThreadRef"];
   readonly routinesRef: ThreadSettingsSessionProps["routinesRef"];
@@ -141,22 +137,6 @@ export function ThreadSettingsSessionProvider(
   );
 
   const [pendingModel, setPendingModel] = useState<ModelOption | null>(null);
-
-  const [botUsageCapInput, setBotUsageCapInput] = useState<string | undefined>(() =>
-    props.botUsageCap === undefined ? undefined : (props.botUsageCap?.limit.toString() ?? ""),
-  );
-
-  const resolvedBotUsageCap =
-    botUsageCapInput === undefined
-      ? undefined
-      : resolveBotUsageCapForProvider(botUsageCapInput, props.botUsageCapProviderDriver);
-
-  const parsedBotUsageCap = resolvedBotUsageCap?.limit;
-
-  const botUsageCapDirty =
-    botUsageCapInput !== undefined && parsedBotUsageCap !== (props.botUsageCap?.limit ?? null);
-
-  const botUsageCapValid = botUsageCapInput === undefined || parsedBotUsageCap !== undefined;
 
   const isApplied = useCallback(
     (option: ModelOption) =>
@@ -210,14 +190,6 @@ export function ThreadSettingsSessionProvider(
     }
   }, [pendingModel, props.onSelectModel]);
 
-  const commitBotUsageCap = useCallback(
-    () =>
-      botUsageCapInput === undefined || !botUsageCapDirty
-        ? Promise.resolve(true)
-        : (props.onUpdateBotUsageCap?.(botUsageCapInput) ?? Promise.resolve(false)),
-    [botUsageCapDirty, botUsageCapInput, props.onUpdateBotUsageCap],
-  );
-
   const applyOptionChange = useCallback(
     (id: string, value: string | boolean) => {
       const next = applyProviderOptionSelection(displayedDescriptors, { id, value });
@@ -257,12 +229,12 @@ export function ThreadSettingsSessionProvider(
       setPendingModel((current) =>
         pendingModelAfterPress({
           current,
-          pressed: option,
+          pressed: stageModelWithAppliedOptions(option, props.selectedModel),
           pressedIsApplied: isApplied(option),
         }),
       );
     },
-    [isApplied],
+    [isApplied, props.selectedModel],
   );
 
   const value = useMemo<ThreadSettingsSessionValue>(
@@ -270,10 +242,6 @@ export function ThreadSettingsSessionProvider(
       providerGroups: props.providerGroups,
       runtimeMode: props.runtimeMode,
       onUpdateRuntimeMode: props.onUpdateRuntimeMode,
-      botUsageCapInput,
-      botUsageCapAvailable: resolvedBotUsageCap?.available ?? true,
-      botUsageCapDirty,
-      botUsageCapValid,
       displayedDescriptors,
       providerExpansionOverrides,
       hasLegacyModels,
@@ -283,14 +251,12 @@ export function ThreadSettingsSessionProvider(
       showLegacy: showLegacyToggle,
       applyOptionChange,
       commitPendingModel,
-      commitBotUsageCap,
       isApplied,
       isDisplayed,
       pressModel,
       setProviderFilter,
       setSearchQuery,
       setShowLegacy: setShowLegacyToggle,
-      setBotUsageCapInput,
       toggleProvider,
       memoryThreadRef: props.memoryThreadRef,
       routinesRef: props.routinesRef,
@@ -300,11 +266,6 @@ export function ThreadSettingsSessionProvider(
     [
       applyOptionChange,
       canDelegate,
-      botUsageCapDirty,
-      botUsageCapInput,
-      botUsageCapValid,
-      resolvedBotUsageCap?.available,
-      commitBotUsageCap,
       commitPendingModel,
       displayedDescriptors,
       providerExpansionOverrides,

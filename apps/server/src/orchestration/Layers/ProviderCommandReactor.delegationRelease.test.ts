@@ -45,7 +45,6 @@ describe("ProviderCommandReactor", () => {
         engine: null,
         sandbox: "local",
         runtimeMode: "approval-required",
-        usageCap: null,
         groupId: null,
         createdAt: now,
       });
@@ -184,7 +183,6 @@ describe("ProviderCommandReactor", () => {
         engine: null,
         sandbox: "local",
         runtimeMode: "approval-required",
-        usageCap: null,
         groupId: null,
         createdAt: now,
       });
@@ -328,7 +326,6 @@ describe("ProviderCommandReactor", () => {
         engine: null,
         sandbox: "local",
         runtimeMode: "approval-required",
-        usageCap: null,
         groupId: null,
         createdAt: now,
       });
@@ -481,7 +478,6 @@ describe("ProviderCommandReactor", () => {
         engine: null,
         sandbox: "local",
         runtimeMode: "approval-required",
-        usageCap: null,
         groupId: null,
         createdAt: now,
       });

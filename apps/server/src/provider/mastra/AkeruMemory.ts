@@ -1,3 +1,4 @@
+import { AkeruModelOptions } from "../ReasoningOptions.ts";
 import * as Schema from "effect/Schema";
 import * as Option from "effect/Option";
 import * as Predicate from "effect/Predicate";
@@ -65,12 +66,7 @@ const decodeControllerContext = Schema.decodeUnknownOption(
   }),
 );
 
-const decodeModelOptions = Schema.decodeUnknownOption(
-  Schema.Struct({
-    reasoningEffort: Schema.optionalKey(Schema.String),
-    serviceTier: Schema.optionalKey(Schema.String),
-  }),
-);
+const decodeModelOptions = Schema.decodeUnknownOption(AkeruModelOptions);
 
 export function controllerContext(requestContext: RequestContext) {
   return Option.getOrUndefined(decodeControllerContext(requestContext.getRaw("controller")));

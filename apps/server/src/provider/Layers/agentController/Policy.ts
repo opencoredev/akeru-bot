@@ -17,9 +17,7 @@ import {
 } from "@akeru/contracts";
 import { driverSupportsDelegation } from "@akeru/shared/delegationProviders";
 
-import { getModelSelectionStringOptionValue } from "@akeru/shared/model";
-
-import { getCodexServiceTierOptionValue } from "../../../codexModelOptions.ts";
+import { nativeModelOptions } from "../../ReasoningOptions.ts";
 
 import { akeruToolCategory } from "../../AkeruMastraHarness.ts";
 
@@ -48,19 +46,7 @@ export function omitNullToolFields<Input0>(input: Input0) {
 }
 
 export function mastraModelOptions(resolved: ResolvedEngine) {
-  if (resolved.provider !== "codex") return undefined;
-
-  const reasoningEffort = getModelSelectionStringOptionValue(
-    resolved.modelSelection,
-    "reasoningEffort",
-  );
-
-  const serviceTier = getCodexServiceTierOptionValue(resolved.modelSelection);
-
-  return {
-    ...(reasoningEffort ? { reasoningEffort } : {}),
-    ...(serviceTier ? { serviceTier } : {}),
-  };
+  return nativeModelOptions(resolved.provider, resolved.modelSelection);
 }
 
 export function isMissingSuspendedRun(detail: string): boolean {

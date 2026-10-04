@@ -1,3 +1,4 @@
+import { invalidReasoningSelection, type AkeruModelOptions } from "../../ReasoningOptions.ts";
 import { resolveClaudeApiModelId } from "../ClaudeProvider.ts";
 import { ProviderDriverKind } from "@akeru/contracts";
 import { ProviderInstanceId } from "@akeru/contracts";
@@ -39,9 +40,7 @@ export function createEngineRouting(deps: {
   readonly mutationLock: Semaphore.Semaphore;
   readonly resolvedByThread: Map<string, ResolvedEngine>;
   readonly sessions: Map<string, ActiveSession>;
-  readonly mastraModelOptions: (
-    resolved: ResolvedEngine,
-  ) => { serviceTier?: string; reasoningEffort?: string } | undefined;
+  readonly mastraModelOptions: (resolved: ResolvedEngine) => AkeruModelOptions | undefined;
   readonly runMastra: <A>(
     operation: string,
     run: (signal: AbortSignal) => Promise<A>,
@@ -87,7 +86,21 @@ export function createEngineRouting(deps: {
     ) {
       const advertised = routing.instanceSnapshot.models;
 
-      if (advertised.length > 0 && !advertised.some((entry) => entry.slug === model)) {
+      const advertisedModel = advertised.find((entry) => entry.slug === model);
+
+      const invalidOption = invalidReasoningSelection(
+        modelSelection,
+        advertisedModel?.capabilities,
+      );
+
+      if (invalidOption) {
+        return yield* new ProviderValidationError({
+          operation: "AgentController.inspectEngine",
+          issue: invalidOption,
+        });
+      }
+
+      if (advertised.length > 0 && !advertisedModel) {
         const name = routing.instanceSnapshot.displayName ?? routing.driverKind;
 
         return yield* new AgentControllerUnsupportedEngineError({
@@ -182,7 +195,7 @@ export function createEngineRouting(deps: {
             active.session.state.set({
               ...activeState,
               providerInstanceId: String(resolved.providerInstanceId),
-              ...(nextModelOptions ? { modelOptions: nextModelOptions } : {}),
+              modelOptions: nextModelOptions ?? {},
             }),
           );
           yield* deps.runMastra("model.switch", () =>

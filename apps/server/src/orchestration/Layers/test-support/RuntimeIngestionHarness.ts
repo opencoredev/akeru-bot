@@ -201,7 +201,6 @@ export function createRuntimeIngestionHarness() {
     serverSettings?: Partial<ServerSettings>;
     threadTitle?: string;
     botOwned?: boolean;
-    botUsageCap?: { readonly unit: "tokens"; readonly limit: number } | null;
     workspaceSubdirectory?: string;
   }) {
     const repositoryRoot = makeTempDir("t3-provider-project-");
@@ -325,7 +324,6 @@ export function createRuntimeIngestionHarness() {
         },
         sandbox: null,
         runtimeMode: "approval-required",
-        usageCap: options.botUsageCap ?? null,
         groupId: null,
         createdAt,
       });
@@ -489,7 +487,6 @@ export function createRuntimeIngestionHarness() {
                 turnId,
                 category: "turn",
                 maximumTokens: 1_000,
-                capLimit: 1_000,
                 provider: ProviderDriverKind.make("codex"),
                 model: "gpt-5-codex",
                 createdAt,

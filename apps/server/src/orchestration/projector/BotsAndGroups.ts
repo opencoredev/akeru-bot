@@ -39,7 +39,6 @@ export function projectBotsAndGroups(
             engine: payload.engine,
             sandbox: payload.sandbox,
             runtimeMode: payload.runtimeMode,
-            usageCap: payload.usageCap,
             imageProvider: payload.imageProvider,
             personalityTone: payload.personalityTone,
             voiceEnabled: payload.voiceEnabled,
@@ -76,7 +75,6 @@ export function projectBotsAndGroups(
             ...(payload.engine !== undefined ? { engine: payload.engine } : {}),
             ...(payload.sandbox !== undefined ? { sandbox: payload.sandbox } : {}),
             ...(payload.runtimeMode !== undefined ? { runtimeMode: payload.runtimeMode } : {}),
-            ...(payload.usageCap !== undefined ? { usageCap: payload.usageCap } : {}),
             ...(payload.imageProvider !== undefined
               ? { imageProvider: payload.imageProvider }
               : {}),

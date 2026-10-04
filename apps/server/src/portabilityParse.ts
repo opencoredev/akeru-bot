@@ -271,5 +271,15 @@ export function parsePortabilityArchive(contents: string) {
     }
   }
 
-  return archive;
+  // Older archives sign the retired token hard stop; once verified, drop it so
+  // previews and imports compare only the settings bots still have.
+  return {
+    ...archive,
+    records: archive.records.map((record) => {
+      if (record.type !== "bot" || !("usageCap" in record.data)) return record;
+      const { usageCap: _usageCap, ...data } = record.data;
+
+      return { ...record, data };
+    }),
+  };
 }

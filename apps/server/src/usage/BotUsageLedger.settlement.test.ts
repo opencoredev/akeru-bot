@@ -66,7 +66,7 @@ it.layer(layer)("BotUsageLedger", (it) => {
     }),
   );
 
-  it.effect("records tool and routine writers and includes their priced tokens in the cap", () =>
+  it.effect("records tool and routine writers and prices their tokens", () =>
     Effect.gen(function* () {
       const ledger = yield* BotUsageLedger;
       const botId = BotId.make("bot-tool-routine");
@@ -76,7 +76,6 @@ it.layer(layer)("BotUsageLedger", (it) => {
           botId,
           category: "tool",
           maximumTokens: 100,
-          capLimit: 100,
         }),
       );
 
@@ -120,18 +119,6 @@ it.layer(layer)("BotUsageLedger", (it) => {
       );
 
       assert.equal(cost.costUsd, 90);
-
-      const remaining = yield* ledger.reserve(
-        reserveInput("cap-after-tool", { botId, maximumTokens: 41, capLimit: 100 }),
-      );
-
-      assert.equal(remaining.reservedTokens, 40);
-
-      const rejected = yield* ledger
-        .reserve(reserveInput("cap-after-tool-2", { botId, maximumTokens: 1, capLimit: 100 }))
-        .pipe(Effect.exit);
-
-      assert.equal(rejected._tag, "Failure");
     }),
   );
 
@@ -150,7 +137,6 @@ it.layer(layer)("BotUsageLedger", (it) => {
           turnId,
           category: "observer",
           maximumTokens: 32_000,
-          capLimit: 32_000,
         }),
       );
 
@@ -209,7 +195,6 @@ it.layer(layer)("BotUsageLedger", (it) => {
             provider: ProviderDriverKind.make(provider),
             model,
             maximumTokens: 32_000,
-            capLimit: 32_000,
           }),
         );
 

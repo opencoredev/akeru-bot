@@ -1,3 +1,4 @@
+import type { AkeruModelOptions } from "../../ReasoningOptions.ts";
 import type { AkeruControllerHarness } from "../../mastra/AkeruHarnessTypes.ts";
 import { ProviderDriverKind } from "@akeru/contracts";
 import { ProviderInstanceId } from "@akeru/contracts";
@@ -150,9 +151,7 @@ export interface SessionLifecycleDependencies {
     clearedDisabledFor: { id: BotId; name: string }[];
   }>;
   readonly bundle: AkeruControllerHarness;
-  readonly mastraModelOptions: (
-    resolved: ResolvedEngine,
-  ) => { serviceTier?: string; reasoningEffort?: string } | undefined;
+  readonly mastraModelOptions: (resolved: ResolvedEngine) => AkeruModelOptions | undefined;
   readonly DEFAULT_MODE_ID: string;
   readonly permissionPolicy: (
     runtimeMode: RuntimeMode,

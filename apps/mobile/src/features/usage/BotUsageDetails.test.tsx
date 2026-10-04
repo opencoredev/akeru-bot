@@ -19,7 +19,6 @@ const snapshot: AkeruBotUsageSnapshot = {
     reflector: { tokens: 100, unavailableEntries: 0 },
   },
   entries: [],
-  usageCap: { unit: "tokens", limit: 20_000 },
   estimatedCost: { status: "available", usd: 1.25 },
   subscriptionPool: { status: "available", used: 4_000, limit: 10_000, unit: "tokens" },
 };
@@ -68,9 +67,6 @@ describe("mobile bot usage screen", () => {
       "300",
       "Reflector",
       "100",
-      "Cap",
-      "12,345 / 20,000 tokens",
-      "chat settings",
       "Estimated cost",
       "$1.25",
       "Not subscription spend",
@@ -90,7 +86,6 @@ describe("mobile bot usage screen", () => {
       data: {
         ...snapshot,
         reservedTokens: 0,
-        usageCap: null,
         measurements: {
           ...snapshot.measurements,
           input: { tokens: 0, unavailableEntries: 1 },
@@ -105,7 +100,7 @@ describe("mobile bot usage screen", () => {
 
     expect(tree).toContain("Unavailable");
     expect(tree).toContain("1,250+");
-    expect(tree).toContain("No cap");
+    expect(tree).not.toContain("No cap");
     expect(tree).toContain("Some provider usage is unavailable.");
     // Nothing reserved gets no row, matching web.
     expect(tree).not.toContain("Reserved");

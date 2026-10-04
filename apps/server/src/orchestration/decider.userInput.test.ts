@@ -41,7 +41,6 @@ const archivedBot: OrchestrationBot = {
   imageProvider: null,
   sandbox: "local",
   runtimeMode: "full-access",
-  usageCap: null,
   voiceEnabled: true,
   channelBindings: [],
   groupId: null,

@@ -22,7 +22,6 @@ import * as ProviderRegistry from "../provider/Services/ProviderRegistry.ts";
 import { deriveProviderInstanceConfigMap } from "../provider/Layers/ProviderInstanceRegistryHydration.ts";
 import { preflightProvider } from "../provider/providerPreflight.ts";
 import { SubscriptionAuthService } from "../subscription-auth/service.ts";
-import { BotUsageLedger } from "../usage/BotUsageLedger.ts";
 import { resolveGroupResponderBotId } from "./groupResponder.ts";
 import { projectThreadDetailSnapshot } from "./ActivityPayloadProjection.ts";
 import {
@@ -58,7 +57,6 @@ export const orchestrationHttpApiLayer = HttpApiBuilder.group(
     const projectionGroups = yield* ProjectionGroups.ProjectionGroupRepository;
     const commandReceipts = yield* OrchestrationCommandReceiptRepository;
     const providerRegistry = yield* Effect.serviceOption(ProviderRegistry.ProviderRegistry);
-    const botUsageLedger = yield* BotUsageLedger;
     const config = yield* ServerConfig.ServerConfig;
     const subscriptionAuth = yield* SubscriptionAuthService.forSecretsDir(config.secretsDir);
     const serverSettings = yield* Effect.serviceOption(ServerSettings.ServerSettingsService);
@@ -384,26 +382,6 @@ export const orchestrationHttpApiLayer = HttpApiBuilder.group(
                   ...(verdict.category === "missing-login" || verdict.category === "expired-login"
                     ? { repairAction: "providers" }
                     : {}),
-                });
-              }
-            }
-
-            if (bot?.usageCap) {
-              const usage = yield* botUsageLedger
-                .summarize(bot.botId)
-                .pipe(
-                  Effect.catch((cause) =>
-                    failEnvironmentInternal("orchestration_dispatch_failed", cause),
-                  ),
-                );
-
-              if (usage.consumedTokens + usage.reservedTokens >= bot.usageCap.limit) {
-                yield* cleanupFailedUploadedAttachments(command, normalizedCommand);
-
-                return yield* failEnvironmentInvalidRequest("invalid_command", {
-                  detail: `Usage cap reached for ${bot.name}.`,
-                  unavailability: "usage-cap",
-                  repairAction: "usage",
                 });
               }
             }

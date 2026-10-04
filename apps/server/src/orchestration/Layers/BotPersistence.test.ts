@@ -40,7 +40,6 @@ it.layer(TestLayer)("bot persistence", (it) => {
         engine: { provider: "codex", model: "gpt-5.6" },
         sandbox: "local",
         runtimeMode: "full-access",
-        usageCap: null,
         groupId: null,
         createdAt,
       });
@@ -95,7 +94,6 @@ it.layer(TestLayer)("bot persistence", (it) => {
         },
         sandbox: null,
         runtimeMode: "approval-required",
-        usageCap: { unit: "tokens", limit: 50_000 },
         imageProvider: "chatgpt",
         personalityTone: 50,
         voiceEnabled: true,
@@ -129,7 +127,6 @@ it.layer(TestLayer)("bot persistence", (it) => {
         engine: null,
         sandbox: "local",
         runtimeMode: "full-access",
-        usageCap: null,
         groupId: null,
         createdAt,
       });
@@ -172,7 +169,6 @@ it.layer(TestLayer)("bot persistence", (it) => {
         },
         sandbox: null,
         runtimeMode: "approval-required",
-        usageCap: { unit: "tokens", limit: 50_000 },
         imageProvider: "chatgpt",
         personalityTone: 50,
         voiceEnabled: true,
@@ -249,7 +245,6 @@ it.layer(TestLayer)("bot persistence", (it) => {
         avatar: { kind: "dither", seed: "painter" },
         engine: { provider: "claudeAgent", model: "claude-opus-5.5" },
         sandbox: "local",
-        usageCap: null,
         groupId: null,
         createdAt,
       });
@@ -292,7 +287,6 @@ it.layer(TestLayer)("bot persistence", (it) => {
           avatar: { kind: "dither", seed: "akeru" },
           engine: null,
           sandbox,
-          usageCap: null,
           groupId: null,
           createdAt: "2026-01-01T00:00:00.000Z",
         });
@@ -331,7 +325,6 @@ it.layer(TestLayer)("bot persistence", (it) => {
         avatar: { kind: "dither", seed: "legacy" },
         engine: null,
         sandbox: "local",
-        usageCap: null,
         groupId: null,
         createdAt: "2026-01-01T00:00:00.000Z",
       });

@@ -394,7 +394,6 @@ function botStepMetersEqual(
   return (
     left.tokens === right.tokens &&
     left.costUsd === right.costUsd &&
-    left.hardStopReached === right.hardStopReached &&
     (left.engine === right.engine ||
       (left.engine.provider === right.engine.provider &&
         left.engine.model === right.engine.model &&

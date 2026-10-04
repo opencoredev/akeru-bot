@@ -184,7 +184,6 @@ const createBot = (
       engine: { provider, model: provider === "codex" ? "gpt-5.6" : "claude-opus-5.5" },
       sandbox: "local",
       runtimeMode: "full-access",
-      usageCap: null,
       groupId: null,
       createdAt,
     });

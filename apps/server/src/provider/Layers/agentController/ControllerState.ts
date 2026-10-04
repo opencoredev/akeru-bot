@@ -110,10 +110,7 @@ export const createControllerState = Effect.fn("createControllerState")(function
     }
   >();
 
-  const memoryUsageByThread = new Map<
-    string,
-    { readonly botId: BotId; readonly capLimit: number; turnId: TurnId }
-  >();
+  const memoryUsageByThread = new Map<string, { readonly botId: BotId; turnId: TurnId }>();
 
   const { clearPreviewMcpSession, preparePreviewMcpSession } = createPreviewMcpSessions({
     options,

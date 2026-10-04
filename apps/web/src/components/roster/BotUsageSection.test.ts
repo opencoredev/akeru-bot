@@ -35,7 +35,6 @@ const snapshot = {
     reflector: { tokens: 100, unavailableEntries: 0 },
   },
   entries: [],
-  usageCap: { unit: "tokens", limit: 20_000 },
   estimatedCost: { status: "available", usd: 1.25 },
   subscriptionPool: { status: "available", used: 34, limit: 100, unit: "percent" },
 } as const;
@@ -98,7 +97,7 @@ describe("formatUsageMeasurement", () => {
       expect(markup).toContain(value);
     }
 
-    expect(markup).toContain("12,345 / 20,000 tokens");
+    expect(markup).not.toContain("Cap</span>");
     expect(markup).toContain("$1.25");
     expect(markup).toContain("34% of pool");
     expect(markup).toContain("Reserved");
@@ -127,7 +126,6 @@ describe("formatUsageMeasurement", () => {
       data: {
         ...snapshot,
         reservedTokens: 0,
-        usageCap: null,
         measurements: {
           ...snapshot.measurements,
           input: { tokens: 0, unavailableEntries: 1 },
@@ -148,7 +146,6 @@ describe("formatUsageMeasurement", () => {
       '>Subscription pool</span><span class="text-right">Unavailable</span>',
     );
     expect(markup).toContain("Some provider usage is unavailable.");
-    expect(markup).toContain("No cap");
     expect(markup).not.toContain("Reserved</span>");
   });
 });
