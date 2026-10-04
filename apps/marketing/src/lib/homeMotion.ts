@@ -1,21 +1,32 @@
 import { mountBotAvatar } from "./botAvatarRuntime";
 
-// Runs `enter` each time an element scrolls into view and `leave` when it scrolls out,
-// so nothing animates off screen.
+// Runs `enter` once each time an element becomes 60% visible and `leave` when it drops
+// below that, so nothing animates off screen. The observer also fires on the way down
+// while the element is still partly visible, so `isIntersecting` alone is not enough.
 function whileInView(
   selector: string,
   enter: (element: HTMLElement) => void,
   leave: (element: HTMLElement) => void,
 ) {
+  const inView = new WeakSet<HTMLElement>();
+
   const observer = new IntersectionObserver(
     (entries) => {
       entries.forEach((entry) => {
         const element = entry.target;
 
         if (!(element instanceof HTMLElement)) return;
+        const visible = entry.intersectionRatio >= 0.6;
 
-        if (entry.isIntersecting) enter(element);
-        else leave(element);
+        if (visible === inView.has(element)) return;
+
+        if (visible) {
+          inView.add(element);
+          enter(element);
+        } else {
+          inView.delete(element);
+          leave(element);
+        }
       });
     },
     { threshold: 0.6 },
@@ -96,6 +107,7 @@ function setActivityLabel(element: HTMLElement, text: string) {
 }
 
 function startActivity(element: HTMLElement) {
+  window.clearInterval(activityTimers.get(element));
   element.dataset.active = "true";
   const labels = activityLabels(element);
   let index = 0;
