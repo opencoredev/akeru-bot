@@ -1,4 +1,3 @@
-import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 import { ThreadEnvMode } from "../environment.ts";
 import {
@@ -22,7 +21,6 @@ import {
   BotAvatar,
   BotEngine,
   BotSandbox,
-  BotUsageCap,
   BotPersonalityTone,
   ChannelProvider,
   ChannelBinding,
@@ -74,7 +72,6 @@ export const BotCreateCommand = Schema.Struct({
   engine: Schema.NullOr(BotEngine),
   sandbox: Schema.NullOr(BotSandbox),
   runtimeMode: Schema.optional(RuntimeMode),
-  usageCap: Schema.NullOr(BotUsageCap).pipe(Schema.withDecodingDefault(Effect.succeed(null))),
   imageProvider: Schema.optional(Schema.NullOr(ImageProviderId)),
   personalityTone: Schema.optional(BotPersonalityTone),
   voiceEnabled: Schema.optional(Schema.Boolean),
@@ -95,7 +92,6 @@ export const BotUpdateCommand = Schema.Struct({
   engine: Schema.optional(Schema.NullOr(BotEngine)),
   sandbox: Schema.optional(Schema.NullOr(BotSandbox)),
   runtimeMode: Schema.optional(RuntimeMode),
-  usageCap: Schema.optional(Schema.NullOr(BotUsageCap)),
   imageProvider: Schema.optional(Schema.NullOr(ImageProviderId)),
   personalityTone: Schema.optional(BotPersonalityTone),
   voiceEnabled: Schema.optional(Schema.Boolean),
@@ -116,7 +112,6 @@ export const ClientBotUpdateCommand = Schema.Struct({
   engine: Schema.optional(Schema.NullOr(BotEngine)),
   sandbox: Schema.optional(Schema.NullOr(BotSandbox)),
   runtimeMode: Schema.optional(RuntimeMode),
-  usageCap: Schema.optional(Schema.NullOr(BotUsageCap)),
   imageProvider: Schema.optional(Schema.NullOr(ImageProviderId)),
   personalityTone: Schema.optional(BotPersonalityTone),
   voiceEnabled: Schema.optional(Schema.Boolean),

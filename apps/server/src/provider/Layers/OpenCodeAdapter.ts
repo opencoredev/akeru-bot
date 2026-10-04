@@ -58,6 +58,7 @@ import {
   isOpenCodeNotFound,
   isSameOpenCodeDirectory,
   nowIso,
+  OPENCODE_PROVIDER_DEFAULT_VARIANT,
   toRequestError,
   ensureSessionContext,
   updateProviderSession,
@@ -319,7 +320,8 @@ export function makeOpenCodeAdapter(
       }
 
       const agent = getModelSelectionStringOptionValue(modelSelection, "agent");
-      const variant = getModelSelectionStringOptionValue(modelSelection, "variant");
+      const savedVariant = getModelSelectionStringOptionValue(modelSelection, "variant");
+      const variant = savedVariant === OPENCODE_PROVIDER_DEFAULT_VARIANT ? undefined : savedVariant;
 
       context.activeTurnId = turnId;
       context.activeAgent = agent;

@@ -157,7 +157,6 @@ export const makeChannelTestBot = () => ({
   engine: null,
   sandbox: "local" as const,
   runtimeMode: "full-access" as const,
-  usageCap: null,
   voiceEnabled: false,
   imageProvider: null,
   channelBindings: [],

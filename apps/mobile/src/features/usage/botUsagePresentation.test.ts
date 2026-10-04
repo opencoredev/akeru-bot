@@ -2,13 +2,11 @@ import { BotId, type AkeruBotUsageSnapshot } from "@akeru/contracts";
 import { describe, expect, it } from "vite-plus/test";
 
 import {
-  BOT_USAGE_CAP_EDIT_CAPTION,
   BOT_USAGE_COST_CAPTION,
   BOT_USAGE_PARTIAL_NOTICE,
   botUsageView,
   formatEstimatedCost,
   formatSubscriptionPool,
-  formatUsageCap,
   formatUsageMeasurement,
 } from "./botUsagePresentation";
 
@@ -23,7 +21,6 @@ const snapshot: AkeruBotUsageSnapshot = {
     reflector: { tokens: 100, unavailableEntries: 0 },
   },
   entries: [],
-  usageCap: { unit: "tokens", limit: 20_000 },
   estimatedCost: { status: "available", usd: 1.25 },
   subscriptionPool: { status: "available", used: 4_000, limit: 10_000, unit: "tokens" },
 };
@@ -67,11 +64,6 @@ describe("bot usage value formatting", () => {
       formatSubscriptionPool({ status: "unavailable", used: null, limit: null, unit: null }),
     ).toBe("Unavailable");
   });
-
-  it("shows the cap against consumed tokens, and says so when there is none", () => {
-    expect(formatUsageCap(snapshot)).toBe("12,345 / 20,000 tokens");
-    expect(formatUsageCap({ ...snapshot, usageCap: null })).toBe("No cap");
-  });
 });
 
 describe("botUsageView", () => {
@@ -90,7 +82,7 @@ describe("botUsageView", () => {
     });
   });
 
-  it("builds every measurement, the cap, cost, pool, and reservations", () => {
+  it("builds every measurement, cost, pool, and reservations", () => {
     const view = botUsageView({ data: snapshot, error: null, isPending: false });
 
     if (view.kind !== "ready") throw new Error("expected a ready view");
@@ -99,7 +91,6 @@ describe("botUsageView", () => {
       "output",
       "observer",
       "reflector",
-      "cap",
       "estimated-cost",
       "subscription-pool",
       "reserved",
@@ -109,11 +100,10 @@ describe("botUsageView", () => {
     expect(view.partialNotice).toBeNull();
   });
 
-  it("keeps the estimate separate from subscription spend and states where the cap is edited", () => {
+  it("keeps the estimate separate from subscription spend", () => {
     const view = botUsageView({ data: snapshot, error: null, isPending: false });
     expect(rowValue(view, "estimated-cost").caption).toBe(BOT_USAGE_COST_CAPTION);
     expect(BOT_USAGE_COST_CAPTION).toContain("Not subscription spend");
-    expect(rowValue(view, "cap").caption).toBe(BOT_USAGE_CAP_EDIT_CAPTION);
   });
 
   it("marks partial and unavailable measurements without inventing values", () => {
@@ -121,7 +111,6 @@ describe("botUsageView", () => {
       data: {
         ...snapshot,
         reservedTokens: 0,
-        usageCap: null,
         measurements: {
           ...snapshot.measurements,
           input: { tokens: 0, unavailableEntries: 1 },
@@ -145,7 +134,6 @@ describe("botUsageView", () => {
       value: "Unavailable",
       unavailable: true,
     });
-    expect(rowValue(view, "cap").value).toBe("No cap");
 
     // Nothing reserved gets no row, matching web.
     if (view.kind !== "ready") throw new Error("expected a ready view");

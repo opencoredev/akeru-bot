@@ -44,7 +44,6 @@ it.layer(TestLayer)("bot persistence", (it) => {
           engine: null,
           sandbox: "local",
           runtimeMode: "full-access",
-          usageCap: null,
           groupId: input.groupId,
           createdAt,
         });
@@ -171,7 +170,6 @@ it.layer(TestLayer)("bot persistence", (it) => {
           engine: null,
           sandbox: "local",
           runtimeMode: "full-access",
-          usageCap: null,
           groupId: null,
           createdAt,
         });
@@ -277,7 +275,6 @@ it.layer(TestLayer)("bot persistence", (it) => {
         engine: null,
         sandbox: "local",
         runtimeMode: "full-access",
-        usageCap: null,
         groupId: null,
         createdAt,
       });
@@ -291,7 +288,6 @@ it.layer(TestLayer)("bot persistence", (it) => {
         engine: null,
         sandbox: "local",
         runtimeMode: "full-access",
-        usageCap: null,
         groupId: null,
         createdAt,
       });

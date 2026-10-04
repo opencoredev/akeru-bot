@@ -19,7 +19,7 @@ export type ProviderAvailabilityReason =
   | "not-installed"
   | "missing-provider";
 
-/** One next step. Clients map "providers" to Settings > Providers and "usage" to bot usage settings. */
+/** One next step. Clients map "providers" to Settings > Providers and "usage" to bot settings. */
 export type ProviderAvailabilityAction = "providers" | "usage" | "feedback" | "none";
 
 export interface ProviderAvailabilityPresentation {
@@ -185,8 +185,11 @@ function presentReason(
       };
     case "usage-cap":
       return {
-        title: t("Akeru usage cap reached"),
-        description: t("Raise this bot's usage cap in its settings to keep chatting."),
+        title: named("{provider} account limit reached", "Provider account limit reached"),
+        description: named(
+          "Your {provider} account hit its quota or spending limit. Raise it with {provider}, or switch this bot to another provider in bot settings.",
+          "Your provider account hit its quota or spending limit. Raise it with the provider, or switch this bot to another provider in bot settings.",
+        ),
         technicalDetails,
         action: "usage",
       };

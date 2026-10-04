@@ -139,7 +139,6 @@ export function makeSnapshot(
         engine: { provider: "codex", model: "gpt-5.6-sol" },
         sandbox: "local",
         runtimeMode: "full-access",
-        usageCap: null,
         imageProvider: null,
         voiceEnabled: true,
         channelBindings: [],

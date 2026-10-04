@@ -88,12 +88,24 @@ export function getProviderModelCapabilities(
   model: string | null | undefined,
   provider: ProviderDriverKind,
 ): ModelCapabilities {
+  return findProviderModelCapabilities(models, model, provider) ?? EMPTY_CAPABILITIES;
+}
+
+/**
+ * The capabilities a listed model advertises, or undefined when this client
+ * cannot know them: the model is not listed, or its snapshot carries no
+ * descriptor list. Unknown is not the same as an empty list, which says the
+ * model takes no options.
+ */
+export function findProviderModelCapabilities(
+  models: ReadonlyArray<ServerProviderModel>,
+  model: string | null | undefined,
+  provider: ProviderDriverKind,
+): ModelCapabilities | undefined {
   const slug = normalizeModelSlug(model, provider);
+  const caps = models.find((candidate) => candidate.slug === slug)?.capabilities;
 
-  const caps =
-    models.find((candidate) => candidate.slug === slug)?.capabilities ?? EMPTY_CAPABILITIES;
-
-  return withoutPlanAgentOption(caps);
+  return caps?.optionDescriptors === undefined ? undefined : withoutPlanAgentOption(caps);
 }
 
 // Plan mode is retired, so the opencode "plan" agent is never selectable.

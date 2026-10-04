@@ -15,13 +15,10 @@ import {
   ProviderAdapterRequestError,
 } from "../../../provider/Errors.ts";
 import type { AgentControllerError } from "../../../provider/Errors.ts";
-import { BotUsageCapExceeded } from "../../../usage/BotUsageLedger.ts";
 
 export const isProviderAdapterRequestError = Schema.is(ProviderAdapterRequestError);
 
 export const isUnsupportedEngineError = Schema.is(AgentControllerUnsupportedEngineError);
-
-export const isBotUsageCapExceeded = Schema.is(BotUsageCapExceeded);
 
 export const isComposioOperationError = Schema.is(ComposioOperationError);
 

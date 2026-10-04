@@ -20,6 +20,8 @@ import {
   type AkeruRoutineDeleteResult,
 } from "./AkeruRoutineSchemas.ts";
 
+import type { AkeruModelOptions } from "../ReasoningOptions.ts";
+
 export interface AkeruMastraState {
   readonly providerInstanceId?: string;
   // Undefined clears a previous directory when a reused session loses its cwd.
@@ -30,10 +32,7 @@ export interface AkeruMastraState {
   readonly personalityTone?: BotPersonalityTone;
   readonly persistentMemoryContext?: string;
   readonly mcpInstructions?: string;
-  readonly modelOptions?: {
-    readonly reasoningEffort?: string;
-    readonly serviceTier?: string;
-  };
+  readonly modelOptions?: AkeruModelOptions;
 }
 
 export type AkeruMastraSession = Session<AkeruMastraState>;

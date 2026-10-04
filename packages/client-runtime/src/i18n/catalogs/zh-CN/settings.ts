@@ -42,8 +42,6 @@ export const settingsCatalog = {
   "Stream token by token (legacy)": "逐个令牌流式传输（旧版）",
   "Terminal font": "终端字体",
   Themes: "主题",
-  "Token hard stop": "令牌硬上限",
-  "Unavailable for this provider": "此提供商不可用",
   "Update ready": "更新已就绪",
   "Voice provider": "语音提供商",
   "OpenAI API voice": "OpenAI API 语音",
@@ -78,6 +76,7 @@ export const settingsCatalog = {
   "No response from {provider}": "{provider} 暂无响应",
   "No response from {provider} for {duration}": "{provider} 已 {duration} 无响应",
   "Could not change the model": "无法更改模型",
+  "Could not change the reasoning": "无法更改推理设置",
   "Change model": "更改模型",
   "Nothing stashed yet. Press {shortcut} with a prompt in the composer to stash it.":
     "暂无暂存内容。在输入框中输入提示后按 {shortcut} 即可暂存。",
@@ -120,8 +119,6 @@ export const settingsCatalog = {
   "The provider and model this bot runs on.": "此机器人使用的提供商和模型。",
   "No model yet": "尚未选择模型",
   Reasoning: "推理",
-  "Stop this bot once it has spent this many tokens. Leave empty for no limit.":
-    "此机器人用完这么多令牌后即停止。留空表示不限制。",
   "Which subscription this bot uses to create images. The chat model above stays the same.":
     "此机器人用哪个订阅生成图片。上方的聊天模型保持不变。",
   "Image provider": "图片提供商",
@@ -224,8 +221,12 @@ export const settingsCatalog = {
     "你的 {provider} 套餐已达到用量或速率限制。请等待限额重置后重新发送消息。",
   "Your provider plan hit its usage or rate limit. Wait for it to reset, then send your message again.":
     "你的提供商套餐已达到用量或速率限制。请等待重置后重新发送消息。",
-  "Raise this bot's usage cap in its settings to keep chatting.":
-    "请在此机器人的设置中提高用量上限以继续聊天。",
+  "{provider} account limit reached": "{provider} 账户已达到限额",
+  "Provider account limit reached": "提供商账户已达到限额",
+  "Your {provider} account hit its quota or spending limit. Raise it with {provider}, or switch this bot to another provider in bot settings.":
+    "你的 {provider} 账户已达到配额或消费上限。请在 {provider} 提高上限，或在机器人设置中将此机器人切换到其他提供商。",
+  "Your provider account hit its quota or spending limit. Raise it with the provider, or switch this bot to another provider in bot settings.":
+    "你的提供商账户已达到配额或消费上限。请在提供商处提高上限，或在机器人设置中将此机器人切换到其他提供商。",
   "{provider} could not respond": "{provider} 无法响应",
   "The provider could not respond": "提供商无法响应",
   Models: "模型",

@@ -1,5 +1,10 @@
 import { catalogRegistry, createTranslator } from "@akeru/client-runtime/i18n";
-import { ProviderDriverKind, ProviderInstanceId } from "@akeru/contracts";
+import {
+  ProviderDriverKind,
+  ProviderInstanceId,
+  type ModelCapabilities,
+  type ServerProvider,
+} from "@akeru/contracts";
 import { DEFAULT_UNIFIED_SETTINGS } from "@akeru/contracts/settings";
 import { describe, expect, it } from "vite-plus/test";
 
@@ -7,7 +12,10 @@ import { deriveProviderInstanceEntries } from "../../providerInstances";
 import { makeComposerTestProvider } from "../../test/composerTestProvider";
 import { providerCatalogEntry } from "../settings/providerCatalog";
 import {
+  botDraftModelOptions,
   botEngineFailureContext,
+  botEngineForModelPick,
+  botEngineForOptions,
   botEngineSubscriptionToConnect,
   botEngineTakesDelegatedWork,
   botEngineUnavailability,
@@ -224,7 +232,7 @@ describe("resolveStickyBotEngine", () => {
     expect(resolved?.instanceId).toBe(instanceId);
   });
 
-  it("inherits app options when an older bot engine matches the app model", () => {
+  it("keeps a saved engine without options on provider defaults even on the app model", () => {
     const providers = [makeComposerTestProvider()];
     const instanceEntries = deriveProviderInstanceEntries(providers);
     const instanceId = instanceEntries[0]?.instanceId;
@@ -243,9 +251,31 @@ describe("resolveStickyBotEngine", () => {
           options: [{ id: "reasoningEffort", value: "medium" }],
         },
       }),
-    ).toEqual({
+    ).toEqual({ instanceId, model: "gpt-5.6-sol" });
+  });
+
+  it("lets a bot without an engine show the app default options", () => {
+    const providers = [makeComposerTestProvider()];
+    const instanceEntries = deriveProviderInstanceEntries(providers);
+    const instanceId = instanceEntries[0]?.instanceId;
+
+    if (!instanceId) throw new Error("missing instance");
+
+    const resolved = resolveStickyBotEngine({
+      engine: null,
+      instanceEntries,
+      settings,
+      providers,
+      defaultSelection: {
+        instanceId,
+        model: "gpt-5-codex",
+        options: [{ id: "reasoningEffort", value: "medium" }],
+      },
+    });
+
+    expect(resolved).toEqual({
       instanceId,
-      model: "gpt-5.6-sol",
+      model: "gpt-5-codex",
       options: [{ id: "reasoningEffort", value: "medium" }],
     });
   });
@@ -428,5 +458,124 @@ describe("routineDelegateOptions", () => {
       { id: "builder", name: "builder", canTakeWork: false },
       { id: "fresh", name: "fresh", canTakeWork: true },
     ]);
+  });
+});
+
+const reasoningCaps = (levels: ReadonlyArray<string>): ModelCapabilities => ({
+  optionDescriptors: [
+    {
+      id: "reasoningEffort",
+      label: "Reasoning",
+      type: "select",
+      currentValue: "default",
+      options: [
+        { id: "default", label: "Provider default", isDefault: true },
+        ...levels.map((id) => ({ id, label: id })),
+      ],
+    },
+  ],
+});
+
+function reasoningProvider(instance: string): ServerProvider {
+  return {
+    ...makeComposerTestProvider(),
+    instanceId: ProviderInstanceId.make(instance),
+    models: [
+      {
+        slug: "gpt-a",
+        name: "A",
+        isCustom: false,
+        capabilities: reasoningCaps(["minimal", "high"]),
+      },
+      { slug: "gpt-b", name: "B", isCustom: false, capabilities: reasoningCaps(["high"]) },
+      {
+        slug: "gpt-quiet",
+        name: "Quiet",
+        isCustom: false,
+        capabilities: { optionDescriptors: [] },
+      },
+      { slug: "gpt-custom", name: "Custom", isCustom: true, capabilities: null },
+    ],
+  };
+}
+
+describe("bot engine reasoning choices", () => {
+  const instanceEntries = deriveProviderInstanceEntries([
+    reasoningProvider("codex"),
+    reasoningProvider("codex_work"),
+  ]);
+
+  const codex = ProviderInstanceId.make("codex");
+
+  const saved = {
+    instanceId: codex,
+    model: "gpt-a",
+    options: [{ id: "reasoningEffort", value: "minimal" }],
+  };
+
+  it("starts the settings draft from the saved engine, not the app default", () => {
+    const appDefault = {
+      instanceId: codex,
+      model: "gpt-a",
+      options: [{ id: "reasoningEffort", value: "high" }],
+    };
+
+    expect(
+      botDraftModelOptions({ provider: "codex", model: "gpt-a" }, appDefault, "codex", "gpt-a"),
+    ).toBeUndefined();
+    expect(botDraftModelOptions(null, appDefault, "codex", "gpt-a")).toEqual(appDefault.options);
+    expect(botDraftModelOptions(null, appDefault, "codex", "gpt-b")).toBeUndefined();
+  });
+
+  it("keeps a supported choice when the model changes on the same instance", () => {
+    expect(
+      botEngineForModelPick({
+        previous: saved,
+        instanceId: "codex",
+        model: "gpt-a",
+        instanceEntries,
+      }),
+    ).toEqual({ provider: "codex", model: "gpt-a", options: saved.options });
+    expect(
+      botEngineForModelPick({
+        previous: saved,
+        instanceId: "codex",
+        model: "gpt-b",
+        instanceEntries,
+      }),
+    ).toEqual({ provider: "codex", model: "gpt-b" });
+  });
+
+  it("clears choices for another instance, an optionless model, and an unknown model", () => {
+    for (const [instanceId, model] of [
+      ["codex_work", "gpt-a"],
+      ["codex", "gpt-quiet"],
+      ["codex", "gpt-custom"],
+    ] as const) {
+      expect(
+        botEngineForModelPick({ previous: saved, instanceId, model, instanceEntries }),
+      ).toEqual({ provider: instanceId, model });
+    }
+  });
+
+  it("saves a reasoning change and drops the provider default", () => {
+    expect(
+      botEngineForOptions({
+        selection: saved,
+        options: [{ id: "reasoningEffort", value: "high" }],
+        instanceEntries,
+      }),
+    ).toEqual({
+      provider: "codex",
+      model: "gpt-a",
+      options: [{ id: "reasoningEffort", value: "high" }],
+    });
+    expect(
+      botEngineForOptions({
+        selection: saved,
+        options: [{ id: "reasoningEffort", value: "default" }],
+        instanceEntries,
+      }),
+    ).toEqual({ provider: "codex", model: "gpt-a" });
   });
 });

@@ -202,15 +202,44 @@ The model list comes from the [model catalog](#model-catalog) and `ModelCatalog.
 Codex combines catalog IDs with bundled and historical compatibility models, and takes names,
 reasoning efforts, and Fast availability from the catalog entry. Models the catalog does not list
 fall back to the harness SDK's thinking levels and keep the Standard and Fast tiers. Catalog
-efforts the SDK would silently downgrade, such as Max on older GPT aliases, are not offered. The catalog
+efforts are sent without the SDK's thinking-level coercion, preserving levels such as Minimal and Max. The catalog
 classifies models as current or legacy; it is not an exhaustive allowlist. The OAuth transport
 forwards the selected ID to the Codex API without a local catalog restriction. Account access is
-still checked by the provider when a request runs. Claude merges catalog additions into its
-built-in capability catalog without dropping historical models. A Claude model newer than the
-build inherits the capabilities of the newest built-in model in its family. Grok includes its API model IDs
+still checked by the provider when a request runs. Claude keeps historical models and takes native
+effort choices from the catalog, retaining built-in context-window and manual-thinking controls.
+When a refresh omits a historical model, its bundled catalog entry or known native built-in levels
+remain available.
+CLI workflow choices such as Ultracode and Ultrathink are excluded from its native effort picker.
+Grok includes its API model IDs
 alongside catalog additions. It labels the compatibility `grok-build` selection as Grok 4.7 and maps it to `grok-4.7` in
 `mastraModelId`, because the product slug is not an API model ID. Keeping the selection slug lets
 existing bots and the default model pass catalog validation. Custom models are retained.
+
+### Reasoning selections
+
+Model snapshots expose reasoning through `ModelCapabilities.optionDescriptors`. Codex, Claude,
+Grok, Kimi For Coding, and OpenCode Go use catalog effort levels; standard OpenCode advertises its
+live variant choices after a Provider default entry, because OpenCode resolves its own default from
+user config. A model with no adjustable effort publishes an empty descriptor list.
+Unknown capabilities remain distinct from an authoritative empty list.
+
+Bot settings on web and the desktop renderer, and the mobile settings sheet, save reasoning to
+`bot.engine.options`. Web chat composers do not expose reasoning controls. A saved
+engine does not inherit app-default options. Choosing a descriptor's default removes that option;
+switching models retains supported choices on the same instance and clears them across instances.
+Group chats retain their thread selection and do not edit a responder's engine.
+
+`AgentController.inspectEngine` validates reasoning against a settled snapshot after resolving the
+bot override. `ReasoningOptions.nativeModelOptions` maps selections to the Mastra state, and
+`withAkeruModelRunOptions` supplies native options on each run: OpenAI Responses effort, Anthropic
+effort/thinking, xAI reasoning effort, OpenCode Go's protocol-specific fields, or a Custom API
+`reasoning_effort` under the `custom-openai` provider options. Kimi uses adaptive
+thinking; older Claude models keep manual thinking where supported. Reset and session reuse replace
+the previous state options, so an earlier effort cannot stick. Codex OAuth retains the SDK's Medium
+default when no level is selected; API-key requests omit the effort. Standard OpenCode continues
+forwarding its selected `variant` through the legacy adapter and omits it at Provider default.
+Saved Claude `ultrathink` and `ultracode` choices from the CLI menu pass validation and run at
+provider default on the harness path.
 
 Successful credential mutations through poll, completion, and logout RPCs reconcile default
 provider settings and refresh each affected saved-credential instance before returning. The

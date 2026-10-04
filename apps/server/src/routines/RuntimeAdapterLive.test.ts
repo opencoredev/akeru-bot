@@ -90,7 +90,6 @@ const bot = (botId: string, name: string, provider: string): ProjectionBot => ({
   avatar: { kind: "blob", shape: "circle", color: "blue" },
   sandbox: "local",
   runtimeMode: "approval-required",
-  usageCap: null,
   imageProvider: null,
   voiceEnabled: false,
   groupId: null,

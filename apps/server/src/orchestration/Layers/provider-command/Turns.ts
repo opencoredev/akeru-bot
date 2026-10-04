@@ -198,7 +198,6 @@ export function createTurns({
               turnId: null,
               category: "turn",
               maximumTokens: AKERU_TURN_USAGE_RESERVATION_TOKENS,
-              capLimit: respondingBot?.usageCap?.limit ?? Number.MAX_SAFE_INTEGER,
               provider:
                 [
                   thread.session?.providerName,

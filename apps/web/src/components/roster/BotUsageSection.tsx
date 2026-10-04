@@ -76,15 +76,6 @@ export function BotUsageSection({
             <span className="text-right">
               {formatUsageMeasurement(snapshot.measurements.reflector, t, formatNumber)}
             </span>
-            <span className="text-muted-foreground">{t("Cap")}</span>
-            <span className="text-right">
-              {snapshot.usageCap
-                ? t("{consumed} / {limit} tokens", {
-                    consumed: formatNumber(snapshot.consumedTokens),
-                    limit: formatNumber(snapshot.usageCap.limit),
-                  })
-                : t("No cap")}
-            </span>
             <span className="text-muted-foreground">{t("Estimated cost")}</span>
             <span className="text-right">
               {snapshot.estimatedCost.status === "available"

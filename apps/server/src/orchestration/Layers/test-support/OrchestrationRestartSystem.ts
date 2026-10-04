@@ -87,7 +87,6 @@ export async function createRestartSystem() {
     avatar: { kind: "dither", seed: "restart-bot" },
     engine: null,
     sandbox: "local",
-    usageCap: null,
     groupId: null,
     createdAt,
   });

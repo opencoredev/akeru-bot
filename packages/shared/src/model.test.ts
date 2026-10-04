@@ -3,6 +3,8 @@ import { ProviderDriverKind, ProviderInstanceId, type ModelCapabilities } from "
 
 import {
   applyClaudePromptEffortPrefix,
+  botEngineFromModelSelection,
+  botEngineModelSelection,
   buildProviderOptionSelectionsFromDescriptors,
   createModelCapabilities,
   createModelSelection,
@@ -14,6 +16,8 @@ import {
   getProviderOptionStringSelectionValue,
   normalizeCustomModelSlug,
   normalizeModelSlug,
+  providerOptionsForModelChange,
+  retainChosenProviderOptions,
 } from "./model.ts";
 
 const codexCaps: ModelCapabilities = createModelCapabilities({
@@ -201,5 +205,211 @@ describe("formatModelSlug", () => {
     expect(formatModelSlug("gpt-5.3-codex-spark")).toBe("GPT-5.3 Codex Spark");
     expect(formatModelSlug("gpt-daybreak-blue-latest")).toBe("GPT Daybreak Blue Latest");
     expect(formatModelSlug("claude-opus-5-5")).toBe("Claude Opus 5.5");
+  });
+});
+
+const nativeReasoningCaps = (levels: ReadonlyArray<string>): ModelCapabilities =>
+  createModelCapabilities({
+    optionDescriptors: [
+      {
+        id: "reasoningEffort",
+        label: "Reasoning",
+        type: "select",
+        currentValue: "default",
+        options: [
+          { id: "default", label: "Provider default", isDefault: true },
+          ...levels.map((id) => ({ id, label: id })),
+        ],
+      },
+    ],
+  });
+
+const haikuCaps: ModelCapabilities = createModelCapabilities({
+  optionDescriptors: [{ id: "thinking", label: "Thinking", type: "boolean" }],
+});
+
+describe("bot engine option helpers", () => {
+  it("shows and retains legacy off as none only when the model offers none", () => {
+    const options = [{ id: "reasoningEffort", value: "off" }];
+    const caps = nativeReasoningCaps(["none", "low"]);
+    const descriptors = getProviderOptionDescriptors({ caps, selections: options });
+
+    expect(descriptors[0]?.currentValue).toBe("none");
+    expect(buildProviderOptionSelectionsFromDescriptors(descriptors)).toEqual([
+      { id: "reasoningEffort", value: "none" },
+    ]);
+    expect(retainChosenProviderOptions(options, caps)).toEqual([
+      { id: "reasoningEffort", value: "none" },
+    ]);
+    expect(
+      providerOptionsForModelChange({
+        previous: createModelSelection(ProviderInstanceId.make("codex"), "gpt-a", options),
+        instanceId: "codex",
+        nextCaps: caps,
+      }),
+    ).toEqual([{ id: "reasoningEffort", value: "none" }]);
+    expect(retainChosenProviderOptions(options, nativeReasoningCaps(["low"]))).toBeUndefined();
+    expect(retainChosenProviderOptions(options, nativeReasoningCaps(["off"]))).toEqual(options);
+  });
+
+  it("keeps only advertised, non-default choices", () => {
+    expect(
+      retainChosenProviderOptions(
+        [
+          { id: "reasoningEffort", value: "minimal" },
+          { id: "serviceTier", value: "fast" },
+        ],
+        nativeReasoningCaps(["minimal", "high"]),
+      ),
+    ).toEqual([{ id: "reasoningEffort", value: "minimal" }]);
+  });
+
+  it("removes a choice reset to the provider default", () => {
+    expect(
+      retainChosenProviderOptions(
+        [{ id: "reasoningEffort", value: "default" }],
+        nativeReasoningCaps(["high"]),
+      ),
+    ).toBeUndefined();
+  });
+
+  it("keeps a real choice whose id is spelled default when it is not the default", () => {
+    const caps = createModelCapabilities({
+      optionDescriptors: [
+        {
+          id: "variant",
+          label: "Variant",
+          type: "select",
+          options: [
+            { id: "high", label: "High", isDefault: true },
+            { id: "default", label: "Default" },
+          ],
+        },
+      ],
+    });
+
+    expect(retainChosenProviderOptions([{ id: "variant", value: "default" }], caps)).toEqual([
+      { id: "variant", value: "default" },
+    ]);
+    expect(retainChosenProviderOptions([{ id: "variant", value: "high" }], caps)).toBeUndefined();
+  });
+
+  it("drops prompt-injected workflow values and unsupported levels", () => {
+    expect(
+      retainChosenProviderOptions(
+        [
+          { id: "effort", value: "ultrathink" },
+          { id: "contextWindow", value: "200k" },
+        ],
+        claudeCaps,
+      ),
+    ).toEqual([{ id: "contextWindow", value: "200k" }]);
+    expect(
+      retainChosenProviderOptions(
+        [{ id: "reasoningEffort", value: "max" }],
+        nativeReasoningCaps(["high"]),
+      ),
+    ).toBeUndefined();
+  });
+
+  it("preserves both values of a boolean without an advertised default", () => {
+    expect(retainChosenProviderOptions([{ id: "thinking", value: false }], haikuCaps)).toEqual([
+      { id: "thinking", value: false },
+    ]);
+    expect(retainChosenProviderOptions([{ id: "thinking", value: true }], haikuCaps)).toEqual([
+      { id: "thinking", value: true },
+    ]);
+  });
+
+  it("keeps options when capabilities are unknown but clears them for an authoritative empty list", () => {
+    const options = [{ id: "reasoningEffort", value: "high" }];
+
+    expect(retainChosenProviderOptions(options, null)).toEqual(options);
+    expect(retainChosenProviderOptions(options, {})).toEqual(options);
+    expect(
+      retainChosenProviderOptions(options, createModelCapabilities({ optionDescriptors: [] })),
+    ).toBeUndefined();
+  });
+
+  it("carries supported choices to another model on the same instance", () => {
+    const previous = createModelSelection(ProviderInstanceId.make("codex"), "gpt-a", [
+      { id: "reasoningEffort", value: "minimal" },
+    ]);
+
+    expect(
+      providerOptionsForModelChange({
+        previous,
+        instanceId: "codex",
+        nextCaps: nativeReasoningCaps(["minimal", "high"]),
+      }),
+    ).toEqual([{ id: "reasoningEffort", value: "minimal" }]);
+    expect(
+      providerOptionsForModelChange({
+        previous,
+        instanceId: "codex",
+        nextCaps: nativeReasoningCaps(["high"]),
+      }),
+    ).toBeUndefined();
+    expect(
+      providerOptionsForModelChange({ previous, instanceId: "codex", nextCaps: null }),
+    ).toBeUndefined();
+  });
+
+  it("clears choices when the model moves to another provider instance", () => {
+    expect(
+      providerOptionsForModelChange({
+        previous: createModelSelection(ProviderInstanceId.make("codex"), "gpt-a", [
+          { id: "reasoningEffort", value: "high" },
+        ]),
+        instanceId: "grok",
+        nextCaps: nativeReasoningCaps(["high"]),
+      }),
+    ).toBeUndefined();
+  });
+
+  it("reads a saved engine without borrowing anything and saves only chosen options", () => {
+    expect(botEngineModelSelection({ provider: "claudeAgent", model: "claude-opus-5-5" })).toEqual({
+      instanceId: "claudeAgent",
+      model: "claude-opus-5-5",
+    });
+    expect(
+      botEngineFromModelSelection(
+        createModelSelection(ProviderInstanceId.make("codex"), "gpt-a", [
+          { id: "reasoningEffort", value: "default" },
+        ]),
+        nativeReasoningCaps(["high"]),
+      ),
+    ).toEqual({ provider: "codex", model: "gpt-a" });
+  });
+
+  it("keeps an explicit OpenCode variant that matches a common default", () => {
+    const caps = {
+      optionDescriptors: [
+        {
+          id: "variant",
+          label: "Variant",
+          type: "select" as const,
+          currentValue: "default",
+          options: [
+            { id: "default", label: "Provider default", isDefault: true },
+            { id: "medium", label: "Medium" },
+            { id: "high", label: "High" },
+          ],
+        },
+      ],
+    };
+
+    expect(
+      botEngineFromModelSelection(
+        createModelSelection(ProviderInstanceId.make("opencode"), "openai/gpt-5.4", [
+          { id: "variant", value: "medium" },
+        ]),
+        caps,
+      ),
+    ).toEqual({
+      provider: "opencode",
+      model: "openai/gpt-5.4",
+      options: [{ id: "variant", value: "medium" }],
+    });
   });
 });

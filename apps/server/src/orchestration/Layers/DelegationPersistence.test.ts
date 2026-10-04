@@ -110,7 +110,6 @@ it.effect("rebuilds the full delegation record after a restart", () =>
           engine: null,
           sandbox: "local",
           runtimeMode: "approval-required",
-          usageCap: null,
           groupId: null,
           createdAt: NOW,
         });
@@ -195,7 +194,6 @@ const seedParentAndChild = Effect.gen(function* () {
       engine: null,
       sandbox: "local",
       runtimeMode: "approval-required",
-      usageCap: null,
       groupId: null,
       createdAt: NOW,
     });

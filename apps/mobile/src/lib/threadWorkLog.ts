@@ -104,8 +104,6 @@ export function deriveWorkLogEntries(
 
     if (activity.kind === "bot.step-usage.updated") continue;
 
-    if (activity.kind === "bot.usage-cap.hit") continue;
-
     // Silent-run state drives the status line; it is not work the bot did.
     if (isSilentRunActivity(activity)) continue;
 

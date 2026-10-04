@@ -78,16 +78,6 @@ export function formatSubscriptionPool(pool: AkeruBotUsageSnapshot["subscription
   return `${pool.used.toLocaleString()} / ${pool.limit.toLocaleString()} ${pool.unit}`;
 }
 
-export function formatUsageCap(snapshot: AkeruBotUsageSnapshot): string {
-  return snapshot.usageCap === null
-    ? "No cap"
-    : `${snapshot.consumedTokens.toLocaleString()} / ${snapshot.usageCap.limit.toLocaleString()} ${snapshot.usageCap.unit}`;
-}
-
-/** Where the cap is changed. Mobile has no bot editor; chat settings owns it. */
-export const BOT_USAGE_CAP_EDIT_CAPTION =
-  "Change the cap in a chat with this bot, under chat settings.";
-
 export const BOT_USAGE_COST_CAPTION =
   "Estimated from model rates. Not subscription spend, and not an amount billed.";
 
@@ -99,13 +89,6 @@ export function buildBotUsageRows(snapshot: AkeruBotUsageSnapshot): ReadonlyArra
     measurementRow("output", "Output", snapshot.measurements.output),
     measurementRow("observer", "Observer", snapshot.measurements.observer),
     measurementRow("reflector", "Reflector", snapshot.measurements.reflector),
-    {
-      key: "cap",
-      label: "Cap",
-      value: formatUsageCap(snapshot),
-      caption: BOT_USAGE_CAP_EDIT_CAPTION,
-      unavailable: false,
-    },
     {
       key: "estimated-cost",
       label: "Estimated cost",

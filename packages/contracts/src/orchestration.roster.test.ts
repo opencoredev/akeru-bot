@@ -311,7 +311,6 @@ it.effect("leaves an omitted bot.create runtime mode for the server", () =>
       avatar: { kind: "dither", seed: "akeru" },
       engine: null,
       sandbox: null,
-      usageCap: null,
       groupId: null,
       createdAt: "2026-01-01T00:00:00.000Z",
     });

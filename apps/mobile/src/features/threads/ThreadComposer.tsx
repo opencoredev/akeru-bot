@@ -1,4 +1,3 @@
-import { Predicate } from "effect";
 import { useMobileI18n } from "../../lib/i18n";
 import type {
   EnvironmentId,
@@ -42,29 +41,23 @@ import {
 import { ControlPill } from "../../components/ControlPill";
 import { ProviderIcon } from "../../components/ProviderIcon";
 import type { DraftComposerImageAttachment } from "../../lib/composerImages";
-import { buildModelOptions, groupByProvider, resolveModelSendBlock } from "../../lib/modelOptions";
+import { resolveModelSendBlock } from "../../lib/modelOptions";
 import { useScaledTextRole } from "../settings/appearance/useScaledTextRole";
 import { useAppearancePreferences } from "../settings/appearance/AppearancePreferencesProvider";
 import type { RemoteClientConnectionState } from "../../lib/connection";
-import { resolveProviderOptionDescriptors } from "../../lib/providerOptions";
 import { useComposerPathSearch } from "../../state/use-composer-path-search";
-import { botEnvironment, environmentBotsAtom, environmentGroupsAtom } from "../../state/bots";
+import { environmentBotsAtom, environmentGroupsAtom } from "../../state/bots";
 import { providerBotName } from "./thread-list-v2-items";
 import { resolveThreadIdentity } from "./threadIdentity";
 import { serverEnvironment } from "../../state/server";
 import { useEnvironmentQuery } from "../../state/query";
-import { useAtomCommand } from "../../state/use-atom-command";
-import { squashAtomCommandFailure } from "@akeru/client-runtime/state/runtime";
 import { ComposerCommandPopover, type ComposerCommandItem } from "./ComposerCommandPopover";
 import { buildComposerCommandItems } from "./composer-command-items";
 import { composerMentionItemToken, isThreadMentionQuery } from "./composerMentionItems";
 import { ComposerMentionPopover } from "./ComposerMentionPopover";
-import {
-  type ExistingThreadSettingsRouteSession,
-  useExistingThreadSettingsRoutePresentation,
-} from "./ThreadSettingsSheet";
+import { useExistingThreadSettingsRoutePresentation } from "./ThreadSettingsSheet";
 import { useThreadSettingsSheetRoute } from "./use-thread-settings-sheet-presentation";
-import { buildBotUsageCapPatch } from "./botStepUsage";
+import { useThreadComposerSettings } from "./use-thread-composer-settings";
 import {
   ComposerConnectionStatusPill,
   composerConnectionStatus,
@@ -175,8 +168,6 @@ export const ThreadComposer = memo(function ThreadComposer(props: ThreadComposer
     ? composerIdentity.title
     : (bot?.name ?? providerBotName(composerProviderDriver));
 
-  const updateBot = useAtomCommand(botEnvironment.update, { reportFailure: false });
-  const deleteBot = useAtomCommand(botEnvironment.delete, { reportFailure: false });
   const wasExpandedBeforePreviewRef = useRef(false);
   const inFlightThreadIdsRef = useRef(new Set<string>());
   const { onExpandedChange } = props;
@@ -247,9 +238,6 @@ export const ThreadComposer = memo(function ThreadComposer(props: ThreadComposer
 
   const sendLabel =
     props.connectionState !== "connected" || props.queueCount > 0 ? "Queue" : "Send";
-
-  const currentModelSelection = props.selectedThread.modelSelection;
-  const currentRuntimeMode = props.selectedThread.runtimeMode;
 
   const connectionStatus = composerConnectionStatus({
     connectionError: props.connectionError,
@@ -413,123 +401,18 @@ export const ThreadComposer = memo(function ThreadComposer(props: ThreadComposer
     [composerTrigger, draftMessage, onChangeDraftMessage],
   );
 
-  // ── Model menu ───────────────────────────────────────────
-  const modelOptions = useMemo(
-    () => buildModelOptions(props.serverConfig, currentModelSelection, subscriptionStatuses, t),
-    [props.serverConfig, currentModelSelection, subscriptionStatuses, t],
-  );
-
-  const providerGroups = useMemo(() => groupByProvider(modelOptions), [modelOptions]);
-
-  // An existing thread is bound to its harness: sessions can't move between
-  // provider instances, so the picker only offers the thread's own group.
-  const threadProviderGroups = useMemo(
-    () => providerGroups.filter((group) => group.providerKey === currentModelSelection.instanceId),
-    [providerGroups, currentModelSelection.instanceId],
-  );
-
-  const currentModelOption =
-    modelOptions.find(
-      (option) =>
-        option.selection.instanceId === currentModelSelection.instanceId &&
-        option.selection.model === currentModelSelection.model,
-    ) ?? null;
-
-  const providerOptionDescriptors = useMemo(
-    () =>
-      resolveProviderOptionDescriptors({
-        capabilities: currentModelOption?.capabilities,
-        selections: currentModelSelection.options,
-      }),
-    [currentModelOption?.capabilities, currentModelSelection.options],
-  );
-
-  const updateBotUsageCap = useCallback(
-    async (input: string) => {
-      if (!bot) return false;
-      const patch = buildBotUsageCapPatch(bot.id, input, currentModelOption?.providerDriver);
-
-      if (!patch) return false;
-      const result = await updateBot({ environmentId: props.environmentId, input: patch });
-
-      return Predicate.isTagged(result, "Success");
-    },
-    [bot, currentModelOption?.providerDriver, props.environmentId, updateBot],
-  );
-
-  const deleteThreadBot = useCallback(async () => {
-    if (!bot) return t("The command failed.");
-
-    const result = await deleteBot({
-      environmentId: props.environmentId,
-      input: { botId: bot.id },
-    });
-
-    if (!Predicate.isTagged(result, "Failure")) return null;
-    const error = squashAtomCommandFailure(result);
-
-    return error instanceof Error ? error.message : t("The command failed.");
-  }, [bot, deleteBot, props.environmentId, t]);
-
-  const settingsRouteSession = useMemo<ExistingThreadSettingsRouteSession>(
-    () => ({
-      ownerId: settingsOwnerId,
-      providerGroups: threadProviderGroups,
-      selectedModel: currentModelSelection,
-      onSelectModel: (option) => props.onUpdateModelSelection(option.selection),
-      optionDescriptors: providerOptionDescriptors,
-      onUpdateOptionSelections: (options) =>
-        props.onUpdateModelSelection({ ...currentModelSelection, options }),
-      runtimeMode: currentRuntimeMode,
-      onUpdateRuntimeMode: props.onUpdateRuntimeMode,
-      ...(bot
-        ? {
-            memoryThreadRef: {
-              environmentId: props.environmentId,
-              threadId: props.selectedThread.id,
-            },
-            routinesRef: {
-              environmentId: props.environmentId,
-              botId: bot.id,
-              botName: bot.name,
-            },
-          }
-        : {}),
-      ...(bot
-        ? {
-            botUsageCap: bot.usageCap,
-            botUsageCapProviderDriver: currentModelOption?.providerDriver,
-            onUpdateBotUsageCap: updateBotUsageCap,
-            onDeleteBot: deleteThreadBot,
-          }
-        : {}),
-    }),
-    [
-      currentModelSelection,
-      currentRuntimeMode,
-      bot,
-      deleteThreadBot,
-      props.environmentId,
-      props.onUpdateModelSelection,
-      props.onUpdateRuntimeMode,
-      props.selectedThread.id,
-      providerOptionDescriptors,
-      settingsOwnerId,
-      threadProviderGroups,
-      updateBotUsageCap,
-    ],
-  );
-
-  const openSettings = useCallback(() => {
-    settingsRoutePresentation.present(settingsRouteSession);
-    settingsSheetPresentation.open();
-  }, [settingsRoutePresentation.present, settingsRouteSession, settingsSheetPresentation.open]);
-
-  useEffect(() => {
-    if (settingsSheetPresentation.isActive) {
-      settingsRoutePresentation.present(settingsRouteSession);
-    }
-  }, [settingsRoutePresentation.present, settingsRouteSession, settingsSheetPresentation.isActive]);
+  const { currentModelSelection, currentModelOption, openSettings } = useThreadComposerSettings({
+    environmentId: props.environmentId,
+    selectedThread: props.selectedThread,
+    serverConfig: props.serverConfig,
+    subscriptionStatuses,
+    bot,
+    settingsOwnerId,
+    settingsRoutePresentation,
+    settingsSheetPresentation,
+    onUpdateModelSelection: props.onUpdateModelSelection,
+    onUpdateRuntimeMode: props.onUpdateRuntimeMode,
+  });
 
   return (
     <Animated.View

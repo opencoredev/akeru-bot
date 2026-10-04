@@ -4,12 +4,7 @@ import { createRef } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vite-plus/test";
 
-import {
-  BotDetailsPanel,
-  BotOverview,
-  parseBotUsageCapInput,
-  resolveBotUsageCapForProvider,
-} from "./BotDetailsPanel";
+import { BotDetailsPanel, BotOverview } from "./BotDetailsPanel";
 import type { Bot } from "./types";
 
 const bot: Bot = {
@@ -23,7 +18,6 @@ const bot: Bot = {
   engine: null,
   sandbox: null,
   runtimeMode: "full-access",
-  usageCap: null,
   voiceEnabled: false,
   groupId: null,
   pinned: false,
@@ -50,7 +44,6 @@ describe("BotDetailsPanel", () => {
     expect(markup).toContain("Sandbox");
     expect(markup).not.toContain('aria-label="Bot name"');
     expect(markup).not.toContain('aria-label="Bot description"');
-    expect(markup).not.toContain("Token hard stop");
     expect(markup).toContain('aria-hidden="true"');
     expect(markup).toContain('data-state="closed"');
     expect(markup).toContain('aria-label="Open Akeru bot sidebar"');
@@ -69,29 +62,6 @@ describe("BotDetailsPanel", () => {
 
     expect(markup).toContain("claude-fable-5");
     expect(markup).not.toContain("Unavailable");
-  });
-
-  it("sets, clears, and rejects invalid hard stops", () => {
-    expect(parseBotUsageCapInput("50000")).toEqual({
-      valid: true,
-      value: { unit: "tokens", limit: 50_000 },
-    });
-    expect(parseBotUsageCapInput(" ")).toEqual({ valid: true, value: null });
-    expect(parseBotUsageCapInput("0")).toEqual({ valid: false, value: null });
-    expect(parseBotUsageCapInput("1.5")).toEqual({ valid: false, value: null });
-  });
-
-  it("clears hard stops for occupancy-only providers", () => {
-    expect(resolveBotUsageCapForProvider("50000", "grok")).toEqual({
-      available: false,
-      valid: true,
-      value: null,
-    });
-    expect(resolveBotUsageCapForProvider("50000", "codex")).toEqual({
-      available: true,
-      valid: true,
-      value: { unit: "tokens", limit: 50_000 },
-    });
   });
 
   it("uses the configured right-panel shortcut while open or closed", () => {

@@ -31,11 +31,7 @@ import type { Bot } from "./types";
 import { useDetailsPanelState } from "./useDetailsPanelState";
 import { useBotDetailsOpen } from "./detailsPanelOpen";
 
-export {
-  parseBotUsageCapInput,
-  resolveBotUsageCapForProvider,
-  type BotProfileUpdate,
-} from "./useBotProfileDraft";
+export { type BotProfileUpdate } from "./useBotProfileDraft";
 
 export function BotOverview({
   bot,

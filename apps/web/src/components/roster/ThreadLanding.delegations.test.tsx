@@ -266,7 +266,6 @@ const parentBot: Bot = {
   engine: null,
   sandbox: "local",
   runtimeMode: "approval-required",
-  usageCap: null,
   voiceEnabled: false,
   groupId: "group-1",
   pinned: false,

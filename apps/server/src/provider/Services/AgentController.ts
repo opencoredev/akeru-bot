@@ -45,7 +45,6 @@ export interface AgentControllerEngineSelection extends AgentControllerAvailable
 export type AgentControllerSendTurnInput = ProviderSendTurnInput & {
   readonly botUsage?: {
     readonly botId: BotId;
-    readonly capLimit: number;
   };
   /**
    * Finished child work acknowledged for this turn, formatted as context. Each

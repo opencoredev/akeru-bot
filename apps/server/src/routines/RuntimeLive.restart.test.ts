@@ -160,7 +160,6 @@ const seed = Effect.gen(function* () {
       engine: null,
       sandbox: "local",
       runtimeMode: "approval-required",
-      usageCap: null,
       groupId: null,
       createdAt: CREATED_AT,
     });

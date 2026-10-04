@@ -5,6 +5,7 @@ import * as Deferred from "effect/Deferred";
 import { it as effectIt } from "@effect/vitest";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 import { ProviderAdapterRequestError } from "../../provider/Errors.ts";
+import { AKERU_TURN_USAGE_RESERVATION_TOKENS } from "../../usage/BotUsageLedger.ts";
 import {
   asMessageId,
   createProviderCommandHarness,
@@ -120,12 +121,11 @@ describe("ProviderCommandReactor", () => {
     });
   });
 
-  effectIt.effect("reserves a configured bot's usage cap and binds the provider turn", () =>
+  effectIt.effect("reserves a configured bot's turn usage and binds the provider turn", () =>
     Effect.gen(function* () {
       const harness = yield* Effect.promise(() =>
         createHarness({
           botEngine: { provider: "codex", model: "gpt-5-codex" },
-          botUsageCap: { unit: "tokens", limit: 1_000 },
         }),
       );
 
@@ -151,59 +151,14 @@ describe("ProviderCommandReactor", () => {
         ),
       );
       const usage = yield* Effect.promise(() => harness.summarizeBotUsage());
-      expect(usage.reservedTokens).toBe(1_000);
+      expect(usage.reservedTokens).toBe(AKERU_TURN_USAGE_RESERVATION_TOKENS);
       expect(usage.entries).toContainEqual(
         expect.objectContaining({
           botId: "bot-1",
           threadId: "thread-1",
           turnId: "turn-1",
           state: "reserved",
-          reservedTokens: 1_000,
-        }),
-      );
-    }),
-  );
-
-  effectIt.effect("rejects a new turn after a configured bot reserves its full usage cap", () =>
-    Effect.gen(function* () {
-      const harness = yield* Effect.promise(() =>
-        createHarness({
-          botEngine: { provider: "codex", model: "gpt-5-codex" },
-          botUsageCap: { unit: "tokens", limit: 1_000 },
-        }),
-      );
-
-      const dispatchTurn = (suffix: string) =>
-        harness.engine.dispatch({
-          type: "thread.turn.start",
-          commandId: CommandId.make(`cmd-turn-start-cap-${suffix}`),
-          threadId: ThreadId.make("thread-1"),
-          message: {
-            messageId: asMessageId(`user-message-cap-${suffix}`),
-            role: "user" as const,
-            text: suffix,
-            attachments: [],
-          },
-          interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
-          runtimeMode: "approval-required" as const,
-          createdAt: `2026-01-01T00:00:0${suffix === "first" ? "0" : "1"}.000Z`,
-        });
-
-      yield* dispatchTurn("first");
-      yield* Effect.promise(() => harness.waitFor(() => harness.sendTurn.mock.calls.length === 1));
-      yield* dispatchTurn("second");
-      yield* Effect.promise(() => harness.drain());
-
-      expect(harness.sendTurn).toHaveBeenCalledTimes(1);
-      const readModel = yield* Effect.promise(() => harness.readModel());
-      const thread = readModel.threads.find((entry) => entry.id === ThreadId.make("thread-1"));
-      expect(thread?.activities).toContainEqual(
-        expect.objectContaining({
-          kind: "provider.turn.start.failed",
-          payload: expect.objectContaining({
-            detail: "Bot bot-1 reached its 1000-token usage cap.",
-            requestId: "user-message-cap-second",
-          }),
+          reservedTokens: AKERU_TURN_USAGE_RESERVATION_TOKENS,
         }),
       );
     }),
@@ -214,7 +169,6 @@ describe("ProviderCommandReactor", () => {
       const harness = yield* Effect.promise(() =>
         createHarness({
           botEngine: { provider: "codex", model: "gpt-5-codex" },
-          botUsageCap: { unit: "tokens", limit: 1_000 },
         }),
       );
 
@@ -248,7 +202,6 @@ describe("ProviderCommandReactor", () => {
       const harness = yield* Effect.promise(() =>
         createHarness({
           botEngine: { provider: "codex", model: "gpt-5-codex" },
-          botUsageCap: { unit: "tokens", limit: 1_000 },
           bindTurnFailure: true,
         }),
       );
@@ -271,7 +224,7 @@ describe("ProviderCommandReactor", () => {
 
       const usage = yield* Effect.promise(() => harness.summarizeBotUsage());
       expect(harness.sendTurn).toHaveBeenCalledTimes(1);
-      expect(usage.consumedTokens).toBe(1_000);
+      expect(usage.consumedTokens).toBe(AKERU_TURN_USAGE_RESERVATION_TOKENS);
       expect(usage.reservedTokens).toBe(0);
       expect(usage.entries[0]).toMatchObject({
         state: "unavailable",

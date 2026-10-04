@@ -18,6 +18,7 @@ import {
   type OpenCodeRuntimeShape,
 } from "../opencodeRuntime.ts";
 import { checkOpenCodeProviderStatus } from "./OpenCodeProvider.ts";
+import { OPENCODE_PROVIDER_DEFAULT_VARIANT } from "./opencode/OpenCodeProtocol.ts";
 import type { OpenCodeInventory } from "../opencodeRuntime.ts";
 
 const decodeOpenCodeSettings = Schema.decodeSync(OpenCodeSettings);
@@ -194,7 +195,7 @@ it.layer(testLayer)("checkOpenCodeProviderStatus", (it) => {
     }).pipe(Effect.provide(TestClock.layer())),
   );
 
-  it.effect("emits OpenCode variant defaults so trait picker can resolve a visible selection", () =>
+  it.effect("offers Provider default ahead of every OpenCode variant", () =>
     Effect.gen(function* () {
       runtimeMock.state.inventory = {
         providerList: {
@@ -211,6 +212,7 @@ it.layer(testLayer)("checkOpenCodeProviderStatus", (it) => {
                   id: "gpt-5.4",
                   name: "GPT-5.4",
                   variants: {
+                    default: {},
                     none: {},
                     low: {},
                     medium: {},
@@ -240,9 +242,18 @@ it.layer(testLayer)("checkOpenCodeProviderStatus", (it) => {
       );
 
       NodeAssert.ok(variantDescriptor && variantDescriptor.type === "select");
-      NodeAssert.equal(
-        variantDescriptor.options.find((option) => option.isDefault === true)?.id,
-        "medium",
+      NodeAssert.equal(variantDescriptor.currentValue, OPENCODE_PROVIDER_DEFAULT_VARIANT);
+      NodeAssert.deepEqual(
+        variantDescriptor.options.map((option) => [option.id, option.isDefault === true]),
+        [
+          [OPENCODE_PROVIDER_DEFAULT_VARIANT, true],
+          ["default", false],
+          ["none", false],
+          ["low", false],
+          ["medium", false],
+          ["high", false],
+          ["xhigh", false],
+        ],
       );
 
       const agentDescriptor = model.capabilities?.optionDescriptors?.find(

@@ -198,7 +198,6 @@ export const createWsBotServicesHandlers = ({
 
           return {
             ...summary,
-            usageCap: bot.value.usageCap,
             estimatedCost,
             subscriptionPool,
           };

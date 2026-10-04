@@ -20,7 +20,6 @@ export function createBots({
             engine: event.payload.engine,
             sandbox: event.payload.sandbox,
             runtimeMode: event.payload.runtimeMode,
-            usageCap: event.payload.usageCap,
             imageProvider: event.payload.imageProvider,
             personalityTone: event.payload.personalityTone,
             voiceEnabled: event.payload.voiceEnabled,
@@ -53,7 +52,6 @@ export function createBots({
             ...(event.payload.runtimeMode !== undefined
               ? { runtimeMode: event.payload.runtimeMode }
               : {}),
-            ...(event.payload.usageCap !== undefined ? { usageCap: event.payload.usageCap } : {}),
             ...(event.payload.imageProvider !== undefined
               ? { imageProvider: event.payload.imageProvider }
               : {}),

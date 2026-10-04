@@ -4,7 +4,9 @@ import {
   ProviderDriverKind,
   ProviderInstanceId,
   type BotEngine,
+  type ModelCapabilities,
   type ModelSelection,
+  type ProviderOptionSelection,
   type ServerProvider,
   type ServerProviderUnavailability,
   type SubscriptionProviderId,
@@ -14,12 +16,17 @@ import {
 import { createTranslator } from "@akeru/client-runtime/i18n";
 import { SUBSCRIPTION_PROVIDER_BY_DRIVER } from "@akeru/client-runtime/provider-auth";
 import { driverSupportsDelegation } from "@akeru/shared/delegationProviders";
-import { formatModelSlug } from "@akeru/shared/model";
+import {
+  botEngineFromModelSelection,
+  botEngineModelSelection,
+  formatModelSlug,
+  providerOptionsForModelChange,
+} from "@akeru/shared/model";
 import type { ProviderAvailabilityTranslate } from "@akeru/client-runtime/provider-availability";
 
 import { resolveAppModelSelectionForInstance } from "../../modelSelection";
 import type { ComposerProviderCatalog } from "../chat/composerProviderMenuItems";
-import { formatProviderDriverKindLabel } from "../../providerModels";
+import { findProviderModelCapabilities, formatProviderDriverKindLabel } from "../../providerModels";
 import { providerCatalogEntryForDriver } from "../settings/providerCatalog";
 import {
   providerInstanceUnavailability,
@@ -74,7 +81,8 @@ export function routineDelegateOptions(
  * The engine a bot answers with. A saved engine is returned as saved, even when
  * its provider is signed out, turned off, or no longer lists the model: the
  * bot keeps its choice and `botEngineUnavailability` explains why it cannot
- * run. Only a bot without an engine borrows the app's selectable default.
+ * run. Its saved options are its own, even when it runs the app's default model.
+ * Only a bot without an engine borrows the app's selectable default.
  */
 export function resolveStickyBotEngine(input: {
   readonly engine: BotEngine | null;
@@ -83,22 +91,7 @@ export function resolveStickyBotEngine(input: {
   readonly providers: ReadonlyArray<ServerProvider>;
   readonly defaultSelection: ModelSelection;
 }): ModelSelection | null {
-  if (input.engine) {
-    const instanceId = ProviderInstanceId.make(input.engine.provider);
-
-    const options =
-      input.engine.options ??
-      (input.defaultSelection.instanceId === instanceId &&
-      input.defaultSelection.model === input.engine.model
-        ? input.defaultSelection.options
-        : undefined);
-
-    return {
-      instanceId,
-      model: input.engine.model,
-      ...(options ? { options } : {}),
-    };
-  }
+  if (input.engine) return botEngineModelSelection(input.engine);
 
   const entry = resolveSelectableProviderInstanceEntry(
     input.instanceEntries,
@@ -120,6 +113,74 @@ export function resolveStickyBotEngine(input: {
       ? { options: input.defaultSelection.options }
       : {}),
   };
+}
+
+/**
+ * The options a bot's settings draft starts from: a saved engine's own, or the
+ * app default's for a bot without an engine that runs the app default model.
+ */
+export function botDraftModelOptions(
+  engine: BotEngine | null,
+  defaultSelection: ModelSelection,
+  instanceId: string,
+  model: string,
+): BotEngine["options"] {
+  if (engine) return engine.options;
+
+  return defaultSelection.instanceId === instanceId && defaultSelection.model === model
+    ? defaultSelection.options
+    : undefined;
+}
+
+/** What this client knows about a model's options; undefined when it cannot know. */
+function botEngineModelCapabilities(
+  instanceEntries: ReadonlyArray<ProviderInstanceEntry>,
+  instanceId: string,
+  model: string,
+): ModelCapabilities | undefined {
+  const entry = instanceEntries.find((candidate) => candidate.instanceId === instanceId);
+
+  return entry ? findProviderModelCapabilities(entry.models, model, entry.driverKind) : undefined;
+}
+
+/**
+ * The engine a model pick saves. The same instance keeps the reasoning choices
+ * the new model supports; another instance starts on provider defaults.
+ */
+export function botEngineForModelPick(input: {
+  readonly previous: ModelSelection | null;
+  readonly instanceId: string;
+  readonly model: string;
+  readonly instanceEntries: ReadonlyArray<ProviderInstanceEntry>;
+}): BotEngine {
+  const options = providerOptionsForModelChange({
+    previous: input.previous,
+    instanceId: input.instanceId,
+    nextCaps: botEngineModelCapabilities(input.instanceEntries, input.instanceId, input.model),
+  });
+
+  return { provider: input.instanceId, model: input.model, ...(options ? { options } : {}) };
+}
+
+/**
+ * The engine a reasoning change saves: the same model with only the choices
+ * that differ from its defaults, so picking a default clears that choice.
+ */
+export function botEngineForOptions(input: {
+  readonly selection: ModelSelection;
+  readonly options: ReadonlyArray<ProviderOptionSelection> | undefined;
+  readonly instanceEntries: ReadonlyArray<ProviderInstanceEntry>;
+}): BotEngine {
+  const { instanceId, model } = input.selection;
+
+  return botEngineFromModelSelection(
+    { instanceId, model, ...(input.options ? { options: input.options } : {}) },
+    botEngineModelCapabilities(
+      input.instanceEntries,
+      input.selection.instanceId,
+      input.selection.model,
+    ),
+  );
 }
 
 const englishTranslate: ProviderAvailabilityTranslate = createTranslator("en").t;

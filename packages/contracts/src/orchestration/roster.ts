@@ -143,13 +143,6 @@ export type BotSandboxBrowserSharing = typeof BotSandboxBrowserSharing.Type;
 
 export const DEFAULT_BOT_SANDBOX_BROWSER_SHARING: BotSandboxBrowserSharing = "separate";
 
-export const BotUsageCap = Schema.Struct({
-  unit: Schema.Literal("tokens"),
-  limit: Schema.Int.check(Schema.isGreaterThan(0)),
-});
-
-export type BotUsageCap = typeof BotUsageCap.Type;
-
 export const MIN_BOT_PERSONALITY_TONE = 0;
 
 export const BALANCED_BOT_PERSONALITY_TONE = 50;
@@ -294,7 +287,6 @@ export const OrchestrationBot = Schema.Struct({
   engine: Schema.NullOr(BotEngine),
   sandbox: PersistedBotSandbox,
   runtimeMode: RuntimeMode.pipe(Schema.withDecodingDefault(Effect.succeed(DEFAULT_RUNTIME_MODE))),
-  usageCap: Schema.NullOr(BotUsageCap).pipe(Schema.withDecodingDefault(Effect.succeed(null))),
   /**
    * The bot's image provider, independent of its chat engine (a Claude bot may
    * still use ChatGPT images). `null` means "use the global default" and is

@@ -13,11 +13,7 @@ import {
   toPersistenceDecodeError,
   toPersistenceSqlError,
 } from "../persistence/Errors.ts";
-import {
-  BotUsageCapExceeded,
-  type SettleBotUsageDetails,
-  type BotUsageLedgerShape,
-} from "./BotUsageLedgerTypes.ts";
+import { type SettleBotUsageDetails, type BotUsageLedgerShape } from "./BotUsageLedgerTypes.ts";
 import {
   UsageRow,
   entryColumns,
@@ -156,7 +152,7 @@ const make = Effect.gen(function* () {
       sql
         .withTransaction(
           Effect.gen(function* () {
-            yield* validateTokens("BotUsageLedger.reserve", [input.maximumTokens, input.capLimit]);
+            yield* validateTokens("BotUsageLedger.reserve", [input.maximumTokens]);
             const prior = yield* selectEntryBySource(sql, input.botId, input.sourceKey);
 
             if (prior[0]) return yield* decodeEntry(prior[0]);
@@ -167,31 +163,9 @@ const make = Effect.gen(function* () {
             ON CONFLICT (bot_id) DO NOTHING
           `;
 
-            const balance = yield* sql<{
-              readonly consumedTokens: number;
-              readonly reservedTokens: number;
-            }>`
-            SELECT consumed_tokens AS "consumedTokens", reserved_tokens AS "reservedTokens"
-            FROM akeru_bot_usage_balances WHERE bot_id = ${input.botId}
-          `;
-
-            const current = balance[0]!;
-            const available = input.capLimit - current.consumedTokens - current.reservedTokens;
-
-            if (input.maximumTokens <= 0 || available <= 0) {
-              return yield* new BotUsageCapExceeded({
-                botId: input.botId,
-                limit: input.capLimit,
-                consumedTokens: current.consumedTokens,
-                reservedTokens: current.reservedTokens,
-                requestedTokens: input.maximumTokens,
-              });
-            }
-
-            const reservedTokens = Math.min(input.maximumTokens, available);
             yield* sql`
             UPDATE akeru_bot_usage_balances
-            SET reserved_tokens = reserved_tokens + ${reservedTokens}, updated_at = ${input.createdAt}
+            SET reserved_tokens = reserved_tokens + ${input.maximumTokens}, updated_at = ${input.createdAt}
             WHERE bot_id = ${input.botId}
           `;
             yield* sql`
@@ -201,7 +175,7 @@ const make = Effect.gen(function* () {
               model, unavailable_reason, created_at, settled_at
             ) VALUES (
               ${input.reservationId}, ${input.sourceKey}, ${input.botId}, ${input.threadId},
-              ${input.turnId}, ${input.category}, 'reserved', ${reservedTokens}, ${reservedTokens},
+              ${input.turnId}, ${input.category}, 'reserved', ${input.maximumTokens}, ${input.maximumTokens},
               NULL, NULL, NULL, ${input.provider}, ${input.model}, NULL, ${input.createdAt}, NULL
             )
           `;
@@ -212,11 +186,9 @@ const make = Effect.gen(function* () {
         )
         .pipe(
           Effect.mapError((cause) =>
-            Predicate.isTagged(cause, "BotUsageCapExceeded")
+            Predicate.isTagged(cause, "PersistenceDecodeError")
               ? cause
-              : Predicate.isTagged(cause, "PersistenceDecodeError")
-                ? cause
-                : toPersistenceSqlError("BotUsageLedger.reserve")(cause),
+              : toPersistenceSqlError("BotUsageLedger.reserve")(cause),
           ),
         ),
     );
@@ -705,8 +677,6 @@ const make = Effect.gen(function* () {
 const decodeUsageSummary = Schema.decodeUnknownEffect(AkeruBotUsageSummary);
 
 export const BotUsageLedgerLive = Layer.effect(BotUsageLedger, make);
-
-export { BotUsageCapExceeded } from "./BotUsageLedgerTypes.ts";
 
 export { AKERU_TURN_USAGE_RESERVATION_TOKENS } from "./BotUsageLedgerTypes.ts";
 

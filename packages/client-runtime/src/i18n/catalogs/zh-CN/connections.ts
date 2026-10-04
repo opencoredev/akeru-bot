@@ -153,8 +153,6 @@ export const connectionsCatalog = {
   "MCP servers: {count}": "MCP 服务器：{count}",
   "no sandbox": "无沙箱",
   "{sandbox} sandbox": "{sandbox} 沙箱",
-  "This provider reports occupancy rather than tokens, so a token limit does not apply.":
-    "此提供商报告的是占用率而不是令牌，因此令牌上限不适用。",
   "Sandbox provider": "沙箱提供商",
   "Which workspace tools this bot may reach.": "此机器人可以使用哪些工作区工具。",
   "No workspace tools": "没有工作区工具",

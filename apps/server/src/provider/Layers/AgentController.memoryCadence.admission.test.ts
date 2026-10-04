@@ -27,7 +27,7 @@ import { createBotMemoryToolHandler } from "../../memory/BotMemoryToolHandlers.t
 import * as McpMemoryToolSession from "../../mcp/McpMemoryToolSession.ts";
 import { AgentController } from "../Services/AgentController.ts";
 import * as ProjectionSnapshotQuery from "../../orchestration/Services/ProjectionSnapshotQuery.ts";
-import { BotUsageCapExceeded } from "../../usage/BotUsageLedger.ts";
+import { PersistenceSqlError } from "../../persistence/Errors.ts";
 import {
   codexThreadId,
   claudeThreadId,
@@ -410,7 +410,7 @@ describe("AgentControllerLive", () => {
         yield* controller.sendTurn({
           threadId: codexThreadId,
           input: "Remember this.",
-          botUsage: { botId, capLimit: 50_000 },
+          botUsage: { botId },
         });
         const options = mastra.harnessOptions[0]!;
 
@@ -426,7 +426,6 @@ describe("AgentControllerLive", () => {
             threadId: codexThreadId,
             category: "observer",
             maximumTokens: 32_000,
-            capLimit: 50_000,
             provider: "codex",
             model: "gpt-5.6-sol",
           }),
@@ -449,20 +448,12 @@ describe("AgentControllerLive", () => {
         });
 
         usageLedger.reserve.mockImplementationOnce(() =>
-          Effect.fail(
-            new BotUsageCapExceeded({
-              botId,
-              limit: 50_000,
-              consumedTokens: 20_000,
-              reservedTokens: 30_000,
-              requestedTokens: 32_000,
-            }),
-          ),
+          Effect.fail(new PersistenceSqlError({ operation: "BotUsageLedger.reserve" })),
         );
         yield* Effect.promise(() =>
           expect(
             options.startMemoryCall!({ threadId: codexThreadId, category: "reflector" }),
-          ).rejects.toBeInstanceOf(BotUsageCapExceeded),
+          ).rejects.toBeInstanceOf(PersistenceSqlError),
         );
         mastra.finishSend();
       }),

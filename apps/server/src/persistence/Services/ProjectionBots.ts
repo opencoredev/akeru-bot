@@ -5,7 +5,6 @@ import {
   ImageProviderId,
   BotPersonalityTone,
   PersistedBotSandbox,
-  BotUsageCap,
   ChannelBinding,
   GroupId,
   IsoDateTime,
@@ -30,7 +29,6 @@ export const ProjectionBot = Schema.Struct({
   engine: Schema.NullOr(BotEngine),
   sandbox: PersistedBotSandbox,
   runtimeMode: RuntimeMode,
-  usageCap: Schema.NullOr(BotUsageCap),
   imageProvider: Schema.NullOr(ImageProviderId).pipe(
     Schema.withDecodingDefault(Effect.succeed(null)),
   ),

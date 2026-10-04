@@ -15,14 +15,10 @@ import {
 } from "../subscription-auth/service.ts";
 import type { ProviderInstance } from "./ProviderDriver.ts";
 import * as ModelCatalog from "./ModelCatalog.ts";
-import {
-  BUNDLED_MODEL_CATALOG,
-  catalogModelsFor,
-  harnessEffortLevels,
-  type CatalogModel,
-} from "./modelCatalogData.ts";
+import { BUNDLED_MODEL_CATALOG, catalogModelsFor, type CatalogModel } from "./modelCatalogData.ts";
 import type { ServerProviderDraft } from "./providerSnapshot.ts";
-import { getClaudeModelCapabilities } from "./Layers/ClaudeProvider.ts";
+import { claudeHarnessCapabilities } from "./ClaudeReasoningCapabilities.ts";
+import { reasoningCapabilities } from "./ReasoningOptions.ts";
 
 export const GROK_HARNESS_MODELS = [
   "grok-4.6",
@@ -68,19 +64,19 @@ const effortLabel = (level: string) =>
 /**
  * Codex option descriptors. Catalog models offer exactly the efforts and
  * service tiers models.dev lists; slugs outside the catalog fall back to
- * Mastra's per-model thinking levels and always offer Fast.
+ * Mastra's known per-model levels and offer Fast.
  */
 export function codexModelCapabilities(slug: string, entry: CatalogModel | undefined) {
-  // The Codex transport downgrades `max` to `xhigh` for models the harness
-  // SDK does not know support it, so only offer levels it will actually send.
   const supported: ReadonlyArray<string> = getAvailableThinkingLevelsForModel(`openai/${slug}`);
 
   const levels =
-    entry?.efforts !== undefined
-      ? harnessEffortLevels(entry.efforts).filter((level) => supported.includes(level))
-      : supported;
+    entry !== undefined
+      ? (entry.efforts ?? []).filter((level) =>
+          ["none", "minimal", "low", "medium", "high", "xhigh", "max"].includes(level),
+        )
+      : supported.map((level) => (level === "off" ? "none" : level));
 
-  const defaultLevel = levels.includes("medium") ? "medium" : levels[0];
+  const defaultLevel = levels[0];
 
   return createModelCapabilities({
     optionDescriptors: [
@@ -91,12 +87,14 @@ export function codexModelCapabilities(slug: string, entry: CatalogModel | undef
               id: "reasoningEffort",
               label: "Reasoning",
               type: "select" as const,
-              currentValue: defaultLevel,
-              options: levels.map((level) => ({
-                id: level,
-                label: effortLabel(level),
-                ...(level === defaultLevel ? { isDefault: true } : {}),
-              })),
+              currentValue: "default",
+              options: [
+                { id: "default", label: "Provider default", isDefault: true },
+                ...levels.map((level) => ({
+                  id: level,
+                  label: effortLabel(level),
+                })),
+              ],
             },
           ]),
       ...(entry === undefined || entry.fast === true
@@ -198,7 +196,21 @@ export const makeHarnessProviderStatus = Effect.fn("makeHarnessProviderStatus")(
         .map((model) => {
           const name = model.isCustom ? undefined : entries.get(model.slug)?.name;
 
-          return name ? { ...model, name } : model;
+          return {
+            ...model,
+            ...(name ? { name } : {}),
+            capabilities: model.isCustom
+              ? model.capabilities
+              : input.driver === "codex"
+                ? codexModelCapabilities(model.slug, entries.get(model.slug))
+                : input.driver === "claudeAgent"
+                  ? claudeHarnessCapabilities(model.slug, entries.get(model.slug))
+                  : reasoningCapabilities(
+                      input.driver,
+                      model.slug === "grok-build" ? "grok-4.6" : model.slug,
+                      entries.get(model.slug === "grok-build" ? "grok-4.6" : model.slug),
+                    ),
+          };
         }),
       ...modelIds
         .filter((slug) => !draft.models.some((model) => !model.isCustom && model.slug === slug))
@@ -211,8 +223,8 @@ export const makeHarnessProviderStatus = Effect.fn("makeHarnessProviderStatus")(
             : {}),
           capabilities: Match.value(input.driver).pipe(
             Match.when("codex", () => codexModelCapabilities(slug, entries.get(slug))),
-            Match.when("claudeAgent", () => getClaudeModelCapabilities(slug)),
-            Match.orElse(() => null),
+            Match.when("claudeAgent", () => claudeHarnessCapabilities(slug, entries.get(slug))),
+            Match.orElse(() => reasoningCapabilities(input.driver, slug, entries.get(slug))),
           ),
         })),
     ];

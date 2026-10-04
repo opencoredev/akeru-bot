@@ -2,14 +2,12 @@ import * as Schema from "effect/Schema";
 import * as Predicate from "effect/Predicate";
 import { AuthStorage } from "@mastra/code-sdk/auth/storage";
 import { opencodeClaudeMaxProvider } from "@mastra/code-sdk/providers/claude-max";
-import { openaiCodexProvider } from "@mastra/code-sdk/providers/openai-codex";
 import { xaiProvider } from "@mastra/code-sdk/providers/xai";
 import { createAnthropic } from "@ai-sdk/anthropic";
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
-import { isThinkingLevelSetting } from "@mastra/code-sdk/thinking";
 import { type SubscriptionProviderId, type ProviderDriverKind } from "@akeru/contracts";
 import type { SubscriptionAuthService } from "../../subscription-auth/service.ts";
-import { akeruOpenAIProvider } from "../AkeruOpenAIProvider.ts";
+import { akeruCodexOAuthProvider, akeruOpenAIProvider } from "../AkeruOpenAIProvider.ts";
 import { akeruKimiProvider, type AkeruKimiAccess } from "../AkeruKimiProvider.ts";
 import { akeruOpenCodeGoProvider, type AkeruOpenCodeGoAccess } from "../AkeruOpenCodeGoProvider.ts";
 import { type AkeruMastraState } from "./AkeruHarnessTypes.ts";
@@ -29,29 +27,46 @@ export function withAkeruModelRunOptions<Options extends AkeruRunOptions>(
   runOptions: Options,
   state: AkeruMastraState,
 ) {
-  const serviceTier = state.modelOptions?.serviceTier;
+  const modelOptions = state.modelOptions;
 
-  if (!serviceTier) return runOptions;
+  if (!modelOptions) return runOptions;
 
-  const providerOptions =
-    Predicate.isObjectOrArray(runOptions.providerOptions) && runOptions.providerOptions !== null
-      ? runOptions.providerOptions
-      : {};
+  const namespace =
+    modelOptions.namespace ??
+    (modelOptions.effort !== undefined || modelOptions.thinking !== undefined
+      ? "anthropic"
+      : "openai");
 
-  const openai =
-    "openai" in providerOptions &&
-    Predicate.isObjectOrArray(providerOptions.openai) &&
-    providerOptions.openai !== null
-      ? providerOptions.openai
-      : {};
+  const reasoningEffort =
+    modelOptions.reasoningEffort === "off" ? "none" : modelOptions.reasoningEffort;
 
-  return {
-    ...runOptions,
-    providerOptions: {
-      ...providerOptions,
-      openai: { ...openai, serviceTier },
-    },
+  const providerOptions = Predicate.isObject(runOptions.providerOptions)
+    ? runOptions.providerOptions
+    : {};
+
+  const existing = providerOptions[namespace];
+
+  const priorOptions = Predicate.isObject(existing) ? existing : {};
+
+  const native = {
+    ...priorOptions,
+    ...(reasoningEffort && reasoningEffort !== "default"
+      ? { reasoningEffort, ...(namespace === "openai" ? { forceReasoning: true } : {}) }
+      : {}),
+    ...(modelOptions.serviceTier ? { serviceTier: modelOptions.serviceTier } : {}),
+    ...(modelOptions.effort && modelOptions.effort !== "default"
+      ? { effort: modelOptions.effort }
+      : {}),
+    ...(modelOptions.thinking !== undefined
+      ? {
+          thinking: {
+            type: modelOptions.thinking ? (modelOptions.thinkingMode ?? "adaptive") : "disabled",
+          },
+        }
+      : {}),
   };
+
+  return { ...runOptions, providerOptions: { ...providerOptions, [namespace]: native } };
 }
 
 export const MASTRA_MODEL_PREFIX = {
@@ -113,7 +128,7 @@ export function resolveAkeruMastraModel(
     instanceId?: string,
     threadId?: string,
   ) => Promise<AkeruOpenCodeGoAccess | undefined>,
-  modelOptions?: AkeruMastraState["modelOptions"],
+  _modelOptions?: AkeruMastraState["modelOptions"],
   getSubscriptionApiKey?: SubscriptionAuthService["getApiKeyCredential"],
   connection?: {
     readonly environment: NodeJS.ProcessEnv;
@@ -179,12 +194,10 @@ export function resolveAkeruMastraModel(
       throw new Error("This Codex instance has no OPENAI_API_KEY transport for Akeru Mastra.");
     }
 
-    const reasoningEffort = modelOptions?.reasoningEffort;
-
-    return openaiCodexProvider(trimmed.slice("openai/".length), {
-      authStorage: scopedAuthStorage("openai-codex"),
-      ...(isThinkingLevelSetting(reasoningEffort) ? { thinkingLevel: reasoningEffort } : {}),
-    });
+    return akeruCodexOAuthProvider(
+      trimmed.slice("openai/".length),
+      scopedAuthStorage("openai-codex"),
+    );
   }
 
   if (trimmed.startsWith("anthropic/")) {

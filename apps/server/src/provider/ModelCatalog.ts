@@ -1,3 +1,4 @@
+import { reasoningCapabilities } from "./ReasoningOptions.ts";
 /**
  * ModelCatalog — the provider models Akeru offers, their display names, and
  * which of them are current versus legacy.
@@ -136,7 +137,13 @@ export function catalogProviderModels(input: {
       name: names.get(slug) ?? slug,
       isCustom,
       ...(slug === defaultSlug ? { isDefault: true } : {}),
-      capabilities: null,
+      capabilities: isCustom
+        ? null
+        : reasoningCapabilities(
+            input.driver,
+            slug,
+            catalogModelsFor(input.catalog, input.driver).find((entry) => entry.id === slug),
+          ),
     })),
     input.catalog,
     input.driver,

@@ -74,10 +74,7 @@ export function createConversation(deps: {
     reason?: string,
   ) => void;
   readonly bundle: AkeruControllerHarness;
-  readonly memoryUsageByThread: Map<
-    string,
-    { readonly botId: BotId; readonly capLimit: number; turnId: TurnId }
-  >;
+  readonly memoryUsageByThread: Map<string, { readonly botId: BotId; turnId: TurnId }>;
   readonly workerRuntime: AkeruWorkerRuntime;
   readonly workerTurnDefaults: Map<
     string,

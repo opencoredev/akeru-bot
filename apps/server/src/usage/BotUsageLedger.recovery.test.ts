@@ -29,7 +29,6 @@ it.effect("reconciles persisted reservations when the ledger restarts", () =>
           botId,
           threadId,
           maximumTokens: 100,
-          capLimit: 1_000,
         }),
       );
       yield* ledger.reserve(
@@ -38,7 +37,6 @@ it.effect("reconciles persisted reservations when the ledger restarts", () =>
           threadId,
           turnId: TurnId.make("turn-interrupted"),
           maximumTokens: 200,
-          capLimit: 1_000,
         }),
       );
       yield* ledger.reserve(
@@ -47,15 +45,10 @@ it.effect("reconciles persisted reservations when the ledger restarts", () =>
           threadId,
           turnId: TurnId.make("turn-reported"),
           maximumTokens: 300,
-          capLimit: 1_000,
         }),
       );
 
-      const {
-        maximumTokens: _maximumTokens,
-        capLimit: _capLimit,
-        ...toolStart
-      } = reserveInput("tool-before-restart", {
+      const { maximumTokens: _maximumTokens, ...toolStart } = reserveInput("tool-before-restart", {
         botId,
         threadId,
         turnId: TurnId.make("turn-interrupted"),
@@ -163,11 +156,12 @@ it.effect("keeps pricing complete when a restart interrupts a tool call", () =>
         settledAt: "2026-08-30T20:02:00.000Z",
       });
 
-      const {
-        maximumTokens: _maximumTokens,
-        capLimit: _capLimit,
-        ...toolStart
-      } = reserveInput("interrupted-tool", { botId, threadId, turnId, category: "tool" });
+      const { maximumTokens: _maximumTokens, ...toolStart } = reserveInput("interrupted-tool", {
+        botId,
+        threadId,
+        turnId,
+        category: "tool",
+      });
 
       yield* ledger.recordStart(toolStart);
     }).pipe(Effect.provide(restartedLayer()));

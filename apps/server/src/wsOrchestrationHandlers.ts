@@ -37,7 +37,6 @@ export const createWsOrchestrationHandlers = ({
   currentSessionId,
   projectionSnapshotQuery,
   projectionBots,
-  botUsageLedger,
   projectionGroups,
   checkpointDiffQuery,
   providerRegistry,
@@ -57,7 +56,6 @@ export const createWsOrchestrationHandlers = ({
   | "currentSessionId"
   | "projectionSnapshotQuery"
   | "projectionBots"
-  | "botUsageLedger"
   | "projectionGroups"
   | "checkpointDiffQuery"
   | "providerRegistry"
@@ -280,22 +278,6 @@ export const createWsOrchestrationHandlers = ({
                   unavailability: verdict.category,
                   ...(verdict.repairAction ? { repairAction: verdict.repairAction } : {}),
                 });
-              }
-            }
-
-            if (botId) {
-              if (bot?.usageCap) {
-                const usage = yield* botUsageLedger.summarize(botId);
-
-                if (usage.consumedTokens + usage.reservedTokens >= bot.usageCap.limit) {
-                  yield* cleanupFailedUploadedAttachments(command, normalizedCommand);
-
-                  return yield* new OrchestrationDispatchCommandError({
-                    message: `Usage cap reached for ${bot.name}.`,
-                    unavailability: "usage-cap",
-                    repairAction: "usage",
-                  });
-                }
               }
             }
           }

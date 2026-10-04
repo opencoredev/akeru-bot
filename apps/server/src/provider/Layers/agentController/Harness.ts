@@ -101,10 +101,7 @@ export function createHarness(deps: {
   };
   readonly turnStillWaiting: (threadId: string, active: ActiveSession) => boolean;
   readonly toolRuntime: AkeruToolRuntime;
-  readonly memoryUsageByThread: Map<
-    string,
-    { readonly botId: BotId; readonly capLimit: number; turnId: TurnId }
-  >;
+  readonly memoryUsageByThread: Map<string, { readonly botId: BotId; turnId: TurnId }>;
   readonly readSessionStartContext: ReturnType<
     typeof createSessionContext
   >["readSessionStartContext"];
@@ -354,7 +351,6 @@ export function createHarness(deps: {
             turnId: context.turnId,
             category,
             maximumTokens: AKERU_TURN_USAGE_RESERVATION_TOKENS,
-            capLimit: context.capLimit,
             provider: active.provider,
             model: active.model,
             createdAt: nowIso(),

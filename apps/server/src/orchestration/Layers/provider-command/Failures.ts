@@ -13,7 +13,6 @@ import { readableErrorDetail } from "../../../provider/Errors.ts";
 import { providerUnavailabilityFromDetail } from "../../../provider/providerSnapshot.ts";
 import {
   resolveControllerBotId,
-  isBotUsageCapExceeded,
   isComposioOperationError,
   isProviderAdapterRequestError,
   isUnsupportedEngineError,
@@ -201,9 +200,6 @@ export function createFailures({
 
   const formatFailureDetail = (cause: Cause.Cause<unknown>): string => {
     const failReason = cause.reasons.find(Cause.isFailReason);
-    const capError = isBotUsageCapExceeded(failReason?.error) ? failReason.error : undefined;
-
-    if (capError) return capError.message;
 
     const composioError = isComposioOperationError(failReason?.error)
       ? failReason.error
@@ -217,10 +213,6 @@ export function createFailures({
   const formatFailure = (cause: Cause.Cause<unknown>): ProviderFailureReport => {
     const detail = formatFailureDetail(cause);
     const failReason = cause.reasons.find(Cause.isFailReason);
-
-    if (isBotUsageCapExceeded(failReason?.error)) {
-      return { detail, unavailability: "usage-cap" };
-    }
 
     // An engine refusal names the instance that failed, so the chat can
     // repair that one even after the bot moves to another model.
