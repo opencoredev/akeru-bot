@@ -139,6 +139,16 @@ describe("portability archive", () => {
 
     expect(JSON.stringify(commands)).not.toContain("usageCap");
     expect(
+      parsed.records.some((record) => record.type === "bot" && "usageCap" in record.data),
+    ).toBe(false);
+    expect(
+      previewPortabilityImport(parsed, makeSnapshot(), makeSettings(), AVAILABLE_PROVIDER_IDS)
+        .changes,
+    ).toEqual(
+      previewPortabilityImport(archive, makeSnapshot(), makeSettings(), AVAILABLE_PROVIDER_IDS)
+        .changes,
+    );
+    expect(
       archive.records.some((record) => record.type === "bot" && "usageCap" in record.data),
     ).toBe(false);
   });
