@@ -364,4 +364,35 @@ describe("bot engine option helpers", () => {
       ),
     ).toEqual({ provider: "codex", model: "gpt-a" });
   });
+
+  it("keeps an explicit OpenCode variant that matches a common default", () => {
+    const caps = {
+      optionDescriptors: [
+        {
+          id: "variant",
+          label: "Variant",
+          type: "select" as const,
+          currentValue: "default",
+          options: [
+            { id: "default", label: "Provider default", isDefault: true },
+            { id: "medium", label: "Medium" },
+            { id: "high", label: "High" },
+          ],
+        },
+      ],
+    };
+
+    expect(
+      botEngineFromModelSelection(
+        createModelSelection(ProviderInstanceId.make("opencode"), "openai/gpt-5.4", [
+          { id: "variant", value: "medium" },
+        ]),
+        caps,
+      ),
+    ).toEqual({
+      provider: "opencode",
+      model: "openai/gpt-5.4",
+      options: [{ id: "variant", value: "medium" }],
+    });
+  });
 });

@@ -452,6 +452,22 @@ it.layer(OpenCodeAdapterTestLayer)("OpenCodeAdapterLive", (it) => {
         variant: "high",
         parts: [{ type: "text", text: "Fix it" }],
       });
+
+      yield* adapter.sendTurn({
+        threadId: asThreadId("thread-custom-instance"),
+        input: "Again",
+        modelSelection: createModelSelection(
+          ProviderInstanceId.make("opencode_zen"),
+          "anthropic/claude-sonnet-4-5",
+          [{ id: "variant", value: "default" }],
+        ),
+      });
+
+      NodeAssert.deepEqual(runtimeMock.state.promptCalls.at(-1), {
+        sessionID: "http://127.0.0.1:9999/session",
+        model: { providerID: "anthropic", modelID: "claude-sonnet-4-5" },
+        parts: [{ type: "text", text: "Again" }],
+      });
     }).pipe(Effect.provide(adapterLayer));
   });
 });

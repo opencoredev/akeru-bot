@@ -219,7 +219,8 @@ existing bots and the default model pass catalog validation. Custom models are r
 
 Model snapshots expose reasoning through `ModelCapabilities.optionDescriptors`. Codex, Claude,
 Grok, Kimi For Coding, and OpenCode Go use catalog effort levels; standard OpenCode advertises its
-live variant choices. A model with no adjustable effort publishes an empty descriptor list.
+live variant choices after a Provider default entry, because OpenCode resolves its own default from
+user config. A model with no adjustable effort publishes an empty descriptor list.
 Unknown capabilities remain distinct from an authoritative empty list.
 
 Bot settings on web and the desktop renderer, and the mobile settings sheet, save reasoning to
@@ -231,11 +232,14 @@ Group chats retain their thread selection and do not edit a responder's engine.
 `AgentController.inspectEngine` validates reasoning against a settled snapshot after resolving the
 bot override. `ReasoningOptions.nativeModelOptions` maps selections to the Mastra state, and
 `withAkeruModelRunOptions` supplies native options on each run: OpenAI Responses effort, Anthropic
-effort/thinking, xAI reasoning effort, or OpenCode Go's protocol-specific fields. Kimi uses adaptive
+effort/thinking, xAI reasoning effort, OpenCode Go's protocol-specific fields, or a Custom API
+`reasoning_effort` under the `custom-openai` provider options. Kimi uses adaptive
 thinking; older Claude models keep manual thinking where supported. Reset and session reuse replace
 the previous state options, so an earlier effort cannot stick. Codex OAuth retains the SDK's Medium
 default when no level is selected; API-key requests omit the effort. Standard OpenCode continues
-forwarding its selected `variant` through the legacy adapter.
+forwarding its selected `variant` through the legacy adapter and omits it at Provider default.
+Saved Claude `ultrathink` and `ultracode` choices from the CLI menu pass validation and run at
+provider default on the harness path.
 
 Successful credential mutations through poll, completion, and logout RPCs reconcile default
 provider settings and refresh each affected saved-credential instance before returning. The

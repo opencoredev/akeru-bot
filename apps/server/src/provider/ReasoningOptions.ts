@@ -15,7 +15,9 @@ import { getClaudeModelCapabilities } from "./Layers/claude/ClaudeModels.ts";
 import { type CatalogModel } from "./modelCatalogData.ts";
 
 export const AkeruModelOptions = Schema.Struct({
-  namespace: Schema.optionalKey(Schema.Literals(["openai", "anthropic", "xai", "opencode-go"])),
+  namespace: Schema.optionalKey(
+    Schema.Literals(["openai", "anthropic", "xai", "opencode-go", "custom-openai"]),
+  ),
   reasoningEffort: Schema.optionalKey(Schema.String),
   serviceTier: Schema.optionalKey(Schema.String),
   effort: Schema.optionalKey(Schema.String),
@@ -91,9 +93,11 @@ export function nativeModelOptions(
     ? "anthropic"
     : driver === "grok"
       ? "xai"
-      : driver === "opencodeGo" && openCodeGoProtocol(selection.model) === "chat-completions"
-        ? "opencode-go"
-        : "openai";
+      : driver === "customOpenai"
+        ? "custom-openai"
+        : driver === "opencodeGo" && openCodeGoProtocol(selection.model) === "chat-completions"
+          ? "opencode-go"
+          : "openai";
 
   const rawEffort = anthropic ? (effort ?? reasoningEffort) : reasoningEffort;
   const normalized = rawEffort === "off" && !anthropic ? "none" : rawEffort;

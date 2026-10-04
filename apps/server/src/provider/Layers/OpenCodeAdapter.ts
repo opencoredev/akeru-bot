@@ -319,7 +319,8 @@ export function makeOpenCodeAdapter(
       }
 
       const agent = getModelSelectionStringOptionValue(modelSelection, "agent");
-      const variant = getModelSelectionStringOptionValue(modelSelection, "variant");
+      const savedVariant = getModelSelectionStringOptionValue(modelSelection, "variant");
+      const variant = savedVariant === "default" ? undefined : savedVariant;
 
       context.activeTurnId = turnId;
       context.activeAgent = agent;

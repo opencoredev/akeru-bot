@@ -186,6 +186,56 @@ describe("native reasoning requests", () => {
       expect(body).not.toHaveProperty("thinking");
     },
   );
+  it("Custom API sends the saved effort under its own provider options", async () => {
+    let body: unknown;
+
+    const fetch = vi.spyOn(globalThis, "fetch").mockImplementation(async (_input, init) => {
+      body = JSON.parse(String(init?.body));
+      throw stopped;
+    });
+
+    try {
+      const modelOptions = nativeModelOptions(
+        driver("customOpenai"),
+        selection("local-model", [{ id: "reasoningEffort", value: "high" }]),
+      );
+
+      expect(modelOptions?.namespace).toBe("custom-openai");
+
+      const model = resolveAkeruMastraModel(
+        "custom-openai/local-model",
+        auth,
+        undefined,
+        undefined,
+        modelOptions,
+        undefined,
+        {
+          environment: {},
+          instanceEnvironment: { CUSTOM_OPENAI_BASE_URL: "http://127.0.0.1:9/v1" },
+          useSavedCredential: false,
+        },
+      );
+
+      if (
+        !Predicate.isObject(model) ||
+        !("specificationVersion" in model) ||
+        model.specificationVersion !== "v3"
+      )
+        throw new Error("Expected a native language model");
+
+      await expect(
+        model.doGenerate({
+          prompt: [{ role: "user", content: [{ type: "text", text: "hello" }] }],
+          ...withAkeruModelRunOptions({}, modelOptions ? { modelOptions } : {}),
+        }),
+      ).rejects.toThrow(stopped);
+      expect(fetch).toHaveBeenCalledOnce();
+      expect(body).toMatchObject({ reasoning_effort: "high" });
+    } finally {
+      vi.restoreAllMocks();
+    }
+  });
+
   it("Kimi sends adaptive effort without inventing a budget", async () => {
     const body = await capturedRequest("kimi-for-coding", driver("kimi"), [
       { id: "effort", value: "max" },
