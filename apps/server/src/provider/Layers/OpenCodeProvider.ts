@@ -25,6 +25,7 @@ import {
   type OpenCodeInventory,
 } from "../opencodeRuntime.ts";
 import type { Agent } from "@opencode-ai/sdk/v2";
+import { OPENCODE_PROVIDER_DEFAULT_VARIANT } from "./opencode/OpenCodeProtocol.ts";
 
 const OPENCODE_PRESENTATION = {
   displayName: "OpenCode",
@@ -171,7 +172,7 @@ function openCodeCapabilitiesForModel(input: {
   // OpenCode picks its own default variant from user config, so Akeru offers
   // that choice instead of guessing it; an explicit level is always forwarded.
   const variantOptions = [
-    { id: "default", label: "Provider default", isDefault: true as const },
+    { id: OPENCODE_PROVIDER_DEFAULT_VARIANT, label: "Provider default", isDefault: true as const },
     ...variantValues.map((value) => ({ id: value, label: titleCaseSlug(value) })),
   ];
 
@@ -196,7 +197,7 @@ function openCodeCapabilitiesForModel(input: {
               label: "Variant",
               type: "select" as const,
               options: variantOptions,
-              currentValue: "default",
+              currentValue: OPENCODE_PROVIDER_DEFAULT_VARIANT,
             },
           ]
         : []),

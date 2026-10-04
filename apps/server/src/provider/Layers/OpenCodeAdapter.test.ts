@@ -27,6 +27,7 @@ import {
   openCodeAdapterTestSettings,
   makeOpenCodeAdapterHarness,
 } from "./test-support/openCodeAdapterHarness.ts";
+import { OPENCODE_PROVIDER_DEFAULT_VARIANT } from "./opencode/OpenCodeProtocol.ts";
 
 const { runtimeMock, OpenCodeRuntimeTestDouble, OpenCodeAdapterTestLayer } =
   makeOpenCodeAdapterHarness();
@@ -459,7 +460,7 @@ it.layer(OpenCodeAdapterTestLayer)("OpenCodeAdapterLive", (it) => {
         modelSelection: createModelSelection(
           ProviderInstanceId.make("opencode_zen"),
           "anthropic/claude-sonnet-4-5",
-          [{ id: "variant", value: "default" }],
+          [{ id: "variant", value: OPENCODE_PROVIDER_DEFAULT_VARIANT }],
         ),
       });
 
@@ -467,6 +468,23 @@ it.layer(OpenCodeAdapterTestLayer)("OpenCodeAdapterLive", (it) => {
         sessionID: "http://127.0.0.1:9999/session",
         model: { providerID: "anthropic", modelID: "claude-sonnet-4-5" },
         parts: [{ type: "text", text: "Again" }],
+      });
+
+      yield* adapter.sendTurn({
+        threadId: asThreadId("thread-custom-instance"),
+        input: "Once more",
+        modelSelection: createModelSelection(
+          ProviderInstanceId.make("opencode_zen"),
+          "anthropic/claude-sonnet-4-5",
+          [{ id: "variant", value: "default" }],
+        ),
+      });
+
+      NodeAssert.deepEqual(runtimeMock.state.promptCalls.at(-1), {
+        sessionID: "http://127.0.0.1:9999/session",
+        model: { providerID: "anthropic", modelID: "claude-sonnet-4-5" },
+        variant: "default",
+        parts: [{ type: "text", text: "Once more" }],
       });
     }).pipe(Effect.provide(adapterLayer));
   });
