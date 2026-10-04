@@ -1,0 +1,177 @@
+---
+// Generated cover art for a blog article. Each kind draws a small data chart in
+// the article bot's color from a seeded PRNG, so every build renders the same art.
+import BotAvatar from "./BotAvatar.astro";
+import type { Article } from "../lib/articles";
+
+interface Props {
+  article: Article;
+  size?: "card" | "feature";
+}
+
+const { article, size = "card" } = Astro.props;
+
+const { bot, cover } = article;
+
+// SVG ids are document-global, so each cover gets ids of its own.
+const idPrefix = `cover${article.href.replace(/[^a-z0-9]+/gi, "-")}-${size}`;
+
+const W = 640;
+
+const H = 360;
+
+let seed = [...article.href].reduce((hash, char) => (hash * 31 + char.charCodeAt(0)) >>> 0, 7);
+
+const random = () => {
+  seed = (seed * 1664525 + 1013904223) >>> 0;
+
+  return seed / 2 ** 32;
+};
+
+// grid: a contribution calendar that gets busier toward the right.
+const gridCells: { x: number; y: number; level: number }[] = [];
+
+if (cover === "grid") {
+  const cols = 30;
+  const rows = 7;
+  const cell = 14;
+  const gap = 5;
+  const left = (W - cols * (cell + gap) + gap) / 2;
+  const top = (H - rows * (cell + gap) + gap) / 2 + 16;
+
+  for (let col = 0; col < cols; col++) {
+    for (let row = 0; row < rows; row++) {
+      const trend = col / cols;
+      const value = random() * 0.75 + trend * 0.55;
+      const level = value < 0.45 ? 0 : value < 0.7 ? 1 : value < 0.9 ? 2 : 3;
+      gridCells.push({ x: left + col * (cell + gap), y: top + row * (cell + gap), level });
+    }
+  }
+}
+
+const GRID_OPACITY = [0.07, 0.35, 0.65, 1];
+
+// bars: paired bars, the bot's color against a neutral series.
+const bars: { x: number; a: number; b: number }[] = [];
+
+if (cover === "bars") {
+  const groups = 9;
+  const span = 460;
+  const left = (W - span) / 2;
+
+  for (let i = 0; i < groups; i++) {
+    bars.push({ x: left + (i * span) / (groups - 1) - 14, a: 60 + random() * 150, b: 40 + random() * 110 });
+  }
+}
+
+// path: a rising stepped line with three numbered milestones.
+const points: [number, number][] = [];
+
+if (cover === "path") {
+  const steps = 14;
+
+  for (let i = 0; i <= steps; i++) {
+    const x = 70 + (i * (W - 140)) / steps;
+    const y = 270 - (i / steps) * 150 - random() * 34;
+    points.push([x, y]);
+  }
+}
+
+const linePath = points.map(([x, y], i) => `${i ? "L" : "M"}${x.toFixed(1)} ${y.toFixed(1)}`).join(" ");
+
+const areaPath = points.length ? `${linePath} L${points.at(-1)![0]} 300 L${points[0]![0]} 300 Z` : "";
+
+const milestones = points.length ? [points[2]!, points[7]!, points[12]!] : [];
+---
+
+<div class:list={["blog-cover", `blog-cover--${size}`]} style={`--cover-color:${bot.color}`} aria-hidden="true">
+  <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="xMidYMid slice">
+    <defs>
+      <pattern id={`${idPrefix}-dots`} width="16" height="16" patternUnits="userSpaceOnUse">
+        <circle cx="1" cy="1" r="1" fill="rgb(255 255 255 / 0.06)"></circle>
+      </pattern>
+      <radialGradient id={`${idPrefix}-glow`} cx="50%" cy="100%" r="80%">
+        <stop offset="0%" stop-color={bot.color} stop-opacity="0.22"></stop>
+        <stop offset="100%" stop-color={bot.color} stop-opacity="0"></stop>
+      </radialGradient>
+    </defs>
+    <rect width={W} height={H} fill={`url(#${idPrefix}-dots)`}></rect>
+    <rect width={W} height={H} fill={`url(#${idPrefix}-glow)`}></rect>
+
+    {
+      gridCells.map((cell) => (
+        <rect x={cell.x} y={cell.y} width="14" height="14" rx="3" fill={bot.color} fill-opacity={GRID_OPACITY[cell.level]} />
+      ))
+    }
+
+    {
+      bars.length > 0 && <line x1="70" x2={W - 70} y1="290" y2="290" stroke="rgb(255 255 255 / 0.12)" />
+    }
+    {
+      bars.map((bar) => (
+        <g>
+          <rect x={bar.x} y={290 - bar.a} width="13" height={bar.a} rx="3" fill={bot.color} />
+          <rect x={bar.x + 16} y={290 - bar.b} width="13" height={bar.b} rx="3" fill="rgb(255 255 255 / 0.18)" />
+        </g>
+      ))
+    }
+
+    {areaPath && <path d={areaPath} fill={bot.color} fill-opacity="0.12" />}
+    {linePath && <path d={linePath} fill="none" stroke={bot.color} stroke-width="3" stroke-linejoin="round" stroke-linecap="round" />}
+    {
+      milestones.map(([x, y], index) => (
+        <g>
+          <circle cx={x} cy={y} r="15" fill="#0a0a0a" stroke={bot.color} stroke-width="3" />
+          <text x={x} y={y + 5} text-anchor="middle" font-size="14" font-weight="600" fill="#f2f2f2" font-family="Geist, system-ui, sans-serif">
+            {index + 1}
+          </text>
+        </g>
+      ))
+    }
+  </svg>
+  <span class="blog-cover-bot">
+    <BotAvatar name={bot.name} shape={bot.shape} color={bot.color} size={size === "feature" ? 44 : 32} />
+    <span>{bot.name}</span>
+  </span>
+</div>
+
+<style>
+  .blog-cover {
+    position: relative;
+    overflow: hidden;
+    aspect-ratio: 16 / 9;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-media);
+    background: var(--color-card);
+  }
+
+  .blog-cover svg {
+    display: block;
+    width: 100%;
+    height: 100%;
+  }
+
+  .blog-cover-bot {
+    position: absolute;
+    top: 14px;
+    left: 14px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 12px 4px 4px;
+    border-radius: 999px;
+    background: rgb(10 10 10 / 0.7);
+    box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.08);
+    font-size: 13px;
+    font-weight: 500;
+    line-height: 18px;
+  }
+
+  .blog-cover--feature .blog-cover-bot {
+    top: 20px;
+    left: 20px;
+    gap: 10px;
+    padding-right: 16px;
+    font-size: 15px;
+  }
+</style>

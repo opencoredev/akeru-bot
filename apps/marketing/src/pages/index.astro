@@ -29,10 +29,15 @@ import DownloadSection from "../components/home/DownloadSection.astro";
 </Layout>
 
 <script>
-  import { initHomeDownloads } from "../lib/homeDownloads";
+  import { mountBotAvatars } from "../lib/botAvatarRuntime";
   import { initDemoVideos } from "../lib/homeDemoVideos";
+  import { initStepDemos, initToolToggles } from "../lib/homeMotion";
 
-  initHomeDownloads();
+  mountBotAvatars();
+
+  initToolToggles();
+
+  initStepDemos();
 
   initDemoVideos();
 </script>

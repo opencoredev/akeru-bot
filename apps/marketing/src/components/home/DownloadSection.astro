@@ -1,68 +1,58 @@
 ---
-import { RELEASES_URL } from "../../lib/releases";
-import { APPLE_MARK, WINDOWS_MARK, LINUX_MARK } from "./PlatformMarks";
+import BotAvatar from "../BotAvatar.astro";
+import { HERO_BOTS } from "../../lib/heroBots";
+import { RELEASES_URL, releaseAssetUrl, resolveBuildVersion } from "../../lib/releases";
 
+const version = await resolveBuildVersion();
 
-// `asset` is the release-asset suffix the client script resolves to a real URL.
+// `asset` is the release-asset suffix; the href is baked from the build-time version.
 const platforms = [
-  { os: "mac", name: "macOS", detail: "Apple silicon · DMG", mark: APPLE_MARK, asset: "arm64.dmg" },
-  { os: "win", name: "Windows", detail: "x64 · Installer", mark: WINDOWS_MARK, asset: "x64.exe" },
-  { os: "linux", name: "Linux", detail: "x64 · AppImage", mark: LINUX_MARK, asset: "x64.AppImage", unsigned: true },
-];
-
-
-const DOWNLOAD_GLYPH = `<path d="M7 11.5L12 17.5L17 11.5H14L14 3H10L10 11.5H7Z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square" />
-  <path d="M5 21H19" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square" />`;
+  { os: "mac", name: "macOS", detail: "Apple silicon · DMG", asset: "arm64.dmg" },
+  { os: "win", name: "Windows", detail: "x64 · Installer", asset: "x64.exe" },
+  { os: "linux", name: "Linux", detail: "x64 · AppImage", asset: "x64.AppImage" },
+].map((platform) => ({ ...platform, href: releaseAssetUrl(version, platform.asset) }));
 ---
-  <section class="download">
-    <div class="download-band">
-      <div class="download-head">
-        <h2>Download Akeru Bot</h2>
-        <p>Free and MIT licensed. Bring your own subscription.</p>
-      </div>
-      <div class="platform-cards">
-        {
-          platforms.map((platform) => (
-            <a class="platform-card" data-os={platform.os} data-asset={platform.asset} href={RELEASES_URL}>
-              <span class="platform-card-top">
-                <svg width="24" height="24" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" set:html={platform.mark} />
-                <svg class="platform-card-glyph" width="18" height="18" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" set:html={DOWNLOAD_GLYPH} />
-              </span>
-              <span class="platform-card-text">
-                <span class="platform-card-name">{platform.name}</span>
-                <span class="platform-card-detail">{platform.detail}</span>
-              </span>
-            </a>
-          ))
-        }
-      </div>
-      <a class="btn-outline" href={RELEASES_URL} target="_blank" rel="noopener noreferrer">
-        All downloads
-      </a>
+<section class="download">
+  <div class="download-band">
+    <div class="download-roster" aria-hidden="true">
+      {
+        HERO_BOTS.map((bot) => (
+          <span data-bot-hover>
+            <BotAvatar name={bot.name} shape={bot.shape} color={bot.color} size={30} />
+          </span>
+        ))
+      }
     </div>
-  </section>
+    <div class="download-head">
+      <h2>Download Akeru Bot</h2>
+      <p>Free and MIT licensed. Bring your own subscription.</p>
+    </div>
+    <div class="platform-cards">
+      {
+        platforms.map((platform) => (
+          <a class="platform-card" data-os={platform.os} data-asset={platform.asset} href={platform.href}>
+            <span class="platform-card-text">
+              <span class="platform-card-name">{platform.name}</span>
+              <span class="platform-card-detail">{platform.detail}</span>
+            </span>
+          </a>
+        ))
+      }
+    </div>
+    <a
+      class="download-notes"
+      href={`${RELEASES_URL}/tag/v${version}`}
+      target="_blank"
+      rel="noopener noreferrer"
+      data-release-notes
+    >
+      Version <span data-release-version>{version}</span> release notes
+    </a>
+  </div>
+</section>
+
 <style>
-
-
-  .btn-outline {
-    display: flex;
-    align-items: center;
-    gap: 9px;
-    padding: 14px 22px;
-    border-radius: var(--radius-md);
-    font-size: 15px;
-    line-height: 18px;
-  }
-
-  .btn-outline {
-    border: 1px solid var(--color-border);
-    font-weight: 500;
-    transition: border-color 0.15s ease;
-  }
-
-  .btn-outline:hover {
-    border-color: var(--color-input);
-  }
+  /* ── Download band ── */
 
   .download {
     display: flex;
@@ -73,25 +63,29 @@ const DOWNLOAD_GLYPH = `<path d="M7 11.5L12 17.5L17 11.5H14L14 3H10L10 11.5H7Z" 
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 36px;
+    gap: 32px;
     width: 100%;
     padding: 64px 56px;
-    border: 1px solid var(--color-border);
-    border-radius: 20px;
-    background:
-      linear-gradient(
-        color-mix(in srgb, var(--color-background) 78%, transparent),
-        color-mix(in srgb, var(--color-background) 78%, transparent)
-      ),
-      url("/download-glow.webp") center / cover no-repeat,
-      var(--color-background);
+    border-radius: 24px;
+    background: var(--color-card);
+    box-shadow: var(--shadow-panel);
+  }
+
+  .download-roster {
+    display: flex;
+    gap: 8px;
+  }
+
+  .download-roster span[data-bot-hover] {
+    display: flex;
+    padding: 3px;
   }
 
   .download-head {
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 12px;
+    gap: 10px;
     text-align: center;
   }
 
@@ -105,7 +99,7 @@ const DOWNLOAD_GLYPH = `<path d="M7 11.5L12 17.5L17 11.5H14L14 3H10L10 11.5H7Z" 
   .download-head p {
     font-size: 16px;
     line-height: 26px;
-    color: color-mix(in srgb, var(--color-foreground) 72%, transparent);
+    color: var(--color-muted-foreground);
   }
 
   .platform-cards {
@@ -119,33 +113,19 @@ const DOWNLOAD_GLYPH = `<path d="M7 11.5L12 17.5L17 11.5H14L14 3H10L10 11.5H7Z" 
     display: flex;
     flex-direction: column;
     gap: 16px;
-    width: 264px;
+    width: 248px;
     padding: 20px;
-    border: 1px solid var(--color-border);
-    border-radius: var(--radius-lg);
-    background: color-mix(in srgb, var(--color-card) 80%, transparent);
+    border-radius: 16px;
+    background: var(--color-background);
+    box-shadow: inset 0 0 0 1px var(--color-border);
     transition:
-      border-color 0.15s ease,
-      background-color 0.15s ease;
+      background-color var(--duration-quick) ease,
+      box-shadow var(--duration-quick) ease;
   }
 
   .platform-card:hover {
-    border-color: var(--color-input);
-    background: color-mix(in srgb, var(--color-popover) 92%, transparent);
-  }
-
-  .platform-card-top {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-  }
-
-  .platform-card-glyph {
-    color: var(--color-muted-foreground);
-  }
-
-  .platform-card:hover .platform-card-glyph {
-    color: var(--color-foreground);
+    background: var(--color-selected);
+    box-shadow: inset 0 0 0 1px var(--color-input);
   }
 
   .platform-card-text {
@@ -167,15 +147,28 @@ const DOWNLOAD_GLYPH = `<path d="M7 11.5L12 17.5L17 11.5H14L14 3H10L10 11.5H7Z" 
     color: var(--color-muted-foreground);
   }
 
-  @media (max-width: 900px) {
+  .download-notes {
+    font-size: 14px;
+    line-height: 20px;
+    color: var(--color-muted-foreground);
+    text-decoration: underline;
+    text-decoration-color: var(--color-input);
+    text-underline-offset: 4px;
+    transition: color var(--duration-quick) ease;
+  }
 
+  .download-notes:hover {
+    color: var(--color-foreground);
+  }
+
+  @media (max-width: 900px) {
     .download {
-      padding: 0 24px 64px;
+      padding: 0 20px 64px;
     }
 
     .download-band {
-      padding: 40px 24px;
-      gap: 28px;
+      padding: 40px 20px;
+      gap: 26px;
     }
 
     .download-head h2 {
@@ -187,5 +180,4 @@ const DOWNLOAD_GLYPH = `<path d="M7 11.5L12 17.5L17 11.5H14L14 3H10L10 11.5H7Z" 
       width: 100%;
     }
   }
-
 </style>

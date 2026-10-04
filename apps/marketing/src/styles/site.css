@@ -47,25 +47,37 @@
 }
 
 :root {
-  /* Akeru design tokens (Paper file "Akeru Bot") */
-  --color-background: #0a0a0a;
+  /* Dark tokens matched to the 0.2.0 app (apps/web/src/index.css), converted from oklch. */
+  /* Sampled from the app screenshot in the hero (public/app-screenshot.webp). */
+  --color-background: #111111;
   --color-foreground: #f5f5f5;
-  --color-card: #111111;
-  --color-popover: #191919;
-  --color-primary: #346bf1;
-  --color-primary-foreground: #ffffff;
-  --color-primary-surface: #121f3d;
-  --color-secondary: #141414;
-  --color-muted: #141414;
-  --color-muted-foreground: #8a8a8a;
-  --color-dim-foreground: #7b7b7b;
-  --color-border: #232323;
-  --color-input: #2c2c2c;
-  --color-destructive: #f26d6d;
-  --color-success: #34d399;
+  --color-card: #181818;
+  --color-popover: #181818;
+  --color-selected: #282828;
+  --color-primary: #f5f5f5;
+  --color-primary-hover: #ffffff;
+  --color-primary-foreground: #111111;
+  --color-secondary: #292929;
+  --color-muted: #1d1d1d;
+  --color-muted-foreground: #a1a1a1;
+  --color-dim-foreground: #868686;
+  --color-border: #2c2c2c;
+  --color-input: #3a3a3a;
+  --color-destructive: #f06464;
+  --color-success: #3ccf8e;
 
-  /* Panel background used by the section bands. */
-  --color-band: #0c0c0c;
+  /* Section bands sit flush with the page, like the app shell. */
+  --color-band: var(--color-background);
+
+  --shadow-panel: inset 0 0 0 1px var(--color-border);
+
+  /* Motion tokens shared with the app. */
+  --duration-quick: 150ms;
+  --duration-fast: 250ms;
+  --duration-slow: 400ms;
+  --duration-very-slow: 500ms;
+  --ease-smooth-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-bounce: cubic-bezier(0.34, 1.36, 0.64, 1);
 
   --font-sans: "Geist", system-ui, sans-serif;
   --font-serif: "EB Garamond", Georgia, serif;
@@ -73,16 +85,17 @@
   --radius-md: 10px;
   --radius-lg: 14px;
   --radius-media: 16px;
+  --radius-panel: 18px;
 
   /* Legacy aliases used by the download and legal pages */
   --bg: var(--color-background);
   --fg: var(--color-foreground);
   --fg-muted: var(--color-muted-foreground);
-  --fg-dim: #6f6f6f;
-  --fg-faint: #545454;
+  --fg-dim: #858585;
+  --fg-faint: #6b6b6b;
   --border: var(--color-border);
   --border-strong: var(--color-input);
-  --accent: var(--color-primary);
+  --accent: var(--color-foreground);
   --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, monospace;
 }
 

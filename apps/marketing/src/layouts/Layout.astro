@@ -80,7 +80,7 @@ const structuredData = [
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="description" content={description} />
     {noindex && <meta name="robots" content="noindex, follow" />}
-    <meta name="theme-color" content="#0a0a0a" />
+    <meta name="theme-color" content="#111111" />
     <link rel="canonical" href={canonicalUrl.href} />
 
     <meta property="og:type" content={socialType} />
@@ -122,6 +122,11 @@ const structuredData = [
 
       <SiteFooter />
     </div>
+    <script>
+      import { initDownloadLinks } from "../lib/downloadLinks";
+
+      initDownloadLinks();
+    </script>
   </body>
 </html>
 

@@ -1,7 +1,4 @@
 ---
-
-
-
 const demos = [
   {
     title: "Text your bot on iMessage",
@@ -26,57 +23,61 @@ const demos = [
   },
 ];
 ---
-  <section id="demos" class="demos">
-    <h2 class="section-title">See it work</h2>
-    {
-      demos.map((demo) => (
-        <div class="demo-row">
-          <div class="demo-copy">
-            <h3>{demo.title}</h3>
-            <p>{demo.body}</p>
-          </div>
-          <div class="demo-media">
-            <video
-              data-demo-video
-              data-src={demo.video}
-              poster={demo.poster}
-              aria-label={demo.label}
-              muted
-              loop
-              playsinline
-              preload="metadata"
-            />
-          </div>
+<section id="demos" class="demos">
+  <h2 class="section-title">See it work</h2>
+  {
+    demos.map((demo) => (
+      <div class="demo-row">
+        <div class="demo-copy">
+          <h3>{demo.title}</h3>
+          <p>{demo.body}</p>
         </div>
-      ))
-    }
-  </section>
-<style>
+        <div class="demo-media">
+          <video
+            data-demo-video
+            data-src={demo.video}
+            poster={demo.poster}
+            aria-label={demo.label}
+            muted
+            loop
+            playsinline
+            preload="metadata"
+          />
+        </div>
+      </div>
+    ))
+  }
+</section>
 
+<style>
+  /* ── Section shells ── */
 
   .section-title {
-    font-size: 46px;
+    font-size: 44px;
     font-weight: 600;
     letter-spacing: -0.03em;
-    line-height: 52px;
+    line-height: 50px;
     text-align: center;
   }
+
+  /* ── Demos ── */
 
   .demos {
     display: flex;
     flex-direction: column;
     align-items: center;
-    border-top: 1px solid var(--color-border);
     padding: 104px 64px;
   }
 
   .demo-row {
     display: flex;
     align-items: center;
-    gap: 88px;
+    gap: 80px;
     width: 100%;
-    margin-top: 96px;
+    margin-top: 88px;
   }
+
+  /* The middle row mirrors, so the media side alternates down the page. */
   .demo-row:nth-of-type(even) {
     flex-direction: row-reverse;
   }
@@ -85,15 +86,15 @@ const demos = [
     flex-shrink: 0;
     display: flex;
     flex-direction: column;
-    gap: 18px;
-    width: 432px;
+    gap: 16px;
+    width: 400px;
   }
 
   .demo-copy h3 {
-    font-size: 34px;
+    font-size: 32px;
     font-weight: 600;
     letter-spacing: -0.03em;
-    line-height: 40px;
+    line-height: 38px;
   }
 
   .demo-copy p {
@@ -105,21 +106,24 @@ const demos = [
   .demo-media {
     flex: 1 0 0;
     aspect-ratio: 8 / 5;
-    border: 1px solid var(--color-border);
-    border-radius: 16px;
+    padding: 8px;
+    border-radius: var(--radius-panel);
     background: var(--color-card);
-    overflow: hidden;
+    box-shadow: var(--shadow-panel);
   }
 
   .demo-media video {
     display: block;
     width: 100%;
     height: 100%;
+    border-radius: 12px;
     object-fit: cover;
+    background: var(--color-muted);
   }
 
   @media (max-width: 1100px) {
-    .demo-row, .demo-row:nth-of-type(even) {
+    .demo-row,
+    .demo-row:nth-of-type(even) {
       flex-direction: column;
       align-items: stretch;
       gap: 28px;
@@ -137,14 +141,13 @@ const demos = [
   }
 
   @media (max-width: 900px) {
-
     .section-title {
       font-size: 32px;
       line-height: 38px;
     }
 
     .demos {
-      padding: 64px 24px;
+      padding: 64px 20px;
     }
 
     .demo-copy h3 {
@@ -152,5 +155,4 @@ const demos = [
       line-height: 32px;
     }
   }
-
 </style>

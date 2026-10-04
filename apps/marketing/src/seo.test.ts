@@ -58,8 +58,12 @@ describe("marketing search metadata", () => {
     const home = homeSource();
     const download = sourceFile("pages/download.astro");
 
-    expect(home).toContain('<span id="download-label">All downloads</span>');
-    expect(home).not.toContain('class="btn-primary" data-os="mac"');
+    // The hero opens /download until the client script picks a direct release asset,
+    // and never falls back to the GitHub releases list.
+    expect(home).toContain(
+      '<a class="btn-primary" href="/download" data-download-auto {...downloadUrls}>',
+    );
+    expect(home).not.toContain("All downloads");
     expect(home).toContain("Your environment owns the chats, bot profiles, and memory.");
     expect(home).not.toContain("Everything stays on your machine");
     expect(home).not.toContain("no hosted service");
@@ -123,17 +127,18 @@ describe("marketing search metadata", () => {
 
   it("publishes an editorial blog index that links every Grok article", () => {
     const blog = sourceFile("pages/blog/index.astro");
+    const articles = sourceFile("lib/articles.ts");
     const layout = layoutSource();
 
     expect(blog).toContain('title="Akeru Blog | Open-source AI bot guides"');
     expect(blog).toContain("<h1>Blog</h1>");
-    expect(blog).toContain('href: "/open-source-grok-bot"');
-    expect(blog).toContain('href: "/compare/akeru-vs-grok-bot"');
-    expect(blog).toContain('href: "/guides/self-hosted-grok-bot"');
+    expect(articles).toContain('href: "/open-source-grok-bot"');
+    expect(articles).toContain('href: "/compare/akeru-vs-grok-bot"');
+    expect(articles).toContain('href: "/guides/self-hosted-grok-bot"');
     expect(blog).toContain('aria-label="Article topics"');
     expect(blog).toContain('<a class="topic-link" href={article.href}>{article.category}</a>');
     expect(blog).toContain('class="article-grid" id="articles"');
-    expect(blog).not.toMatch(/Example|article-art/);
+    expect(blog).toContain("<BlogCover article={article} />");
     expect(blog).toMatch(/\.blog-header \{[\s\S]*?text-align: center;/);
     expect(blog).not.toMatch(/gradient/);
     expect(layout).toContain('<a class="nav-link" href="/blog">Blog</a>');
@@ -147,11 +152,11 @@ describe("marketing search metadata", () => {
     expect(layout).toContain('src: url("/fonts/eb-garamond-500-latin.woff2") format("woff2");');
     expect(layout).not.toContain("fonts.googleapis.com");
     expect(layout).toContain('--font-serif: "EB Garamond", Georgia, serif;');
-    expect(layout).toContain("--color-muted-foreground: #8a8a8a;");
+    expect(layout).toContain("--color-muted-foreground: #a1a1a1;");
     expect(home).not.toContain("--color-editorial-muted-foreground");
     expect(home).toContain("data-demo-video");
-    expect(home).toMatch(/\.hero-title \{[\s\S]*?font-size: 84px;/);
-    expect(home).toMatch(/background:[\s\S]*?url\("\/download-glow\.webp"\)/);
+    expect(home).toMatch(/\.hero-title \{[\s\S]*?font-size: 72px;/);
+    expect(home).not.toContain("download-glow");
   });
 
   it("adds page and breadcrumb structured data to search pages", () => {
@@ -178,7 +183,8 @@ describe("marketing search metadata", () => {
       ".article-copy :global(h2) { margin-top: 32px; font-size: 30px; line-height: 41px; }",
     );
     expect(searchPage).not.toMatch(/Akeru maintainers|readingTime|Share on|data-copy-url/);
-    expect(searchPage).not.toMatch(/Example|article-cover|related-art/);
+    expect(searchPage).not.toMatch(/Example|related-art/);
+    expect(searchPage).toContain('<BlogCover article={coverArticle} size="feature" />');
     expect(layout).toContain('Astro.url.pathname.replace(/\\/+$/, "")');
   });
 

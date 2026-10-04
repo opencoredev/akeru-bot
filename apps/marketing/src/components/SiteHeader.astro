@@ -1,5 +1,15 @@
 ---
+import { Menu01Icon } from "@hugeicons/core-free-icons";
+import Icon from "./Icon.astro";
 import { DOCS_URL, GITHUB_REPOSITORY_URL } from "../lib/site";
+import { DOWNLOAD_TARGETS, releaseAssetUrl, resolveBuildVersion } from "../lib/releases";
+
+// The nav CTA opens /download until the client script knows the visitor's platform.
+const buildVersion = await resolveBuildVersion();
+
+const downloadUrls = Object.fromEntries(
+  DOWNLOAD_TARGETS.map((target) => [`data-url-${target.os}`, releaseAssetUrl(buildVersion, target.assetSuffix)]),
+);
 ---
       <nav class="nav">
         <div class="nav-side">
@@ -19,23 +29,12 @@ import { DOCS_URL, GITHUB_REPOSITORY_URL } from "../lib/site";
             target="_blank"
             rel="noopener noreferrer">GitHub</a
           >
-          <a class="nav-cta" href="/download">
+          <a class="nav-cta" href="/download" data-download-auto="short" {...downloadUrls}>
             Download
-            <svg width="14" height="14" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-              <path
-                d="M7 11.5L12 17.5L17 11.5H14L14 3H10L10 11.5H7Z"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="1.8"
-                stroke-linecap="square"></path>
-              <path d="M5 21H19" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="square"></path>
-            </svg>
           </a>
           <details class="nav-menu">
             <summary aria-label="Open navigation menu">
-              <svg width="18" height="18" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-                <path d="M4 7H20M4 12H20M4 17H20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="square"></path>
-              </svg>
+              <Icon icon={Menu01Icon} size={18} />
             </summary>
             <div class="nav-menu-panel">
               <a href="/#bots">Bots</a>
@@ -55,8 +54,7 @@ import { DOCS_URL, GITHUB_REPOSITORY_URL } from "../lib/site";
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 20px 64px;
-    border-bottom: 1px solid var(--color-border);
+    padding: 18px 64px;
   }
 
   .nav-side {
@@ -102,7 +100,7 @@ import { DOCS_URL, GITHUB_REPOSITORY_URL } from "../lib/site";
     align-items: center;
     gap: 8px;
     padding: 9px 16px;
-    border-radius: var(--radius-md);
+    border-radius: 999px;
     background: var(--color-primary);
     color: var(--color-primary-foreground);
     font-size: 14px;
@@ -112,7 +110,7 @@ import { DOCS_URL, GITHUB_REPOSITORY_URL } from "../lib/site";
   }
 
   .nav-cta:hover {
-    background: #2a5ad6;
+    background: var(--color-primary-hover);
   }
   .nav-menu {
     position: relative;
@@ -126,8 +124,8 @@ import { DOCS_URL, GITHUB_REPOSITORY_URL } from "../lib/site";
     width: 36px;
     height: 36px;
     border: 1px solid var(--color-border);
-    border-radius: var(--radius-md);
-    cursor: pointer;
+    border-radius: 999px;
+    background: var(--color-card);
     list-style: none;
   }
 
@@ -151,6 +149,7 @@ import { DOCS_URL, GITHUB_REPOSITORY_URL } from "../lib/site";
     border: 1px solid var(--color-border);
     border-radius: var(--radius-lg);
     background: var(--color-popover);
+    box-shadow: var(--shadow-panel);
   }
 
   .nav-menu-panel a {

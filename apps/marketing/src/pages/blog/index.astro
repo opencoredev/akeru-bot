@@ -1,26 +1,9 @@
 ---
+import BlogCover from "../../components/BlogCover.astro";
 import Layout from "../../layouts/Layout.astro";
+import { ARTICLES as articles, formatPublished } from "../../lib/articles";
 
-const articles = [
-  {
-    href: "/open-source-grok-bot",
-    category: "Open source",
-    date: "Sep 3, 2026",
-    title: "An open-source alternative to Grok Bot",
-  },
-  {
-    href: "/compare/akeru-vs-grok-bot",
-    category: "Comparison",
-    date: "Sep 3, 2026",
-    title: "Akeru Bot and Grok Bot compared",
-  },
-  {
-    href: "/guides/self-hosted-grok-bot",
-    category: "Guide",
-    date: "Sep 3, 2026",
-    title: "Run a Grok bot on an environment you control",
-  },
-] as const;
+const [featured, ...rest] = articles;
 
 const siteOrigin = Astro.site ?? new URL(Astro.url.origin);
 
@@ -67,13 +50,31 @@ const structuredData = [
 
     <section class="article-grid" id="articles" aria-label="All articles">
       {
-        articles.map((article) => (
+        featured && (
+          <a class="article-card article-card--featured" href={featured.href}>
+            <BlogCover article={featured} size="feature" />
+            <div class="article-body">
+              <span class="article-category">{featured.category}</span>
+              <h2>{featured.title}</h2>
+              <p>{featured.summary}</p>
+              <span class="article-meta">
+                <time datetime={featured.published}>{formatPublished(featured)}</time> · {featured.readMinutes} min read
+              </span>
+            </div>
+          </a>
+        )
+      }
+      {
+        rest.map((article) => (
           <a class="article-card" href={article.href}>
-            <h2>{article.title}</h2>
-            <div class="article-meta">
-              <time datetime="2026-09-03">{article.date}</time>
-              <span aria-hidden="true">&bull;</span>
-              <span>{article.category}</span>
+            <BlogCover article={article} />
+            <div class="article-body">
+              <span class="article-category">{article.category}</span>
+              <h2>{article.title}</h2>
+              <p>{article.summary}</p>
+              <span class="article-meta">
+                <time datetime={article.published}>{formatPublished(article)}</time> · {article.readMinutes} min read
+              </span>
             </div>
           </a>
         ))
@@ -84,7 +85,7 @@ const structuredData = [
 
 <style>
   .blog-index {
-    --color-editorial-muted-foreground: #b4b4b4;
+    --color-editorial-muted-foreground: #b5b5b5;
     width: min(960px, calc(100% - 80px));
     margin: 0 auto;
     padding: 120px 0 140px;
@@ -147,38 +148,83 @@ const structuredData = [
 
   .article-grid {
     display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 48px 32px;
-    margin-top: 40px;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 56px 32px;
+    margin-top: 48px;
     scroll-margin-top: 24px;
   }
 
   .article-card {
     display: grid;
     grid-template-columns: minmax(0, 1fr);
-    gap: 6px;
+    align-content: start;
+    gap: 20px;
     min-width: 0;
-    padding-top: 20px;
-    border-top: 1px solid var(--color-border);
+  }
+
+  .article-card--featured {
+    grid-column: 1 / -1;
+    grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr);
+    align-items: center;
+    gap: 40px;
+  }
+
+  .article-card :global(.blog-cover) {
+    transition: border-color 0.2s ease;
+  }
+
+  .article-card:hover :global(.blog-cover) {
+    border-color: var(--color-input);
+  }
+
+  .article-body {
+    display: grid;
+    gap: 10px;
+    min-width: 0;
+  }
+
+  .article-category {
+    color: var(--color-muted-foreground);
+    font-size: 13px;
+    font-weight: 500;
+    line-height: 18px;
   }
 
   .article-card h2 {
-    font-size: 14px;
+    font-size: 20px;
     font-weight: 500;
-    line-height: 19px;
+    line-height: 26px;
+    letter-spacing: -0.3px;
+  }
+
+  .article-card--featured h2 {
+    font-size: 32px;
+    line-height: 38px;
+    letter-spacing: -0.8px;
+  }
+
+  .article-card p {
+    color: var(--color-editorial-muted-foreground);
+    font-size: 15px;
+    line-height: 23px;
+  }
+
+  .article-card--featured p {
+    font-size: 17px;
+    line-height: 26px;
   }
 
   .article-meta {
-    display: flex;
-    gap: 6px;
-    color: var(--color-editorial-muted-foreground);
-    font-size: 14px;
-    line-height: 19px;
+    color: var(--color-dim-foreground);
+    font-size: 13px;
+    line-height: 18px;
   }
 
   @media (max-width: 860px) {
     .blog-index { width: calc(100% - 40px); padding: 96px 0 104px; }
-    .article-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 40px 24px; }
+    .article-grid { gap: 48px 24px; }
+    .article-card--featured { grid-template-columns: minmax(0, 1fr); gap: 20px; }
+    .article-card--featured h2 { font-size: 26px; line-height: 32px; }
   }
 
   @media (max-width: 580px) {
@@ -186,10 +232,10 @@ const structuredData = [
     .blog-header p { font-size: 18px; line-height: 25px; }
     .topic-nav { justify-content: flex-start; gap: 28px; margin-top: 48px; }
     .article-grid { grid-template-columns: 1fr; gap: 40px; margin-top: 32px; }
-    .article-card { gap: 6px; }
   }
 
   @media (prefers-reduced-motion: reduce) {
-    .topic-link { transition: none; }
+    .topic-link,
+    .article-card :global(.blog-cover) { transition: none; }
   }
 </style>

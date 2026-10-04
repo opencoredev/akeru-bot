@@ -173,6 +173,9 @@ importers:
 
   apps/marketing:
     dependencies:
+      '@hugeicons/core-free-icons':
+        specifier: ^4.3.0
+        version: 4.3.0
       '@usenotra/geo':
         specifier: 0.3.0
         version: 0.3.0(zod@4.4.3)

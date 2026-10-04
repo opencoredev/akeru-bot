@@ -4,6 +4,9 @@ const REPO = "opencoredev/akeru-bot";
 
 export const RELEASES_URL = `https://github.com/${REPO}/releases`;
 
+// Used only when the build cannot reach GitHub. The client script still upgrades links.
+export const FALLBACK_VERSION = "0.2.1";
+
 const API_URL = `https://api.github.com/repos/${REPO}/releases/latest`;
 
 const CACHE_KEY = "akeru-latest-release";
@@ -53,7 +56,44 @@ const TARGETS = {
   },
 } as const satisfies Record<string, DownloadTarget>;
 
+export const DOWNLOAD_TARGETS = Object.values(TARGETS);
+
+export function releaseAssetUrl(version: string, assetSuffix: string): string {
+  return `https://github.com/${REPO}/releases/download/v${version}/Akeru-Bot-${version}-${assetSuffix}`;
+}
+
+// Build-time lookup. The /releases/latest page redirects to the newest stable tag
+// and, unlike the REST API, is not rate limited for anonymous build machines.
+let buildVersion: Promise<string> | undefined;
+
+export function resolveBuildVersion(): Promise<string> {
+  buildVersion ??= lookupBuildVersion();
+
+  return buildVersion;
+}
+
+async function lookupBuildVersion(): Promise<string> {
+  try {
+    const response = await fetch(`${RELEASES_URL}/latest`, {
+      redirect: "manual",
+      signal: AbortSignal.timeout(RELEASE_REQUEST_TIMEOUT_MS),
+    });
+
+    const version = /\/releases\/tag\/v(\d+\.\d+\.\d+)$/.exec(
+      response.headers.get("location") ?? "",
+    )?.[1];
+
+    return version ?? FALLBACK_VERSION;
+  } catch {
+    return FALLBACK_VERSION;
+  }
+}
+
 export function detectDownloadTarget(userAgent: string): DownloadTarget | null {
+  // Phones and tablets have no desktop build. Their user agents also claim Linux or
+  // Mac OS X, so check them first.
+  if (/Android|iPhone|iPad|iPod/i.test(userAgent)) return null;
+
   if (/Windows/i.test(userAgent)) return TARGETS.win;
 
   if (/Macintosh|Mac OS X/i.test(userAgent)) return TARGETS.mac;
@@ -79,42 +119,68 @@ export function requiresUnsignedInstall(assetSuffix: string): boolean {
   );
 }
 
-type DownloadLink = EventTarget & {
-  href: string;
-  removeAttribute(name: string): void;
-  setAttribute(name: string, value: string): void;
-};
+type DownloadLink = { href: string };
 
-export function blockDownloadUntilResolved(link: DownloadLink): (url: string) => void {
-  const blockClick = (event: Event) => event.preventDefault();
-  link.removeAttribute("href");
-  link.setAttribute("aria-disabled", "true");
-  link.addEventListener("click", blockClick);
-
-  return (url) => {
-    link.href = url;
-    link.removeAttribute("aria-disabled");
-    link.removeEventListener("click", blockClick);
-  };
-}
-
+// Pages bake a direct asset URL in at build time, so a link always downloads. This
+// only upgrades the link when GitHub reports a newer release than the build saw.
 export async function resolveAssetDownload(
   link: DownloadLink,
   assetSuffix: string,
   release: Promise<Release> = fetchLatestRelease(),
 ): Promise<ReleaseAsset | null> {
-  const resolve = blockDownloadUntilResolved(link);
-
   try {
-    const asset = selectReleaseAsset(await release, assetSuffix);
-    resolve(asset?.browser_download_url ?? RELEASES_URL);
+    const latest = await release;
+    const asset = selectReleaseAsset(latest, assetSuffix);
+
+    if (asset && isNewerVersion(latest.tag_name, versionInUrl(link.href))) {
+      link.href = asset.browser_download_url;
+    }
 
     return asset;
   } catch {
-    resolve(RELEASES_URL);
-
     return null;
   }
+}
+
+type ReleaseVersionLabel = { textContent: string | null };
+
+type ReleaseNotesLink = { href: string };
+
+// Version text and release-notes links are baked at build time too. When the links
+// above move to a newer release, these follow so the page names what it downloads.
+export function upgradeReleaseInfo(
+  latest: Release,
+  labels: Iterable<ReleaseVersionLabel>,
+  notesLinks: Iterable<ReleaseNotesLink>,
+) {
+  for (const label of labels) {
+    if (isNewerVersion(latest.tag_name, label.textContent ?? undefined)) {
+      label.textContent = latest.tag_name.slice(1);
+    }
+  }
+
+  for (const link of notesLinks) {
+    if (isNewerVersion(latest.tag_name, /\/tag\/(v[\d.]+)$/.exec(link.href)?.[1])) {
+      link.href = latest.html_url;
+    }
+  }
+}
+
+function versionInUrl(url: string): string | undefined {
+  return /\/download\/(v\d+\.\d+\.\d+)\//.exec(url)?.[1];
+}
+
+// A stale cache or a lagging API must never move a link back to an older build.
+function isNewerVersion(candidate: string, current: string | undefined): boolean {
+  if (!current) return true;
+  const parse = (tag: string) => tag.replace(/^v/, "").split(".").map(Number);
+  const [a, b] = [parse(candidate), parse(current)];
+
+  for (let i = 0; i < 3; i++) {
+    if (a[i] !== b[i]) return (a[i] ?? 0) > (b[i] ?? 0);
+  }
+
+  return false;
 }
 
 export function fetchLatestRelease(): Promise<Release> {

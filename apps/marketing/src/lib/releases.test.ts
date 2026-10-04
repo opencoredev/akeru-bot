@@ -2,12 +2,13 @@ import * as NodeAssert from "node:assert/strict";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 import {
-  blockDownloadUntilResolved,
   detectDownloadTarget,
-  RELEASES_URL,
+  FALLBACK_VERSION,
+  releaseAssetUrl,
   requiresUnsignedInstall,
   resolveAssetDownload,
   selectReleaseAsset,
+  upgradeReleaseInfo,
   type Release,
 } from "./releases";
 
@@ -30,19 +31,11 @@ const release = {
   ],
 } satisfies Release;
 
-class DownloadLinkStub extends EventTarget {
-  href = RELEASES_URL;
-  attributes = new Map<string, string>();
+// The direct asset URL a page bakes in at build time.
+const BAKED_URL = releaseAssetUrl("1.2.2", "x64.exe");
 
-  removeAttribute(name: string) {
-    this.attributes.delete(name);
-
-    if (name === "href") this.href = "";
-  }
-
-  setAttribute(name: string, value: string) {
-    this.attributes.set(name, value);
-  }
+class DownloadLinkStub {
+  href = BAKED_URL;
 }
 
 describe("release downloads", () => {
@@ -67,25 +60,22 @@ describe("release downloads", () => {
   it("does not advertise macOS Intel or unknown systems", () => {
     NodeAssert.equal(detectDownloadTarget("Macintosh; Intel Mac OS X")?.assetSuffix, "arm64.dmg");
     NodeAssert.equal(detectDownloadTarget("Mozilla/5.0 (Android 16)"), null);
+    NodeAssert.equal(detectDownloadTarget("Mozilla/5.0 (Linux; Android 16; Pixel 9)"), null);
+    NodeAssert.equal(
+      detectDownloadTarget("Mozilla/5.0 (iPhone; CPU iPhone OS 26_0 like Mac OS X)"),
+      null,
+    );
   });
 
-  it("blocks a fast click until the primary download resolves", () => {
-    const link = new DownloadLinkStub();
-    link.href = "https://wrong.example";
-    const resolve = blockDownloadUntilResolved(link);
-    const pendingClick = new Event("click", { cancelable: true });
-    link.dispatchEvent(pendingClick);
-    NodeAssert.equal(pendingClick.defaultPrevented, true);
-    NodeAssert.equal(link.attributes.get("aria-disabled"), "true");
-
-    resolve("https://downloads.example/mac");
-    const readyClick = new Event("click", { cancelable: true });
-    link.dispatchEvent(readyClick);
-    NodeAssert.equal(readyClick.defaultPrevented, false);
-    NodeAssert.equal(link.href, "https://downloads.example/mac");
+  it("bakes direct asset URLs for the build-time version", () => {
+    NodeAssert.equal(
+      releaseAssetUrl("0.2.1", "arm64.dmg"),
+      "https://github.com/opencoredev/akeru-bot/releases/download/v0.2.1/Akeru-Bot-0.2.1-arm64.dmg",
+    );
+    NodeAssert.match(FALLBACK_VERSION, /^\d+\.\d+\.\d+$/);
   });
 
-  it("uses one resolver for direct assets and fallback links", async () => {
+  it("upgrades a baked link only when the latest release has the asset", async () => {
     let finishRelease!: (value: Release) => void;
 
     const pendingRelease = new Promise<Release>((resolve) => {
@@ -94,22 +84,28 @@ describe("release downloads", () => {
 
     const link = new DownloadLinkStub();
     const resolving = resolveAssetDownload(link, "x64.exe", pendingRelease);
-    const pendingClick = new Event("click", { cancelable: true });
-    link.dispatchEvent(pendingClick);
-    NodeAssert.equal(pendingClick.defaultPrevented, true);
-    NodeAssert.equal(link.attributes.get("aria-disabled"), "true");
+    NodeAssert.equal(link.href, BAKED_URL);
 
     finishRelease(release);
     NodeAssert.equal(await resolving, release.assets[1]);
     NodeAssert.equal(link.href, "https://downloads.example/windows");
 
-    const fallback = new DownloadLinkStub();
+    const offline = new DownloadLinkStub();
     NodeAssert.equal(
-      await resolveAssetDownload(fallback, "x64.exe", Promise.reject(new Error("offline"))),
+      await resolveAssetDownload(offline, "x64.exe", Promise.reject(new Error("offline"))),
       null,
     );
-    NodeAssert.equal(fallback.href, RELEASES_URL);
-    NodeAssert.equal(fallback.attributes.has("aria-disabled"), false);
+    NodeAssert.equal(offline.href, BAKED_URL);
+  });
+
+  it("never moves a baked link back to an older release", async () => {
+    const link = new DownloadLinkStub();
+    link.href = releaseAssetUrl("1.3.0", "x64.exe");
+    NodeAssert.equal(
+      await resolveAssetDownload(link, "x64.exe", Promise.resolve(release)),
+      release.assets[1],
+    );
+    NodeAssert.equal(link.href, releaseAssetUrl("1.3.0", "x64.exe"));
   });
 
   it("accepts only the exact asset for the stable tag", () => {
@@ -207,7 +203,7 @@ describe("bounded shared release requests", () => {
   });
 
   it.each(["headers", "body"])(
-    "aborts stalled %s and restores every fallback at the shared deadline",
+    "aborts stalled %s and keeps every baked link at the shared deadline",
     async (stage) => {
       const stalled = deferred<Response>();
       const body = deferred<Release>();
@@ -226,20 +222,12 @@ describe("bounded shared release requests", () => {
       const signal = fetchMock.mock.calls[0]?.[1]?.signal;
       expect(signal?.aborted).toBe(false);
       await vi.advanceTimersByTimeAsync(RELEASE_REQUEST_TIMEOUT_MS - 1);
-      expect(cards.every((card) => card.attributes.get("aria-disabled") === "true")).toBe(true);
+      expect(cards.every((card) => card.href === BAKED_URL)).toBe(true);
       await vi.advanceTimersByTimeAsync(1);
       expect(await request).toEqual(new Error("GitHub release request timed out"));
       expect(await Promise.all(downloads)).toEqual([null, null, null]);
       expect(signal?.aborted).toBe(true);
-
-      for (const card of cards) {
-        expect(card.href).toBe(RELEASES_URL);
-        expect(card.attributes.has("aria-disabled")).toBe(false);
-        const click = new Event("click", { cancelable: true });
-        card.dispatchEvent(click);
-        expect(click.defaultPrevented).toBe(false);
-      }
-
+      expect(cards.every((card) => card.href === BAKED_URL)).toBe(true);
       expect(fetchMock).toHaveBeenCalledTimes(1);
       expect(storage.setItem).not.toHaveBeenCalled();
       expect(vi.getTimerCount()).toBe(0);
@@ -259,7 +247,7 @@ describe("bounded shared release requests", () => {
         "akeru-latest-release",
         JSON.stringify(nextRelease),
       );
-      expect(cards.every((card) => card.href === RELEASES_URL)).toBe(true);
+      expect(cards.every((card) => card.href === BAKED_URL)).toBe(true);
       expect(fetchMock).toHaveBeenCalledTimes(2);
       expect(vi.getTimerCount()).toBe(0);
     },
@@ -285,8 +273,7 @@ describe("bounded shared release requests", () => {
       const { fetchLatestRelease, resolveAssetDownload } = await import("./releases");
       const link = new DownloadLinkStub();
       expect(await resolveAssetDownload(link, "arm64.dmg")).toBeNull();
-      expect(link.href).toBe(RELEASES_URL);
-      expect(link.attributes.has("aria-disabled")).toBe(false);
+      expect(link.href).toBe(BAKED_URL);
       expect(storage.setItem).not.toHaveBeenCalled();
       expect(vi.getTimerCount()).toBe(0);
 
@@ -335,13 +322,78 @@ describe("bounded shared release requests", () => {
     expect(vi.getTimerCount()).toBe(0);
   });
 
-  it("uses the releases fallback when a valid release has no matching asset", async () => {
+  it("keeps the baked link when a valid release has no matching asset", async () => {
     fetchMock.mockResolvedValueOnce(releaseResponse({ ...release, assets: [] }));
     const { resolveAssetDownload } = await import("./releases");
     const link = new DownloadLinkStub();
     expect(await resolveAssetDownload(link, "arm64.dmg")).toBeNull();
-    expect(link.href).toBe(RELEASES_URL);
-    expect(link.attributes.has("aria-disabled")).toBe(false);
+    expect(link.href).toBe(BAKED_URL);
     expect(vi.getTimerCount()).toBe(0);
   });
+});
+
+describe("release info labels", () => {
+  it("moves version text and notes links forward with the downloads", () => {
+    const label = { textContent: "1.2.2" };
+    const notes = { href: "https://github.com/opencoredev/akeru-bot/releases/tag/v1.2.2" };
+    upgradeReleaseInfo(release, [label], [notes]);
+    expect(label.textContent).toBe("1.2.3");
+    expect(notes.href).toBe(release.html_url);
+  });
+
+  it("never moves release info back to an older version", () => {
+    const label = { textContent: "1.3.0" };
+    const notes = { href: "https://github.com/opencoredev/akeru-bot/releases/tag/v1.3.0" };
+    upgradeReleaseInfo(release, [label], [notes]);
+    expect(label.textContent).toBe("1.3.0");
+    expect(notes.href).toBe("https://github.com/opencoredev/akeru-bot/releases/tag/v1.3.0");
+  });
+});
+
+describe("build-time release version", () => {
+  const fetchMock = vi.fn<typeof fetch>();
+
+  const redirectTo = (location: string | null) =>
+    new Response(null, { status: 302, headers: location ? { location } : {} });
+
+  beforeEach(() => {
+    vi.resetModules();
+    fetchMock.mockReset();
+    vi.stubGlobal("fetch", fetchMock);
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("reads the version from the latest-release redirect once per build", async () => {
+    fetchMock.mockResolvedValue(
+      redirectTo("https://github.com/opencoredev/akeru-bot/releases/tag/v1.4.0"),
+    );
+    const { resolveBuildVersion } = await import("./releases");
+
+    expect(await resolveBuildVersion()).toBe("1.4.0");
+    expect(await resolveBuildVersion()).toBe("1.4.0");
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock.mock.calls[0]?.[1]?.redirect).toBe("manual");
+  });
+
+  for (const [name, response] of [
+    ["a missing location", () => Promise.resolve(redirectTo(null))],
+    [
+      "a pre-release tag",
+      () =>
+        Promise.resolve(
+          redirectTo("https://github.com/opencoredev/akeru-bot/releases/tag/v1.4.0-rc.1"),
+        ),
+    ],
+    ["a failed request", () => Promise.reject(new Error("offline"))],
+  ] as const) {
+    it(`falls back to the pinned version after ${name}`, async () => {
+      fetchMock.mockImplementation(response);
+      const { resolveBuildVersion } = await import("./releases");
+
+      expect(await resolveBuildVersion()).toBe(FALLBACK_VERSION);
+    });
+  }
 });
