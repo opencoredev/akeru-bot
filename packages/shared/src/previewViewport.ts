@@ -1,9 +1,13 @@
+import * as Data from "effect/Data";
+import * as Predicate from "effect/Predicate";
 import type {
   PreviewAutomationResizeInput,
   PreviewViewportPresetId,
   PreviewViewportSetting,
 } from "@akeru/contracts";
 import { PREVIEW_VIEWPORT_PRESET_IDS } from "@akeru/contracts";
+
+const Viewport = Data.taggedEnum<PreviewViewportSetting>();
 
 export interface PreviewViewportPreset {
   readonly id: PreviewViewportPresetId;
@@ -149,38 +153,45 @@ export const PREVIEW_VIEWPORT_PRESETS: ReadonlyArray<PreviewViewportPreset> =
 export function resolvePreviewViewport(
   input: PreviewAutomationResizeInput,
 ): PreviewViewportSetting {
-  if (input.mode === "fill") return { _tag: "fill" };
+  if (input.mode === "fill") return Viewport.fill();
+
   if (input.mode === "preset" && input.preset !== undefined) {
     const preset = PREVIEW_VIEWPORT_PRESETS.find((candidate) => candidate.id === input.preset);
+
     if (!preset) throw new Error(`Unknown preview viewport preset: ${input.preset}`);
     const landscape = input.orientation === "landscape";
     const portrait = input.orientation === "portrait";
     const nativePortrait = preset.height >= preset.width;
     const shouldSwap = (landscape && nativePortrait) || (portrait && !nativePortrait);
-    return {
-      _tag: "preset",
+
+    return Viewport.preset({
       width: shouldSwap ? preset.height : preset.width,
       height: shouldSwap ? preset.width : preset.height,
       presetId: preset.id,
-    };
+    });
   }
+
   if (input.width === undefined || input.height === undefined) {
     throw new Error("Custom preview viewport requires width and height");
   }
-  return {
-    _tag: "freeform",
-    width: input.width,
-    height: input.height,
-  };
+
+  return Viewport.freeform({ width: input.width, height: input.height });
 }
 
 export function previewViewportLabel(viewport: PreviewViewportSetting): string {
-  return viewport._tag === "fill" ? "Fill panel" : `${viewport.width} × ${viewport.height}`;
+  return isFillViewport(viewport) ? "Fill panel" : `${viewport.width} × ${viewport.height}`;
 }
 
 export function previewViewportPresetOrientation(
   viewport: PreviewViewportSetting,
 ): "portrait" | "landscape" | null {
-  if (viewport._tag === "fill" || viewport.width === viewport.height) return null;
+  if (isFillViewport(viewport) || viewport.width === viewport.height) return null;
+
   return viewport.width > viewport.height ? "landscape" : "portrait";
+}
+
+function isFillViewport(
+  value: PreviewViewportSetting,
+): value is Extract<PreviewViewportSetting, { readonly _tag: "fill" }> {
+  return Predicate.isTagged(value, "fill");
 }

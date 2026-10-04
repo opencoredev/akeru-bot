@@ -1,3 +1,4 @@
+import type { RuntimeThreadFixture } from "../test-support/fixtures";
 import { EnvironmentId, ThreadId } from "@akeru/contracts";
 import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
@@ -17,12 +18,14 @@ const mocks = vi.hoisted(() => {
     openBotChat: (botId: string, threadId: string | null, chatPath?: string) => {
       if (chatPath !== undefined) roster.recordChatPath(botId, chatPath);
       const openChatByBotId = { ...roster.openChatByBotId };
+
       if (threadId === null) delete openChatByBotId[botId];
       else openChatByBotId[botId] = threadId;
       roster.openChatByBotId = openChatByBotId;
     },
     recordLastMessage: () => undefined,
   };
+
   return {
     roster,
     messageProjection: {
@@ -31,7 +34,7 @@ const mocks = vi.hoisted(() => {
       hasMessages: true,
       lastUserMessageAt: "2026-09-01T00:00:00.000Z",
     },
-    threadShells: [] as Array<Record<string, unknown>>,
+    threadShells: [] as Array<RuntimeThreadFixture>,
     commands: {
       create: Symbol("create"),
       startTurn: Symbol("startTurn"),
@@ -45,6 +48,7 @@ const mocks = vi.hoisted(() => {
 vi.mock("react", async (importOriginal) => {
   const actual = await importOriginal<typeof import("react")>();
   const { reactHookHarness } = await import("../../test/reactHookHarness");
+
   return {
     ...actual,
     useCallback: reactHookHarness.useCallback,
@@ -54,20 +58,27 @@ vi.mock("react", async (importOriginal) => {
     useState: reactHookHarness.useState,
   };
 });
+
 vi.mock("react/compiler-runtime", async () => {
   const { reactHookHarness } = await import("../../test/reactHookHarness");
+
   return { c: reactHookHarness.useMemoCache };
 });
+
 vi.mock("@effect/atom-react", () => ({ useAtomValue: () => [{ id: "bot-1" }] }));
+
 vi.mock("../../hooks/useSettings", () => ({
   usePrimarySettings: () => ({ localExecutionMode: "full-access" }),
 }));
+
 vi.mock("../../modelSelection", () => ({
   resolveAppModelSelectionState: () => ({ provider: "codex", model: "gpt" }),
 }));
+
 vi.mock("./botConversationMessageProjection", () => ({
   useBotConversationMessageProjection: () => mocks.messageProjection,
 }));
+
 vi.mock("../../state/entities", () => ({
   useProjects: () => [{ environmentId: "env-a", id: "project-1", defaultModelSelection: null }],
   useThreadShells: () => mocks.threadShells,
@@ -81,12 +92,17 @@ vi.mock("../../state/entities", () => ({
   useThreadActivities: () => [],
   readEnvironmentSupportsFileAttachments: () => true,
 }));
+
 vi.mock("../../state/bots", () => ({ environmentBotsAtom: () => null }));
+
 vi.mock("../../state/environments", () => ({ usePrimaryEnvironmentId: () => "env-a" }));
+
 vi.mock("../../state/server", () => ({ primaryServerProvidersAtom: null }));
+
 vi.mock("../../state/threads", () => ({
   threadEnvironment: { create: mocks.commands.create, startTurn: mocks.commands.startTurn },
 }));
+
 vi.mock("../../state/use-atom-command", () => ({
   useAtomCommand: (command: symbol) =>
     command === mocks.commands.create
@@ -95,15 +111,20 @@ vi.mock("../../state/use-atom-command", () => ({
         ? mocks.startTurn
         : mocks.otherCommand,
 }));
+
 vi.mock("../../session-logic", () => ({ derivePendingUserInputs: () => [] }));
+
 vi.mock("../Sidebar.logic", () => ({
   sortScopedProjectsForSidebar: (projects: unknown[]) => projects,
 }));
+
 vi.mock("../../localApi", () => ({ ensureLocalApi: () => ({ shell: { openExternal: vi.fn() } }) }));
+
 vi.mock("./rosterStore", () => {
-  const useRosterStore = (selector: (state: typeof mocks.roster) => unknown) =>
-    selector(mocks.roster);
+  const useRosterStore = <T>(selector: (state: typeof mocks.roster) => T) => selector(mocks.roster);
+
   useRosterStore.getState = () => mocks.roster;
+
   return { useRosterStore };
 });
 
@@ -114,7 +135,7 @@ function chatShell(id: string, updatedAt: string) {
     botId: "bot-1",
     parentThreadId: null,
     archivedAt: null,
-    runtimeMode: "full-access",
+    runtimeMode: "full-access" as const,
     updatedAt,
     createdAt: updatedAt,
   };
@@ -122,6 +143,7 @@ function chatShell(id: string, updatedAt: string) {
 
 function render() {
   hooks.beginRender();
+
   return useBotThreadRuntime("bot-1", null);
 }
 
@@ -132,6 +154,7 @@ function deferredCreate() {
       resolve = settle;
     }),
   );
+
   return () => resolve({ _tag: "Success", value: undefined });
 }
 
@@ -196,8 +219,10 @@ describe("New chat while another chat is opened", () => {
 
     expect(await creating).toBe(true);
     expect(await sending).toBe(true);
+
     const createdId = (mocks.createThread.mock.calls[0]![0] as { input: { threadId: string } })
       .input.threadId;
+
     expect(startedThreadIds()).toEqual([createdId]);
     expect(mocks.roster.openChatByBotId["bot-1"]).toBe("older");
     expect(mocks.roster.chatPathByBotId["bot-1"]).toBe("/env-a/older");
@@ -215,8 +240,10 @@ describe("New chat while another chat is opened", () => {
 
     expect(await creating).toBe(true);
     expect(await sending).toBe(true);
+
     const createdId = (mocks.createThread.mock.calls[0]![0] as { input: { threadId: string } })
       .input.threadId;
+
     expect(startedThreadIds()).toEqual([createdId]);
     expect(mocks.roster.openChatByBotId["bot-1"]).toBeUndefined();
     expect(mocks.roster.chatPathByBotId["bot-1"]).toBe(`/env-a/${createdId}`);
@@ -231,8 +258,10 @@ describe("New chat while another chat is opened", () => {
 
     expect(await creating).toBe(true);
     expect(await sending).toBe(true);
+
     const createdId = (mocks.createThread.mock.calls[0]![0] as { input: { threadId: string } })
       .input.threadId;
+
     expect(startedThreadIds()).toEqual([createdId]);
     expect(mocks.roster.chatPathByBotId["bot-1"]).toBe(`/env-a/${createdId}`);
   });
@@ -241,6 +270,7 @@ describe("New chat while another chat is opened", () => {
 describe("Opening another chat while a send reads its attachments", () => {
   it("sends into the chat where the message was submitted and keeps the newly opened chat", async () => {
     const readers: Array<() => void> = [];
+
     class DeferredFileReader extends EventTarget {
       result: string | null = null;
       error: Error | null = null;
@@ -251,9 +281,12 @@ describe("Opening another chat while a send reads its attachments", () => {
         });
       }
     }
+
     vi.stubGlobal("FileReader", DeferredFileReader);
+
     try {
       mocks.roster.openBotChat("bot-1", "older", "/env-a/newest");
+
       const sending = render().send("look at this", [
         new File(["png"], "shot.png", { type: "image/png" }),
       ]);

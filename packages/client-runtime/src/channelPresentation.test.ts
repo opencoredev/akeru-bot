@@ -50,10 +50,12 @@ describe("channel presentation", () => {
   it("derives one repair action from status and failure category", () => {
     const projectId = ProjectId.make("project-1");
     const live = [{ id: projectId }];
+
     const at = (
       status: ChannelBinding["status"],
       failureCategory?: ChannelBinding["failureCategory"],
     ) => channelRepairAction({ status, projectId, failureCategory }, live);
+
     expect(at("connecting")).toBe("wait");
     expect(at("connected")).toBe("none");
     expect(at("connected", "delivery-unknown")).toBe("check-delivery");
@@ -107,10 +109,12 @@ describe("channel presentation", () => {
 
   it("shows a repair warning without exposing error details", () => {
     const projectId = ProjectId.make("project-1");
+
     const presentation = channelBindingPresentation(
       { ...binding, projectId, lastError: "private-error-detail" },
       [{ id: projectId, title: "Workspace" }],
     );
+
     expect(presentation.warning).toBe("Channel needs attention");
     expect(JSON.stringify(presentation)).not.toContain("private-error-detail");
   });
@@ -130,10 +134,12 @@ describe("channel presentation", () => {
     const live = ProjectId.make("project-live");
     const gone = ProjectId.make("project-gone");
     const target = ProjectId.make("project-target");
+
     const projects = [
       { id: live, title: "Workspace" },
       { id: target, title: "Target" },
     ];
+
     expect(channelRestoreProjectId(live, target, projects)).toBe(live);
     expect(channelRestoreProjectId(gone, target, projects)).toBe(target);
     expect(channelRestoreProjectId(undefined, target, projects)).toBe(target);
@@ -151,10 +157,12 @@ describe("channel presentation", () => {
       true,
     );
     expect(channelBindingNeedsProject({ status: "failed" }, projects)).toBe(true);
+
     const blocked = channelBindingPresentation(
       { ...binding, status: "blocked", projectId: gone, lastError: "private" },
       projects,
     );
+
     expect(blocked.health).toBe("Choose another project");
     expect(blocked.warning).toBe("Choose a project before reconnecting");
     expect(blocked.needsProjectConfirmation).toBe(true);

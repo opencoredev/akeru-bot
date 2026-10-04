@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import type {
   ComputerAction,
   ComputerError,
@@ -36,6 +37,7 @@ export interface ComputerViewerPort {
 
 /** Queued input is bounded; a client that outruns the computer loses the oldest moves first. */
 export const COMPUTER_VIEWER_INPUT_QUEUE_LIMIT = 32;
+
 const SCROLL_LIMIT = 2000;
 
 export interface ComputerViewerController {
@@ -74,16 +76,20 @@ export function createComputerViewerController(options: {
 
   const dispatch = (event: ComputerViewerEvent) => {
     const next = reduceComputerViewer(state, event);
+
     if (next === state) return;
     const lostLease = state.lease !== null && next.lease?.sessionId !== state.lease.sessionId;
     state = next;
+
     if (lostLease) queue = [];
+
     for (const listener of listeners) listener(state);
   };
 
   const refreshState = async () => {
     const generation = visibilityGeneration;
     const outcome = await port.getState();
+
     if (outcome.ok && state.visible && generation === visibilityGeneration) {
       dispatch({ type: "server-state", state: outcome.value });
     }
@@ -94,6 +100,7 @@ export function createComputerViewerController(options: {
     if (outcome.ok) onSuccess(outcome.value);
     else {
       dispatch({ type: "failed", code: outcome.code });
+
       if (outcome.code !== "transport") void refreshState();
     }
   };
@@ -101,20 +108,27 @@ export function createComputerViewerController(options: {
   const drain = async () => {
     if (draining) return;
     draining = true;
+
     try {
       while (queue.length > 0) {
         const lease = state.lease;
+
         if (lease === null || !state.visible) {
           queue = [];
+
           return;
         }
+
         const action = queue.shift()!;
+
         const outcome = await port.input({
           sessionId: lease.sessionId,
           sequence: lease.sequence + 1,
           action,
         });
+
         if (state.lease?.sessionId !== lease.sessionId) continue;
+
         if (!outcome.ok) {
           dispatch({ type: "failed", code: outcome.code });
           // The server may still hold the lease this client just gave up, which
@@ -123,9 +137,11 @@ export function createComputerViewerController(options: {
           // connection, so release then too; a real disconnect already ends
           // the lease on the server.
           await port.release(lease.sessionId);
+
           if (outcome.code !== "transport") void refreshState();
           continue;
         }
+
         dispatch({ type: "input-sent" });
       }
     } finally {
@@ -135,8 +151,9 @@ export function createComputerViewerController(options: {
 
   const enqueue = (action: ComputerAction) => {
     const last = queue.at(-1);
+
     if (
-      action._tag === "scroll" &&
+      Predicate.isTagged(action, "scroll") &&
       last?._tag === "scroll" &&
       last.direction === action.direction
     ) {
@@ -144,13 +161,17 @@ export function createComputerViewerController(options: {
         ...last,
         amount: Math.min(SCROLL_LIMIT, last.amount + action.amount),
       };
+
       return;
     }
+
     if (queue.length >= COMPUTER_VIEWER_INPUT_QUEUE_LIMIT) {
-      const moveIndex = queue.findIndex((queued) => queued._tag === "move");
+      const moveIndex = queue.findIndex((queued) => Predicate.isTagged(queued, "move"));
+
       if (moveIndex === -1) return;
       queue.splice(moveIndex, 1);
     }
+
     queue.push(action);
   };
 
@@ -158,16 +179,20 @@ export function createComputerViewerController(options: {
     getState: () => state,
     subscribe: (listener) => {
       listeners.add(listener);
+
       return () => listeners.delete(listener);
     },
     dispatch,
     receive: (event) => {
       if (!state.visible) return;
-      if (event._tag === "state") dispatch({ type: "server-state", state: event.state });
-      else if (event._tag === "frame") dispatch({ type: "frame", frame: event.frame });
+
+      if (Predicate.isTagged(event, "state"))
+        dispatch({ type: "server-state", state: event.state });
+      else if (Predicate.isTagged(event, "frame")) dispatch({ type: "frame", frame: event.frame });
     },
     show: async () => {
       if (closing) await closing;
+
       if (state.visible) return;
       visibilityGeneration += 1;
       dispatch({ type: "visibility", visible: true });
@@ -175,6 +200,7 @@ export function createComputerViewerController(options: {
     },
     hide: async () => {
       if (closing) return closing;
+
       if (!state.visible) return;
       queue = [];
       visibilityGeneration += 1;
@@ -182,6 +208,7 @@ export function createComputerViewerController(options: {
       // Closing releases any lease this connection holds, so the bot resumes.
       const pending = port.close().then(() => undefined);
       closing = pending;
+
       try {
         await pending;
       } finally {
@@ -190,19 +217,24 @@ export function createComputerViewerController(options: {
     },
     takeControl: async () => {
       if (closing) await closing;
+
       if (!state.visible) return;
       const generation = visibilityGeneration;
       dispatch({ type: "pending", pending: "acquire" });
       const outcome = await port.acquire();
+
       if (!state.visible || generation !== visibilityGeneration) {
         // The viewer closed while acquiring; hand control straight back.
         if (outcome.ok) await port.release(outcome.value.sessionId);
+
         return;
       }
+
       settle(outcome, (session) => dispatch({ type: "acquired", session }));
     },
     returnControl: async () => {
       const lease = state.lease;
+
       if (lease === null) return;
       queue = [];
       dispatch({ type: "pending", pending: "release" });

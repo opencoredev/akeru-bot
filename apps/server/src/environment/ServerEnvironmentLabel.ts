@@ -14,6 +14,7 @@ const ServerEnvironmentLabelCommandProbe = Schema.Literals([
   "macos-computer-name",
   "linux-pretty-hostname",
 ]);
+
 type ServerEnvironmentLabelCommandProbe = typeof ServerEnvironmentLabelCommandProbe.Type;
 
 export class ServerEnvironmentLabelFileError extends Schema.TaggedErrorClass<ServerEnvironmentLabelFileError>()(
@@ -45,30 +46,37 @@ export class ServerEnvironmentLabelCommandError extends Schema.TaggedErrorClass<
 
 function normalizeLabel(value: string | null | undefined): string | null {
   const trimmed = value?.trim();
+
   return trimmed && trimmed.length > 0 ? trimmed : null;
 }
 
 function parseMachineInfoValue(raw: string, key: string): string | null {
   for (const line of raw.split(/\r?\n/g)) {
     const trimmed = line.trim();
+
     if (trimmed.length === 0 || trimmed.startsWith("#") || !trimmed.startsWith(`${key}=`)) {
       continue;
     }
+
     const value = trimmed.slice(key.length + 1).trim();
+
     if (
       (value.startsWith('"') && value.endsWith('"')) ||
       (value.startsWith("'") && value.endsWith("'"))
     ) {
       return normalizeLabel(value.slice(1, -1));
     }
+
     return normalizeLabel(value);
   }
+
   return null;
 }
 
 const readLinuxMachineInfo = Effect.fn("readLinuxMachineInfo")(function* () {
   const fileSystem = yield* FileSystem.FileSystem;
   const machineInfoPath = "/etc/machine-info";
+
   return yield* fileSystem.exists(machineInfoPath).pipe(
     Effect.mapError(
       (cause) =>
@@ -112,6 +120,7 @@ const runFriendlyLabelCommand = Effect.fn("runFriendlyLabelCommand")(function* (
   readonly args: readonly string[];
 }) {
   const processRunner = yield* ProcessRunner.ProcessRunner;
+
   const result = yield* processRunner
     .run({
       command: input.command,
@@ -152,6 +161,7 @@ const runFriendlyLabelCommand = Effect.fn("runFriendlyLabelCommand")(function* (
 
 const resolveFriendlyHostLabel = Effect.fn("resolveFriendlyHostLabel")(function* () {
   const platform = yield* HostProcessPlatform;
+
   if (platform === "darwin") {
     return yield* runFriendlyLabelCommand({
       probe: "macos-computer-name",
@@ -162,8 +172,10 @@ const resolveFriendlyHostLabel = Effect.fn("resolveFriendlyHostLabel")(function*
 
   if (platform === "linux") {
     const machineInfo = normalizeLabel(yield* readLinuxMachineInfo());
+
     if (machineInfo) {
       const prettyHostname = parseMachineInfoValue(machineInfo, "PRETTY_HOSTNAME");
+
       if (prettyHostname) {
         return prettyHostname;
       }
@@ -183,11 +195,13 @@ export const resolveServerEnvironmentLabel = Effect.fn("resolveServerEnvironment
   input: ResolveServerEnvironmentLabelInput,
 ) {
   const friendlyHostLabel = yield* resolveFriendlyHostLabel();
+
   if (friendlyHostLabel) {
     return friendlyHostLabel;
   }
 
   const hostname = normalizeLabel(yield* HostProcessHostname);
+
   if (hostname) {
     return hostname;
   }

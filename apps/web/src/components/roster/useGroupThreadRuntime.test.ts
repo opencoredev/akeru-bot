@@ -1,6 +1,9 @@
+import type { RuntimeThreadFixture, RuntimeProjectFixture } from "../test-support/fixtures";
+
 vi.mock("./botConversationMessageProjection", () => ({
   useBotConversationMessageProjection: () => mocks.messageProjection,
 }));
+
 import { BotId, EnvironmentId, ThreadId } from "@akeru/contracts";
 import { DEFAULT_UNIFIED_SETTINGS } from "@akeru/contracts/settings";
 import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
@@ -24,10 +27,10 @@ const mocks = vi.hoisted(() => ({
   providersAtom: Symbol("providers"),
   providers: [] as ReturnType<typeof makeComposerTestProvider>[],
   serverGroups: [] as Array<{ id: string }>,
-  projects: [] as Array<Record<string, unknown>>,
-  startTurn: null as unknown as ReturnType<typeof vi.fn>,
-  threadShells: [] as Array<Record<string, unknown>>,
-  threadShell: null as Record<string, unknown> | null,
+  projects: [] as Array<RuntimeProjectFixture>,
+  startTurn: vi.fn(),
+  threadShells: [] as Array<RuntimeThreadFixture>,
+  threadShell: null as RuntimeThreadFixture | null,
   bots: [] as Bot[],
   groups: [] as Group[],
 }));
@@ -35,6 +38,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock("react", async (importOriginal) => {
   const actual = await importOriginal<typeof import("react")>();
   const { reactHookHarness } = await import("../../test/reactHookHarness");
+
   return {
     ...actual,
     useCallback: reactHookHarness.useCallback,
@@ -44,22 +48,28 @@ vi.mock("react", async (importOriginal) => {
     useState: reactHookHarness.useState,
   };
 });
+
 vi.mock("react/compiler-runtime", async () => {
   const { reactHookHarness } = await import("../../test/reactHookHarness");
+
   return { c: reactHookHarness.useMemoCache };
 });
+
 vi.mock("@effect/atom-react", () => ({
-  useAtomValue: (atom: unknown) =>
+  useAtomValue: <T>(atom: T) =>
     atom === mocks.groupAtom
       ? mocks.serverGroups
       : atom === mocks.providersAtom
         ? mocks.providers
         : [],
 }));
+
 vi.mock("../../hooks/useSettings", () => ({
   usePrimarySettings: () => DEFAULT_UNIFIED_SETTINGS,
 }));
+
 vi.mock("../../modelSelection", () => ({ resolveAppModelSelectionState: () => null }));
+
 vi.mock("../../state/entities", () => ({
   useProjects: () => mocks.projects,
   useThreadShells: () => mocks.threadShells,
@@ -69,24 +79,32 @@ vi.mock("../../state/entities", () => ({
   useThreadActivities: () => [],
   readEnvironmentSupportsFileAttachments: () => true,
 }));
+
 vi.mock("../../state/bots", () => ({ environmentGroupsAtom: () => mocks.groupAtom }));
+
 vi.mock("../../state/environments", () => ({
   usePrimaryEnvironmentId: () => mocks.primaryEnvironmentId,
 }));
+
 vi.mock("../../state/server", () => ({ primaryServerProvidersAtom: mocks.providersAtom }));
+
 vi.mock("../../state/threads", () => ({
   threadEnvironment: { startTurn: mocks.startTurnAtom },
 }));
+
 vi.mock("../../state/use-atom-command", () => ({
-  useAtomCommand: (atom: unknown) =>
+  useAtomCommand: <T>(atom: T) =>
     atom === mocks.startTurnAtom ? mocks.startTurn : vi.fn().mockResolvedValue({ _tag: "Success" }),
 }));
+
 vi.mock("../../session-logic", () => ({ derivePendingUserInputs: () => [] }));
+
 vi.mock("../Sidebar.logic", () => ({
-  sortScopedProjectsForSidebar: (projects: unknown) => projects,
+  sortScopedProjectsForSidebar: <T>(projects: T) => projects,
 }));
+
 vi.mock("./rosterStore", () => ({
-  useRosterStore: (selector: (state: { bots: Bot[]; groups: Group[] }) => unknown) =>
+  useRosterStore: <T>(selector: (state: { bots: Bot[]; groups: Group[] }) => T) =>
     selector({ bots: mocks.bots, groups: mocks.groups }),
 }));
 
@@ -268,7 +286,7 @@ describe("group runtime errors", () => {
         id: "bot-2",
         engine: { provider: "codex", model: "gpt-5.6-sol" },
         archivedAt: null,
-        runtimeMode: "full-access",
+        runtimeMode: "full-access" as const,
       } as Bot,
     ];
 
@@ -290,6 +308,7 @@ describe("group runtime errors", () => {
       .mockImplementationOnce(async () => {
         firstStarted();
         await firstAccepted;
+
         return { _tag: "Success" };
       })
       .mockResolvedValue({ _tag: "Success" });
@@ -316,7 +335,7 @@ describe("group runtime errors", () => {
         id: "bot-1",
         engine: { provider: "codex", model: "gpt-5.6-sol" },
         archivedAt: null,
-        runtimeMode: "full-access",
+        runtimeMode: "full-access" as const,
       } as Bot,
     ];
 
@@ -347,6 +366,7 @@ describe("group runtime errors", () => {
       .mockImplementationOnce(async () => {
         firstStarted();
         await firstAccepted;
+
         return { _tag: "Success" };
       })
       .mockResolvedValue({ _tag: "Success" });
@@ -371,7 +391,7 @@ describe("group runtime errors", () => {
         id: "bot-1",
         engine: { provider: "codex", model: "gpt-5.6-sol" },
         archivedAt: null,
-        runtimeMode: "full-access",
+        runtimeMode: "full-access" as const,
       } as Bot,
     ];
 
@@ -401,6 +421,7 @@ describe("group runtime errors", () => {
       .mockImplementationOnce(async () => {
         firstStarted();
         await firstAccepted;
+
         return { _tag: "Success" };
       })
       .mockResolvedValue({ _tag: "Success" });
@@ -425,7 +446,7 @@ describe("group runtime errors", () => {
         id: "bot-1",
         engine: { provider: "codex", model: "gpt-5.6-sol" },
         archivedAt: null,
-        runtimeMode: "full-access",
+        runtimeMode: "full-access" as const,
       } as Bot,
     ];
 
@@ -455,6 +476,7 @@ describe("group runtime errors", () => {
       .mockImplementationOnce(async () => {
         firstStarted();
         await firstAccepted;
+
         return { _tag: "Success" };
       })
       .mockResolvedValue({ _tag: "Success" });
@@ -479,17 +501,19 @@ describe("group runtime errors", () => {
         id: "bot-1",
         engine: { provider: "codex", model: "gpt-5.6-sol" },
         archivedAt: null,
-        runtimeMode: "full-access",
+        runtimeMode: "full-access" as const,
       } as Bot,
     ];
+
     const chat = (id: string, updatedAt: string) => ({
       environmentId: mocks.primaryEnvironmentId,
       id: ThreadId.make(id),
       groupId: "group-1",
       updatedAt,
       archivedAt: null,
-      runtimeMode: "full-access",
+      runtimeMode: "full-access" as const,
     });
+
     mocks.threadShells = [chat("thread-x", "2026-09-13T00:00:00.000Z")];
     mocks.threadShell = mocks.threadShells[0]!;
 

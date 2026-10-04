@@ -1,4 +1,3 @@
-// @effect-diagnostics nodeBuiltinImport:off - This integration guard reads its sibling source.
 import * as NodeFS from "node:fs";
 
 import { describe, expect, it } from "vite-plus/test";
@@ -11,6 +10,7 @@ function readSibling(file: string) {
 function rowComponent(source: string, name: string) {
   const start = source.indexOf(`export const ${name} = memo(`);
   const end = source.indexOf("\nexport ", start + 1);
+
   return start < 0 ? "" : source.slice(start, end < 0 ? source.length : end);
 }
 
@@ -48,6 +48,7 @@ describe("BotThreadLanding message formatting", () => {
     for (const file of ["BotThreadLanding.tsx", "GroupThreadLanding.tsx"]) {
       expect(readSibling(file)).toContain("stepMeters.get(message.turnId)");
     }
+
     const assistantRow = rowComponent(readSibling("BotChatMessageRows.tsx"), "AssistantMessageRow");
     expect(assistantRow).toContain("<BotStepMeter meter={stepMeter} />");
   });
@@ -57,6 +58,7 @@ describe("BotThreadLanding message formatting", () => {
       new URL("./BotThreadLanding.tsx", import.meta.url),
       "utf8",
     );
+
     const groupSource = NodeFS.readFileSync(
       new URL("./GroupThreadLanding.tsx", import.meta.url),
       "utf8",
@@ -89,12 +91,15 @@ describe("BotThreadLanding message formatting", () => {
       const controls = row.split("<MessageControls").slice(1);
       expect(controls.length).toBeGreaterThan(0);
       expect(row).toContain("HOVER_CONTROLS_CLASS");
+
       for (const block of controls) {
         const props = block.slice(0, block.indexOf("/>"));
         expect(props).toContain("onReply=");
+
         if (name === "AssistantMessageRow") expect(props).toContain("readAloud");
       }
     }
+
     // Only the "Unavailable bot" layout omits reactions.
     const assistantControls = rowComponent(source, "AssistantMessageRow").split("<MessageControls");
     expect(assistantControls[2]).toContain("{...reactions.controls}");
@@ -131,9 +136,11 @@ describe("BotThreadLanding message formatting", () => {
 
   it("renders routine receipts as readable actions with an explicit failed tone", () => {
     const source = NodeFS.readFileSync(new URL("./BotThreadLanding.tsx", import.meta.url), "utf8");
-    const start = source.indexOf("function RoutineReceiptRow");
-    const end = source.indexOf("const NO_ENVIRONMENT", start);
-    const receiptRow = source.slice(start, end);
+
+    const receiptRow = NodeFS.readFileSync(
+      new URL("./RoutineReceiptRow.tsx", import.meta.url),
+      "utf8",
+    );
 
     expect(receiptRow).toContain('const Row = opensRoutines ? "button" : "div"');
     expect(receiptRow).toContain("onClick={opensRoutines ? onOpenRoutines : undefined}");

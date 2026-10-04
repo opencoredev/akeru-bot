@@ -15,6 +15,7 @@ import {
 } from "./threadSearch.ts";
 
 const envA = EnvironmentId.make("env-a");
+
 const envB = EnvironmentId.make("env-b");
 
 it("creates stable keys regardless of environment order", () => {
@@ -41,6 +42,7 @@ it("encodes scoped thread keys without delimiter collisions", () => {
     environmentId: EnvironmentId.make("env\u0000thread"),
     threadId: ThreadId.make("id"),
   });
+
   const second = threadSearchMatchKey({
     environmentId: EnvironmentId.make("env"),
     threadId: ThreadId.make("thread\u0000id"),
@@ -51,13 +53,16 @@ it("encodes scoped thread keys without delimiter collisions", () => {
 
 it("accepts search keys at the maximum decoded query length", () => {
   const queries: string[] = [];
+
   const searchAtom = createThreadSearchResultsAtomFamily<Error>({
     getSearchAtom: (_environmentId, query) => {
       queries.push(query);
+
       return Atom.make(AsyncResult.success({ matches: [] }));
     },
     labelPrefix: "test:thread-search",
   });
+
   const registry = AtomRegistry.make();
   const query = "a".repeat(200);
 
@@ -73,13 +78,16 @@ it("accepts search keys at the maximum decoded query length", () => {
 
 it("ignores invalid search keys", () => {
   let searchCount = 0;
+
   const searchAtom = createThreadSearchResultsAtomFamily<Error>({
     getSearchAtom: () => {
       searchCount += 1;
+
       return Atom.make(AsyncResult.success({ matches: [] }));
     },
     labelPrefix: "test:thread-search",
   });
+
   const registry = AtomRegistry.make();
 
   try {
@@ -106,6 +114,7 @@ it("merges successful environments and silently ignores failures", () => {
       },
     ],
   };
+
   const searchAtom = createThreadSearchResultsAtomFamily<Error>({
     getSearchAtom: (environmentId) =>
       environmentId === envA
@@ -117,6 +126,7 @@ it("merges successful environments and silently ignores failures", () => {
           ),
     labelPrefix: "test:thread-search",
   });
+
   const registry = AtomRegistry.make();
 
   const state = registry.get(searchAtom(makeThreadSearchKey([envB, envA], "needle")));

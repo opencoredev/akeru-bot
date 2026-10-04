@@ -15,9 +15,11 @@ describe("Akeru OpenAI API-key transport", () => {
       access: "first-key",
       baseUrl: "https://proxy.example/v1",
     };
+
     const request = vi.fn(
       async (_input: string | URL | Request, _init?: RequestInit) => new Response("{}"),
     );
+
     const fetch = buildAkeruOpenAIFetch(() => credential, request);
     await fetch("https://api.openai.com/v1/responses", {
       method: "POST",

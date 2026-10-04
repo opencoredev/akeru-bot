@@ -1,3 +1,4 @@
+import * as Match from "effect/Match";
 import { DesktopSshEnvironmentTargetSchema, EnvironmentId } from "@akeru/contracts";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
@@ -33,6 +34,7 @@ export class SshConnectionProfile extends Schema.TaggedClass<SshConnectionProfil
 ) {}
 
 export const ConnectionProfile = Schema.Union([BearerConnectionProfile, SshConnectionProfile]);
+
 export type ConnectionProfile = typeof ConnectionProfile.Type;
 
 export interface ConnectionCatalogEntry {
@@ -48,6 +50,7 @@ export class BearerConnectionCredential extends Schema.TaggedClass<BearerConnect
 ) {}
 
 export const ConnectionCredential = Schema.Union([BearerConnectionCredential]);
+
 export type ConnectionCredential = typeof ConnectionCredential.Type;
 
 export class PrimaryConnectionRegistration extends Schema.TaggedClass<PrimaryConnectionRegistration>()(
@@ -78,6 +81,7 @@ export const ConnectionRegistration = Schema.Union([
   BearerConnectionRegistration,
   SshConnectionRegistration,
 ]);
+
 export type ConnectionRegistration = typeof ConnectionRegistration.Type;
 
 /**
@@ -93,6 +97,7 @@ export const PlatformConnectionRegistration = Schema.Union([
   PrimaryConnectionRegistration,
   BearerConnectionRegistration,
 ]);
+
 export type PlatformConnectionRegistration = typeof PlatformConnectionRegistration.Type;
 
 export function connectionRegistrationTarget(
@@ -104,17 +109,26 @@ export function connectionRegistrationTarget(
 export function connectionRegistrationCatalogEntry(
   registration: ConnectionRegistration | PrimaryConnectionRegistration,
 ): ConnectionCatalogEntry {
-  switch (registration._tag) {
-    case "PrimaryConnectionRegistration":
-      return {
-        target: registration.target,
-        profile: Option.none(),
-      };
-    case "BearerConnectionRegistration":
-    case "SshConnectionRegistration":
-      return {
-        target: registration.target,
-        profile: Option.some(registration.profile),
-      };
-  }
+  return Match.value(registration).pipe(
+    Match.tagsExhaustive({
+      PrimaryConnectionRegistration: (registration) => {
+        return {
+          target: registration.target,
+          profile: Option.none(),
+        };
+      },
+      BearerConnectionRegistration: (registration) => {
+        return {
+          target: registration.target,
+          profile: Option.some(registration.profile),
+        };
+      },
+      SshConnectionRegistration: (registration) => {
+        return {
+          target: registration.target,
+          profile: Option.some(registration.profile),
+        };
+      },
+    }),
+  );
 }

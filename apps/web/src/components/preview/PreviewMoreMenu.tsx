@@ -70,12 +70,14 @@ export function PreviewMoreMenu({
   if (!previewBridge) return null;
   const bridge = previewBridge;
   const tabDisabled = !tabId || !hasWebContents;
+
   const callTab = (op: (tabId: string) => Promise<void>) => () => {
     if (!tabId) return;
     void op(tabId).catch(() => undefined);
   };
 
   const zoomLabel = `${Math.round(zoomFactor * 100)}%`;
+
   return (
     <Menu>
       <Tooltip>
@@ -114,6 +116,7 @@ export function PreviewMoreMenu({
               value={colorScheme}
               onValueChange={(value) => {
                 if (!tabId) return;
+                // SAFETY: the radio group emits only the color schemes rendered from COLOR_SCHEME_OPTIONS.
                 void bridge
                   .setColorScheme(tabId, value as DesktopPreviewColorScheme)
                   .catch(() => undefined);
@@ -169,7 +172,7 @@ export function PreviewMoreMenu({
               type="button"
               onClick={callTab(bridge.resetZoom)}
               aria-label="Reset zoom"
-              className="[:hover,[data-pressed]]:bg-foreground/10"
+              presentation="preview-tool"
               disabled={tabDisabled}
             >
               <RotateCcw />

@@ -45,5 +45,6 @@ const destinations: Readonly<Record<SettingsDeepLinkId, MobileSettingsDestinatio
 
 export function resolveMobileSettingsDestination(href: string): MobileSettingsDestination | null {
   const id = parseSettingsDeepLinkId(href);
+
   return id === null ? null : destinations[id];
 }

@@ -53,12 +53,15 @@ export function mergeServers(input: {
 
   for (const url of input.configuredUrls) {
     const parsed = parseLocalUrl(url);
+
     if (!parsed) continue;
     const key = canonicalKey(parsed.host, parsed.port);
+
     if (!configuredByServer.has(key)) configuredByServer.set(key, parsed);
   }
 
   const live: PreviewableServer[] = [];
+
   for (const server of input.scanner) {
     const key = canonicalKey(server.host, server.port);
     const configured = configuredByServer.get(key);
@@ -75,29 +78,37 @@ export function mergeServers(input: {
       configured: 0,
       scanner: 1,
     };
+
     if (sourceOrder[a.source] !== sourceOrder[b.source]) {
       return sourceOrder[a.source] - sourceOrder[b.source];
     }
+
     return a.port - b.port;
   });
 }
 
 function canonicalKey(host: string, port: number): string {
   const normalizedHost = host.toLowerCase();
+
   return `${isLoopbackHost(normalizedHost) ? "loopback" : normalizedHost}:${port}`;
 }
 
 function parseLocalUrl(raw: string): { host: string; port: number; url: string } | null {
   try {
     const parsed = new URL(raw);
+
     if (parsed.protocol !== "http:" && parsed.protocol !== "https:") return null;
+
     if (!isLoopbackHost(parsed.hostname)) return null;
+
     const port = parsed.port
       ? Number.parseInt(parsed.port, 10)
       : parsed.protocol === "http:"
         ? 80
         : 443;
+
     if (!Number.isFinite(port) || port <= 0) return null;
+
     return { host: parsed.hostname, port, url: parsed.href };
   } catch {
     return null;

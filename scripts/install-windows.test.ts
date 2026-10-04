@@ -1,10 +1,10 @@
-// @effect-diagnostics nodeBuiltinImport:off - Tests pin installer script text; behavior runs separately on Windows.
 import * as NodeAssert from "node:assert/strict";
 import * as NodeFS from "node:fs";
 import * as NodePath from "node:path";
 import { describe, it } from "vite-plus/test";
 
 const scriptPath = NodePath.resolve(import.meta.dirname, "./install-windows.ps1");
+
 const script = NodeFS.readFileSync(scriptPath, "utf8");
 
 describe("install-windows.ps1", () => {

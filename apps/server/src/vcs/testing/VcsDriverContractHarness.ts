@@ -47,6 +47,7 @@ export function runVcsDriverContractSuite<R, E>(input: VcsDriverContractSuiteInp
   ): Effect.Effect<string, PlatformError.PlatformError, FileSystem.FileSystem | Scope.Scope> =>
     Effect.gen(function* () {
       const fileSystem = yield* FileSystem.FileSystem;
+
       return yield* fileSystem.makeTempDirectoryScoped({ prefix });
     });
 
@@ -98,10 +99,12 @@ export function runVcsDriverContractSuite<R, E>(input: VcsDriverContractSuiteInp
 
           yield* input.fixture.createRepo(cwd);
           yield* input.fixture.writeFile(cwd, "tracked.ts", "export const tracked = true;\n");
+
           if (input.fixture.trackFile && input.fixture.commit) {
             yield* input.fixture.trackFile(cwd, "tracked.ts");
             yield* input.fixture.commit(cwd, "Track file");
           }
+
           yield* input.fixture.writeFile(cwd, "untracked.ts", "export const untracked = true;\n");
 
           const result = yield* driver.listWorkspaceFiles(cwd);

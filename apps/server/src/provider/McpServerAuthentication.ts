@@ -28,22 +28,27 @@ export async function authenticateMcpServer(
   const temporary = options.managers.length === 0;
   const manager = options.managers[0] ?? options.createManager();
   const serverId = String(options.server.id);
+
   const cancelAuthentication = () => {
     void manager.cancelServerAuthentication(serverId).catch(() => undefined);
   };
+
   options.signal?.addEventListener("abort", cancelAuthentication, { once: true });
 
   try {
     let connected: McpServerStatus;
+
     try {
       if (temporary) await manager.init();
 
       const reconnectStatus = await manager.reconnectServer(serverId);
+
       const authenticatedStatus = reconnectStatus.connected
         ? reconnectStatus
         : await manager.authenticateServer(serverId, {
             onAuthorizationUrl: options.onAuthorizationUrl,
           });
+
       connected = requireConnected(authenticatedStatus);
       options.recordSuccess(options.server.id);
     } catch (cause) {
@@ -66,6 +71,7 @@ export async function authenticateMcpServer(
     return connected;
   } finally {
     options.signal?.removeEventListener("abort", cancelAuthentication);
+
     if (temporary) await manager.disconnect().catch(() => undefined);
   }
 }

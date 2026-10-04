@@ -29,6 +29,7 @@ export function PreviewEmptyState({
     environmentId,
     configuredUrls,
   });
+
   const recents = recentEntries.filter((entry) => URL.canParse(entry.url)).slice(0, 8);
 
   if (servers.length === 0 && recents.length === 0) {

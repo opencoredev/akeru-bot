@@ -87,6 +87,7 @@ describe("planPinnedMove", () => {
       movedId: "c",
       direction: "up",
     });
+
     expect(assignments).toHaveLength(1);
     expect(assignments![0]!.id).toBe("c");
     expect(assignments![0]!.orderKey > "f" && assignments![0]!.orderKey < "m").toBe(true);
@@ -100,6 +101,7 @@ describe("planPinnedMove", () => {
         ["b", "m"],
       ]),
     };
+
     expect(planPinnedMove({ ...input, movedId: "a", direction: "up" })).toBeNull();
     expect(planPinnedMove({ ...input, movedId: "b", direction: "down" })).toBeNull();
   });
@@ -115,6 +117,7 @@ describe("planPinnedMove", () => {
       movedId: "b",
       direction: "up",
     });
+
     expect(assignments).not.toBeNull();
     const keys = assignments!.map((entry) => entry.orderKey);
     expect([...keys].sort()).toEqual(keys);
@@ -137,6 +140,7 @@ describe("sortPinnedThreadsByOrderKey", () => {
         environmentId: "env-a",
       },
     ]);
+
     expect(sorted.map((thread) => thread.environmentId)).toEqual(["env-a", "env-b"]);
   });
 });

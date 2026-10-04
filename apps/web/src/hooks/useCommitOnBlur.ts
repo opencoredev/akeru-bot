@@ -21,6 +21,7 @@ export function shouldBlurCommitOnKeyDown(event: {
   readonly nativeEvent: { readonly isComposing?: boolean };
 }): boolean {
   if (event.nativeEvent.isComposing || event.keyCode === 229) return false;
+
   return event.key === "Enter";
 }
 
@@ -38,6 +39,7 @@ export function useCommitOnBlur(value: string, onCommit: (next: string) => void)
     onBlur: () => {
       const next = draft ?? value;
       setDraft(null);
+
       if (next !== value) {
         onCommit(next);
       }
@@ -45,7 +47,7 @@ export function useCommitOnBlur(value: string, onCommit: (next: string) => void)
     onKeyDown: (event: KeyboardEvent<HTMLInputElement>) => {
       if (!shouldBlurCommitOnKeyDown(event)) return;
       event.preventDefault();
-      (event.target as HTMLInputElement).blur();
+      event.currentTarget.blur();
     },
   };
 }

@@ -13,6 +13,7 @@ import { AppText as Text } from "../../components/AppText";
 import { GlassSurface } from "../../components/GlassSurface";
 import { PierreEntryIcon } from "../../components/PierreEntryIcon";
 import { useThemeColor } from "../../lib/useThemeColor";
+
 export type ComposerCommandItem =
   | {
       readonly id: string;
@@ -75,6 +76,7 @@ interface ComposerCommandPopoverProps {
 
 function PopoverSurface(props: { readonly children: React.ReactNode; readonly style?: ViewStyle }) {
   const tintColor = useThemeColor("--color-glass-surface");
+
   const baseStyle: ViewStyle = {
     borderRadius: 16,
     overflow: "hidden",
@@ -135,6 +137,7 @@ function emptyText(triggerKind: ComposerTriggerKind | null, isLoading: boolean):
   if (isLoading) {
     return triggerKind === "path" ? "Searching…" : "Loading…";
   }
+
   switch (triggerKind) {
     case "path":
       return "No matching chats, files, or folders.";
@@ -154,10 +157,12 @@ const CommandRow = memo(function CommandRow(props: {
   readonly isSlashSkill: boolean;
 }) {
   const iconName = itemIcon(props.item);
+
   // A skill's own emoji wins; named glyphs and provider asset paths fall back
   // to the source-kind symbol from itemIcon.
   const skillTextIcon =
     props.item.type === "skill" ? resolveProviderSkillTextIcon(props.item.skill) : null;
+
   const iconColor = useThemeColor("--color-icon-subtle");
   const borderColor = useThemeColor("--color-border");
 

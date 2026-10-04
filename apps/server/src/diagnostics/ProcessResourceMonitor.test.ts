@@ -13,6 +13,7 @@ describe("ProcessResourceMonitor", () => {
   it.effect("projects resource telemetry history into the legacy diagnostics contract", () =>
     Effect.gen(function* () {
       const readAt = DateTime.makeUnsafe("2026-05-05T10:00:00.000Z");
+
       const history: ResourceTelemetryHistoryWithLegacyBuckets = {
         readAt,
         windowMs: 60_000,
@@ -105,6 +106,7 @@ describe("ProcessResourceMonitor", () => {
           inaccessibleProcessCount: 0,
         },
       };
+
       const telemetry: ResourceTelemetry.ResourceTelemetry["Service"] = {
         latest: Effect.die("unused"),
         changes: Stream.empty,
@@ -114,6 +116,7 @@ describe("ProcessResourceMonitor", () => {
         validateProcessIdentity: () => Effect.die("unused"),
         retry: Effect.die("unused"),
       };
+
       const layer = ProcessResourceMonitor.layer.pipe(
         Layer.provide(
           Layer.succeed(

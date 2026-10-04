@@ -17,5 +17,6 @@ export type DraftInputProps = Omit<InputProps, "value" | "onChange" | "defaultVa
  */
 export function DraftInput({ value, onCommit, ...rest }: DraftInputProps) {
   const bag = useCommitOnBlur(value, onCommit);
+
   return <Input {...rest} {...bag} />;
 }

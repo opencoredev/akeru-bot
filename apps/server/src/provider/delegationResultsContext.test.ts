@@ -10,8 +10,11 @@ import { describe, expect, it } from "@effect/vitest";
 import { delegationResultsContext } from "./delegationResultsContext.ts";
 
 const NOW = "2026-09-25T12:00:00.000Z";
+
 const CHILD_BOT_ID = BotId.make("bot-child");
+
 const CHILD_THREAD_ID = ThreadId.make("thread-child");
+
 const CHILD_TURN_ID = TurnId.make("turn-child");
 
 function makeDelegation(id: string, phase: AkeruDelegationRecord["phase"]): AkeruDelegationRecord {

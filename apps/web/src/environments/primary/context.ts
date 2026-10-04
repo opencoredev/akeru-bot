@@ -13,6 +13,7 @@ import { runPrimaryHttp } from "../../lib/runtime";
 import { readPrimaryEnvironmentTarget } from "./target";
 
 let primaryEnvironmentDescriptor: ExecutionEnvironmentDescriptor | null = null;
+
 let primaryEnvironmentDescriptorPromise: Promise<ExecutionEnvironmentDescriptor> | null = null;
 
 function createPrimaryKnownEnvironment(input: {
@@ -20,6 +21,7 @@ function createPrimaryKnownEnvironment(input: {
   readonly target: KnownEnvironment["target"];
 }): KnownEnvironment | null {
   const descriptor = readPrimaryEnvironmentDescriptor();
+
   if (!descriptor) {
     return null;
   }
@@ -38,6 +40,7 @@ function createPrimaryKnownEnvironment(input: {
 async function fetchPrimaryEnvironmentDescriptor(): Promise<ExecutionEnvironmentDescriptor> {
   return retryTransientBootstrap(async () => {
     let descriptor: ExecutionEnvironmentDescriptor;
+
     try {
       descriptor = await runPrimaryHttp(
         PrimaryEnvironmentHttpClient.pipe(Effect.flatMap((client) => client.metadata.descriptor())),
@@ -50,6 +53,7 @@ async function fetchPrimaryEnvironmentDescriptor(): Promise<ExecutionEnvironment
     }
 
     writePrimaryEnvironmentDescriptor(descriptor);
+
     return descriptor;
   });
 }
@@ -66,6 +70,7 @@ export function writePrimaryEnvironmentDescriptor(
 
 export function getPrimaryKnownEnvironment(): KnownEnvironment | null {
   const primaryTarget = readPrimaryEnvironmentTarget();
+
   if (!primaryTarget) {
     return null;
   }
@@ -78,6 +83,7 @@ export function getPrimaryKnownEnvironment(): KnownEnvironment | null {
 
 export function resolveInitialPrimaryEnvironmentDescriptor(): Promise<ExecutionEnvironmentDescriptor> {
   const descriptor = readPrimaryEnvironmentDescriptor();
+
   if (descriptor) {
     return Promise.resolve(descriptor);
   }
@@ -88,6 +94,7 @@ export function resolveInitialPrimaryEnvironmentDescriptor(): Promise<ExecutionE
 
   const nextPromise = fetchPrimaryEnvironmentDescriptor();
   primaryEnvironmentDescriptorPromise = nextPromise;
+
   return nextPromise.finally(() => {
     if (primaryEnvironmentDescriptorPromise === nextPromise) {
       primaryEnvironmentDescriptorPromise = null;

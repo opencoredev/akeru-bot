@@ -16,12 +16,14 @@ import { ConnectionEnvironmentRow } from "./ConnectionEnvironmentRow";
 
 export function ConnectionsRouteScreen() {
   const { t } = useMobileI18n();
+
   const {
     connectedEnvironments,
     onReconnectEnvironment,
     onRemoveEnvironmentPress,
     onUpdateEnvironment,
   } = useRemoteConnections();
+
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
   const hasEnvironments = connectedEnvironments.length > 0;

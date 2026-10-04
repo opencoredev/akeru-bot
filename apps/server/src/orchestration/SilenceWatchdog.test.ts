@@ -5,6 +5,7 @@ import { SILENCE_WATCHDOG_SILENT_MS, startSilenceWatchdog } from "./SilenceWatch
 
 const recorder = () => {
   const events: string[] = [];
+
   return {
     events,
     callbacks: {

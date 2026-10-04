@@ -33,22 +33,26 @@ export const ProjectionCheckpoint = Schema.Struct({
   assistantMessageId: Schema.NullOr(MessageId),
   completedAt: IsoDateTime,
 });
+
 export type ProjectionCheckpoint = typeof ProjectionCheckpoint.Type;
 
 export const ListByThreadIdInput = Schema.Struct({
   threadId: ThreadId,
 });
+
 export type ListByThreadIdInput = typeof ListByThreadIdInput.Type;
 
 export const GetByThreadAndTurnCountInput = Schema.Struct({
   threadId: ThreadId,
   checkpointTurnCount: NonNegativeInt,
 });
+
 export type GetByThreadAndTurnCountInput = typeof GetByThreadAndTurnCountInput.Type;
 
 export const DeleteByThreadIdInput = Schema.Struct({
   threadId: ThreadId,
 });
+
 export type DeleteByThreadIdInput = typeof DeleteByThreadIdInput.Type;
 
 /**

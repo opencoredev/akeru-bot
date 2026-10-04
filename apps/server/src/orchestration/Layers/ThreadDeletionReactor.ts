@@ -30,6 +30,7 @@ export const logCleanupCauseUnlessInterrupted = <R, E>({
       if (Cause.hasInterruptsOnly(cause)) {
         return Effect.failCause(cause);
       }
+
       return Effect.logDebug(message, {
         threadId,
         cause: Cause.pretty(cause),
@@ -61,6 +62,7 @@ const make = Effect.gen(function* () {
         if (Cause.hasInterruptsOnly(cause)) {
           return Effect.failCause(cause);
         }
+
         return Effect.logWarning("thread deletion reactor failed to process event", {
           eventType: event.type,
           threadId: event.payload.threadId,
@@ -76,6 +78,7 @@ const make = Effect.gen(function* () {
   // was ahead of that create in the engine queue; the worker drain then covers
   // the in-flight cleanup.
   const seenSequence = yield* SubscriptionRef.make(0);
+
   const noteSeen = (sequence: number) =>
     SubscriptionRef.update(seenSequence, (seen) => Math.max(seen, sequence));
 

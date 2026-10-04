@@ -1,236 +1,28 @@
+import { Predicate } from "effect";
 import type { EnvironmentThreadShell } from "@akeru/client-runtime/state/shell";
-import { canSettle, canSnooze } from "@akeru/client-runtime/state/thread-settled";
+import { canSnooze } from "@akeru/client-runtime/state/thread-settled";
 import * as Cause from "effect/Cause";
-import * as Haptics from "expo-haptics";
 import { useCallback, useRef } from "react";
 import { Alert } from "react-native";
-
-import { showConfirmDialog } from "../../components/ConfirmDialogHost";
 import { useMobileI18n } from "../../lib/i18n";
 import { scopedThreadKey } from "../../lib/scopedEntities";
-import { refreshArchivedThreadsForEnvironment } from "../archive/useArchivedThreadSnapshots";
 import {
   pinOrderKeyBetween,
   planPinnedMove,
   sortPinnedThreadsByOrderKey,
 } from "@akeru/client-runtime/state/thread-sort";
 import { appAtomRegistry } from "../../state/atom-registry";
-import { environmentServerConfigsAtom } from "../../state/server";
 import { environmentThreadShells, threadEnvironment } from "../../state/threads";
 import { useAtomCommand } from "../../state/use-atom-command";
+import {
+  type ThreadListAction,
+  selectionHaptic,
+  useConfirmDeleteThread,
+  useThreadActionExecutor,
+} from "./use-thread-action-executor";
+import { environmentSupportsThreadCapability } from "./environment-thread-capabilities";
 
-/** Version skew: never send settle/unsettle to a server that predates them
-    (capability defaults false on decode for older servers). */
-function environmentSupportsSettlement(environmentId: EnvironmentThreadShell["environmentId"]) {
-  return (
-    appAtomRegistry.get(environmentServerConfigsAtom).get(environmentId)?.environment.capabilities
-      .threadSettlement === true
-  );
-}
-
-function environmentSupportsSnooze(environmentId: EnvironmentThreadShell["environmentId"]) {
-  return (
-    appAtomRegistry.get(environmentServerConfigsAtom).get(environmentId)?.environment.capabilities
-      .threadSnooze === true
-  );
-}
-
-function environmentSupportsPinning(environmentId: EnvironmentThreadShell["environmentId"]) {
-  return (
-    appAtomRegistry.get(environmentServerConfigsAtom).get(environmentId)?.environment.capabilities
-      .threadPinning === true
-  );
-}
-
-function environmentSupportsPinReorder(environmentId: EnvironmentThreadShell["environmentId"]) {
-  return (
-    appAtomRegistry.get(environmentServerConfigsAtom).get(environmentId)?.environment.capabilities
-      .threadPinReorder === true
-  );
-}
-
-function environmentSupportsTitleRegeneration(
-  environmentId: EnvironmentThreadShell["environmentId"],
-) {
-  return (
-    appAtomRegistry.get(environmentServerConfigsAtom).get(environmentId)?.environment.capabilities
-      .threadTitleRegeneration === true
-  );
-}
-
-type ThreadListAction = "archive" | "unarchive" | "delete" | "settle" | "unsettle";
-type Translate = ReturnType<typeof useMobileI18n>["t"];
-
-function actionFailureMessage(
-  action: ThreadListAction,
-  cause: Cause.Cause<unknown>,
-  t: Translate,
-): string {
-  const error = Cause.squash(cause);
-  if (error instanceof Error && error.message.trim().length > 0) {
-    return error.message;
-  }
-  if (action === "archive") return t("The chat could not be archived.");
-  if (action === "unarchive") return t("The chat could not be unarchived.");
-  if (action === "settle") return t("The chat could not be settled.");
-  if (action === "unsettle") return t("The chat could not be un-settled.");
-  return t("The chat could not be deleted.");
-}
-
-function selectionHaptic(): void {
-  void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-}
-
-function actionFailureTitle(action: ThreadListAction, t: Translate): string {
-  if (action === "archive") return t("Could not archive chat");
-  if (action === "unarchive") return t("Could not unarchive chat");
-  if (action === "settle") return t("Could not settle chat");
-  if (action === "unsettle") return t("Could not un-settle chat");
-  return t("Could not delete chat");
-}
-
-/** Resolves to true iff the action was dispatched and succeeded. */
-function useThreadActionExecutor(
-  onCompleted?: (action: ThreadListAction, thread: EnvironmentThreadShell) => void,
-) {
-  const { t } = useMobileI18n();
-  const archiveMutation = useAtomCommand(threadEnvironment.archive, { reportFailure: false });
-  const unarchiveMutation = useAtomCommand(threadEnvironment.unarchive, { reportFailure: false });
-  const deleteMutation = useAtomCommand(threadEnvironment.delete, { reportFailure: false });
-  const settleMutation = useAtomCommand(threadEnvironment.settle, { reportFailure: false });
-  const unsettleMutation = useAtomCommand(threadEnvironment.unsettle, { reportFailure: false });
-  const inFlightThreadKeys = useRef(new Set<string>());
-
-  const executeAction = useCallback(
-    async (action: ThreadListAction, thread: EnvironmentThreadShell) => {
-      const key = scopedThreadKey(thread.environmentId, thread.id);
-      if (inFlightThreadKeys.current.has(key)) {
-        return false;
-      }
-
-      inFlightThreadKeys.current.add(key);
-      selectionHaptic();
-      try {
-        if (
-          (action === "settle" || action === "unsettle") &&
-          !environmentSupportsSettlement(thread.environmentId)
-        ) {
-          Alert.alert(
-            actionFailureTitle(action, t),
-            t(
-              "This environment's server does not support settling yet. Update the server to use Settle.",
-            ),
-          );
-          return false;
-        }
-        // Settle may only target what effectiveSettled could classify as
-        // settled: not starting/running sessions, not threads waiting on
-        // approvals or user input. Anything else would hide live work.
-        if (action === "settle" && !canSettle(thread, { now: new Date().toISOString() })) {
-          Alert.alert(
-            actionFailureTitle(action, t),
-            t("This chat still needs attention. Resolve or interrupt it first, then try again."),
-          );
-          return false;
-        }
-        // Archive keeps its original, narrower guard: never interrupt a
-        // thread mid-turn.
-        if (
-          action === "archive" &&
-          thread.session?.status === "running" &&
-          thread.session.activeTurnId != null
-        ) {
-          Alert.alert(
-            actionFailureTitle(action, t),
-            t("This chat is working. Interrupt it first, then try again."),
-          );
-          return false;
-        }
-        const result =
-          action === "unsettle"
-            ? await unsettleMutation({
-                environmentId: thread.environmentId,
-                input: { threadId: thread.id, reason: "user" },
-              })
-            : await (
-                action === "settle"
-                  ? settleMutation
-                  : action === "archive"
-                    ? archiveMutation
-                    : action === "unarchive"
-                      ? unarchiveMutation
-                      : deleteMutation
-              )({
-                environmentId: thread.environmentId,
-                input: { threadId: thread.id },
-              });
-        if (result._tag === "Failure") {
-          Alert.alert(actionFailureTitle(action, t), actionFailureMessage(action, result.cause, t));
-          return false;
-        }
-        // Settled threads stay in the live shell stream; only the archive
-        // lifecycle still feeds the archived-snapshot surface.
-        if (action === "archive" || action === "unarchive" || action === "delete") {
-          refreshArchivedThreadsForEnvironment(thread.environmentId);
-        }
-        onCompleted?.(action, thread);
-        return true;
-      } finally {
-        inFlightThreadKeys.current.delete(key);
-      }
-    },
-    [
-      archiveMutation,
-      deleteMutation,
-      onCompleted,
-      settleMutation,
-      t,
-      unarchiveMutation,
-      unsettleMutation,
-    ],
-  );
-
-  return executeAction;
-}
-
-function useConfirmDeleteThread(
-  executeAction: (action: ThreadListAction, thread: EnvironmentThreadShell) => Promise<boolean>,
-) {
-  const { t } = useMobileI18n();
-  return useCallback(
-    (thread: EnvironmentThreadShell) => {
-      const title = t("Delete chat?");
-      const message = t("“{title}” will be permanently deleted, including its terminal history.", {
-        title: thread.title,
-      });
-      if (process.env.EXPO_OS === "ios") {
-        Alert.alert(title, message, [
-          { text: t("Cancel"), style: "cancel" },
-          {
-            text: t("Delete"),
-            style: "destructive",
-            onPress: () => {
-              void executeAction("delete", thread);
-            },
-          },
-        ]);
-        return;
-      }
-      showConfirmDialog({
-        title,
-        message,
-        confirmText: t("Delete"),
-        destructive: true,
-        onConfirm: () => {
-          void executeAction("delete", thread);
-        },
-      });
-    },
-    [executeAction, t],
-  );
-}
-
-export function useThreadListActions(): {
+type ThreadListActions = {
   readonly archiveThread: (thread: EnvironmentThreadShell) => void;
   readonly confirmDeleteThread: (thread: EnvironmentThreadShell) => void;
   readonly settleThread: (thread: EnvironmentThreadShell) => Promise<boolean>;
@@ -244,16 +36,25 @@ export function useThreadListActions(): {
     direction: "up" | "down",
   ) => Promise<boolean>;
   readonly regenerateThreadTitle: (thread: EnvironmentThreadShell) => Promise<boolean>;
-} {
+};
+
+type ArchivedThreadListActions = {
+  readonly unarchiveThread: (thread: EnvironmentThreadShell) => void;
+  readonly confirmDeleteThread: (thread: EnvironmentThreadShell) => void;
+};
+
+export function useThreadListActions(): ThreadListActions {
   const { t } = useMobileI18n();
   const executeAction = useThreadActionExecutor();
   const snoozeMutation = useAtomCommand(threadEnvironment.snooze, { reportFailure: false });
   const unsnoozeMutation = useAtomCommand(threadEnvironment.unsnooze, { reportFailure: false });
   const pinMutation = useAtomCommand(threadEnvironment.pin, { reportFailure: false });
   const unpinMutation = useAtomCommand(threadEnvironment.unpin, { reportFailure: false });
+
   const updateThreadMetadata = useAtomCommand(threadEnvironment.updateMetadata, {
     reportFailure: false,
   });
+
   const snoozeInFlightThreadKeys = useRef(new Set<string>());
   const titleRegenerationInFlightThreadKeys = useRef(new Set<string>());
 
@@ -263,27 +64,34 @@ export function useThreadListActions(): {
     },
     [executeAction],
   );
+
   const settleThread = useCallback(
     async (thread: EnvironmentThreadShell) => (await executeAction("settle", thread)) === true,
     [executeAction],
   );
+
   const snoozeThread = useCallback(
     async (thread: EnvironmentThreadShell, snoozedUntil: string) => {
       const key = scopedThreadKey(thread.environmentId, thread.id);
+
       if (snoozeInFlightThreadKeys.current.has(key)) {
         return false;
       }
+
       snoozeInFlightThreadKeys.current.add(key);
+
       try {
-        if (!environmentSupportsSnooze(thread.environmentId)) {
+        if (!environmentSupportsThreadCapability(thread.environmentId, "threadSnooze")) {
           Alert.alert(
             t("Could not snooze chat"),
             t(
               "This environment's server does not support snoozing yet. Update the server to use Snooze.",
             ),
           );
+
           return false;
         }
+
         if (!canSnooze(thread, { now: new Date().toISOString() })) {
           Alert.alert(
             t("Could not snooze chat"),
@@ -291,10 +99,12 @@ export function useThreadListActions(): {
               ? t("This chat is waiting on you. Respond to the pending request before snoozing it.")
               : t("This chat is still starting a turn. Try again once it's running."),
           );
+
           return false;
         }
 
         selectionHaptic();
+
         const result = await snoozeMutation({
           environmentId: thread.environmentId,
           input: {
@@ -302,7 +112,8 @@ export function useThreadListActions(): {
             snoozedUntil,
           },
         });
-        if (result._tag === "Failure") {
+
+        if (Predicate.isTagged(result, "Failure")) {
           const error = Cause.squash(result.cause);
           Alert.alert(
             t("Could not snooze chat"),
@@ -310,8 +121,10 @@ export function useThreadListActions(): {
               ? error.message
               : t("The chat could not be snoozed."),
           );
+
           return false;
         }
+
         return true;
       } finally {
         snoozeInFlightThreadKeys.current.delete(key);
@@ -319,30 +132,37 @@ export function useThreadListActions(): {
     },
     [snoozeMutation, t],
   );
+
   const unsnoozeThread = useCallback(
     async (thread: EnvironmentThreadShell) => {
       const key = scopedThreadKey(thread.environmentId, thread.id);
+
       if (snoozeInFlightThreadKeys.current.has(key)) {
         return false;
       }
+
       snoozeInFlightThreadKeys.current.add(key);
+
       try {
-        if (!environmentSupportsSnooze(thread.environmentId)) {
+        if (!environmentSupportsThreadCapability(thread.environmentId, "threadSnooze")) {
           Alert.alert(
             t("Could not wake chat"),
             t(
               "This environment's server does not support snoozing yet. Update the server to wake this chat.",
             ),
           );
+
           return false;
         }
 
         selectionHaptic();
+
         const result = await unsnoozeMutation({
           environmentId: thread.environmentId,
           input: { threadId: thread.id, reason: "user" },
         });
-        if (result._tag === "Failure") {
+
+        if (Predicate.isTagged(result, "Failure")) {
           const error = Cause.squash(result.cause);
           Alert.alert(
             t("Could not wake chat"),
@@ -350,8 +170,10 @@ export function useThreadListActions(): {
               ? error.message
               : t("The chat could not be woken."),
           );
+
           return false;
         }
+
         return true;
       } finally {
         snoozeInFlightThreadKeys.current.delete(key);
@@ -359,39 +181,49 @@ export function useThreadListActions(): {
     },
     [unsnoozeMutation, t],
   );
+
   const unsettleThread = useCallback(
     async (thread: EnvironmentThreadShell) => (await executeAction("unsettle", thread)) === true,
     [executeAction],
   );
+
   const pinThread = useCallback(
     async (thread: EnvironmentThreadShell) => {
-      if (!environmentSupportsPinning(thread.environmentId)) {
+      if (!environmentSupportsThreadCapability(thread.environmentId, "threadPinning")) {
         Alert.alert(
           t("Could not pin chat"),
           t(
             "This environment's server does not support pinning yet. Update the server to use Pin.",
           ),
         );
+
         return false;
       }
+
       selectionHaptic();
       // Same placement as web: a fresh pin takes the top of the arranged
       // run. Servers that predate reordering get the bare pin (keyless).
       let orderKey: string | undefined;
-      if (environmentSupportsPinReorder(thread.environmentId)) {
+
+      if (environmentSupportsThreadCapability(thread.environmentId, "threadPinReorder")) {
         const shells = appAtomRegistry.get(environmentThreadShells.threadShellsAtom);
         let firstKey: string | null = null;
+
         for (const shell of shells) {
           if (shell.pinnedAt == null || shell.pinOrderKey == null) continue;
+
           if (firstKey === null || shell.pinOrderKey < firstKey) firstKey = shell.pinOrderKey;
         }
+
         orderKey = pinOrderKeyBetween(null, firstKey) ?? undefined;
       }
+
       const result = await pinMutation({
         environmentId: thread.environmentId,
         input: { threadId: thread.id, ...(orderKey !== undefined ? { orderKey } : {}) },
       });
-      if (result._tag === "Failure") {
+
+      if (Predicate.isTagged(result, "Failure")) {
         const error = Cause.squash(result.cause);
         Alert.alert(
           t("Could not pin chat"),
@@ -399,29 +231,36 @@ export function useThreadListActions(): {
             ? error.message
             : t("The chat could not be pinned."),
         );
+
         return false;
       }
+
       return true;
     },
     [pinMutation, t],
   );
+
   const unpinThread = useCallback(
     async (thread: EnvironmentThreadShell) => {
-      if (!environmentSupportsPinning(thread.environmentId)) {
+      if (!environmentSupportsThreadCapability(thread.environmentId, "threadPinning")) {
         Alert.alert(
           t("Could not unpin chat"),
           t(
             "This environment's server does not support pinning yet. Update the server to use Pin.",
           ),
         );
+
         return false;
       }
+
       selectionHaptic();
+
       const result = await unpinMutation({
         environmentId: thread.environmentId,
         input: { threadId: thread.id },
       });
-      if (result._tag === "Failure") {
+
+      if (Predicate.isTagged(result, "Failure")) {
         const error = Cause.squash(result.cause);
         Alert.alert(
           t("Could not unpin chat"),
@@ -429,39 +268,47 @@ export function useThreadListActions(): {
             ? error.message
             : t("The chat could not be unpinned."),
         );
+
         return false;
       }
+
       return true;
     },
     [unpinMutation, t],
   );
+
   const regenerateThreadTitle = useCallback(
     async (thread: EnvironmentThreadShell) => {
       const key = scopedThreadKey(thread.environmentId, thread.id);
+
       if (
         thread.titleRegeneration != null ||
         titleRegenerationInFlightThreadKeys.current.has(key)
       ) {
         return false;
       }
-      if (!environmentSupportsTitleRegeneration(thread.environmentId)) {
+
+      if (!environmentSupportsThreadCapability(thread.environmentId, "threadTitleRegeneration")) {
         Alert.alert(
           t("Could not regenerate title"),
           t(
             "This environment's server does not support title regeneration yet. Update the server to regenerate chat titles.",
           ),
         );
+
         return false;
       }
 
       titleRegenerationInFlightThreadKeys.current.add(key);
       selectionHaptic();
+
       try {
         const result = await updateThreadMetadata({
           environmentId: thread.environmentId,
           input: { threadId: thread.id, regenerateTitle: true },
         });
-        if (result._tag === "Failure") {
+
+        if (Predicate.isTagged(result, "Failure")) {
           const error = Cause.squash(result.cause);
           Alert.alert(
             t("Could not regenerate title"),
@@ -469,8 +316,10 @@ export function useThreadListActions(): {
               ? error.message
               : t("The chat title could not be regenerated."),
           );
+
           return false;
         }
+
         return true;
       } finally {
         titleRegenerationInFlightThreadKeys.current.delete(key);
@@ -487,32 +336,40 @@ export function useThreadListActions(): {
   const reorderPinnedMutation = useAtomCommand(threadEnvironment.reorderPin, {
     reportFailure: false,
   });
+
   // One move at a time: a second tap before the first write's event lands
   // would plan from the same stale snapshot and silently collapse two moves
   // into one — same double-dispatch guard as snoozeThread.
   const movePinnedInFlightRef = useRef(false);
+
   const movePinnedThread = useCallback(
     async (thread: EnvironmentThreadShell, direction: "up" | "down") => {
       if (movePinnedInFlightRef.current) return false;
-      if (!environmentSupportsPinReorder(thread.environmentId)) {
+
+      if (!environmentSupportsThreadCapability(thread.environmentId, "threadPinReorder")) {
         Alert.alert(
           t("Could not move chat"),
           t(
             "This environment's server does not support pinned reordering yet. Update the server to reorder pins.",
           ),
         );
+
         return false;
       }
+
       const shells = appAtomRegistry.get(environmentThreadShells.threadShellsAtom);
+
       const pinned = sortPinnedThreadsByOrderKey(
         shells.filter(
           (shell) =>
             shell.pinnedAt != null &&
             shell.archivedAt === null &&
-            environmentSupportsPinReorder(shell.environmentId),
+            environmentSupportsThreadCapability(shell.environmentId, "threadPinReorder"),
         ),
       );
+
       const orderedIds = pinned.map((shell) => scopedThreadKey(shell.environmentId, shell.id));
+
       const assignments = planPinnedMove({
         orderedIds,
         keysById: new Map(
@@ -524,21 +381,28 @@ export function useThreadListActions(): {
         movedId: scopedThreadKey(thread.environmentId, thread.id),
         direction,
       });
+
       if (assignments === null || assignments.length === 0) return false;
+
       const shellByKey = new Map(
         pinned.map((shell) => [scopedThreadKey(shell.environmentId, shell.id), shell]),
       );
+
       selectionHaptic();
       movePinnedInFlightRef.current = true;
+
       try {
         for (const assignment of assignments) {
           const target = shellByKey.get(assignment.id);
+
           if (target === undefined) continue;
+
           const result = await reorderPinnedMutation({
             environmentId: target.environmentId,
             input: { threadId: target.id, orderKey: assignment.orderKey },
           });
-          if (result._tag === "Failure") {
+
+          if (Predicate.isTagged(result, "Failure")) {
             const error = Cause.squash(result.cause);
             Alert.alert(
               t("Could not move chat"),
@@ -546,12 +410,14 @@ export function useThreadListActions(): {
                 ? error.message
                 : t("The pinned chat could not be moved."),
             );
+
             // No rollback: keys already written are valid orderings on their
             // own (each write is a complete, consistent placement), so a
             // partial materialization leaves the list sensible, not corrupt.
             return false;
           }
         }
+
         return true;
       } finally {
         movePinnedInFlightRef.current = false;
@@ -578,23 +444,23 @@ export function useThreadListActions(): {
 
 export function useArchivedThreadListActions(
   onCompleted: (thread: EnvironmentThreadShell) => void,
-): {
-  readonly unarchiveThread: (thread: EnvironmentThreadShell) => void;
-  readonly confirmDeleteThread: (thread: EnvironmentThreadShell) => void;
-} {
+): ArchivedThreadListActions {
   const handleCompleted = useCallback(
     (_action: ThreadListAction, thread: EnvironmentThreadShell) => {
       onCompleted(thread);
     },
     [onCompleted],
   );
+
   const executeAction = useThreadActionExecutor(handleCompleted);
+
   const unarchiveThread = useCallback(
     (thread: EnvironmentThreadShell) => {
       void executeAction("unarchive", thread);
     },
     [executeAction],
   );
+
   const confirmDeleteThread = useConfirmDeleteThread(executeAction);
 
   return { unarchiveThread, confirmDeleteThread };

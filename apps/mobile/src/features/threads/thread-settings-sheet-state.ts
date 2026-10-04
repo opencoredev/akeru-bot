@@ -7,6 +7,7 @@ export function modelMatchesCatalogQuery(input: {
   readonly query: string;
 }): boolean {
   const query = input.query.trim().toLocaleLowerCase();
+
   if (query.length === 0) {
     return true;
   }
@@ -28,6 +29,7 @@ export function pendingModelAfterPress(input: {
   if (input.pressedIsApplied) {
     return null;
   }
+
   return input.current?.key === input.pressed.key ? input.current : input.pressed;
 }
 
@@ -43,5 +45,6 @@ export function providerSectionIsCollapsed(input: {
   if (input.isNarrowed) {
     return false;
   }
+
   return input.defaultExpanded ? input.hasExpansionOverride : !input.hasExpansionOverride;
 }

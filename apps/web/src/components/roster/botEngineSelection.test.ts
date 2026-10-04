@@ -5,6 +5,7 @@ import { describe, expect, it } from "vite-plus/test";
 
 import { deriveProviderInstanceEntries } from "../../providerInstances";
 import { makeComposerTestProvider } from "../../test/composerTestProvider";
+import { providerCatalogEntry } from "../settings/providerCatalog";
 import {
   botEngineFailureContext,
   botEngineTakesDelegatedWork,
@@ -26,6 +27,7 @@ describe("resolveStickyBotEngine", () => {
         auth: { status: "unknown" as const },
       },
     ];
+
     const instanceEntries = deriveProviderInstanceEntries(providers);
     const instanceId = instanceEntries[0]!.instanceId;
 
@@ -53,6 +55,7 @@ describe("resolveStickyBotEngine", () => {
         auth: { status: "unknown" as const },
       },
     ];
+
     const instanceEntries = deriveProviderInstanceEntries(providers);
     const instanceId = instanceEntries[0]!.instanceId;
     expect(
@@ -76,6 +79,7 @@ describe("resolveStickyBotEngine", () => {
       displayName: "Codex",
       unavailability: "expired-login" as const,
     };
+
     const signedIn = deriveProviderInstanceEntries([makeComposerTestProvider()]);
     const signedOut = deriveProviderInstanceEntries([expired]);
     const instanceId = signedOut[0]!.instanceId;
@@ -83,14 +87,14 @@ describe("resolveStickyBotEngine", () => {
 
     expect(botEngineUnavailability({ instanceId, model: "gpt-5-codex" }, signedOut)).toMatchObject({
       reason: "expired-login",
-      title: "Codex sign-in expired",
-      description: "Reconnect Codex in Settings > Providers, then send your message again.",
+      title: "ChatGPT sign-in expired",
+      description: "Reconnect ChatGPT in Settings > Providers, then send your message again.",
     });
     expect(
       botEngineUnavailability({ instanceId, model: "gpt-5-codex" }, signedOut, zh),
     ).toMatchObject({
-      title: "Codex 登录已过期",
-      description: "请在“设置 > 提供商”中重新连接 Codex，然后重新发送消息。",
+      title: "ChatGPT 登录已过期",
+      description: "请在“设置 > 提供商”中重新连接 ChatGPT，然后重新发送消息。",
     });
     expect(botEngineUnavailability({ instanceId, model: "gpt-4-retired" }, signedIn)).toMatchObject(
       {
@@ -126,6 +130,7 @@ describe("resolveStickyBotEngine", () => {
         },
       ],
     };
+
     const providers = [makeComposerTestProvider(), signedOut];
     const instanceEntries = deriveProviderInstanceEntries(providers);
     const engine = { provider: signedOut.instanceId, model: "claude-opus-5-5" };
@@ -156,12 +161,14 @@ describe("resolveStickyBotEngine", () => {
   it("does not show a fallback provider for a bot with an unavailable saved engine", () => {
     const savedId = ProviderInstanceId.make("codex");
     const fallbackId = ProviderInstanceId.make("codex-backup");
+
     const providers = [
       { ...makeComposerTestProvider(), enabled: false, status: "disabled" as const },
       { ...makeComposerTestProvider(), instanceId: fallbackId },
     ];
 
     const instanceEntries = deriveProviderInstanceEntries(providers);
+
     const selected = resolveStickyBotEngine({
       engine: { provider: savedId, model: "gpt-5-codex" },
       instanceEntries,
@@ -169,6 +176,7 @@ describe("resolveStickyBotEngine", () => {
       providers,
       defaultSelection: { instanceId: fallbackId, model: "gpt-5-codex" },
     });
+
     expect(selected).toEqual({ instanceId: savedId, model: "gpt-5-codex" });
     expect(botEngineUnavailability(selected, instanceEntries)?.reason).not.toBeNull();
   });
@@ -177,6 +185,7 @@ describe("resolveStickyBotEngine", () => {
     const providers = [makeComposerTestProvider()];
     const instanceEntries = deriveProviderInstanceEntries(providers);
     const instanceId = instanceEntries[0]?.instanceId;
+
     if (!instanceId) throw new Error("missing instance");
 
     const resolved = resolveStickyBotEngine({
@@ -218,6 +227,7 @@ describe("resolveStickyBotEngine", () => {
     const providers = [makeComposerTestProvider()];
     const instanceEntries = deriveProviderInstanceEntries(providers);
     const instanceId = instanceEntries[0]?.instanceId;
+
     if (!instanceId) throw new Error("missing instance");
 
     expect(
@@ -254,14 +264,71 @@ describe("botEngineFailureContext", () => {
       ),
     ).toEqual({
       unavailability: "missing-login",
-      providerName: entry.displayName,
+      providerName: "ChatGPT",
+      provider: providerCatalogEntry("chatgpt"),
       modelName: model.name,
     });
     expect(botEngineFailureContext(null, instanceEntries, undefined)).toEqual({
       unavailability: null,
       providerName: null,
+      provider: null,
       modelName: null,
     });
+  });
+
+  it("keeps naming the provider that failed after the bot switches models", () => {
+    const instanceEntries = deriveProviderInstanceEntries([makeComposerTestProvider()]);
+    const entry = instanceEntries[0]!;
+
+    expect(
+      botEngineFailureContext(
+        { instanceId: entry.instanceId, model: entry.models[0]!.slug },
+        instanceEntries,
+        "missing-login",
+        "claudeAgent",
+      ),
+    ).toEqual({
+      unavailability: "missing-login",
+      providerName: "Claude",
+      provider: providerCatalogEntry("claude"),
+      modelName: null,
+    });
+  });
+
+  it("keeps a name the user gave the built-in instance", () => {
+    const instanceEntries = deriveProviderInstanceEntries([
+      { ...makeComposerTestProvider(), displayName: "Work Codex" },
+    ]);
+
+    const entry = instanceEntries[0]!;
+
+    expect(
+      botEngineFailureContext(
+        { instanceId: entry.instanceId, model: entry.models[0]!.slug },
+        instanceEntries,
+        "missing-login",
+      ),
+    ).toMatchObject({ providerName: "Work Codex", provider: providerCatalogEntry("chatgpt") });
+  });
+
+  it("keeps a custom instance's own name and has no single provider page for it", () => {
+    const instanceEntries = deriveProviderInstanceEntries([
+      {
+        ...makeComposerTestProvider(),
+        instanceId: ProviderInstanceId.make("codex_work"),
+        displayName: "Work Codex",
+      },
+    ]);
+
+    const entry = instanceEntries[0]!;
+
+    expect(
+      botEngineFailureContext(
+        { instanceId: entry.instanceId, model: entry.models[0]!.slug },
+        instanceEntries,
+        "missing-login",
+      ),
+    ).toMatchObject({ providerName: "Work Codex", provider: null });
   });
 });
 
@@ -309,6 +376,7 @@ describe("routineDelegateOptions", () => {
       driver: ProviderDriverKind.make("opencode"),
     },
   ]);
+
   const bot = (id: string, provider: string | null, archivedAt: string | null = null) => ({
     id,
     name: id,

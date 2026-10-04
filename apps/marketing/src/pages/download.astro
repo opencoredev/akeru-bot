@@ -5,6 +5,7 @@ import { RELEASES_URL, releaseAssetUrl, resolveBuildVersion } from "../lib/relea
 // Hrefs are direct release assets baked at build time; the shared client script
 // upgrades them if GitHub has published something newer since.
 const version = await resolveBuildVersion();
+
 const platforms = [
   { os: "mac", name: "macOS", asset: "arm64.dmg", arch: "Apple Silicon (arm64)", format: ".dmg" },
   { os: "win", name: "Windows", asset: "x64.exe", arch: "Windows 10, 11", format: ".exe" },

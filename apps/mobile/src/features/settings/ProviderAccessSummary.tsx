@@ -25,6 +25,7 @@ export function ProviderAccessSummary({
   const { t } = useMobileI18n();
   const [expanded, setExpanded] = useState(false);
   const guide = providerAccessGuide(provider, status, { models, t });
+
   if (!guide) return null;
 
   const rows: ReadonlyArray<readonly [string, string]> = [

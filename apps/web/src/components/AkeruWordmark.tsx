@@ -6,10 +6,7 @@ import { cn } from "../lib/utils";
 export function AkeruWordmark({ className, ...props }: ComponentProps<"span">) {
   return (
     <span
-      className={cn(
-        "truncate text-xl leading-none tracking-tight [font-family:var(--font-brand-serif)]",
-        className,
-      )}
+      className={cn("truncate text-xl leading-none tracking-tight font-brand-serif", className)}
       {...props}
     >
       akeru

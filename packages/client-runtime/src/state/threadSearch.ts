@@ -20,6 +20,7 @@ export interface ThreadSearchResultsState {
 const ThreadSearchKey = Schema.fromJsonString(
   Schema.Tuple([Schema.Array(EnvironmentId), OrchestrationSearchThreadsInput.fields.query]),
 );
+
 const decodeThreadSearchKey = Schema.decodeUnknownOption(ThreadSearchKey);
 
 export function makeThreadSearchKey(
@@ -57,6 +58,7 @@ export function createThreadSearchResultsAtomFamily<E>(options: {
   return Atom.family((key: string) =>
     Atom.make((get): ThreadSearchResultsState => {
       const parsedKey = parseThreadSearchKey(key);
+
       if (Option.isNone(parsedKey)) {
         return { matches: [], isLoading: false };
       }
@@ -69,6 +71,7 @@ export function createThreadSearchResultsAtomFamily<E>(options: {
         const result = get(options.getSearchAtom(environmentId, query));
         isLoading ||= result.waiting;
         const value = Option.getOrNull(AsyncResult.value(result));
+
         if (value !== null) {
           matches.push(
             ...value.matches.map((match) => ({

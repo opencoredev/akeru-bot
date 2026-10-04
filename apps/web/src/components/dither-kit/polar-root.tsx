@@ -1,5 +1,8 @@
-// @ts-nocheck
 "use client";
+
+import type { ChartValue } from "./chartValue";
+
+import { Predicate } from "effect";
 
 import { Children, type ComponentType, isValidElement, type ReactNode } from "react";
 import type { ChartConfig, Margins } from "./chart-context";
@@ -10,11 +13,6 @@ import { axisAtAngle, sliceAtAngle } from "./polar";
 import { PolarChartContext, usePolarController } from "./polar-context";
 import { useChartDimensions } from "./use-chart-dimensions";
 
-// `object` rather than `Record<string, unknown>`: interfaces don't get an
-// implicit index signature, so interface-typed rows failed to satisfy the
-// generic. Internal layers still index rows through their own Row type.
-type Row = object;
-
 const DEFAULT_POLAR_MARGINS: Margins = {
   top: 22,
   right: 14,
@@ -23,11 +21,17 @@ const DEFAULT_POLAR_MARGINS: Margins = {
 };
 
 function layerOf(node: ReactNode): "back" | "dom" | "svg" {
-  if (!isValidElement(node) || typeof node.type === "string") return "svg";
-  return (node.type as { chartLayer?: "back" | "dom" }).chartLayer ?? "svg";
+  if (!isValidElement(node) || Predicate.isString(node.type)) return "svg";
+
+  if (!(Predicate.isObject(node.type) || Predicate.isFunction(node.type))) return "svg";
+
+  return "chartLayer" in node.type &&
+    (node.type.chartLayer === "back" || node.type.chartLayer === "dom")
+    ? node.type.chartLayer
+    : "svg";
 }
 
-export type PolarRootProps<TData extends Row> = {
+export type PolarRootProps<TData extends Record<keyof TData, ChartValue>> = {
   chartType: "pie" | "radar";
   /** Family painter — `PieCanvas` or `RadarCanvas`; ships with each chart. */
   Canvas: ComponentType;
@@ -50,7 +54,7 @@ export type PolarRootProps<TData extends Row> = {
   onSelectionChange?: (key: string | null) => void;
 };
 
-export function PolarRoot<TData extends Row>({
+export function PolarRoot<TData extends Record<keyof TData, ChartValue>>({
   chartType,
   Canvas,
   backDecoration,
@@ -75,8 +79,7 @@ export function PolarRoot<TData extends Row>({
 
   const ctx = usePolarController({
     chartType,
-    // Safe: the controller only reads row[key] for the configured keys.
-    data: data as Record<string, unknown>[],
+    data,
     config,
     dataKey,
     nameKey,
@@ -89,7 +92,7 @@ export function PolarRoot<TData extends Row>({
     bloom,
     bloomOnHover,
     defaultSelectedDataKey,
-    onSelectionChange,
+    ...(onSelectionChange !== undefined ? { onSelectionChange } : {}),
   });
 
   const backChildren: ReactNode[] = [];
@@ -97,6 +100,7 @@ export function PolarRoot<TData extends Row>({
   const domChildren: ReactNode[] = [];
   Children.forEach(children, (child) => {
     const layer = layerOf(child);
+
     if (layer === "back") backChildren.push(child);
     else if (layer === "dom") domChildren.push(child);
     else svgChildren.push(child);
@@ -104,12 +108,14 @@ export function PolarRoot<TData extends Row>({
 
   const onMove = (clientX: number, clientY: number) => {
     const el = ref.current;
+
     if (!el) return;
     const rect = el.getBoundingClientRect();
     const dx = clientX - rect.left - margins.left - ctx.center.x;
     const dy = clientY - rect.top - margins.top - ctx.center.y;
     const angle = Math.atan2(dy, dx);
     const r = Math.hypot(dx, dy);
+
     if (chartType === "pie" && ctx.pie) {
       const inside = r <= ctx.outerRadius && r >= ctx.innerRadius;
       const i = inside ? sliceAtAngle(ctx.pie, angle) : -1;
@@ -117,6 +123,7 @@ export function PolarRoot<TData extends Row>({
     } else if (ctx.radar) {
       ctx.setHoverIndex(axisAtAngle(ctx.radar.axes, angle));
     }
+
     ctx.setCursor(clientX - rect.left, clientY - rect.top);
   };
 

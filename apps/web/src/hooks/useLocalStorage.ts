@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import * as Schema from "effect/Schema";
 import * as Record from "effect/Record";
 import { useCallback, useMemo, useSyncExternalStore } from "react";
@@ -17,6 +18,7 @@ export class LocalStorageOperationError extends Schema.TaggedErrorClass<LocalSto
 
 const memoryStorage: Storage = (function () {
   const store = new Map<string, string>();
+
   return {
     clear: () => store.clear(),
     getItem: (_) => store.get(_) ?? null,
@@ -59,6 +61,7 @@ const encode = <T, E>(key: string, schema: Schema.Codec<T, E>, value: T) => {
 
 export const getLocalStorageItem = <T, E>(key: string, schema: Schema.Codec<T, E>): T | null => {
   const item = read(key);
+
   return item ? decode(key, schema, item) : null;
 };
 
@@ -69,21 +72,24 @@ export const getLocalStorageItem = <T, E>(key: string, schema: Schema.Codec<T, E
 export const getFirstLocalStorageItem = <T, E>(
   keys: ReadonlyArray<string>,
   schema: Schema.Codec<T, E>,
-  onError: (error: unknown) => void,
+  onError: (cause: unknown) => void,
 ): T | null => {
   for (const key of keys) {
     try {
       const value = getLocalStorageItem(key, schema);
+
       if (value !== null) return value;
     } catch (error) {
       onError(error);
     }
   }
+
   return null;
 };
 
 export const setLocalStorageItem = <T, E>(key: string, value: T, schema: Schema.Codec<T, E>) => {
   const valueToSet = encode(key, schema, value);
+
   try {
     getStorage().setItem(key, valueToSet);
   } catch (cause) {
@@ -101,12 +107,19 @@ export const removeLocalStorageItem = (key: string) => {
 
 const LOCAL_STORAGE_CHANGE_EVENT = "akeru:local_storage_change";
 
+declare global {
+  interface WindowEventMap {
+    "akeru:local_storage_change": CustomEvent<LocalStorageChangeDetail>;
+  }
+}
+
 interface LocalStorageChangeDetail {
   key: string;
 }
 
 function dispatchLocalStorageChange(key: string) {
   if (typeof window === "undefined") return;
+
   try {
     window.dispatchEvent(
       new CustomEvent<LocalStorageChangeDetail>(LOCAL_STORAGE_CHANGE_EVENT, {
@@ -128,6 +141,7 @@ export function useLocalStorage<T, E>(
       return read(key);
     } catch (error) {
       console.error("[LOCALSTORAGE] Could not read stored value.", error);
+
       return null;
     }
   }, [key]);
@@ -139,6 +153,7 @@ export function useLocalStorage<T, E>(
           onStoreChange();
         }
       };
+
       const handleLocalChange = (event: CustomEvent<LocalStorageChangeDetail>) => {
         if (event.detail.key === key) {
           onStoreChange();
@@ -146,24 +161,28 @@ export function useLocalStorage<T, E>(
       };
 
       window.addEventListener("storage", handleStorageChange);
-      window.addEventListener(LOCAL_STORAGE_CHANGE_EVENT, handleLocalChange as EventListener);
+      window.addEventListener(LOCAL_STORAGE_CHANGE_EVENT, handleLocalChange);
+
       return () => {
         window.removeEventListener("storage", handleStorageChange);
-        window.removeEventListener(LOCAL_STORAGE_CHANGE_EVENT, handleLocalChange as EventListener);
+        window.removeEventListener(LOCAL_STORAGE_CHANGE_EVENT, handleLocalChange);
       };
     },
     [key],
   );
 
   const serializedValue = useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
+
   const storedValue = useMemo(() => {
     if (serializedValue === null) {
       return initialValue;
     }
+
     try {
       return decode(key, schema, serializedValue);
     } catch (error) {
       console.error("[LOCALSTORAGE] Could not decode stored value.", error);
+
       return initialValue;
     }
   }, [initialValue, key, schema, serializedValue]);
@@ -173,8 +192,10 @@ export function useLocalStorage<T, E>(
       try {
         const currentValue = getLocalStorageItem(key, schema) ?? initialValue;
         let valueToStore: T;
-        if (typeof value === "function") {
+
+        if (Predicate.isFunction(value)) {
           try {
+            // SAFETY: Function values are updater callbacks under this hook’s contract, rather than stored callable data.
             valueToStore = (value as (val: T) => T)(currentValue);
           } catch (cause) {
             throw new LocalStorageOperationError({
@@ -186,11 +207,13 @@ export function useLocalStorage<T, E>(
         } else {
           valueToStore = value;
         }
+
         if (valueToStore === null) {
           removeLocalStorageItem(key);
         } else {
           setLocalStorageItem(key, valueToStore, schema);
         }
+
         dispatchLocalStorageChange(key);
       } catch (error) {
         console.error("[LOCALSTORAGE] Could not update stored value.", error);

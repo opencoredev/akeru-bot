@@ -1,3 +1,5 @@
+import { isJsonObject, isJsonString } from "../../../../plugins/json.ts";
+
 const REPO = "opencoredev/akeru-bot";
 
 export const RELEASES_URL = `https://github.com/${REPO}/releases`;
@@ -6,10 +8,13 @@ export const RELEASES_URL = `https://github.com/${REPO}/releases`;
 export const FALLBACK_VERSION = "0.2.1";
 
 const API_URL = `https://api.github.com/repos/${REPO}/releases/latest`;
+
 const CACHE_KEY = "akeru-latest-release";
+
 export const RELEASE_REQUEST_TIMEOUT_MS = 5_000;
 
 let latestRelease: Release | undefined;
+
 let releaseRequest: Promise<Release> | undefined;
 
 export interface ReleaseAsset {
@@ -63,6 +68,7 @@ let buildVersion: Promise<string> | undefined;
 
 export function resolveBuildVersion(): Promise<string> {
   buildVersion ??= lookupBuildVersion();
+
   return buildVersion;
 }
 
@@ -72,9 +78,11 @@ async function lookupBuildVersion(): Promise<string> {
       redirect: "manual",
       signal: AbortSignal.timeout(RELEASE_REQUEST_TIMEOUT_MS),
     });
+
     const version = /\/releases\/tag\/v(\d+\.\d+\.\d+)$/.exec(
       response.headers.get("location") ?? "",
     )?.[1];
+
     return version ?? FALLBACK_VERSION;
   } catch {
     return FALLBACK_VERSION;
@@ -83,16 +91,21 @@ async function lookupBuildVersion(): Promise<string> {
 
 export function detectDownloadTarget(userAgent: string): DownloadTarget | null {
   if (/Windows/i.test(userAgent)) return TARGETS.win;
+
   if (/Macintosh|Mac OS X/i.test(userAgent)) return TARGETS.mac;
+
   if (/Linux/i.test(userAgent)) return TARGETS.linux;
+
   return null;
 }
 
 export function selectReleaseAsset(release: Release, assetSuffix: string): ReleaseAsset | null {
   const version = /^v(\d+\.\d+\.\d+)$/.exec(release.tag_name)?.[1];
+
   if (!version) return null;
 
   const assetName = `Akeru-Bot-${version}-${assetSuffix}`;
+
   return release.assets.find((asset) => asset.name === assetName) ?? null;
 }
 
@@ -114,9 +127,11 @@ export async function resolveAssetDownload(
   try {
     const latest = await release;
     const asset = selectReleaseAsset(latest, assetSuffix);
+
     if (asset && isNewerVersion(latest.tag_name, versionInUrl(link.href))) {
       link.href = asset.browser_download_url;
     }
+
     return asset;
   } catch {
     return null;
@@ -132,69 +147,87 @@ function isNewerVersion(candidate: string, current: string | undefined): boolean
   if (!current) return true;
   const parse = (tag: string) => tag.replace(/^v/, "").split(".").map(Number);
   const [a, b] = [parse(candidate), parse(current)];
+
   for (let i = 0; i < 3; i++) {
     if (a[i] !== b[i]) return (a[i] ?? 0) > (b[i] ?? 0);
   }
+
   return false;
 }
 
 export function fetchLatestRelease(): Promise<Release> {
   if (latestRelease) return Promise.resolve(latestRelease);
+
   if (releaseRequest) return releaseRequest;
 
   const cached = readCachedRelease();
+
   if (cached) {
     latestRelease = cached;
+
     return Promise.resolve(cached);
   }
 
   releaseRequest = requestLatestRelease()
     .then((data) => {
       latestRelease = data;
+
       try {
         sessionStorage.setItem(CACHE_KEY, JSON.stringify(data));
       } catch {
         // Downloads still work when session storage is unavailable or full.
       }
+
       return data;
     })
     .finally(() => {
       releaseRequest = undefined;
     });
+
   return releaseRequest;
 }
 
 function readCachedRelease(): Release | undefined {
   try {
     const cached = sessionStorage.getItem(CACHE_KEY);
+
     if (!cached) return undefined;
+
     try {
       const data: unknown = JSON.parse(cached);
+
       if (isRelease(data)) return data;
     } catch {
       // Invalid cached data is replaced by the next successful request.
     }
+
     sessionStorage.removeItem(CACHE_KEY);
   } catch {
     // Storage access can be denied independently of network access.
   }
+
   return undefined;
 }
 
 async function requestLatestRelease(): Promise<Release> {
   const controller = new AbortController();
   let timer: ReturnType<typeof setTimeout> | undefined;
+
   const deadline = new Promise<never>((_, reject) => {
     timer = setTimeout(() => {
       reject(new Error("GitHub release request timed out"));
       controller.abort();
     }, RELEASE_REQUEST_TIMEOUT_MS);
   });
+
   const request = async () => {
     const response = await fetch(API_URL, { signal: controller.signal });
+
     if (!response.ok) throw new Error(`GitHub release request failed: ${response.status}`);
     const data: unknown = await response.json();
+
     if (!isRelease(data)) throw new Error("GitHub returned an invalid release");
+
     return data;
   };
 
@@ -207,19 +240,27 @@ async function requestLatestRelease(): Promise<Release> {
 }
 
 function isRelease(value: unknown): value is Release {
-  if (!value || typeof value !== "object") return false;
-  const release = value as Record<string, unknown>;
+  if (!isJsonObject(value)) return false;
+  const release = value;
+
   return (
-    typeof release.tag_name === "string" &&
+    "tag_name" in release &&
+    isJsonString(release.tag_name) &&
     /^v\d+\.\d+\.\d+$/.test(release.tag_name) &&
-    typeof release.html_url === "string" &&
+    "html_url" in release &&
+    isJsonString(release.html_url) &&
+    "assets" in release &&
     Array.isArray(release.assets) &&
-    release.assets.every(
-      (asset) =>
-        asset &&
-        typeof asset === "object" &&
-        typeof asset.name === "string" &&
-        typeof asset.browser_download_url === "string",
-    )
+    release.assets.every(isReleaseAsset)
+  );
+}
+
+function isReleaseAsset(asset: unknown): asset is ReleaseAsset {
+  return (
+    isJsonObject(asset) &&
+    "name" in asset &&
+    isJsonString(asset.name) &&
+    "browser_download_url" in asset &&
+    isJsonString(asset.browser_download_url)
   );
 }

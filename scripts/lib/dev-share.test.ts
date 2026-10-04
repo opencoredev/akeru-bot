@@ -13,6 +13,7 @@ import {
 } from "./dev-share.ts";
 
 const TAILNET_STATUS = JSON.stringify({ Self: { DNSName: "host.example.ts.net." } });
+
 const NO_HANDLER_STDERR = "error: failed to remove web serve: handler does not exist";
 
 interface CallResult {
@@ -32,6 +33,7 @@ const spawnerLayer = (input: { readonly off?: CallResult; readonly serve?: CallR
     ChildProcessSpawner.ChildProcessSpawner,
     ChildProcessSpawner.make((command) => {
       const args = "args" in command ? (command.args as ReadonlyArray<string>) : [];
+
       const result: CallResult = args.includes("status")
         ? { exitCode: 0 }
         : args.includes("off")
@@ -62,6 +64,7 @@ describe("unshareDevServer", () => {
       const result = yield* unshareDevServer(5788).pipe(
         Effect.provide(spawnerLayer({ off: { exitCode: 0 } })),
       );
+
       assert.isTrue(result.cleared);
     }),
   );
@@ -73,6 +76,7 @@ describe("unshareDevServer", () => {
       const result = yield* unshareDevServer(5788).pipe(
         Effect.provide(spawnerLayer({ off: { exitCode: 1, stderr: NO_HANDLER_STDERR } })),
       );
+
       assert.isTrue(result.cleared);
     }),
   );
@@ -82,6 +86,7 @@ describe("unshareDevServer", () => {
       const result = yield* unshareDevServer(5788).pipe(
         Effect.provide(spawnerLayer({ off: { exitCode: 1, stderr: "permission denied" } })),
       );
+
       assert.isFalse(result.cleared);
       assert.include(result.explanation, "permission denied");
       // Structured, so a wrapping error can keep the real chain.

@@ -46,6 +46,7 @@ const fetchDescriptor = Effect.fn("clientRuntime.connection.remote.fetchDescript
 export const make = Effect.gen(function* () {
   const presentation = yield* ClientCapabilities.ClientPresentation;
   const httpClient = yield* HttpClient.HttpClient;
+
   const bearerDescriptors = yield* Ref.make<
     ReadonlyMap<
       EnvironmentId,
@@ -68,20 +69,24 @@ export const make = Effect.gen(function* () {
     }) {
       const now = yield* Clock.currentTimeMillis;
       const cachedDescriptor = (yield* Ref.get(bearerDescriptors)).get(input.expectedEnvironmentId);
+
       const canReuseDescriptor =
         cachedDescriptor?.httpBaseUrl === input.httpBaseUrl &&
         cachedDescriptor.validatedAtEpochMs + BEARER_DESCRIPTOR_CACHE_TTL_MS > now;
+
       const descriptor = canReuseDescriptor
         ? cachedDescriptor.descriptor
         : yield* fetchDescriptor(input.httpBaseUrl).pipe(
             Effect.provideService(HttpClient.HttpClient, httpClient),
           );
+
       if (descriptor.environmentId !== input.expectedEnvironmentId) {
         return yield* environmentMismatchError({
           expected: input.expectedEnvironmentId,
           actual: descriptor.environmentId,
         });
       }
+
       if (!canReuseDescriptor) {
         yield* Ref.update(bearerDescriptors, (current) => {
           const next = new Map(current);
@@ -90,9 +95,11 @@ export const make = Effect.gen(function* () {
             descriptor,
             validatedAtEpochMs: now,
           });
+
           return next;
         });
       }
+
       const socketUrl = yield* resolveRemoteWebSocketConnectionUrl({
         wsBaseUrl: input.wsBaseUrl,
         httpBaseUrl: input.httpBaseUrl,
@@ -102,6 +109,7 @@ export const make = Effect.gen(function* () {
         Effect.mapError(mapRemoteEnvironmentError),
         Effect.provideService(HttpClient.HttpClient, httpClient),
       );
+
       return {
         environmentId: descriptor.environmentId,
         label: descriptor.label,

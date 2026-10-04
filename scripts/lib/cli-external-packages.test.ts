@@ -27,6 +27,7 @@ const PackageManifest = Schema.Struct({
   optionalDependencies: Schema.optional(Schema.Record(Schema.String, Schema.String)),
   peerDependencies: Schema.optional(Schema.Record(Schema.String, Schema.String)),
 });
+
 type PackageManifest = typeof PackageManifest.Type;
 
 const decodeManifest = Schema.decodeUnknownSync(Schema.fromJsonString(PackageManifest));
@@ -157,6 +158,7 @@ it.layer(NodeServices.layer)("external package dependency closure", (it) => {
   const readInstalledPackages = Effect.gen(function* () {
     const fileSystem = yield* FileSystem.FileSystem;
     const path = yield* Path.Path;
+
     const storeDir = path.resolve(
       path.dirname(NodeURL.fileURLToPath(import.meta.url)),
       "../../node_modules/.pnpm",
@@ -170,10 +172,12 @@ it.layer(NodeServices.layer)("external package dependency closure", (it) => {
       fileSystem.exists(candidate).pipe(Effect.orElseSucceed(() => false));
 
     const installed = new Map<string, PackageManifest>();
+
     if (!(yield* isPresent(storeDir))) return installed;
 
     for (const entry of yield* fileSystem.readDirectory(storeDir)) {
       const modulesDir = path.join(storeDir, entry, "node_modules");
+
       if (!(yield* isPresent(modulesDir))) continue;
 
       for (const owner of yield* fileSystem.readDirectory(modulesDir)) {
@@ -186,11 +190,13 @@ it.layer(NodeServices.layer)("external package dependency closure", (it) => {
         for (const name of names) {
           if (installed.has(name)) continue;
           const manifestPath = path.join(modulesDir, name, "package.json");
+
           if (!(yield* isPresent(manifestPath))) continue;
           installed.set(name, decodeManifest(yield* fileSystem.readFileString(manifestPath)));
         }
       }
     }
+
     return installed;
   }).pipe(Effect.cached, Effect.runSync);
 
@@ -237,17 +243,20 @@ it.layer(NodeServices.layer)("external package dependency closure", (it) => {
         seen.add(name);
 
         const manifest = installed.get(name);
+
         if (!manifest) continue;
 
         const declared = {
-          ...(manifest.dependencies ?? {}),
-          ...(manifest.optionalDependencies ?? {}),
-          ...(manifest.peerDependencies ?? {}),
+          ...manifest.dependencies,
+          ...manifest.optionalDependencies,
+          ...manifest.peerDependencies,
         };
+
         for (const dependency of Object.keys(declared)) {
           if (!isRuntimeExternal(dependency)) {
             violations.push(`${name} -> ${dependency}`);
           }
+
           if (!seen.has(dependency)) queue.push(dependency);
         }
       }
@@ -275,6 +284,7 @@ var x = 1;
       region(
         "../../node_modules/.pnpm/msgpackr-extract@3.0.4/node_modules/msgpackr-extract/index.js",
       );
+
     const result = findInlinedExternalPackages(source);
 
     assert.deepStrictEqual(result.inlined, ["detect-libc", "msgpackr-extract"]);
@@ -286,6 +296,7 @@ var x = 1;
       region("../../node_modules/.pnpm/libsql@0.5.29/node_modules/libsql/index.js") +
         region("../../node_modules/@neon-rs/load/dist/index.js"),
     );
+
     assert.deepStrictEqual(result.inlined, ["@neon-rs/load", "libsql"]);
   });
 
@@ -293,6 +304,7 @@ var x = 1;
     const result = findInlinedExternalPackages(
       region("../../node_modules/@ff-labs/fff-node/dist/src/index.js"),
     );
+
     assert.deepStrictEqual(result.inlined, ["@ff-labs/fff-node"]);
   });
 
@@ -300,6 +312,7 @@ var x = 1;
     const source =
       region("../../node_modules/.pnpm/effect@4.0.0/node_modules/effect/dist/index.js") +
       region("../../src/server/main.ts");
+
     const result = findInlinedExternalPackages(source);
 
     assert.deepStrictEqual(result.inlined, []);
@@ -316,6 +329,7 @@ var x = 1;
       region("../../node_modules/.pnpm/effect@4.0.0/node_modules/effect/dist/index.js") +
       region("../../node_modules/.pnpm/yaml@2.4.0/node_modules/yaml/dist/index.js") +
       region("../../src/server/main.ts");
+
     const result = findInlinedExternalPackages(source);
 
     assert.deepStrictEqual(result.inlinedPackages, ["effect", "yaml"]);
@@ -326,6 +340,7 @@ var x = 1;
     const result = findInlinedExternalPackages(
       region("../../node_modules/.pnpm/effect@4.0.0/node_modules/effect/dist/index.js"),
     );
+
     assert.deepStrictEqual(result.inlinedPackages, ["effect"]);
   });
 

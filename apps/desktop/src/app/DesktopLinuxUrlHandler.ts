@@ -9,7 +9,7 @@ import * as ChildProcessSpawner from "effect/unstable/process/ChildProcessSpawne
 
 import * as ElectronProtocol from "../electron/ElectronProtocol.ts";
 import * as DesktopEnvironment from "./DesktopEnvironment.ts";
-import { makeComponentLogger } from "./DesktopObservability.ts";
+import { componentLogger } from "./DesktopObservability.ts";
 
 // Linux ships as an AppImage, so the .desktop entry users end up with is
 // created by whatever integration tool they use (AppImageLauncher names it
@@ -32,25 +32,33 @@ export const RETIRED_URL_HANDLER_SCHEMES = ["t3code", "t3code-dev"] as const;
 // nothing changed.
 export function removeRetiredSchemeAssociations(mimeappsContent: string): string | null {
   let changed = false;
+
   const retained = mimeappsContent.split("\n").flatMap((line) => {
     const match = /^x-scheme-handler\/([^=]+)=(.*)$/.exec(line.trim());
+
     if (match === null) return [line];
     const [, scheme, handlers] = match;
-    if (!(RETIRED_URL_HANDLER_SCHEMES as readonly string[]).includes(scheme!)) {
+
+    if (!RETIRED_URL_HANDLER_SCHEMES.some((retired) => retired === scheme)) {
       return [line];
     }
+
     const entries = handlers!.split(";").filter((handler) => handler.length > 0);
     const others = entries.filter((handler) => handler !== URL_HANDLER_DESKTOP_ENTRY_NAME);
+
     if (others.length === entries.length) {
       return [line];
     }
+
     changed = true;
+
     return others.length === 0 ? [] : [`x-scheme-handler/${scheme}=${others.join(";")};`];
   });
+
   return changed ? retained.join("\n") : null;
 }
 
-const { logInfo, logWarning } = makeComponentLogger("desktop-linux-url-handler");
+const { logInfo, logWarning } = componentLogger("desktop-linux-url-handler");
 
 export class DesktopLinuxUrlHandlerRegistrationError extends Schema.TaggedErrorClass<DesktopLinuxUrlHandlerRegistrationError>()(
   "DesktopLinuxUrlHandlerRegistrationError",
@@ -64,6 +72,7 @@ export class DesktopLinuxUrlHandlerRegistrationError extends Schema.TaggedErrorC
 ) {
   override get message(): string {
     const exitCode = this.exitCode === undefined ? "" : `, xdg-mime exit code ${this.exitCode}`;
+
     return `Failed to register the ${this.scheme}:// URL handler (step: ${this.step}${exitCode}).`;
   }
 }
@@ -90,6 +99,7 @@ export function escapeDesktopEntryExecArgument(value: string): string {
     .replaceAll("$", () => "\\$")
     .replaceAll('"', () => '\\"')
     .replaceAll("%", () => "%%");
+
   return escapeDesktopEntryString(`"${quoted}"`);
 }
 
@@ -127,6 +137,7 @@ export const make = Effect.gen(function* () {
 
   const scheme = ElectronProtocol.getDesktopScheme(environment.isDevelopment);
   const schemes = [scheme];
+
   const desktopEntryPath = environment.path.join(
     environment.linuxApplicationsDir,
     URL_HANDLER_DESKTOP_ENTRY_NAME,
@@ -169,9 +180,11 @@ export const make = Effect.gen(function* () {
             stderr: "ignore",
           },
         );
+
         const handle = yield* spawner.spawn(command);
         const exitCode = yield* handle.exitCode;
-        if ((exitCode as unknown as number) !== 0) {
+
+        if (exitCode !== 0) {
           return yield* new DesktopLinuxUrlHandlerRegistrationError({
             step: "set-default-handler",
             scheme,
@@ -198,9 +211,11 @@ export const make = Effect.gen(function* () {
     const mimeappsPath = environment.path.join(environment.appDataDirectory, "mimeapps.list");
     const content = yield* fileSystem.readFileString(mimeappsPath);
     const cleaned = removeRetiredSchemeAssociations(content);
+
     if (cleaned === null) {
       return;
     }
+
     yield* fileSystem.writeFileString(mimeappsPath, cleaned);
     yield* logInfo("released retired URL scheme defaults", {
       schemes: RETIRED_URL_HANDLER_SCHEMES,
@@ -215,6 +230,7 @@ export const make = Effect.gen(function* () {
     if (environment.platform !== "linux" || !environment.isPackaged) {
       return;
     }
+
     yield* writeDesktopEntry;
     yield* Effect.forEach(schemes, setDefaultHandler, { discard: true });
     yield* releaseRetiredSchemes;

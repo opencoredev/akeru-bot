@@ -1,4 +1,3 @@
-// @effect-diagnostics nodeBuiltinImport:off preferSchemaOverJson:off
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { describe, expect, it } from "@effect/vitest";
 import { ProviderInstanceId } from "@akeru/contracts";
@@ -6,6 +5,7 @@ import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
+import * as Logger from "effect/Logger";
 import * as Path from "effect/Path";
 import * as Stream from "effect/Stream";
 import { HttpClient, HttpClientResponse } from "effect/unstable/http";
@@ -13,10 +13,9 @@ import { HttpClient, HttpClientResponse } from "effect/unstable/http";
 import * as BackgroundPolicy from "../../background/BackgroundPolicy.ts";
 import { ServerConfig } from "../../config.ts";
 import { layerTest as serverSettingsLayerTest } from "../../serverSettings.ts";
-import { ProviderDriverError } from "../Errors.ts";
+import * as ModelCatalog from "../ModelCatalog.ts";
 import { NoOpProviderEventLoggers, ProviderEventLoggers } from "../Layers/ProviderEventLoggers.ts";
 import { GrokDriver } from "./GrokDriver.ts";
-import { GrokSkillsProbeError } from "./GrokSkills.ts";
 
 const TEST_EPOCH = DateTime.makeUnsafe("1970-01-01T00:00:00.000Z");
 
@@ -64,6 +63,7 @@ const grokDriverTestLayer = Layer.mergeAll(
   TestHttpClientLive,
   Layer.succeed(ProviderEventLoggers, NoOpProviderEventLoggers),
   BackgroundPolicyAlwaysRunLayer,
+  ModelCatalog.layerTest,
 );
 
 const LOGGED_IN_MODELS_OUTPUT = [
@@ -116,6 +116,7 @@ const writeFakeGrokCli = (input: {
         ],
       }),
     );
+
     const inspectCase =
       input.inspect === "fail"
         ? "  inspect) exit 1;;"
@@ -126,6 +127,7 @@ const writeFakeGrokCli = (input: {
             "    fi",
             `    cat ${shellQuote(machineSkillsPath)}; exit 0;;`,
           ].join("\n");
+
     yield* fs.writeFileString(
       grokPath,
       [
@@ -141,6 +143,7 @@ const writeFakeGrokCli = (input: {
       ].join("\n"),
     );
     yield* fs.chmod(grokPath, 0o755);
+
     return grokPath;
   });
 
@@ -159,9 +162,11 @@ it.layer(grokDriverTestLayer)("GrokDriver.snapshotForCwd", (it) => {
       Effect.scoped(
         Effect.gen(function* () {
           const fs = yield* FileSystem.FileSystem;
+
           const workspaceCwd = yield* fs.makeTempDirectoryScoped({
             prefix: "akeru-grok-disabled-workspace-",
           });
+
           const grokPath = yield* writeFakeGrokCli({ workspaceCwd, inspect: "fail" });
           const instance = yield* createGrokInstance({ enabled: false, binaryPath: grokPath });
           expect(instance.snapshotForCwd).toBeTypeOf("function");
@@ -179,15 +184,17 @@ it.layer(grokDriverTestLayer)("GrokDriver.snapshotForCwd", (it) => {
       Effect.scoped(
         Effect.gen(function* () {
           const fs = yield* FileSystem.FileSystem;
+
           const workspaceCwd = yield* fs.makeTempDirectoryScoped({
             prefix: "akeru-grok-workspace-",
           });
+
           const grokPath = yield* writeFakeGrokCli({ workspaceCwd, inspect: "skills" });
           const instance = yield* createGrokInstance({ enabled: true, binaryPath: grokPath });
           const machine = yield* instance.snapshot.refresh;
           const workspace = yield* instance.snapshotForCwd!(workspaceCwd);
 
-          expect(machine.skills?.map((skill) => skill.name)).toEqual(["machine-skill"]);
+          expect(machine.skills ?? []).toEqual([]);
           expect(workspace.skills).toEqual([
             {
               name: "project-skill",
@@ -200,25 +207,58 @@ it.layer(grokDriverTestLayer)("GrokDriver.snapshotForCwd", (it) => {
       ),
     );
 
-    it.effect("propagates inspect failures as ProviderDriverError", () =>
+    it.effect("logs inspect failures while falling back to an empty catalog", () =>
       Effect.scoped(
         Effect.gen(function* () {
           const fs = yield* FileSystem.FileSystem;
+
           const workspaceCwd = yield* fs.makeTempDirectoryScoped({
             prefix: "akeru-grok-failed-workspace-",
           });
+
           const grokPath = yield* writeFakeGrokCli({ workspaceCwd, inspect: "fail" });
           const instance = yield* createGrokInstance({ enabled: true, binaryPath: grokPath });
 
           const machine = yield* instance.snapshot.refresh;
           expect(machine.skills ?? []).toEqual([]);
 
-          const error = yield* instance.snapshotForCwd!(workspaceCwd).pipe(Effect.flip);
-          expect(error._tag).toBe("ProviderDriverError");
-          expect(error).toBeInstanceOf(ProviderDriverError);
-          expect(error.detail).toContain(`Failed to discover Grok skills for '${workspaceCwd}'`);
-          expect(error.cause).toBeInstanceOf(GrokSkillsProbeError);
-          expect((error.cause as GrokSkillsProbeError).stage).toBe("exit");
+          const messages: unknown[] = [];
+
+          const logger = Logger.make(({ message }) => {
+            messages.push(message);
+          });
+
+          const workspace = yield* instance.snapshotForCwd!(workspaceCwd).pipe(
+            Effect.provide(Logger.layer([logger], { mergeWithExisting: false })),
+          );
+
+          expect(workspace.skills).toEqual([]);
+          expect(workspace.auth).toEqual(machine.auth);
+          expect(messages.flat()).toContain("Grok skill discovery failed");
+        }),
+      ),
+    );
+
+    it.effect("keeps missing CLI skill discovery silent", () =>
+      Effect.scoped(
+        Effect.gen(function* () {
+          const instance = yield* createGrokInstance({
+            enabled: true,
+            binaryPath: "/no/provider/grok",
+          });
+
+          const messages: unknown[] = [];
+
+          const logger = Logger.make(({ message }) => {
+            messages.push(message);
+          });
+
+          const workspace = yield* instance.snapshotForCwd!(process.cwd()).pipe(
+            Effect.provide(Logger.layer([logger], { mergeWithExisting: false })),
+          );
+
+          expect(workspace.skills).toEqual([]);
+          expect(messages).toEqual([]);
         }),
       ),
     );

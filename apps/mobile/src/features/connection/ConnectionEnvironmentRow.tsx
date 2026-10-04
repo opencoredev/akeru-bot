@@ -47,18 +47,23 @@ export function ConnectionEnvironmentRow(props: {
   const statusLabel = connectionStatusLabel(props.environment, t);
   const statusTraceId = props.environment.connectionErrorTraceId;
   const hasConnectionFailure = props.environment.connectionError !== null;
+
   const isRetrying =
     props.environment.connectionState === "connecting" ||
     props.environment.connectionState === "reconnecting";
+
   const handleSave = useCallback(async () => {
     const result = await props.onUpdate(props.environment.environmentId, {
       label: label.trim(),
       displayUrl: url.trim(),
     });
+
     if (AsyncResult.isSuccess(result)) {
       props.onToggle();
+
       return;
     }
+
     const error = Cause.squash(result.cause);
     Alert.alert(
       t("Could not update environment"),

@@ -35,8 +35,10 @@ export function threadSilentRun(
 ): ThreadSilentRun | null {
   if (!turnId) return null;
   let latest: OrchestrationThreadActivity | null = null;
+
   for (const activity of activities) {
     if (activity.turnId !== turnId || !isSilentRunActivity(activity)) continue;
+
     // A clear always follows its silence, so it wins a timestamp tie.
     if (
       latest === null ||
@@ -47,10 +49,13 @@ export function threadSilentRun(
       latest = activity;
     }
   }
+
   if (latest?.kind !== THREAD_SILENT_RUN_ACTIVITY_KIND || !isSilentRunPayload(latest.payload)) {
     return null;
   }
+
   const { provider, lastActivityAt } = latest.payload;
+
   return {
     provider,
     providerName: PROVIDER_DISPLAY_NAMES[provider] ?? provider,

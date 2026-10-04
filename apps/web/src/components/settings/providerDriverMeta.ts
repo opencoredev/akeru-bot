@@ -1,13 +1,22 @@
 import {
   ClaudeSettings,
   CodexSettings,
+  CustomOpenaiSettings,
   GrokSettings,
   KimiSettings,
   OpenCodeGoSettings,
   ProviderDriverKind,
 } from "@akeru/contracts";
 import type * as Schema from "effect/Schema";
-import { ClaudeAI, GrokIcon, KimiIcon, type Icon, OpenAI, OpenCodeIcon } from "../Icons";
+import {
+  ClaudeAI,
+  CustomApiIcon,
+  GrokIcon,
+  KimiIcon,
+  type Icon,
+  OpenAI,
+  OpenCodeIcon,
+} from "../Icons";
 
 type ProviderSettingsSchema = {
   readonly fields: Readonly<Record<string, Schema.Top>>;
@@ -67,6 +76,12 @@ export const PROVIDER_CLIENT_DEFINITIONS: readonly ProviderClientDefinition[] = 
     icon: OpenCodeIcon,
     settingsSchema: OpenCodeGoSettings,
   },
+  {
+    value: ProviderDriverKind.make("customOpenai"),
+    label: "Custom API",
+    icon: CustomApiIcon,
+    settingsSchema: CustomOpenaiSettings,
+  },
 ];
 
 export const PROVIDER_CLIENT_DEFINITION_BY_VALUE: Partial<
@@ -76,7 +91,9 @@ export const PROVIDER_CLIENT_DEFINITION_BY_VALUE: Partial<
 );
 
 export const DRIVER_OPTIONS = PROVIDER_CLIENT_DEFINITIONS;
+
 export const DRIVER_OPTION_BY_VALUE = PROVIDER_CLIENT_DEFINITION_BY_VALUE;
+
 export type DriverOption = ProviderClientDefinition;
 
 /**
@@ -86,5 +103,6 @@ export type DriverOption = ProviderClientDefinition;
  */
 export function getDriverOption(driver: ProviderDriverKind | undefined): DriverOption | undefined {
   if (driver === undefined) return undefined;
+
   return PROVIDER_CLIENT_DEFINITION_BY_VALUE[driver];
 }

@@ -1,3 +1,5 @@
+import * as Predicate from "effect/Predicate";
+import { ServerProviderUnavailability } from "@akeru/contracts";
 import * as Schema from "effect/Schema";
 
 import type { CheckpointServiceError } from "../checkpointing/Errors.ts";
@@ -195,6 +197,9 @@ export class AgentControllerUnsupportedEngineError extends Schema.TaggedErrorCla
     provider: Schema.String,
     model: Schema.String,
     detail: Schema.String,
+    // Set when the user can fix the failure, so the chat names the fix instead
+    // of asking for feedback.
+    unavailability: Schema.optional(ServerProviderUnavailability),
     cause: Schema.optional(Schema.Defect()),
   },
 ) {
@@ -260,6 +265,7 @@ export type AgentControllerError =
 const hasReadableIssue = Schema.is(
   Schema.Union([ProviderValidationError, ProviderAdapterValidationError]),
 );
+
 const hasReadableDetail = Schema.is(
   Schema.Union([
     ProviderAdapterRequestError,
@@ -277,14 +283,18 @@ const hasReadableDetail = Schema.is(
  * class name, operation prefix, and stack so chats and bot work cards never
  * show server paths. Log the full cause separately.
  */
-export function readableErrorDetail(error: unknown): string {
-  if (hasReadableIssue(error)) return error.issue;
-  if (hasReadableDetail(error)) return error.detail;
+export function readableErrorDetail(cause: unknown): string {
+  if (hasReadableIssue(cause)) return cause.issue;
+
+  if (hasReadableDetail(cause)) return cause.detail;
+
   const message =
-    error instanceof Error ? error.message : typeof error === "string" ? error : undefined;
+    cause instanceof Error ? cause.message : Predicate.isString(cause) ? cause : undefined;
+
   const firstLine = message
     ?.split("\n")
     .map((line) => line.trim())
     .find((line) => line.length > 0 && !line.startsWith("at "));
+
   return firstLine ?? "Something went wrong.";
 }

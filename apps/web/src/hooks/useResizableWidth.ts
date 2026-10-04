@@ -35,15 +35,13 @@ export interface ResizableWidthHandlers {
  * follows the cursor live) and only commits to localStorage when the user
  * lifts the pointer.
  */
-export function useResizableWidth(options: UseResizableWidthOptions): {
-  readonly width: number;
-  readonly handlers: ResizableWidthHandlers;
-} {
+export function useResizableWidth(options: UseResizableWidthOptions) {
   const { storageKey, defaultWidth, minWidth, maxWidth, edge } = options;
 
   const clamp = useCallback(
     (value: number): number => {
       if (!Number.isFinite(value)) return defaultWidth;
+
       return Math.max(minWidth, Math.min(maxWidth, value));
     },
     [defaultWidth, maxWidth, minWidth],
@@ -52,11 +50,14 @@ export function useResizableWidth(options: UseResizableWidthOptions): {
   // No cross-tab subscription: panel width is per-window state.
   const [width, setWidth] = useState<number>(() => {
     if (typeof window === "undefined") return defaultWidth;
+
     try {
       const stored = getLocalStorageItem(storageKey, WidthSchema);
+
       return clamp(stored ?? defaultWidth);
     } catch (error) {
       console.error("Could not read persisted panel width.", error);
+
       return defaultWidth;
     }
   });
@@ -74,10 +75,13 @@ export function useResizableWidth(options: UseResizableWidthOptions): {
 
   const releasePointer = useCallback((pointerId: number) => {
     const state = dragStateRef.current;
+
     if (!state) return;
+
     if (state.rafId !== null) {
       cancelAnimationFrame(state.rafId);
     }
+
     try {
       if (state.target.hasPointerCapture(pointerId)) {
         state.target.releasePointerCapture(pointerId);
@@ -85,6 +89,7 @@ export function useResizableWidth(options: UseResizableWidthOptions): {
     } catch {
       // pointer may already be released; harmless.
     }
+
     document.body.style.removeProperty("cursor");
     document.body.style.removeProperty("user-select");
     dragStateRef.current = null;
@@ -96,11 +101,13 @@ export function useResizableWidth(options: UseResizableWidthOptions): {
       event.preventDefault();
       event.stopPropagation();
       const target = event.currentTarget;
+
       try {
         target.setPointerCapture(event.pointerId);
       } catch {
         return;
       }
+
       document.body.style.cursor = "col-resize";
       document.body.style.userSelect = "none";
       dragStateRef.current = {
@@ -118,13 +125,16 @@ export function useResizableWidth(options: UseResizableWidthOptions): {
   const onPointerMove = useCallback(
     (event: ReactPointerEvent<HTMLElement>) => {
       const state = dragStateRef.current;
+
       if (!state || state.pointerId !== event.pointerId) return;
       event.preventDefault();
       const delta = edge === "left" ? state.startX - event.clientX : event.clientX - state.startX;
       state.pending = clamp(state.startWidth + delta);
+
       if (state.rafId !== null) return;
       state.rafId = requestAnimationFrame(() => {
         const active = dragStateRef.current;
+
         if (!active) return;
         active.rafId = null;
         setWidth(active.pending);
@@ -136,15 +146,18 @@ export function useResizableWidth(options: UseResizableWidthOptions): {
   const onPointerUp = useCallback(
     (event: ReactPointerEvent<HTMLElement>) => {
       const state = dragStateRef.current;
+
       if (!state || state.pointerId !== event.pointerId) return;
       const finalWidth = clamp(state.pending);
       releasePointer(event.pointerId);
+
       // Commit once at drag-end to avoid 60Hz localStorage writes.
       try {
         setLocalStorageItem(storageKey, finalWidth, WidthSchema);
       } catch (error) {
         console.error("Could not persist panel width.", error);
       }
+
       setWidth(finalWidth);
     },
     [clamp, releasePointer, storageKey],
@@ -153,6 +166,7 @@ export function useResizableWidth(options: UseResizableWidthOptions): {
   const onPointerCancel = useCallback(
     (event: ReactPointerEvent<HTMLElement>) => {
       const state = dragStateRef.current;
+
       if (!state || state.pointerId !== event.pointerId) return;
       // Don't persist a cancelled drag; revert to the start width.
       releasePointer(event.pointerId);

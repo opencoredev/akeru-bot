@@ -37,8 +37,10 @@ export const startExpoDictationCapture: DictationDependencies["capture"] = async
   signal.throwIfAborted();
   const permission = await requestRecordingPermissionsAsync();
   signal.throwIfAborted();
+
   if (!permission.granted) throw new Error(PERMISSION_DENIED);
   await setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true });
+
   // Until dispose exists, a setup failure must hand the audio session back itself.
   const leaveRecordingMode = (cause: unknown, release?: () => void): never => {
     release?.();
@@ -47,20 +49,24 @@ export const startExpoDictationCapture: DictationDependencies["capture"] = async
   };
 
   let recorder: InstanceType<typeof AudioModule.AudioRecorder>;
+
   try {
     recorder = new AudioModule.AudioRecorder(DICTATION_RECORDING);
   } catch (cause) {
     return leaveRecordingMode(cause);
   }
+
   let disposed = false;
   let stopping = false;
   let startedAt = 0;
   let statusSubscription: ReturnType<typeof recorder.addListener>;
+
   try {
     statusSubscription = recorder.addListener(
       "recordingStatusUpdate",
       (status: RecordingStatus) => {
         if (disposed || stopping) return;
+
         if (status.hasError || status.mediaServicesDidReset) {
           onError(new Error(status.error ?? "The microphone stopped recording."));
         }
@@ -69,34 +75,43 @@ export const startExpoDictationCapture: DictationDependencies["capture"] = async
   } catch (cause) {
     return leaveRecordingMode(cause, () => recorder.release());
   }
+
   const appSubscription = AppState.addEventListener("change", (state) => {
     if (!disposed && state !== "active") {
       onError(new Error("Dictation stopped because Akeru Bot left the foreground."));
     }
   });
+
   const deleteRecording = () => {
     const uri = recorder.uri;
+
     if (!uri) return;
+
     try {
       const file = new File(uri);
+
       if (file.exists) file.delete();
     } catch {
       // The recorder may not have written a file yet.
     }
   };
+
   const dispose = () => {
     if (disposed) return;
     disposed = true;
     statusSubscription.remove();
     appSubscription.remove();
+
     const finish = () => {
       deleteRecording();
       recorder.release();
       void setAudioModeAsync({ allowsRecording: false }).catch(() => undefined);
     };
+
     if (recorder.isRecording) void recorder.stop().then(finish, finish);
     else finish();
   };
+
   signal.addEventListener("abort", dispose, { once: true });
 
   try {
@@ -116,13 +131,17 @@ export const startExpoDictationCapture: DictationDependencies["capture"] = async
       await recorder.stop();
       const durationMs = Date.now() - startedAt;
       const uri = recorder.uri;
+
       if (!uri) throw new Error("The recording could not be saved.");
       const file = new File(uri);
+
       if (file.size > limits.maxAudioBytes) throw new Error("The recording is too long.");
       const bytes = await file.bytes();
+
       return { bytes, mediaType: "audio/mp4", durationMs };
     },
     dispose,
   };
+
   return capture;
 };

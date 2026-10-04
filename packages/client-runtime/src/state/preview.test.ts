@@ -8,6 +8,7 @@ describe("preview state commands", () => {
       environmentId: "environment-1",
       input: { clientId: "client-1", connectionId: "connection-1" },
     });
+
     const replacement = previewAutomationHostFocusConcurrencyKey({
       environmentId: "environment-1",
       input: { clientId: "client-1", connectionId: "connection-2" },

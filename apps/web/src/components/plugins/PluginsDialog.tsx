@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 import { useAtomValue } from "@effect/atom-react";
 import {
   isAtomCommandInterrupted,
@@ -9,22 +10,18 @@ import {
   type McpServer,
   type ProviderAccessStatus,
 } from "@akeru/contracts";
-import { Cancel01Icon, PuzzleIcon, Search01Icon } from "@hugeicons/core-free-icons";
 import { useChangedSinceMount } from "../../hooks/useChangedSinceMount";
-import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useState } from "react";
 import {
   integrationsShListing,
   isInstallablePlugin,
-  isListedIntegration,
-  loadDirectoryCatalog,
   type PluginDirectoryDefinition,
   type PluginSkill,
 } from "../../../../../plugins";
 import { createTranslator } from "@akeru/client-runtime/i18n";
-import { isElectron } from "../../env";
 import { useI18n } from "../../i18n";
 import { ensureLocalApi } from "../../localApi";
-import { cn, randomUUID } from "../../lib/utils";
+import { randomUUID } from "../../lib/utils";
 import { closePlugins, usePluginsDialogStore } from "../../pluginsDialogStore";
 import { environmentBotsAtom } from "../../state/bots";
 import { usePrimaryEnvironmentId } from "../../state/environments";
@@ -32,8 +29,6 @@ import { environmentMcpServersAtom, mcpServerEnvironment } from "../../state/mcp
 import { useEnvironmentQuery } from "../../state/query";
 import { serverEnvironment } from "../../state/server";
 import { useAtomCommand } from "../../state/use-atom-command";
-import { WorkspacePageHeader } from "../WorkspacePageHeader";
-import { AppIcon } from "../ui/app-icon";
 import { Button } from "../ui/button";
 import {
   Dialog,
@@ -49,15 +44,22 @@ import { Input } from "../ui/input";
 import { Select, SelectItem, SelectPopup, SelectTrigger, SelectValue } from "../ui/select";
 import { Textarea } from "../ui/textarea";
 import { toastManager } from "../ui/toast";
-import { ScrollArea } from "../ui/scroll-area";
 import { SidebarInset } from "../ui/sidebar";
 import { ComposioSection } from "./ComposioSection";
 import {
-  CustomMcpServers,
-  pluginLabel,
-  PluginsCatalog,
-  RemovedBuiltinServers,
-} from "./PluginsCatalog";
+  draftFromServer,
+  EMPTY_MCP_SERVER_DRAFT,
+  validateMcpServerDraft,
+} from "./mcpServerDraft.logic";
+import {
+  PLUGIN_PAGE_COLUMN_CLASS_NAME,
+  PluginDirectoryLayout,
+  PluginFilterBar,
+  PluginSearchField,
+  PluginsPageHeader,
+} from "./PluginDirectoryLayout";
+import { FULL_PLUGIN_CATALOG, LISTED_PLUGIN_CATALOG } from "./pluginDirectoryCatalog";
+import { CustomMcpServers, PluginsCatalog, RemovedBuiltinServers } from "./PluginsCatalog";
 import { PluginDetails } from "./PluginDetails";
 import { runPluginEnablePlan } from "./pluginConnection";
 import {
@@ -67,35 +69,37 @@ import {
   pluginMcpServerId,
 } from "./pluginRegistry";
 import {
-  buildPluginFilters,
   buildPluginSections,
   pluginActiveDependentBotNames,
   pluginBlocker,
   type PluginFilter,
 } from "./pluginPresentation";
 
+export {
+  PLUGIN_DIRECTORY_HEADER_CLASS_NAME,
+  PLUGIN_DIRECTORY_PANEL_CLASS_NAME,
+  PLUGIN_PAGE_COLUMN_CLASS_NAME,
+  PluginsPageHeader,
+} from "./PluginDirectoryLayout";
+
+export { PLUGIN_DIRECTORY_FILTERS } from "./pluginDirectoryCatalog";
+
+export {
+  EMPTY_MCP_SERVER_DRAFT,
+  type McpServerDraft,
+  validateMcpServerDraft,
+} from "./mcpServerDraft.logic";
+
 const englishTranslator = createTranslator("en");
 
 type Translate = typeof englishTranslator.translate;
 
-const ALL_CATEGORIES_VALUE = "all-categories";
-const PRIMARY_FILTERS = ["All", "Featured", "Installed"] as const satisfies readonly PluginFilter[];
-
-// The directory lists only integrations.sh entries, but an installed plugin that later
-// drops off that list (for example, pending vendor verification) must stay manageable.
-const FULL_CATALOG = loadDirectoryCatalog();
-const CATALOG = FULL_CATALOG.filter(isListedIntegration);
-export const PLUGIN_DIRECTORY_FILTERS = buildPluginFilters(CATALOG);
-
 export function resolvePluginDialogServers(
   servers: readonly McpServer[],
-  catalog: readonly PluginDirectoryDefinition[] = FULL_CATALOG,
-): {
-  readonly installedPlugins: readonly PluginDirectoryDefinition[];
-  readonly customServers: readonly McpServer[];
-  readonly removedBuiltinServers: readonly McpServer[];
-} {
+  catalog: readonly PluginDirectoryDefinition[] = FULL_PLUGIN_CATALOG,
+) {
   const catalogServerIds = new Set(catalog.map(pluginMcpServerId));
+
   return {
     installedPlugins: catalog.filter((plugin) => findPluginServer(plugin, servers)),
     customServers: servers.filter((server) => !isBuiltinMcpServer(server)),
@@ -105,173 +109,8 @@ export function resolvePluginDialogServers(
   };
 }
 
-export const PLUGIN_DIALOG_CLASS_NAME = "h-[min(48rem,90dvh)] max-w-5xl flex-col overflow-hidden";
-export const PLUGIN_DIRECTORY_HEADER_CLASS_NAME = "shrink-0 gap-3 px-6 pt-5 pb-4";
-export const PLUGIN_DIRECTORY_PANEL_CLASS_NAME = "space-y-8 px-5 pt-5! pb-5 sm:px-6";
-export const PLUGIN_PAGE_COLUMN_CLASS_NAME =
-  "mx-auto flex w-full max-w-6xl flex-col px-4 pt-0 pb-16 sm:px-10 sm:pt-1";
-
-function isPrimaryFilter(filter: PluginFilter): filter is (typeof PRIMARY_FILTERS)[number] {
-  return (PRIMARY_FILTERS as readonly PluginFilter[]).includes(filter);
-}
-
-/** Toolbar search field: card fill with a leading icon. */
-function PluginSearchField({
-  query,
-  onQueryChange,
-}: {
-  readonly query: string;
-  readonly onQueryChange: (query: string) => void;
-}) {
-  const { t } = useI18n();
-  return (
-    <div className="relative">
-      <AppIcon
-        icon={Search01Icon}
-        className="pointer-events-none absolute start-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
-      />
-      <input
-        aria-label={t("Search plugins")}
-        autoComplete="off"
-        className="h-9 w-full rounded-xl border border-border/80 bg-card ps-9 pe-9 text-sm text-foreground shadow-xs outline-none transition-[border-color,box-shadow] placeholder:text-muted-foreground focus-visible:border-ring/60 focus-visible:ring-3 focus-visible:ring-ring/15 [&::-webkit-search-cancel-button]:appearance-none"
-        placeholder={t("Search plugins")}
-        spellCheck={false}
-        type="search"
-        value={query}
-        onChange={(event) => onQueryChange(event.currentTarget.value)}
-        onKeyDown={(event) => {
-          if (event.key === "Escape" && query) {
-            event.stopPropagation();
-            onQueryChange("");
-          }
-        }}
-      />
-      {query ? (
-        <button
-          aria-label={t("Clear search")}
-          className="absolute end-1.5 top-1/2 flex size-6 -translate-y-1/2 cursor-pointer items-center justify-center rounded-full text-muted-foreground outline-hidden transition-colors hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
-          type="button"
-          onClick={() => onQueryChange("")}
-        >
-          <AppIcon icon={Cancel01Icon} className="size-3.5" />
-        </button>
-      ) : null}
-    </div>
-  );
-}
-
-/**
- * Moves the segmented control's pill under the pressed button. The first placement,
- * resizes, and reappearing after a category was chosen skip the slide.
- */
-function useSegmentPill(active: string | null) {
-  const barRef = useRef<HTMLDivElement>(null);
-  const pillRef = useRef<HTMLSpanElement>(null);
-  const shownRef = useRef(false);
-
-  useLayoutEffect(() => {
-    const bar = barRef.current;
-    const pill = pillRef.current;
-    if (!bar || !pill) return;
-    const place = (instant: boolean) => {
-      const target = bar.querySelector<HTMLElement>('[aria-pressed="true"]');
-      if (!target) {
-        pill.style.opacity = "0";
-        shownRef.current = false;
-        return;
-      }
-      if (instant || !shownRef.current) pill.style.transition = "none";
-      pill.style.translate = `${target.offsetLeft}px 0`;
-      pill.style.width = `${target.offsetWidth}px`;
-      pill.style.opacity = "1";
-      if (pill.style.transition === "none") {
-        void pill.offsetWidth;
-        pill.style.transition = "";
-      }
-      shownRef.current = true;
-    };
-    place(false);
-    const observer = new ResizeObserver(() => place(true));
-    observer.observe(bar);
-    return () => observer.disconnect();
-  }, [active]);
-
-  return { barRef, pillRef };
-}
-
-/**
- * Directory filters: a small segmented control for the three views plus one
- * category menu, so eleven categories never crowd the page.
- */
-function PluginFilterBar({
-  filter,
-  onFilterChange,
-}: {
-  readonly filter: PluginFilter;
-  readonly onFilterChange: (filter: PluginFilter) => void;
-}) {
-  const { t } = useI18n();
-  const categories = PLUGIN_DIRECTORY_FILTERS.filter((item) => !isPrimaryFilter(item));
-  const category = isPrimaryFilter(filter) ? null : filter;
-  const { barRef, pillRef } = useSegmentPill(category ? null : filter);
-  return (
-    <div
-      aria-label={t("Plugin sections and categories")}
-      className="flex flex-wrap items-center justify-between gap-2"
-      role="group"
-    >
-      <div className="relative inline-flex rounded-[10px] bg-muted/70 p-0.5" ref={barRef}>
-        <span
-          aria-hidden="true"
-          className="motion-segment-pill pointer-events-none absolute inset-y-0.5 left-0 rounded-lg bg-card opacity-0 shadow-xs ring-1 ring-border/60"
-          ref={pillRef}
-        />
-        {PRIMARY_FILTERS.map((item) => (
-          <button
-            aria-pressed={filter === item}
-            className={cn(
-              "relative h-7 cursor-pointer rounded-lg px-3 text-[13px] outline-hidden transition-colors duration-(--duration-fast) ease-(--ease-smooth-out) focus-visible:ring-2 focus-visible:ring-ring motion-reduce:transition-none",
-              filter === item
-                ? "font-medium text-foreground"
-                : "text-muted-foreground hover:text-foreground",
-            )}
-            key={item}
-            type="button"
-            onClick={() => onFilterChange(item)}
-          >
-            {pluginLabel(item, t)}
-          </button>
-        ))}
-      </div>
-      {categories.length > 0 ? (
-        <Select
-          value={category ?? ALL_CATEGORIES_VALUE}
-          onValueChange={(value) => {
-            const next = PLUGIN_DIRECTORY_FILTERS.find((item) => item === value);
-            onFilterChange(next ?? "All");
-          }}
-        >
-          <SelectTrigger
-            aria-label={t("Plugin category")}
-            className={cn("h-8 rounded-lg text-[13px]", category && "text-foreground")}
-            size="sm"
-            variant="ghost"
-          >
-            <SelectValue>{category ? pluginLabel(category, t) : t("All categories")}</SelectValue>
-          </SelectTrigger>
-          <SelectPopup align="end" alignItemWithTrigger={false}>
-            <SelectItem value={ALL_CATEGORIES_VALUE}>{t("All categories")}</SelectItem>
-            {categories.map((item) => (
-              <SelectItem key={item} value={item}>
-                {pluginLabel(item, t)}
-              </SelectItem>
-            ))}
-          </SelectPopup>
-        </Select>
-      ) : null}
-    </div>
-  );
-}
+export const PLUGIN_DIALOG_CLASS_NAME =
+  "h-(--spacing-min-48rem-90dvh) max-w-5xl flex-col overflow-hidden";
 
 /** The named blocker for a brokered plugin that cannot connect yet, or null when it can. */
 export function pluginBrokeredBlockerNotice(
@@ -279,7 +118,9 @@ export function pluginBrokeredBlockerNotice(
   t: Translate = englishTranslator.translate,
 ) {
   const blocker = pluginBlocker(plugin);
+
   if (plugin.connection.type !== "brokered" || blocker === null) return null;
+
   return {
     type: "warning" as const,
     title: t("{name} is not available yet", { name: plugin.title }),
@@ -293,6 +134,7 @@ export function pluginRecoveryNotice(
   t: Translate = englishTranslator.translate,
 ) {
   if (recoveryFailures.length === 0) return null;
+
   return {
     type: "warning" as const,
     title: t("{name} connected with a session issue", { name: pluginTitle }),
@@ -302,140 +144,7 @@ export function pluginRecoveryNotice(
   };
 }
 
-export interface McpServerDraft {
-  readonly name: string;
-  readonly transport: "stdio" | "url";
-  readonly command: string;
-  readonly args: string;
-  readonly url: string;
-}
-
-export const EMPTY_MCP_SERVER_DRAFT: McpServerDraft = {
-  name: "",
-  transport: "stdio",
-  command: "",
-  args: "",
-  url: "",
-};
-
 type EditorTarget = { readonly server: McpServer | null };
-
-function draftFromServer(server: McpServer): McpServerDraft {
-  return server.transport === "stdio"
-    ? {
-        name: server.name,
-        transport: "stdio",
-        command: server.command,
-        args: server.args?.join("\n") ?? "",
-        url: "",
-      }
-    : {
-        name: server.name,
-        transport: "url",
-        command: "",
-        args: "",
-        url: server.url,
-      };
-}
-
-export function validateMcpServerDraft(
-  draft: McpServerDraft,
-  t: Translate = englishTranslator.translate,
-): string | null {
-  if (!draft.name.trim()) return t("Name is required.");
-  if (draft.transport === "stdio") {
-    return draft.command.trim() ? null : t("Command is required.");
-  }
-  try {
-    const url = new URL(draft.url.trim());
-    if (url.protocol !== "http:" && url.protocol !== "https:") {
-      return t("URL must start with http:// or https://.");
-    }
-    return url.username || url.password ? t("Store credentials outside the server URL.") : null;
-  } catch {
-    return t("Enter a valid HTTP or HTTPS URL.");
-  }
-}
-
-/** Standalone page header shared by the directory and plugin details. */
-export function PluginsPageHeader({ children }: { readonly children?: ReactNode }) {
-  const { t } = useI18n();
-  return (
-    <WorkspacePageHeader electron={isElectron}>
-      {children ?? (
-        <div className="flex min-w-0 items-center gap-2">
-          <AppIcon icon={PuzzleIcon} className="size-4 shrink-0 text-muted-foreground" />
-          <h1 className="truncate text-sm font-medium text-foreground">{t("Plugins")}</h1>
-        </div>
-      )}
-    </WorkspacePageHeader>
-  );
-}
-
-/** Places search, filters, and results in either the dialog or the workspace page. */
-function PluginDirectoryLayout({
-  standalone,
-  search,
-  filters,
-  returning,
-  children,
-}: {
-  readonly standalone: boolean;
-  readonly search: ReactNode;
-  readonly filters: ReactNode;
-  /** True when the directory remounts after leaving plugin details. */
-  readonly returning: boolean;
-  readonly children: ReactNode;
-}) {
-  const { t } = useI18n();
-  if (!standalone) {
-    return (
-      <>
-        <DialogHeader className={PLUGIN_DIRECTORY_HEADER_CLASS_NAME}>
-          <div className="pe-8">
-            <DialogTitle>{t("Plugins")}</DialogTitle>
-          </div>
-          {search}
-          {filters}
-        </DialogHeader>
-        <DialogPanel
-          className={cn(PLUGIN_DIRECTORY_PANEL_CLASS_NAME, returning && "motion-page-back")}
-        >
-          {children}
-        </DialogPanel>
-      </>
-    );
-  }
-  return (
-    <>
-      <PluginsPageHeader>
-        <span />
-      </PluginsPageHeader>
-      <ScrollArea className="min-h-0 flex-1" scrollFade>
-        <div
-          className={cn(
-            PLUGIN_PAGE_COLUMN_CLASS_NAME,
-            returning ? "motion-page-back" : "motion-section-enter",
-          )}
-        >
-          <div className="px-1">
-            <h1 className="text-2xl font-semibold tracking-tight text-foreground">
-              {t("Plugins")}
-            </h1>
-            <p className="mt-1 text-sm text-muted-foreground">
-              {t("Connect a listed integration, or follow a setup guide from integrations.sh.")}
-            </p>
-          </div>
-          <div className="mt-6 mb-8 flex flex-col gap-3 sm:flex-row sm:items-center">
-            <div className="w-full sm:max-w-sm sm:flex-1">{search}</div>
-            <div className="min-w-0 flex-1">{filters}</div>
-          </div>
-          <div className="space-y-10">{children}</div>
-        </div>
-      </ScrollArea>
-    </>
-  );
-}
 
 function PluginsDialogForEnvironment({
   environmentId,
@@ -448,17 +157,21 @@ function PluginsDialogForEnvironment({
   const requestedQuery = usePluginsDialogStore((state) => state.requestedQuery);
   const servers = useAtomValue(environmentMcpServersAtom(environmentId));
   const bots = useAtomValue(environmentBotsAtom(environmentId));
+
   const subscriptionAuth = useEnvironmentQuery(
     serverEnvironment.subscriptionAuth({ environmentId, input: {} }),
   );
+
   const createServer = useAtomCommand(mcpServerEnvironment.create, { reportFailure: false });
   const updateServer = useAtomCommand(mcpServerEnvironment.update, { reportFailure: false });
   const deleteServer = useAtomCommand(mcpServerEnvironment.delete, { reportFailure: false });
   const enableServer = useAtomCommand(mcpServerEnvironment.enable, { reportFailure: false });
   const disableServer = useAtomCommand(mcpServerEnvironment.disable, { reportFailure: false });
+
   const authenticateServer = useAtomCommand(serverEnvironment.authenticateMcpServer, {
     reportFailure: false,
   });
+
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<PluginFilter>("All");
   const [selectedPlugin, setSelectedPlugin] = useState<PluginDirectoryDefinition | null>(null);
@@ -467,15 +180,19 @@ function PluginsDialogForEnvironment({
   const [draft, setDraft] = useState(EMPTY_MCP_SERVER_DRAFT);
   const [submitAttempted, setSubmitAttempted] = useState(false);
   const [pendingServerId, setPendingServerId] = useState<string | null>(null);
+
   const { customServers, installedPlugins, removedBuiltinServers } =
     resolvePluginDialogServers(servers);
+
   const sections = buildPluginSections({
-    plugins: CATALOG,
+    plugins: LISTED_PLUGIN_CATALOG,
     query,
     filter,
     installedPluginIds: new Set(installedPlugins.map((plugin) => plugin.id)),
   });
+
   const validationError = validateMcpServerDraft(draft, t);
+
   const selectedPluginServer = selectedPlugin
     ? findPluginServer(selectedPlugin, servers)
     : undefined;
@@ -483,6 +200,7 @@ function PluginsDialogForEnvironment({
   useEffect(() => {
     if (requestedQuery !== null) setQuery(requestedQuery);
   }, [requestedQuery]);
+
   const selectedPluginAccess: ProviderAccessStatus | undefined = selectedPlugin
     ? subscriptionAuth.data?.access.find((status) => status.pluginId === selectedPlugin.id)
     : undefined;
@@ -491,13 +209,14 @@ function PluginsDialogForEnvironment({
     title: string,
     result: Awaited<ReturnType<typeof createServer>>,
   ): boolean => {
-    if (result._tag !== "Failure" || isAtomCommandInterrupted(result)) return false;
+    if (!Predicate.isTagged(result, "Failure") || isAtomCommandInterrupted(result)) return false;
     const error = squashAtomCommandFailure(result);
     toastManager.add({
       type: "error",
       title,
       description: error instanceof Error ? error.message : t("The command failed."),
     });
+
     return true;
   };
 
@@ -523,29 +242,38 @@ function PluginsDialogForEnvironment({
     // the named blocker instead of a dead click.
     if (enabled) {
       const notice = pluginBrokeredBlockerNotice(plugin, t);
+
       if (notice) {
         toastManager.add(notice);
+
         return;
       }
     }
+
     if (!enabled) {
       const mcpServerId = pluginMcpServerId(plugin);
       setPendingServerId(mcpServerId);
       const result = await disableServer({ environmentId, input: { mcpServerId } });
       setPendingServerId(null);
       reportFailure(t("Could not disable {name}", { name: plugin.title }), result);
+
       return;
     }
+
     if (!isInstallablePlugin(plugin)) return;
 
     const plan = planPluginToggle(plugin, servers, true);
+
     if (plan.action === "disable") return;
     setPendingServerId(plan.mcpServerId);
+
     const commandSucceeded = (title: string, result: Awaited<ReturnType<typeof createServer>>) => {
-      if (result._tag === "Success") return true;
+      if (Predicate.isTagged(result, "Success")) return true;
       reportFailure(title, result);
+
       return false;
     };
+
     const shouldAuthenticate =
       plugin.authentication === "oauth" || plugin.authentication === "optional-oauth";
 
@@ -580,15 +308,19 @@ function PluginsDialogForEnvironment({
                   mcpServerId,
                   onAuthorizationUrl,
                 });
-                if (result._tag === "Success") {
+
+                if (Predicate.isTagged(result, "Success")) {
                   const notice = pluginRecoveryNotice(
                     plugin.title,
                     result.value.recoveryFailures,
                     t,
                   );
+
                   if (notice) toastManager.add(notice);
+
                   return true;
                 }
+
                 if (!isAtomCommandInterrupted(result)) {
                   const error = squashAtomCommandFailure(result);
                   toastManager.add({
@@ -598,15 +330,18 @@ function PluginsDialogForEnvironment({
                       error instanceof Error ? error.message : t("Authentication failed."),
                   });
                 }
+
                 return false;
               },
             }
           : {}),
         openAuthorizationUrl: async (url) => {
           const authorizationUrl = new URL(url);
+
           if (authorizationUrl.protocol !== "https:") {
             throw new Error("The authorization URL must use HTTPS.");
           }
+
           await ensureLocalApi().shell.openExternal(authorizationUrl.toString());
         },
       });
@@ -618,10 +353,12 @@ function PluginsDialogForEnvironment({
 
   const toggleCustom = async (server: McpServer, enabled: boolean) => {
     setPendingServerId(server.id);
+
     const result = await (enabled ? enableServer : disableServer)({
       environmentId,
       input: { mcpServerId: server.id },
     });
+
     setPendingServerId(null);
     reportFailure(
       enabled ? t("Could not enable MCP server") : t("Could not disable MCP server"),
@@ -631,8 +368,10 @@ function PluginsDialogForEnvironment({
 
   const saveEditor = async () => {
     setSubmitAttempted(true);
+
     if (!editorTarget || validationError) return;
     const mcpServerId = editorTarget.server?.id ?? McpServerId.make(randomUUID());
+
     const configuration =
       draft.transport === "stdio"
         ? {
@@ -645,11 +384,15 @@ function PluginsDialogForEnvironment({
               .filter(Boolean),
           }
         : { name: draft.name.trim(), transport: "url" as const, url: draft.url.trim() };
+
     setPendingServerId(mcpServerId);
+
     const result = editorTarget.server
       ? await updateServer({ environmentId, input: { mcpServerId, ...configuration } })
       : await createServer({ environmentId, input: { mcpServerId, ...configuration } });
+
     setPendingServerId(null);
+
     if (
       !reportFailure(
         editorTarget.server ? t("Could not update MCP server") : t("Could not add MCP server"),
@@ -681,6 +424,7 @@ function PluginsDialogForEnvironment({
         variant: "destructive",
       },
     );
+
     if (!confirmed) return;
     setPendingServerId(server.id);
     const result = await deleteServer({ environmentId, input: { mcpServerId: server.id } });
@@ -704,9 +448,12 @@ function PluginsDialogForEnvironment({
             onRemove={() => {
               if (selectedPlugin.connection.type === "brokered") {
                 void togglePlugin(selectedPlugin, false);
+
                 return;
               }
+
               const server = findPluginServer(selectedPlugin, servers);
+
               if (server) void removeServer(server);
             }}
             onViewDocumentation={() =>
@@ -762,7 +509,7 @@ function PluginsDialogForEnvironment({
             <ComposioSection
               environmentId={environmentId}
               query={query}
-              catalog={FULL_CATALOG}
+              catalog={FULL_PLUGIN_CATALOG}
               installedOnly={filter === "Installed"}
             />
           ) : null}
@@ -786,8 +533,8 @@ function PluginsDialogForEnvironment({
         </PluginDirectoryLayout>
       )}
       <Dialog open={editorTarget !== null} onOpenChange={(open) => !open && closeEditor()}>
-        <DialogPopup className="max-h-[min(36rem,90dvh)] max-w-lg flex-col overflow-hidden">
-          <DialogHeader className="shrink-0 border-b px-6 py-5">
+        <DialogPopup className="max-h-(--spacing-min-36rem-90dvh) max-w-lg flex-col overflow-hidden">
+          <DialogHeader variant="divided" className="shrink-0 px-6 py-5">
             <DialogTitle>
               {editorTarget?.server ? t("Edit MCP server") : t("Add MCP server")}
             </DialogTitle>
@@ -872,6 +619,7 @@ export function PluginsDialog() {
   const { t } = useI18n();
   const open = usePluginsDialogStore((state) => state.open);
   const environmentId = usePrimaryEnvironmentId();
+
   return (
     <Dialog open={open} onOpenChange={(nextOpen) => !nextOpen && closePlugins()}>
       <DialogPopup bottomStickOnMobile={false} className={PLUGIN_DIALOG_CLASS_NAME}>
@@ -891,8 +639,9 @@ export function PluginsDialog() {
 export function PluginsPage() {
   const { t } = useI18n();
   const environmentId = usePrimaryEnvironmentId();
+
   return (
-    <SidebarInset className="h-dvh min-h-0 overflow-hidden overscroll-y-none bg-background text-foreground isolate">
+    <SidebarInset className="h-dvh min-h-0 overflow-hidden overscroll-y-none isolate">
       <div className="flex min-h-0 min-w-0 flex-1 flex-col text-foreground">
         {environmentId ? (
           <PluginsDialogForEnvironment environmentId={environmentId} standalone />
@@ -900,7 +649,7 @@ export function PluginsPage() {
           <>
             <PluginsPageHeader />
             <div className={PLUGIN_PAGE_COLUMN_CLASS_NAME}>
-              <p className="px-2.5 text-[15px] leading-6 text-muted-foreground">
+              <p className="px-2.5 text-15px leading-6 text-muted-foreground">
                 {t("Connect an environment to manage plugins.")}
               </p>
             </div>

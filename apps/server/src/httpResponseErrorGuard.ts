@@ -1,5 +1,6 @@
-// @effect-diagnostics nodeBuiltinImport:off
-import type * as NodeHttp from "node:http";
+import type * as NodeHttpServer from "@effect/platform-node/NodeHttpServer";
+
+type HttpServer = ReturnType<Parameters<typeof NodeHttpServer.make>[0]>;
 
 /**
  * Node surfaces late socket write failures (EPIPE, ECONNRESET,
@@ -21,9 +22,9 @@ import type * as NodeHttp from "node:http";
  * already interrupted through the response "close" event, so the write
  * failure needs no handling beyond being observed.
  */
-export function guardHttpResponseWriteErrors<T extends NodeHttp.Server>(
+export function guardHttpResponseWriteErrors<T extends HttpServer>(
   server: T,
-  onError?: (error: unknown) => void,
+  onError?: (cause: unknown) => void,
 ): T {
   server.on("request", (_request, response) => {
     response.on("error", (error) => {
@@ -35,5 +36,6 @@ export function guardHttpResponseWriteErrors<T extends NodeHttp.Server>(
       onError?.(error);
     });
   });
+
   return server;
 }

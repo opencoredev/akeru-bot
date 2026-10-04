@@ -8,6 +8,7 @@ describe("reply message", () => {
     const markup = renderToStaticMarkup(
       <ReplyMessageBody text={"> Replying to Layout check\n> OK\n\nWhich message?"} />,
     );
+
     expect(markup).toContain('data-testid="reply-reference"');
     expect(markup).toContain("Layout check");
     expect(markup).toContain(">OK</span>");

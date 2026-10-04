@@ -21,9 +21,13 @@ import { useEnvironmentQuery } from "./query";
 import { useEnvironmentThread } from "./threads";
 
 const PROJECT_PATH_SEARCH_DEBOUNCE_MS = 120;
+
 const COMPOSER_PATH_SEARCH_LIMIT = 80;
+
 const THREAD_SEARCH_DEBOUNCE_MS = 200;
+
 const EMPTY_THREAD_SEARCH_MATCHES: ReadonlyArray<EnvironmentThreadSearchMatch> = Object.freeze([]);
+
 const EMPTY_THREAD_SEARCH_ATOM = Atom.make({
   matches: EMPTY_THREAD_SEARCH_MATCHES,
   isLoading: false,
@@ -52,6 +56,7 @@ export function useDebouncedValue<A>(value: A, delayMs: number): A {
     const timer = window.setTimeout(() => {
       setDebounced(value);
     }, delayMs);
+
     return () => {
       window.clearTimeout(timer);
     };
@@ -60,25 +65,23 @@ export function useDebouncedValue<A>(value: A, delayMs: number): A {
   return debounced;
 }
 
-export function useThreadSearch(
-  environmentIds: ReadonlyArray<EnvironmentId>,
-  query: string,
-): {
-  readonly matches: ReadonlyArray<EnvironmentThreadSearchMatch>;
-  readonly isPending: boolean;
-} {
+export function useThreadSearch(environmentIds: ReadonlyArray<EnvironmentId>, query: string) {
   const normalizedQuery = query.trim();
   const debouncedQuery = useDebouncedValue(normalizedQuery, THREAD_SEARCH_DEBOUNCE_MS);
   const canSearch = environmentIds.length > 0 && normalizedQuery.length >= 2;
   const settledQuery = canSearch && normalizedQuery === debouncedQuery ? debouncedQuery : null;
+
   const searchKey = useMemo(
     () => (settledQuery === null ? null : makeThreadSearchKey(environmentIds, settledQuery)),
     [environmentIds, settledQuery],
   );
+
   const result = useAtomValue(
     searchKey === null ? EMPTY_THREAD_SEARCH_ATOM : threadSearchResultsAtom(searchKey),
   );
+
   const isDebouncing = canSearch && normalizedQuery !== debouncedQuery;
+
   return {
     matches: isDebouncing ? EMPTY_THREAD_SEARCH_MATCHES : result.matches,
     isPending: canSearch && (isDebouncing || result.isLoading),
@@ -90,6 +93,7 @@ export function useThreadDetail(
   threadId: ThreadId | null,
 ): ThreadDetailView {
   const state = useEnvironmentThread(environmentId, threadId);
+
   return {
     data: Option.getOrNull(state.data),
     error: Option.getOrNull(state.error),
@@ -122,6 +126,7 @@ export function useProjectPathSearch(
   options?: { readonly allowEmptyQuery?: boolean },
 ) {
   const allowEmptyQuery = options?.allowEmptyQuery === true;
+
   const normalizedTarget = useMemo(
     () => ({
       environmentId: target.environmentId,
@@ -132,7 +137,9 @@ export function useProjectPathSearch(
     }),
     [target.cwd, target.environmentId, target.imageOnly, target.kind, target.query],
   );
+
   const debouncedTarget = useDebouncedValue(normalizedTarget, PROJECT_PATH_SEARCH_DEBOUNCE_MS);
+
   const result = useEnvironmentQuery(
     debouncedTarget.environmentId !== null &&
       debouncedTarget.cwd !== null &&

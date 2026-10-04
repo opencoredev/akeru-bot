@@ -77,6 +77,7 @@ describe("probeWslDistros", () => {
       TestClock.layer(),
       Layer.succeed(ChildProcessSpawner.ChildProcessSpawner, makeDistroListSpawner({})),
     );
+
     return Effect.gen(function* () {
       const fiber = yield* probeWslDistros.pipe(Effect.flip, Effect.forkScoped);
       yield* Effect.yieldNow;
@@ -193,6 +194,7 @@ describe("parseNodeVersion", () => {
       "  nodeVersion:22.16.0  ",
       "nodePath:/usr/bin/node",
     ].join("\n");
+
     expect(parseNodeVersion(stdout)).toBe("22.16.0");
   });
 });
@@ -233,6 +235,7 @@ describe("formatMissingToolsReason", () => {
       { missingTools: ["node", "make"], nodeVersion: null },
       "^24.10",
     );
+
     expect(reason).toContain("node");
     expect(reason).toContain("^24.10");
     expect(reason).toContain("make");
@@ -244,6 +247,7 @@ describe("formatMissingToolsReason", () => {
       { missingTools: [], nodeVersion: "20.0.0" },
       "^24.10 || ^22.16",
     );
+
     expect(reason).toContain("node 20.0.0");
     expect(reason).toContain("requires ^24.10 || ^22.16");
   });
@@ -253,6 +257,7 @@ describe("formatMissingToolsReason", () => {
       { missingTools: ["g++", "python3"], nodeVersion: "24.10.0" },
       "^24.10",
     );
+
     expect(reason).toContain("g++");
     expect(reason).toContain("python3");
     expect(reason).toContain("build-essential");

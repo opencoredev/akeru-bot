@@ -26,6 +26,7 @@ export class ServerLifecycleEvents extends Context.Service<
 
 const make = Effect.gen(function* () {
   const pubsub = yield* PubSub.unbounded<ServerLifecycleStreamEvent>();
+
   const state = yield* Ref.make<SnapshotState>({
     sequence: 0,
     events: [],
@@ -35,14 +36,17 @@ const make = Effect.gen(function* () {
     publish: (event) =>
       Ref.modify(state, (current) => {
         const nextSequence = current.sequence + 1;
+
         const nextEvent = {
           ...event,
           sequence: nextSequence,
         } satisfies ServerLifecycleStreamEvent;
+
         const nextEvents =
           nextEvent.type === "welcome"
             ? [nextEvent, ...current.events.filter((entry) => entry.type !== "welcome")]
             : [nextEvent, ...current.events.filter((entry) => entry.type !== "ready")];
+
         return [nextEvent, { sequence: nextSequence, events: nextEvents }] as const;
       }).pipe(Effect.tap((event) => PubSub.publish(pubsub, event))),
     snapshot: Ref.get(state),

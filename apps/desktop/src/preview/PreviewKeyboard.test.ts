@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import { makePreviewAutomationKeySequence } from "./PreviewKeyboard.ts";
+import { previewAutomationKeySequence } from "./PreviewKeyboard.ts";
 
 describe("preview keyboard packets", () => {
   it("includes the Chromium virtual key code and Enter text", () => {
-    expect(makePreviewAutomationKeySequence({ key: "Enter" })).toEqual({
+    expect(previewAutomationKeySequence({ key: "Enter" })).toEqual({
       keyDown: {
         type: "keyDown",
         key: "Enter",
@@ -30,7 +30,7 @@ describe("preview keyboard packets", () => {
   });
 
   it("dispatches printable keys as text key-down events", () => {
-    const sequence = makePreviewAutomationKeySequence({ key: "z" });
+    const sequence = previewAutomationKeySequence({ key: "z" });
     expect(sequence.keyDown).toMatchObject({
       type: "keyDown",
       key: "z",
@@ -43,7 +43,7 @@ describe("preview keyboard packets", () => {
 
   it("suppresses text and uses raw key-down for shortcuts", () => {
     expect(
-      makePreviewAutomationKeySequence({ key: "a", modifiers: ["Meta"] }, { isMac: true }).keyDown,
+      previewAutomationKeySequence({ key: "a", modifiers: ["Meta"] }, { isMac: true }).keyDown,
     ).toEqual({
       type: "rawKeyDown",
       key: "a",
@@ -58,16 +58,16 @@ describe("preview keyboard packets", () => {
 
   it("maps common macOS editing shortcuts without changing other platforms", () => {
     expect(
-      makePreviewAutomationKeySequence({ key: "z", modifiers: ["Shift", "Meta"] }, { isMac: true })
+      previewAutomationKeySequence({ key: "z", modifiers: ["Shift", "Meta"] }, { isMac: true })
         .keyDown.commands,
     ).toEqual(["redo"]);
     expect(
-      makePreviewAutomationKeySequence({ key: "a", modifiers: ["Meta"] }).keyDown,
+      previewAutomationKeySequence({ key: "a", modifiers: ["Meta"] }).keyDown,
     ).not.toHaveProperty("commands");
   });
 
   it("resolves shifted printable keys to their browser values", () => {
-    const sequence = makePreviewAutomationKeySequence({ key: "1", modifiers: ["Shift"] });
+    const sequence = previewAutomationKeySequence({ key: "1", modifiers: ["Shift"] });
     expect(sequence.keyDown).toMatchObject({
       key: "!",
       code: "Digit1",
@@ -79,10 +79,11 @@ describe("preview keyboard packets", () => {
   });
 
   it("keeps shifted key values while suppressing text for modified chords", () => {
-    const sequence = makePreviewAutomationKeySequence({
+    const sequence = previewAutomationKeySequence({
       key: "1",
       modifiers: ["Control", "Shift"],
     });
+
     expect(sequence.keyDown).toEqual({
       type: "rawKeyDown",
       key: "!",

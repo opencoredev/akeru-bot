@@ -8,11 +8,13 @@ import { LanguageProvider } from "../../i18n";
 
 vi.mock("react-dom", async (importOriginal) => ({
   ...(await importOriginal<typeof import("react-dom")>()),
-  createPortal: (children: unknown) => children,
+  createPortal: (children: ReactNode) => children,
 }));
+
 // Dialogs and sheets mount their popups after hydration, so render them inline when open.
 vi.mock("../ui/dialog", async (importOriginal) => {
   const Pass = ({ children }: { readonly children?: ReactNode }) => <div>{children}</div>;
+
   return {
     ...(await importOriginal<typeof import("../ui/dialog")>()),
     Dialog: ({ open, children }: { readonly open: boolean; readonly children?: ReactNode }) =>
@@ -25,8 +27,10 @@ vi.mock("../ui/dialog", async (importOriginal) => {
     DialogTitle: Pass,
   };
 });
+
 vi.mock("../ui/sheet", async (importOriginal) => {
   const Pass = ({ children }: { readonly children?: ReactNode }) => <div>{children}</div>;
+
   return {
     ...(await importOriginal<typeof import("../ui/sheet")>()),
     Sheet: ({ open, children }: { readonly open: boolean; readonly children?: ReactNode }) =>
@@ -39,6 +43,7 @@ vi.mock("../ui/sheet", async (importOriginal) => {
     SheetTitle: Pass,
   };
 });
+
 vi.mock("@tanstack/react-router", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@tanstack/react-router")>()),
   Link: ({ children }: { readonly children?: ReactNode }) => <a>{children}</a>,
@@ -89,6 +94,7 @@ function makeBot(id: string, name: string): Bot {
 }
 
 const akeru = makeBot("bot-akeru", "Akeru");
+
 const mori = makeBot("bot-mori", "Mori");
 
 describe("roster in Simplified Chinese", () => {
@@ -113,6 +119,7 @@ describe("roster in Simplified Chinese", () => {
       createdAt: "2026-08-27T00:00:00.000Z",
       updatedAt: "2026-08-27T00:00:00.000Z",
     };
+
     const markup = renderInChinese(
       <GroupDetailsPanel
         environmentId={EnvironmentId.make("environment-1")}
@@ -121,6 +128,7 @@ describe("roster in Simplified Chinese", () => {
         onDeleted={() => {}}
       />,
     );
+
     expect(markup).toContain("删除群组");
     expect(markup).not.toContain("Delete group");
     expect(markup).not.toContain("Collapse");
@@ -137,6 +145,7 @@ describe("roster in Simplified Chinese", () => {
         }}
       />,
     );
+
     expect(markup).toContain("codex/gpt-5");
     expect(markup).toContain("个令牌");
     expect(markup).toContain("强制停止");
@@ -161,6 +170,7 @@ describe("roster in Simplified Chinese", () => {
         canDelegate={false}
       />,
     );
+
     expect(empty).toContain("工具");
     expect(empty).toContain("管理插件");
     expect(empty).toContain("还没有工具");
@@ -174,6 +184,7 @@ describe("roster in Simplified Chinese", () => {
     const markup = renderInChinese(
       <BotMemorySheet open onOpenChange={() => {}} threadRef={null} />,
     );
+
     expect(markup).toContain("记忆");
     expect(markup).toContain("还没有记忆");
     expect(markup).toContain("与这个机器人开始聊天");
@@ -185,6 +196,7 @@ describe("roster in Simplified Chinese", () => {
     const markup = renderInChinese(
       <NewBotDialog open onOpenChange={() => {}} onCreate={() => {}} />,
     );
+
     expect(markup).toContain("新建机器人");
     expect(markup).toContain("为你的队友设定身份");
     expect(markup).toContain("你的机器人");
@@ -203,6 +215,7 @@ describe("roster in Simplified Chinese", () => {
     const markup = renderInChinese(
       <NewGroupDialog open bots={[akeru]} onOpenChange={() => {}} onCreate={() => {}} />,
     );
+
     expect(markup).toContain("新建群组");
     expect(markup).toContain("选择此群组中的机器人");
     expect(markup).toContain("请至少选择两个机器人。");
@@ -214,6 +227,7 @@ describe("roster in Simplified Chinese", () => {
     const markup = renderInChinese(
       <RosterPanelHeader onNewBot={() => {}} onNewGroup={() => {}} onSearch={() => {}} />,
     );
+
     expect(markup).toContain('aria-label="搜索"');
     expect(markup).toContain('aria-label="新建"');
     expect(markup).not.toContain('aria-label="Search"');

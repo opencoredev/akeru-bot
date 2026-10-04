@@ -22,6 +22,7 @@ it.layer(Layer.mergeAll(NodeSqliteClient.layerMemory()))("054_AkeruEntityMemory"
           'idx_akeru_memory_partition_current'
         )
       `;
+
       assert.deepEqual(
         new Set(objects.map((object) => object.name)),
         new Set([
@@ -53,6 +54,7 @@ it.layer(Layer.mergeAll(NodeSqliteClient.layerMemory()))("054_AkeruEntityMemory"
           ${approval}, 'private', ${deletion}, 0, 0, '[]'
         )
       `;
+
       yield* insert("approved", "approved", "active");
       yield* insert("pending", "pending", "active");
       yield* insert("tombstoned", "approved", "tombstoned");
@@ -60,6 +62,7 @@ it.layer(Layer.mergeAll(NodeSqliteClient.layerMemory()))("054_AkeruEntityMemory"
       const before = yield* sql<{ readonly memoryId: string }>`
         SELECT memory_id AS "memoryId" FROM akeru_memory_fts ORDER BY memory_id
       `;
+
       assert.deepEqual(
         before.map((row) => row.memoryId),
         ["approved"],

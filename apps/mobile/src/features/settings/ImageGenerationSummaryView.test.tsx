@@ -14,12 +14,16 @@ vi.mock("react-native", () => ({
   Text: "span",
   View: "div",
 }));
+
 vi.mock("../../components/AppText", () => ({ AppText: "span" }));
+
 vi.mock("../../lib/i18n", async () => {
   const { createTranslator } = await import("@akeru/client-runtime/i18n");
   const translator = createTranslator("en");
+
   return { useMobileI18n: () => ({ ...translator, t: translator.translate }) };
 });
+
 vi.mock("./components/SettingsSection", () => ({
   SettingsSection: ({
     title,
@@ -97,6 +101,7 @@ describe("mobile image generation summary", () => {
       error: null,
       isPending: false,
     });
+
     expect(markup).toContain("ChatGPT subscription detected");
     expect(markup).toContain("Supports image generation");
     expect(markup).toContain("No images generated yet");
@@ -112,6 +117,7 @@ describe("mobile image generation summary", () => {
       { data: { providers: [status("chatgpt"), status("grok")] }, error: null, isPending: false },
       { ...settings, chatgptEnabled: false },
     );
+
     expect(markup).toContain("Disabled");
     expect(markup).not.toMatch(/>(On|Off) ·/);
   });
@@ -127,6 +133,7 @@ describe("mobile image generation summary", () => {
       error: null,
       isPending: false,
     });
+
     expect(markup).toContain("No ChatGPT subscription connected");
     expect(markup).not.toContain("Not connected");
     expect(markup).not.toContain("Next step: Connect ChatGPT subscription");

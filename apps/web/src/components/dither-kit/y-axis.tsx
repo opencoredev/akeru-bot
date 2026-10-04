@@ -1,4 +1,3 @@
-// @ts-nocheck
 "use client";
 
 import { useChartPart } from "./chart-context";
@@ -13,10 +12,11 @@ export function YAxis({
   tickMargin?: number;
 }) {
   const ctx = useChartPart("YAxis");
+
   if (!ctx.ready) return null;
 
   return (
-    <g className="fill-current font-mono text-[10px] text-muted-foreground">
+    <g className="fill-current font-mono text-10px text-muted-foreground">
       {ctx.y.ticks(tickCount).map((t) => (
         <text
           key={t}

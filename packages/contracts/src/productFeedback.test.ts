@@ -4,6 +4,22 @@ import * as Schema from "effect/Schema";
 
 import { ProductFeedbackSubmission, ProductFeedbackToolDraft } from "./productFeedback.ts";
 
+const decodeExitProductFeedbackSubmission = Schema.decodeUnknownExit(ProductFeedbackSubmission);
+
+const decodeExitProductFeedbackSubmissionStrict = Schema.decodeUnknownExit(
+  ProductFeedbackSubmission,
+  {
+    onExcessProperty: "error",
+  },
+);
+
+const decodeExitProductFeedbackToolDraftStrict = Schema.decodeUnknownExit(
+  ProductFeedbackToolDraft,
+  {
+    onExcessProperty: "error",
+  },
+);
+
 const submission = {
   schemaVersion: 1,
   feedback: "The button does not respond.",
@@ -13,22 +29,21 @@ const submission = {
 
 describe("ProductFeedbackSubmission", () => {
   it("accepts the bounded anonymous payload", () => {
-    expect(Exit.isSuccess(Schema.decodeUnknownExit(ProductFeedbackSubmission)(submission))).toBe(
-      true,
-    );
+    expect(Exit.isSuccess(decodeExitProductFeedbackSubmission(submission))).toBe(true);
   });
 
   it("rejects conversation data and oversized feedback", () => {
     expect(
       Exit.isFailure(
-        Schema.decodeUnknownExit(ProductFeedbackSubmission, {
-          onExcessProperty: "error",
-        })({ ...submission, conversation: "private thread" }),
+        decodeExitProductFeedbackSubmissionStrict({
+          ...submission,
+          conversation: "private thread",
+        }),
       ),
     ).toBe(true);
     expect(
       Exit.isFailure(
-        Schema.decodeUnknownExit(ProductFeedbackSubmission)({
+        decodeExitProductFeedbackSubmission({
           ...submission,
           feedback: "x".repeat(4_001),
         }),
@@ -39,9 +54,8 @@ describe("ProductFeedbackSubmission", () => {
 
 describe("ProductFeedbackToolDraft", () => {
   it("accepts feedback text and rejects every other field", () => {
-    const decode = Schema.decodeUnknownExit(ProductFeedbackToolDraft, {
-      onExcessProperty: "error",
-    });
+    const decode = decodeExitProductFeedbackToolDraftStrict;
+
     expect(Exit.isSuccess(decode({ feedback: "Add a shortcut." }))).toBe(true);
     expect(
       Exit.isFailure(

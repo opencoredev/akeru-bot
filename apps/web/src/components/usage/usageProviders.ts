@@ -42,7 +42,13 @@ export const PROVIDER_PRESENTATION = {
 } satisfies Record<UsageProviderKind, UsageProviderPresentation>;
 
 /** Stable provider reading order across charts, summaries, tables, and hover rows. */
-export const PROVIDER_ORDER = Object.keys(PROVIDER_PRESENTATION) as UsageProviderKind[];
+export const PROVIDER_ORDER = [
+  "codex",
+  "claude",
+  "grok",
+  "kimi",
+  "opencode",
+] satisfies UsageProviderKind[];
 
 /** Providers with real activity, independent of the metric currently displayed. */
 export function providersWithUsage(
@@ -53,9 +59,8 @@ export function providersWithUsage(
   }[],
 ): readonly UsageProviderKind[] {
   const active = new Set(
-    totals
-      .filter((entry) => entry.totalTokens > 0 || entry.costUsd > 0)
-      .map((entry) => entry.provider),
+    totals.flatMap((entry) => (entry.totalTokens > 0 || entry.costUsd > 0 ? [entry.provider] : [])),
   );
+
   return PROVIDER_ORDER.filter((provider) => active.has(provider));
 }

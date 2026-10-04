@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import { describe, expect, it } from "@effect/vitest";
 import { type ModelCapabilities, ProviderDriverKind } from "@akeru/contracts";
 import { HostProcessPlatform } from "@akeru/shared/hostProcess";
@@ -71,6 +72,7 @@ describe("buildServerProvider unavailability", () => {
       models: [],
       probe,
     });
+
   const authenticated = { status: "authenticated" as const };
 
   it("ignores informational messages on usable providers", () => {
@@ -163,6 +165,7 @@ describe("providerModelsFromSettings", () => {
 
   it("preserves a custom slug that collides with a provider alias", () => {
     const capabilities = createModelCapabilities({ optionDescriptors: [] });
+
     const models = providerModelsFromSettings(
       [
         {
@@ -198,6 +201,7 @@ describe("ProviderCommandNotFoundError", () => {
 
   it.effect("retains safe failed-command diagnostics without process output", () => {
     const stderr = "'codex' is not recognized: secret-token-value";
+
     const spawner = ChildProcessSpawner.make(() =>
       Effect.succeed(
         ChildProcessSpawner.makeHandle({
@@ -215,6 +219,7 @@ describe("ProviderCommandNotFoundError", () => {
         }),
       ),
     );
+
     return Effect.gen(function* () {
       const error = yield* spawnAndCollect(
         "C:\\tools\\codex.cmd",
@@ -225,7 +230,7 @@ describe("ProviderCommandNotFoundError", () => {
         Effect.flip,
       );
 
-      if (error._tag !== "ProviderCommandNotFoundError") {
+      if (!Predicate.isTagged(error, "ProviderCommandNotFoundError")) {
         throw new Error(`Unexpected error: ${error._tag}`);
       }
 

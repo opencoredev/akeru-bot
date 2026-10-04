@@ -47,6 +47,7 @@ describe("environment HTTP errors", () => {
         traceId,
       }),
     ] as const;
+
     const details = [
       "invalid_command",
       "missing_credential",
@@ -55,6 +56,7 @@ describe("environment HTTP errors", () => {
       "thread_not_found",
       "orchestration_snapshot_failed",
     ];
+
     errors.forEach((error, index) => {
       expect(error.message).toContain(details[index]);
     });

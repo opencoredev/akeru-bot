@@ -1,10 +1,5 @@
-import {
-  DesktopServerExposureModeSchema,
-  DesktopUpdateChannelSchema,
-  type DesktopServerExposureMode,
-  type DesktopUpdateChannel,
-} from "@akeru/contracts";
-import { fromLenientJson } from "@akeru/shared/schemaJson";
+import { type DesktopServerExposureMode, type DesktopUpdateChannel } from "@akeru/contracts";
+
 import * as Context from "effect/Context";
 import * as Crypto from "effect/Crypto";
 import * as Effect from "effect/Effect";
@@ -12,140 +7,50 @@ import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as Path from "effect/Path";
-import * as Schema from "effect/Schema";
+
 import * as SynchronizedRef from "effect/SynchronizedRef";
-
 import * as DesktopEnvironment from "../app/DesktopEnvironment.ts";
+
 import {
-  DEFAULT_LINUX_PASSWORD_STORE,
-  normalizeLinuxPasswordStorePreference,
-  type LinuxPasswordStorePreference,
-} from "../linuxSecretStorage.ts";
-import { resolveDefaultDesktopUpdateChannel } from "../updates/updateChannels.ts";
-import { isValidDistroName } from "../wsl/wslPathParsing.ts";
+  type DesktopSettings,
+  type DesktopWindowBounds,
+  type DesktopSettingsChange,
+  settingsChange,
+  setMainWindowBounds,
+  setServerExposureMode,
+  setTailscaleServe,
+  setUpdateChannel,
+  setWslBackendEnabled,
+  setWslDistro,
+  setWslOnly,
+  applyWslWindowsFallback,
+  DEFAULT_DESKTOP_SETTINGS,
+} from "./DesktopSettingsDocument.ts";
+import {
+  DesktopSettingsWriteError,
+  writeSettings,
+  readSettings,
+} from "./DesktopSettingsPersistence.ts";
 
-export interface DesktopSettings {
-  readonly linuxPasswordStore: LinuxPasswordStorePreference;
-  readonly mainWindowBounds: DesktopWindowBounds | null;
-  readonly mainWindowMaximized: boolean;
-  readonly serverExposureMode: DesktopServerExposureMode;
-  readonly tailscaleServeEnabled: boolean;
-  readonly tailscaleServePort: number;
-  readonly updateChannel: DesktopUpdateChannel;
-  readonly updateChannelConfiguredByUser: boolean;
-  // Was a "local" | "wsl" swap mode in an earlier iteration of the WSL
-  // integration. We now run Windows and WSL backends side by side, so the
-  // setting is just whether the WSL backend should be running alongside the
-  // primary. Persisted documents that still carry the legacy `wslMode: "wsl"`
-  // value are migrated to `wslBackendEnabled: true` on load.
-  readonly wslBackendEnabled: boolean;
-  readonly wslDistro: string | null;
-  // When true (and wslBackendEnabled is also true) the desktop runs only
-  // the WSL backend as the primary, and the Windows-side Node backend is
-  // not started. Designed for users who develop entirely inside WSL and
-  // don't want a second backend process running. Defaults to false so
-  // existing setups stay on the parallel-backends behavior. Changing
-  // this requires a desktop restart because the pool's primary spec is
-  // chosen once at layer init.
-  readonly wslOnly: boolean;
-}
+export type { DesktopSettings } from "./DesktopSettingsDocument.ts";
 
-export interface DesktopSettingsChange {
-  readonly settings: DesktopSettings;
-  readonly changed: boolean;
-}
+export type { DesktopSettingsChange } from "./DesktopSettingsDocument.ts";
 
-export const DEFAULT_TAILSCALE_SERVE_PORT = 443;
-const MIN_MAIN_WINDOW_SIZE = {
-  width: 840,
-  height: 620,
-} as const;
-export const DesktopWindowBoundsSchema = Schema.Struct({
-  x: Schema.Int,
-  y: Schema.Int,
-  width: Schema.Int.check(Schema.isGreaterThanOrEqualTo(MIN_MAIN_WINDOW_SIZE.width)),
-  height: Schema.Int.check(Schema.isGreaterThanOrEqualTo(MIN_MAIN_WINDOW_SIZE.height)),
-});
-export type DesktopWindowBounds = typeof DesktopWindowBoundsSchema.Type;
-export const DEFAULT_MAIN_WINDOW_SIZE = {
-  width: 1100,
-  height: 780,
-} as const;
+export { DEFAULT_TAILSCALE_SERVE_PORT } from "./DesktopSettingsDocument.ts";
 
-export const DEFAULT_DESKTOP_SETTINGS: DesktopSettings = {
-  linuxPasswordStore: DEFAULT_LINUX_PASSWORD_STORE,
-  mainWindowBounds: null,
-  mainWindowMaximized: false,
-  serverExposureMode: "local-only",
-  tailscaleServeEnabled: false,
-  tailscaleServePort: DEFAULT_TAILSCALE_SERVE_PORT,
-  updateChannel: "latest",
-  updateChannelConfiguredByUser: false,
-  wslBackendEnabled: false,
-  wslDistro: null,
-  wslOnly: false,
-};
+export { DesktopWindowBoundsSchema } from "./DesktopSettingsDocument.ts";
 
-const DesktopWindowBoundsDocument = Schema.Struct({
-  x: Schema.Number,
-  y: Schema.Number,
-  width: Schema.Number,
-  height: Schema.Number,
-});
+export type { DesktopWindowBounds } from "./DesktopSettingsDocument.ts";
 
-const DesktopSettingsDocument = Schema.Struct({
-  linuxPasswordStore: Schema.optionalKey(Schema.Unknown),
-  mainWindowBounds: Schema.optionalKey(Schema.NullOr(DesktopWindowBoundsDocument)),
-  mainWindowMaximized: Schema.optionalKey(Schema.Boolean),
-  serverExposureMode: Schema.optionalKey(DesktopServerExposureModeSchema),
-  tailscaleServeEnabled: Schema.optionalKey(Schema.Boolean),
-  tailscaleServePort: Schema.optionalKey(Schema.Number),
-  updateChannel: Schema.optionalKey(DesktopUpdateChannelSchema),
-  updateChannelConfiguredByUser: Schema.optionalKey(Schema.Boolean),
-  // Newer form of the WSL toggle. `wslMode` is still accepted on load so
-  // existing on-disk settings keep working; on the next persist we write the
-  // new boolean and the legacy key drops out.
-  wslBackendEnabled: Schema.optionalKey(Schema.Boolean),
-  wslMode: Schema.optionalKey(Schema.Literals(["local", "wsl"])),
-  wslDistro: Schema.optionalKey(Schema.NullOr(Schema.String)),
-  wslOnly: Schema.optionalKey(Schema.Boolean),
-});
+export { DEFAULT_MAIN_WINDOW_SIZE } from "./DesktopSettingsDocument.ts";
 
-type DesktopSettingsDocument = typeof DesktopSettingsDocument.Type;
-type Mutable<T> = { -readonly [K in keyof T]: T[K] };
+export { DEFAULT_DESKTOP_SETTINGS } from "./DesktopSettingsDocument.ts";
 
-const DesktopSettingsJson = fromLenientJson(DesktopSettingsDocument);
-const decodeDesktopSettingsJson = Schema.decodeEffect(DesktopSettingsJson);
-const encodeDesktopSettingsJson = Schema.encodeEffect(DesktopSettingsJson);
-const decodeDesktopWindowBounds = Schema.decodeUnknownOption(DesktopWindowBoundsSchema);
-const desktopWindowBoundsEquivalence = Schema.toEquivalence(DesktopWindowBoundsSchema);
+export { resolveDefaultDesktopSettings } from "./DesktopSettingsDocument.ts";
 
-const settingsChange = (settings: DesktopSettings, changed: boolean): DesktopSettingsChange => ({
-  settings,
-  changed,
-});
+export { normalizeMainWindowBounds } from "./DesktopSettingsDocument.ts";
 
-const DesktopSettingsWriteOperation = Schema.Literals([
-  "create-temporary-file-name",
-  "encode-document",
-  "create-directory",
-  "write-temporary-file",
-  "replace-settings-file",
-]);
-type DesktopSettingsWriteOperation = typeof DesktopSettingsWriteOperation.Type;
-
-export class DesktopSettingsWriteError extends Schema.TaggedErrorClass<DesktopSettingsWriteError>()(
-  "DesktopSettingsWriteError",
-  {
-    operation: DesktopSettingsWriteOperation,
-    path: Schema.String,
-    cause: Schema.Defect(),
-  },
-) {
-  override get message(): string {
-    return `Desktop settings write failed during ${this.operation} at ${this.path}.`;
-  }
-}
+export { DesktopSettingsWriteError } from "./DesktopSettingsPersistence.ts";
 
 export class DesktopAppSettings extends Context.Service<
   DesktopAppSettings,
@@ -183,270 +88,6 @@ export class DesktopAppSettings extends Context.Service<
   }
 >()("@akeru/desktop/settings/DesktopAppSettings") {}
 
-export function resolveDefaultDesktopSettings(appVersion: string): DesktopSettings {
-  return {
-    ...DEFAULT_DESKTOP_SETTINGS,
-    updateChannel: resolveDefaultDesktopUpdateChannel(appVersion),
-  };
-}
-
-function normalizeTailscaleServePort(value: unknown): number {
-  return typeof value === "number" && Number.isInteger(value) && value >= 1 && value <= 65_535
-    ? value
-    : DEFAULT_TAILSCALE_SERVE_PORT;
-}
-
-function normalizeWslDistro(value: unknown): string | null {
-  return typeof value === "string" && isValidDistroName(value) ? value : null;
-}
-
-export function normalizeMainWindowBounds(value: unknown): DesktopWindowBounds | null {
-  return Option.getOrNull(decodeDesktopWindowBounds(value));
-}
-
-function normalizeDesktopSettingsDocument(
-  parsed: DesktopSettingsDocument,
-  appVersion: string,
-): DesktopSettings {
-  const defaultSettings = resolveDefaultDesktopSettings(appVersion);
-  const mainWindowBounds = normalizeMainWindowBounds(parsed.mainWindowBounds);
-  const parsedUpdateChannel = Option.fromNullishOr(parsed.updateChannel);
-  const updateChannelConfiguredByUser = parsed.updateChannelConfiguredByUser === true;
-
-  // Newer form wins when both are present; otherwise fall back to the legacy
-  // `wslMode === "wsl"` signal so users coming off the swap-mode build keep
-  // their WSL backend enabled.
-  const wslBackendEnabled =
-    parsed.wslBackendEnabled === true ||
-    (parsed.wslBackendEnabled === undefined && parsed.wslMode === "wsl");
-
-  return {
-    linuxPasswordStore: normalizeLinuxPasswordStorePreference(parsed.linuxPasswordStore),
-    mainWindowBounds,
-    mainWindowMaximized: mainWindowBounds !== null && parsed.mainWindowMaximized === true,
-    serverExposureMode:
-      parsed.serverExposureMode === "network-accessible" ? "network-accessible" : "local-only",
-    tailscaleServeEnabled: parsed.tailscaleServeEnabled === true,
-    tailscaleServePort: normalizeTailscaleServePort(parsed.tailscaleServePort),
-    updateChannel: updateChannelConfiguredByUser
-      ? Option.getOrElse(parsedUpdateChannel, () => defaultSettings.updateChannel)
-      : defaultSettings.updateChannel,
-    updateChannelConfiguredByUser,
-    wslBackendEnabled,
-    wslDistro: normalizeWslDistro(parsed.wslDistro),
-    wslOnly: parsed.wslOnly === true,
-  };
-}
-
-function toDesktopSettingsDocument(
-  settings: DesktopSettings,
-  defaults: DesktopSettings,
-): DesktopSettingsDocument {
-  const document: Mutable<DesktopSettingsDocument> = {};
-
-  if (settings.linuxPasswordStore !== defaults.linuxPasswordStore) {
-    document.linuxPasswordStore = settings.linuxPasswordStore;
-  }
-  if (settings.mainWindowBounds !== null) {
-    document.mainWindowBounds = settings.mainWindowBounds;
-  }
-  if (settings.mainWindowMaximized) {
-    document.mainWindowMaximized = true;
-  }
-  if (settings.serverExposureMode !== defaults.serverExposureMode) {
-    document.serverExposureMode = settings.serverExposureMode;
-  }
-  if (settings.tailscaleServeEnabled !== defaults.tailscaleServeEnabled) {
-    document.tailscaleServeEnabled = settings.tailscaleServeEnabled;
-  }
-  if (settings.tailscaleServePort !== defaults.tailscaleServePort) {
-    document.tailscaleServePort = settings.tailscaleServePort;
-  }
-  if (settings.updateChannel !== defaults.updateChannel) {
-    document.updateChannel = settings.updateChannel;
-  }
-  if (settings.updateChannelConfiguredByUser !== defaults.updateChannelConfiguredByUser) {
-    document.updateChannelConfiguredByUser = settings.updateChannelConfiguredByUser;
-  }
-  if (settings.wslBackendEnabled !== defaults.wslBackendEnabled) {
-    document.wslBackendEnabled = settings.wslBackendEnabled;
-  }
-  if (settings.wslDistro !== defaults.wslDistro) {
-    document.wslDistro = settings.wslDistro;
-  }
-  if (settings.wslOnly !== defaults.wslOnly) {
-    document.wslOnly = settings.wslOnly;
-  }
-
-  return document;
-}
-
-function setServerExposureMode(
-  settings: DesktopSettings,
-  requestedMode: DesktopServerExposureMode,
-): DesktopSettings {
-  return settings.serverExposureMode === requestedMode
-    ? settings
-    : {
-        ...settings,
-        serverExposureMode: requestedMode,
-      };
-}
-
-function setMainWindowBounds(
-  settings: DesktopSettings,
-  bounds: DesktopWindowBounds,
-  isMaximized: boolean,
-): DesktopSettings {
-  return settings.mainWindowBounds !== null &&
-    desktopWindowBoundsEquivalence(settings.mainWindowBounds, bounds) &&
-    settings.mainWindowMaximized === isMaximized
-    ? settings
-    : {
-        ...settings,
-        mainWindowBounds: bounds,
-        mainWindowMaximized: isMaximized,
-      };
-}
-
-function setTailscaleServe(
-  settings: DesktopSettings,
-  input: { readonly enabled: boolean; readonly port: Option.Option<number> },
-): DesktopSettings {
-  const port = Option.match(input.port, {
-    onNone: () => settings.tailscaleServePort,
-    onSome: normalizeTailscaleServePort,
-  });
-  return settings.tailscaleServeEnabled === input.enabled && settings.tailscaleServePort === port
-    ? settings
-    : {
-        ...settings,
-        tailscaleServeEnabled: input.enabled,
-        tailscaleServePort: port,
-      };
-}
-
-function setUpdateChannel(
-  settings: DesktopSettings,
-  requestedChannel: DesktopUpdateChannel,
-): DesktopSettings {
-  return settings.updateChannel === requestedChannel
-    ? settings
-    : {
-        ...settings,
-        updateChannel: requestedChannel,
-        updateChannelConfiguredByUser: true,
-      };
-}
-
-function setWslBackendEnabled(settings: DesktopSettings, enabled: boolean): DesktopSettings {
-  return settings.wslBackendEnabled === enabled
-    ? settings
-    : {
-        ...settings,
-        wslBackendEnabled: enabled,
-      };
-}
-
-function setWslDistro(settings: DesktopSettings, distro: string | null): DesktopSettings {
-  const normalized = normalizeWslDistro(distro);
-  return settings.wslDistro === normalized
-    ? settings
-    : {
-        ...settings,
-        wslDistro: normalized,
-      };
-}
-
-function setWslOnly(settings: DesktopSettings, enabled: boolean): DesktopSettings {
-  return settings.wslOnly === enabled
-    ? settings
-    : {
-        ...settings,
-        wslOnly: enabled,
-      };
-}
-
-function applyWslWindowsFallback(settings: DesktopSettings): DesktopSettings {
-  return setWslOnly(setWslBackendEnabled(settings, false), false);
-}
-
-function readSettings(
-  fileSystem: FileSystem.FileSystem,
-  settingsPath: string,
-  appVersion: string,
-): Effect.Effect<DesktopSettings> {
-  const defaultSettings = resolveDefaultDesktopSettings(appVersion);
-
-  return fileSystem.readFileString(settingsPath).pipe(
-    Effect.option,
-    Effect.flatMap(
-      Option.match({
-        onNone: () => Effect.succeed(defaultSettings),
-        onSome: (raw) =>
-          decodeDesktopSettingsJson(raw).pipe(
-            Effect.map((parsed) => normalizeDesktopSettingsDocument(parsed, appVersion)),
-            Effect.orElseSucceed(() => defaultSettings),
-          ),
-      }),
-    ),
-  );
-}
-
-const writeSettings = Effect.fn("desktop.settings.writeSettings")(function* (input: {
-  readonly fileSystem: FileSystem.FileSystem;
-  readonly path: Path.Path;
-  readonly settingsPath: string;
-  readonly settings: DesktopSettings;
-  readonly defaultSettings: DesktopSettings;
-  readonly suffix: string;
-}): Effect.fn.Return<void, DesktopSettingsWriteError> {
-  const directory = input.path.dirname(input.settingsPath);
-  const tempPath = `${input.settingsPath}.${process.pid}.${input.suffix}.tmp`;
-  const encoded = yield* encodeDesktopSettingsJson(
-    toDesktopSettingsDocument(input.settings, input.defaultSettings),
-  ).pipe(
-    Effect.mapError(
-      (cause) =>
-        new DesktopSettingsWriteError({
-          operation: "encode-document",
-          path: input.settingsPath,
-          cause,
-        }),
-    ),
-  );
-  yield* input.fileSystem.makeDirectory(directory, { recursive: true }).pipe(
-    Effect.mapError(
-      (cause) =>
-        new DesktopSettingsWriteError({
-          operation: "create-directory",
-          path: directory,
-          cause,
-        }),
-    ),
-  );
-  yield* input.fileSystem.writeFileString(tempPath, `${encoded}\n`).pipe(
-    Effect.mapError(
-      (cause) =>
-        new DesktopSettingsWriteError({
-          operation: "write-temporary-file",
-          path: tempPath,
-          cause,
-        }),
-    ),
-  );
-  yield* input.fileSystem.rename(tempPath, input.settingsPath).pipe(
-    Effect.mapError(
-      (cause) =>
-        new DesktopSettingsWriteError({
-          operation: "replace-settings-file",
-          path: input.settingsPath,
-          cause,
-        }),
-    ),
-  );
-});
-
 export const make = Effect.gen(function* () {
   const environment = yield* DesktopEnvironment.DesktopEnvironment;
   const fileSystem = yield* FileSystem.FileSystem;
@@ -457,6 +98,7 @@ export const make = Effect.gen(function* () {
   const updateInMemory = (update: (settings: DesktopSettings) => DesktopSettings) =>
     SynchronizedRef.modify(settingsRef, (settings) => {
       const nextSettings = update(settings);
+
       return [settingsChange(nextSettings, nextSettings !== settings), nextSettings] as const;
     });
 
@@ -465,6 +107,7 @@ export const make = Effect.gen(function* () {
   ): Effect.Effect<DesktopSettingsChange, DesktopSettingsWriteError> =>
     SynchronizedRef.modifyEffect(settingsRef, (settings) => {
       const nextSettings = update(settings);
+
       if (nextSettings === settings) {
         return Effect.succeed([settingsChange(settings, false), settings] as const);
       }
@@ -501,6 +144,7 @@ export const make = Effect.gen(function* () {
         environment.desktopSettingsPath,
         environment.appVersion,
       );
+
       return yield* SynchronizedRef.setAndGet(settingsRef, settings);
     }).pipe(Effect.withSpan("desktop.settings.load")),
     setMainWindowBounds: (bounds, isMaximized) =>
@@ -557,9 +201,11 @@ export const layerTest = (initialSettings: DesktopSettings = DEFAULT_DESKTOP_SET
     DesktopAppSettings,
     Effect.gen(function* () {
       const settingsRef = yield* SynchronizedRef.make(initialSettings);
+
       const update = (f: (settings: DesktopSettings) => DesktopSettings) =>
         SynchronizedRef.modify(settingsRef, (settings) => {
           const nextSettings = f(settings);
+
           return [
             {
               settings: nextSettings,

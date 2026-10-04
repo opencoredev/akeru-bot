@@ -1,3 +1,5 @@
+import * as Match from "effect/Match";
+import * as Schema from "effect/Schema";
 import type {
   DesktopAppBranding,
   DesktopAppStageLabel,
@@ -26,6 +28,10 @@ export interface MakeDesktopEnvironmentInput {
   readonly resourcesPath: string;
   readonly runningUnderArm64Translation: boolean;
 }
+
+const decodeFolderOptions = Schema.decodeUnknownOption(
+  Schema.Struct({ initialPath: Schema.String }),
+);
 
 export class DesktopEnvironment extends Context.Service<
   DesktopEnvironment,
@@ -79,7 +85,7 @@ export class DesktopEnvironment extends Context.Service<
     readonly legacyUserDataDirName: string;
     readonly defaultDesktopSettings: DesktopAppSettings.DesktopSettings;
     readonly runtimeInfo: DesktopRuntimeInfo;
-    readonly resolvePickFolderDefaultPath: (rawOptions: unknown) => Option.Option<string>;
+    readonly resolvePickFolderDefaultPath: <Input>(rawOptions: Input) => Option.Option<string>;
     readonly resolveResourcePathCandidates: (fileName: string) => readonly string[];
   }
 >()("@akeru/desktop/app/DesktopEnvironment") {}
@@ -103,6 +109,7 @@ function resolveDesktopAppBranding(input: {
   readonly appVersion: string;
 }): DesktopAppBranding {
   const stageLabel = resolveDesktopAppStageLabel(input);
+
   return {
     baseName: APP_BASE_NAME,
     stageLabel,
@@ -113,7 +120,9 @@ function resolveDesktopAppBranding(input: {
 
 function normalizeDesktopArch(arch: string): DesktopRuntimeArch {
   if (arch === "arm64") return "arm64";
+
   if (arch === "x64") return "x64";
+
   return "other";
 }
 
@@ -149,43 +158,56 @@ const make = Effect.fn("desktop.environment.make")(function* (
   const homeDirectory = input.homeDirectory;
   const devServerUrl = config.devServerUrl;
   const isDevelopment = Option.isSome(devServerUrl);
-  const appDataDirectory =
-    input.platform === "win32"
-      ? Option.getOrElse(config.appDataDirectory, () =>
-          path.join(homeDirectory, "AppData", "Roaming"),
-        )
-      : input.platform === "darwin"
-        ? path.join(homeDirectory, "Library", "Application Support")
-        : Option.getOrElse(config.xdgConfigHome, () => path.join(homeDirectory, ".config"));
+
+  const appDataDirectory = Match.value(input.platform).pipe(
+    Match.when("win32", () =>
+      Option.getOrElse(config.appDataDirectory, () =>
+        path.join(homeDirectory, "AppData", "Roaming"),
+      ),
+    ),
+    Match.when("darwin", () => path.join(homeDirectory, "Library", "Application Support")),
+    Match.orElse(() =>
+      Option.getOrElse(config.xdgConfigHome, () => path.join(homeDirectory, ".config")),
+    ),
+  );
+
   const baseDir = resolveDesktopBaseDir({
     homeDirectory,
     joinPath: path.join,
     t3Home: config.t3Home,
   });
+
   const rootDir = path.resolve(input.dirname, "../../..");
   const appRoot = input.isPackaged ? input.appPath : rootDir;
+
   const serverRoot =
     input.isPackaged && input.platform === "win32"
       ? path.join(input.resourcesPath, "server.asar")
       : appRoot;
+
   const branding = resolveDesktopAppBranding({
     isDevelopment,
     isPackaged: input.isPackaged,
     appVersion: input.appVersion,
   });
+
   const displayName = branding.displayName;
+
   const stateDir = resolveDesktopStateDir({
     baseDir,
     isDevelopment,
     joinPath: path.join,
     t3Home: config.t3Home,
   });
+
   const userDataDirName = isDevelopment ? "akeru-bot-dev" : "akeru-bot";
   const legacyUserDataDirName = isDevelopment ? "Akeru Bot (Dev)" : "Akeru Bot (Alpha)";
+
   const linuxApplicationsDir = path.join(
     Option.getOrElse(config.xdgDataHome, () => path.join(homeDirectory, ".local", "share")),
     "applications",
   );
+
   const resourcesPath = input.resourcesPath;
 
   return DesktopEnvironment.of({
@@ -241,16 +263,13 @@ const make = Effect.fn("desktop.environment.make")(function* (
       runningUnderArm64Translation: input.runningUnderArm64Translation,
     }),
     resolvePickFolderDefaultPath: (rawOptions) => {
-      if (typeof rawOptions !== "object" || rawOptions === null) {
-        return Option.none();
-      }
+      const parsed = decodeFolderOptions(rawOptions);
 
-      const { initialPath } = rawOptions as { initialPath?: unknown };
-      if (typeof initialPath !== "string") {
-        return Option.none();
-      }
+      if (Option.isNone(parsed)) return Option.none();
+      const { initialPath } = parsed.value;
 
       const trimmedPath = initialPath.trim();
+
       if (trimmedPath.length === 0) {
         return Option.none();
       }

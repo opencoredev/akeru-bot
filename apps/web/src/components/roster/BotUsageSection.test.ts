@@ -9,6 +9,7 @@ const state = vi.hoisted(() => ({
 }));
 
 vi.mock("../../state/query", () => ({ useEnvironmentQuery: state.query }));
+
 vi.mock("../../state/botUsage", () => ({
   botUsageEnvironment: { summary: state.summary },
 }));
@@ -83,6 +84,7 @@ describe("formatUsageMeasurement", () => {
       environmentId: EnvironmentId.make("environment-1"),
       input: { botId: BotId.make("bot-1") },
     });
+
     for (const value of [
       "Input",
       "1,250",
@@ -95,6 +97,7 @@ describe("formatUsageMeasurement", () => {
     ]) {
       expect(markup).toContain(value);
     }
+
     expect(markup).toContain("12,345 / 20,000 tokens");
     expect(markup).toContain("$1.25");
     expect(markup).toContain("34% of pool");

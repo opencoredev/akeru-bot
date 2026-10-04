@@ -79,6 +79,7 @@ function findQueuedPendingTask(messageId: string): QueuedThreadMessage | null {
   const message = flattenQueuedThreadMessages(
     appAtomRegistry.get(threadOutboxManager.queuedMessagesByThreadKeyAtom),
   ).find((candidate) => candidate.messageId === messageId);
+
   return message?.creation !== undefined ? message : null;
 }
 
@@ -137,6 +138,7 @@ export function NewTaskFlowProvider(props: React.PropsWithChildren) {
   const threads = useThreadShells();
   const { savedConnectionsById } = useSavedRemoteConnections();
   const groupingSettings = useMobileProjectGroupingSettings();
+
   const projectScopes = useMemo(
     () =>
       sortHomeProjectScopes({
@@ -155,16 +157,19 @@ export function NewTaskFlowProvider(props: React.PropsWithChildren) {
   const [selectedEnvironmentIdOverride, setSelectedEnvironmentId] = useState<EnvironmentId | null>(
     null,
   );
+
   const selectedEnvironmentId =
     selectedEnvironmentIdOverride !== null &&
     projects.some((project) => project.environmentId === selectedEnvironmentIdOverride)
       ? selectedEnvironmentIdOverride
       : (projects[0]?.environmentId ?? null);
+
   const subscriptionAuth = useEnvironmentQuery(
     selectedEnvironmentId === null
       ? null
       : serverEnvironment.subscriptionAuth({ environmentId: selectedEnvironmentId, input: {} }),
   );
+
   const subscriptionStatuses = subscriptionAuth.data?.providers;
   const [selectedProjectKey, setSelectedProjectKey] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -182,10 +187,12 @@ export function NewTaskFlowProvider(props: React.PropsWithChildren) {
     const editing = editingPendingTaskRef.current;
     editingPendingTaskRef.current = null;
     setEditingPendingTask(null);
+
     if (editing) {
       if (activeEditingMessageId === editing.messageId) {
         activeEditingMessageId = null;
       }
+
       releaseEditingQueuedMessage(editing.messageId);
     }
   }, []);
@@ -204,9 +211,11 @@ export function NewTaskFlowProvider(props: React.PropsWithChildren) {
   // snapshotted at enqueue time.
   const editingPendingProject = useMemo<EnvironmentProject | null>(() => {
     const creation = editingPendingTask?.creation;
+
     if (!editingPendingTask || !creation) {
       return null;
     }
+
     return {
       environmentId: editingPendingTask.environmentId,
       id: creation.projectId,
@@ -245,42 +254,54 @@ export function NewTaskFlowProvider(props: React.PropsWithChildren) {
   // workspaceRoot, and an "" basename would reject every real host below.
   const selectedWorkspaceBasename = selectedProject?.workspaceRoot.split("/").at(-1) || null;
   const selectedProjectTitle = selectedProject?.title ?? null;
+
   const environments = useMemo(() => {
     const seen = new Set<EnvironmentId>();
+
     const result: Array<{
       readonly environmentId: EnvironmentId;
       readonly environmentLabel: string;
     }> = [];
+
     const hostsSelectedRepository = (project: EnvironmentProject) => {
       if (selectedRepositoryKey === null && selectedWorkspaceBasename === null) {
         return true;
       }
+
       const projectKey = project.repositoryIdentity?.canonicalKey ?? null;
+
       if (selectedRepositoryKey !== null && projectKey !== null) {
         return projectKey === selectedRepositoryKey;
       }
+
       return (
         project.workspaceRoot.split("/").at(-1) === selectedWorkspaceBasename ||
         (selectedProjectTitle !== null && project.title === selectedProjectTitle)
       );
     };
+
     for (const project of projects) {
       if (!hostsSelectedRepository(project)) {
         continue;
       }
+
       if (seen.has(project.environmentId)) {
         continue;
       }
+
       const environment = savedConnectionsById[project.environmentId];
+
       if (!environment) {
         continue;
       }
+
       seen.add(project.environmentId);
       result.push({
         environmentId: project.environmentId,
         environmentLabel: environment.environmentLabel,
       });
     }
+
     return result;
   }, [
     projects,
@@ -293,6 +314,7 @@ export function NewTaskFlowProvider(props: React.PropsWithChildren) {
   const selectedEnvironmentServerConfig = useEnvironmentServerConfig(
     selectedProject?.environmentId ?? null,
   );
+
   // While a queued pending task is being edited its draft lives under a key
   // scoped to the queued message, so per-project new-task drafts stay intact.
   const selectedProjectDraftKey = editingPendingTask
@@ -300,9 +322,11 @@ export function NewTaskFlowProvider(props: React.PropsWithChildren) {
     : selectedProject
       ? `new-task:${scopedProjectKey(selectedProject.environmentId, selectedProject.id)}`
       : null;
+
   const selectedProjectDraft = useComposerDraft(selectedProjectDraftKey);
   const prompt = selectedProjectDraft.text;
   const attachments = selectedProjectDraft.attachments;
+
   const runtimeMode =
     selectedProjectDraft.runtimeMode ??
     selectedEnvironmentServerConfig?.settings.localExecutionMode ??
@@ -318,11 +342,13 @@ export function NewTaskFlowProvider(props: React.PropsWithChildren) {
     selectedProjectDraft.modelSelection ?? null,
     subscriptionStatuses,
   );
+
   const projectDefaultModelSelection = resolveDefaultableModelSelection(
     selectedEnvironmentServerConfig,
     selectedProject?.defaultModelSelection ?? null,
     subscriptionStatuses,
   );
+
   const modelOptions = useMemo(
     () =>
       buildModelOptions(
@@ -346,6 +372,7 @@ export function NewTaskFlowProvider(props: React.PropsWithChildren) {
     modelOptions.find((option) => option.isDefault && option.disabledReason === null)?.selection ??
     modelOptions.find((option) => option.disabledReason === null)?.selection ??
     null;
+
   const selectedModelKey = selectedModel
     ? `${selectedModel.instanceId}:${selectedModel.model}`
     : null;
@@ -357,6 +384,7 @@ export function NewTaskFlowProvider(props: React.PropsWithChildren) {
         option.selection.instanceId === selectedModel.instanceId &&
         option.selection.model === selectedModel.model,
     ) ?? null;
+
   const selectedProviderSkills = useMemo(
     () =>
       selectedEnvironmentServerConfig?.providers.find(
@@ -364,6 +392,7 @@ export function NewTaskFlowProvider(props: React.PropsWithChildren) {
       )?.skills ?? [],
     [selectedEnvironmentServerConfig, selectedModel?.instanceId],
   );
+
   const setSelectedModelKey = useCallback(
     // Options ride along in the same write: a follow-up setSelectedModelOptions
     // call would rebuild the selection from the stale pre-switch model.
@@ -371,27 +400,33 @@ export function NewTaskFlowProvider(props: React.PropsWithChildren) {
       if (!key || !selectedProjectDraftKey) {
         return;
       }
+
       const option = modelOptions.find((candidate) => candidate.key === key);
+
       if (!option || option.disabledReason) {
         return;
       }
+
       updateComposerDraftSettings(selectedProjectDraftKey, {
         modelSelection: options ? { ...option.selection, options } : option.selection,
       });
     },
     [modelOptions, selectedProjectDraftKey],
   );
+
   const setSelectedModelOptions = useCallback(
     (options: ReadonlyArray<ProviderOptionSelection> | undefined) => {
       if (!selectedModel || !selectedProjectDraftKey) {
         return;
       }
+
       const nextSelection: ModelSelection = options
         ? { ...selectedModel, options }
         : {
             instanceId: selectedModel.instanceId,
             model: selectedModel.model,
           };
+
       updateComposerDraftSettings(selectedProjectDraftKey, {
         modelSelection: nextSelection,
       });
@@ -400,58 +435,71 @@ export function NewTaskFlowProvider(props: React.PropsWithChildren) {
   );
 
   const providerGroups = useMemo(() => groupByProvider(modelOptions), [modelOptions]);
+
   const setPrompt = useCallback(
     (value: string) => {
       if (!selectedProjectDraftKey) {
         return;
       }
+
       setComposerDraftText(selectedProjectDraftKey, value);
     },
     [selectedProjectDraftKey],
   );
+
   const replaceAttachments = useCallback(
     (nextAttachments: ReadonlyArray<DraftComposerImageAttachment>) => {
       if (!selectedProjectDraftKey) {
         return;
       }
+
       replaceComposerDraftAttachments(selectedProjectDraftKey, nextAttachments);
     },
     [selectedProjectDraftKey],
   );
+
   const appendAttachments = useCallback(
     (nextAttachments: ReadonlyArray<DraftComposerImageAttachment>) => {
       if (!selectedProjectDraftKey) {
         return;
       }
+
       appendComposerDraftAttachments(selectedProjectDraftKey, nextAttachments);
     },
     [selectedProjectDraftKey],
   );
+
   const removeAttachment = useCallback(
     (imageId: string) => {
       if (!selectedProjectDraftKey) {
         return;
       }
+
       removeComposerDraftAttachment(selectedProjectDraftKey, imageId);
     },
     [selectedProjectDraftKey],
   );
+
   const clearAttachments = useCallback(() => {
     if (!selectedProjectDraftKey) {
       return;
     }
+
     replaceComposerDraftAttachments(selectedProjectDraftKey, []);
   }, [selectedProjectDraftKey]);
+
   const setProject = useCallback(
     (project: EnvironmentProject) => {
       const nextProjectKey = scopedProjectKey(project.environmentId, project.id);
       const nextDraftKey = `new-task:${nextProjectKey}`;
+
       if (
         selectedProjectDraftKey?.startsWith("new-task:") &&
         selectedProjectDraftKey !== nextDraftKey
       ) {
         void copyComposerDraftContentIfEmpty(selectedProjectDraftKey, nextDraftKey);
       }
+
       setSelectedEnvironmentId(project.environmentId);
       setSelectedProjectKey(nextProjectKey);
     },
@@ -463,12 +511,14 @@ export function NewTaskFlowProvider(props: React.PropsWithChildren) {
       const projectsOnTarget = projects.filter(
         (project) => project.environmentId === environmentId,
       );
+
       const repositoryKey = selectedProject?.repositoryIdentity?.canonicalKey ?? null;
       // Prefer the repository identity; projects without one (e.g. not yet
       // indexed) fall back to workspace basename, then title, so switching
       // computers still follows the same repo instead of resetting to
       // whatever project is first on the target machine.
       const workspaceBasename = selectedProject?.workspaceRoot.split("/").at(-1) || null;
+
       const match =
         (repositoryKey !== null
           ? projectsOnTarget.find(
@@ -483,6 +533,7 @@ export function NewTaskFlowProvider(props: React.PropsWithChildren) {
         (selectedProject !== null
           ? projectsOnTarget.find((project) => project.title === selectedProject.title)
           : undefined);
+
       setSelectedEnvironmentId(environmentId);
       setSelectedProjectKey(match ? scopedProjectKey(match.environmentId, match.id) : null);
     },
@@ -497,12 +548,16 @@ export function NewTaskFlowProvider(props: React.PropsWithChildren) {
     },
     [selectedProjectDraftKey],
   );
+
   const beginEditingPendingTask = useCallback((messageId: string): boolean => {
     const message = findQueuedPendingTask(messageId);
+
     if (!message?.creation) {
       return false;
     }
+
     const draftKey = pendingTaskDraftKey(message.messageId);
+
     // Only hydrate a fresh editing draft; reopening mid-edit keeps newer edits.
     if (isComposerDraftEmpty(getComposerDraftSnapshot(draftKey))) {
       setComposerDraftText(draftKey, message.text);
@@ -512,6 +567,7 @@ export function NewTaskFlowProvider(props: React.PropsWithChildren) {
         runtimeMode: message.runtimeMode,
       });
     }
+
     setSelectedEnvironmentId(message.environmentId);
     setSelectedProjectKey(scopedProjectKey(message.environmentId, message.creation.projectId));
     activeEditingMessageId = message.messageId;
@@ -519,6 +575,7 @@ export function NewTaskFlowProvider(props: React.PropsWithChildren) {
     setEditingPendingTask(message);
     // Hold the outbox drain off this task while it is open in the editor.
     holdEditingQueuedMessage(message.messageId);
+
     return true;
   }, []);
 
@@ -527,8 +584,10 @@ export function NewTaskFlowProvider(props: React.PropsWithChildren) {
       if (!selectedProject || !selectedProjectDraftKey) {
         return null;
       }
+
       const draft = getComposerDraftSnapshot(selectedProjectDraftKey);
       const text = draft.text.trim();
+
       // Same availability gate the composer display applies: a stored
       // selection targeting a disabled provider must not ride into the queue.
       const draftModelSelection =
@@ -536,20 +595,25 @@ export function NewTaskFlowProvider(props: React.PropsWithChildren) {
           selectedEnvironmentServerConfig,
           draft.modelSelection ?? null,
         ) ?? selectedModel;
+
       if (text.length === 0 || !draftModelSelection) {
         return null;
       }
+
       // When the selection is the stand-in built from the queued snapshot,
       // persist the original (possibly absent) snapshot values — the
       // stand-in's placeholder title/workspaceRoot must never be written back
       // as if they were real project metadata.
       const usingPendingSnapshot = selectedProject === editingPendingProject;
+
       const projectTitle = usingPendingSnapshot
         ? editingPendingTask?.creation?.projectTitle
         : selectedProject.title;
+
       const projectCwd = usingPendingSnapshot
         ? editingPendingTask?.creation?.projectCwd
         : selectedProject.workspaceRoot;
+
       return {
         environmentId: selectedProject.environmentId,
         threadId: ThreadId.make(metadata.threadId),
@@ -590,13 +654,16 @@ export function NewTaskFlowProvider(props: React.PropsWithChildren) {
   const finishEditingPendingTask = useCallback(() => {
     const editing = editingPendingTaskRef.current;
     editingPendingTaskRef.current = null;
+
     if (editing) {
       if (activeEditingMessageId === editing.messageId) {
         activeEditingMessageId = null;
       }
+
       clearComposerDraft(pendingTaskDraftKey(editing.messageId));
       releaseEditingQueuedMessage(editing.messageId);
     }
+
     setEditingPendingTask(null);
   }, []);
 
@@ -607,12 +674,15 @@ export function NewTaskFlowProvider(props: React.PropsWithChildren) {
   const queuedMessagesByThreadKey = useThreadOutboxMessages();
   useEffect(() => {
     const editing = editingPendingTaskRef.current;
+
     if (!editing) {
       return;
     }
+
     const stillQueued = flattenQueuedThreadMessages(queuedMessagesByThreadKey).some(
       (candidate) => candidate.messageId === editing.messageId,
     );
+
     if (!stillQueued) {
       finishEditingPendingTask();
     }
@@ -624,11 +694,14 @@ export function NewTaskFlowProvider(props: React.PropsWithChildren) {
   useEffect(() => {
     editingFlushRef.current = () => {
       const editing = editingPendingTaskRef.current;
+
       if (!editing) {
         return;
       }
+
       editingPendingTaskRef.current = null;
       setEditingPendingTask(null);
+
       if (activeEditingMessageId === editing.messageId) {
         activeEditingMessageId = null;
       }
@@ -657,6 +730,7 @@ export function NewTaskFlowProvider(props: React.PropsWithChildren) {
           if (activeEditingMessageId === editing.messageId) {
             return;
           }
+
           clearComposerDraft(pendingTaskDraftKey(editing.messageId));
           releaseEditingQueuedMessage(editing.messageId);
         })
@@ -667,9 +741,11 @@ export function NewTaskFlowProvider(props: React.PropsWithChildren) {
         });
     };
   }, [buildPendingTaskMessage]);
+
   const cancelEditingPendingTask = useCallback(() => {
     editingFlushRef.current?.();
   }, []);
+
   useEffect(
     () => () => {
       editingFlushRef.current?.();
@@ -759,8 +835,10 @@ export function NewTaskFlowProvider(props: React.PropsWithChildren) {
 
 export function useNewTaskFlow() {
   const value = React.use(NewTaskFlowContext);
+
   if (value === null) {
     throw new Error("useNewTaskFlow must be used within NewTaskFlowProvider.");
   }
+
   return value;
 }

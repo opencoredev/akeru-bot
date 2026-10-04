@@ -24,6 +24,7 @@ export function ProviderAccessDetails({
 }) {
   const { t } = useI18n();
   const guide = providerAccessGuide(provider, status, { models, t });
+
   if (!guide) return null;
 
   const rows: ReadonlyArray<readonly [string, string]> = [
@@ -56,7 +57,7 @@ export function ProviderAccessDetails({
         <summary className="w-fit cursor-pointer rounded-sm py-0.5 outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring">
           {t("Access details")}
         </summary>
-        <dl className="mt-1 grid max-w-2xl grid-cols-1 gap-x-4 gap-y-1 sm:grid-cols-[8rem_minmax(0,1fr)]">
+        <dl className="mt-1 grid max-w-2xl grid-cols-1 gap-x-4 gap-y-1 sm:grid-cols-8rem-1fr">
           {rows.map(([label, value]) => (
             <div key={label} className="contents">
               <dt className="font-medium text-foreground/80">{label}</dt>

@@ -1,19 +1,24 @@
+import * as Predicate from "effect/Predicate";
 import { describe, expect, it } from "vite-plus/test";
 
 import { readImageDimensions } from "./imageDimensions.ts";
 
 function bytes(...parts: ReadonlyArray<number | string | ReadonlyArray<number>>): Uint8Array {
   const out: number[] = [];
+
   for (const part of parts) {
-    if (typeof part === "string") for (const c of part) out.push(c.charCodeAt(0));
-    else if (typeof part === "number") out.push(part);
+    if (Predicate.isString(part)) for (const c of part) out.push(c.charCodeAt(0));
+    else if (Predicate.isNumber(part)) out.push(part);
     else out.push(...part);
   }
+
   return Uint8Array.from(out);
 }
 
 const u32 = (n: number) => [(n >>> 24) & 0xff, (n >>> 16) & 0xff, (n >>> 8) & 0xff, n & 0xff];
+
 const u16 = (n: number) => [(n >>> 8) & 0xff, n & 0xff];
+
 const u16le = (n: number) => [n & 0xff, (n >>> 8) & 0xff];
 
 describe("readImageDimensions", () => {
@@ -27,6 +32,7 @@ describe("readImageDimensions", () => {
       u32(1600),
       u32(900),
     );
+
     expect(readImageDimensions(png)).toEqual({ width: 1600, height: 900 });
   });
 
@@ -52,6 +58,7 @@ describe("readImageDimensions", () => {
       0x4d, 0x4d, 0x00, 0x2a, 0x00, 0x00, 0x00, 0x08, 0x00, 0x01, 0x01, 0x12, 0x00, 0x03, 0x00,
       0x00, 0x00, 0x01, 0x00, 0x06, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
     ];
+
     const exif = ["Exif\0\0", tiff] as const;
     const app1 = bytes([0xff, 0xe1], u16(2 + 6 + tiff.length), ...exif);
     const sof0 = bytes([0xff, 0xc0], u16(17), [8], u16(3024), u16(4032));
@@ -94,6 +101,7 @@ describe("readImageDimensions", () => {
   it("reads each WebP container flavour", () => {
     const riff = (chunk: string, body: ReadonlyArray<number>) =>
       bytes("RIFF", u32(0), "WEBP", chunk, u32(body.length), body);
+
     // VP8: frame tag (3), start code (3), then 14-bit width and height.
     expect(
       readImageDimensions(riff("VP8 ", [0, 0, 0, 0x9d, 0x01, 0x2a, ...u16le(800), ...u16le(600)])),

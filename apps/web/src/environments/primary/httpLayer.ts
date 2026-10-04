@@ -34,6 +34,7 @@ export function makePrimaryEnvironmentHttpLayer() {
   return Layer.unwrap(
     Effect.sync(() => {
       const baseLayer = remoteHttpClientLayer(globalThis.fetch);
+
       if (isSameOriginBrowserPrimary()) {
         return Layer.merge(
           baseLayer,

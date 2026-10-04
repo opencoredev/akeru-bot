@@ -56,17 +56,20 @@ class TestRow {
     clone.attributes = this.attributes.map((attribute) => ({ ...attribute }));
     clone.children = this.children.map((child) => child.cloneNode(true));
     this.clones.push(clone);
+
     return clone;
   }
   animate = vi.fn((_frames: Keyframe[], _options: KeyframeAnimationOptions) => {
     const animation = new TestAnimation();
     this.animations.push(animation);
+
     return animation;
   });
 }
 
 function fixture(rows: TestRow[]) {
   const media = { matches: false };
+
   const parent = {
     children: rows,
     ownerDocument: { defaultView: { matchMedia: () => media } },
@@ -78,19 +81,25 @@ function fixture(rows: TestRow[]) {
       });
     },
   };
+
   function layout(next: TestRow[]) {
     let top = 8;
+
     for (const row of next) {
       row.offsetTop = top;
       top += row.offsetHeight + 1;
     }
+
     parent.children = [
       ...next,
       ...parent.children.filter((row) => row.style.position === "absolute"),
     ];
   }
+
   layout(rows);
-  const motion = createRosterListMotion(parent as unknown as HTMLUListElement);
+  vi.stubGlobal("document", { createElement: () => parent });
+  const motion = createRosterListMotion(document.createElement("ul"));
+
   return { motion, layout, media, parent };
 }
 
@@ -102,6 +111,7 @@ function expectMove(row: TestRow, offset: number) {
 }
 
 beforeEach(() => vi.stubGlobal("HTMLElement", TestRow));
+
 afterEach(() => vi.unstubAllGlobals());
 
 describe("roster list motion", () => {

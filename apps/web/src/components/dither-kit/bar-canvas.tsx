@@ -1,4 +1,3 @@
-// @ts-nocheck
 "use client";
 
 import { useEffect, useMemo, useRef } from "react";
@@ -40,16 +39,20 @@ export function BarCanvas() {
   // rebuild every band's geometry.
   const targets = useMemo(() => {
     const out: Record<string, Bars> = {};
+
     if (!ready) return out;
     const h = height || 1;
+
     for (const key of configKeys) {
       const band = bands[key];
+
       if (!band) continue;
       out[key] = {
         top: band.map((b) => (y(b[1]) / h) * (rows - 1)),
         base: band.map((b) => (y(b[0]) / h) * (rows - 1)),
       };
     }
+
     return out;
   }, [ready, configKeys, bands, y, height, rows]);
 
@@ -87,12 +90,14 @@ export function BarCanvas() {
   useEffect(() => {
     const canvas = canvasRef.current;
     const c = canvas?.getContext("2d");
+
     if (!(canvas && c) || cols <= 0 || rows <= 0) return;
     canvas.width = cols;
     canvas.height = rows;
 
     const bloomCanvas = bloomRef.current;
     const bloomCtx = bloomCanvas?.getContext("2d") ?? null;
+
     if (bloomCanvas) {
       bloomCanvas.width = cols;
       bloomCanvas.height = rows;
@@ -107,6 +112,7 @@ export function BarCanvas() {
     const barProgress = (i: number, len: number, prog: number) => {
       if (!animate) return 1;
       const start = len > 1 ? (i / (len - 1)) * STAGGER : 0;
+
       return easeOutCubic(clamp01((prog - start) / (1 - STAGGER)));
     };
 
@@ -117,11 +123,13 @@ export function BarCanvas() {
       const keys = s.configKeys;
       keys.forEach((key, si) => {
         const t = targetsRef.current[key];
+
         if (!t) return;
         const seed = s.seedOf(key);
         const variant = s.seriesSpecs[key]?.variant ?? "gradient";
         const emphasis = s.selectedDataKey ?? s.focusDataKey;
         const selDim = emphasis !== null && emphasis !== key ? 0.3 : 1;
+
         for (let i = 0; i < s.dataLength; i++) {
           const bp = barProgress(i, s.dataLength, prog);
           const base = t.base[i] ?? rows - 1;
@@ -136,6 +144,7 @@ export function BarCanvas() {
           const slot = s.barSlot(i, si, keys.length);
           const c0 = Math.round(slot.x * fx);
           const c1 = Math.round((slot.x + slot.width) * fx);
+
           for (let x = c0; x < c1; x++) {
             paintColumn(c, x, top, bottom, seed, {
               variant,
@@ -155,18 +164,21 @@ export function BarCanvas() {
     let intensity = 0;
     let needsFill = true;
     let lastPaintSig = "";
-    let lastSelected: string | null | undefined = Symbol() as never;
-    let lastHover: number | null | undefined = Symbol() as never;
+    let lastSelected: string | null | undefined | symbol = Symbol();
+    let lastHover: number | null | undefined | symbol = Symbol();
 
     const draw = (now: number) => {
       raf = animate ? requestAnimationFrame(draw) : 0;
       const s = state.current;
+
       if (!s.ready) return;
+
       if (s.revision !== lastRevision) {
         lastRevision = s.revision;
         animStart = 0; // re-play the wave on data change / replay
         lastProg = -1;
       }
+
       if (!animStart) animStart = now;
       const prog = animate ? Math.min(1, (now - animStart) / duration) : 1;
 
@@ -174,16 +186,21 @@ export function BarCanvas() {
         lastProg = prog;
         needsFill = true;
       }
+
       const emphasisNow = s.selectedDataKey ?? s.focusDataKey;
+
       if (emphasisNow !== lastSelected) {
         lastSelected = emphasisNow;
         needsFill = true;
       }
+
       if (s.hoverIndex !== lastHover) {
         lastHover = s.hoverIndex;
         needsFill = true;
       }
+
       const itTarget = s.isMouseInChart || s.hovered ? 1 : 0;
+
       if (Math.abs(intensity - itTarget) > 0.001) {
         intensity += (itTarget - intensity) * (animate ? 0.16 : 1);
         needsFill = true;
@@ -193,6 +210,7 @@ export function BarCanvas() {
       const paintSig = `${s.stackType}|${s.configKeys
         .map((k) => s.seriesSpecs[k]?.variant ?? "")
         .join(",")}`;
+
       if (paintSig !== lastPaintSig) {
         lastPaintSig = paintSig;
         needsFill = true;
@@ -201,6 +219,7 @@ export function BarCanvas() {
       if (!needsFill) return;
       paint(prog);
       needsFill = false;
+
       if (bloomCtx && s.bloom !== "off" && (!s.bloomOnHover || s.isMouseInChart || s.hovered)) {
         bloomCtx.clearRect(0, 0, cols, rows);
         bloomCtx.drawImage(canvas, 0, 0);
@@ -209,9 +228,12 @@ export function BarCanvas() {
 
     invalidateRef.current = () => {
       needsFill = true;
+
       if (!raf) raf = requestAnimationFrame(draw);
     };
+
     invalidateRef.current();
+
     return () => {
       cancelAnimationFrame(raf);
       invalidateRef.current = null;
@@ -220,27 +242,29 @@ export function BarCanvas() {
 
   const bloomActive = ctx.bloomOnHover ? ctx.isMouseInChart || ctx.hovered : true;
   const bloom = bloomLayerStyle(ctx.bloom, bloomActive);
+
   const pos = {
-    left: ctx.margins.left,
-    top: ctx.margins.top,
-    width,
-    height,
+    "--plot-left": `${ctx.margins.left}px`,
+    "--plot-top": `${ctx.margins.top}px`,
+    "--plot-width": `${width}px`,
+    "--plot-height": `${height}px`,
   } as const;
 
   return (
     <>
       <canvas
         ref={canvasRef}
-        className="pointer-events-none absolute"
-        style={{ ...pos, imageRendering: "pixelated" }}
+        className="pointer-events-none absolute top-(--plot-top) left-(--plot-left) h-(--plot-height) w-(--plot-width) image-pixelated"
+        style={pos}
       />
       <canvas
         ref={bloomRef}
-        className="pointer-events-none absolute"
+        className="pointer-events-none absolute top-(--plot-top) left-(--plot-left) h-(--plot-height) w-(--plot-width) dither-bloom-layer"
         style={{
           ...pos,
-          transition: "opacity 220ms ease",
-          ...(bloom ?? { opacity: 0 }),
+          "--bloom-filter": bloom?.filter,
+          "--bloom-opacity": bloom?.opacity ?? 0,
+          "--bloom-blend": bloom?.mixBlendMode,
         }}
       />
     </>

@@ -65,6 +65,7 @@ export const NoOpProviderEventLoggers: ProviderEventLoggers["Service"] = {
 export const make = Effect.gen(function* () {
   const { providerEventLogPath } = yield* ServerConfig;
   const attribution = yield* ResourceAttribution.ResourceAttribution;
+
   const store = yield* EventNdjsonLogger.makeEventNdjsonLogStore(providerEventLogPath, {
     attribution,
   }).pipe(
@@ -81,6 +82,7 @@ export const make = Effect.gen(function* () {
   }
 
   yield* Effect.addFinalizer(() => store.close());
+
   return ProviderEventLoggers.of({
     native: store.logger("native"),
     canonical: store.logger("canonical"),

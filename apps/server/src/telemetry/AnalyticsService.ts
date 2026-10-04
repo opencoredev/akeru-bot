@@ -1,18 +1,11 @@
 import * as NodeCrypto from "node:crypto";
 import {
   USAGE_3H_COUNTER_KEYS,
-  USAGE_3H_COUNTER_MAX,
   USAGE_BASE_COUNTER_KEYS,
   USAGE_PLUGIN_IDS,
   USAGE_TOOL_IDS,
-  Usage3hEvent,
   decodeUsage3hEvent,
   type Usage3hEvent as Usage3hEventType,
-  type UsageAnalyticsProvider,
-  type UsageArchitecture,
-  type UsageClientType,
-  type UsageOperatingSystem,
-  type UsageSandboxProvider,
 } from "@akeru/contracts";
 import { HostProcessArchitecture, HostProcessPlatform } from "@akeru/shared/hostProcess";
 import * as Config from "effect/Config";
@@ -23,72 +16,50 @@ import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as Path from "effect/Path";
-import * as Schema from "effect/Schema";
 import * as Semaphore from "effect/Semaphore";
 import * as Stream from "effect/Stream";
 import * as SqlClient from "effect/unstable/sql/SqlClient";
 import * as HttpClient from "effect/unstable/http/HttpClient";
 import * as HttpClientRequest from "effect/unstable/http/HttpClientRequest";
 import * as HttpClientResponse from "effect/unstable/http/HttpClientResponse";
-
 import packageJson from "../../package.json" with { type: "json" };
 import { writeFileStringAtomically } from "../atomicWrite.ts";
 import * as ServerConfig from "../config.ts";
 import * as ServerSettings from "../serverSettings.ts";
+import {
+  MAX_PENDING_BUCKETS,
+  AnalyticsState,
+  decodeState,
+  encodeState,
+  migrateLegacyState,
+  encodeJson,
+} from "./AnalyticsState.ts";
+import {
+  type BucketAggregateRow,
+  type TurnUsageRow,
+  type ToolUsageRow,
+  type EnabledPluginRow,
+  bucketStartAt,
+  bucketEnd,
+  clampCounter,
+  collapse,
+  providerValues,
+  normalizeProvider,
+  sandboxValues,
+  normalizeSandbox,
+  clientValues,
+  normalizeClient,
+  operatingSystem,
+  architecture,
+  insertId,
+  hasActivity,
+} from "./AnalyticsAggregation.ts";
 
-const BUCKET_HOURS = 3;
-const BUCKET_MS = BUCKET_HOURS * 60 * 60 * 1_000;
-const MAX_PENDING_BUCKETS = 256;
 const MAX_BUCKETS_PER_PASS = 8;
+
 const MAX_BATCH_BYTES = 64 * 1_024;
+
 const DEFAULT_POSTHOG_KEY = "phc_yuXg3geGrykvtEkQdeG6jWf2jvdA2WSZnQdrKVnMKUa7";
-
-const AnalyticsState = Schema.Struct({
-  version: Schema.Literal(1),
-  installationId: Schema.String.check(Schema.isUUID()),
-  cursorBucketStart: Schema.String.check(
-    Schema.isPattern(/^\d{4}-\d{2}-\d{2}T(?:00|03|06|09|12|15|18|21):00:00\.000Z$/),
-  ),
-  deliveryDay: Schema.String.check(Schema.isPattern(/^\d{4}-\d{2}-\d{2}$/)),
-  deliveredToday: Schema.Int.check(Schema.isBetween({ minimum: 0, maximum: 8 })),
-  firstActiveInstallReported: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
-  pending: Schema.Array(Usage3hEvent).check(Schema.isMaxLength(MAX_PENDING_BUCKETS)),
-});
-type AnalyticsState = typeof AnalyticsState.Type;
-
-const decodeState = Schema.decodeUnknownSync(Schema.fromJsonString(AnalyticsState), {
-  onExcessProperty: "error",
-});
-const encodeState = Schema.encodeSync(Schema.fromJsonString(AnalyticsState));
-
-const RETIRED_PROVIDER_COUNTERS = [
-  ["provider_turns_cursor", "provider_turns_other"],
-  ["browser_searches_cursor", "browser_searches_other"],
-] as const;
-
-// Folds counters for retired providers into `other` so events queued before an
-// upgrade still decode and deliver.
-const migrateLegacyState = (encoded: string): string => {
-  const state: unknown = JSON.parse(encoded);
-  if (typeof state !== "object" || state === null || !("pending" in state)) return encoded;
-  if (!Array.isArray(state.pending)) return encoded;
-  for (const event of state.pending) {
-    const properties: unknown = event?.properties;
-    if (typeof properties !== "object" || properties === null) continue;
-    const record = properties as Record<string, unknown>;
-    for (const [retired, other] of RETIRED_PROVIDER_COUNTERS) {
-      const count = record[retired];
-      if (count === undefined) continue;
-      delete record[retired];
-      if (typeof count === "number" && typeof record[other] === "number") {
-        record[other] = Math.min(record[other] + count, USAGE_3H_COUNTER_MAX);
-      }
-    }
-    if (record.provider === "cursor") record.provider = "other";
-  }
-  return JSON.stringify(state);
-};
-const encodeJson = Schema.encodeUnknownSync(Schema.fromJsonString(Schema.Unknown));
 
 const TelemetryEnvConfig = Config.all({
   posthogKey: Config.string("T3CODE_POSTHOG_KEY").pipe(
@@ -102,123 +73,6 @@ const TelemetryEnvConfig = Config.all({
   nodeEnvironment: Config.option(Config.string("NODE_ENV")),
   ci: Config.option(Config.boolean("CI")),
 });
-
-interface BucketAggregateRow {
-  readonly botsCreated: number;
-  readonly botsDeleted: number;
-  readonly botsRestored: number;
-  readonly botsTotalCreated: number;
-  readonly botsTotalGone: number;
-  readonly userMessages: number;
-  readonly botReplies: number;
-  readonly failedTurns: number;
-  readonly groupMessages: number;
-  readonly approvalsRequested: number;
-  readonly approvalsAccepted: number;
-  readonly approvalsRejected: number;
-  readonly clientSurfaces: string | null;
-  readonly providers: string | null;
-  readonly sandboxes: string | null;
-}
-
-interface TurnUsageRow {
-  readonly provider: string | null;
-  readonly sandbox: string | null;
-  readonly count: number;
-}
-
-interface ToolUsageRow {
-  readonly itemType: string | null;
-  readonly provider: string | null;
-  readonly count: number;
-}
-
-interface EnabledPluginRow {
-  readonly pluginId: string;
-}
-
-export function bucketStartAt(timestamp: number): string {
-  return DateTime.formatIso(DateTime.makeUnsafe(Math.floor(timestamp / BUCKET_MS) * BUCKET_MS));
-}
-
-function bucketEnd(bucketStart: string): string {
-  return DateTime.formatIso(
-    DateTime.add(DateTime.makeUnsafe(bucketStart), { hours: BUCKET_HOURS }),
-  );
-}
-
-function clampCounter(value: number): number {
-  return Math.min(USAGE_3H_COUNTER_MAX, Math.max(0, Math.floor(value)));
-}
-
-function collapse<T extends string>(
-  encoded: string | null,
-  allowed: ReadonlySet<string>,
-  normalize: (value: string) => T,
-  none: T,
-  mixed: T,
-): T {
-  const values = new Set(
-    (encoded ?? "")
-      .split(",")
-      .filter(Boolean)
-      .map((value) => (allowed.has(value) ? normalize(value) : normalize("other"))),
-  );
-  if (values.size === 0) return none;
-  if (values.size > 1) return mixed;
-  return values.values().next().value ?? none;
-}
-
-// Retired providers such as Cursor fall through to "other" so historical
-// buckets still match the event schema.
-const providerValues = new Set(["codex", "claude", "claudeagent", "grok", "kimi", "opencode"]);
-export function normalizeProvider(value: string): UsageAnalyticsProvider {
-  if (value === "claudeagent") return "claude";
-  if (value === "other") return "other";
-  return providerValues.has(value) ? (value as UsageAnalyticsProvider) : "other";
-}
-
-const sandboxValues = new Set([
-  "none",
-  "local",
-  "e2b",
-  "daytona",
-  "vercel",
-  "upstash",
-  "ascii",
-  "railway",
-  "tenki",
-]);
-function normalizeSandbox(value: string): UsageSandboxProvider {
-  if (value === "other") return "other";
-  return sandboxValues.has(value) ? (value as UsageSandboxProvider) : "other";
-}
-
-const clientValues = new Set(["web", "desktop", "mobile"]);
-function normalizeClient(value: string): UsageClientType {
-  if (value === "other") return "none";
-  return clientValues.has(value) ? (value as UsageClientType) : "none";
-}
-
-function operatingSystem(value: string): UsageOperatingSystem {
-  return value === "darwin" || value === "linux" || value === "win32" ? value : "other";
-}
-
-function architecture(value: string): UsageArchitecture {
-  return value === "x64" || value === "arm64" || value === "arm" || value === "ia32"
-    ? value
-    : "other";
-}
-
-function insertId(installationId: string, start: string): string {
-  return NodeCrypto.createHash("sha256").update(`${installationId}:${start}`).digest("hex");
-}
-
-function hasActivity(properties: Usage3hEventType["properties"]): boolean {
-  return USAGE_3H_COUNTER_KEYS.some(
-    (key) => key !== "bots_total" && !key.startsWith("plugin_enabled_") && properties[key] > 0,
-  );
-}
 
 export class AnalyticsService extends Context.Service<
   AnalyticsService,
@@ -248,6 +102,7 @@ export const make = Effect.gen(function* () {
   const isDevelopment =
     serverConfig.devUrl !== undefined ||
     ["development", "test"].includes(Option.getOrElse(environment.nodeEnvironment, () => ""));
+
   const defaultEnabled = !isDevelopment && !Option.getOrElse(environment.ci, () => false);
   const environmentEnabled = Option.getOrElse(environment.enabled, () => defaultEnabled);
 
@@ -269,6 +124,7 @@ export const make = Effect.gen(function* () {
     Effect.gen(function* () {
       // Migration is deletion-only. Never read or transform the inherited identity.
       yield* fs.remove(serverConfig.anonymousIdPath, { force: true });
+
       if (!(yield* fs.exists(serverConfig.analyticsStatePath))) {
         const fresh: AnalyticsState = {
           version: 1,
@@ -279,10 +135,14 @@ export const make = Effect.gen(function* () {
           firstActiveInstallReported: false,
           pending: [],
         };
+
         yield* writeState(fresh);
+
         return fresh;
       }
+
       const encoded = yield* fs.readFileString(serverConfig.analyticsStatePath);
+
       return yield* Effect.sync(() => decodeState(migrateLegacyState(encoded)));
     });
 
@@ -393,12 +253,15 @@ export const make = Effect.gen(function* () {
           WHERE enabled = 1 AND mcp_server_id LIKE 'builtin-%'
         `,
       ]);
+
       const row = rows[0];
+
       if (!row) return null;
 
       const capabilityCounters = Object.fromEntries(
         USAGE_3H_COUNTER_KEYS.slice(USAGE_BASE_COUNTER_KEYS.length).map((key) => [key, 0]),
       );
+
       for (const usage of turnUsage) {
         const provider = normalizeProvider(usage.provider ?? "other");
         capabilityCounters[`provider_turns_${provider}`] = clampCounter(
@@ -409,11 +272,13 @@ export const make = Effect.gen(function* () {
           (capabilityCounters[`sandbox_turns_${sandbox}`] ?? 0) + usage.count,
         );
       }
+
       for (const usage of toolUsage) {
-        if (usage.itemType && USAGE_TOOL_IDS.includes(usage.itemType as never)) {
+        if (usage.itemType && USAGE_TOOL_IDS.some((toolId) => toolId === usage.itemType)) {
           capabilityCounters[`tool_calls_${usage.itemType}`] = clampCounter(
             (capabilityCounters[`tool_calls_${usage.itemType}`] ?? 0) + usage.count,
           );
+
           if (usage.itemType === "web_search") {
             const provider = normalizeProvider(usage.provider ?? "other");
             capabilityCounters[`browser_searches_${provider}`] = clampCounter(
@@ -422,13 +287,16 @@ export const make = Effect.gen(function* () {
           }
         }
       }
+
       const enabledPluginIds = new Set(enabledPlugins.map((plugin) => plugin.pluginId));
+
       for (const pluginId of USAGE_PLUGIN_IDS) {
         capabilityCounters[`plugin_enabled_${pluginId}`] = Number(
           enabledPluginIds.has(pluginId.replaceAll("_", "-")),
         );
       }
 
+      // SAFETY: All property fields are constructed from the analytics schema counters and enum normalizers; computed private fields are filled before validation.
       const properties = {
         app_version: packageJson.version,
         operating_system: operatingSystem(hostPlatform),
@@ -461,6 +329,7 @@ export const make = Effect.gen(function* () {
         $ip: "0.0.0.0",
         $insert_id: "",
       } as Usage3hEventType["properties"];
+
       return {
         properties,
         changed: row.botsRestored > 0 || hasActivity(properties),
@@ -471,6 +340,7 @@ export const make = Effect.gen(function* () {
     Effect.gen(function* () {
       let next = state;
       const currentStart = bucketStartAt(now);
+
       for (
         let count = 0;
         count < MAX_BUCKETS_PER_PASS &&
@@ -482,6 +352,7 @@ export const make = Effect.gen(function* () {
         const end = bucketEnd(start);
         const aggregate = yield* readBucket(start, end);
         const changed = aggregate !== null && aggregate.changed;
+
         const pending = changed
           ? next.pending.concat(
               decodeUsage3hEvent({
@@ -496,6 +367,7 @@ export const make = Effect.gen(function* () {
               }),
             )
           : next.pending;
+
         next = Object.assign({}, next, {
           cursorBucketStart: end,
           firstActiveInstallReported: next.firstActiveInstallReported || changed,
@@ -503,21 +375,27 @@ export const make = Effect.gen(function* () {
         });
         yield* persistState(next);
       }
+
       return next;
     });
 
   const sendPending = (state: AnalyticsState, now: number) =>
     Effect.gen(function* () {
       const key = Option.getOrUndefined(environment.posthogKey);
+
       if (!key || state.pending.length === 0) return state;
       const deliveryDay = bucketStartAt(now).slice(0, 10);
       const deliveredToday = state.deliveryDay === deliveryDay ? state.deliveredToday : 0;
       const available = 8 - deliveredToday;
+
       if (available === 0) return state;
+
       const batch = state.pending
         .slice(0, Math.min(MAX_BUCKETS_PER_PASS, available))
         .map((event) => decodeUsage3hEvent(event));
+
       const body = { api_key: key, batch };
+
       if (encodeJson(body).length > MAX_BATCH_BYTES) return state;
 
       yield* HttpClientRequest.post(`${environment.posthogHost.replace(/\/$/, "")}/batch/`).pipe(
@@ -525,29 +403,38 @@ export const make = Effect.gen(function* () {
         Effect.flatMap(httpClient.execute),
         Effect.flatMap(HttpClientResponse.filterStatusOk),
       );
+
       const next = {
         ...state,
         deliveryDay,
         deliveredToday: deliveredToday + batch.length,
         pending: state.pending.slice(batch.length),
       };
+
       yield* persistState(next);
+
       return next;
     });
 
   const runOnce = lock.withPermits(1)(
     Effect.gen(function* () {
       const settings = yield* serverSettings.getSettings;
+
       if (!settings.analyticsEnabled) {
         yield* removeAnalyticsState;
+
         return;
       }
+
       if (!environmentEnabled) {
         if (Option.isSome(environment.enabled)) yield* removeAnalyticsState;
+
         return;
       }
+
       if (Option.isNone(environment.posthogKey)) {
         yield* removeAnalyticsState;
+
         return;
       }
 
@@ -573,4 +460,9 @@ export const make = Effect.gen(function* () {
 });
 
 export const layer = Layer.effect(AnalyticsService, make);
+
 export const layerTest = AnalyticsService.layerTest;
+
+export { bucketStartAt } from "./AnalyticsAggregation.ts";
+
+export { normalizeProvider } from "./AnalyticsAggregation.ts";

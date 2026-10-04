@@ -60,6 +60,7 @@ export function useEnvironment(
   environmentId: EnvironmentId | null,
 ): EnvironmentPresentation | null {
   const { presentation } = useEnvironmentPresentation(environmentId);
+
   return useMemo(
     () =>
       environmentId === null || presentation === null
@@ -75,6 +76,7 @@ export function usePrimaryEnvironment(): EnvironmentPresentation | null {
 
 export function useEnvironmentHttpBaseUrl(environmentId: EnvironmentId | null): string | null {
   const prepared = usePreparedConnection(environmentId);
+
   return Option.isSome(prepared) ? prepared.value.httpBaseUrl : null;
 }
 

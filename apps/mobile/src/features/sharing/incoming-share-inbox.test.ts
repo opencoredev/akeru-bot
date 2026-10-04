@@ -23,15 +23,18 @@ function draft(id: string, createdAt = "2026-07-16T08:00:00.000Z"): IncomingShar
 
 function deferred() {
   let resolve!: () => void;
+
   const promise = new Promise<void>((next) => {
     resolve = next;
   });
+
   return { promise, resolve };
 }
 
 function createHarness(overrides: Partial<IncomingShareInboxDependencies> = {}) {
   const persisted = new Map<string, IncomingShareDraft>();
   let payloads: ReadonlyArray<SharePayload> = [PAYLOAD];
+
   const dependencies: IncomingShareInboxDependencies = {
     loadDrafts: async () => [...persisted.values()],
     writeDraft: async (value) => {
@@ -52,6 +55,7 @@ function createHarness(overrides: Partial<IncomingShareInboxDependencies> = {}) 
     now: () => "2026-07-16T08:00:00.000Z",
     ...overrides,
   };
+
   return { inbox: new IncomingShareInbox(dependencies), persisted };
 }
 
@@ -61,6 +65,7 @@ describe("IncomingShareInbox", () => {
       draft: draft(id, createdAt),
       cleanup: async () => undefined,
     }));
+
     const cleanupReplayedPayloads = vi.fn(async () => undefined);
     const { inbox, persisted } = createHarness({ buildDraft, cleanupReplayedPayloads });
     persisted.set("share-stable", draft("share-stable"));
@@ -72,10 +77,13 @@ describe("IncomingShareInbox", () => {
 
   it("serializes concurrent refreshes so one native payload creates one inbox item", async () => {
     const building = deferred();
+
     const buildDraft = vi.fn(async ({ id, createdAt }) => {
       await building.promise;
+
       return { draft: draft(id, createdAt), cleanup: async () => undefined };
     });
+
     const { inbox } = createHarness({ buildDraft });
 
     const first = inbox.refresh({ ingestNative: true });
@@ -91,9 +99,11 @@ describe("IncomingShareInbox", () => {
 
   it("orders consumption after an in-flight refresh without restoring stale state", async () => {
     const building = deferred();
+
     const { inbox, persisted } = createHarness({
       buildDraft: async ({ id, createdAt }) => {
         await building.promise;
+
         return { draft: draft(id, createdAt), cleanup: async () => undefined };
       },
     });
@@ -136,6 +146,7 @@ describe("IncomingShareInbox", () => {
   it("does not acknowledge a supported payload when its durable write fails", async () => {
     const clearPayloads = vi.fn();
     const cleanup = vi.fn(async () => undefined);
+
     const { inbox } = createHarness({
       clearPayloads,
       buildDraft: async ({ id, createdAt }) => ({

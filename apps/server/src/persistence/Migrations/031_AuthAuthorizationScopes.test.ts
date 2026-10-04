@@ -59,12 +59,15 @@ layer("031_AuthAuthorizationScopes", (it) => {
       const pairingColumns = yield* sql<{ readonly name: string }>`
         PRAGMA table_info(auth_pairing_links)
       `;
+
       const sessionColumns = yield* sql<{ readonly name: string }>`
         PRAGMA table_info(auth_sessions)
       `;
+
       const pairingRows = yield* sql<{ readonly id: string }>`
         SELECT id FROM auth_pairing_links
       `;
+
       const sessionRows = yield* sql<{ readonly sessionId: string }>`
         SELECT session_id AS "sessionId" FROM auth_sessions
       `;

@@ -1,3 +1,4 @@
+import * as Schema from "effect/Schema";
 import {
   EventId,
   ProviderDriverKind,
@@ -17,6 +18,7 @@ describe("runtimeEventToActivities approval details", () => {
       schedule: { kind: "weekdays", time: "08:00" },
       timezone: "America/New_York",
     };
+
     const event = {
       type: "request.opened",
       eventId: EventId.make("evt-routine-request"),
@@ -42,6 +44,7 @@ describe("runtimeEventToActivities approval details", () => {
 
   it("preserves a dynamic tool name and bounded draft arguments", () => {
     const args = { feedback: "Add a shortcut." };
+
     const event = {
       type: "request.opened",
       eventId: EventId.make("evt-feedback-request"),
@@ -77,6 +80,7 @@ describe("runtimeEventToActivities approval details", () => {
         args: { token: "secret" },
       },
     } satisfies ProviderRuntimeEvent;
+
     const invalidFeedbackEvent = {
       ...event,
       eventId: EventId.make("evt-invalid-feedback-request"),
@@ -94,6 +98,7 @@ describe("runtimeEventToActivities approval details", () => {
 
   it("preserves complete multiline command details", () => {
     const detail = `bun run release -- ${"long-argument ".repeat(20)}\nsecond line`;
+
     const event = {
       type: "request.opened",
       eventId: EventId.make("evt-request-opened"),
@@ -110,7 +115,7 @@ describe("runtimeEventToActivities approval details", () => {
     const [activity] = runtimeEventToActivities(event);
 
     expect(activity?.kind).toBe("approval.requested");
-    expect((activity?.payload as Record<string, unknown> | undefined)?.detail).toBe(detail);
+    expect((activity?.payload as Record<string, Schema.Json> | undefined)?.detail).toBe(detail);
   });
 
   it("keeps app details and approval options available to remote clients", () => {
@@ -119,6 +124,7 @@ describe("runtimeEventToActivities approval details", () => {
       { decision: "acceptAlways", label: "Always allow Safari" },
       { decision: "accept", label: "Approve" },
     ] as const;
+
     const event = {
       type: "request.opened",
       eventId: EventId.make("evt-mcp-elicitation"),

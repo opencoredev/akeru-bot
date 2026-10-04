@@ -1,43 +1,9 @@
-import {
-  CommandId,
-  EventId,
-  ProjectId,
-  ProviderDriverKind,
-  ThreadId,
-  type OrchestrationEvent,
-} from "@akeru/contracts";
+import { ProviderDriverKind, ThreadId } from "@akeru/contracts";
 import { it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import { describe, expect } from "vite-plus/test";
-
 import { createEmptyReadModel, findProjectedThread, projectEvent } from "./projector.ts";
-
-function makeEvent(input: {
-  sequence: number;
-  type: OrchestrationEvent["type"];
-  occurredAt: string;
-  aggregateKind: OrchestrationEvent["aggregateKind"];
-  aggregateId: string;
-  commandId: string | null;
-  payload: unknown;
-}): OrchestrationEvent {
-  return {
-    sequence: input.sequence,
-    eventId: EventId.make(`event-${input.sequence}`),
-    type: input.type,
-    aggregateKind: input.aggregateKind,
-    aggregateId:
-      input.aggregateKind === "project"
-        ? ProjectId.make(input.aggregateId)
-        : ThreadId.make(input.aggregateId),
-    occurredAt: input.occurredAt,
-    commandId: input.commandId === null ? null : CommandId.make(input.commandId),
-    causationEventId: null,
-    correlationId: null,
-    metadata: {},
-    payload: input.payload as never,
-  } as OrchestrationEvent;
-}
+import { makeEvent } from "./test-support/ProjectorFixtures.ts";
 
 describe("orchestration projector", () => {
   it.effect(
@@ -45,6 +11,7 @@ describe("orchestration projector", () => {
     () =>
       Effect.gen(function* () {
         const now = "2026-01-01T00:00:00.000Z";
+
         const seeded = yield* projectEvent(
           createEmptyReadModel(now),
           makeEvent({
@@ -67,19 +34,24 @@ describe("orchestration projector", () => {
             },
           }),
         );
+
         let identityReads = 0;
+
         const threads = Array.from({ length: 2000 }, (_, i) => ({
           ...seeded.threads[0]!,
           get id() {
             identityReads += 1;
+
             return ThreadId.make(`indexed-${i}`);
           },
           deletedAt: i === 0 ? now : null,
           archivedAt: i === 1 ? now : null,
         }));
+
         const target = ThreadId.make("indexed-1999");
         expect(findProjectedThread(threads, target)).toBe(threads[1999]);
         identityReads = 0;
+
         const patched = yield* projectEvent(
           { ...seeded, threads },
           makeEvent({
@@ -92,6 +64,7 @@ describe("orchestration projector", () => {
             payload: { threadId: target, title: "After", updatedAt: now },
           }),
         );
+
         expect(findProjectedThread(patched.threads, target)?.title).toBe("After");
         expect(findProjectedThread(patched.threads, ThreadId.make("indexed-0"))?.deletedAt).toBe(
           now,
@@ -104,13 +77,12 @@ describe("orchestration projector", () => {
         expect(patched.threads[0]).toBe(threads[0]);
       }),
   );
+  it.effect("applies thread.created events", () =>
+    Effect.gen(function* () {
+      const now = "2026-01-01T00:00:00.000Z";
+      const model = createEmptyReadModel(now);
 
-  it("applies thread.created events", async () => {
-    const now = "2026-01-01T00:00:00.000Z";
-    const model = createEmptyReadModel(now);
-
-    const next = await Effect.runPromise(
-      projectEvent(
+      const next = yield* projectEvent(
         model,
         makeEvent({
           sequence: 1,
@@ -134,86 +106,87 @@ describe("orchestration projector", () => {
             updatedAt: now,
           },
         }),
-      ),
-    );
+      );
 
-    expect(next.snapshotSequence).toBe(1);
-    expect(next.threads).toEqual([
-      {
-        id: "thread-1",
-        projectId: "project-1",
-        botId: null,
-        groupId: null,
-        parentThreadId: null,
-        parentDelegationId: null,
-        respondingBotId: null,
-        title: "demo",
-        modelSelection: {
-          instanceId: "codex",
-          model: "gpt-5-codex",
+      expect(next.snapshotSequence).toBe(1);
+      expect(next.threads).toEqual([
+        {
+          id: "thread-1",
+          projectId: "project-1",
+          botId: null,
+          groupId: null,
+          parentThreadId: null,
+          parentDelegationId: null,
+          respondingBotId: null,
+          title: "demo",
+          modelSelection: {
+            instanceId: "codex",
+            model: "gpt-5-codex",
+          },
+          runtimeMode: "full-access",
+          interactionMode: "default",
+          branch: null,
+          worktreePath: null,
+          latestTurn: null,
+          createdAt: now,
+          updatedAt: now,
+          archivedAt: null,
+          settledOverride: null,
+          settledAt: null,
+          unsettledAt: null,
+          snoozedUntil: null,
+          snoozedAt: null,
+          deletedAt: null,
+          messages: [],
+          proposedPlans: [],
+          activities: [],
+          checkpoints: [],
+          session: null,
         },
-        runtimeMode: "full-access",
-        interactionMode: "default",
-        branch: null,
-        worktreePath: null,
-        latestTurn: null,
-        createdAt: now,
-        updatedAt: now,
-        archivedAt: null,
-        settledOverride: null,
-        settledAt: null,
-        unsettledAt: null,
-        snoozedUntil: null,
-        snoozedAt: null,
-        deletedAt: null,
-        messages: [],
-        proposedPlans: [],
-        activities: [],
-        checkpoints: [],
-        session: null,
-      },
-    ]);
-  });
+      ]);
+    }),
+  );
+  it.effect("fails when event payload cannot be decoded by runtime schema", () =>
+    Effect.gen(function* () {
+      const now = "2026-01-01T00:00:00.000Z";
+      const model = createEmptyReadModel(now);
 
-  it("fails when event payload cannot be decoded by runtime schema", async () => {
-    const now = "2026-01-01T00:00:00.000Z";
-    const model = createEmptyReadModel(now);
-
-    await expect(
-      Effect.runPromise(
-        projectEvent(
-          model,
-          makeEvent({
-            sequence: 1,
-            type: "thread.created",
-            aggregateKind: "thread",
-            aggregateId: "thread-1",
-            occurredAt: now,
-            commandId: "cmd-invalid",
-            payload: {
-              // missing required threadId
-              projectId: "project-1",
-              title: "demo",
-              modelSelection: {
-                provider: ProviderDriverKind.make("codex"),
-                model: "gpt-5-codex",
+      expect(
+        (yield* Effect.exit(
+          projectEvent(
+            model,
+            makeEvent({
+              sequence: 1,
+              type: "thread.created",
+              aggregateKind: "thread",
+              aggregateId: "thread-1",
+              occurredAt: now,
+              commandId: "cmd-invalid",
+              payload: {
+                // missing required threadId
+                projectId: "project-1",
+                title: "demo",
+                modelSelection: {
+                  provider: ProviderDriverKind.make("codex"),
+                  model: "gpt-5-codex",
+                },
+                branch: null,
+                worktreePath: null,
+                createdAt: now,
+                updatedAt: now,
               },
-              branch: null,
-              worktreePath: null,
-              createdAt: now,
-              updatedAt: now,
-            },
-          }),
-        ),
-      ),
-    ).rejects.toBeDefined();
-  });
+            }),
+          ),
+        ))._tag,
+      ).toBe("Failure");
+    }),
+  );
+  it.effect("applies thread.archived and thread.unarchived events", () =>
+    Effect.gen(function* () {
+      const now = "2026-01-01T00:00:00.000Z";
+      const later = "2026-01-01T00:00:01.000Z";
 
-  it("applies thread.archived and thread.unarchived events", async () => {
-    const now = "2026-01-01T00:00:00.000Z";
-    const later = "2026-01-01T00:00:01.000Z";
-    const created = await Effect.runPromise(
-      projectEvent(
+      const created = yield* projectEvent(
         createEmptyReadModel(now),
         makeEvent({
           sequence: 1,
@@ -238,11 +211,9 @@ describe("orchestration projector", () => {
             updatedAt: now,
           },
         }),
-      ),
-    );
+      );
 
-    const archived = await Effect.runPromise(
-      projectEvent(
+      const archived = yield* projectEvent(
         created,
         makeEvent({
           sequence: 2,
@@ -257,12 +228,11 @@ describe("orchestration projector", () => {
             updatedAt: later,
           },
         }),
-      ),
-    );
-    expect(archived.threads[0]?.archivedAt).toBe(later);
+      );
 
-    const unarchived = await Effect.runPromise(
-      projectEvent(
+      expect(archived.threads[0]?.archivedAt).toBe(later);
+
+      const unarchived = yield* projectEvent(
         archived,
         makeEvent({
           sequence: 3,
@@ -276,17 +246,17 @@ describe("orchestration projector", () => {
             updatedAt: later,
           },
         }),
-      ),
-    );
-    expect(unarchived.threads[0]?.archivedAt).toBeNull();
-  });
+      );
 
-  it("keeps projector forward-compatible for unhandled event types", async () => {
-    const now = "2026-01-01T00:00:00.000Z";
-    const model = createEmptyReadModel(now);
+      expect(unarchived.threads[0]?.archivedAt).toBeNull();
+    }),
+  );
+  it.effect("keeps projector forward-compatible for unhandled event types", () =>
+    Effect.gen(function* () {
+      const now = "2026-01-01T00:00:00.000Z";
+      const model = createEmptyReadModel(now);
 
-    const next = await Effect.runPromise(
-      projectEvent(
+      const next = yield* projectEvent(
         model,
         makeEvent({
           sequence: 7,
@@ -302,1115 +272,11 @@ describe("orchestration projector", () => {
             createdAt: "2026-01-01T00:00:00.000Z",
           },
         }),
-      ),
-    );
-
-    expect(next.snapshotSequence).toBe(7);
-    expect(next.updatedAt).toBe("2026-01-01T00:00:00.000Z");
-    expect(next.threads).toEqual([]);
-  });
-
-  it.effect("clears a failed session's category when the turn resumes", () =>
-    Effect.gen(function* () {
-      const at = "2026-02-23T08:00:00.000Z";
-      const created = yield* projectEvent(
-        createEmptyReadModel(at),
-        makeEvent({
-          sequence: 1,
-          type: "thread.created",
-          aggregateKind: "thread",
-          aggregateId: "thread-1",
-          occurredAt: at,
-          commandId: "cmd-create",
-          payload: {
-            threadId: "thread-1",
-            projectId: "project-1",
-            title: "demo",
-            modelSelection: { provider: ProviderDriverKind.make("codex"), model: "gpt-5.3-codex" },
-            runtimeMode: "full-access",
-            branch: null,
-            worktreePath: null,
-            createdAt: at,
-            updatedAt: at,
-          },
-        }),
-      );
-      const failed = yield* projectEvent(
-        created,
-        makeEvent({
-          sequence: 2,
-          type: "thread.session-set",
-          aggregateKind: "thread",
-          aggregateId: "thread-1",
-          occurredAt: at,
-          commandId: "cmd-failed",
-          payload: {
-            threadId: "thread-1",
-            session: {
-              threadId: "thread-1",
-              status: "error",
-              providerName: "codex",
-              runtimeMode: "full-access",
-              activeTurnId: null,
-              lastError: "rate limit exceeded",
-              unavailability: "limit-reached",
-              updatedAt: at,
-            },
-          },
-        }),
-      );
-      expect(failed.threads[0]?.session?.unavailability).toBe("limit-reached");
-
-      const resumed = yield* projectEvent(
-        failed,
-        makeEvent({
-          sequence: 3,
-          type: "thread.turn-resume-requested",
-          aggregateKind: "thread",
-          aggregateId: "thread-1",
-          occurredAt: at,
-          commandId: "cmd-resume",
-          payload: { threadId: "thread-1", createdAt: at },
-        }),
-      );
-      const session = resumed.threads[0]?.session;
-      expect(session?.status).toBe("starting");
-      expect(session?.lastError).toBeNull();
-      expect(session?.unavailability).toBeUndefined();
-    }),
-  );
-
-  it("tracks latest turn id from session lifecycle events", async () => {
-    const createdAt = "2026-02-23T08:00:00.000Z";
-    const startedAt = "2026-02-23T08:00:05.000Z";
-    const model = createEmptyReadModel(createdAt);
-
-    const afterCreate = await Effect.runPromise(
-      projectEvent(
-        model,
-        makeEvent({
-          sequence: 1,
-          type: "thread.created",
-          aggregateKind: "thread",
-          aggregateId: "thread-1",
-          occurredAt: createdAt,
-          commandId: "cmd-create",
-          payload: {
-            threadId: "thread-1",
-            projectId: "project-1",
-            title: "demo",
-            modelSelection: {
-              provider: ProviderDriverKind.make("codex"),
-              model: "gpt-5.3-codex",
-            },
-            runtimeMode: "full-access",
-            branch: null,
-            worktreePath: null,
-            createdAt,
-            updatedAt: createdAt,
-          },
-        }),
-      ),
-    );
-
-    const settledAt = "2026-02-23T08:01:00.000Z";
-    const [afterRunning, afterReady] = await Effect.runPromise(
-      Effect.flatMap(
-        projectEvent(
-          afterCreate,
-          makeEvent({
-            sequence: 2,
-            type: "thread.session-set",
-            aggregateKind: "thread",
-            aggregateId: "thread-1",
-            occurredAt: startedAt,
-            commandId: "cmd-running",
-            payload: {
-              threadId: "thread-1",
-              session: {
-                threadId: "thread-1",
-                status: "running",
-                providerName: "codex",
-                providerSessionId: "session-1",
-                providerThreadId: "provider-thread-1",
-                runtimeMode: "approval-required",
-                activeTurnId: "turn-1",
-                lastError: null,
-                updatedAt: startedAt,
-              },
-            },
-          }),
-        ),
-        (running) =>
-          Effect.map(
-            projectEvent(
-              running,
-              makeEvent({
-                sequence: 3,
-                type: "thread.session-set",
-                aggregateKind: "thread",
-                aggregateId: "thread-1",
-                occurredAt: settledAt,
-                commandId: "cmd-ready",
-                payload: {
-                  threadId: "thread-1",
-                  session: {
-                    threadId: "thread-1",
-                    status: "ready",
-                    providerName: "codex",
-                    providerSessionId: "session-1",
-                    providerThreadId: "provider-thread-1",
-                    runtimeMode: "approval-required",
-                    activeTurnId: null,
-                    lastError: null,
-                    updatedAt: settledAt,
-                  },
-                },
-              }),
-            ),
-            (ready) => [running, ready] as const,
-          ),
-      ),
-    );
-
-    const thread = afterRunning.threads[0];
-    expect(thread?.latestTurn?.turnId).toBe("turn-1");
-    expect(thread?.session?.status).toBe("running");
-
-    // Leaving the "running" session status settles the running turn with the
-    // session timestamp as the turn end.
-    const settledThread = afterReady.threads[0];
-    expect(settledThread?.latestTurn?.turnId).toBe("turn-1");
-    expect(settledThread?.latestTurn?.state).toBe("completed");
-    expect(settledThread?.latestTurn?.completedAt).toBe(settledAt);
-  });
-
-  it.effect.each([
-    ["ready", "completed"],
-    ["interrupted", "interrupted"],
-  ] as const)(
-    "preserves the turn state after a %s session captures its checkpoint",
-    ([status, state]) =>
-      Effect.gen(function* () {
-        const createdAt = "2026-02-23T08:00:00.000Z";
-        const startedAt = "2026-02-23T08:00:05.000Z";
-        const settledAt = "2026-02-23T08:01:00.000Z";
-        const afterCreate = yield* projectEvent(
-          createEmptyReadModel(createdAt),
-          makeEvent({
-            sequence: 1,
-            type: "thread.created",
-            aggregateKind: "thread",
-            aggregateId: "thread-1",
-            occurredAt: createdAt,
-            commandId: "cmd-create",
-            payload: {
-              threadId: "thread-1",
-              projectId: "project-1",
-              title: "demo",
-              modelSelection: {
-                provider: ProviderDriverKind.make("codex"),
-                model: "gpt-5.3-codex",
-              },
-              runtimeMode: "full-access",
-              branch: null,
-              worktreePath: null,
-              createdAt,
-              updatedAt: createdAt,
-            },
-          }),
-        );
-        const afterRunning = yield* projectEvent(
-          afterCreate,
-          makeEvent({
-            sequence: 2,
-            type: "thread.session-set",
-            aggregateKind: "thread",
-            aggregateId: "thread-1",
-            occurredAt: startedAt,
-            commandId: "cmd-running",
-            payload: {
-              threadId: "thread-1",
-              session: {
-                threadId: "thread-1",
-                status: "running",
-                providerName: "codex",
-                providerSessionId: "session-1",
-                providerThreadId: "provider-thread-1",
-                runtimeMode: "approval-required",
-                activeTurnId: "turn-1",
-                lastError: null,
-                updatedAt: startedAt,
-              },
-            },
-          }),
-        );
-        const afterSettled = yield* projectEvent(
-          afterRunning,
-          makeEvent({
-            sequence: 3,
-            type: "thread.session-set",
-            aggregateKind: "thread",
-            aggregateId: "thread-1",
-            occurredAt: settledAt,
-            commandId: "cmd-settled",
-            payload: {
-              threadId: "thread-1",
-              session: {
-                threadId: "thread-1",
-                status,
-                providerName: "codex",
-                providerSessionId: "session-1",
-                providerThreadId: "provider-thread-1",
-                runtimeMode: "approval-required",
-                activeTurnId: null,
-                lastError: null,
-                updatedAt: settledAt,
-              },
-            },
-          }),
-        );
-        const afterCheckpoint = yield* projectEvent(
-          afterSettled,
-          makeEvent({
-            sequence: 4,
-            type: "thread.turn-diff-completed",
-            aggregateKind: "thread",
-            aggregateId: "thread-1",
-            occurredAt: settledAt,
-            commandId: "cmd-checkpoint",
-            payload: {
-              threadId: "thread-1",
-              turnId: "turn-1",
-              checkpointTurnCount: 1,
-              checkpointRef: "refs/t3/checkpoints/thread-1/turn/1",
-              status: "ready",
-              files: [],
-              assistantMessageId: "assistant-1",
-              completedAt: settledAt,
-            },
-          }),
-        );
-
-        expect(afterCheckpoint.threads[0]?.latestTurn?.state).toBe(state);
-        expect(afterCheckpoint.threads[0]?.checkpoints[0]?.status).toBe("ready");
-      }),
-  );
-
-  it.effect("does not treat a missing checkpoint as an interruption", () =>
-    Effect.gen(function* () {
-      const createdAt = "2026-02-23T08:00:00.000Z";
-      const afterCreate = yield* projectEvent(
-        createEmptyReadModel(createdAt),
-        makeEvent({
-          sequence: 1,
-          type: "thread.created",
-          aggregateKind: "thread",
-          aggregateId: "thread-1",
-          occurredAt: createdAt,
-          commandId: "cmd-create",
-          payload: {
-            threadId: "thread-1",
-            projectId: "project-1",
-            title: "demo",
-            modelSelection: {
-              provider: ProviderDriverKind.make("codex"),
-              model: "gpt-5.3-codex",
-            },
-            runtimeMode: "full-access",
-            branch: null,
-            worktreePath: null,
-            createdAt,
-            updatedAt: createdAt,
-          },
-        }),
-      );
-      const afterCheckpoint = yield* projectEvent(
-        afterCreate,
-        makeEvent({
-          sequence: 2,
-          type: "thread.turn-diff-completed",
-          aggregateKind: "thread",
-          aggregateId: "thread-1",
-          occurredAt: createdAt,
-          commandId: "cmd-placeholder",
-          payload: {
-            threadId: "thread-1",
-            turnId: "turn-1",
-            checkpointTurnCount: 1,
-            checkpointRef: "provider-diff:placeholder",
-            status: "missing",
-            files: [],
-            assistantMessageId: "assistant-1",
-            completedAt: createdAt,
-          },
-        }),
       );
 
-      expect(afterCheckpoint.threads[0]?.latestTurn?.state).toBe("completed");
-    }),
-  );
-
-  it("updates canonical thread runtime mode from thread.runtime-mode-set", async () => {
-    const createdAt = "2026-02-23T08:00:00.000Z";
-    const updatedAt = "2026-02-23T08:00:05.000Z";
-    const model = createEmptyReadModel(createdAt);
-
-    const afterCreate = await Effect.runPromise(
-      projectEvent(
-        model,
-        makeEvent({
-          sequence: 1,
-          type: "thread.created",
-          aggregateKind: "thread",
-          aggregateId: "thread-1",
-          occurredAt: createdAt,
-          commandId: "cmd-create",
-          payload: {
-            threadId: "thread-1",
-            projectId: "project-1",
-            title: "demo",
-            modelSelection: {
-              provider: ProviderDriverKind.make("codex"),
-              model: "gpt-5.3-codex",
-            },
-            runtimeMode: "full-access",
-            branch: null,
-            worktreePath: null,
-            createdAt,
-            updatedAt: createdAt,
-          },
-        }),
-      ),
-    );
-
-    const afterUpdate = await Effect.runPromise(
-      projectEvent(
-        afterCreate,
-        makeEvent({
-          sequence: 2,
-          type: "thread.runtime-mode-set",
-          aggregateKind: "thread",
-          aggregateId: "thread-1",
-          occurredAt: updatedAt,
-          commandId: "cmd-runtime-mode-set",
-          payload: {
-            threadId: "thread-1",
-            runtimeMode: "approval-required",
-            updatedAt,
-          },
-        }),
-      ),
-    );
-
-    expect(afterUpdate.threads[0]?.runtimeMode).toBe("approval-required");
-    expect(afterUpdate.threads[0]?.updatedAt).toBe(updatedAt);
-  });
-
-  it("marks assistant messages completed with non-streaming updates", async () => {
-    const createdAt = "2026-02-23T09:00:00.000Z";
-    const deltaAt = "2026-02-23T09:00:01.000Z";
-    const completeAt = "2026-02-23T09:00:03.500Z";
-    const model = createEmptyReadModel(createdAt);
-
-    const afterCreate = await Effect.runPromise(
-      projectEvent(
-        model,
-        makeEvent({
-          sequence: 1,
-          type: "thread.created",
-          aggregateKind: "thread",
-          aggregateId: "thread-1",
-          occurredAt: createdAt,
-          commandId: "cmd-create",
-          payload: {
-            threadId: "thread-1",
-            projectId: "project-1",
-            title: "demo",
-            modelSelection: {
-              provider: ProviderDriverKind.make("codex"),
-              model: "gpt-5.3-codex",
-            },
-            runtimeMode: "full-access",
-            branch: null,
-            worktreePath: null,
-            createdAt,
-            updatedAt: createdAt,
-          },
-        }),
-      ),
-    );
-
-    const afterDelta = await Effect.runPromise(
-      projectEvent(
-        afterCreate,
-        makeEvent({
-          sequence: 2,
-          type: "thread.message-sent",
-          aggregateKind: "thread",
-          aggregateId: "thread-1",
-          occurredAt: deltaAt,
-          commandId: "cmd-delta",
-          payload: {
-            threadId: "thread-1",
-            messageId: "assistant:msg-1",
-            role: "assistant",
-            text: "hello",
-            turnId: "turn-1",
-            streaming: true,
-            createdAt: deltaAt,
-            updatedAt: deltaAt,
-          },
-        }),
-      ),
-    );
-
-    const afterComplete = await Effect.runPromise(
-      projectEvent(
-        afterDelta,
-        makeEvent({
-          sequence: 3,
-          type: "thread.message-sent",
-          aggregateKind: "thread",
-          aggregateId: "thread-1",
-          occurredAt: completeAt,
-          commandId: "cmd-complete",
-          payload: {
-            threadId: "thread-1",
-            messageId: "assistant:msg-1",
-            role: "assistant",
-            text: "",
-            turnId: "turn-1",
-            streaming: false,
-            createdAt: completeAt,
-            updatedAt: completeAt,
-          },
-        }),
-      ),
-    );
-
-    const message = afterComplete.threads[0]?.messages[0];
-    expect(message?.id).toBe("assistant:msg-1");
-    expect(message?.text).toBe("hello");
-    expect(message?.streaming).toBe(false);
-    expect(message?.updatedAt).toBe(completeAt);
-  });
-
-  it("projects channelDelivery onto the targeted assistant message", async () => {
-    const now = "2026-09-25T12:00:00.000Z";
-    const model = createEmptyReadModel(now);
-
-    const withThread = await Effect.runPromise(
-      projectEvent(
-        model,
-        makeEvent({
-          sequence: 1,
-          type: "thread.created",
-          aggregateKind: "thread",
-          aggregateId: "thread-1",
-          occurredAt: now,
-          commandId: "cmd-create",
-          payload: {
-            threadId: "thread-1",
-            projectId: "project-1",
-            title: "demo",
-            modelSelection: {
-              provider: ProviderDriverKind.make("codex"),
-              model: "gpt-5.3-codex",
-            },
-            runtimeMode: "full-access",
-            branch: null,
-            worktreePath: null,
-            createdAt: now,
-            updatedAt: now,
-          },
-        }),
-      ),
-    );
-
-    const withMessage = await Effect.runPromise(
-      projectEvent(
-        withThread,
-        makeEvent({
-          sequence: 2,
-          type: "thread.message-sent",
-          aggregateKind: "thread",
-          aggregateId: "thread-1",
-          occurredAt: now,
-          commandId: "cmd-message",
-          payload: {
-            threadId: "thread-1",
-            messageId: "assistant:msg-1",
-            role: "assistant",
-            text: "hello",
-            turnId: "turn-1",
-            streaming: false,
-            createdAt: now,
-            updatedAt: now,
-          },
-        }),
-      ),
-    );
-    expect(withMessage.threads[0]?.messages[0]?.channelDelivery).toBeUndefined();
-
-    const withDelivery = await Effect.runPromise(
-      projectEvent(
-        withMessage,
-        makeEvent({
-          sequence: 3,
-          type: "thread.channel-delivery-set",
-          aggregateKind: "thread",
-          aggregateId: "thread-1",
-          occurredAt: now,
-          commandId: "cmd-delivery",
-          payload: {
-            threadId: "thread-1",
-            messageId: "assistant:msg-1",
-            delivery: "sent",
-            updatedAt: now,
-          },
-        }),
-      ),
-    );
-
-    expect(withDelivery.threads[0]?.messages[0]?.channelDelivery).toBe("sent");
-    expect(withDelivery.threads[0]?.updatedAt).toBe(now);
-  });
-
-  it("prunes reverted turn messages from in-memory thread snapshot", async () => {
-    const createdAt = "2026-02-23T10:00:00.000Z";
-    const model = createEmptyReadModel(createdAt);
-
-    const afterCreate = await Effect.runPromise(
-      projectEvent(
-        model,
-        makeEvent({
-          sequence: 1,
-          type: "thread.created",
-          aggregateKind: "thread",
-          aggregateId: "thread-1",
-          occurredAt: createdAt,
-          commandId: "cmd-create",
-          payload: {
-            threadId: "thread-1",
-            projectId: "project-1",
-            title: "demo",
-            modelSelection: {
-              provider: ProviderDriverKind.make("codex"),
-              model: "gpt-5.3-codex",
-            },
-            runtimeMode: "full-access",
-            branch: null,
-            worktreePath: null,
-            createdAt,
-            updatedAt: createdAt,
-          },
-        }),
-      ),
-    );
-
-    const events: ReadonlyArray<OrchestrationEvent> = [
-      makeEvent({
-        sequence: 2,
-        type: "thread.message-sent",
-        aggregateKind: "thread",
-        aggregateId: "thread-1",
-        occurredAt: "2026-02-23T10:00:01.000Z",
-        commandId: "cmd-user-1",
-        payload: {
-          threadId: "thread-1",
-          messageId: "user-msg-1",
-          role: "user",
-          text: "First edit",
-          turnId: null,
-          streaming: false,
-          createdAt: "2026-02-23T10:00:01.000Z",
-          updatedAt: "2026-02-23T10:00:01.000Z",
-        },
-      }),
-      makeEvent({
-        sequence: 3,
-        type: "thread.message-sent",
-        aggregateKind: "thread",
-        aggregateId: "thread-1",
-        occurredAt: "2026-02-23T10:00:02.000Z",
-        commandId: "cmd-assistant-1",
-        payload: {
-          threadId: "thread-1",
-          messageId: "assistant-msg-1",
-          role: "assistant",
-          text: "Updated README to v2.\n",
-          turnId: "turn-1",
-          streaming: false,
-          createdAt: "2026-02-23T10:00:02.000Z",
-          updatedAt: "2026-02-23T10:00:02.000Z",
-        },
-      }),
-      makeEvent({
-        sequence: 4,
-        type: "thread.turn-diff-completed",
-        aggregateKind: "thread",
-        aggregateId: "thread-1",
-        occurredAt: "2026-02-23T10:00:02.500Z",
-        commandId: "cmd-turn-1-complete",
-        payload: {
-          threadId: "thread-1",
-          turnId: "turn-1",
-          checkpointTurnCount: 1,
-          checkpointRef: "refs/t3/checkpoints/thread-1/turn/1",
-          status: "ready",
-          files: [],
-          assistantMessageId: "assistant-msg-1",
-          completedAt: "2026-02-23T10:00:02.500Z",
-        },
-      }),
-      makeEvent({
-        sequence: 5,
-        type: "thread.activity-appended",
-        aggregateKind: "thread",
-        aggregateId: "thread-1",
-        occurredAt: "2026-02-23T10:00:02.750Z",
-        commandId: "cmd-activity-1",
-        payload: {
-          threadId: "thread-1",
-          activity: {
-            id: "activity-1",
-            tone: "tool",
-            kind: "tool.started",
-            summary: "Edit file started",
-            payload: { toolKind: "command" },
-            turnId: "turn-1",
-            createdAt: "2026-02-23T10:00:02.750Z",
-          },
-        },
-      }),
-      makeEvent({
-        sequence: 6,
-        type: "thread.message-sent",
-        aggregateKind: "thread",
-        aggregateId: "thread-1",
-        occurredAt: "2026-02-23T10:00:03.000Z",
-        commandId: "cmd-user-2",
-        payload: {
-          threadId: "thread-1",
-          messageId: "user-msg-2",
-          role: "user",
-          text: "Second edit",
-          turnId: null,
-          streaming: false,
-          createdAt: "2026-02-23T10:00:03.000Z",
-          updatedAt: "2026-02-23T10:00:03.000Z",
-        },
-      }),
-      makeEvent({
-        sequence: 7,
-        type: "thread.message-sent",
-        aggregateKind: "thread",
-        aggregateId: "thread-1",
-        occurredAt: "2026-02-23T10:00:04.000Z",
-        commandId: "cmd-assistant-2",
-        payload: {
-          threadId: "thread-1",
-          messageId: "assistant-msg-2",
-          role: "assistant",
-          text: "Updated README to v3.\n",
-          turnId: "turn-2",
-          streaming: false,
-          createdAt: "2026-02-23T10:00:04.000Z",
-          updatedAt: "2026-02-23T10:00:04.000Z",
-        },
-      }),
-      makeEvent({
-        sequence: 8,
-        type: "thread.turn-diff-completed",
-        aggregateKind: "thread",
-        aggregateId: "thread-1",
-        occurredAt: "2026-02-23T10:00:04.500Z",
-        commandId: "cmd-turn-2-complete",
-        payload: {
-          threadId: "thread-1",
-          turnId: "turn-2",
-          checkpointTurnCount: 2,
-          checkpointRef: "refs/t3/checkpoints/thread-1/turn/2",
-          status: "ready",
-          files: [],
-          assistantMessageId: "assistant-msg-2",
-          completedAt: "2026-02-23T10:00:04.500Z",
-        },
-      }),
-      makeEvent({
-        sequence: 9,
-        type: "thread.activity-appended",
-        aggregateKind: "thread",
-        aggregateId: "thread-1",
-        occurredAt: "2026-02-23T10:00:04.750Z",
-        commandId: "cmd-activity-2",
-        payload: {
-          threadId: "thread-1",
-          activity: {
-            id: "activity-2",
-            tone: "tool",
-            kind: "tool.completed",
-            summary: "Edit file complete",
-            payload: { toolKind: "command" },
-            turnId: "turn-2",
-            createdAt: "2026-02-23T10:00:04.750Z",
-          },
-        },
-      }),
-      makeEvent({
-        sequence: 10,
-        type: "thread.reverted",
-        aggregateKind: "thread",
-        aggregateId: "thread-1",
-        occurredAt: "2026-02-23T10:00:05.000Z",
-        commandId: "cmd-revert",
-        payload: {
-          threadId: "thread-1",
-          turnCount: 1,
-        },
-      }),
-    ];
-
-    const afterRevert = await events.reduce<Promise<ReturnType<typeof createEmptyReadModel>>>(
-      (statePromise, event) =>
-        statePromise.then((state) => Effect.runPromise(projectEvent(state, event))),
-      Promise.resolve(afterCreate),
-    );
-
-    const thread = afterRevert.threads[0];
-    expect(thread?.messages.map((message) => ({ role: message.role, text: message.text }))).toEqual(
-      [
-        { role: "user", text: "First edit" },
-        { role: "assistant", text: "Updated README to v2.\n" },
-      ],
-    );
-    expect(
-      thread?.activities.map((activity) => ({ id: activity.id, turnId: activity.turnId })),
-    ).toEqual([{ id: "activity-1", turnId: "turn-1" }]);
-    expect(thread?.checkpoints.map((checkpoint) => checkpoint.checkpointTurnCount)).toEqual([1]);
-    expect(thread?.latestTurn?.turnId).toBe("turn-1");
-  });
-
-  it("does not fallback-retain messages tied to removed turn IDs", async () => {
-    const createdAt = "2026-02-26T12:00:00.000Z";
-    const model = createEmptyReadModel(createdAt);
-
-    const afterCreate = await Effect.runPromise(
-      projectEvent(
-        model,
-        makeEvent({
-          sequence: 1,
-          type: "thread.created",
-          aggregateKind: "thread",
-          aggregateId: "thread-revert",
-          occurredAt: createdAt,
-          commandId: "cmd-create-revert",
-          payload: {
-            threadId: "thread-revert",
-            projectId: "project-1",
-            title: "demo",
-            modelSelection: {
-              provider: ProviderDriverKind.make("codex"),
-              model: "gpt-5.3-codex",
-            },
-            runtimeMode: "full-access",
-            branch: null,
-            worktreePath: null,
-            createdAt,
-            updatedAt: createdAt,
-          },
-        }),
-      ),
-    );
-
-    const events: ReadonlyArray<OrchestrationEvent> = [
-      makeEvent({
-        sequence: 2,
-        type: "thread.turn-diff-completed",
-        aggregateKind: "thread",
-        aggregateId: "thread-revert",
-        occurredAt: "2026-02-26T12:00:01.000Z",
-        commandId: "cmd-turn-1",
-        payload: {
-          threadId: "thread-revert",
-          turnId: "turn-1",
-          checkpointTurnCount: 1,
-          checkpointRef: "refs/t3/checkpoints/thread-revert/turn/1",
-          status: "ready",
-          files: [],
-          assistantMessageId: "assistant-keep",
-          completedAt: "2026-02-26T12:00:01.000Z",
-        },
-      }),
-      makeEvent({
-        sequence: 3,
-        type: "thread.message-sent",
-        aggregateKind: "thread",
-        aggregateId: "thread-revert",
-        occurredAt: "2026-02-26T12:00:01.100Z",
-        commandId: "cmd-assistant-keep",
-        payload: {
-          threadId: "thread-revert",
-          messageId: "assistant-keep",
-          role: "assistant",
-          text: "kept",
-          turnId: "turn-1",
-          streaming: false,
-          createdAt: "2026-02-26T12:00:01.100Z",
-          updatedAt: "2026-02-26T12:00:01.100Z",
-        },
-      }),
-      makeEvent({
-        sequence: 4,
-        type: "thread.turn-diff-completed",
-        aggregateKind: "thread",
-        aggregateId: "thread-revert",
-        occurredAt: "2026-02-26T12:00:02.000Z",
-        commandId: "cmd-turn-2",
-        payload: {
-          threadId: "thread-revert",
-          turnId: "turn-2",
-          checkpointTurnCount: 2,
-          checkpointRef: "refs/t3/checkpoints/thread-revert/turn/2",
-          status: "ready",
-          files: [],
-          assistantMessageId: "assistant-remove",
-          completedAt: "2026-02-26T12:00:02.000Z",
-        },
-      }),
-      makeEvent({
-        sequence: 5,
-        type: "thread.message-sent",
-        aggregateKind: "thread",
-        aggregateId: "thread-revert",
-        occurredAt: "2026-02-26T12:00:02.050Z",
-        commandId: "cmd-user-remove",
-        payload: {
-          threadId: "thread-revert",
-          messageId: "user-remove",
-          role: "user",
-          text: "removed",
-          turnId: "turn-2",
-          streaming: false,
-          createdAt: "2026-02-26T12:00:02.050Z",
-          updatedAt: "2026-02-26T12:00:02.050Z",
-        },
-      }),
-      makeEvent({
-        sequence: 6,
-        type: "thread.message-sent",
-        aggregateKind: "thread",
-        aggregateId: "thread-revert",
-        occurredAt: "2026-02-26T12:00:02.100Z",
-        commandId: "cmd-assistant-remove",
-        payload: {
-          threadId: "thread-revert",
-          messageId: "assistant-remove",
-          role: "assistant",
-          text: "removed",
-          turnId: "turn-2",
-          streaming: false,
-          createdAt: "2026-02-26T12:00:02.100Z",
-          updatedAt: "2026-02-26T12:00:02.100Z",
-        },
-      }),
-      makeEvent({
-        sequence: 7,
-        type: "thread.reverted",
-        aggregateKind: "thread",
-        aggregateId: "thread-revert",
-        occurredAt: "2026-02-26T12:00:03.000Z",
-        commandId: "cmd-revert",
-        payload: {
-          threadId: "thread-revert",
-          turnCount: 1,
-        },
-      }),
-    ];
-
-    const afterRevert = await events.reduce<Promise<ReturnType<typeof createEmptyReadModel>>>(
-      (statePromise, event) =>
-        statePromise.then((state) => Effect.runPromise(projectEvent(state, event))),
-      Promise.resolve(afterCreate),
-    );
-
-    const thread = afterRevert.threads[0];
-    expect(
-      thread?.messages.map((message) => ({
-        id: message.id,
-        role: message.role,
-        turnId: message.turnId,
-      })),
-    ).toEqual([{ id: "assistant-keep", role: "assistant", turnId: "turn-1" }]);
-  });
-
-  it.effect("caps message and checkpoint retention for long-lived threads", () =>
-    Effect.gen(function* () {
-      const createdAt = "2026-03-01T10:00:00.000Z";
-      const model = createEmptyReadModel(createdAt);
-
-      const afterCreate = yield* projectEvent(
-        model,
-        makeEvent({
-          sequence: 1,
-          type: "thread.created",
-          aggregateKind: "thread",
-          aggregateId: "thread-capped",
-          occurredAt: createdAt,
-          commandId: "cmd-create-capped",
-          payload: {
-            threadId: "thread-capped",
-            projectId: "project-1",
-            title: "capped",
-            modelSelection: {
-              provider: ProviderDriverKind.make("codex"),
-              model: "gpt-5-codex",
-            },
-            runtimeMode: "full-access",
-            branch: null,
-            worktreePath: null,
-            createdAt,
-            updatedAt: createdAt,
-          },
-        }),
-      );
-
-      const messageEvents: ReadonlyArray<OrchestrationEvent> = Array.from(
-        { length: 2_100 },
-        (_, index) =>
-          makeEvent({
-            sequence: index + 2,
-            type: "thread.message-sent",
-            aggregateKind: "thread",
-            aggregateId: "thread-capped",
-            occurredAt: `2026-03-01T10:00:${String(index % 60).padStart(2, "0")}.000Z`,
-            commandId: `cmd-message-${index}`,
-            payload: {
-              threadId: "thread-capped",
-              messageId: `msg-${index}`,
-              role: "assistant",
-              text: `message-${index}`,
-              turnId: `turn-${index}`,
-              streaming: false,
-              createdAt: `2026-03-01T10:00:${String(index % 60).padStart(2, "0")}.000Z`,
-              updatedAt: `2026-03-01T10:00:${String(index % 60).padStart(2, "0")}.000Z`,
-            },
-          }),
-      );
-      const afterMessages = yield* Effect.reduce(messageEvents, () => afterCreate, projectEvent);
-
-      const checkpointEvents: ReadonlyArray<OrchestrationEvent> = Array.from(
-        { length: 600 },
-        (_, index) =>
-          makeEvent({
-            sequence: index + 2_102,
-            type: "thread.turn-diff-completed",
-            aggregateKind: "thread",
-            aggregateId: "thread-capped",
-            occurredAt: `2026-03-01T10:30:${String(index % 60).padStart(2, "0")}.000Z`,
-            commandId: `cmd-checkpoint-${index}`,
-            payload: {
-              threadId: "thread-capped",
-              turnId: `turn-${index}`,
-              checkpointTurnCount: index + 1,
-              checkpointRef: `refs/t3/checkpoints/thread-capped/turn/${index + 1}`,
-              status: "ready",
-              files: [],
-              assistantMessageId: `msg-${index}`,
-              completedAt: `2026-03-01T10:30:${String(index % 60).padStart(2, "0")}.000Z`,
-            },
-          }),
-      );
-      const finalState = yield* Effect.reduce(checkpointEvents, () => afterMessages, projectEvent);
-
-      const thread = finalState.threads[0];
-      expect(thread?.messages).toHaveLength(2_000);
-      expect(thread?.messages[0]?.id).toBe("msg-100");
-      expect(thread?.messages.at(-1)?.id).toBe("msg-2099");
-      expect(thread?.checkpoints).toHaveLength(500);
-      expect(thread?.checkpoints[0]?.turnId).toBe("turn-100");
-      expect(thread?.checkpoints.at(-1)?.turnId).toBe("turn-599");
-    }),
-  );
-
-  it.effect("keeps activities sorted and updates messages in place", () =>
-    Effect.gen(function* () {
-      const createdAt = "2026-03-02T10:00:00.000Z";
-      let sequence = 0;
-      const event = (type: OrchestrationEvent["type"], payload: unknown) =>
-        makeEvent({
-          sequence: ++sequence,
-          type,
-          aggregateKind: "thread",
-          aggregateId: "thread-order",
-          occurredAt: createdAt,
-          commandId: null,
-          payload,
-        });
-      const activity = (id: string, at: string, summary = id) =>
-        event("thread.activity-appended", {
-          threadId: "thread-order",
-          activity: {
-            id,
-            tone: "info",
-            kind: "note",
-            summary,
-            payload: {},
-            turnId: null,
-            createdAt: at,
-          },
-        });
-      const message = (id: string, text: string, streaming: boolean) =>
-        event("thread.message-sent", {
-          threadId: "thread-order",
-          messageId: id,
-          role: "assistant",
-          text,
-          turnId: null,
-          streaming,
-          createdAt,
-          updatedAt: createdAt,
-        });
-
-      const events: ReadonlyArray<OrchestrationEvent> = [
-        event("thread.created", {
-          threadId: "thread-order",
-          projectId: "project-1",
-          title: "order",
-          modelSelection: { provider: ProviderDriverKind.make("codex"), model: "gpt-5-codex" },
-          runtimeMode: "full-access",
-          branch: null,
-          worktreePath: null,
-          createdAt,
-          updatedAt: createdAt,
-        }),
-        activity("activity-b", "2026-03-02T10:00:02.000Z"),
-        activity("activity-d", "2026-03-02T10:00:04.000Z"),
-        activity("activity-a", "2026-03-02T10:00:01.000Z"),
-        activity("activity-c", "2026-03-02T10:00:03.000Z"),
-        activity("activity-d", "2026-03-02T10:00:04.000Z", "activity-d replaced"),
-        message("message-1", "first ", true),
-        message("message-2", "second", false),
-        message("message-1", "part", true),
-      ];
-      const state = yield* Effect.reduce(
-        events,
-        () => createEmptyReadModel(createdAt),
-        projectEvent,
-      );
-
-      const thread = state.threads[0];
-      expect(thread?.activities.map((entry) => [entry.id, entry.summary])).toEqual([
-        ["activity-a", "activity-a"],
-        ["activity-b", "activity-b"],
-        ["activity-c", "activity-c"],
-        ["activity-d", "activity-d replaced"],
-      ]);
-      expect(thread?.messages.map((entry) => [entry.id, entry.text])).toEqual([
-        ["message-1", "first part"],
-        ["message-2", "second"],
-      ]);
+      expect(next.snapshotSequence).toBe(7);
+      expect(next.updatedAt).toBe("2026-01-01T00:00:00.000Z");
+      expect(next.threads).toEqual([]);
     }),
   );
 });

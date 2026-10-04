@@ -34,6 +34,7 @@ const TIME_FORMAT: Intl.DateTimeFormatOptions = { dateStyle: "medium", timeStyle
 
 function formatTime(value: string, i18n: MobileI18n) {
   const date = new Date(value);
+
   return Number.isNaN(date.getTime()) ? value : i18n.formatDate(date, TIME_FORMAT);
 }
 
@@ -170,6 +171,7 @@ export function DurableFactsCard(props: {
   const { t } = i18n;
   const busy = props.busyRootId !== null;
   const readOnlyReason = props.policy ? durableFactReadOnlyReason(props.policy) : null;
+
   return (
     <View className="gap-3 rounded-2xl bg-card p-4">
       <Text className="font-t3-bold text-foreground">{t("Durable facts")}</Text>
@@ -179,6 +181,7 @@ export function DurableFactsCard(props: {
       <View accessibilityRole="tablist" className="flex-row flex-wrap gap-2">
         {DURABLE_MEMORY_INSPECT_SCOPES.map((option) => {
           const selected = option.scope === props.scope;
+
           return (
             <Pressable
               key={option.scope}
@@ -228,19 +231,23 @@ export function DurableFactsCard(props: {
               durableFactActions(fact, props.policy).includes("edit")
                 ? props.editing
                 : null;
+
             const source = durableFactSourceLabel(
               fact,
               { currentThreadId: props.currentThreadId, threadTitles: props.threadTitles },
               i18n,
             );
+
             const bots =
               durableFactBotsLabel(
                 fact,
                 { currentBotId: props.currentBotId, botNames: props.botNames },
                 i18n,
               ) ?? t("none");
+
             const created = formatTime(fact.createdAt, i18n);
             const updated = formatTime(fact.updatedAt, i18n);
+
             return (
               <View key={fact.rootId} className="gap-1 border-t border-border-subtle pt-3">
                 {editing ? (

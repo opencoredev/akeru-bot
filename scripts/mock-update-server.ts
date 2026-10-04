@@ -1,4 +1,3 @@
-// @effect-diagnostics-next-line nodeBuiltinImport:off - NodeHttpServer.layer takes `NodeHttp.createServer` as arg
 import * as NodeHttp from "node:http";
 
 import { NodeHttpServer, NodeRuntime, NodeServices } from "@effect/platform-node";
@@ -17,6 +16,7 @@ interface MockUpdateServerConfig {
 const resolveMockUpdateServerConfig = Effect.gen(function* () {
   const fileSystem = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
+
   const config = yield* Config.all({
     port: Config.port("T3CODE_DESKTOP_MOCK_UPDATE_SERVER_PORT").pipe(Config.withDefault(3000)),
     root: Config.string("T3CODE_DESKTOP_MOCK_UPDATE_SERVER_ROOT").pipe(
@@ -36,6 +36,7 @@ const isOutsideRoot = (rootRealPath: string, filePath: string) =>
   Effect.gen(function* () {
     const path = yield* Path.Path;
     const relativePath = path.relative(rootRealPath, filePath);
+
     return (
       relativePath === ".." || relativePath.startsWith("../") || relativePath.startsWith("..\\")
     );
@@ -44,6 +45,7 @@ const isOutsideRoot = (rootRealPath: string, filePath: string) =>
 const isWithinRoot = (rootRealPath: string, filePath: string) =>
   Effect.gen(function* () {
     const fileSystem = yield* FileSystem.FileSystem;
+
     const resolvedFilePath = yield* fileSystem.realPath(filePath).pipe(
       Effect.match({
         onFailure: () => undefined,
@@ -60,6 +62,7 @@ const resolveRequestedFilePath = (rootRealPath: string, requestUrl: string | und
   Effect.gen(function* () {
     const path = yield* Path.Path;
     const rawPath = (requestUrl ?? "/").split("?", 1)[0] ?? "/";
+
     const decodedPath = yield* Effect.try({
       try: () => decodeURIComponent(rawPath),
       catch: () => null,
@@ -89,6 +92,7 @@ const resolveRequestedFilePath = (rootRealPath: string, requestUrl: string | und
 const isServableFile = (rootRealPath: string, filePath: string) =>
   Effect.gen(function* () {
     const fileSystem = yield* FileSystem.FileSystem;
+
     const stat = yield* fileSystem.stat(filePath).pipe(
       Effect.match({
         onFailure: () => undefined,
@@ -113,22 +117,27 @@ export const makeMockUpdateRouteLayer = (rootRealPath: string) => {
       yield* Effect.logInfo(`Request received for path: ${requestPath}`);
 
       const filePath = yield* resolveRequestedFilePath(rootRealPath, request.url);
+
       if (!filePath) {
         yield* Effect.logWarning(`Attempted to access file outside of root: ${request.url ?? "/"}`);
+
         return HttpServerResponse.text("Not Found", { status: 404 });
       }
 
       if (!(yield* isServableFile(rootRealPath, filePath))) {
         yield* Effect.logWarning(`Attempted to access invalid file: ${filePath}`);
+
         return HttpServerResponse.text("Not Found", { status: 404 });
       }
 
       yield* Effect.logInfo(`Serving file: ${filePath}`);
+
       return yield* HttpServerResponse.file(filePath, { status: 200 });
     }).pipe(
       Effect.catchCause((cause) =>
         Effect.gen(function* () {
           yield* Effect.logError(`Unhandled mock update request failure: ${cause}`);
+
           return HttpServerResponse.text("Internal Server Error", { status: 500 });
         }),
       ),

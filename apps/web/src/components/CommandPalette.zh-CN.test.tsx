@@ -7,9 +7,11 @@ import { LanguageProvider } from "../i18n";
 import type { CommandPaletteGroup } from "./CommandPalette.logic";
 
 vi.mock("@effect/atom-react", () => ({ useAtomValue: () => [] }));
+
 vi.mock("../hooks/useTheme", () => ({
   useTheme: () => ({ resolvedTheme: "dark", setAppearanceMode: () => undefined }),
 }));
+
 // Render the dialog shell and results as plain markup so the titles are visible.
 vi.mock("./ui/command", () => ({
   CommandDialog: ({ children }: { children: ReactNode }) => <>{children}</>,
@@ -17,6 +19,7 @@ vi.mock("./ui/command", () => ({
     <div aria-label={props["aria-label"]}>{children}</div>
   ),
 }));
+
 vi.mock("./CommandPaletteContent", () => ({
   CommandPaletteContent: (props: {
     children: ReactNode;
@@ -30,6 +33,7 @@ vi.mock("./CommandPaletteContent", () => ({
     </div>
   ),
 }));
+
 vi.mock("./CommandPaletteResults", () => ({
   CommandPaletteResults: ({ groups }: { groups: ReadonlyArray<CommandPaletteGroup> }) => (
     <ul>
@@ -56,6 +60,7 @@ describe("command palette in Simplified Chinese", () => {
         <CommandPalette>{null}</CommandPalette>
       </LanguageProvider>,
     );
+
     for (const text of [
       'aria-label="命令面板"',
       'placeholder="搜索命令和聊天..."',
@@ -69,6 +74,7 @@ describe("command palette in Simplified Chinese", () => {
     ]) {
       expect(html).toContain(text);
     }
+
     expect(html).not.toContain("Open plugins");
   });
 });

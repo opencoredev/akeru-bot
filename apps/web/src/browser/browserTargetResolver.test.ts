@@ -195,6 +195,7 @@ describe("browser target resolver", () => {
 
   it("classifies exact private IPv4 and IPv6 boundaries", async () => {
     const { isPrivateNetworkHost } = await import("./browserTargetResolver");
+
     const privateHosts = [
       "0.0.0.0",
       "10.0.0.0",
@@ -227,6 +228,7 @@ describe("browser target resolver", () => {
       "devbox.example.ts.net.",
       "devbox.example.ts.net..",
     ];
+
     const publicHosts = [
       "1.0.0.0",
       "100.63.255.255",
@@ -245,12 +247,14 @@ describe("browser target resolver", () => {
       "::ffff:8.8.8.8",
       "example.com.",
     ];
+
     expect(privateHosts.filter((host) => !isPrivateNetworkHost(host))).toEqual([]);
     expect(publicHosts.filter(isPrivateNetworkHost)).toEqual([]);
   });
 
   it("allows only globally routable hosts to reach a public favicon provider", async () => {
     const { isPublicFaviconHost } = await import("./browserTargetResolver");
+
     const nonPublic = [
       "192.0.0.0",
       "192.0.0.255",
@@ -298,6 +302,7 @@ describe("browser target resolver", () => {
       "service.internal",
       "hidden.onion",
     ];
+
     const publicHosts = [
       "191.255.255.255",
       "192.0.1.255",
@@ -320,6 +325,7 @@ describe("browser target resolver", () => {
       "example.com",
       "example.com.",
     ];
+
     expect(nonPublic.filter(isPublicFaviconHost)).toEqual([]);
     expect(publicHosts.filter((host) => !isPublicFaviconHost(host))).toEqual([]);
   });

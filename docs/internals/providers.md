@@ -7,24 +7,32 @@ orchestration layer does not know which one is behind a thread.
 
 ## Built-in drivers
 
-[`builtInDrivers.ts`][drivers] exports `BUILT_IN_DRIVERS` with six entries:
+[`builtInDrivers.ts`][drivers] exports `BUILT_IN_DRIVERS` with seven entries:
 
-| Driver kind   | Driver source                                |
-| ------------- | -------------------------------------------- |
-| `codex`       | [`Drivers/CodexDriver.ts`][codex]            |
-| `claudeAgent` | [`Drivers/ClaudeDriver.ts`][claude]          |
-| `grok`        | [`Drivers/GrokDriver.ts`][grok]              |
-| `kimi`        | [`Drivers/KimiDriver.ts`][kimi]              |
-| `opencode`    | [`Drivers/OpenCodeDriver.ts`][opencode]      |
-| `opencodeGo`  | [`Drivers/OpenCodeGoDriver.ts`][opencode-go] |
+| Driver kind    | Driver source                                    |
+| -------------- | ------------------------------------------------ |
+| `codex`        | [`Drivers/CodexDriver.ts`][codex]                |
+| `claudeAgent`  | [`Drivers/ClaudeDriver.ts`][claude]              |
+| `grok`         | [`Drivers/GrokDriver.ts`][grok]                  |
+| `kimi`         | [`Drivers/KimiDriver.ts`][kimi]                  |
+| `opencode`     | [`Drivers/OpenCodeDriver.ts`][opencode]          |
+| `opencodeGo`   | [`Drivers/OpenCodeGoDriver.ts`][opencode-go]     |
+| `customOpenai` | [`Drivers/CustomOpenaiDriver.ts`][custom-openai] |
 
-Each driver declares its `driverKind`, a `configSchema`, and a `create` function that builds an
-adapter in a child scope. Adapter implementations live beside them in
+Each driver declares its `driverKind`, a `configSchema`, and a `create` function that builds a
+provider instance in a child scope. The five subscription drivers and Custom API supply a Mastra
+connection; standard OpenCode supplies a legacy adapter. Adapter implementations live beside them in
 `apps/server/src/provider/Layers/` (`CodexAdapter.ts`, `ClaudeAdapter.ts`, and so on) and conform to
 [`ProviderAdapter.ts`][adapter]. Read the driver plus its adapter to see how a specific agent's
 transport, config, and event shapes are mapped.
 
 ## Registry and routing
+
+Settings calls a provider instance an account. **Add account** on a provider's page creates another
+instance of that page's driver; it never asks for a driver. Subscription accounts only take a name and
+sign in from their card afterwards. The dialog does not show the inherited CLI fields (binary path,
+home paths, launch arguments), because Mastra-routed drivers do not start the CLI to run turns.
+Custom API asks for a service, a name, then its address and key.
 
 Two registries separate configuration from live processes:
 
@@ -38,7 +46,7 @@ Two registries separate configuration from live processes:
 directory to route session and turn operations for a thread, so callers name a thread, not an agent.
 
 Desktop chat does not call `ProviderService` directly from orchestration. The command reactor calls
-Akeru's [`AgentController`][controller]. Codex, Claude, Grok, Kimi, and OpenCode Go threads run
+Akeru's [`AgentController`][controller]. Codex, Claude, Grok, Kimi, OpenCode Go, and Custom API threads run
 through Akeru's custom Mastra Core controller and call `Session.sendMessage()`. The backing agent is a general-purpose Akeru assistant
 with Akeru-owned observational memory, workspace, tools, approval policy, and lifecycle. Akeru builds
 workspace and enabled plugin tools per thread, and resolves the selected subscription model through
@@ -152,9 +160,91 @@ revert boundary. OpenCode keeps reverted messages in the transcript until the ne
 `readThread` stops at `session.revert.messageID` rather than slicing the local copy. OpenCode Go
 stays on Mastra and does not use this adapter path.
 
-### Grok health check
+### Custom API
 
-`checkGrokProviderStatus` never opens an ACP session. It runs `grok --version`, then `grok models`
+Custom API (`customOpenai`) is not a subscription. Each instance points at one OpenAI-compatible
+endpoint, and Mastra reaches it through the `custom-openai/` model prefix with
+`createOpenAICompatible`. The base URL comes from the instance's `CUSTOM_OPENAI_BASE_URL` variable or
+its `baseUrl` config. The optional key comes only from the instance's sensitive
+`CUSTOM_OPENAI_API_KEY` variable, never from the process environment, so a process-wide key is
+never sent to an arbitrary URL. A base URL alone makes the instance ready, because local servers
+such as Ollama take no key.
+
+The web settings write that key for the user. The add dialog offers presets from
+`apps/web/src/components/settings/customApiPresets.ts` that fill `baseUrl` and the instance name,
+and an **API key** field that saves `CUSTOM_OPENAI_API_KEY` as a sensitive variable. Presets are a
+client convenience: the server stores only the URL, and the card matches the URL back to a preset
+to word its key hint. A key is bound to its endpoint on the client: switching presets in the dialog
+clears the draft key, and a card edit that moves the effective URL (the `CUSTOM_OPENAI_BASE_URL`
+variable when set, `baseUrl` otherwise) to another host, or from HTTPS to HTTP, drops the stored key
+in the same settings update, so the next probe never sends it to the new service. A redacted
+override cannot be read, so any change to it, or a `baseUrl` move behind it, drops the key too. When
+the variable repeats, the last row wins, as it does in the driver. A probe answered with 401 or 403
+reports auth status `unknown`: the card stops showing the instance as connected, but preflight still
+lets turns through, because a scoped key can be refused `/models` and still chat.
+
+The model list is `GET {baseUrl}/models` plus the instance's hand-added models. Discovery is
+optional: a failed or unreadable probe keeps the last good catalog and reports a warning naming only
+the endpoint origin. Disabled instances never probe. The registry drops endpoint models only after a
+probe settles, and never retains a hand-added model the user removed. Until a probe settles, a
+hand-added model the last good catalog also listed keeps its discovered mark, so removing the
+hand-added copy leaves the endpoint's model in place.
+
+### Harness-native readiness
+
+Codex, Claude, and Grok use `HarnessProviderStatus.ts`, not their CLI health checks, to publish
+readiness. Like Kimi and OpenCode Go, they report the bundled runtime as installed even when no
+provider binary exists. The initial snapshot and each refresh reload `SubscriptionAuthService`
+from the environment's `subscription-auth.json`. A connected saved credential makes the instance
+ready; a missing credential reports unauthenticated and asks the user to connect in Settings.
+
+The model list comes from the [model catalog](#model-catalog) and `ModelCatalog.applyModelCatalog`.
+Codex combines catalog IDs with bundled and historical compatibility models, and takes names,
+reasoning efforts, and Fast availability from the catalog entry. Models the catalog does not list
+fall back to the harness SDK's thinking levels and keep the Standard and Fast tiers. Catalog
+efforts the SDK would silently downgrade, such as Max on older GPT aliases, are not offered. The catalog
+classifies models as current or legacy; it is not an exhaustive allowlist. The OAuth transport
+forwards the selected ID to the Codex API without a local catalog restriction. Account access is
+still checked by the provider when a request runs. Claude merges catalog additions into its
+built-in capability catalog without dropping historical models. A Claude model newer than the
+build inherits the capabilities of the newest built-in model in its family. Grok includes its API model IDs
+alongside catalog additions. It labels the compatibility `grok-build` selection as Grok 4.6 and maps it to `grok-4.6` in
+`mastraModelId`, because the product slug is not an API model ID. Keeping the selection slug lets
+existing bots and the default model pass catalog validation. Custom models are retained.
+
+Successful credential mutations through poll, completion, and logout RPCs reconcile default
+provider settings and refresh each affected saved-credential instance before returning. The
+registry publishes the updated snapshot immediately, including for named instances and when
+periodic health refresh is disabled.
+
+Explicit connection variables or a custom home disable saved-credential fallback. Codex then
+requires `OPENAI_API_KEY`, Claude requires `ANTHROPIC_API_KEY`, `ANTHROPIC_AUTH_TOKEN`, or
+`CLAUDE_CODE_OAUTH_TOKEN`, and Grok requires `XAI_API_KEY` in the instance's explicit environment.
+A CLI login or custom CLI home alone cannot make that instance ready. Ambient credentials remain
+available to saved-credential instances, matching the harness's transport precedence.
+
+`HarnessTextGeneration.ts` generates chat titles and branch names through
+`resolveAkeruMastraModel`, the same transport resolver as turns. It reloads saved credentials for
+each operation and preserves instance scoping, Codex reasoning effort and service tier, and Claude
+effort and context-window selections. Claude's 1M context selection uses the same `[1m]` model
+suffix in turns and writing requests. The transport strips this CLI-style suffix from the API
+model ID and sets the extended-context beta header for API keys and OAuth alike.
+Each writing operation has a 180-second deadline and aborts
+the generation request when it expires. Stored
+image attachments are resolved through the attachment store and sent as multimodal image parts,
+not just filenames. Invalid or unreadable image attachments are skipped; available images and
+text still reach generation.
+It does not spawn a provider CLI. These drivers no
+longer construct legacy adapters. CLI skill catalogs and maintenance remain optional extras;
+catalog failures do not fail a workspace snapshot or change readiness. A missing Grok CLI stays
+silent; other skill discovery failures are logged as warnings. Claude still reads skill
+files directly, without a CLI. Codex's CLI-only skills and Claude's CLI slash-command discovery are
+not part of readiness snapshots. Version checks are skipped when there is no CLI version.
+
+### Legacy Grok CLI probe
+
+`checkGrokProviderStatus` is retained for legacy probe tests and is not used by `GrokDriver`.
+It never opens an ACP session. It runs `grok --version`, then `grok models`
 for login state and model slugs, then a single ACP `initialize` and reads models from
 `_meta.modelState`. `authenticate` and `session/new` are skipped on purpose: `authenticate` can open
 a browser login and `session/new` boots every configured MCP server, both of which made background
@@ -174,10 +264,9 @@ request and drops, so Stop did not stop. `AcpSessionRuntime.cancel` now waits fo
 write before returning so a replacement prompt cannot race ahead of it. Grok mid-turn sends cancel
 the in-flight prompt and continue the same turn instead of queueing.
 
-Grok skill discovery uses `grok inspect --json`. Machine-level health checks recover probe
-failures to an empty skill list. `ProviderInstance.snapshotForCwd` re-runs inspect in the
-thread workspace so a failed probe is not cached as empty. Composer cwd refresh still uses the
-machine snapshot until a client calls `snapshotForCwd`.
+Grok skill discovery uses `grok inspect --json` only for optional workspace catalogs.
+`ProviderInstance.snapshotForCwd` recovers missing binaries and failed inspect requests to an empty
+skill list. Machine snapshots do not probe the CLI.
 
 `ServerProviderSkill` carries an optional `icon` (an emoji or a short glyph name from skill
 frontmatter or provider metadata, e.g. the Codex app-server's interface icon paths). Clients
@@ -331,17 +420,33 @@ produces the activity.
 Adding a driver means writing the driver plus adapter and adding it to `BUILT_IN_DRIVERS`. No
 orchestration, contract, or client change is required for the common case.
 
-## Model manifest
+## Model catalog
 
-The model picker's legacy section is driven by `apps/server/src/provider/model-manifest.json`, which
-lists the current (non-legacy) model slugs per driver kind. The `ModelManifest` service
-(`apps/server/src/provider/ModelManifest.ts`) refreshes that data from the same file on `main` via
-raw.githubusercontent.com, so moving a model in or out of the legacy section is a commit, not a
-release. Preference order is remote fetch, then the on-disk copy of the last successful fetch (in
-the state directory), then the bundled copy. Fetches are TTL-gated, run concurrently with provider
-probes, respect the `enableProviderUpdateChecks` setting, and never fail a provider check. The
-Codex and Claude drivers apply the classification to every snapshot with `applyModelManifest`;
-driver kinds absent from the manifest have no legacy concept.
+Model lists, display names, and the picker's legacy section come from
+[models.dev](https://models.dev). `modelCatalogData.ts` maps each driver to a models.dev provider
+(`codex` to `openai`, `claudeAgent` to `anthropic`, `grok` to `xai`, `kimi` to
+`kimi-code-plan-global`, `opencodeGo` to `opencode-go`) and keeps only models a coding agent can
+run: tool calling, text output, no dated Claude snapshots, and for Codex only GPT reasoning models
+outside the Pro and nano tiers. For Codex, Claude, and Grok, a model is current when it is the
+newest non-deprecated model in its family and was released within 180 days of the provider's
+newest model. Kimi For Coding and OpenCode Go list every non-deprecated model as current.
+
+The `ModelCatalog` service (`ModelCatalog.ts`) runs its own loop that refetches models.dev
+hourly, retries a failed fetch after five minutes, and respects `enableProviderUpdateChecks`.
+Preference order is the last fetch, then its on-disk copy (`model-catalog.json` in the state
+directory), then the bundled `apps/server/src/provider/model-catalog.json`. A fetch that omits a
+driver keeps that driver's previous models, and a fetch never fails a provider check. When the bundle
+lists a driver release newer than anything in the on-disk copy, that driver uses the bundled list
+until the next fetch, so upgrading while offline still shows a newer release's models. Drivers apply the catalog to every snapshot. Codex, Claude, and
+Grok publish it on their periodic health check; Kimi For Coding and OpenCode Go have no periodic
+check, so they republish when the catalog's `changes` stream emits. Kimi For Coding
+and OpenCode Go keep a hardcoded fallback list whose first slug stays the default, and Grok keeps
+`grok-build` current because models.dev does not list it.
+
+Regenerate the bundle with `node apps/server/scripts/sync-model-catalog.ts` (pass a saved
+`api.json` path to work offline). `model-manifest.json` is the older current-model list that
+released builds before the catalog still fetch from `main`; keep its current IDs in step with the
+catalog until those builds age out.
 
 ## How provider work is requested
 
@@ -386,6 +491,7 @@ when a request opens (approval) or user input is requested, via
 [kimi]: ../../apps/server/src/provider/Drivers/KimiDriver.ts
 [opencode]: ../../apps/server/src/provider/Drivers/OpenCodeDriver.ts
 [opencode-go]: ../../apps/server/src/provider/Drivers/OpenCodeGoDriver.ts
+[custom-openai]: ../../apps/server/src/provider/Drivers/CustomOpenaiDriver.ts
 [adapter]: ../../apps/server/src/provider/Services/ProviderAdapter.ts
 [instances]: ../../apps/server/src/provider/Services/ProviderInstanceRegistry.ts
 [registry]: ../../apps/server/src/provider/Services/ProviderAdapterRegistry.ts

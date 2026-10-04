@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import {
   AuthAccessReadScope,
   AuthAccessWriteScope,
@@ -56,7 +57,7 @@ export function annotateEnvironmentRequest(endpoint: string) {
     const traceId = yield* currentEnvironmentTraceId;
 
     yield* Effect.addFinalizer((exit) =>
-      exit._tag === "Failure"
+      Predicate.isTagged(exit, "Failure")
         ? Effect.logWarning("environment api request failed", {
             endpoint,
             traceId,
@@ -69,7 +70,7 @@ export function annotateEnvironmentRequest(endpoint: string) {
     yield* Effect.annotateCurrentSpan({
       "environment.endpoint": endpoint,
       "http.request.method": request.method,
-      "url.path": url._tag === "Some" ? url.value.pathname : "unknown",
+      "url.path": Predicate.isTagged(url, "Some") ? url.value.pathname : "unknown",
     });
   });
 }
@@ -105,6 +106,7 @@ export function failEnvironmentInvalidRequest(
 }
 
 const isAuthEnvironmentScope = Schema.is(AuthEnvironmentScope);
+
 const REQUESTABLE_ENVIRONMENT_SCOPES = new Set<string>([
   ...AuthAdministrativeScopes,
   ...AuthRetiredEnvironmentScopes,
@@ -119,6 +121,7 @@ export function parseRequestedEnvironmentScopes(
 ): ReadonlyArray<AuthEnvironmentScope> | null {
   const scopes = parseAllowedOAuthScope({ value, allowedScopes: REQUESTABLE_ENVIRONMENT_SCOPES });
   const currentScopes = scopes?.filter(isAuthEnvironmentScope) ?? [];
+
   return currentScopes.length === 0 ? null : currentScopes;
 }
 
@@ -175,16 +178,18 @@ const appendSessionCookie = (cookieName: string, token: string, expiresAt: DateT
     ),
   );
 
-export function failEnvironmentInternal(reason: EnvironmentInternalErrorReason, error?: unknown) {
+export function failEnvironmentInternal(reason: EnvironmentInternalErrorReason, cause?: unknown) {
   return Effect.gen(function* () {
     const traceId = yield* currentEnvironmentTraceId;
-    if (error !== undefined) {
+
+    if (cause !== undefined) {
       yield* Effect.logError("environment api operation failed", {
         reason,
         traceId,
-        cause: error,
+        cause: cause,
       });
     }
+
     return yield* new EnvironmentInternalError({ code: "internal_error", reason, traceId });
   });
 }
@@ -193,9 +198,11 @@ export const requireEnvironmentScope = Effect.fn("environment.auth.requireScope"
   scope: AuthEnvironmentScope,
 ) {
   const session = yield* EnvironmentAuthenticatedPrincipal;
+
   if (!session.scopes.has(scope)) {
     return yield* failEnvironmentScopeRequired(scope);
   }
+
   return session;
 });
 
@@ -203,9 +210,11 @@ export const environmentAuthenticatedAuthLayer = Layer.effect(
   EnvironmentAuthenticatedAuth,
   Effect.gen(function* () {
     const serverAuth = yield* EnvironmentAuth.EnvironmentAuth;
+
     return (httpEffect) =>
       Effect.gen(function* () {
         const request = yield* HttpServerRequest.HttpServerRequest;
+
         const session = yield* serverAuth.authenticateHttpRequest(request).pipe(
           Effect.catchIf(EnvironmentAuth.isServerAuthCredentialError, (error) =>
             failEnvironmentAuthInvalid(EnvironmentAuth.serverAuthCredentialReason(error)),
@@ -214,6 +223,7 @@ export const environmentAuthenticatedAuthLayer = Layer.effect(
             failEnvironmentInternal("internal_error", error),
           ),
         );
+
         return yield* httpEffect.pipe(
           Effect.provideService(EnvironmentAuthenticatedPrincipal, {
             ...session,
@@ -239,11 +249,13 @@ export const authHttpApiLayer = HttpApiBuilder.group(
             yield* annotateEnvironmentRequest(args.endpoint.name);
             const request = yield* HttpServerRequest.HttpServerRequest;
             const result = yield* serverAuth.getSessionState(request);
+
             const credential = EnvironmentAuth.selectRequestCredential(
               request,
               sessions.cookieName,
               sessions.legacyCookieName,
             );
+
             if (
               credential?.source === "legacy-cookie" &&
               result.authenticated &&
@@ -253,6 +265,7 @@ export const authHttpApiLayer = HttpApiBuilder.group(
               yield* appendSessionCookie(sessions.cookieName, credential.token, result.expiresAt);
               yield* appendCredentialResponseHeaders;
             }
+
             return result;
           },
           Effect.catchIf(EnvironmentAuth.isServerAuthInternalError, (error) =>
@@ -266,16 +279,19 @@ export const authHttpApiLayer = HttpApiBuilder.group(
           function* (args) {
             yield* annotateEnvironmentRequest(args.endpoint.name);
             const request = yield* HttpServerRequest.HttpServerRequest;
+
             const result = yield* serverAuth.createBrowserSession(
               args.payload.credential,
               deriveAuthClientMetadata({ request }),
             );
+
             yield* appendSessionCookie(
               sessions.cookieName,
               result.sessionToken,
               result.response.expiresAt,
             );
             yield* appendCredentialResponseHeaders;
+
             return result.response;
           },
           Effect.catchIf(EnvironmentAuth.isServerAuthCredentialError, (error) =>
@@ -292,14 +308,18 @@ export const authHttpApiLayer = HttpApiBuilder.group(
           function* (args) {
             yield* annotateEnvironmentRequest(args.endpoint.name);
             const request = yield* HttpServerRequest.HttpServerRequest;
+
             const requestedScopes =
               args.payload.scope === undefined
                 ? undefined
                 : parseRequestedEnvironmentScopes(args.payload.scope);
+
             if (requestedScopes === null) {
               return yield* failEnvironmentInvalidRequest("invalid_scope");
             }
+
             yield* appendCredentialResponseHeaders;
+
             return yield* serverAuth.exchangeBootstrapCredentialForAccessToken(
               args.payload.subject_token,
               requestedScopes,
@@ -333,6 +353,7 @@ export const authHttpApiLayer = HttpApiBuilder.group(
             yield* annotateEnvironmentRequest(args.endpoint.name);
             const session = yield* EnvironmentAuthenticatedPrincipal;
             yield* appendCredentialResponseHeaders;
+
             return yield* serverAuth.issueWebSocketTicket(session);
           },
           Effect.catchIf(EnvironmentAuth.isServerAuthInternalError, (error) =>
@@ -347,17 +368,20 @@ export const authHttpApiLayer = HttpApiBuilder.group(
             yield* annotateEnvironmentRequest(args.endpoint.name);
             const session = yield* requireEnvironmentScope(AuthAccessWriteScope);
             const delegatedScopes = args.payload.scopes ?? AuthStandardClientScopes;
+
             if (
               delegatedScopes.length === 0 ||
               new Set<AuthEnvironmentScope>(delegatedScopes).size !== delegatedScopes.length
             ) {
               return yield* failEnvironmentInvalidRequest("invalid_scope");
             }
+
             for (const delegatedScope of delegatedScopes) {
               if (!session.scopes.has(delegatedScope)) {
                 return yield* failEnvironmentScopeRequired(delegatedScope);
               }
             }
+
             return yield* serverAuth.issuePairingCredential(args.payload);
           },
           Effect.catchIf(EnvironmentAuth.isServerAuthInternalError, (error) =>
@@ -371,6 +395,7 @@ export const authHttpApiLayer = HttpApiBuilder.group(
           function* (args) {
             yield* annotateEnvironmentRequest(args.endpoint.name);
             yield* requireEnvironmentScope(AuthAccessReadScope);
+
             return yield* serverAuth.listPairingLinks();
           },
           Effect.catchIf(EnvironmentAuth.isServerAuthInternalError, (error) =>
@@ -385,6 +410,7 @@ export const authHttpApiLayer = HttpApiBuilder.group(
             yield* annotateEnvironmentRequest(args.endpoint.name);
             yield* requireEnvironmentScope(AuthAccessWriteScope);
             const revoked = yield* serverAuth.revokePairingLink(args.payload.id);
+
             return { revoked };
           },
           Effect.catchIf(EnvironmentAuth.isServerAuthInternalError, (error) =>
@@ -398,6 +424,7 @@ export const authHttpApiLayer = HttpApiBuilder.group(
           function* (args) {
             yield* annotateEnvironmentRequest(args.endpoint.name);
             const session = yield* requireEnvironmentScope(AuthAccessReadScope);
+
             return yield* serverAuth.listClientSessions(session.sessionId);
           },
           Effect.catchIf(EnvironmentAuth.isServerAuthInternalError, (error) =>
@@ -411,10 +438,12 @@ export const authHttpApiLayer = HttpApiBuilder.group(
           function* (args) {
             yield* annotateEnvironmentRequest(args.endpoint.name);
             const session = yield* requireEnvironmentScope(AuthAccessWriteScope);
+
             const revoked = yield* serverAuth.revokeClientSession(
               session.sessionId,
               args.payload.sessionId,
             );
+
             return { revoked };
           },
           Effect.catchTag("ServerAuthForbiddenOperationError", () =>
@@ -432,6 +461,7 @@ export const authHttpApiLayer = HttpApiBuilder.group(
             yield* annotateEnvironmentRequest(args.endpoint.name);
             const session = yield* requireEnvironmentScope(AuthAccessWriteScope);
             const revokedCount = yield* serverAuth.revokeOtherClientSessions(session.sessionId);
+
             return { revokedCount };
           },
           Effect.catchIf(EnvironmentAuth.isServerAuthInternalError, (error) =>

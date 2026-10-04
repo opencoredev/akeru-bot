@@ -25,6 +25,7 @@ export function DictationControls({
   onBlockedPress,
 }: DictationControlsProps) {
   const { t } = useI18n();
+
   const announcements = {
     idle: t("Dictation ready."),
     requesting: t("Requesting microphone access…"),
@@ -33,6 +34,7 @@ export function DictationControls({
     canceled: t("Dictation canceled."),
     failed: t("Dictation failed. Try again."),
   };
+
   const descriptionId = useId();
   const pointer = useRef<number | null>(null);
   const suppressClick = useRef(false);
@@ -44,8 +46,10 @@ export function DictationControls({
   const retry = appearance === "send-slot" && status === "failed" && !unavailableReason;
   const blocked = Boolean(unavailableReason);
   const explainsBlock = appearance === "send-slot" && blocked && onBlockedPress !== undefined;
+
   const disabled =
     (appearance === "labeled" && status === "transcribing") || (blocked && !explainsBlock);
+
   const operation = useRef(busy);
   const cancelCallback = useRef(onCancel);
   useEffect(() => {
@@ -54,36 +58,48 @@ export function DictationControls({
   useEffect(() => {
     operation.current = busy;
   }, [status]);
+
   const cancel = () => {
     pointer.current = null;
+
     if (!operation.current) return;
     operation.current = false;
     cancelCallback.current();
   };
+
   useEffect(() => {
     if (!blocked) return;
+
     // A blocked slot cannot retry, so settle a failed dictation and give the send slot back.
     if (status === "failed") cancelCallback.current();
     else cancel();
   }, [blocked, status]);
   useEffect(() => () => cancel(), []);
+
   const start = () => {
     operation.current = true;
     onStart();
   };
+
   const toggle = () => {
     if (explainsBlock) {
       onBlockedPress(unavailableReason!);
+
       return;
     }
+
     if (disabled) return;
+
     if (appearance === "send-slot" && status === "transcribing") {
       cancel();
+
       return;
     }
+
     if (active) onRelease();
     else start();
   };
+
   const label =
     appearance === "send-slot" && status === "transcribing"
       ? t("Cancel dictation")
@@ -92,6 +108,7 @@ export function DictationControls({
         : retry
           ? t("Retry dictation")
           : t("Start dictation");
+
   const statusText = unavailableReason
     ? t("Dictation unavailable: {reason}", { reason: unavailableReason })
     : announcements[status];
@@ -101,12 +118,11 @@ export function DictationControls({
       type="button"
       className={
         appearance === "send-slot"
-          ? `flex size-full items-center justify-center rounded-full transition-colors disabled:opacity-50 aria-disabled:opacity-50 ${
-              active ? "bg-destructive text-white" : "bg-foreground text-background"
+          ? `flex size-full touch-none select-none items-center justify-center rounded-full transition-colors disabled:opacity-50 aria-disabled:opacity-50 ${
+              active ? "bg-destructive text-on-solid" : "bg-foreground text-background"
             }`
-          : "min-h-11 rounded-md border px-3 text-sm focus-visible:outline-2 focus-visible:outline-ring disabled:opacity-50"
+          : "min-h-11 touch-none select-none rounded-md border px-3 text-sm focus-visible:outline-2 focus-visible:outline-ring disabled:opacity-50"
       }
-      style={{ touchAction: "none", userSelect: "none" }}
       disabled={disabled}
       aria-disabled={explainsBlock || undefined}
       aria-label={label}
@@ -114,7 +130,9 @@ export function DictationControls({
       aria-describedby={`${descriptionId} ${descriptionId}-status`}
       onPointerDown={(event) => {
         if (event.button !== 0 || !event.isPrimary || disabled || pointer.current !== null) return;
+
         if (explainsBlock) return;
+
         if (appearance === "send-slot" && status === "transcribing") return;
         event.preventDefault();
         suppressClick.current = true;
@@ -122,12 +140,14 @@ export function DictationControls({
         pointer.current = event.pointerId;
         holdStartedAt.current = Date.now();
         startedThisGesture.current = !active;
+
         if (!active) start();
       }}
       onPointerUp={(event) => {
         if (pointer.current !== event.pointerId) return;
         pointer.current = null;
         const heldMs = Date.now() - holdStartedAt.current;
+
         // A tap starts recording; only a real hold finishes on release.
         if (appearance === "send-slot" && startedThisGesture.current && heldMs < 220) return;
         onRelease();
@@ -142,8 +162,10 @@ export function DictationControls({
         // Pointer release already finished the hold; keyboard and AT clicks have detail zero.
         if (event.detail !== 0 && suppressClick.current) {
           suppressClick.current = false;
+
           return;
         }
+
         suppressClick.current = false;
         toggle();
       }}

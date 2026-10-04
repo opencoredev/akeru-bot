@@ -1,7 +1,11 @@
+import * as Schema from "effect/Schema";
+import * as Option from "effect/Option";
+import { storedField } from "./lib/persistedSchema";
+import * as Predicate from "effect/Predicate";
 import { scopedThreadKey } from "@akeru/client-runtime/environment";
 import type { ScopedThreadRef } from "@akeru/contracts";
 import { create } from "zustand";
-import { createJSONStorage, persist } from "zustand/middleware";
+import { createJSONStorage, persist, type PersistOptions } from "zustand/middleware";
 import { useShallow } from "zustand/react/shallow";
 
 import { normalizePreviewUrl } from "@akeru/shared/preview";
@@ -14,32 +18,41 @@ import { createMigratingStorage } from "./lib/storageKeyMigration";
 export type BrowserHistoryEntry = { url: string; lastVisitedAt: number; title?: string };
 
 export const BROWSER_HISTORY_MAX_ENTRIES_PER_PROJECT = 50;
+
 export const BROWSER_HISTORY_MAX_PROJECTS = 20;
+
 export const BROWSER_HISTORY_MAX_URL_LENGTH = 2048;
+
 export const BROWSER_HISTORY_MAX_TITLE_LENGTH = 512;
+
 const MAX_VALID_DATE_MS = 8_640_000_000_000_000;
 
 export function isValidHistoryTimestamp(value: unknown): value is number {
   return (
-    typeof value === "number" && Number.isFinite(value) && Math.abs(value) <= MAX_VALID_DATE_MS
+    Predicate.isNumber(value) && Number.isFinite(value) && Math.abs(value) <= MAX_VALID_DATE_MS
   );
 }
 
 export function normalizeHistoryUrl(raw: string): string | null {
   let parsed: URL;
+
   try {
     parsed = new URL(normalizePreviewUrl(raw));
   } catch {
     return null;
   }
+
   parsed.username = parsed.password = "";
+
   return parsed.href.length > BROWSER_HISTORY_MAX_URL_LENGTH ? null : parsed.href;
 }
 
 export function titleLookupKey(normalized: string, environmentHostname?: string | null): string {
   const parsed = new URL(visitLookupKey(normalized, environmentHostname));
+
   if (parsed.pathname !== "/" && parsed.pathname.endsWith("/"))
     parsed.pathname = parsed.pathname.slice(0, -1);
+
   return parsed.href;
 }
 
@@ -47,13 +60,16 @@ function visitLookupKey(normalized: string, environmentHostname?: string | null)
   const parsed = new URL(normalized);
   const host = normalizeHostname(parsed.hostname);
   const environmentHost = environmentHostname && normalizeHostname(environmentHostname);
+
   if (isLocalLoopbackHost(host) || host === "0.0.0.0" || host === environmentHost)
     parsed.hostname = "local";
+
   return parsed.href;
 }
 
 function isStableLocalUrl(normalized: string): boolean {
   const host = normalizeHostname(new URL(normalized).hostname);
+
   return isLocalLoopbackHost(host) || host === "0.0.0.0";
 }
 
@@ -64,23 +80,30 @@ export function upsertHistoryEntry(
   options?: { insertOrdered?: boolean; environmentHostname?: string | null },
 ): BrowserHistoryEntry[] {
   const key = visitLookupKey(url, options?.environmentHostname);
+
   const existing = entries.find(
     (candidate) => visitLookupKey(candidate.url, options?.environmentHostname) === key,
   );
+
   const rest = entries.filter(
     (candidate) => visitLookupKey(candidate.url, options?.environmentHostname) !== key,
   );
+
   const visitedAt =
     options?.insertOrdered && existing && existing.lastVisitedAt > at ? existing.lastVisitedAt : at;
+
   const storedUrl =
     existing && (isStableLocalUrl(existing.url) || !isStableLocalUrl(url)) ? existing.url : url;
+
   const entry: BrowserHistoryEntry = existing
     ? { ...existing, url: storedUrl, lastVisitedAt: visitedAt }
     : { url, lastVisitedAt: visitedAt };
+
   if (!options?.insertOrdered)
     return [entry, ...rest].slice(0, BROWSER_HISTORY_MAX_ENTRIES_PER_PROJECT);
   const index = rest.findIndex((candidate) => candidate.lastVisitedAt < entry.lastVisitedAt);
   const next = index === -1 ? [...rest, entry] : rest.toSpliced(index, 0, entry);
+
   return next.slice(0, BROWSER_HISTORY_MAX_ENTRIES_PER_PROJECT);
 }
 
@@ -88,39 +111,71 @@ export function evictExcessProjects(
   byProjectKey: Record<string, BrowserHistoryEntry[]>,
 ): Record<string, BrowserHistoryEntry[]> {
   const keys = Object.keys(byProjectKey);
+
   if (keys.length <= BROWSER_HISTORY_MAX_PROJECTS) return byProjectKey;
+
   const kept = keys
     .toSorted(
       (a, b) =>
         (byProjectKey[b]?.[0]?.lastVisitedAt ?? 0) - (byProjectKey[a]?.[0]?.lastVisitedAt ?? 0),
     )
     .slice(0, BROWSER_HISTORY_MAX_PROJECTS);
+
   return Object.fromEntries(kept.map((key) => [key, byProjectKey[key] ?? []]));
 }
 
-export function migratePersistedBrowserHistoryState(persistedState: unknown): {
-  byProjectKey: Record<string, BrowserHistoryEntry[]>;
-} {
-  if (!persistedState || typeof persistedState !== "object") return { byProjectKey: {} };
-  const raw = (persistedState as { byProjectKey?: unknown }).byProjectKey;
-  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return { byProjectKey: {} };
-  const byProjectKey: Record<string, BrowserHistoryEntry[]> = {};
-  for (const [projectKey, value] of Object.entries(raw as Record<string, unknown>)) {
-    if (!Array.isArray(value)) continue;
+const StoredHistoryEntry = Schema.Struct({
+  url: storedField(Schema.NullOr(Schema.String), null),
+  lastVisitedAt: storedField(Schema.NullOr(Schema.Number), null),
+  title: storedField(Schema.NullOr(Schema.String), null),
+});
+
+const StoredBrowserHistory = Schema.Struct({
+  byProjectKey: storedField(
+    Schema.Record(
+      Schema.String,
+      storedField(Schema.Array(storedField(Schema.NullOr(StoredHistoryEntry), null)), []),
+    ),
+    {},
+  ),
+  projectKeyByThreadKey: storedField(
+    Schema.Record(Schema.String, storedField(Schema.NullOr(Schema.String), null)),
+    {},
+  ),
+});
+
+const decodeStoredHistory = Schema.decodeUnknownOption(StoredBrowserHistory);
+
+type PersistedBrowserHistory = Pick<BrowserHistoryStoreState, "byProjectKey">;
+
+export const migratePersistedBrowserHistoryState = ((persistedState) => {
+  const decoded = decodeStoredHistory(persistedState);
+  const byProjectKey: BrowserHistoryStoreState["byProjectKey"] = {};
+
+  if (Option.isNone(decoded)) return { byProjectKey };
+
+  for (const [projectKey, value] of Object.entries(decoded.value.byProjectKey)) {
     const seenUrls = new Set<string>();
+
     const entries = value
       .flatMap<BrowserHistoryEntry>((candidate) => {
-        if (!candidate || typeof candidate !== "object") return [];
-        const { url, lastVisitedAt, title } = candidate as Record<string, unknown>;
-        if (typeof url !== "string") return [];
+        if (candidate === null || candidate.url === null) return [];
+        const { url, lastVisitedAt, title } = candidate;
         const normalizedUrl = normalizeHistoryUrl(url);
-        if (!normalizedUrl) return [];
-        if (!isValidHistoryTimestamp(lastVisitedAt)) return [];
+
+        if (
+          !normalizedUrl ||
+          lastVisitedAt === null ||
+          !Number.isFinite(lastVisitedAt) ||
+          Math.abs(lastVisitedAt) > MAX_VALID_DATE_MS
+        )
+          return [];
+
         return [
           {
             url: normalizedUrl,
             lastVisitedAt,
-            ...(typeof title === "string" && title.length > 0
+            ...(title !== null && title.length > 0
               ? { title: title.slice(0, BROWSER_HISTORY_MAX_TITLE_LENGTH) }
               : {}),
           },
@@ -129,24 +184,33 @@ export function migratePersistedBrowserHistoryState(persistedState: unknown): {
       .toSorted((a, b) => b.lastVisitedAt - a.lastVisitedAt)
       .filter((entry) => {
         const key = visitLookupKey(entry.url);
+
         if (seenUrls.has(key)) return false;
         seenUrls.add(key);
+
         return true;
       })
       .slice(0, BROWSER_HISTORY_MAX_ENTRIES_PER_PROJECT);
+
     if (entries.length > 0) byProjectKey[projectKey] = entries;
   }
+
   return { byProjectKey: evictExcessProjects(byProjectKey) };
-}
+}) satisfies NonNullable<
+  PersistOptions<BrowserHistoryStoreState, PersistedBrowserHistory>["migrate"]
+>;
 
 const BROWSER_HISTORY_STORAGE_KEY = "akeru:browser-history:v1";
+
 // Pre-rebrand key; migrated through the wrapping storage on first write.
 const LEGACY_BROWSER_HISTORY_STORAGE_KEY = "t3code:browser-history:v1";
 
 const PENDING_MAX_PER_THREAD = 10;
+
 const PENDING_MAX_THREADS = 20;
 
 type PendingVisit = { url: string; at: number; environmentHostname: string | null };
+
 type PendingTitle = { url: string; title: string; environmentHostname: string | null | undefined };
 
 interface BrowserHistoryStoreState {
@@ -174,17 +238,48 @@ function addPendingByThread<T>(
   pendingByThreadKey: Record<string, T[]>,
   threadKey: string,
   item: T,
-): Record<string, T[]> {
+) {
   const existing = pendingByThreadKey[threadKey] ?? [];
   const next = { ...pendingByThreadKey };
   next[threadKey] = [...existing, item].slice(-PENDING_MAX_PER_THREAD);
   const keys = Object.keys(next);
+
   if (keys.length > PENDING_MAX_THREADS) {
     const oldestKey = keys[0];
+
     if (oldestKey !== undefined && oldestKey !== threadKey) delete next[oldestKey];
   }
+
   return next;
 }
+
+export const mergeBrowserHistoryState = ((persistedState, currentState) => {
+  const migrated = migratePersistedBrowserHistoryState(persistedState);
+  const decoded = decodeStoredHistory(persistedState);
+
+  const projectKeyByThreadKey = Option.isSome(decoded)
+    ? Object.fromEntries(
+        Object.entries(decoded.value.projectKeyByThreadKey)
+          .filter(
+            (entry): entry is [string, string] =>
+              entry[1] !== null && entry[1] in migrated.byProjectKey,
+          )
+          .slice(-100),
+      )
+    : {};
+
+  const state: BrowserHistoryStoreState = {
+    ...currentState,
+    ...migrated,
+    projectKeyByThreadKey,
+    pendingVisitsByThreadKey: {},
+    pendingTitlesByThreadKey: {},
+  };
+
+  return state;
+}) satisfies NonNullable<
+  PersistOptions<BrowserHistoryStoreState, PersistedBrowserHistory>["merge"]
+>;
 
 export const useBrowserHistoryStore = create<BrowserHistoryStoreState>()(
   persist(
@@ -195,6 +290,7 @@ export const useBrowserHistoryStore = create<BrowserHistoryStoreState>()(
       pendingTitlesByThreadKey: {},
       recordVisit: (projectKey, url, at, options) => {
         const normalized = normalizeHistoryUrl(url);
+
         if (!normalized) return;
         set((state) => {
           return {
@@ -215,11 +311,14 @@ export const useBrowserHistoryStore = create<BrowserHistoryStoreState>()(
         const state = get();
         const entries = state.byProjectKey[projectKey];
         const trimmed = title.trim().slice(0, BROWSER_HISTORY_MAX_TITLE_LENGTH);
+
         if (!normalized || !entries || trimmed.length === 0) return;
         const key = titleLookupKey(normalized, environmentHostname);
+
         const index = entries.findIndex(
           (candidate) => titleLookupKey(candidate.url, environmentHostname) === key,
         );
+
         if (index === -1 || entries[index]?.title === trimmed) return;
         set({
           byProjectKey: {
@@ -234,14 +333,19 @@ export const useBrowserHistoryStore = create<BrowserHistoryStoreState>()(
         const normalized = normalizeHistoryUrl(url);
         const state = get();
         const entries = state.byProjectKey[projectKey];
+
         if (!normalized || !entries) return;
         const next = entries.filter((candidate) => candidate.url !== normalized);
+
         if (next.length === entries.length) return;
+
         if (next.length === 0) {
           const { [projectKey]: _removed, ...rest } = state.byProjectKey;
           set({ byProjectKey: rest });
+
           return;
         }
+
         set({ byProjectKey: { ...state.byProjectKey, [projectKey]: next } });
       },
       registerThreadProject: (ref, projectKey) => {
@@ -249,6 +353,7 @@ export const useBrowserHistoryStore = create<BrowserHistoryStoreState>()(
         const state = get();
         const pendingVisits = state.pendingVisitsByThreadKey[threadKey];
         const pendingTitles = state.pendingTitlesByThreadKey[threadKey];
+
         if (
           state.projectKeyByThreadKey[threadKey] === projectKey &&
           !pendingVisits &&
@@ -256,6 +361,7 @@ export const useBrowserHistoryStore = create<BrowserHistoryStoreState>()(
         ) {
           return;
         }
+
         const nextPendingVisits = { ...state.pendingVisitsByThreadKey };
         const nextPendingTitles = { ...state.pendingTitlesByThreadKey };
         delete nextPendingVisits[threadKey];
@@ -265,11 +371,13 @@ export const useBrowserHistoryStore = create<BrowserHistoryStoreState>()(
           pendingVisitsByThreadKey: nextPendingVisits,
           pendingTitlesByThreadKey: nextPendingTitles,
         });
+
         for (const visit of pendingVisits ?? [])
           get().recordVisit(projectKey, visit.url, visit.at, {
             insertOrdered: true,
             environmentHostname: visit.environmentHostname,
           });
+
         for (const pendingTitle of pendingTitles ?? [])
           get().setTitleForUrl(
             projectKey,
@@ -299,37 +407,6 @@ export const useBrowserHistoryStore = create<BrowserHistoryStoreState>()(
   ),
 );
 
-export function mergeBrowserHistoryState(
-  persistedState: unknown,
-  currentState: BrowserHistoryStoreState,
-): BrowserHistoryStoreState {
-  const migrated = migratePersistedBrowserHistoryState(persistedState);
-  return {
-    ...currentState,
-    ...migrated,
-    projectKeyByThreadKey: migratePersistedThreadProjectKeys(persistedState, migrated.byProjectKey),
-    pendingVisitsByThreadKey: {},
-    pendingTitlesByThreadKey: {},
-  };
-}
-
-function migratePersistedThreadProjectKeys(
-  persistedState: unknown,
-  byProjectKey: Record<string, BrowserHistoryEntry[]>,
-): Record<string, string> {
-  if (!persistedState || typeof persistedState !== "object") return {};
-  const raw = (persistedState as { projectKeyByThreadKey?: unknown }).projectKeyByThreadKey;
-  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return {};
-  return Object.fromEntries(
-    Object.entries(raw as Record<string, unknown>)
-      .filter(
-        (entry): entry is [string, string] =>
-          typeof entry[1] === "string" && entry[1] in byProjectKey,
-      )
-      .slice(-100),
-  );
-}
-
 export function recordVisitForThread(ref: ScopedThreadRef, url: string, at?: number): void {
   const threadKey = scopedThreadKey(ref);
   const state = useBrowserHistoryStore.getState();
@@ -337,6 +414,7 @@ export function recordVisitForThread(ref: ScopedThreadRef, url: string, at?: num
   const visitAt = at ?? Date.now();
   const connection = readPreparedConnection(ref.environmentId);
   const environmentHostname = connection ? new URL(connection.httpBaseUrl).hostname : null;
+
   if (!projectKey) {
     useBrowserHistoryStore.setState({
       pendingVisitsByThreadKey: addPendingByThread(state.pendingVisitsByThreadKey, threadKey, {
@@ -345,8 +423,10 @@ export function recordVisitForThread(ref: ScopedThreadRef, url: string, at?: num
         environmentHostname,
       }),
     });
+
     return;
   }
+
   state.recordVisit(projectKey, url, visitAt, { environmentHostname });
 }
 
@@ -359,6 +439,7 @@ export function setTitleForThreadUrl(
   const threadKey = scopedThreadKey(ref);
   const state = useBrowserHistoryStore.getState();
   const projectKey = state.projectKeyByThreadKey[threadKey];
+
   if (!projectKey) {
     useBrowserHistoryStore.setState({
       pendingTitlesByThreadKey: addPendingByThread(state.pendingTitlesByThreadKey, threadKey, {
@@ -367,14 +448,17 @@ export function setTitleForThreadUrl(
         environmentHostname,
       }),
     });
+
     return;
   }
+
   state.setTitleForUrl(projectKey, url, title, environmentHostname);
 }
 
 export function removeUrlForThread(ref: ScopedThreadRef, url: string): void {
   const state = useBrowserHistoryStore.getState();
   const projectKey = state.projectKeyByThreadKey[scopedThreadKey(ref)];
+
   if (!projectKey) return;
   state.removeUrl(projectKey, url);
 }
@@ -389,6 +473,7 @@ export function useThreadRecentHistory(
     useShallow((state) => {
       const projectKey = state.projectKeyByThreadKey[scopedThreadKey(ref)];
       const entries = projectKey ? state.byProjectKey[projectKey] : undefined;
+
       return entries && entries.length > 0 ? entries.slice(0, limit) : EMPTY_HISTORY;
     }),
   );

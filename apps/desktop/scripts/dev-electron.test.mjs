@@ -12,21 +12,29 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("node:child_process", () => ({ spawn: mocks.spawn, spawnSync: mocks.spawnSync }));
+
 vi.mock("node:fs", () => ({ watch: mocks.watch }));
+
 vi.mock("node:os", () => ({ platform: mocks.platform }));
+
 vi.mock("./electron-launcher.mjs", () => ({
   desktopDir: "/repo/apps/desktop",
   resolveDevProtocolClient: mocks.resolveDevProtocolClient,
   resolveElectronLaunchCommand: mocks.resolveElectronLaunchCommand,
 }));
+
 vi.mock("./wait-for-resources.mjs", () => ({ waitForResources: mocks.waitForResources }));
 
 const killProcess = process.kill.bind(process);
 
 let apps;
+
 let watchers;
+
 let signals;
+
 let kill;
+
 let exit;
 
 async function launch(platform = "darwin") {
@@ -53,6 +61,7 @@ describe("desktop development process ownership", () => {
     exit = vi.spyOn(process, "exit").mockImplementation(() => undefined);
     vi.spyOn(process, "once").mockImplementation((signal, listener) => {
       signals.set(signal, listener);
+
       return process;
     });
     mocks.resolveElectronLaunchCommand.mockImplementation((args) => ({
@@ -64,11 +73,13 @@ describe("desktop development process ownership", () => {
       app.pid = 4100 + apps.length;
       app.kill = vi.fn();
       apps.push(app);
+
       return app;
     });
     mocks.watch.mockImplementation((_directory, _options, onChange) => {
       const watcher = { onChange, close: vi.fn() };
       watchers.push(watcher);
+
       return watcher;
     });
   });
@@ -169,6 +180,7 @@ describe("desktop development process ownership", () => {
     mocks.spawn.mockImplementationOnce(() => {
       const app = new NodeEvents.EventEmitter();
       apps.push(app);
+
       return app;
     });
     await launch();
@@ -223,16 +235,17 @@ describe("desktop development process ownership", () => {
     expect(exit).toHaveBeenCalledExactlyOnceWith(143);
   });
 
-  // oxlint-disable-next-line akeru/no-global-process-runtime -- Process-group smoke tests require POSIX signals.
   it.skipIf(process.platform === "win32").each([false, true])(
     "cleans a real owned child and grandchild, with forced shutdown %s",
     async (forceShutdown) => {
       const { spawn } = await vi.importActual("node:child_process");
+
       const grandchildScript = `
         process.on("SIGTERM", () => {});
         process.send("ready");
         setInterval(() => {}, 1000);
       `;
+
       const childScript = `
         const { spawn } = require("node:child_process");
         process.on("SIGTERM", () => { ${forceShutdown ? "" : "process.exit(0);"} });
@@ -242,6 +255,7 @@ describe("desktop development process ownership", () => {
         grandchild.once("message", () => process.send("ready"));
         setInterval(() => {}, 1000);
       `;
+
       const unrelated = spawn(
         process.execPath,
         [
@@ -253,11 +267,13 @@ describe("desktop development process ownership", () => {
         ],
         { stdio: ["ignore", "ignore", "ignore", "ipc"] },
       );
+
       const unrelatedExit = NodeEvents.once(unrelated, "exit");
       let app;
       let ready;
       let closed;
       let appClosed = false;
+
       try {
         await NodeEvents.once(unrelated, "message");
         mocks.spawn.mockImplementationOnce(() => {
@@ -270,6 +286,7 @@ describe("desktop development process ownership", () => {
           closed = NodeEvents.once(app, "close").then(() => {
             appClosed = true;
           });
+
           return app;
         });
         kill.mockImplementation(killProcess);
@@ -278,9 +295,11 @@ describe("desktop development process ownership", () => {
         signals.get("SIGTERM")();
         await vi.advanceTimersByTimeAsync(0);
         expect(kill).toHaveBeenCalledWith(-app.pid, "SIGTERM");
+
         if (!forceShutdown) {
           await closed;
         }
+
         await vi.advanceTimersByTimeAsync(1500);
         await closed;
         await vi.advanceTimersByTimeAsync(0);
@@ -299,6 +318,7 @@ describe("desktop development process ownership", () => {
           killProcess(-app.pid, "SIGKILL");
           await closed;
         }
+
         unrelated.kill("SIGKILL");
         await unrelatedExit;
       }

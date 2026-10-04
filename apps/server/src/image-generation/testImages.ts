@@ -6,12 +6,14 @@ export function pngBytes(width: number, height: number): Uint8Array {
   bytes.set([0x49, 0x48, 0x44, 0x52], 12);
   new DataView(bytes.buffer).setUint32(16, width);
   new DataView(bytes.buffer).setUint32(20, height);
+
   return bytes;
 }
 
 export function jpegBytes(width: number, height: number): Uint8Array {
   // SOI, APP0 (length 16), SOF0 with height/width, EOI.
   const app0 = [0xff, 0xe0, 0x00, 0x10, ...Array.from({ length: 14 }, () => 0)];
+
   const sof0 = [
     0xff,
     0xc0,
@@ -25,6 +27,7 @@ export function jpegBytes(width: number, height: number): Uint8Array {
     0x03,
     ...Array.from({ length: 9 }, () => 0),
   ];
+
   return new Uint8Array([0xff, 0xd8, ...app0, ...sof0, 0xff, 0xd9]);
 }
 

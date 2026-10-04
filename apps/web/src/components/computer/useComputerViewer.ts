@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 import { RegistryContext } from "@effect/atom-react";
 import {
   deriveComputerViewer,
@@ -25,6 +26,7 @@ import { useAtomCommand } from "~/state/use-atom-command";
 import { useAtomQueryRunner } from "~/state/use-atom-query-runner";
 
 const isComputerError = Schema.is(ComputerError);
+
 /** How often an open viewer asks again for a computer that has not started yet. */
 const UNAVAILABLE_RECHECK_MS = 5_000;
 
@@ -32,8 +34,9 @@ const UNAVAILABLE_RECHECK_MS = 5_000;
 export function computerViewerOutcome<A, E>(
   result: AtomCommandResult<A, E>,
 ): ComputerViewerOutcome<A> {
-  if (result._tag === "Success") return { ok: true, value: result.value };
+  if (Predicate.isTagged(result, "Success")) return { ok: true, value: result.value };
   const error = Cause.squash(result.cause);
+
   return { ok: false, code: isComputerError(error) ? error.code : "adapter" };
 }
 
@@ -53,6 +56,7 @@ function usePageVisible(): boolean {
   return useSyncExternalStore(
     (onChange) => {
       document.addEventListener("visibilitychange", onChange);
+
       return () => document.removeEventListener("visibilitychange", onChange);
     },
     () => document.visibilityState === "visible",
@@ -83,15 +87,18 @@ export function useComputerViewer(threadRef: ScopedThreadRef, open: boolean): Co
   const stop = useAtomCommand(computerEnvironment.stop, commandOptions);
 
   const { environmentId, threadId } = threadRef;
+
   const eventsAtom = useMemo(
     () => computerEnvironment.events({ environmentId, input: { threadId } }),
     [environmentId, threadId],
   );
+
   const [streamEpoch, setStreamEpoch] = useState(0);
   const resubscribe = useCallback(() => setStreamEpoch((epoch) => epoch + 1), []);
 
   const controller = useMemo(() => {
     const target = { environmentId, input: { threadId } };
+
     return createComputerViewerController({
       port: {
         getState: async () => computerViewerOutcome(await getState(target)),
@@ -126,6 +133,7 @@ export function useComputerViewer(threadRef: ScopedThreadRef, open: boolean): Co
   useEffect(() => {
     if (!visible) return;
     void controller.show();
+
     return () => {
       void controller.hide();
     };
@@ -143,12 +151,15 @@ export function useComputerViewer(threadRef: ScopedThreadRef, open: boolean): Co
   useEffect(() => {
     if (!unavailable) return;
     let active = true;
+
     const timer = setInterval(() => {
       void getState({ environmentId, input: { threadId } }).then((outcome) => {
         const next = computerViewerOutcome(outcome);
+
         if (active && next.ok) applyUnavailableRecheck(controller, next.value);
       });
     }, UNAVAILABLE_RECHECK_MS);
+
     return () => {
       active = false;
       clearInterval(timer);
@@ -161,14 +172,17 @@ export function useComputerViewer(threadRef: ScopedThreadRef, open: boolean): Co
   const streamable = visible && connected && status !== "stopped" && status !== "unavailable";
   useEffect(() => {
     if (!streamable) return;
+
     if (streamEpoch > 0) registry.refresh(eventsAtom);
+
     return registry.subscribe(
       eventsAtom,
       (result) => {
-        if (result._tag === "Success") controller.receive(result.value);
-        else if (result._tag === "Failure") {
+        if (Predicate.isTagged(result, "Success")) controller.receive(result.value);
+        else if (Predicate.isTagged(result, "Failure")) {
           void getState({ environmentId, input: { threadId } }).then((outcome) => {
             const next = computerViewerOutcome(outcome);
+
             if (next.ok) controller.dispatch({ type: "server-state", state: next.value });
           });
         }
@@ -193,13 +207,16 @@ export function useComputerViewer(threadRef: ScopedThreadRef, open: boolean): Co
   const leaseExpiresAt = lease?.expiresAt ?? null;
   useEffect(() => {
     if (leaseId === null || leaseExpiresAt === null) return;
+
     const timer = window.setTimeout(
       () => controller.dispatch({ type: "tick", now: leaseExpiresAt }),
       COMPUTER_SESSION_TTL_MS,
     );
+
     return () => window.clearTimeout(timer);
   }, [controller, leaseExpiresAt, leaseId]);
 
   const view = useMemo(() => deriveComputerViewer(state), [state]);
+
   return { controller, state, view };
 }

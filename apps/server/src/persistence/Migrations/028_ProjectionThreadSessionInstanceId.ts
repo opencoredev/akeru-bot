@@ -7,6 +7,7 @@ export default Effect.gen(function* () {
   const columns = yield* sql<{ readonly name: string }>`
     PRAGMA table_info(projection_thread_sessions)
   `;
+
   if (!columns.some((column) => column.name === "provider_instance_id")) {
     yield* sql`
       ALTER TABLE projection_thread_sessions

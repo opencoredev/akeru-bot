@@ -11,6 +11,7 @@ import {
 import { CLIENT_SETTINGS_STORAGE_KEY } from "./clientPersistenceStorage";
 
 const subscriptions = vi.hoisted(() => new Set<(listener: () => void) => () => void>());
+
 vi.mock("react", async (importOriginal) => ({
   ...(await importOriginal<typeof import("react")>()),
   useSyncExternalStore: <T,>(
@@ -18,12 +19,14 @@ vi.mock("react", async (importOriginal) => ({
     getSnapshot: () => T,
   ) => {
     subscriptions.add(subscribe);
+
     return getSnapshot();
   },
 }));
 
 function storage() {
   const values = new Map<string, string>();
+
   return {
     getItem: (key: string) => values.get(key) ?? null,
     setItem: (key: string, value: string) => {
@@ -37,13 +40,18 @@ function storage() {
 }
 
 let current: ReturnType<typeof useI18n>;
+
 let updateOther: ReturnType<typeof useUpdateClientSettings>;
+
 const cleanups: Array<() => void> = [];
+
 function Probe() {
   current = useI18n();
   updateOther = useUpdateClientSettings();
+
   return <span lang={current.locale}>{current.preference}</span>;
 }
+
 function render() {
   return renderToStaticMarkup(
     <LanguageProvider>
@@ -51,9 +59,11 @@ function render() {
     </LanguageProvider>,
   );
 }
+
 function subscribe() {
   for (const subscription of subscriptions) cleanups.push(subscription(() => {}));
 }
+
 function resetRenderer() {
   for (const cleanup of cleanups.splice(0)) cleanup();
   subscriptions.clear();
@@ -64,6 +74,7 @@ beforeEach(() => {
   resetRenderer();
   vi.stubGlobal("navigator", { languages: ["en-GB"] });
 });
+
 afterEach(() => {
   resetRenderer();
   vi.unstubAllGlobals();
@@ -78,12 +89,14 @@ describe("language client settings persistence", () => {
       timestampFormat: "24-hour",
       environmentIdentificationMode: "none",
     };
+
     const bridge = {
       getClientSettings: vi.fn(async () => disk),
       setClientSettings: vi.fn(async (settings: ClientSettings) => {
         disk = settings;
       }),
     };
+
     const localStorage = storage();
     vi.stubGlobal(
       "window",
@@ -128,9 +141,11 @@ describe("language client settings persistence", () => {
 
   it("waits for disk hydration before applying a language change", async () => {
     let resolveDisk!: (settings: ClientSettings) => void;
+
     const diskRead = new Promise<ClientSettings>((resolve) => {
       resolveDisk = resolve;
     });
+
     const setClientSettings = vi.fn(async (_settings: ClientSettings) => {});
     vi.stubGlobal(
       "window",

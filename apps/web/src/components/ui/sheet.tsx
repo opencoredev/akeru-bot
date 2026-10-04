@@ -65,8 +65,11 @@ function SheetPopup({
   forceBackdrop = false,
   side = "right",
   variant = "default",
+  flush = false,
   ...props
 }: SheetPrimitive.Popup.Props & {
+  /** Drops the popup padding so a full-height panel can own its own insets. */
+  flush?: boolean;
   showCloseButton?: boolean;
   keepMounted?: boolean;
   /** Render the backdrop even when Base UI treats this sheet as nested in another dialog. */
@@ -91,6 +94,7 @@ function SheetPopup({
               "col-start-2 w-[calc(100%-(--spacing(12)))] max-w-md border-s data-ending-style:translate-x-8 data-starting-style:translate-x-8",
             variant === "inset" &&
               "before:hidden sm:rounded-2xl sm:border sm:before:rounded-[calc(var(--radius-2xl)-1px)] sm:**:data-[slot=sheet-footer]:rounded-b-[calc(var(--radius-2xl)-1px)]",
+            flush && "pb-safe pt-safe p-0",
             className,
           )}
           data-slot="sheet-popup"
@@ -112,11 +116,22 @@ function SheetPopup({
   );
 }
 
-function SheetHeader({ className, ...props }: React.ComponentProps<"div">) {
+/**
+ * `compact` is the tighter, bordered header of a narrow side sheet, with room on the end
+ * for the close button.
+ */
+function SheetHeader({
+  className,
+  variant = "default",
+  ...props
+}: React.ComponentProps<"div"> & {
+  variant?: "default" | "compact";
+}) {
   return (
     <div
       className={cn(
         "flex flex-col gap-2 p-6 in-[[data-slot=sheet-popup]:has([data-slot=sheet-panel])]:pb-3 max-sm:pb-4",
+        variant === "compact" && "gap-1 border-b px-6 pt-5 pb-4 pe-12",
         className,
       )}
       data-slot="sheet-header"
@@ -147,10 +162,20 @@ function SheetFooter({
   );
 }
 
-function SheetTitle({ className, ...props }: SheetPrimitive.Title.Props) {
+function SheetTitle({
+  className,
+  variant = "default",
+  ...props
+}: SheetPrimitive.Title.Props & {
+  variant?: "default" | "compact";
+}) {
   return (
     <SheetPrimitive.Title
-      className={cn("font-heading font-semibold text-xl leading-none", className)}
+      className={cn(
+        "font-semibold text-xl leading-none",
+        variant === "compact" && "text-base leading-6",
+        className,
+      )}
       data-slot="sheet-title"
       {...props}
     />
@@ -170,13 +195,18 @@ function SheetDescription({ className, ...props }: SheetPrimitive.Description.Pr
 function SheetPanel({
   className,
   scrollFade = true,
+  variant = "default",
   ...props
-}: React.ComponentProps<"div"> & { scrollFade?: boolean }) {
+}: React.ComponentProps<"div"> & {
+  scrollFade?: boolean;
+  variant?: "default" | "compact";
+}) {
   return (
     <ScrollArea scrollFade={scrollFade}>
       <div
         className={cn(
           "p-6 in-[[data-slot=sheet-popup]:has([data-slot=sheet-header])]:pt-1 in-[[data-slot=sheet-popup]:has([data-slot=sheet-footer]:not(.border-t))]:pb-1",
+          variant === "compact" && "px-6 pb-6",
           className,
         )}
         data-slot="sheet-panel"

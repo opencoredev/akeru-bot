@@ -85,6 +85,7 @@ it("parses repeatable capture filters", () => {
     "both",
     "--skip-build",
   ]);
+
   assert.deepStrictEqual([...options.platforms], ["ios"]);
   assert.deepStrictEqual([...options.deviceIds], ["phone"]);
   assert.deepStrictEqual([...options.scenes], ["environments"]);
@@ -226,6 +227,7 @@ it("reads captured PNG dimensions from the IHDR header", () => {
 function rgbaPng(width: number, height: number): Buffer {
   const png = new PNG({ width, height });
   png.data.fill(255);
+
   return PNG.sync.write(png);
 }
 
@@ -317,14 +319,17 @@ it("seeds a playful multi-environment project spectrum", () => {
     ["hydration-haikus", "patient-penguins"],
   );
   assert.equal(new Set(snoozedThreads.map((thread) => thread.snoozeMinutes)).size, 2);
+
   for (const thread of snoozedThreads) {
     assert.equal(thread.response !== null, true, `${thread.title} is not completed`);
     assert.equal("state" in thread, false, `${thread.title} is blocked or working`);
     assert.equal("settled" in thread, false, `${thread.title} is settled`);
     assert.equal(thread.snoozeMinutes > 60, true, `${thread.title} wakes too soon`);
   }
+
   const primaryThread = SHOWCASE_THREADS.find((thread) => thread.id === "remote-command-center");
   assert.equal(primaryThread !== undefined && !("snoozeMinutes" in primaryThread), true);
+
   // Every project contributes to both the active block and the settled tail,
   // so each list scope screenshots with the same two-part structure.
   for (const project of SHOWCASE_PROJECTS) {

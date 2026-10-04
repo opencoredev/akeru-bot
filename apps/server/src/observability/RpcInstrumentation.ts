@@ -1,3 +1,4 @@
+import type { RawMetricAttributes } from "./Attributes.ts";
 import { WS_METHODS } from "@akeru/contracts";
 import * as Clock from "effect/Clock";
 import * as Duration from "effect/Duration";
@@ -11,10 +12,12 @@ import { outcomeFromExit } from "./Attributes.ts";
 import { metricAttributes, rpcRequestDuration, rpcRequestsTotal, withMetrics } from "./Metrics.ts";
 
 const RPC_SPAN_PREFIX = "ws.rpc";
+
 const DEFAULT_RPC_SPAN_ATTRIBUTES = {
   "rpc.transport": "websocket",
   "rpc.system": "effect-rpc",
 } as const;
+
 const RPC_METHODS_WITH_TRACING_DISABLED: ReadonlySet<string> = new Set([
   WS_METHODS.serverGetTraceDiagnostics,
   WS_METHODS.serverGetProcessDiagnostics,
@@ -26,10 +29,7 @@ function shouldTraceRpc(method: string): boolean {
   return !RPC_METHODS_WITH_TRACING_DISABLED.has(method);
 }
 
-const rpcSpanAttributes = (
-  method: string,
-  traceAttributes?: Readonly<Record<string, unknown>>,
-): Record<string, unknown> => ({
+const rpcSpanAttributes = (method: string, traceAttributes?: RawMetricAttributes) => ({
   ...DEFAULT_RPC_SPAN_ATTRIBUTES,
   "rpc.method": method,
   ...traceAttributes,
@@ -38,7 +38,7 @@ const rpcSpanAttributes = (
 const withRpcEffectTracing = <A, E, R>(
   method: string,
   effect: Effect.Effect<A, E, R>,
-  traceAttributes?: Readonly<Record<string, unknown>>,
+  traceAttributes?: RawMetricAttributes,
 ): Effect.Effect<A, E, R> =>
   shouldTraceRpc(method)
     ? effect.pipe(
@@ -51,7 +51,7 @@ const withRpcEffectTracing = <A, E, R>(
 const withRpcStreamTracing = <A, E, R>(
   method: string,
   stream: Stream.Stream<A, E, R>,
-  traceAttributes?: Readonly<Record<string, unknown>>,
+  traceAttributes?: RawMetricAttributes,
 ): Stream.Stream<A, E, R> =>
   shouldTraceRpc(method)
     ? stream.pipe(
@@ -61,10 +61,10 @@ const withRpcStreamTracing = <A, E, R>(
       )
     : stream.pipe(Stream.provideService(References.TracerEnabled, false));
 
-const recordRpcStreamMetrics = <E>(
+const recordRpcStreamMetrics = <A, E>(
   method: string,
   startedAt: bigint,
-  exit: Exit.Exit<unknown, E>,
+  exit: Exit.Exit<A, E>,
 ): Effect.Effect<void, never, never> =>
   Effect.gen(function* () {
     const endedAt = yield* Clock.currentTimeNanos;
@@ -89,7 +89,7 @@ const recordRpcStreamMetrics = <E>(
 export const observeRpcEffect = <A, E, R>(
   method: string,
   effect: Effect.Effect<A, E, R>,
-  traceAttributes?: Readonly<Record<string, unknown>>,
+  traceAttributes?: RawMetricAttributes,
 ): Effect.Effect<A, E, R> => {
   const instrumented = effect.pipe(
     withMetrics({
@@ -107,11 +107,12 @@ export const observeRpcEffect = <A, E, R>(
 export const observeRpcStream = <A, E, R>(
   method: string,
   stream: Stream.Stream<A, E, R>,
-  traceAttributes?: Readonly<Record<string, unknown>>,
+  traceAttributes?: RawMetricAttributes,
 ): Stream.Stream<A, E, R> => {
   const instrumented = Stream.unwrap(
     Effect.gen(function* () {
       const startedAt = yield* Clock.currentTimeNanos;
+
       return stream.pipe(Stream.onExit((exit) => recordRpcStreamMetrics(method, startedAt, exit)));
     }),
   );
@@ -122,7 +123,7 @@ export const observeRpcStream = <A, E, R>(
 export const observeRpcStreamEffect = <A, StreamError, StreamContext, EffectError, EffectContext>(
   method: string,
   effect: Effect.Effect<Stream.Stream<A, StreamError, StreamContext>, EffectError, EffectContext>,
-  traceAttributes?: Readonly<Record<string, unknown>>,
+  traceAttributes?: RawMetricAttributes,
 ): Stream.Stream<A, StreamError | EffectError, StreamContext | EffectContext> => {
   const instrumented = Stream.unwrap(
     Effect.gen(function* () {
@@ -131,6 +132,7 @@ export const observeRpcStreamEffect = <A, StreamError, StreamContext, EffectErro
 
       if (Exit.isFailure(exit)) {
         yield* recordRpcStreamMetrics(method, startedAt, exit);
+
         return yield* Effect.failCause(exit.cause);
       }
 

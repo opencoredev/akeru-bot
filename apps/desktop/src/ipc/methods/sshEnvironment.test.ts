@@ -1,3 +1,4 @@
+import type * as Schema from "effect/Schema";
 import { assert, describe, it } from "@effect/vitest";
 import { SshHttpBridgeError } from "@akeru/ssh/errors";
 import * as Cause from "effect/Cause";
@@ -12,7 +13,11 @@ import {
   fetchSshEnvironmentDescriptor,
 } from "./sshEnvironment.ts";
 
-function jsonResponse(request: HttpClientRequest.HttpClientRequest, body: unknown, status = 200) {
+function jsonResponse(
+  request: HttpClientRequest.HttpClientRequest,
+  body: Schema.Json,
+  status = 200,
+) {
   return HttpClientResponse.fromWeb(
     request,
     new Response(JSON.stringify(body), {
@@ -36,9 +41,11 @@ function makeHttpClientLayer(
 describe("SSH environment IPC", () => {
   it.effect("fetches and decodes the remote environment descriptor", () => {
     const requestUrls: string[] = [];
+
     const layer = makeHttpClientLayer((request) =>
       Effect.sync(() => {
         requestUrls.push(request.url);
+
         return jsonResponse(request, {
           environmentId: "remote-env",
           label: "Remote Devbox",
@@ -76,6 +83,7 @@ describe("SSH environment IPC", () => {
           httpBaseUrl: "http://127.0.0.1:41773/",
         }),
       );
+
       assert(Exit.isFailure(exit));
       const failure = Cause.findErrorOption(exit.cause);
       assert(Option.isSome(failure));
@@ -89,9 +97,11 @@ describe("SSH environment IPC", () => {
 
   it.effect("rejects non-loopback HTTP endpoints before issuing a request", () => {
     let requestCount = 0;
+
     const layer = makeHttpClientLayer((request) =>
       Effect.sync(() => {
         requestCount += 1;
+
         return jsonResponse(request, {});
       }),
     );
@@ -102,6 +112,7 @@ describe("SSH environment IPC", () => {
           httpBaseUrl: "http://remote.example.com:41773/",
         }),
       );
+
       assert(Exit.isFailure(exit));
       const failure = Cause.findErrorOption(exit.cause);
       assert(Option.isSome(failure));

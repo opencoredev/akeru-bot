@@ -25,6 +25,7 @@ layer("019_ProjectionSnapshotLookupIndexes", (it) => {
       }>`
         PRAGMA index_list(projection_projects)
       `;
+
       assert.ok(
         projectIndexes.some(
           (index) => index.name === "idx_projection_projects_workspace_root_deleted_at",
@@ -38,6 +39,7 @@ layer("019_ProjectionSnapshotLookupIndexes", (it) => {
       }>`
         PRAGMA index_info('idx_projection_projects_workspace_root_deleted_at')
       `;
+
       assert.deepStrictEqual(
         projectIndexColumns.map((column) => column.name),
         ["workspace_root", "deleted_at"],
@@ -52,6 +54,7 @@ layer("019_ProjectionSnapshotLookupIndexes", (it) => {
       }>`
         PRAGMA index_list(projection_threads)
       `;
+
       assert.ok(
         threadIndexes.some(
           (index) => index.name === "idx_projection_threads_project_deleted_created",
@@ -65,6 +68,7 @@ layer("019_ProjectionSnapshotLookupIndexes", (it) => {
       }>`
         PRAGMA index_info('idx_projection_threads_project_deleted_created')
       `;
+
       assert.deepStrictEqual(
         threadIndexColumns.map((column) => column.name),
         ["project_id", "deleted_at", "created_at"],

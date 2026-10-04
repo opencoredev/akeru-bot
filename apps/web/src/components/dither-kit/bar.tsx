@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { type ReactNode, useEffect } from "react";
 import { type AreaVariant, type StrokeVariant, useChartPart } from "./chart-context";
 import { SeriesContext } from "./series-context";
@@ -35,10 +34,12 @@ export function Bar({
 
   useEffect(() => {
     registerSeries({ dataKey, kind: "bar", variant, strokeVariant });
+
     return () => unregisterSeries(dataKey);
   }, [dataKey, variant, strokeVariant, registerSeries, unregisterSeries]);
 
   const band = ctx.bands[dataKey];
+
   if (!ctx.ready || !band) return null;
 
   const seed = ctx.seedOf(dataKey);
@@ -50,21 +51,23 @@ export function Bar({
   return (
     <>
       {isClickable &&
-        band.map((b, i) => {
+        ctx.dataMarks.map(({ index: i, key }) => {
+          const b = band[i];
+
+          if (!b) return null;
           const slot = ctx.barSlot(i, si, n);
           const top = ctx.y(b[1]);
           const base = ctx.y(b[0]);
+
           return (
-            // biome-ignore lint/a11y/noStaticElementInteractions: progressive enhancement; the Legend offers the same toggle accessibly
             <rect
-              // biome-ignore lint/suspicious/noArrayIndexKey: index is the stable category position
-              key={i}
+              key={key}
               x={slot.x}
               y={Math.min(top, base)}
               width={slot.width}
               height={Math.abs(base - top)}
               fill="transparent"
-              style={{ cursor: "pointer" }}
+              className="cursor-pointer"
               onClick={onClick}
             />
           );

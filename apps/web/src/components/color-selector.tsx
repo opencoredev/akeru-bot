@@ -1,5 +1,6 @@
 "use client";
 
+import { recordLookup } from "./recordLookup";
 import { useState } from "react";
 import { cn } from "~/lib/utils";
 
@@ -47,7 +48,7 @@ function getSizeClass(size: "default" | "sm" | "lg") {
 }
 
 function getColorValue(color: string): string {
-  return colorMap[color as keyof typeof colorMap] || color;
+  return recordLookup(colorMap, color) || color;
 }
 
 export function ColorSelector({
@@ -72,16 +73,16 @@ export function ColorSelector({
       {name && <input type="hidden" name={name} value={selectedColor} />}
       {colors.map((color) => {
         const colorValue = getColorValue(color);
+
         return (
           <div
             key={color}
-            className={`${sizeClass} cursor-pointer rounded-full transition-transform duration-200 active:scale-90`}
-            style={{
-              backgroundColor: colorValue,
-              ...(selectedColor === color && {
-                boxShadow: `inset 0 0 0 2px var(--card), 0 0 0 2px ${colorValue}`,
-              }),
-            }}
+            className={cn(
+              sizeClass,
+              "cursor-pointer rounded-full swatch-fill transition-transform duration-200 active:scale-90",
+              selectedColor === color && "swatch-ring",
+            )}
+            style={{ "--swatch": colorValue }}
             onClick={() => handleColorSelect(color)}
             onKeyDown={(e) => {
               if (e.key === "Enter" || e.key === " ") {

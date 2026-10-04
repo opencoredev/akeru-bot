@@ -72,6 +72,7 @@ describe("withoutErrorStack", () => {
     ]) {
       expect(withoutErrorStack(message)).toBe(message);
     }
+
     expect(withoutErrorStack("")).toBe("");
   });
 });

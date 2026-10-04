@@ -2,6 +2,7 @@ import * as Schema from "effect/Schema";
 import { TrimmedNonEmptyString } from "./baseSchemas.ts";
 
 export const EditorLaunchStyle = Schema.Literals(["direct-path", "goto", "line-column"]);
+
 export type EditorLaunchStyle = typeof EditorLaunchStyle.Type;
 
 type EditorDefinition = {
@@ -74,9 +75,11 @@ export const EDITORS = [
 ] as const satisfies ReadonlyArray<EditorDefinition>;
 
 export const EditorId = Schema.Literals(EDITORS.map((e) => e.id));
+
 export type EditorId = typeof EditorId.Type;
 
 export const FileManagerRevealKind = Schema.Literals(["finder", "file-explorer", "files"]);
+
 export type FileManagerRevealKind = typeof FileManagerRevealKind.Type;
 
 export const LaunchEditorInput = Schema.Struct({
@@ -87,6 +90,7 @@ export const LaunchEditorInput = Schema.Struct({
       `shellRevealInFileManager` config flag before sending this. */
   reveal: Schema.optional(Schema.Boolean),
 });
+
 export type LaunchEditorInput = typeof LaunchEditorInput.Type;
 
 const remoteSchemeOf = (editor: EditorDefinition): string | undefined => editor.remoteScheme;
@@ -98,6 +102,7 @@ export const REMOTE_CAPABLE_EDITOR_IDS: ReadonlyArray<EditorId> = EDITORS.flatMa
 
 export const remoteSchemeForEditor = (id: EditorId): string | undefined => {
   const editor = EDITORS.find((candidate) => candidate.id === id);
+
   return editor === undefined ? undefined : remoteSchemeOf(editor);
 };
 
@@ -113,14 +118,17 @@ export const buildRemoteOpenUrl = (input: {
   readonly absolutePath: string;
 }): string | undefined => {
   const scheme = remoteSchemeForEditor(input.editor);
+
   if (scheme === undefined) {
     return undefined;
   }
+
   // Windows server paths (`C:\...`) appear as `/C:/...` in vscode-remote URIs.
   const posixPath = input.absolutePath.replaceAll("\\", "/");
   const rootedPath = posixPath.startsWith("/") ? posixPath : `/${posixPath}`;
   const encodedPath = rootedPath.split("/").map(encodeURIComponent).join("/");
   const encodedHost = encodeURIComponent(input.host);
+
   return input.editor === "zed"
     ? `${scheme}://ssh/${encodedHost}${encodedPath}`
     : `${scheme}://vscode-remote/ssh-remote+${encodedHost}${encodedPath}`;
@@ -133,12 +141,14 @@ export const buildRemoteOpenUrl = (input: {
  * (tailnet MagicDNS name, then mDNS `<hostname>.local`).
  */
 export const RemoteOpenTargetKind = Schema.Literals(["tailscale", "mdns"]);
+
 export type RemoteOpenTargetKind = typeof RemoteOpenTargetKind.Type;
 
 export const RemoteOpenTarget = Schema.Struct({
   kind: RemoteOpenTargetKind,
   host: TrimmedNonEmptyString,
 });
+
 export type RemoteOpenTarget = typeof RemoteOpenTarget.Type;
 
 export class ExternalLauncherUnknownEditorError extends Schema.TaggedErrorClass<ExternalLauncherUnknownEditorError>()(
@@ -213,6 +223,7 @@ export const ExternalLauncherError = Schema.Union([
   ExternalLauncherBrowserSpawnError,
   ExternalLauncherEditorSpawnError,
 ]);
+
 export type ExternalLauncherError = typeof ExternalLauncherError.Type;
 
 export const isExternalLauncherError = Schema.is(ExternalLauncherError);

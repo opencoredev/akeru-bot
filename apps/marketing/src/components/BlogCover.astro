@@ -10,19 +10,24 @@ interface Props {
 }
 
 const { article, size = "card" } = Astro.props;
+
 const { bot, cover } = article;
 
 const W = 640;
+
 const H = 360;
 
 let seed = [...article.href].reduce((hash, char) => (hash * 31 + char.charCodeAt(0)) >>> 0, 7);
+
 const random = () => {
   seed = (seed * 1664525 + 1013904223) >>> 0;
+
   return seed / 2 ** 32;
 };
 
 // grid: a contribution calendar that gets busier toward the right.
 const gridCells: { x: number; y: number; level: number }[] = [];
+
 if (cover === "grid") {
   const cols = 30;
   const rows = 7;
@@ -30,6 +35,7 @@ if (cover === "grid") {
   const gap = 5;
   const left = (W - cols * (cell + gap) + gap) / 2;
   const top = (H - rows * (cell + gap) + gap) / 2 + 16;
+
   for (let col = 0; col < cols; col++) {
     for (let row = 0; row < rows; row++) {
       const trend = col / cols;
@@ -39,14 +45,17 @@ if (cover === "grid") {
     }
   }
 }
+
 const GRID_OPACITY = [0.07, 0.35, 0.65, 1];
 
 // bars: paired bars, the bot's color against a neutral series.
 const bars: { x: number; a: number; b: number }[] = [];
+
 if (cover === "bars") {
   const groups = 9;
   const span = 460;
   const left = (W - span) / 2;
+
   for (let i = 0; i < groups; i++) {
     bars.push({ x: left + (i * span) / (groups - 1) - 14, a: 60 + random() * 150, b: 40 + random() * 110 });
   }
@@ -54,16 +63,21 @@ if (cover === "bars") {
 
 // path: a rising stepped line with three numbered milestones.
 const points: [number, number][] = [];
+
 if (cover === "path") {
   const steps = 14;
+
   for (let i = 0; i <= steps; i++) {
     const x = 70 + (i * (W - 140)) / steps;
     const y = 270 - (i / steps) * 150 - random() * 34;
     points.push([x, y]);
   }
 }
+
 const linePath = points.map(([x, y], i) => `${i ? "L" : "M"}${x.toFixed(1)} ${y.toFixed(1)}`).join(" ");
+
 const areaPath = points.length ? `${linePath} L${points.at(-1)![0]} 300 L${points[0]![0]} 300 Z` : "";
+
 const milestones = points.length ? [points[2]!, points[7]!, points[12]!] : [];
 ---
 

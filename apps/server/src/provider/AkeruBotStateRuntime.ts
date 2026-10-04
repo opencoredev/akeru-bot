@@ -1,4 +1,3 @@
-// @effect-diagnostics globalDate:off globalRandom:off nodeBuiltinImport:off
 import * as NodeCrypto from "node:crypto";
 
 import {
@@ -31,15 +30,18 @@ export function createAkeruBotStateRuntime(options: AkeruBotStateRuntimeOptions)
   ): Promise<AkeruToolReceipt> => {
     const snapshot = await options.readSnapshot();
     const bot = snapshot.bots.find((candidate) => candidate.id === botId);
+
     if (!bot || bot.archivedAt !== null) throw new Error("This bot is not available.");
 
     const createdAt = now();
+
     const result = await options.dispatch({
       type: "bot.update",
       commandId: CommandId.make(`bot-state:profile:${id()}`),
       botId,
       ...input,
     });
+
     return {
       receiptId: toolCallId,
       toolId: "UpdateBotProfile",

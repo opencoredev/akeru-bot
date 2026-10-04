@@ -32,6 +32,7 @@ describe("waitForNavigationReadiness", () => {
       environmentId: EnvironmentId.make("environment-2"),
       threadId: ThreadId.make("thread-1"),
     };
+
     const tabId = "tab_1";
     const staleRuntimeTabId = previewRuntimeTabId(threadRef, "epoch-1", tabId);
     mocks.readThreadPreviewState.mockReturnValue({

@@ -44,7 +44,9 @@ describe("BrowserSession", () => {
         setPermissionCheckHandler: vi.fn(),
         setUserAgent: vi.fn(),
       };
+
       sessions.set(partition, browserSession);
+
       return browserSession;
     });
   });
@@ -83,6 +85,7 @@ describe("BrowserSession", () => {
           granted = value;
         });
         assert.isDefined(granted);
+
         return granted;
       };
 
@@ -114,12 +117,14 @@ describe("BrowserSession", () => {
 
   it.effect("preserves partition scope and the platform failure chain", () => {
     const nativeCause = new Error("native digest failed");
+
     const platformCause = PlatformError.systemError({
       _tag: "Unknown",
       module: "Crypto",
       method: "digest",
       cause: nativeCause,
     });
+
     const failingCryptoLayer = Layer.succeed(
       Crypto.Crypto,
       Crypto.make({
@@ -180,6 +185,7 @@ describe("BrowserSession", () => {
       yield* browserSessions.clearCache();
 
       assert.strictEqual(sessions.size, 2);
+
       for (const browserSession of sessions.values()) {
         assert.strictEqual(browserSession.clearStorageData.mock.calls.length, 1);
         assert.deepEqual(browserSession.clearStorageData.mock.calls[0], [
@@ -217,6 +223,7 @@ describe("BrowserSession", () => {
         `Failed to clear desktop preview browser storage for partition ${secondPartition}.`,
       );
       assert.notInclude(storageError.message, storageCause.message);
+
       for (const browserSession of sessions.values()) {
         assert.strictEqual(browserSession.clearStorageData.mock.calls.length, 1);
       }
@@ -234,6 +241,7 @@ describe("BrowserSession", () => {
         `Failed to clear the desktop preview browser cache for partition ${firstPartition}.`,
       );
       assert.notInclude(cacheError.message, cacheCause.message);
+
       for (const browserSession of sessions.values()) {
         assert.strictEqual(browserSession.clearCache.mock.calls.length, 1);
       }

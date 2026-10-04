@@ -30,6 +30,7 @@ export function resolveBotModelLabel(
   const instanceEntries = sortProviderInstanceEntries(
     applyProviderInstanceSettings(deriveProviderInstanceEntries(providers), settings),
   );
+
   const selection = resolveStickyBotEngine({
     engine,
     instanceEntries,
@@ -37,12 +38,17 @@ export function resolveBotModelLabel(
     providers,
     defaultSelection: resolveAppModelSelectionState(settings, providers),
   });
+
   if (!selection?.model) return engine?.model ?? t("No provider ready");
+
   const model = instanceEntries
     .find((entry) => entry.instanceId === selection.instanceId)
     ?.models.find((candidate) => candidate.slug === selection.model);
+
   const name = model ? getTriggerDisplayModelName(model) : selection.model;
+
   const usesOwnEngine =
     engine !== null && engine.provider === selection.instanceId && engine.model === selection.model;
+
   return usesOwnEngine ? name : t("{name} (default)", { name });
 }

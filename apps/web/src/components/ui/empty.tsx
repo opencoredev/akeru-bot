@@ -75,10 +75,21 @@ function EmptyMedia({
   );
 }
 
-function EmptyTitle({ className, ...props }: React.ComponentProps<"div">) {
+/** `body` sets the title in the body face at medium weight, for small in-panel states. */
+function EmptyTitle({
+  className,
+  variant = "default",
+  ...props
+}: React.ComponentProps<"div"> & {
+  variant?: "default" | "body";
+}) {
   return (
     <div
-      className={cn("font-heading font-semibold text-xl", className)}
+      className={cn(
+        "font-semibold text-xl",
+        variant === "body" && "font-sans font-medium",
+        className,
+      )}
       data-slot="empty-title"
       {...props}
     />

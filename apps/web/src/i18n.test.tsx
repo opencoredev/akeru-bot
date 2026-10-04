@@ -5,6 +5,7 @@ import { availableLanguages, LanguageProvider, normalizeLanguagePreference, useI
 
 function Probe() {
   const { t, locale } = useI18n();
+
   return createElement("span", { lang: locale }, t("Language"), " / ", t("Close"));
 }
 
@@ -14,9 +15,11 @@ describe("client-local language preference", () => {
       { id: "en", label: "English" },
       { id: "zh-CN", label: "简体中文" },
     ]);
+
     for (const value of [null, undefined, "", "fr", "__proto__", {}, "system"]) {
       expect(normalizeLanguagePreference(value)).toBe("system");
     }
+
     expect(normalizeLanguagePreference("en")).toBe("en");
     expect(normalizeLanguagePreference("zh-CN")).toBe("zh-CN");
   });
@@ -27,6 +30,7 @@ describe("client-local language preference", () => {
         <Probe />
       </LanguageProvider>,
     );
+
     expect(output).toContain('lang="fr"');
     expect(output).toContain("Langue de test / Close");
     expect(availableLanguages).toHaveLength(2);

@@ -17,6 +17,7 @@ import {
   useSavedRemoteConnection,
 } from "./use-remote-environment-registry";
 import { resolveThreadSelectionDetailRef } from "./thread-selection";
+
 type ThreadSelectionRouteParams = {
   readonly environmentId?: string | string[];
   readonly threadId?: string | string[];
@@ -33,6 +34,7 @@ function firstRouteParam(value: string | string[] | undefined): string | null {
 function latestUserMessageAt(thread: OrchestrationThread): OrchestrationThread["updatedAt"] | null {
   for (let index = thread.messages.length - 1; index >= 0; index -= 1) {
     const message = thread.messages[index];
+
     if (message?.role === "user") {
       return message.createdAt;
     }
@@ -76,9 +78,11 @@ function threadDetailToShell(
 
 function useResolvedThreadSelection(params: ThreadSelectionRouteParams | undefined) {
   const routeParams = params ?? {};
+
   const routeThreadRef = useMemo<ScopedThreadRef | null>(() => {
     const environmentId = firstRouteParam(routeParams.environmentId);
     const threadId = firstRouteParam(routeParams.threadId);
+
     if (!environmentId || !threadId) {
       return null;
     }
@@ -88,21 +92,28 @@ function useResolvedThreadSelection(params: ThreadSelectionRouteParams | undefin
       threadId: ThreadId.make(threadId),
     };
   }, [routeParams.environmentId, routeParams.threadId]);
+
   const lastRouteThreadRef = useRef<ScopedThreadRef | null>(null);
+
   if (routeThreadRef !== null) {
     lastRouteThreadRef.current = routeThreadRef;
   }
+
   const selectedThreadRef = routeThreadRef ?? lastRouteThreadRef.current;
   const selectedThreadShell = useThreadShell(selectedThreadRef);
+
   const selectedThreadDetailRef = resolveThreadSelectionDetailRef(
     selectedThreadRef,
     selectedThreadShell !== null,
   );
+
   const selectedThreadDetailState = useEnvironmentThread(
     selectedThreadDetailRef?.environmentId ?? null,
     selectedThreadDetailRef?.threadId ?? null,
   );
+
   const selectedThreadDetail = Option.getOrNull(selectedThreadDetailState.data);
+
   const selectedThread = useMemo(
     () =>
       selectedThreadShell ??
@@ -111,6 +122,7 @@ function useResolvedThreadSelection(params: ThreadSelectionRouteParams | undefin
         : null),
     [selectedThreadDetail, selectedThreadRef, selectedThreadShell],
   );
+
   const selectedProjectRef = useMemo<ScopedProjectRef | null>(
     () =>
       selectedThread === null
@@ -121,6 +133,7 @@ function useResolvedThreadSelection(params: ThreadSelectionRouteParams | undefin
           },
     [selectedThread],
   );
+
   const selectedThreadProject = useProject(selectedProjectRef);
   const selectedEnvironmentId = selectedThread?.environmentId ?? null;
   const selectedEnvironmentConnection = useSavedRemoteConnection(selectedEnvironmentId);
@@ -148,5 +161,6 @@ type ThreadSelectionState = ReturnType<typeof useResolvedThreadSelection>;
 
 export function useThreadSelection(): ThreadSelectionState {
   const route = useRoute<RouteProp<Record<string, ThreadSelectionRouteParams | undefined>>>();
+
   return useResolvedThreadSelection(route.params);
 }

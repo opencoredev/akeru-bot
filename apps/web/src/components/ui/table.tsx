@@ -14,8 +14,22 @@ function Table({ className, ...props }: React.ComponentProps<"table">) {
   );
 }
 
-function TableHeader({ className, ...props }: React.ComponentProps<"thead">) {
-  return <thead data-slot="table-header" className={cn("[&_tr]:border-b", className)} {...props} />;
+function TableHeader({
+  className,
+  presentation,
+  ...props
+}: React.ComponentProps<"thead"> & { presentation?: "provider-environment" }) {
+  return (
+    <thead
+      data-slot="table-header"
+      className={cn(
+        "[&_tr]:border-b",
+        presentation === "provider-environment" && "bg-muted/25 text-[11px] text-muted-foreground",
+        className,
+      )}
+      {...props}
+    />
+  );
 }
 
 function TableBody({ className, ...props }: React.ComponentProps<"tbody">) {
@@ -38,12 +52,21 @@ function TableFooter({ className, ...props }: React.ComponentProps<"tfoot">) {
   );
 }
 
-function TableRow({ className, ...props }: React.ComponentProps<"tr">) {
+function TableRow({
+  className,
+  presentation,
+  ...props
+}: React.ComponentProps<"tr"> & {
+  presentation?: "provider-environment-header" | "provider-environment";
+}) {
   return (
     <tr
       data-slot="table-row"
       className={cn(
         "border-b transition-colors hover:bg-muted/50 has-aria-expanded:bg-muted/50 data-[state=selected]:bg-muted",
+        presentation === "provider-environment-header" && "hover:bg-transparent",
+        presentation === "provider-environment" &&
+          "border-border/60 odd:bg-muted/20 even:bg-background/20",
         className,
       )}
       {...props}

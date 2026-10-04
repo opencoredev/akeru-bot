@@ -43,6 +43,7 @@ describe("DesktopAssets", () => {
           ),
         ),
       );
+
       const fileSystemLayer = FileSystem.layerNoop({
         exists: (path) =>
           Effect.succeed(
@@ -50,6 +51,7 @@ describe("DesktopAssets", () => {
               String(path).includes("/apps/marketing/public/"),
           ),
       });
+
       const assets = yield* DesktopAssets.DesktopAssets.pipe(
         Effect.provide(
           DesktopAssets.layer.pipe(
@@ -79,12 +81,14 @@ describe("DesktopAssets", () => {
         resourcesPath: "/repo/apps/desktop/resources",
         runningUnderArm64Translation: false,
       }).pipe(Layer.provide(Layer.mergeAll(NodeServices.layer, DesktopConfig.layerTest({}))));
+
       const fileSystemLayer = FileSystem.layerNoop({
         exists: (path) =>
           Effect.succeed(
             String(path).includes("/assets/prod/") || String(path).includes("/apps/web/public/"),
           ),
       });
+
       const assets = yield* DesktopAssets.DesktopAssets.pipe(
         Effect.provide(
           DesktopAssets.layer.pipe(
@@ -105,6 +109,7 @@ describe("DesktopAssets", () => {
     Effect.gen(function* () {
       const fileName = "custom.bin";
       const candidatePath = "/repo/apps/desktop/resources/custom.bin";
+
       const cause = PlatformError.systemError({
         _tag: "PermissionDenied",
         module: "FileSystem",
@@ -112,12 +117,15 @@ describe("DesktopAssets", () => {
         pathOrDescriptor: candidatePath,
         description: "private filesystem diagnostic",
       });
+
       const fileSystemLayer = FileSystem.layerNoop({
         exists: (path) => (path === candidatePath ? Effect.fail(cause) : Effect.succeed(false)),
       });
+
       const assetsLayer = DesktopAssets.layer.pipe(
         Layer.provide(Layer.merge(fileSystemLayer, environmentLayer)),
       );
+
       const assets = yield* DesktopAssets.DesktopAssets.pipe(Effect.provide(assetsLayer));
 
       const error = yield* assets.resolveResourcePath(fileName).pipe(Effect.flip);

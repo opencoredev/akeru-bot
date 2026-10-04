@@ -34,14 +34,18 @@ describe("writeTextToClipboard", () => {
       const focus = vi.fn();
       const restoreFocus = vi.fn();
       const appendChild = vi.fn();
+
       const execCommand = vi.fn(() => {
         if (result === "throws") throw new Error("copy command failed");
+
         return result === "success";
       });
+
       const remove = vi.fn();
       const select = vi.fn();
       const setAttribute = vi.fn();
       const setSelectionRange = vi.fn();
+
       const textarea = {
         focus,
         remove,
@@ -64,6 +68,7 @@ describe("writeTextToClipboard", () => {
       const pendingCopy = writeTextToClipboard("remote command", "command");
       // The fallback must run during the original user gesture, before any await.
       expect(execCommand).toHaveBeenCalledWith("copy");
+
       if (result === "success") {
         await expect(pendingCopy).resolves.toBe(true);
       } else {
@@ -116,7 +121,7 @@ describe("writeTextToClipboard", () => {
 
     const error = await writeTextToClipboard("secret clipboard contents", "error-message").then(
       () => undefined,
-      (failure: unknown) => failure,
+      (cause: unknown) => cause,
     );
 
     expect(writeText).toHaveBeenCalledWith("secret clipboard contents");

@@ -10,6 +10,7 @@ describe("desktop detached action errors", () => {
       Cause.fail(new Error("shutdown failed")),
       Cause.die(new Error("relaunch defect")),
     );
+
     const error = new DesktopLifecycleRelaunchError({
       reason: "apply update",
       cause,
@@ -25,6 +26,7 @@ describe("desktop detached action errors", () => {
       Cause.fail(new Error("window unavailable")),
       Cause.die(new Error("dispatch defect")),
     );
+
     const error = new DesktopApplicationMenuActionError({
       action: "open-settings",
       cause,

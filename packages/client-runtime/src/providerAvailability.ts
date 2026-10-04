@@ -1,3 +1,5 @@
+import { asRecord } from "./work-log-command.ts";
+import * as Predicate from "effect/Predicate";
 import type {
   OrchestrationThreadActivity,
   ServerProvider,
@@ -25,6 +27,15 @@ export interface ProviderAvailabilityPresentation {
   readonly description: string;
   readonly technicalDetails: string;
   readonly action: ProviderAvailabilityAction;
+  /** Set when a known provider state caused the failure, so a client can name the fix. */
+  readonly reason?: ProviderAvailabilityReason | undefined;
+}
+
+/** Whether signing in is the fix, so a repair button can say "Connect". */
+export function providerReasonNeedsSignIn(
+  reason: ProviderAvailabilityReason | null | undefined,
+): boolean {
+  return reason === "missing-login" || reason === "expired-login" || reason === "missing-provider";
 }
 
 export function providerAvailabilityReason(
@@ -32,17 +43,22 @@ export function providerAvailabilityReason(
   model?: string | null,
 ): ProviderAvailabilityReason | null {
   if (!provider) return "missing-provider";
+
   if (!provider.enabled) return "disabled";
+
   if (provider.unavailability && provider.unavailability !== "temporary-failure") {
     return provider.unavailability;
   }
+
   if (
     !provider.installed ||
     (provider.availability === "unavailable" && provider.status !== "error")
   ) {
     return "not-installed";
   }
+
   if (provider.auth.status === "unauthenticated") return "missing-login";
+
   if (
     model &&
     provider.models.length > 0 &&
@@ -50,7 +66,9 @@ export function providerAvailabilityReason(
   ) {
     return "unsupported-model";
   }
+
   if (provider.unavailability === "temporary-failure") return "temporary-failure";
+
   return null;
 }
 
@@ -63,6 +81,13 @@ export type ProviderAvailabilityTranslate = (
 const englishTranslate: ProviderAvailabilityTranslate = createTranslator("en").t;
 
 export function presentProviderUnavailability(
+  input: Parameters<typeof presentReason>[0],
+  t: ProviderAvailabilityTranslate = englishTranslate,
+): ProviderAvailabilityPresentation & { readonly reason: ProviderAvailabilityReason } {
+  return { ...presentReason(input, t), reason: input.reason };
+}
+
+function presentReason(
   input: {
     readonly reason: ProviderAvailabilityReason;
     /** Omit when the failure did not say which provider it came from. */
@@ -73,11 +98,14 @@ export function presentProviderUnavailability(
   t: ProviderAvailabilityTranslate = englishTranslate,
 ): ProviderAvailabilityPresentation {
   const provider = input.providerName;
+
   // Each sentence has its own key for an unknown provider, so no locale has to
   // splice a generic noun into a template written around a proper name.
   const named = (known: MessageKey, unknown: MessageKey, params: TranslationParams = {}) =>
     provider ? t(known, { ...params, provider }) : t(unknown, params);
+
   const technicalDetails = boundedDetail(input.detail);
+
   switch (input.reason) {
     case "missing-provider":
       return {
@@ -178,6 +206,7 @@ export function providerUnavailabilitySummary(
   t: ProviderAvailabilityTranslate = englishTranslate,
 ): string {
   const presentation = presentProviderUnavailability(input, t);
+
   return joinProviderUnavailability(presentation, t);
 }
 
@@ -205,6 +234,8 @@ export function latestTurnFailure(
 ): {
   readonly detail: string;
   readonly unavailability: ServerProviderUnavailability | null;
+  /** The provider instance that failed, when the server recorded it. */
+  readonly providerInstanceId?: string;
 } | null {
   // .sort() on a copy, not .toSorted(): Hermes doesn't ship the ES2023
   // change-by-copy array methods.
@@ -213,26 +244,31 @@ export function latestTurnFailure(
       (right.sequence ?? -1) - (left.sequence ?? -1) ||
       right.createdAt.localeCompare(left.createdAt),
   );
+
   for (const activity of newestFirst) {
     if (since && activity.createdAt < since) return null;
+
     if (!TURN_FAILURE_KINDS.has(activity.kind)) continue;
-    const payload =
-      activity.payload && typeof activity.payload === "object"
-        ? (activity.payload as Record<string, unknown>)
-        : {};
-    const detail =
-      typeof payload.detail === "string"
-        ? payload.detail
-        : typeof payload.message === "string"
-          ? payload.message
-          : activity.summary;
+
+    const payload = asRecord(activity.payload) ?? {};
+
+    const detail = Predicate.isString(payload.detail)
+      ? payload.detail
+      : Predicate.isString(payload.message)
+        ? payload.message
+        : activity.summary;
+
     return {
       detail,
       unavailability: isServerProviderUnavailability(payload.unavailability)
         ? payload.unavailability
         : null,
+      ...(Predicate.isString(payload.providerInstanceId)
+        ? { providerInstanceId: payload.providerInstanceId }
+        : {}),
     };
   }
+
   return null;
 }
 
@@ -249,10 +285,11 @@ const UNAVAILABILITY_VALUES = new Set<string>([
 export function isServerProviderUnavailability(
   value: unknown,
 ): value is ServerProviderUnavailability {
-  return typeof value === "string" && UNAVAILABILITY_VALUES.has(value);
+  return Predicate.isString(value) && UNAVAILABILITY_VALUES.has(value);
 }
 
 function boundedDetail(detail: string | null | undefined): string {
   const firstLine = detail?.split("\n", 1)[0]?.trim() ?? "";
+
   return firstLine.replace(/file:\/\/\/[^\s)]+/g, "file://…").slice(0, 600);
 }

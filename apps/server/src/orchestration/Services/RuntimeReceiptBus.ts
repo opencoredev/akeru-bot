@@ -19,6 +19,7 @@ import * as Schema from "effect/Schema";
 import * as Context from "effect/Context";
 import type * as Effect from "effect/Effect";
 import type * as Stream from "effect/Stream";
+import type * as Scope from "effect/Scope";
 
 export const CheckpointBaselineCapturedReceipt = Schema.Struct({
   type: Schema.Literal("checkpoint.baseline.captured"),
@@ -27,6 +28,7 @@ export const CheckpointBaselineCapturedReceipt = Schema.Struct({
   checkpointRef: CheckpointRef,
   createdAt: IsoDateTime,
 });
+
 export type CheckpointBaselineCapturedReceipt = typeof CheckpointBaselineCapturedReceipt.Type;
 
 export const CheckpointDiffFinalizedReceipt = Schema.Struct({
@@ -38,6 +40,7 @@ export const CheckpointDiffFinalizedReceipt = Schema.Struct({
   status: Schema.Literals(["ready", "missing", "error"]),
   createdAt: IsoDateTime,
 });
+
 export type CheckpointDiffFinalizedReceipt = typeof CheckpointDiffFinalizedReceipt.Type;
 
 export const TurnProcessingQuiescedReceipt = Schema.Struct({
@@ -47,6 +50,7 @@ export const TurnProcessingQuiescedReceipt = Schema.Struct({
   checkpointTurnCount: NonNegativeInt,
   createdAt: IsoDateTime,
 });
+
 export type TurnProcessingQuiescedReceipt = typeof TurnProcessingQuiescedReceipt.Type;
 
 export const OrchestrationRuntimeReceipt = Schema.Union([
@@ -54,11 +58,17 @@ export const OrchestrationRuntimeReceipt = Schema.Union([
   CheckpointDiffFinalizedReceipt,
   TurnProcessingQuiescedReceipt,
 ]);
+
 export type OrchestrationRuntimeReceipt = typeof OrchestrationRuntimeReceipt.Type;
 
 export interface RuntimeReceiptBusShape {
   readonly publish: (receipt: OrchestrationRuntimeReceipt) => Effect.Effect<void>;
   readonly streamEventsForTest: Stream.Stream<OrchestrationRuntimeReceipt>;
+  readonly subscribeEventsForTest?: Effect.Effect<
+    Stream.Stream<OrchestrationRuntimeReceipt>,
+    never,
+    Scope.Scope
+  >;
 }
 
 export class RuntimeReceiptBus extends Context.Service<RuntimeReceiptBus, RuntimeReceiptBusShape>()(

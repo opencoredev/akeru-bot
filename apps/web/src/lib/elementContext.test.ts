@@ -85,6 +85,7 @@ describe("normalizeElementContextSelection", () => {
         ],
       }),
     );
+
     expect(result).not.toBeNull();
     expect(result?.tagName).toBe("button");
     expect(result?.pageUrl).toBe("https://example.com");
@@ -106,9 +107,11 @@ describe("normalizeElementContextSelection", () => {
 
   it("clamps oversized htmlPreview / styles so we don't blow localStorage", () => {
     const huge = "x".repeat(10_000);
+
     const result = normalizeElementContextSelection(
       makePayload({ htmlPreview: huge, styles: huge }),
     );
+
     expect(result).not.toBeNull();
     expect(result!.htmlPreview.length).toBeLessThanOrEqual(4000);
     expect(result!.styles.length).toBeLessThanOrEqual(4000);
@@ -121,6 +124,7 @@ describe("normalizeElementContextSelection", () => {
     const result = normalizeElementContextSelection(
       makePayload({ htmlPreview: "<a>\r\nhi\r\n</a>", styles: ".a {\r\n  color: red;\r\n}" }),
     );
+
     expect(result?.htmlPreview).toBe("<a>\nhi\n</a>");
     expect(result?.styles).toBe(".a {\n  color: red;\n}");
   });
@@ -139,6 +143,7 @@ describe("normalizeElementContextSelection", () => {
         ],
       }),
     );
+
     expect(result?.source).toEqual({
       functionName: "FromStack",
       fileName: "/repo/FromStack.tsx",
@@ -260,6 +265,7 @@ describe("extractTrailingElementContexts", () => {
       makeSelection(),
       makeSelection({ selector: "button.cancel", componentName: "CancelButton" }),
     ]);
+
     const result = extractTrailingElementContexts(prompt);
     expect(result.promptText).toBe("Investigate this");
     expect(result.contextCount).toBe(2);

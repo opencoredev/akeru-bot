@@ -34,6 +34,7 @@ export function BotChatsSection({
   const environmentId = usePrimaryEnvironmentId();
   const shells = useThreadShells();
   const newChat = useActiveChatPaletteActions().find((action) => action.id === "new") ?? null;
+
   const rows = useMemo(
     () =>
       environmentId
@@ -44,6 +45,7 @@ export function BotChatsSection({
         : [],
     [botId, environmentId, shells, threadRef?.threadId],
   );
+
   if (rows.length === 0) return null;
   const now = Date.now();
 
@@ -55,13 +57,10 @@ export function BotChatsSection({
           <li key={row.threadId}>
             {/* Quiet rows: labels line up with the sheet's, only the fill reaches past them. */}
             <Button
-              variant="ghost"
-              size="sm"
+              variant={row.current ? "ghost-current" : "ghost-quiet"}
+              size="row-relaxed"
               aria-current={row.current ? "true" : undefined}
-              className={cn(
-                "-mx-2 w-[calc(100%+1rem)] justify-start gap-3 px-2 font-normal",
-                row.current ? "bg-muted text-foreground" : "text-muted-foreground",
-              )}
+              className="-mx-2 w-(--spacing-full-plus-1rem) justify-start"
               onClick={() => {
                 if (!row.current) {
                   useRosterStore
@@ -72,6 +71,7 @@ export function BotChatsSection({
                       `/${environmentId}/${row.threadId}`,
                     );
                 }
+
                 onOpenChat?.();
               }}
             >
@@ -89,9 +89,9 @@ export function BotChatsSection({
       </ul>
       {newChat ? (
         <Button
-          variant="ghost"
-          size="sm"
-          className="-mx-2 w-[calc(100%+1rem)] justify-start px-2 text-muted-foreground"
+          variant="ghost-quiet"
+          size="row"
+          className="-mx-2 w-(--spacing-full-plus-1rem) justify-start"
           onClick={() => {
             onOpenChat?.();
             void newChat.run();

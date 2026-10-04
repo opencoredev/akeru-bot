@@ -7,6 +7,7 @@ export const CheckpointDiffOperation = Schema.Literals([
   "CheckpointDiffQuery.getTurnDiff",
   "CheckpointDiffQuery.getFullThreadDiff",
 ]);
+
 export type CheckpointDiffOperation = typeof CheckpointDiffOperation.Type;
 
 /** The computed result does not satisfy the checkpoint RPC contract. */
@@ -20,6 +21,7 @@ export class CheckpointDiffResultInvalidError extends Schema.TaggedErrorClass<Ch
   override get message(): string {
     const result =
       this.operation === "CheckpointDiffQuery.getTurnDiff" ? "turn diff" : "full thread diff";
+
     return `Checkpoint invariant violation in ${this.operation}: Computed ${result} result does not satisfy contract schema.`;
   }
 }
@@ -48,6 +50,7 @@ export class CheckpointWorkspacePathMissingError extends Schema.TaggedErrorClass
   override get message(): string {
     const diff =
       this.operation === "CheckpointDiffQuery.getTurnDiff" ? "turn diff" : "full thread diff";
+
     return `Checkpoint invariant violation in ${this.operation}: Workspace path missing for thread '${this.threadId}' when computing ${diff}.`;
   }
 }

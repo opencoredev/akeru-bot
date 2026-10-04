@@ -6,7 +6,7 @@ import { SettingsPanelForSection } from "./SettingsDialog";
 // The page container reads the hash for deep links; no router is mounted here.
 vi.mock("@tanstack/react-router", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@tanstack/react-router")>()),
-  useLocation: ({ select }: { select: (location: { hash: string }) => unknown }) =>
+  useLocation: <T,>({ select }: { select: (location: { hash: string }) => T }) =>
     select({ hash: "" }),
   useNavigate: () => () => undefined,
   Link: ({ to, children, className }: { to: string; children: unknown; className?: string }) => (

@@ -8,6 +8,7 @@ const defaultTcpHosts = ["127.0.0.1", "localhost", "::1"];
 async function fileExists(filePath) {
   try {
     await NodeFSP.access(filePath);
+
     return true;
   } catch {
     return false;
@@ -48,18 +49,21 @@ async function resolvePendingResources({ baseDir, files, tcpPort, tcpHosts, conn
 
   for (const relativeFilePath of files) {
     const ready = await fileExists(NodePath.resolve(baseDir, relativeFilePath));
+
     if (!ready) {
       pendingFiles.push(relativeFilePath);
     }
   }
 
   let tcpReady = false;
+
   for (const host of tcpHosts) {
     tcpReady = await tcpPortIsReady({
       host,
       port: tcpPort,
       connectTimeoutMs,
     });
+
     if (tcpReady) {
       break;
     }
@@ -102,9 +106,11 @@ export async function waitForResources({
 
     if (Date.now() - startedAt >= timeoutMs) {
       const pendingResources = [];
+
       if (!tcpReady) {
         pendingResources.push(tcpHost ? `tcp:${tcpHost}:${tcpPort}` : `tcp:${tcpPort}`);
       }
+
       for (const filePath of pendingFiles) {
         pendingResources.push(`file:${filePath}`);
       }

@@ -22,10 +22,12 @@ function useSettingsNavigation() {
   const pathname = useLocation({ select: (location) => location.pathname });
   const navigate = useNavigate();
   const { isMobile, setOpenMobile } = useSidebar();
+
   const go = (to: string) => {
     if (isMobile) setOpenMobile(false);
     void navigate({ to });
   };
+
   return { pathname, go };
 }
 
@@ -36,6 +38,7 @@ function useSettingsNavigation() {
 export function SettingsPanelNav() {
   const { t } = useI18n();
   const { pathname, go } = useSettingsNavigation();
+
   return (
     <nav aria-label={t("Settings sections")} className="min-h-0 flex-1 overflow-y-auto px-2 pb-2">
       {SETTINGS_NAV_GROUPS.map((group) => (
@@ -47,6 +50,7 @@ export function SettingsPanelNav() {
             {group.items.map((item) => {
               const to = `/settings/${item.section}`;
               const active = pathname === to || pathname.startsWith(`${to}/`);
+
               return (
                 <li key={item.section} className="list-none">
                   <button
@@ -61,10 +65,8 @@ export function SettingsPanelNav() {
                     )}
                   >
                     <AppIcon
-                      className={cn(
-                        "size-[18px] shrink-0",
-                        active ? "text-sidebar-foreground" : "text-sidebar-muted-foreground",
-                      )}
+                      className="size-4.5 shrink-0"
+                      tone={active ? "sidebar" : "sidebar-muted"}
                       icon={item.icon}
                       strokeWidth={active ? 2 : 1.7}
                     />
@@ -90,12 +92,13 @@ export function SettingsSidebarNav() {
       <SidebarChromeHeader isElectron={isElectron} />
       <SidebarContent className="overflow-x-hidden">
         {SETTINGS_NAV_GROUPS.map((group) => (
-          <SidebarGroup key={group.label} className="p-[var(--sidebar-content-inset)]">
+          <SidebarGroup key={group.label} className="p-(--sidebar-content-inset)">
             <SidebarGroupLabel>{t(group.label)}</SidebarGroupLabel>
             <SidebarMenu>
               {group.items.map((item) => {
                 const to = `/settings/${item.section}`;
                 const active = pathname === to || pathname.startsWith(`${to}/`);
+
                 return (
                   <SidebarMenuItem key={item.section}>
                     <SidebarMenuButton
@@ -105,7 +108,8 @@ export function SettingsSidebarNav() {
                       tooltip={t(item.label)}
                     >
                       <AppIcon
-                        className={cn("size-4", !active && "text-sidebar-muted-foreground")}
+                        className="size-4"
+                        tone={active ? undefined : "sidebar-muted"}
                         icon={item.icon}
                       />
                       <span className="truncate group-data-[collapsible=icon]:hidden">
@@ -119,7 +123,7 @@ export function SettingsSidebarNav() {
           </SidebarGroup>
         ))}
       </SidebarContent>
-      <SidebarFooter className="p-[var(--sidebar-content-inset)]">
+      <SidebarFooter className="p-(--sidebar-content-inset)">
         <SidebarMenu>
           <SidebarMenuItem>
             <SidebarMenuButton onClick={() => go("/")} tooltip={t("Back to chats")}>

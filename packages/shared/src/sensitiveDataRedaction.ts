@@ -22,11 +22,14 @@ const sensitivePatterns = [
 export function redactSensitiveText(value: string) {
   let redacted = false;
   let next = value;
+
   for (const pattern of sensitivePatterns) {
     next = next.replaceAll(pattern, () => {
       redacted = true;
+
       return REDACTED;
     });
   }
+
   return { value: next, redacted };
 }

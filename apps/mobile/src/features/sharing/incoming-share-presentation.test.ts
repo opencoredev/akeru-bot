@@ -11,18 +11,21 @@ describe("incoming share presentation", () => {
       isShareSheetPresented: false,
       pendingShareId: "share-1",
     });
+
     expect(presented.shareIdToPresent).toBe("share-1");
 
     const whilePresented = transitionIncomingSharePresentation(presented.state, {
       isShareSheetPresented: true,
       pendingShareId: "share-1",
     });
+
     expect(whilePresented).toEqual({ state: presented.state, shareIdToPresent: null });
 
     const dismissed = transitionIncomingSharePresentation(whilePresented.state, {
       isShareSheetPresented: false,
       pendingShareId: "share-1",
     });
+
     expect(dismissed.state.dismissedShareId).toBe("share-1");
 
     expect(
@@ -43,6 +46,7 @@ describe("incoming share presentation", () => {
       isShareSheetPresented: false,
       pendingShareId: "share-2",
     });
+
     expect(next.shareIdToPresent).toBe("share-2");
     expect(next.state).toEqual({ presentedShareId: "share-2", dismissedShareId: null });
   });
@@ -52,10 +56,12 @@ describe("incoming share presentation", () => {
       presentedShareId: null,
       dismissedShareId: "share-1",
     };
+
     const consumed = transitionIncomingSharePresentation(dismissed, {
       isShareSheetPresented: false,
       pendingShareId: null,
     });
+
     expect(consumed.state).toEqual(EMPTY_INCOMING_SHARE_PRESENTATION_STATE);
 
     expect(
@@ -71,16 +77,19 @@ describe("incoming share presentation", () => {
       presentedShareId: "share-1",
       dismissedShareId: null,
     };
+
     const consumed = transitionIncomingSharePresentation(presented, {
       isShareSheetPresented: true,
       pendingShareId: null,
     });
+
     expect(consumed.state).toEqual(EMPTY_INCOMING_SHARE_PRESENTATION_STATE);
 
     const replacementWhileOpen = transitionIncomingSharePresentation(consumed.state, {
       isShareSheetPresented: true,
       pendingShareId: "share-1",
     });
+
     expect(replacementWhileOpen.shareIdToPresent).toBeNull();
     expect(
       transitionIncomingSharePresentation(replacementWhileOpen.state, {

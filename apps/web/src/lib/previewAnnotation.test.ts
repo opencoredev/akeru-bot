@@ -67,6 +67,7 @@ describe("preview annotations", () => {
     const result = extractTrailingPreviewAnnotation(
       appendPreviewAnnotationPrompt("Fix this", annotation),
     );
+
     expect(result.promptText).toBe("Fix this");
     expect(result.annotation).toMatchObject({
       title: "Example",

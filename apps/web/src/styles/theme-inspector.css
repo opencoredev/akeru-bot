@@ -1,0 +1,70 @@
+html[data-theme-token-probe],
+html[data-theme-token-probe] *,
+html[data-theme-token-probe] *::before,
+html[data-theme-token-probe] *::after {
+  transition: none !important;
+}
+
+#theme-inspector-spotlight {
+  position: fixed;
+  z-index: 100;
+  inset: 0;
+  width: 100vw;
+  height: 100dvh;
+  overflow: visible;
+  pointer-events: none;
+}
+
+[data-slot="popover-positioner"]:has([data-theme-editor-panel]),
+[data-slot="tooltip-positioner"]:has([data-theme-editor-panel]) {
+  z-index: 120;
+}
+
+.theme-inspector-spotlight-dimmer {
+  fill: rgb(2 3 8 / 54%);
+}
+
+.theme-inspector-spotlight-glow {
+  fill: color-mix(in oklab, var(--ring) 9%, transparent);
+  stroke: color-mix(in oklab, var(--ring) 72%, white);
+  stroke-width: 2px;
+  opacity: 0.92;
+  vector-effect: non-scaling-stroke;
+}
+
+#theme-inspector-hover {
+  position: fixed;
+  z-index: 101;
+  pointer-events: none;
+  background: color-mix(in oklab, var(--ring) 7%, transparent);
+  border: 1px solid color-mix(in oklab, var(--ring) 70%, white);
+  box-shadow:
+    0 0 0 3px color-mix(in oklab, var(--ring) 16%, transparent),
+    0 0 18px color-mix(in oklab, var(--ring) 38%, transparent);
+}
+
+#theme-inspector-hover [data-theme-inspector-hover-label] {
+  position: absolute;
+  left: 0;
+  max-width: 12rem;
+  overflow: hidden;
+  padding: 0.2rem 0.45rem;
+  border: 1px solid color-mix(in oklab, var(--ring) 48%, var(--contrast-border));
+  border-radius: 0.4rem;
+  background: var(--popover);
+  box-shadow: 0 4px 16px rgb(0 0 0 / 24%);
+  color: var(--contrast-popover-foreground);
+  font-size: 0.6875rem;
+  font-weight: 600;
+  line-height: 1rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+#theme-inspector-hover[data-placement="above"] [data-theme-inspector-hover-label] {
+  bottom: calc(100% + 0.35rem);
+}
+
+#theme-inspector-hover[data-placement="below"] [data-theme-inspector-hover-label] {
+  top: calc(100% + 0.35rem);
+}

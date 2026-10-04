@@ -12,10 +12,12 @@ describe("AkeruKimiProvider", () => {
     const request = vi.fn(
       async (_input: string | URL | Request, _init?: RequestInit) => new Response("{}"),
     );
+
     const fetch = buildAkeruKimiFetch(
       async () => ({ accessToken: "api-key", baseUrl: "https://proxy.example/v1" }),
       request,
     );
+
     await fetch("https://api.kimi.com/coding/v1/messages?beta=true", {
       method: "POST",
       body: "{}",
@@ -43,8 +45,10 @@ describe("AkeruKimiProvider", () => {
       expect(headers.get("x-msh-device-id")).toBe(access.deviceId);
       expect(headers.get("x-msh-platform")).toBe("akeru");
       expect(headers.get("x-msh-version")).toBe("0.0.34");
+
       return new Response("{}", { status: 200 });
     });
+
     const fetch = buildAkeruKimiFetch(async () => access, request);
 
     await fetch("https://api.kimi.com/coding/v1/messages", {

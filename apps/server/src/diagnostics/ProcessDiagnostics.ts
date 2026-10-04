@@ -43,6 +43,7 @@ function formatElapsed(runTimeMs: number): string {
   const hours = Math.floor(totalSeconds / 3_600);
   const minutes = Math.floor((totalSeconds % 3_600) / 60);
   const seconds = totalSeconds % 60;
+
   return hours > 0
     ? `${hours}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`
     : `${minutes}:${String(seconds).padStart(2, "0")}`;
@@ -57,6 +58,7 @@ function canSignalCategory(category: ResourceTelemetryProcessCategory): boolean 
 export const make = Effect.fn("makeProcessDiagnostics")(function* () {
   const telemetry = yield* ResourceTelemetry.ResourceTelemetry;
   const refreshedTelemetry = telemetry.refresh.pipe(Effect.catch(() => telemetry.latest));
+
   const read: ProcessDiagnostics["Service"]["read"] = refreshedTelemetry.pipe(
     Effect.map((snapshot) => {
       const processes = snapshot.processes
@@ -76,6 +78,7 @@ export const make = Effect.fn("makeProcessDiagnostics")(function* () {
             childPids: entry.childPids,
           }),
         );
+
       return {
         serverPid: process.pid,
         readAt: snapshot.readAt,
@@ -98,7 +101,9 @@ export const make = Effect.fn("makeProcessDiagnostics")(function* () {
           message: Option.some("Refusing to signal the Akeru Bot server process."),
         };
       }
+
       const current = yield* telemetry.refresh.pipe(Effect.option);
+
       if (Option.isNone(current)) {
         return {
           pid: input.pid,
@@ -109,10 +114,12 @@ export const make = Effect.fn("makeProcessDiagnostics")(function* () {
           ),
         };
       }
+
       const selected = current.value.processes.find(
         (entry) =>
           entry.identity.pid === input.pid && entry.identity.startTimeMs === input.startTimeMs,
       );
+
       if (!selected) {
         return {
           pid: input.pid,
@@ -123,6 +130,7 @@ export const make = Effect.fn("makeProcessDiagnostics")(function* () {
           ),
         };
       }
+
       if (!canSignalCategory(selected.category)) {
         return {
           pid: input.pid,
@@ -133,9 +141,11 @@ export const make = Effect.fn("makeProcessDiagnostics")(function* () {
           ),
         };
       }
+
       return yield* Effect.try({
         try: () => {
           process.kill(input.pid, input.signal);
+
           return {
             pid: input.pid,
             signal: input.signal,

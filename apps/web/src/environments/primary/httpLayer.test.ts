@@ -50,7 +50,7 @@ describe.sequential("primary environment HTTP layer", () => {
             bootstrapToken: "desktop-bootstrap-token",
           }),
           getLocalEnvironmentBearerToken: vi.fn().mockResolvedValue("desktop-bearer-token"),
-        } as unknown as DesktopBridge,
+        } as Partial<DesktopBridge>,
       },
     });
 

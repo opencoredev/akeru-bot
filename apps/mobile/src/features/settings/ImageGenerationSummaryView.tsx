@@ -79,6 +79,7 @@ export function ImageGenerationSummaryView({
           const health = imageProviderHealthDisplay(status, enabled, loadFailed);
           // A missing subscription is one fact, so the row states it once.
           const disconnected = status !== undefined && !status.connected;
+
           return (
             <View
               key={provider}

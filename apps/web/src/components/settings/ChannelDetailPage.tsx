@@ -52,9 +52,11 @@ export function ChannelDetailPage({ provider }: { readonly provider: ChannelProv
   const meta = channelProviderMeta(provider);
   const allowed = settings.access === "allowed";
   const connections = settings.connections.filter((connection) => connection.provider === provider);
+
   const state = allowed
     ? channelState(provider, settings.connections, settings.bots, settings.liveProjects, t, plural)
     : { tone: "neutral" as const, label: t("Unavailable") };
+
   const openSetup = (next: ChannelReplacement | null) => {
     setReplacing(next);
     setSetupOpen(true);
@@ -140,16 +142,19 @@ export function ChannelConnectionRow({
   const connectionBusy = settings.busyConnectionId === connection.id;
   const locked = settings.busy || connectionBusy;
   const needsProject = binding ? channelBindingNeedsProject(binding, liveProjects) : false;
+
   const projectId = channelPickerProjectId({
     selected: pickedProjectId,
     binding,
     hint: settings.projectHint(bot?.id ?? null),
     liveProjects,
   });
+
   const canMove =
     bot !== undefined &&
     binding !== undefined &&
     canChangeChannelProject(binding, projectId, liveProjects);
+
   const repairAction = bot && binding ? channelRepairAction(binding, liveProjects) : "none";
   const showProviderLink = connection.managementUrl && repairAction !== "check-delivery";
   const canDisconnect = bot !== undefined && binding?.status === "connected";
@@ -166,7 +171,7 @@ export function ChannelConnectionRow({
               needsProject={needsProject}
             />
           </div>
-          <p className="truncate text-[13px] text-muted-foreground/80">
+          <p className="truncate text-13px text-muted-foreground/80">
             {providerLabel(connection.provider)}
             {externalIdentity ? ` · ${externalIdentity}` : ""}
           </p>
@@ -178,7 +183,7 @@ export function ChannelConnectionRow({
                 type="button"
                 variant="ghost"
                 size="icon-sm"
-                className="size-7 shrink-0 text-muted-foreground hover:text-foreground sm:size-7"
+                presentation="channel-disclosure"
                 aria-label={t("Actions for {name}", { name: connection.name })}
               />
             }
@@ -229,14 +234,19 @@ export function ChannelConnectionRow({
             value={bot?.id ?? UNASSIGNED}
             onValueChange={(next) => {
               if (!next) return;
+
               if (next === UNASSIGNED) {
                 void settings.updateAssignment(connection, next, null);
+
                 return;
               }
+
               const selectedProject = liveProjects.some((project) => project.id === pickedProjectId)
                 ? pickedProjectId
                 : null;
+
               const destinationProject = selectedProject ?? settings.projectHint(BotId.make(next));
+
               if (!destinationProject) return;
               void settings.updateAssignment(connection, next, destinationProject);
             }}
@@ -292,6 +302,7 @@ export function ChannelConnectionRow({
               } else {
                 // A disconnected channel starts in the project the picker shows.
                 const target = channelReconnectProject(binding, projectId, liveProjects);
+
                 if (target) void settings.moveToProject(connection, bot.id, target);
                 else void settings.reconnectConnection(connection, bot.id);
               }
@@ -310,7 +321,7 @@ export function ChannelConnectionRow({
         ) : null}
       </div>
       {bot ? (
-        <p className="text-[13px] text-muted-foreground/80">
+        <p className="text-13px text-muted-foreground/80">
           {channelTestInstructions(connection.provider, bot.name, t)}
         </p>
       ) : null}

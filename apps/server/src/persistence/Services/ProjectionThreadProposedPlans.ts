@@ -22,11 +22,13 @@ export const ProjectionThreadProposedPlan = Schema.Struct({
   createdAt: IsoDateTime,
   updatedAt: IsoDateTime,
 });
+
 export type ProjectionThreadProposedPlan = typeof ProjectionThreadProposedPlan.Type;
 
 export const ListProjectionThreadProposedPlansInput = Schema.Struct({
   threadId: ThreadId,
 });
+
 export type ListProjectionThreadProposedPlansInput =
   typeof ListProjectionThreadProposedPlansInput.Type;
 
@@ -34,6 +36,7 @@ export const HasActionableProjectionThreadProposedPlanInput = Schema.Struct({
   threadId: ThreadId,
   latestTurnId: Schema.NullOr(TurnId),
 });
+
 export type HasActionableProjectionThreadProposedPlanInput =
   typeof HasActionableProjectionThreadProposedPlanInput.Type;
 
@@ -41,11 +44,13 @@ export const GetProjectionThreadProposedPlanInput = Schema.Struct({
   threadId: ThreadId,
   planId: OrchestrationProposedPlanId,
 });
+
 export type GetProjectionThreadProposedPlanInput = typeof GetProjectionThreadProposedPlanInput.Type;
 
 export const DeleteProjectionThreadProposedPlansInput = Schema.Struct({
   threadId: ThreadId,
 });
+
 export type DeleteProjectionThreadProposedPlansInput =
   typeof DeleteProjectionThreadProposedPlansInput.Type;
 

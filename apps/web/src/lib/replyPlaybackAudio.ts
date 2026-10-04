@@ -7,6 +7,7 @@ export function createBrowserReplyAudio(blob: Blob, events: ReplyAudioEvents): R
   if (!blob.type.startsWith("audio/") || blob.size === 0 || blob.size > MAX_REPLY_AUDIO_BYTES) {
     throw new Error("Reply audio is empty, unsupported, or exceeds the playback limit.");
   }
+
   const audio = new Audio();
   const url = URL.createObjectURL(blob);
   let disposed = false;
@@ -16,17 +17,21 @@ export function createBrowserReplyAudio(blob: Blob, events: ReplyAudioEvents): R
   const ended = () => events.onEnded();
   const error = () => events.onError();
   const interrupted = () => events.onInterrupted();
+
   const visibility = () => {
     if (document.hidden) interrupted();
   };
+
   const paused = () => {
     if (!explicitlyPaused && !disposed && !audio.ended) interrupted();
   };
+
   audio.addEventListener("ended", ended);
   audio.addEventListener("error", error);
   audio.addEventListener("pause", paused);
   window.addEventListener("pagehide", interrupted);
   document.addEventListener("visibilitychange", visibility);
+
   return {
     play: async () => {
       if (disposed) throw new Error("Reply audio has been released. Read the reply again.");
@@ -35,6 +40,7 @@ export function createBrowserReplyAudio(blob: Blob, events: ReplyAudioEvents): R
     },
     pause: () => {
       explicitlyPaused = true;
+
       if (!disposed) audio.pause();
     },
     dispose: () => {

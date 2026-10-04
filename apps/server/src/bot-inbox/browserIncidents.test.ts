@@ -1,4 +1,3 @@
-// @effect-diagnostics nodeBuiltinImport:off
 import * as NodeFS from "node:fs";
 import * as NodeOS from "node:os";
 import * as NodePath from "node:path";
@@ -13,6 +12,7 @@ import {
 } from "./browserIncidents.ts";
 
 const directories: string[] = [];
+
 afterEach(() => {
   for (const directory of directories.splice(0))
     NodeFS.rmSync(directory, { recursive: true, force: true });
@@ -23,6 +23,7 @@ describe("browser inbox producer", () => {
     const directory = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "akeru-browser-inbox-"));
     directories.push(directory);
     const service = new BotInboxService(NodePath.join(directory, "inbox.json"));
+
     const input = {
       botId: BotId.make("bot-one"),
       botName: "Akeru",
@@ -52,12 +53,14 @@ describe("browser inbox producer", () => {
     directories.push(directory);
     const service = new BotInboxService(NodePath.join(directory, "inbox.json"));
     const botId = BotId.make("bot-multi-workspace");
+
     const input = {
       botId,
       botName: "Akeru",
       taskOrRoutine: "Research task",
       detail: "Browser unavailable.",
     };
+
     recordBrowserFailure(service, { ...input, resourceKey: "workspace-one" });
     recordBrowserFailure(service, { ...input, resourceKey: "workspace-two" });
     resolveBrowserFailure(service, botId, "workspace-two");

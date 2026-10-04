@@ -1,3 +1,5 @@
+import { standardCommand } from "./test-support/standard-command.ts";
+import * as Predicate from "effect/Predicate";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
@@ -16,6 +18,7 @@ import {
 } from "./sync-reference-repos.ts";
 
 const encoder = new TextEncoder();
+
 const effectSmol = referenceRepos[0]!;
 
 function mockHandle(
@@ -47,14 +50,13 @@ function mockSpawnerLayer(
   return Layer.succeed(
     ChildProcessSpawner.ChildProcessSpawner,
     ChildProcessSpawner.make((command) => {
-      const childProcess = command as unknown as {
-        readonly command: string;
-        readonly args: ReadonlyArray<string>;
-      };
+      const childProcess = standardCommand(command);
+
       commands.push({
         command: childProcess.command,
         args: childProcess.args,
       });
+
       return Effect.succeed(handle);
     }),
   );
@@ -65,9 +67,11 @@ it.layer(NodeServices.layer)("sync-reference-repos", (it) => {
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
+
       const rootDir = yield* fs.makeTempDirectoryScoped({
         prefix: "sync-reference-repos-version-",
       });
+
       yield* fs.writeFileString(
         path.join(rootDir, "pnpm-workspace.yaml"),
         "catalog:\n  effect: 4.0.0-beta.73\n",
@@ -83,6 +87,7 @@ it.layer(NodeServices.layer)("sync-reference-repos", (it) => {
   it.effect("uses the latest branch without reading package versions", () =>
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
+
       const rootDir = yield* fs.makeTempDirectoryScoped({
         prefix: "sync-reference-repos-latest-",
       });
@@ -95,16 +100,19 @@ it.layer(NodeServices.layer)("sync-reference-repos", (it) => {
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
+
       const rootDir = yield* fs.makeTempDirectoryScoped({
         prefix: "sync-reference-repos-read-error-",
       });
+
       const sourcePath = path.join(rootDir, effectSmol.versionSourcePath);
 
       const error = yield* resolveReferenceRepoRef(effectSmol, rootDir, false).pipe(Effect.flip);
 
-      if (error._tag !== "ReferenceRepoVersionSourceError") {
+      if (!Predicate.isTagged(error, "ReferenceRepoVersionSourceError")) {
         assert.fail(`Unexpected error: ${error._tag}`);
       }
+
       assert.equal(error.operation, "read");
       assert.equal(error.repoId, effectSmol.id);
       assert.equal(error.sourcePath, sourcePath);
@@ -117,18 +125,21 @@ it.layer(NodeServices.layer)("sync-reference-repos", (it) => {
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
+
       const rootDir = yield* fs.makeTempDirectoryScoped({
         prefix: "sync-reference-repos-parse-error-",
       });
+
       const sourcePath = path.join(rootDir, effectSmol.versionSourcePath);
       yield* fs.makeDirectory(path.dirname(sourcePath), { recursive: true });
       yield* fs.writeFileString(sourcePath, "{");
 
       const error = yield* resolveReferenceRepoRef(effectSmol, rootDir, false).pipe(Effect.flip);
 
-      if (error._tag !== "ReferenceRepoVersionSourceError") {
+      if (!Predicate.isTagged(error, "ReferenceRepoVersionSourceError")) {
         assert.fail(`Unexpected error: ${error._tag}`);
       }
+
       assert.equal(error.operation, "parse");
       assert.equal(error.repoId, effectSmol.id);
       assert.equal(error.sourcePath, sourcePath);
@@ -141,9 +152,11 @@ it.layer(NodeServices.layer)("sync-reference-repos", (it) => {
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
+
       const rootDir = yield* fs.makeTempDirectoryScoped({
         prefix: "sync-reference-repos-plan-",
       });
+
       yield* fs.writeFileString(
         path.join(rootDir, "pnpm-workspace.yaml"),
         "catalog:\n  effect: 4.0.0-beta.73\n",
@@ -171,9 +184,11 @@ it.layer(NodeServices.layer)("sync-reference-repos", (it) => {
     return Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
+
       const rootDir = yield* fs.makeTempDirectoryScoped({
         prefix: "sync-reference-repos-run-",
       });
+
       yield* fs.writeFileString(
         path.join(rootDir, "pnpm-workspace.yaml"),
         "catalog:\n  effect: 4.0.0-beta.73\n",
@@ -206,9 +221,10 @@ it.layer(NodeServices.layer)("sync-reference-repos", (it) => {
         dryRun: true,
       }).pipe(Effect.flip);
 
-      if (error._tag !== "ReferenceRepoSelectionError") {
+      if (!Predicate.isTagged(error, "ReferenceRepoSelectionError")) {
         assert.fail(`Unexpected error: ${error._tag}`);
       }
+
       assert.equal(error.repoId, "missing");
       assert.deepStrictEqual(error.expectedRepoIds, ["effect-smol"]);
       assert.ok(!("cause" in error));
@@ -221,9 +237,11 @@ it.layer(NodeServices.layer)("sync-reference-repos", (it) => {
     return Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
+
       const rootDir = yield* fs.makeTempDirectoryScoped({
         prefix: "sync-reference-repos-exit-error-",
       });
+
       yield* fs.writeFileString(
         path.join(rootDir, "pnpm-workspace.yaml"),
         "catalog:\n  effect: 4.0.0-beta.73\n",
@@ -239,9 +257,10 @@ it.layer(NodeServices.layer)("sync-reference-repos", (it) => {
         Effect.flip,
       );
 
-      if (error._tag !== "ReferenceRepoGitSubtreeError") {
+      if (!Predicate.isTagged(error, "ReferenceRepoGitSubtreeError")) {
         assert.fail(`Unexpected error: ${error._tag}`);
       }
+
       assert.equal(error.operation, "exit");
       assert.equal(error.repoId, effectSmol.id);
       assert.equal(error.action, "add");

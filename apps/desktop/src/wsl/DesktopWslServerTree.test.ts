@@ -53,9 +53,11 @@ const withTempDir = <A, E, R>(
 > =>
   Effect.gen(function* () {
     const fileSystem = yield* FileSystem.FileSystem;
+
     const tempDir = yield* fileSystem.makeTempDirectoryScoped({
       prefix: "t3-wsl-server-tree-test-",
     });
+
     return yield* run(tempDir);
   }).pipe(Effect.scoped);
 
@@ -67,6 +69,7 @@ const ensureWith = (input: {
 }) =>
   Effect.gen(function* () {
     const tree = yield* DesktopWslServerTree.DesktopWslServerTree;
+
     return yield* tree.ensure;
   }).pipe(
     Effect.provide(DesktopWslServerTree.layer.pipe(Layer.provideMerge(environmentLayer(input)))),
@@ -90,7 +93,9 @@ describe("DesktopWslServerTree", () => {
             Effect.gen(function* () {
               // Give every task in the current batch a chance to overlap.
               yield* Effect.yieldNow;
+
               if (node.depth === 4) return [];
+
               return Array.from({ length: 8 }, (_, index) => ({
                 depth: node.depth + 1,
                 id: `${node.id}.${String(index)}`,
@@ -114,6 +119,7 @@ describe("DesktopWslServerTree", () => {
           resourcesPath: tempDir,
           isPackaged: false,
         });
+
         assert.isTrue(result.ok);
         assert.isFalse(result.ok && result.root.endsWith(".asar"));
       }),
@@ -153,9 +159,11 @@ describe("DesktopWslServerTree", () => {
         assert.equal(entry, "server-entry");
         const dep = yield* fileSystem.exists(path.join(root, "node_modules/effect/package.json"));
         assert.isTrue(dep);
+
         const marker = yield* fileSystem.readFileString(
           path.join(root, "t3code-wsl-server-tree.json"),
         );
+
         assert.include(marker, '"version":"1.2.3"');
       }),
     ).pipe(Effect.provide(NodeServices.layer)),
@@ -178,6 +186,7 @@ describe("DesktopWslServerTree", () => {
 
         const results = yield* Effect.gen(function* () {
           const tree = yield* DesktopWslServerTree.DesktopWslServerTree;
+
           return yield* Effect.all([tree.ensure, tree.ensure], { concurrency: "unbounded" });
         }).pipe(
           Effect.provide(
@@ -213,6 +222,7 @@ describe("DesktopWslServerTree", () => {
           baseDir: tempDir,
           resourcesPath: path.join(tempDir, "resources"),
         });
+
         assert.isTrue(first.ok);
 
         // Mutate the source; a reused tree must keep the first copy.
@@ -220,10 +230,12 @@ describe("DesktopWslServerTree", () => {
           path.join(serverRoot, "apps/server/dist/bin.mjs"),
           "v2-should-not-appear",
         );
+
         const second = yield* ensureWith({
           baseDir: tempDir,
           resourcesPath: path.join(tempDir, "resources"),
         });
+
         assert.isTrue(second.ok);
         const root = second.ok ? second.root : "";
         const entry = yield* fileSystem.readFileString(path.join(root, "apps/server/dist/bin.mjs"));
@@ -253,6 +265,7 @@ describe("DesktopWslServerTree", () => {
           baseDir: tempDir,
           resourcesPath: path.join(tempDir, "resources"),
         });
+
         assert.isTrue(result.ok);
         assert.isFalse(yield* fileSystem.exists(path.join(treeRoot, "1.0.0")));
         assert.isFalse(yield* fileSystem.exists(path.join(treeRoot, "1.2.3.partial")));
@@ -277,14 +290,17 @@ describe("DesktopWslServerTree", () => {
           resourcesPath: path.join(tempDir, "resources"),
           appVersion: "1.2.3",
         });
+
         assert.isTrue(first.ok);
 
         yield* fileSystem.writeFileString(path.join(serverRoot, "apps/server/dist/bin.mjs"), "new");
+
         const second = yield* ensureWith({
           baseDir: tempDir,
           resourcesPath: path.join(tempDir, "resources"),
           appVersion: "1.2.4",
         });
+
         assert.isTrue(second.ok);
         const root = second.ok ? second.root : "";
         assert.include(root, "1.2.4");
@@ -302,20 +318,26 @@ describe("DesktopWslServerTree", () => {
       Effect.gen(function* () {
         const fileSystem = yield* FileSystem.FileSystem;
         const path = yield* Path.Path;
+
         const result = yield* ensureWith({
           baseDir: tempDir,
           // resources dir exists but server.asar does not
           resourcesPath: path.join(tempDir, "resources"),
         });
+
         assert.isFalse(result.ok);
+
         if (!result.ok) {
           assert.include(result.reason, "could not be extracted");
           assert.isFalse(result.fatal);
         }
+
         const treeRoot = path.join(tempDir, "userdata", "wsl-server-tree");
+
         const leftovers = yield* fileSystem
           .readDirectory(treeRoot)
           .pipe(Effect.orElseSucceed(() => []));
+
         assert.deepStrictEqual(leftovers, []);
       }),
     ).pipe(Effect.provide(NodeServices.layer)),

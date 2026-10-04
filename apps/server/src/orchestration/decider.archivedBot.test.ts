@@ -19,8 +19,11 @@ import { decideOrchestrationCommand } from "./decider.ts";
 import { createEmptyReadModel } from "./projector.ts";
 
 const NOW = "2026-08-27T12:00:00.000Z";
+
 const BOT_ID = BotId.make("bot-akeru");
+
 const THREAD_ID = ThreadId.make("thread-direct");
+
 const GROUP_ID = GroupId.make("group-product");
 
 function makeBot(archivedAt: string | null = null): OrchestrationBot {
@@ -139,6 +142,7 @@ it.layer(NodeServices.layer)("archived bot turns", (it) => {
         command: turnStart,
         readModel: makeReadModel(),
       });
+
       const events = Array.isArray(decided) ? decided : [decided];
       expect(events.map((event) => event.type)).toContain("thread.turn-start-requested");
     }),
@@ -150,6 +154,7 @@ it.layer(NodeServices.layer)("archived bot turns", (it) => {
         command: turnStart,
         readModel: makeReadModel({ archived: true }),
       }).pipe(Effect.flip);
+
       expect(error._tag).toBe("OrchestrationCommandInvariantError");
       expect(String(error)).toContain("is archived");
     }),
@@ -164,6 +169,7 @@ it.layer(NodeServices.layer)("archived bot turns", (it) => {
           command: turnResume,
           readModel: makeReadModel({ group, interrupted: true }),
         });
+
         const events = Array.isArray(decided) ? decided : [decided];
         expect(events.map((event) => event.type)).toEqual(["thread.turn-resume-requested"]);
       }),
@@ -175,6 +181,7 @@ it.layer(NodeServices.layer)("archived bot turns", (it) => {
           command: turnResume,
           readModel: makeReadModel({ group, interrupted: true, archived: true }),
         }).pipe(Effect.flip);
+
         expect(error._tag).toBe("OrchestrationCommandInvariantError");
         expect(String(error)).toContain(
           group ? `is archived and cannot respond for group '${GROUP_ID}'` : "is archived",
@@ -194,6 +201,7 @@ it.layer(NodeServices.layer)("archived bot turns", (it) => {
           noResponder: true,
         }),
       }).pipe(Effect.flip);
+
       expect(error._tag).toBe("OrchestrationCommandInvariantError");
       expect(String(error)).toContain(`is archived and cannot respond for group '${GROUP_ID}'`);
     }),

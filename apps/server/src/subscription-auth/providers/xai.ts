@@ -32,13 +32,21 @@ import {
 import type { OAuthCredentials } from "../types.ts";
 
 const CLIENT_ID = "b1a00492-073a-47ea-816f-4c329264a828";
+
 const DEVICE_CODE_URL = "https://auth.x.ai/oauth2/device/code";
+
 const TOKEN_URL = "https://auth.x.ai/oauth2/token";
+
 const SCOPE = "openid profile email offline_access grok-cli:access api:access";
+
 const DEVICE_CODE_GRANT_TYPE = "urn:ietf:params:oauth:grant-type:device_code";
+
 const DEFAULT_TOKEN_EXPIRES_IN_SECONDS = 3600;
+
 const DEFAULT_DEVICE_CODE_EXPIRES_IN_SECONDS = 600;
+
 const REFRESH_SKEW_MS = 5 * 60 * 1000;
+
 const REQUEST_TIMEOUT = "30 seconds";
 
 const DeviceAuthorizationResponse = Schema.Struct({
@@ -76,6 +84,7 @@ function validateVerificationUri(
   raw: string,
 ): Effect.Effect<string, SubscriptionAuthResponseError> {
   let parsed: URL;
+
   try {
     parsed = new URL(raw);
   } catch {
@@ -85,6 +94,7 @@ function validateVerificationUri(
       }),
     );
   }
+
   if (parsed.protocol !== "https:") {
     return Effect.fail(
       new SubscriptionAuthResponseError({
@@ -92,29 +102,35 @@ function validateVerificationUri(
       }),
     );
   }
+
   return Effect.succeed(parsed.toString());
 }
 
 const credentialsFromTokenResponse = Effect.fn("xai.credentialsFromTokenResponse")(function* (
-  body: unknown,
+  body: Schema.Json | undefined,
   previousRefreshToken?: string,
 ) {
   const tokens = yield* decodeOAuthBody(
     TokenResponse,
     "xAI token response missing access_token",
   )(body);
+
   // xAI may not rotate the refresh token on refresh; keep the previous one.
   const refresh = tokens.refresh_token || previousRefreshToken;
+
   if (!refresh) {
     return yield* new SubscriptionAuthResponseError({
       message: "xAI token response missing refresh_token",
     });
   }
+
   const expiresIn =
     tokens.expires_in !== undefined && tokens.expires_in > 0
       ? tokens.expires_in
       : DEFAULT_TOKEN_EXPIRES_IN_SECONDS;
+
   const now = yield* Clock.currentTimeMillis;
+
   return {
     access: tokens.access_token,
     refresh,
@@ -140,6 +156,7 @@ export type XAIDevicePollResult =
 /** Start an xAI device-code login: request a user code and return pending state. */
 const startDeviceLogin = Effect.fn("xai.startDeviceLogin")(function* () {
   const label = "Failed to initiate xAI device authorization";
+
   const data = yield* postForm(label, DEVICE_CODE_URL, { client_id: CLIENT_ID, scope: SCOPE }).pipe(
     Effect.flatMap(ensureOk(label)),
     Effect.flatMap(responseJson),
@@ -151,9 +168,11 @@ const startDeviceLogin = Effect.fn("xai.startDeviceLogin")(function* () {
     ),
     withOAuthTimeout("xAI device authorization", REQUEST_TIMEOUT),
   );
+
   const url = yield* validateVerificationUri(
     data.verification_uri_complete ?? data.verification_uri,
   );
+
   return {
     deviceCode: data.device_code,
     userCode: data.user_code,
@@ -203,10 +222,12 @@ const pollTokenOnce = Effect.fn("xai.pollTokenOnce")(
     }
 
     const text = yield* responseText(response);
+
     const body = Option.getOrElse(decodeTokenErrorBody(text), () => ({
       error: undefined,
       interval: undefined,
     }));
+
     switch (body.error) {
       case "authorization_pending":
         return { status: "pending", intervalSeconds: body.interval };
@@ -239,6 +260,7 @@ const pollDeviceLogin = Effect.fn("xai.pollDeviceLogin")(function* (
   pending: XAIDeviceLoginPending,
 ) {
   const step = yield* stepDeviceCodePoll(pending.state, pollTokenOnce(pending));
+
   switch (step.status) {
     case "complete":
       return { status: "complete", credentials: step.result } satisfies XAIDevicePollResult;
@@ -257,6 +279,7 @@ const pollDeviceLogin = Effect.fn("xai.pollDeviceLogin")(function* (
 /** Refresh an xAI OAuth token. */
 const refreshToken = Effect.fn("xai.refreshToken")(function* (refresh: string) {
   const label = "xAI token refresh failed";
+
   return yield* postForm(label, TOKEN_URL, {
     grant_type: "refresh_token",
     client_id: CLIENT_ID,

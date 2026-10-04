@@ -1,4 +1,3 @@
-// @effect-diagnostics nodeBuiltinImport:off - setup-script bootstrap, runs before any Effect runtime exists.
 /**
  * Pre-warms Vite's dependency-optimizer cache (`node_modules/.vite/deps`) so
  * the first `vp run dev` in a fresh worktree doesn't stall the initial page
@@ -18,5 +17,7 @@ const webRoot = NodePath.dirname(NodePath.dirname(NodeURL.fileURLToPath(import.m
 // logLevel "error" silences the "manually calling optimizeDeps is deprecated"
 // warning — deliberate here: warming ahead of the server is the whole point.
 const config = await resolveConfig({ root: webRoot, logLevel: "error" }, "serve");
+
 await optimizeDeps(config);
+
 console.log("[warm-dep-cache] web dependency cache is warm");

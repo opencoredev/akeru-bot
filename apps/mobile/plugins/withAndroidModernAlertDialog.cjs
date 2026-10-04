@@ -1,5 +1,7 @@
 const fs = require("node:fs");
+
 const path = require("node:path");
+
 const {
   AndroidConfig,
   withAndroidColors,
@@ -48,6 +50,7 @@ const COLORS = {
 function assignStyleItem(style, name, value) {
   style.item = style.item ?? [];
   const existing = style.item.find((item) => item.$?.name === name);
+
   if (existing) {
     existing._ = value;
   } else {
@@ -61,6 +64,7 @@ function withAlertDialogStyles(config) {
     resources.style = resources.style ?? [];
 
     const appTheme = resources.style.find((style) => style.$?.name === "AppTheme");
+
     if (appTheme) {
       // React Native's dialog module builds an androidx.appcompat AlertDialog,
       // which resolves its theme from the AppCompat attr; the framework attr is
@@ -146,18 +150,22 @@ function assignColors(colorsResource, palette) {
     name: "alert_dialog_button_text",
     value: palette.buttonText,
   });
+
   return result;
 }
 
 function withAlertDialogColors(config) {
   config = withAndroidColors(config, (config) => {
     config.modResults = assignColors(config.modResults, COLORS.light);
+
     return config;
   });
   config = withAndroidColorsNight(config, (config) => {
     config.modResults = assignColors(config.modResults, COLORS.night);
+
     return config;
   });
+
   return config;
 }
 
@@ -173,11 +181,13 @@ function withAlertDialogBackgroundDrawable(config) {
         "res",
         "drawable",
       );
+
       fs.mkdirSync(drawableDir, { recursive: true });
       fs.writeFileSync(
         path.join(drawableDir, "alert_dialog_background.xml"),
         DIALOG_BACKGROUND_DRAWABLE,
       );
+
       return config;
     },
   ]);

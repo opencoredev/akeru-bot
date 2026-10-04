@@ -51,57 +51,100 @@ import {
 
 // Server-internal alias surface, backed by contract schemas as the source of truth.
 export const ProjectCreatedPayload = ContractsProjectCreatedPayloadSchema;
+
 export const ProjectMetaUpdatedPayload = ContractsProjectMetaUpdatedPayloadSchema;
+
 export const ProjectDeletedPayload = ContractsProjectDeletedPayloadSchema;
 
 export const BotCreatedPayload = ContractsBotCreatedPayloadSchema;
+
 export const BotUpdatedPayload = ContractsBotUpdatedPayloadSchema;
+
 export const BotArchivedPayload = ContractsBotArchivedPayloadSchema;
+
 export const BotRestoredPayload = ContractsBotRestoredPayloadSchema;
+
 export const BotDeletedPayload = ContractsBotDeletedPayloadSchema;
+
 export const GroupCreatedPayload = ContractsGroupCreatedPayloadSchema;
+
 export const GroupRenamedPayload = ContractsGroupRenamedPayloadSchema;
+
 export const GroupDeletedPayload = ContractsGroupDeletedPayloadSchema;
+
 export const GroupMemberAssignedPayload = ContractsGroupMemberAssignedPayloadSchema;
+
 export const GroupMemberUnassignedPayload = ContractsGroupMemberUnassignedPayloadSchema;
+
 export const GroupPersonAssignedPayload = ContractsGroupPersonAssignedPayloadSchema;
+
 export const GroupPersonUnassignedPayload = ContractsGroupPersonUnassignedPayloadSchema;
+
 export const GroupBossSetPayload = ContractsGroupBossSetPayloadSchema;
+
 export const McpServerCreatedPayload = ContractsMcpServerCreatedPayloadSchema;
+
 export const McpServerUpdatedPayload = ContractsMcpServerUpdatedPayloadSchema;
+
 export const McpServerDeletedPayload = ContractsMcpServerDeletedPayloadSchema;
+
 export const McpServerEnabledPayload = ContractsMcpServerEnabledPayloadSchema;
+
 export const McpServerDisabledPayload = ContractsMcpServerDisabledPayloadSchema;
 
 export const ThreadCreatedPayload = ContractsThreadCreatedPayloadSchema;
+
 export const ThreadOwnershipUpdatedPayload = ContractsThreadOwnershipUpdatedPayloadSchema;
+
 export const ThreadArchivedPayload = ContractsThreadArchivedPayloadSchema;
+
 export const ThreadSettledPayload = ContractsThreadSettledPayloadSchema;
+
 export const ThreadMetaUpdatedPayload = ContractsThreadMetaUpdatedPayloadSchema;
+
 export const ThreadRuntimeModeSetPayload = ContractsThreadRuntimeModeSetPayloadSchema;
+
 export const ThreadInteractionModeSetPayload = ContractsThreadInteractionModeSetPayloadSchema;
+
 export const ThreadDeletedPayload = ContractsThreadDeletedPayloadSchema;
+
 export const ThreadUnarchivedPayload = ContractsThreadUnarchivedPayloadSchema;
+
 export const ThreadUnsettledPayload = ContractsThreadUnsettledPayloadSchema;
+
 export const ThreadSnoozedPayload = ContractsThreadSnoozedPayloadSchema;
+
 export const ThreadUnsnoozedPayload = ContractsThreadUnsnoozedPayloadSchema;
+
 export const ThreadPinnedPayload = ContractsThreadPinnedPayloadSchema;
+
 export const ThreadUnpinnedPayload = ContractsThreadUnpinnedPayloadSchema;
+
 export const ThreadPinReorderedPayload = ContractsThreadPinReorderedPayloadSchema;
 
 export const MessageSentPayloadSchema = ContractsThreadMessageSentPayloadSchema;
+
 export const ThreadMessageReactionSetPayload = ContractsThreadMessageReactionSetPayloadSchema;
+
 export const ThreadProposedPlanUpsertedPayload = ContractsThreadProposedPlanUpsertedPayloadSchema;
+
 export const ThreadSessionSetPayload = ContractsThreadSessionSetPayloadSchema;
+
 export const ThreadTurnDiffCompletedPayload = ContractsThreadTurnDiffCompletedPayloadSchema;
+
 export const ThreadRevertedPayload = ContractsThreadRevertedPayloadSchema;
+
 export const ThreadActivityAppendedPayload = ContractsThreadActivityAppendedPayloadSchema;
 
 export const ThreadTurnStartRequestedPayload = ContractsThreadTurnStartRequestedPayloadSchema;
+
 export const ThreadTurnInterruptRequestedPayload =
   ContractsThreadTurnInterruptRequestedPayloadSchema;
+
 export const ThreadApprovalResponseRequestedPayload =
   ContractsThreadApprovalResponseRequestedPayloadSchema;
+
 export const ThreadCheckpointRevertRequestedPayload =
   ContractsThreadCheckpointRevertRequestedPayloadSchema;
+
 export const ThreadSessionStopRequestedPayload = ContractsThreadSessionStopRequestedPayloadSchema;

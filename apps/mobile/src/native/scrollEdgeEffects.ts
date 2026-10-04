@@ -3,6 +3,7 @@
 // (those packages ship untranspiled Flow syntax).
 
 export type NativeTopScrollEdgeEffect = "automatic" | "soft";
+
 export type NativeHeaderScrollEdgeEffects = {
   readonly top: NativeTopScrollEdgeEffect;
   readonly bottom: "hidden";

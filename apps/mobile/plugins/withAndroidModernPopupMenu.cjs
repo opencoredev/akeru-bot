@@ -1,5 +1,7 @@
 const fs = require("node:fs");
+
 const path = require("node:path");
+
 const {
   AndroidConfig,
   withAndroidColors,
@@ -72,6 +74,7 @@ const COLORS = {
 function assignStyleItem(style, name, value) {
   style.item = style.item ?? [];
   const existing = style.item.find((item) => item.$?.name === name);
+
   if (existing) {
     existing._ = value;
   } else {
@@ -85,6 +88,7 @@ function withPopupMenuStyles(config) {
     resources.style = resources.style ?? [];
 
     const appTheme = resources.style.find((style) => style.$?.name === "AppTheme");
+
     if (appTheme) {
       assignStyleItem(appTheme, "popupMenuStyle", "@style/AppPopupMenu");
       assignStyleItem(appTheme, "android:popupMenuStyle", "@style/AppPopupMenu");
@@ -198,6 +202,7 @@ function withPopupMenuColors(config) {
       name: "popup_menu_item_text",
       value: COLORS.light.itemText,
     });
+
     return config;
   });
   config = withAndroidColorsNight(config, (config) => {
@@ -209,8 +214,10 @@ function withPopupMenuColors(config) {
       name: "popup_menu_item_text",
       value: COLORS.night.itemText,
     });
+
     return config;
   });
+
   return config;
 }
 
@@ -226,6 +233,7 @@ function withPopupMenuBackgroundDrawable(config) {
         "res",
         "drawable",
       );
+
       fs.mkdirSync(drawableDir, { recursive: true });
       fs.writeFileSync(
         path.join(drawableDir, "popup_menu_background.xml"),
@@ -240,6 +248,7 @@ function withPopupMenuBackgroundDrawable(config) {
         path.join(drawableDir, "popup_menu_submenu_arrow.xml"),
         SUBMENU_ARROW_DRAWABLE,
       );
+
       return config;
     },
   ]);

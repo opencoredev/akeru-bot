@@ -140,9 +140,9 @@ export function CursorGrowIcon(props: React.ComponentProps<"svg">): React.ReactE
   return (
     <svg
       aria-hidden="true"
-      fill="black"
+      fill="var(--color-black)"
       height="14"
-      stroke="white"
+      stroke="var(--color-white)"
       viewBox="0 0 24 14"
       width="26"
       xmlns="http://www.w3.org/2000/svg"

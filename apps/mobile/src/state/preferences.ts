@@ -38,16 +38,19 @@ export function createMobilePreferencesState(runtime: Atom.AtomRuntime<MobilePre
     Atom.keepAlive,
     Atom.withLabel("mobile:preferences:optimistic-patch"),
   );
+
   const confirmedPreferencesAtom = Atom.make<Preferences>({}).pipe(
     Atom.keepAlive,
     Atom.withLabel("mobile:preferences:confirmed"),
   );
+
   let nextPatchVersion = 0;
 
   const preferencesAtom = Atom.make((get) => {
     const stored = get(storedPreferencesAtom);
     const confirmed = get(confirmedPreferencesAtom);
     const optimistic = get(optimisticPatchAtom);
+
     return AsyncResult.map(stored, (preferences) => ({
       ...preferences,
       ...confirmed,
@@ -61,47 +64,57 @@ export function createMobilePreferencesState(runtime: Atom.AtomRuntime<MobilePre
         const version = ++nextPatchVersion;
         const current = get(optimisticPatchAtom);
         const versions = { ...current.versions };
+
+        // SAFETY: Preference patches are owned objects whose keys are Preferences fields.
         for (const key of Object.keys(patch) as Array<keyof Preferences>) {
           versions[key] = version;
         }
+
         get.set(optimisticPatchAtom, {
           values: { ...current.values, ...patch },
           versions,
         });
+
         return MobilePreferencesStore.pipe(
           Effect.flatMap((store) => store.savePatch(patch)),
           Effect.tap((saved) =>
             Effect.sync(() => {
               get.set(confirmedPreferencesAtom, saved);
               const optimistic = get(optimisticPatchAtom);
-              const values = { ...optimistic.values } as Record<string, unknown>;
-              const currentVersions = { ...optimistic.versions } as Record<string, unknown>;
+              const values = { ...optimistic.values };
+              const currentVersions = { ...optimistic.versions };
+
+              // SAFETY: Preference patches are owned objects whose keys are Preferences fields.
               for (const key of Object.keys(patch) as Array<keyof Preferences>) {
                 if (optimistic.versions[key] === version) {
                   delete values[key];
                   delete currentVersions[key];
                 }
               }
+
               get.set(optimisticPatchAtom, {
-                values: values as Partial<Preferences>,
-                versions: currentVersions as Partial<Record<keyof Preferences, number>>,
+                values: values,
+                versions: currentVersions,
               });
             }),
           ),
           Effect.tapError(() =>
             Effect.sync(() => {
               const optimistic = get(optimisticPatchAtom);
-              const values = { ...optimistic.values } as Record<string, unknown>;
-              const currentVersions = { ...optimistic.versions } as Record<string, unknown>;
+              const values = { ...optimistic.values };
+              const currentVersions = { ...optimistic.versions };
+
+              // SAFETY: Preference patches are owned objects whose keys are Preferences fields.
               for (const key of Object.keys(patch) as Array<keyof Preferences>) {
                 if (optimistic.versions[key] === version) {
                   delete values[key];
                   delete currentVersions[key];
                 }
               }
+
               get.set(optimisticPatchAtom, {
-                values: values as Partial<Preferences>,
-                versions: currentVersions as Partial<Record<keyof Preferences, number>>,
+                values: values,
+                versions: currentVersions,
               });
             }),
           ),
@@ -118,7 +131,9 @@ export function createMobilePreferencesState(runtime: Atom.AtomRuntime<MobilePre
 }
 
 const mobilePreferencesRuntime = Atom.runtime(Runtime.runtimeContextLayer);
+
 export const mobilePreferencesState = createMobilePreferencesState(mobilePreferencesRuntime);
 
 export const mobilePreferencesAtom = mobilePreferencesState.preferencesAtom;
+
 export const updateMobilePreferencesAtom = mobilePreferencesState.updatePreferencesAtom;

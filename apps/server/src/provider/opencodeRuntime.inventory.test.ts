@@ -1,3 +1,4 @@
+import { partialSdkFixture } from "./test-support/partialSdkFixture.ts";
 import * as NodeAssert from "node:assert/strict";
 
 import * as NodeServices from "@effect/platform-node/NodeServices";
@@ -28,7 +29,8 @@ it.layer(testLayer)("OpenCodeRuntime inventory", (it) => {
   it.effect("keeps provider inventory when skill discovery fails", () =>
     Effect.gen(function* () {
       const runtime = yield* OpenCodeRuntime;
-      const client = {
+
+      const client = partialSdkFixture<OpencodeClient>({
         provider: {
           list: () =>
             Promise.resolve({
@@ -43,7 +45,7 @@ it.layer(testLayer)("OpenCodeRuntime inventory", (it) => {
           agents: () => Promise.resolve({ data: [] }),
           skills: () => Promise.reject(new Error("skills endpoint unavailable")),
         },
-      } as unknown as OpencodeClient;
+      });
 
       const inventory = yield* runtime.loadOpenCodeInventory(client);
 
@@ -56,7 +58,8 @@ it.layer(testLayer)("OpenCodeRuntime inventory", (it) => {
   it.effect("keeps only SDK skill metadata in inventory", () =>
     Effect.gen(function* () {
       const runtime = yield* OpenCodeRuntime;
-      const client = {
+
+      const client = partialSdkFixture<OpencodeClient>({
         provider: {
           list: () =>
             Promise.resolve({
@@ -81,7 +84,7 @@ it.layer(testLayer)("OpenCodeRuntime inventory", (it) => {
               ],
             }),
         },
-      } as unknown as OpencodeClient;
+      });
 
       const inventory = yield* runtime.loadOpenCodeInventory(client);
 
@@ -130,11 +133,13 @@ it.layer(testLayer)("OpenCodeRuntime inventory", (it) => {
           "",
         ].join("\n"),
       );
+
       if (!isWindows) {
         yield* fs.chmod(binaryPath, 0o755);
       }
 
       const runtime = yield* OpenCodeRuntime;
+
       const inventory = yield* runtime.loadInventoryFromCli({
         binaryPath,
         cwd: tempDir,
@@ -155,6 +160,7 @@ it.layer(testLayer)("OpenCodeRuntime inventory", (it) => {
       const runtime = yield* OpenCodeRuntime;
       const executablePath = yield* HostProcessExecutablePath;
       const outputBytes = 2 * 1024 * 1024;
+
       const result = yield* runtime.runOpenCodeCommand({
         binaryPath: executablePath,
         args: [
@@ -218,11 +224,13 @@ it.layer(testLayer)("OpenCodeRuntime inventory", (it) => {
           "",
         ].join("\n"),
       );
+
       if (!isWindows) {
         yield* fs.chmod(binaryPath, 0o755);
       }
 
       const runtime = yield* OpenCodeRuntime;
+
       const inventory = yield* runtime.loadInventoryFromCli({
         binaryPath,
         cwd: tempDir,
@@ -283,11 +291,13 @@ it.layer(testLayer)("OpenCodeRuntime inventory", (it) => {
           "",
         ].join("\n"),
       );
+
       if (!isWindows) {
         yield* fs.chmod(binaryPath, 0o755);
       }
 
       const runtime = yield* OpenCodeRuntime;
+
       const loadInventory = runtime.loadInventoryFromCli({
         binaryPath,
         cwd: tempDir,
@@ -302,6 +312,7 @@ it.layer(testLayer)("OpenCodeRuntime inventory", (it) => {
       const [first, second] = yield* Effect.all([loadInventory, loadInventory], {
         concurrency: "unbounded",
       });
+
       NodeAssert.deepEqual(first.providerList.connected, ["openai"]);
       NodeAssert.deepEqual(second.providerList.connected, ["openai"]);
 
@@ -310,10 +321,13 @@ it.layer(testLayer)("OpenCodeRuntime inventory", (it) => {
         .split("\n")
         .map((line) => {
           const [startText, endText] = line.split(" ");
+
           return { start: Number(startText), end: Number(endText) };
         })
         .toSorted((left, right) => left.start - right.start);
+
       NodeAssert.equal(intervals.length, 6);
+
       for (let index = 1; index < intervals.length; index += 1) {
         NodeAssert.ok(intervals[index - 1]!.end <= intervals[index]!.start);
       }
@@ -327,6 +341,7 @@ it.layer(testLayer)("OpenCodeRuntime inventory", (it) => {
       const hostEnvironment = yield* HostProcessEnvironment;
       const executablePath = yield* HostProcessExecutablePath;
       const hostPlatform = yield* HostProcessPlatform;
+
       if (hostPlatform === "win32") {
         return;
       }
@@ -352,6 +367,7 @@ it.layer(testLayer)("OpenCodeRuntime inventory", (it) => {
       yield* fs.chmod(binaryPath, 0o755);
 
       const runtime = yield* OpenCodeRuntime;
+
       const commandFiber = yield* runtime
         .runOpenCodeCommand({
           binaryPath,
@@ -368,10 +384,12 @@ it.layer(testLayer)("OpenCodeRuntime inventory", (it) => {
       const pidText = yield* fs
         .readFileString(pidPath)
         .pipe(Effect.retry(Schedule.spaced("25 millis")), Effect.timeoutOption("2 seconds"));
+
       if (Option.isNone(pidText)) {
         yield* Fiber.interrupt(commandFiber);
         NodeAssert.fail("Hanging OpenCode command never wrote its pid.");
       }
+
       const pid = Number(pidText.value.trim());
       NodeAssert.ok(Number.isInteger(pid) && pid > 0);
 
@@ -380,6 +398,7 @@ it.layer(testLayer)("OpenCodeRuntime inventory", (it) => {
       const stillAlive = yield* Effect.sync(() => {
         try {
           process.kill(pid, 0);
+
           return true;
         } catch {
           return false;
@@ -392,6 +411,7 @@ it.layer(testLayer)("OpenCodeRuntime inventory", (it) => {
         Effect.retry(Schedule.spaced("25 millis")),
         Effect.timeoutOption("2 seconds"),
       );
+
       NodeAssert.equal(Option.isSome(stillAlive), true);
     }).pipe(TestClock.withLive),
   );

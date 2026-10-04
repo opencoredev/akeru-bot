@@ -29,36 +29,47 @@ import { GeneralSettingsPanel } from "./GeneralSettingsPanel";
 const AppearanceSettingsPanel = lazy(async () => ({
   default: (await import("./SettingsPanels")).AppearanceSettingsPanel,
 }));
+
 const ProvidersSettingsPage = lazy(async () => ({
   default: (await import("./SettingsPages")).ProvidersSettingsPage,
 }));
+
 const SandboxSettingsPage = lazy(async () => ({
   default: (await import("./SettingsPages")).SandboxSettingsPage,
 }));
+
 const BrowserSettingsPage = lazy(async () => ({
   default: (await import("./SettingsPages")).BrowserSettingsPage,
 }));
+
 const AdvancedSettingsPage = lazy(async () => ({
   default: (await import("./SettingsPages")).AdvancedSettingsPage,
 }));
+
 const BotChannelsSettingsPanel = lazy(async () => ({
   default: (await import("./BotChannelsSettings")).BotChannelsSettingsPanel,
 }));
+
 const PrivacySettingsPanel = lazy(async () => ({
   default: (await import("./PrivacySettings")).PrivacySettingsPanel,
 }));
+
 const ConnectionsSettings = lazy(async () => ({
   default: (await import("./ConnectionsSettings")).ConnectionsSettings,
 }));
+
 const KeybindingsSettingsPanel = lazy(async () => ({
   default: (await import("./KeybindingsSettings")).KeybindingsSettingsPanel,
 }));
+
 const ImageGenerationSettingsPanel = lazy(async () => ({
   default: (await import("./ImageGenerationSettings")).ImageGenerationSettingsPanel,
 }));
+
 const ArchivedChatsSettingsPanel = lazy(async () => ({
   default: (await import("./ArchivedChatsSettings")).ArchivedChatsSettingsPanel,
 }));
+
 const DiagnosticsSettingsPanel = lazy(async () => ({
   default: (await import("./DiagnosticsSettings")).DiagnosticsSettingsPanel,
 }));
@@ -81,6 +92,7 @@ const SECTION_PANELS: Readonly<Record<SettingsSection, ComponentType>> = {
 
 export function SettingsPanelForSection({ section }: { readonly section: SettingsSection }) {
   const Panel = SECTION_PANELS[section];
+
   return (
     <Suspense
       fallback={
@@ -118,7 +130,7 @@ export const SETTINGS_NAV_GROUPS: ReadonlyArray<{
       { section: "keybindings", label: "Keyboard", icon: KeyboardIcon },
       { section: "connections", label: "Connections", icon: Link02Icon },
       { section: "privacy", label: "Privacy & data", icon: SecurityCheckIcon },
-      { section: "archived", label: "Archived chats", icon: Archive02Icon },
+      { section: "archived", label: "Archived", icon: Archive02Icon },
       { section: "advanced", label: "Advanced", icon: SlidersHorizontalIcon },
     ],
   },
@@ -165,7 +177,7 @@ export function SettingsDialog() {
       }}
     >
       <DialogPopup
-        className="h-[min(44rem,88dvh)] max-w-4xl flex-row overflow-hidden max-sm:flex-col"
+        className="h-(--spacing-min-44rem-88dvh) max-w-4xl flex-row overflow-hidden max-sm:flex-col"
         bottomStickOnMobile={false}
       >
         <DialogTitle className="sr-only">{t("Settings")}</DialogTitle>
@@ -180,6 +192,7 @@ export function SettingsDialog() {
               </div>
               {group.items.map((item) => {
                 const isActive = section === item.section;
+
                 return (
                   <button
                     key={item.section}

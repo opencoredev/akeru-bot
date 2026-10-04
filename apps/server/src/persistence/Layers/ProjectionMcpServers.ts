@@ -33,6 +33,7 @@ const decodeMcpServer = Schema.decodeUnknownEffect(McpServer);
 
 function decodeRow(row: ProjectionMcpServerDbRow) {
   const instructions = row.instructions !== null ? { instructions: row.instructions } : {};
+
   const candidate =
     row.transport === "stdio"
       ? {
@@ -56,6 +57,7 @@ function decodeRow(row: ProjectionMcpServerDbRow) {
           createdAt: row.createdAt,
           updatedAt: row.updatedAt,
         };
+
   return decodeMcpServer(candidate).pipe(
     Effect.mapError(toPersistenceDecodeError("ProjectionMcpServerRepository.decodeRow")),
   );

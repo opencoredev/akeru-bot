@@ -25,7 +25,19 @@ function TooltipPopup({
   align?: TooltipPrimitive.Positioner.Props["align"];
   side?: TooltipPrimitive.Positioner.Props["side"];
   sideOffset?: TooltipPrimitive.Positioner.Props["sideOffset"];
-  variant?: "default" | "glass";
+  variant?:
+    | "default"
+    | "glass"
+    | "diagnostics-prose"
+    | "diagnostics-mono"
+    | "diagnostics-process"
+    | "keybinding-warning"
+    | "telemetry-history"
+    | "connection-error"
+    | "tight"
+    | "hint"
+    | "mono"
+    | "file-link";
   anchor?: TooltipPrimitive.Positioner.Props["anchor"];
 }) {
   return (
@@ -42,8 +54,18 @@ function TooltipPopup({
           className={cn(
             "relative flex h-(--popup-height,auto) w-(--popup-width,auto) origin-(--transform-origin) text-balance rounded-md text-popover-foreground text-xs transition-[width,height,scale,opacity] data-ending-style:scale-98 data-starting-style:scale-98 data-ending-style:opacity-0 data-starting-style:opacity-0 data-instant:duration-0",
             variant === "glass"
-              ? "dropdown-glass shadow-xl shadow-black/25"
+              ? "dropdown-glass shadow-xl shadow-shade/25"
               : "dropdown-glass shadow-md/40",
+            variant === "diagnostics-prose" && "text-[11px] leading-relaxed text-wrap",
+            variant === "diagnostics-mono" && "font-mono text-[11px]",
+            variant === "diagnostics-process" && "font-mono text-[11px] leading-relaxed text-wrap",
+            variant === "keybinding-warning" && "leading-relaxed",
+            variant === "telemetry-history" && "space-y-0.5 text-left",
+            variant === "connection-error" && "max-w-80 whitespace-pre-wrap leading-tight",
+            variant === "tight" && "leading-tight",
+            variant === "hint" && "font-normal leading-snug",
+            variant === "mono" && "font-mono",
+            variant === "file-link" && "font-mono text-[11px] leading-tight",
             className,
           )}
           data-slot="tooltip-popup"

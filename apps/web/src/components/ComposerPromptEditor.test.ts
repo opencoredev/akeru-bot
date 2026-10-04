@@ -18,9 +18,22 @@ class TestClipboardEvent extends Event {
   constructor(text: string) {
     super("paste", { cancelable: true });
     this.clipboardData = {
-      files: [],
+      files: { length: 0, item: () => null, [Symbol.iterator]: () => [][Symbol.iterator]() },
+      dropEffect: "none",
+      effectAllowed: "all",
+      items: {
+        length: 0,
+        add: () => null,
+        clear() {},
+        remove() {},
+        [Symbol.iterator]: () => [][Symbol.iterator](),
+      },
+      types: ["text/plain"],
+      clearData() {},
+      setData() {},
+      setDragImage() {},
       getData: (type: string) => (type === "text/plain" ? text : ""),
-    } as unknown as DataTransfer;
+    };
   }
 }
 
@@ -33,10 +46,13 @@ describe("registerComposerInlineTokenPaste", () => {
     vi.stubGlobal("ClipboardEvent", TestClipboardEvent);
     const editor = createEditor();
     const mention = "[improve-deploy-error-logging.md](.changeset/improve-deploy-error-logging.md)";
+
     const plainTextFallback = vi.fn(() => {
       const selection = $getSelection();
+
       if (!$isRangeSelection(selection)) return false;
       selection.insertText(mention);
+
       return true;
     });
 
@@ -78,10 +94,13 @@ describe("registerComposerInlineTokenPaste", () => {
   ])("leaves scoped package command %s to the plain-text paste fallback", (command) => {
     vi.stubGlobal("ClipboardEvent", TestClipboardEvent);
     const editor = createEditor();
+
     const plainTextFallback = vi.fn((event: ClipboardEvent) => {
       const selection = $getSelection();
+
       if (!$isRangeSelection(selection)) return false;
       selection.insertText(event.clipboardData?.getData("text/plain") ?? "");
+
       return true;
     });
 

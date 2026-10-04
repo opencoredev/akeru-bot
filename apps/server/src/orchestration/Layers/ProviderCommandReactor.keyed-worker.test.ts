@@ -1,11 +1,12 @@
+import * as Match from "effect/Match";
 import { it } from "@effect/vitest";
 import { describe, expect } from "vite-plus/test";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
 
-import { makeKeyedDrainableWorker } from "./ProviderCommandReactor.ts";
+import { keyedDrainableWorker } from "./ProviderCommandReactor.ts";
 
-describe("makeKeyedDrainableWorker", () => {
+describe("keyedDrainableWorker", () => {
   it.effect(
     "runs independent keys while preserving same-thread start, stop, and restart FIFO",
     () =>
@@ -15,7 +16,8 @@ describe("makeKeyedDrainableWorker", () => {
           const releaseA1 = yield* Deferred.make<void>();
           const startedB1 = yield* Deferred.make<void>();
           const processed: string[] = [];
-          const worker = yield* makeKeyedDrainableWorker<string, string, never, never>({
+
+          const worker = yield* keyedDrainableWorker<string, string, never, never>({
             concurrency: 2,
             process: (item) =>
               Effect.gen(function* () {
@@ -23,11 +25,14 @@ describe("makeKeyedDrainableWorker", () => {
                   yield* Deferred.succeed(startedA1, undefined).pipe(Effect.orDie);
                   yield* Deferred.await(releaseA1);
                 }
+
                 if (item === "approval") {
                   processed.push(item);
                   yield* Deferred.succeed(startedB1, undefined).pipe(Effect.orDie);
+
                   return;
                 }
+
                 processed.push(item);
               }),
           });
@@ -55,7 +60,8 @@ describe("makeKeyedDrainableWorker", () => {
         const releaseA = yield* Deferred.make<void>();
         const releaseB = yield* Deferred.make<void>();
         const drained = yield* Deferred.make<void>();
-        const worker = yield* makeKeyedDrainableWorker<string, string, never, never>({
+
+        const worker = yield* keyedDrainableWorker<string, string, never, never>({
           concurrency: 2,
           process: (item) =>
             Effect.gen(function* () {
@@ -88,35 +94,42 @@ describe("makeKeyedDrainableWorker", () => {
       Effect.gen(function* () {
         const started = new Map<string, Deferred.Deferred<void>>();
         const releases = new Map<string, Deferred.Deferred<void>>();
+
         for (const item of ["a", "b", "c"]) {
           started.set(item, yield* Deferred.make<void>());
           releases.set(item, yield* Deferred.make<void>());
         }
+
         const recovered = yield* Deferred.make<void>();
         let active = 0;
         let maxActive = 0;
-        const worker = yield* makeKeyedDrainableWorker<string, string, string, never>({
+
+        const worker = yield* keyedDrainableWorker<string, string, string, never>({
           concurrency: 2,
           process: (item) =>
-            item === "fail"
-              ? Effect.fail("injected failure")
-              : item === "recovered"
-                ? Deferred.succeed(recovered, undefined).pipe(Effect.asVoid)
-                : Effect.acquireUseRelease(
-                    Effect.sync(() => {
-                      active += 1;
-                      maxActive = Math.max(maxActive, active);
+            Match.value(item).pipe(
+              Match.when("fail", () => Effect.fail("injected failure")),
+              Match.when("recovered", () =>
+                Deferred.succeed(recovered, undefined).pipe(Effect.asVoid),
+              ),
+              Match.orElse(() =>
+                Effect.acquireUseRelease(
+                  Effect.sync(() => {
+                    active += 1;
+                    maxActive = Math.max(maxActive, active);
+                  }),
+                  () =>
+                    Effect.gen(function* () {
+                      yield* Deferred.succeed(started.get(item)!, undefined).pipe(Effect.orDie);
+                      yield* Deferred.await(releases.get(item)!);
                     }),
-                    () =>
-                      Effect.gen(function* () {
-                        yield* Deferred.succeed(started.get(item)!, undefined).pipe(Effect.orDie);
-                        yield* Deferred.await(releases.get(item)!);
-                      }),
-                    () =>
-                      Effect.sync(() => {
-                        active -= 1;
-                      }),
-                  ),
+                  () =>
+                    Effect.sync(() => {
+                      active -= 1;
+                    }),
+                ),
+              ),
+            ),
         });
 
         yield* worker.enqueue("a", "a");

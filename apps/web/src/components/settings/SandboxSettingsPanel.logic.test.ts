@@ -20,6 +20,7 @@ describe("sandbox settings", () => {
       }),
       defaultProvider: "e2b" as const,
     };
+
     for (const change of [
       { kind: "disconnect" },
       { kind: "save", draft: { RAILWAY_API_TOKEN: "rotated", RAILWAY_ENVIRONMENT_ID: "env" } },
@@ -45,17 +46,21 @@ describe("sandbox settings", () => {
         draft: { RAILWAY_API_TOKEN: "token" },
       }),
     ).toBe(false);
+
     const connected = saveSandboxProviderConnection({
       settings: DEFAULT_SERVER_SETTINGS.sandbox,
       provider: "railway",
       draft: { RAILWAY_API_TOKEN: " token ", RAILWAY_ENVIRONMENT_ID: " env " },
     });
+
     expect(isSandboxProviderConnected(connected, "railway")).toBe(true);
     expect(selectableSandboxProviders(connected)).toEqual(["local", "railway"]);
+
     const disconnected = disconnectSandboxProvider(
       { ...connected, defaultProvider: "railway" },
       "railway",
     );
+
     expect(disconnected.defaultProvider).toBe("local");
     expect(isSandboxProviderConnected(disconnected, "railway")).toBe(false);
   });
@@ -70,6 +75,7 @@ describe("sandbox settings", () => {
       provider: "e2b",
       draft: { E2B_API_KEY: " e2b-secret " },
     });
+
     expect(isSandboxProviderConnected(sandbox, "e2b")).toBe(true);
     expect(selectableSandboxProviders(sandbox)).toEqual(["local", "e2b"]);
   });
@@ -89,19 +95,23 @@ describe("sandbox settings", () => {
     expect(canSaveSandboxProviderConnection({ settings, provider: "ascii", draft: {} })).toBe(
       false,
     );
+
     const connected = saveSandboxProviderConnection({
       settings,
       provider: "ascii",
       draft: { BOX_API_KEY: " ascii-secret " },
     });
+
     expect(connected.providers.ascii.environment).toEqual([
       { name: "BOX_API_KEY", value: "ascii-secret", sensitive: true },
     ]);
     expect(selectableSandboxProviders(connected)).toContain("ascii");
+
     const disconnected = disconnectSandboxProvider(
       { ...connected, defaultProvider: "ascii" },
       "ascii",
     );
+
     expect(disconnected.defaultProvider).toBe("local");
     expect(selectableSandboxProviders(disconnected)).not.toContain("ascii");
   });
@@ -115,6 +125,7 @@ describe("sandbox settings", () => {
       }),
       defaultProvider: "e2b" as const,
     };
+
     const redacted = {
       ...connected,
       providers: {
@@ -124,6 +135,7 @@ describe("sandbox settings", () => {
         },
       },
     };
+
     const saved = saveSandboxProviderConnection({ settings: redacted, provider: "e2b", draft: {} });
     expect(saved.providers.e2b.environment[0]?.valueRedacted).toBe(true);
     expect(disconnectSandboxProvider(saved, "e2b").defaultProvider).toBe("local");

@@ -68,9 +68,11 @@ describe("copyTextWithHaptic", () => {
     });
 
     const failures = consoleError.mock.calls.map(([failure]) => failure);
+
     const clipboardError = failures.find(
       (failure) => failure instanceof CopyTextClipboardWriteError,
     );
+
     expect(clipboardError).toBeInstanceOf(CopyTextClipboardWriteError);
     expect(clipboardError).toMatchObject({
       target: "connection-trace-id",

@@ -61,6 +61,7 @@ export type PluginDirectoryDefinition =
   | PendingPluginDefinition;
 
 export type PluginDefinition = CatalogPluginDefinition;
+
 export type { PluginSkill };
 
 type AssetModules = Readonly<Record<string, string>>;
@@ -69,6 +70,7 @@ const catalogModules = import.meta.glob<unknown>("./entries/*/plugin.json", {
   eager: true,
   import: "default",
 });
+
 const catalogAssets = import.meta.glob<string>(
   ["./entries/*/logo.svg", "./entries/*/logo-dark.svg"],
   {
@@ -86,7 +88,9 @@ function assetUrl(
 ): string {
   const path = `./entries/${directory}/${filename}`;
   const url = assets[path];
+
   if (!url) throw new TypeError(`Plugin '${pluginId}' is missing logo asset '${filename}'.`);
+
   return url;
 }
 
@@ -95,11 +99,13 @@ function toPluginDefinition(
   assets: AssetModules,
 ): PluginDirectoryDefinition {
   const remoteLogoUrl = manifest.logo.url;
+
   const logo = {
     provenance: manifest.logo.provenance,
     src: remoteLogoUrl ?? assetUrl(assets, manifest.id, "logo.svg", manifest.id),
     darkSrc: remoteLogoUrl ?? assetUrl(assets, manifest.id, "logo-dark.svg", manifest.id),
   };
+
   const base = {
     ...manifest,
     title: manifest.name,
@@ -109,6 +115,7 @@ function toPluginDefinition(
     docsUrl: manifest.documentationUrl,
     builtin: true as const,
   };
+
   if (manifest.transport.type === "url") {
     return Object.freeze({
       ...base,
@@ -117,6 +124,7 @@ function toPluginDefinition(
       url: manifest.transport.url,
     });
   }
+
   if (manifest.transport.type === "stdio") {
     return Object.freeze({
       ...base,
@@ -126,6 +134,7 @@ function toPluginDefinition(
       ...(manifest.transport.args ? { args: manifest.transport.args } : {}),
     });
   }
+
   return Object.freeze({
     ...base,
     kind: "mcp-unavailable" as const,
@@ -133,12 +142,14 @@ function toPluginDefinition(
   });
 }
 
-export function loadDirectoryCatalog(
-  modules: CatalogManifestModules = catalogModules,
+export function loadDirectoryCatalog<T = (typeof catalogModules)[string]>(
+  modules?: CatalogManifestModules<T>,
   assets: AssetModules = catalogAssets,
 ): readonly PluginDirectoryDefinition[] {
   return Object.freeze(
-    loadManifestCatalog(modules).map((manifest) => toPluginDefinition(manifest, assets)),
+    loadManifestCatalog(modules ?? catalogModules).map((manifest) =>
+      toPluginDefinition(manifest, assets),
+    ),
   );
 }
 
@@ -146,8 +157,8 @@ export function isInstallablePlugin(plugin: PluginDirectoryDefinition): plugin i
   return isInstallableManifest(plugin) && plugin.kind !== "mcp-unavailable";
 }
 
-export function loadCatalog(
-  modules: CatalogManifestModules = catalogModules,
+export function loadCatalog<T = (typeof catalogModules)[string]>(
+  modules?: CatalogManifestModules<T>,
   assets: AssetModules = catalogAssets,
 ): readonly CatalogPluginDefinition[] {
   return loadDirectoryCatalog(modules, assets).filter(isInstallablePlugin);
@@ -173,10 +184,12 @@ export function resolveCatalogInstallations(
   catalog: readonly PluginDirectoryDefinition[] = loadDirectoryCatalog(),
 ): readonly CatalogInstallation[] {
   const byId = new Map(catalog.map((plugin) => [plugin.id, plugin]));
+
   return installed.flatMap((server): readonly CatalogInstallation[] => {
     if (!server.id.startsWith(BUILTIN_PREFIX)) return [];
     const pluginId = server.id.slice(BUILTIN_PREFIX.length);
     const plugin = byId.get(pluginId);
+
     return plugin
       ? [{ kind: "catalog", serverId: server.id, plugin }]
       : [{ kind: "legacy", serverId: server.id, pluginId, title: server.name }];

@@ -1,0 +1,576 @@
+---
+import BotAvatar from "../BotAvatar.astro";
+import { HERO_BOTS } from "../../lib/heroBots";
+
+const [scout, relay, mira] = HERO_BOTS;
+
+const steps = [
+  {
+    number: "1",
+    title: "Connect a subscription",
+    body: "Sign in with Claude, Codex, Grok, Kimi For Coding, or OpenCode. Akeru Bot adds no account of its own.",
+  },
+  {
+    number: "2",
+    title: "Create a bot",
+    body: "Name it, pick a provider, and choose the tools it can reach.",
+  },
+  {
+    number: "3",
+    title: "Hand it work",
+    body: "Chat from the desktop app, any browser on your network, or your phone. Bots keep working while you are away.",
+  },
+];
+
+// BotActivityStatus from the app: the pixel comet circles this diamond while the
+// label steps through the plain-language updates a working bot reports.
+const GLYPH_CELLS = [
+  [2, 0],
+  [3, 1],
+  [4, 2],
+  [3, 3],
+  [2, 4],
+  [1, 3],
+  [0, 2],
+  [1, 1],
+] as const;
+
+const ACTIVITY_LABELS = [`${mira.name} is working`, "Reading a source", "Running checks", "Editing files"];
+
+// The onboarding celebration, with the same burst math as OnboardingCelebration.tsx.
+// A fixed seed keeps the build deterministic.
+const CONFETTI_COLORS = [relay.color, relay.color, scout.color, "#FFA826", mira.color];
+
+let seed = 7;
+
+const random = () => {
+  seed = (seed * 16807) % 2147483647;
+
+  return (seed - 1) / 2147483646;
+};
+
+const confetti = Array.from({ length: 16 }, (_, i) => {
+  const r = random();
+  const spread = (i / 15) * 2 - 1 + (random() - 0.5) * 0.2;
+
+  return {
+    x: Math.round(spread * 132),
+    y: Math.round(-46 - r * 104),
+    rotate: i % 2 === 0 ? 110 : -110,
+    scale: (0.65 + random() * 0.5).toFixed(2),
+    delay: Math.round(r * 0.12 * 0.66 * 1000),
+    square: r > 0.45,
+    color: CONFETTI_COLORS[i % CONFETTI_COLORS.length],
+  };
+});
+
+const providers = ["Claude", "Codex", "Grok", "Kimi For Coding", "OpenCode"];
+---
+<section id="how-it-works" class="how">
+  <h2 class="section-title">Up and running in three steps</h2>
+  <p class="how-sub">
+    Your environment owns the chats, bot profiles, and memory. Run the environment on your
+    machine or connect it to a cloud sandbox that you control.
+  </p>
+  <p class="how-sub">
+    Looking for an <a href="/open-source-grok-bot">open-source Grok Bot alternative</a>?
+    See how Akeru works with your Grok subscription, or follow the{" "}
+    <a href="/guides/self-hosted-grok-bot">self-hosted Grok bot setup guide</a>.
+  </p>
+  <ol class="steps" data-steps>
+    {
+      steps.map((step, index) => (
+        <li class="step">
+          <div class="step-visual">
+            {index === 0 && (
+              <ul class="provider-chips" aria-label="Supported providers">
+                {providers.map((provider) => <li>{provider}</li>)}
+              </ul>
+            )}
+            {index === 1 && (
+              <div class="create" data-create data-name={relay.name}>
+                <div class="celebration">
+                  <span class="confetti" aria-hidden="true">
+                    {confetti.map((piece) => (
+                      <span
+                        class:list={["confetti-piece", { "is-square": piece.square }]}
+                        style={`--x:${piece.x}px;--y:${piece.y}px;--rotate:${piece.rotate}deg;--scale:${piece.scale};--delay:${piece.delay}ms;background:${piece.color}`}
+                      />
+                    ))}
+                  </span>
+                  <span class="create-slot" aria-hidden="true" />
+                  <BotAvatar name={relay.name} shape={relay.shape} color={relay.color} size={56} />
+                </div>
+                <div class="create-field">
+                  <span class="create-name" data-create-name>{relay.name}</span>
+                  <span class="create-caret" aria-hidden="true" />
+                </div>
+                <span class="create-provider">Claude</span>
+              </div>
+            )}
+            {index === 2 && (
+              <div class="chat-demo" data-activity data-labels={ACTIVITY_LABELS.join("|")}>
+                <p class="chat-bubble">Can you look at the failing checkout test?</p>
+                <div class="activity-row">
+                  <span class="activity-glyph">
+                    <svg aria-hidden="true" class="bot-thinking-glyph" viewBox="0 0 14 14">
+                      {GLYPH_CELLS.map(([x, y], index) => (
+                        <rect fill="currentColor" height="2" width="2" x={x * 3} y={y * 3} style={`--cell:${index}`} />
+                      ))}
+                    </svg>
+                  </span>
+                  <span class="bot-shimmer-text" data-activity-label>
+                    {ACTIVITY_LABELS[0]}...
+                    <span aria-hidden="true" class="bot-shimmer-sheen">
+                      <span class="bot-shimmer-sheen-text">{ACTIVITY_LABELS[0]}...</span>
+                    </span>
+                  </span>
+                </div>
+              </div>
+            )}
+          </div>
+          <span class="step-number" aria-hidden="true">{step.number}</span>
+          <h3>{step.title}</h3>
+          <p>{step.body}</p>
+        </li>
+      ))
+    }
+  </ol>
+</section>
+
+<style>
+  /* ── Section shells ── */
+
+  .section-title {
+    font-size: 44px;
+    font-weight: 600;
+    letter-spacing: -0.03em;
+    line-height: 50px;
+    text-align: center;
+  }
+
+  /* ── How it works ── */
+
+  .how {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 104px 64px 112px;
+    background: var(--color-band);
+    border-block: 1px solid var(--color-border);
+  }
+
+  .how-sub {
+    max-width: 620px;
+    margin-top: 18px;
+    font-size: 16px;
+    line-height: 26px;
+    text-align: center;
+    color: var(--color-muted-foreground);
+  }
+
+  .how-sub a {
+    color: var(--color-foreground);
+    text-decoration: underline;
+    text-underline-offset: 4px;
+  }
+
+  .how-sub a:focus-visible {
+    outline: 2px solid var(--color-primary);
+    outline-offset: 4px;
+  }
+
+  .steps {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 16px;
+    width: 100%;
+    margin-top: 56px;
+    list-style: none;
+  }
+
+  .step {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 12px 12px 28px;
+    border-radius: var(--radius-panel);
+    background: var(--color-card);
+    box-shadow: var(--shadow-panel);
+  }
+
+  .step > :not(.step-visual) {
+    margin-inline: 16px;
+  }
+
+  .step-visual {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 168px;
+    margin-bottom: 10px;
+    border: 1px solid var(--color-border);
+    border-radius: 12px;
+    background: var(--color-background);
+  }
+
+  .step-number {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    background: var(--color-selected);
+    color: var(--color-foreground);
+    font-size: 13px;
+    font-weight: 600;
+  }
+
+  .step h3 {
+    font-size: 18px;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    line-height: 24px;
+  }
+
+  .step p {
+    font-size: 14px;
+    line-height: 22px;
+    color: var(--color-muted-foreground);
+  }
+
+  .provider-chips {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 6px;
+    max-width: 260px;
+    list-style: none;
+  }
+
+  .provider-chips li {
+    padding: 6px 12px;
+    border-radius: 999px;
+    background: var(--color-card);
+    box-shadow: var(--shadow-panel);
+    font-size: 13px;
+    font-weight: 500;
+    line-height: 17px;
+  }
+
+  .create {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .celebration {
+    position: relative;
+    display: grid;
+    place-items: center;
+    width: 56px;
+    height: 56px;
+  }
+
+  .celebration > :global(*) {
+    grid-area: 1 / 1;
+  }
+
+  /* The empty avatar slot shown before the bot exists. */
+  .create-slot {
+    width: 56px;
+    height: 56px;
+    border: 1px dashed var(--color-input);
+    border-radius: 50%;
+    opacity: 0;
+    transition: opacity var(--duration-fast) var(--ease-smooth-out);
+  }
+
+  .celebration :global(.bot-avatar) {
+    transition:
+      opacity var(--duration-fast) var(--ease-smooth-out),
+      transform var(--duration-very-slow) var(--ease-bounce),
+      filter var(--duration-fast) var(--ease-smooth-out);
+  }
+
+  .create-field {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    min-width: 132px;
+    height: 32px;
+    padding: 0 12px;
+    border-radius: 8px;
+    background: var(--color-card);
+    box-shadow: var(--shadow-panel);
+    font-size: 14px;
+    font-weight: 600;
+    transition: box-shadow var(--duration-fast) var(--ease-smooth-out);
+  }
+
+  .create-caret {
+    width: 1.5px;
+    height: 16px;
+    background: var(--color-foreground);
+    opacity: 0;
+  }
+
+  .create-provider {
+    padding: 3px 10px;
+    border-radius: 999px;
+    background: var(--color-selected);
+    color: var(--color-muted-foreground);
+    font-size: 12px;
+    font-weight: 500;
+    line-height: 16px;
+    transition:
+      opacity var(--duration-fast) var(--ease-smooth-out),
+      transform var(--duration-fast) var(--ease-smooth-out);
+  }
+
+  .create[data-stage="empty"] .create-slot,
+  .create[data-stage="typing"] .create-slot {
+    opacity: 1;
+  }
+
+  .create[data-stage="empty"] :global(.bot-avatar),
+  .create[data-stage="typing"] :global(.bot-avatar) {
+    opacity: 0;
+    transform: scale(0.6);
+    filter: blur(2px);
+  }
+
+  .create[data-stage="typing"] .create-field {
+    box-shadow: inset 0 0 0 1px var(--color-muted-foreground);
+  }
+
+  .create[data-stage="typing"] .create-caret {
+    animation: create-caret 900ms step-end infinite;
+  }
+
+  .create[data-stage="empty"] .create-provider,
+  .create[data-stage="typing"] .create-provider,
+  .create[data-stage="created"] .create-provider {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+
+  @keyframes create-caret {
+    0%,
+    100% {
+      opacity: 1;
+    }
+    50% {
+      opacity: 0;
+    }
+  }
+
+  .confetti {
+    position: absolute;
+    top: 28px;
+    left: 50%;
+    pointer-events: none;
+  }
+
+  .confetti-piece {
+    position: absolute;
+    top: -3px;
+    left: -3px;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    opacity: 0;
+  }
+
+  .confetti-piece.is-square {
+    border-radius: 2px;
+  }
+
+  .create[data-stage="created"] .confetti-piece,
+  .create[data-stage="done"] .confetti-piece {
+    animation: confetti-burst 780ms cubic-bezier(0.16, 1, 0.3, 1) var(--delay) both;
+  }
+
+  @keyframes confetti-burst {
+    0% {
+      opacity: 0;
+      transform: translate(0, 0) rotate(0deg) scale(0.4);
+    }
+    12% {
+      opacity: 1;
+    }
+    62% {
+      opacity: 1;
+      transform: translate(var(--x), var(--y)) rotate(var(--rotate)) scale(var(--scale));
+    }
+    100% {
+      opacity: 0;
+      transform: translate(var(--x), calc(var(--y) + 26px)) rotate(var(--rotate)) scale(var(--scale));
+    }
+  }
+
+  /* "Hand it work": a user message and the app's BotActivityStatus row under it. */
+  .chat-demo {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    width: 100%;
+    padding: 0 20px;
+  }
+
+  .chat-bubble {
+    align-self: flex-end;
+    max-width: 82%;
+    padding: 8px 12px;
+    border-radius: 16px;
+    background: var(--color-secondary);
+    font-size: 13px;
+    line-height: 18px;
+  }
+
+  .activity-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-width: 0;
+    padding: 4px 0;
+    font-size: 14px;
+    line-height: 20px;
+  }
+
+  .activity-glyph {
+    display: flex;
+    flex-shrink: 0;
+    justify-content: center;
+    width: 28px;
+    color: var(--color-foreground);
+  }
+
+  /* Ported from apps/web/src/index.css. Both loops pause while the row is off screen. */
+  .bot-thinking-glyph {
+    flex-shrink: 0;
+    width: 14px;
+    height: 14px;
+  }
+
+  .bot-thinking-glyph rect {
+    opacity: 0.12;
+    animation: bot-thinking-comet 720ms step-end infinite;
+    animation-delay: calc(var(--cell) * 90ms - 720ms);
+    animation-play-state: paused;
+  }
+
+  @keyframes bot-thinking-comet {
+    0% {
+      opacity: 1;
+    }
+    12.5% {
+      opacity: 0.7;
+    }
+    25% {
+      opacity: 0.45;
+    }
+    37.5% {
+      opacity: 0.25;
+    }
+    50%,
+    100% {
+      opacity: 0.12;
+    }
+  }
+
+  .bot-shimmer-text {
+    --bot-shimmer-duration: 1800ms;
+    position: relative;
+    min-width: 0;
+    overflow: hidden;
+    color: var(--color-foreground);
+    font-weight: 500;
+    white-space: nowrap;
+  }
+
+  .bot-shimmer-text :global(.bot-shimmer-sheen) {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    mask-image: linear-gradient(90deg, transparent 25%, #000 50%, transparent 75%);
+    animation: bot-shimmer-sheen var(--bot-shimmer-duration) linear infinite;
+    animation-play-state: paused;
+    will-change: transform;
+  }
+
+  .bot-shimmer-text :global(.bot-shimmer-sheen-text) {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: color-mix(in srgb, var(--color-background) 62%, transparent);
+    animation: bot-shimmer-sheen-counter var(--bot-shimmer-duration) linear infinite;
+    animation-play-state: paused;
+    will-change: transform;
+  }
+
+  .chat-demo[data-active] .bot-thinking-glyph rect,
+  .chat-demo[data-active] :global(.bot-shimmer-sheen),
+  .chat-demo[data-active] :global(.bot-shimmer-sheen-text) {
+    animation-play-state: running;
+  }
+
+  @keyframes bot-shimmer-sheen {
+    from {
+      transform: translateX(-75%);
+    }
+    to {
+      transform: translateX(75%);
+    }
+  }
+
+  @keyframes bot-shimmer-sheen-counter {
+    from {
+      transform: translateX(75%);
+    }
+    to {
+      transform: translateX(-75%);
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .bot-thinking-glyph rect {
+      animation: none;
+      opacity: calc(1 - var(--cell) * 0.11);
+    }
+
+    .bot-shimmer-text :global(.bot-shimmer-sheen) {
+      display: none;
+    }
+  }
+
+  @media (max-width: 1100px) {
+    .steps {
+      grid-template-columns: minmax(0, 1fr);
+      max-width: 560px;
+    }
+  }
+
+  @media (max-width: 900px) {
+    .section-title {
+      font-size: 32px;
+      line-height: 38px;
+    }
+
+    .how {
+      padding: 64px 20px;
+    }
+
+    .how-sub {
+      font-size: 15px;
+      line-height: 24px;
+    }
+
+    .steps {
+      margin-top: 32px;
+    }
+  }
+</style>

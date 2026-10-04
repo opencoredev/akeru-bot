@@ -60,6 +60,7 @@ export function BotOverview({
   const providers = useAtomValue(primaryServerProvidersAtom);
   const settings = usePrimarySettings();
   const modelLabel = resolveBotModelLabel(bot.engine, settings, providers, t);
+
   return (
     <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-6 pt-6">
       <div className="flex flex-col items-center text-center">
@@ -158,19 +159,27 @@ export function BotDetailsPanel({
   useEffect(() => {
     if (routinePanelRequest === 0 || handledRoutineRequest.current === routinePanelRequest) return;
     const mobile = window.matchMedia(RIGHT_PANEL_INLINE_LAYOUT_MEDIA_QUERY).matches;
+
     if (mobile && !mobileOpen) {
       setMobileOpen(true);
+
       return;
     }
+
     if (!mobile && !desktopOpen) {
       setDesktopOpen(true);
+
       return;
     }
+
     if (browserExpanded) {
       setBrowserExpanded(false);
+
       return;
     }
+
     const panel = mobile ? mobileRoutineRef.current : desktopRoutineRef.current;
+
     if (!panel || (!mobile && desktopPanel.state !== "open")) return;
     handledRoutineRequest.current = routinePanelRequest;
     panel.scrollIntoView({ block: "start" });
@@ -187,16 +196,19 @@ export function BotDetailsPanel({
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.defaultPrevented || event.repeat) return;
+
       if (
         event.target instanceof HTMLElement &&
         event.target.closest("[data-keybinding-capture]")
       ) {
         return;
       }
+
       if (resolveShortcutCommand(event, keybindings) !== "rightPanel.toggle") return;
 
       event.preventDefault();
       event.stopPropagation();
+
       if (window.matchMedia(RIGHT_PANEL_INLINE_LAYOUT_MEDIA_QUERY).matches) {
         setMobileOpen((open) => !open);
       } else {
@@ -205,6 +217,7 @@ export function BotDetailsPanel({
     };
 
     window.addEventListener("keydown", onKeyDown, true);
+
     return () => window.removeEventListener("keydown", onKeyDown, true);
   }, [keybindings, setDesktopOpen]);
 
@@ -226,9 +239,9 @@ export function BotDetailsPanel({
       />
       {!browserExpanded || !canExpandBrowser ? (
         <>
-          <header className="relative flex h-[var(--workspace-topbar-height)] shrink-0 items-center justify-center px-4 min-[981px]:h-0">
+          <header className="relative flex h-(--workspace-topbar-height) shrink-0 items-center justify-center px-4 min-[981px]:h-0">
             <h2 className="text-sm font-medium min-[981px]:sr-only">{t("Bot")}</h2>
-            <div className="absolute right-3 flex items-center min-[981px]:fixed min-[981px]:right-[var(--workspace-controls-right)] min-[981px]:top-[var(--workspace-controls-top)] min-[981px]:z-40 min-[981px]:h-[var(--workspace-topbar-height)]">
+            <div className="absolute right-3 flex items-center min-[981px]:fixed min-[981px]:right-(--workspace-controls-right) min-[981px]:top-(--workspace-controls-top) min-[981px]:z-40 min-[981px]:h-(--workspace-topbar-height)">
               {closeButton}
             </div>
           </header>
@@ -267,7 +280,7 @@ export function BotDetailsPanel({
         onTransitionEnd={desktopPanel.onTransitionEnd}
         className={cn(
           "hidden h-full shrink-0 flex-col items-end overflow-hidden border-l border-border bg-background min-[981px]:flex",
-          browserExpanded ? "[--details-width:min(48rem,52vw)]" : "[--details-width:22rem]",
+          browserExpanded ? "details-width-wide" : "details-width",
         )}
       >
         <div data-details-column="" className="flex min-h-0 flex-1 flex-col">
@@ -301,7 +314,7 @@ export function BotDetailsPanel({
       {!desktopOpen ? (
         <div
           className={cn(
-            "fixed right-[var(--workspace-controls-right)] top-[var(--workspace-controls-top)] z-40 hidden h-[var(--workspace-topbar-height)] items-center min-[981px]:flex",
+            "fixed right-(--workspace-controls-right) top-(--workspace-controls-top) z-40 hidden h-(--workspace-topbar-height) items-center min-[981px]:flex",
             desktopPanel.toggled && "motion-fade-in",
           )}
         >
@@ -327,7 +340,7 @@ export function BotDetailsPanel({
           </Tooltip>
         </div>
       ) : null}
-      <div className="fixed right-[var(--workspace-controls-right)] top-[var(--workspace-controls-top)] z-40 flex h-[var(--workspace-topbar-height)] items-center min-[981px]:hidden">
+      <div className="fixed right-(--workspace-controls-right) top-(--workspace-controls-top) z-40 flex h-(--workspace-topbar-height) items-center min-[981px]:hidden">
         <Button
           aria-label={t("Open {name} bot sidebar", { name: bot.name })}
           size="icon-sm"
@@ -339,7 +352,8 @@ export function BotDetailsPanel({
       </div>
       <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
         <SheetPopup
-          className="w-[min(92vw,24rem)] pb-safe pt-safe p-0"
+          flush
+          className="w-(--spacing-min-92vw-24rem)"
           showCloseButton={false}
           side="right"
         >

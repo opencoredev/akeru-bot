@@ -26,6 +26,7 @@ vi.mock("heic-to/csp", () => ({
  */
 
 const originalCreateImageBitmap = globalThis.createImageBitmap;
+
 const originalOffscreenCanvas = globalThis.OffscreenCanvas;
 
 function makeFile(sizeBytes: number, type = "image/png"): File {
@@ -40,15 +41,18 @@ function makeHeicFile(options?: {
   lastModified?: number;
 }): File {
   const encoder = new TextEncoder();
+
   const makeBox = (name: string, ...contents: Uint8Array[]) => {
     const bytes = new Uint8Array(8 + contents.reduce((size, content) => size + content.length, 0));
     new DataView(bytes.buffer).setUint32(0, bytes.length);
     bytes.set(encoder.encode(name), 4);
     let offset = 8;
+
     for (const content of contents) {
       bytes.set(content, offset);
       offset += content.length;
     }
+
     return bytes;
   };
 
@@ -104,15 +108,18 @@ function stubCanvasPipeline(
       }
       async convertToBlob({ type, quality }: { type: string; quality: number }) {
         const resolvedType = type === "image/webp" && !supportsWebp ? "image/png" : type;
+
         return new Blob([new Uint8Array(sizeForQuality(quality))], { type: resolvedType });
       }
     },
   );
+
   return { close, fillRect };
 }
 
 afterEach(() => {
   mocks.heicTo.mockReset();
+  vi.restoreAllMocks();
   vi.unstubAllGlobals();
   globalThis.createImageBitmap = originalCreateImageBitmap;
   globalThis.OffscreenCanvas = originalOffscreenCanvas;
@@ -288,6 +295,7 @@ describe("compressImageForStash", () => {
         async convertToBlob({ type }: { type: string; quality: number }) {
           // Only a genuinely downscaled pass fits the budget.
           const size = smallestRequested < 800 ? 100_000 : 5_000_000;
+
           return new Blob([new Uint8Array(size)], { type });
         }
       },
@@ -321,6 +329,7 @@ describe("HEIC attachment preparation", () => {
       type: "",
       lastModified: 123,
     });
+
     mocks.heicTo.mockResolvedValueOnce(
       new Blob([new Uint8Array([4, 5, 6, 7])], { type: "image/jpeg" }),
     );
@@ -344,6 +353,7 @@ describe("HEIC attachment preparation", () => {
       name: "photo.heif",
       type: "image/heif",
     });
+
     mocks.heicTo.mockResolvedValueOnce(
       new Blob([new Uint8Array(2_000_000)], { type: "image/jpeg" }),
     );
@@ -362,6 +372,7 @@ describe("HEIC attachment preparation", () => {
       name: "large.heic",
       type: "image/heic",
     });
+
     mocks.heicTo.mockResolvedValueOnce(
       new Blob([new Uint8Array(MAX_COMPRESSIBLE_SOURCE_BYTES + 1)], {
         type: "image/jpeg",
@@ -417,6 +428,7 @@ describe("HEIC attachment preparation", () => {
       name: "broken.heic",
       type: "image/heic",
     });
+
     mocks.heicTo.mockRejectedValueOnce(new Error("Invalid HEIC image"));
 
     expect(await prepareImageForAttachment(original, 1024)).toEqual({
@@ -444,5 +456,53 @@ describe("HEIC attachment preparation", () => {
     expect(result.ok && result.file).toBe(original);
     expect(result.ok && result.recompressed).toBe(false);
     expect(mocks.heicTo).not.toHaveBeenCalled();
+  });
+});
+
+describe("compression with missing browser API bindings", () => {
+  it("returns too-large when createImageBitmap is absent", async () => {
+    vi.stubGlobal("createImageBitmap", undefined);
+    Reflect.deleteProperty(globalThis, "createImageBitmap");
+
+    expect(await compressImageToByteLimit(makeFile(100), 10)).toEqual({
+      ok: false,
+      reason: "too-large",
+    });
+  });
+
+  it("returns too-large when neither canvas API is available", async () => {
+    stubCanvasPipeline(() => 4);
+    Reflect.deleteProperty(globalThis, "OffscreenCanvas");
+    vi.stubGlobal("document", undefined);
+
+    expect(await compressImageToByteLimit(makeFile(100), 10)).toEqual({
+      ok: false,
+      reason: "too-large",
+    });
+  });
+
+  it("uses the document canvas when OffscreenCanvas is absent", async () => {
+    const { close } = stubCanvasPipeline(() => 4);
+    Reflect.deleteProperty(globalThis, "OffscreenCanvas");
+    const drawImage = vi.fn();
+
+    const createElement = vi.fn(() => ({
+      width: 0,
+      height: 0,
+      getContext: () => ({ drawImage }),
+      toDataURL: (type: string) => `data:${type};base64,AQIDBA==`,
+    }));
+
+    vi.stubGlobal("document", { createElement });
+
+    const result = await compressImageToByteLimit(makeFile(100), 30);
+
+    expect(result.ok).toBe(true);
+    expect(result.ok && result.recompressed).toBe(true);
+    expect(result.ok && result.file.size).toBe(4);
+    expect(result.ok && result.file.type).toBe("image/webp");
+    expect(createElement).toHaveBeenCalledWith("canvas");
+    expect(drawImage).toHaveBeenCalled();
+    expect(close).toHaveBeenCalled();
   });
 });

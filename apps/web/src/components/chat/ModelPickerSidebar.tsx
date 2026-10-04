@@ -29,14 +29,18 @@ function describeUnavailableInstance(
 
 const SELECTED_INDICATOR_CLASS =
   "pointer-events-none absolute -right-1 top-1/2 z-10 h-5 w-0.75 -translate-y-1/2 rounded-l-full bg-foreground/70";
+
 const BADGE_BASE_CLASS =
   "pointer-events-none absolute -right-0.5 top-0.5 z-10 flex size-3.5 items-center justify-center rounded-full bg-transparent shadow-sm ";
+
 const NEW_BADGE_CLASS = `${BADGE_BASE_CLASS} text-update-foreground `;
 
 /** Opens toward the rail so the list stays readable (not over the model names). */
 const PICKER_TOOLTIP_SIDE = "left" as const;
+
 const PICKER_TOOLTIP_SIDE_OFFSET = 8;
-const PICKER_TOOLTIP_CLASS = "max-w-64 text-balance font-normal leading-snug";
+
+const PICKER_TOOLTIP_CLASS = "max-w-64";
 
 export const ModelPickerSidebar = memo(function ModelPickerSidebar(props: {
   selectedInstanceId: ProviderInstanceId | "favorites";
@@ -61,40 +65,47 @@ export const ModelPickerSidebar = memo(function ModelPickerSidebar(props: {
   newBadgeInstanceIds?: ReadonlySet<ProviderInstanceId>;
 }) {
   const { t } = useI18n();
+
   const handleSelect = (instanceId: ProviderInstanceId | "favorites") => {
     props.onSelectInstance(instanceId);
   };
+
   const showFavorites = props.showFavorites ?? true;
   const [hoveredInstanceId, setHoveredInstanceId] = useState<ProviderInstanceId | null>(null);
   const sidebarContentRef = useRef<HTMLDivElement>(null);
   const [selectedIndicatorTop, setSelectedIndicatorTop] = useState<number | null>(null);
   useLayoutEffect(() => {
     const content = sidebarContentRef.current;
+
     if (!content) {
       return;
     }
+
     const selectedItem = Array.from(
       content.querySelectorAll<HTMLElement>("[data-model-picker-provider]"),
     ).find((item) => item.dataset.modelPickerProvider === props.selectedInstanceId);
+
     if (!selectedItem) {
       setSelectedIndicatorTop(null);
+
       return;
     }
+
     setSelectedIndicatorTop(selectedItem.offsetTop + selectedItem.offsetHeight / 2 - 10);
   }, [props.instanceEntries, props.selectedInstanceId, showFavorites]);
 
   return (
     <div className="w-11 shrink-0 overflow-hidden bg-muted/30" data-model-picker-sidebar="true">
-      <div className="h-full overflow-y-auto overscroll-contain [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+      <div className="h-full overflow-y-auto overscroll-contain scrollbar-none [&::-webkit-scrollbar]:hidden">
         <div ref={sidebarContentRef} className="relative flex min-h-full flex-col gap-1 p-1">
           {selectedIndicatorTop !== null ? (
             <div
               data-model-picker-selected-indicator="true"
               className={cn(
                 SELECTED_INDICATOR_CLASS,
-                "right-0 translate-y-0 transition-[top] duration-200 ease-out",
+                "right-0 top-(--indicator-top) translate-y-0 transition-top duration-200 ease-out",
               )}
-              style={{ top: selectedIndicatorTop }}
+              style={{ "--indicator-top": `${selectedIndicatorTop}px` }}
             />
           ) : null}
           {/* Favorites section */}
@@ -121,6 +132,7 @@ export const ModelPickerSidebar = memo(function ModelPickerSidebar(props: {
                     side={PICKER_TOOLTIP_SIDE}
                     sideOffset={PICKER_TOOLTIP_SIDE_OFFSET}
                     align="center"
+                    variant="hint"
                     className={PICKER_TOOLTIP_CLASS}
                   >
                     {t("Favorites")}
@@ -195,9 +207,7 @@ export const ModelPickerSidebar = memo(function ModelPickerSidebar(props: {
                         ? "var(--background)"
                         : "color-mix(in oklab, var(--muted) 30%, transparent)"
                   }
-                  {...(entry.accentColor
-                    ? { badgeClassName: "h-3 min-w-3 px-0.5 text-[7px]" }
-                    : {})}
+                  {...(entry.accentColor ? { badgeClassName: "h-3 min-w-3 px-0.5 text-7px" } : {})}
                 />
                 {showNewBadge ? (
                   <span className={NEW_BADGE_CLASS} aria-hidden>
@@ -225,6 +235,7 @@ export const ModelPickerSidebar = memo(function ModelPickerSidebar(props: {
                     side={PICKER_TOOLTIP_SIDE}
                     sideOffset={PICKER_TOOLTIP_SIDE_OFFSET}
                     align="center"
+                    variant="hint"
                     className={PICKER_TOOLTIP_CLASS}
                   >
                     {tooltip}

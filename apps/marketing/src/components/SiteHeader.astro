@@ -1,0 +1,186 @@
+---
+import { Menu01Icon } from "@hugeicons/core-free-icons";
+import Icon from "./Icon.astro";
+import { DOCS_URL, GITHUB_REPOSITORY_URL } from "../lib/site";
+import { DOWNLOAD_TARGETS, releaseAssetUrl, resolveBuildVersion } from "../lib/releases";
+
+// The nav CTA downloads the macOS build by default and swaps to the visitor's platform.
+const buildVersion = await resolveBuildVersion();
+
+const downloadUrls = Object.fromEntries(
+  DOWNLOAD_TARGETS.map((target) => [`data-url-${target.os}`, releaseAssetUrl(buildVersion, target.assetSuffix)]),
+);
+---
+      <nav class="nav">
+        <div class="nav-side">
+          <a href="/" class="nav-brand" aria-label="Akeru Bot home">akeru</a>
+        </div>
+        <div class="nav-links">
+          <a class="nav-link" href="/#bots">Bots</a>
+          <a class="nav-link" href="/#demos">Demos</a>
+          <a class="nav-link" href="/developers">Developers</a>
+          <a class="nav-link" href="/blog">Blog</a>
+          <a class="nav-link" href={DOCS_URL} target="_blank" rel="noopener noreferrer">Docs</a>
+        </div>
+        <div class="nav-side nav-side--end">
+          <a
+            class="nav-link nav-link--github"
+            href={GITHUB_REPOSITORY_URL}
+            target="_blank"
+            rel="noopener noreferrer">GitHub</a
+          >
+          <a class="nav-cta" href={downloadUrls["data-url-mac"]} data-download-auto="short" {...downloadUrls}>
+            Download
+          </a>
+          <details class="nav-menu">
+            <summary aria-label="Open navigation menu">
+              <Icon icon={Menu01Icon} size={18} />
+            </summary>
+            <div class="nav-menu-panel">
+              <a href="/#bots">Bots</a>
+              <a href="/#demos">Demos</a>
+              <a href="/developers">Developers</a>
+              <a href="/blog">Blog</a>
+              <a href={DOCS_URL} target="_blank" rel="noopener noreferrer">Docs</a>
+              <a href={GITHUB_REPOSITORY_URL} target="_blank" rel="noopener noreferrer">GitHub</a>
+            </div>
+          </details>
+        </div>
+      </nav>
+<style>
+
+
+  .nav {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 18px 64px;
+  }
+
+  .nav-side {
+    flex: 1 0 0;
+    display: flex;
+    align-items: center;
+    gap: 20px;
+  }
+
+  .nav-side--end {
+    justify-content: flex-end;
+  }
+
+  .nav-brand {
+    font-family: var(--font-serif);
+    font-size: 24px;
+    line-height: 24px;
+    letter-spacing: -0.005em;
+    color: var(--color-foreground);
+  }
+
+  .nav-links {
+    display: flex;
+    align-items: center;
+    gap: 34px;
+    flex-shrink: 0;
+  }
+
+  .nav-link {
+    font-size: 14px;
+    line-height: 18px;
+    font-weight: 500;
+    color: var(--color-muted-foreground);
+    transition: color 0.15s ease;
+  }
+
+  .nav-link:hover {
+    color: var(--color-foreground);
+  }
+
+  .nav-cta {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 9px 16px;
+    border-radius: 999px;
+    background: var(--color-primary);
+    color: var(--color-primary-foreground);
+    font-size: 14px;
+    line-height: 18px;
+    font-weight: 600;
+    transition: background-color 0.15s ease;
+  }
+
+  .nav-cta:hover {
+    background: var(--color-primary-hover);
+  }
+  .nav-menu {
+    position: relative;
+    display: none;
+  }
+
+  .nav-menu summary {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    border: 1px solid var(--color-border);
+    border-radius: 999px;
+    background: var(--color-card);
+    list-style: none;
+  }
+
+  .nav-menu summary::-webkit-details-marker {
+    display: none;
+  }
+
+  .nav-menu[open] summary {
+    border-color: var(--color-input);
+  }
+
+  .nav-menu-panel {
+    position: absolute;
+    top: 44px;
+    right: 0;
+    z-index: 10;
+    display: flex;
+    flex-direction: column;
+    min-width: 180px;
+    padding: 8px;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    background: var(--color-popover);
+    box-shadow: var(--shadow-panel);
+  }
+
+  .nav-menu-panel a {
+    padding: 10px 12px;
+    border-radius: var(--radius-sm);
+    font-size: 14px;
+    line-height: 18px;
+    font-weight: 500;
+    color: var(--color-foreground);
+  }
+
+  .nav-menu-panel a:hover {
+    background: var(--color-secondary);
+  }
+
+  @media (max-width: 900px) {
+    .nav {
+      padding: 16px 24px;
+    }
+
+    .nav-links {
+      display: none;
+    }
+
+    .nav-link--github {
+      display: none;
+    }
+
+    .nav-menu {
+      display: block;
+    }
+  }
+
+</style>

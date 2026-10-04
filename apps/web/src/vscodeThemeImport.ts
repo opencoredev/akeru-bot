@@ -1,3 +1,6 @@
+import * as Schema from "effect/Schema";
+import { isRecord } from "./theme/themeTypes";
+import * as Predicate from "effect/Predicate";
 import {
   createVividThemeColors,
   getThemeModes,
@@ -21,11 +24,8 @@ import {
  */
 
 type VsCodeRgba = { r: number; g: number; b: number; a: number };
-type VsCodeRgb = { r: number; g: number; b: number };
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
+type VsCodeRgb = { r: number; g: number; b: number };
 
 /** sRGB transfer function, and its inverse, shared by the wide-gamut path. */
 function decodeGamma(value: number): number {
@@ -34,6 +34,7 @@ function decodeGamma(value: number): number {
 
 function encodeGamma(value: number): number {
   const clamped = Math.max(0, Math.min(1, value));
+
   return clamped <= 0.0031308 ? clamped * 12.92 : 1.055 * clamped ** (1 / 2.4) - 0.055;
 }
 
@@ -44,51 +45,64 @@ function encodeGamma(value: number): number {
  */
 function parseColorFunction(value: string): VsCodeRgba | null {
   const match = /^color\(\s*(display-p3|srgb)\s+([^)]+)\)$/i.exec(value);
+
   if (!match) return null;
   const [space, body] = [match[1]!.toLowerCase(), match[2]!];
   const [channelPart, alphaPart] = body.split("/");
+
   const channels = channelPart!
     .trim()
     .split(/\s+/)
     .map((part) => (part.endsWith("%") ? Number.parseFloat(part) / 100 : Number.parseFloat(part)));
+
   if (channels.length !== 3 || channels.some((channel) => !Number.isFinite(channel))) return null;
   const alphaRaw = alphaPart?.trim();
+
   const alpha =
     alphaRaw === undefined
       ? 1
       : alphaRaw.endsWith("%")
         ? Number.parseFloat(alphaRaw) / 100
         : Number.parseFloat(alphaRaw);
+
   if (!Number.isFinite(alpha)) return null;
 
-  const [red, green, blue] = channels as [number, number, number];
+  const red = channels[0]!;
+  const green = channels[1]!;
+  const blue = channels[2]!;
+
   if (space === "srgb") {
     return { r: red * 255, g: green * 255, b: blue * 255, a: Math.max(0, Math.min(1, alpha)) };
   }
-  const [linearRed, linearGreen, linearBlue] = [red, green, blue].map(decodeGamma) as [
-    number,
-    number,
-    number,
-  ];
+
+  const linearRed = decodeGamma(red);
+  const linearGreen = decodeGamma(green);
+  const linearBlue = decodeGamma(blue);
+
   // Display P3 linear -> sRGB linear.
   const srgb = [
     1.2249401762805 * linearRed - 0.2249401762805 * linearGreen,
     -0.042056961239 * linearRed + 1.042056961239 * linearGreen,
     -0.0196375547643 * linearRed - 0.0786360655012 * linearGreen + 1.0982736202656 * linearBlue,
-  ].map((channel) => encodeGamma(channel) * 255) as [number, number, number];
-  return { r: srgb[0], g: srgb[1], b: srgb[2], a: Math.max(0, Math.min(1, alpha)) };
+  ].map((channel) => encodeGamma(channel) * 255);
+
+  return { r: srgb[0]!, g: srgb[1]!, b: srgb[2]!, a: Math.max(0, Math.min(1, alpha)) };
 }
 
 /** VS Code accepts #RGB, #RGBA, #RRGGBB, and #RRGGBBAA; some themes also use
  *  CSS color() notation for wide-gamut palettes. */
-function parseVsCodeColor(value: unknown): VsCodeRgba | null {
-  if (typeof value !== "string") return null;
+function parseVsCodeColor(value: Schema.Json | undefined): VsCodeRgba | null {
+  if (!Predicate.isString(value)) return null;
   const trimmed = value.trim();
+
   if (trimmed.startsWith("color(")) return parseColorFunction(trimmed);
   const hex = trimmed.replace(/^#/, "");
+
   if (!/^(?:[0-9a-f]{3,4}|[0-9a-f]{6}|[0-9a-f]{8})$/i.test(hex)) return null;
+
   const expand = (part: string) =>
     part.length === 1 ? Number.parseInt(part + part, 16) : Number.parseInt(part, 16);
+
   if (hex.length <= 4) {
     return {
       r: expand(hex[0]!),
@@ -97,6 +111,7 @@ function parseVsCodeColor(value: unknown): VsCodeRgba | null {
       a: hex.length === 4 ? expand(hex[3]!) / 255 : 1,
     };
   }
+
   return {
     r: Number.parseInt(hex.slice(0, 2), 16),
     g: Number.parseInt(hex.slice(2, 4), 16),
@@ -110,6 +125,7 @@ function toHex(color: VsCodeRgb): string {
     Math.max(0, Math.min(255, Math.round(value)))
       .toString(16)
       .padStart(2, "0");
+
   return `#${channel(color.r)}${channel(color.g)}${channel(color.b)}`;
 }
 
@@ -117,6 +133,7 @@ function toHex(color: VsCodeRgb): string {
  *  composited onto whatever surface they sit on. */
 function flattenOver(color: VsCodeRgba, base: VsCodeRgb): string {
   if (color.a >= 1) return toHex(color);
+
   return toHex({
     r: color.r * color.a + base.r * (1 - color.a),
     g: color.g * color.a + base.g * (1 - color.a),
@@ -127,14 +144,17 @@ function flattenOver(color: VsCodeRgba, base: VsCodeRgb): string {
 function relativeLuminance(color: VsCodeRgb): number {
   const channel = (value: number) => {
     const ratio = value / 255;
+
     return ratio <= 0.03928 ? ratio / 12.92 : ((ratio + 0.055) / 1.055) ** 2.4;
   };
+
   return 0.2126 * channel(color.r) + 0.7152 * channel(color.g) + 0.0722 * channel(color.b);
 }
 
 function contrastRatio(first: VsCodeRgb, second: VsCodeRgb): number {
   const a = relativeLuminance(first);
   const b = relativeLuminance(second);
+
   return (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
 }
 
@@ -146,18 +166,24 @@ function hexToRgb(value: string): VsCodeRgb {
  * A VS Code theme is recognised by its workbench colors: the keys are dotted
  * paths (`editor.background`), which our own files never use.
  */
-export function isVsCodeThemeFile(value: unknown): boolean {
+export function isVsCodeThemeFile(value: Schema.Json): boolean {
   if (!isRecord(value)) return false;
+
   if (value.version === THEME_FILE_VERSION) return false;
+
   const hasWorkbenchColors =
     isRecord(value.colors) && Object.keys(value.colors).some((key) => key.includes("."));
+
   return hasWorkbenchColors || Array.isArray(value.tokenColors);
 }
 
-function resolveAppearance(value: Record<string, unknown>, canvas: VsCodeRgb): ThemeAppearance {
-  const type = typeof value.type === "string" ? value.type.toLowerCase() : null;
+function resolveAppearance(value: Schema.JsonObject, canvas: VsCodeRgb): ThemeAppearance {
+  const type = Predicate.isString(value.type) ? value.type.toLowerCase() : null;
+
   if (type === "light" || type === "hc-light") return "light";
+
   if (type === "dark" || type === "hc-black") return "dark";
+
   // Unlabelled themes (and the odd custom `type`) follow the editor surface.
   return relativeLuminance(canvas) < 0.179 ? "dark" : "light";
 }
@@ -165,7 +191,9 @@ function resolveAppearance(value: Record<string, unknown>, canvas: VsCodeRgb): T
 /** Extension `name` fields are often package slugs; read them as words. */
 export function humanizeThemeName(raw: string): string {
   const trimmed = raw.trim();
+
   if (/\s/.test(trimmed) || !/[-_.]/.test(trimmed)) return trimmed;
+
   return trimmed
     .split(/[-_.]+/)
     .filter(Boolean)
@@ -173,18 +201,20 @@ export function humanizeThemeName(raw: string): string {
     .join(" ");
 }
 
-function resolveName(value: Record<string, unknown>): string {
+function resolveName(value: Schema.JsonObject): string {
   // Judge candidates by their humanized form: a displayName of "---"
   // humanizes to nothing and must fall through to the name.
   for (const candidate of [value.displayName, value.name]) {
-    if (typeof candidate !== "string") continue;
+    if (!Predicate.isString(candidate)) continue;
     const humanized = humanizeThemeName(candidate);
+
     if (humanized.length > 0) return humanized.slice(0, 48);
   }
+
   return "VS Code theme";
 }
 
-export function parseVsCodeThemeFile(value: unknown): ThemeDefinition {
+export function parseVsCodeThemeFile(value: Schema.Json): ThemeDefinition {
   if (!isRecord(value)) throw new Error("Theme files must contain a JSON object.");
   const colors = isRecord(value.colors) ? value.colors : {};
 
@@ -192,21 +222,27 @@ export function parseVsCodeThemeFile(value: unknown): ThemeDefinition {
   const pick = (...keys: ReadonlyArray<string>): VsCodeRgba | null => {
     for (const key of keys) {
       const parsed = parseVsCodeColor(colors[key]);
+
       if (parsed) return parsed;
     }
+
     return null;
   };
+
   const solidOver = (base: VsCodeRgb, ...keys: ReadonlyArray<string>): string | null => {
     const parsed = pick(...keys);
+
     return parsed ? flattenOver(parsed, base) : null;
   };
 
   const canvasColor = pick("editor.background", "editorPane.background");
+
   if (!canvasColor) {
     throw new Error(
       'That VS Code theme has no "editor.background" color, so there is nothing to build a palette from.',
     );
   }
+
   const canvas = { r: canvasColor.r, g: canvasColor.g, b: canvasColor.b };
   const appearance = resolveAppearance(value, canvas);
 
@@ -218,6 +254,7 @@ export function parseVsCodeThemeFile(value: unknown): ThemeDefinition {
     "progressBar.background",
     "badge.background",
   );
+
   const canvasHex = toHex(canvas);
   const accentHex = accentColor ? flattenOver(accentColor, canvas) : null;
 
@@ -229,12 +266,17 @@ export function parseVsCodeThemeFile(value: unknown): ThemeDefinition {
   const mutedAccentHex = accentColor
     ? flattenOver({ r: accentColor.r, g: accentColor.g, b: accentColor.b, a: 0.2 }, canvas)
     : null;
+
   const derived = createVividThemeColors(appearance, canvasHex, mutedAccentHex ?? canvasHex);
+
   const sidebarHex =
     solidOver(canvas, "sideBar.background", "activityBar.background") ?? derived.sidebar;
+
   const sidebar = hexToRgb(sidebarHex);
+
   const terminalHex =
     solidOver(canvas, "terminal.background", "panel.background") ?? derived.terminalBackground;
+
   const terminal = hexToRgb(terminalHex);
 
   /** Foregrounds only win when they stay readable on the surface they land on;
@@ -247,12 +289,15 @@ export function parseVsCodeThemeFile(value: unknown): ThemeDefinition {
     const surfaceRgb = hexToRgb(surface);
     const isReadable = (candidate: string) => contrastRatio(hexToRgb(candidate), surfaceRgb) >= 4.5;
     const specified = solidOver(surfaceRgb, ...keys);
+
     if (specified && isReadable(specified)) return specified;
+
     // The derived fallback was solved against the derived surface. When the
     // file replaced that surface (a light sideBar in a dark theme, say), the
     // fallback has to clear the bar there too, or the text falls back to the
     // readable end of the greyscale for the surface actually in play.
     if (isReadable(fallback)) return fallback;
+
     return relativeLuminance(surfaceRgb) < 0.179 ? "#ffffff" : "#000000";
   };
 
@@ -301,6 +346,7 @@ export function parseVsCodeThemeFile(value: unknown): ThemeDefinition {
     terminalScrollbar:
       solidOver(terminal, "scrollbarSlider.background") ?? derived.terminalScrollbar,
   };
+
   if (accentHex) {
     overrides.accent = accentHex;
     overrides.focus = accentHex;
@@ -348,22 +394,27 @@ export function pairVsCodeThemes(
       .trim();
 
   type Group = { light: ThemeDefinition[]; dark: ThemeDefinition[]; order: number };
+
   const groups = new Map<string, Group>();
   const passthrough: Array<{ theme: ThemeDefinition; order: number }> = [];
   themes.forEach((theme, order) => {
     // Only single-appearance themes with an appearance word in the name can
     // pair; anything else is already what the user asked for.
     const key = stripAppearance(theme.label);
+
     if (getThemeModes(theme).length !== 1 || key === theme.label || key.length === 0) {
       passthrough.push({ theme, order });
+
       return;
     }
+
     const group = groups.get(key) ?? { light: [], dark: [], order };
     group[theme.appearance].push(theme);
     groups.set(key, group);
   });
 
   const paired: Array<{ theme: ThemeDefinition; order: number }> = [];
+
   for (const [key, group] of groups) {
     // Ambiguity (two darks for one light) is not guessed at, and a pair
     // whose stripped name collides with a built-in id ("Grove Light" +
@@ -387,6 +438,7 @@ export function pairVsCodeThemes(
         // Fall through to the individual themes below.
       }
     }
+
     for (const theme of [...group.light, ...group.dark]) {
       paired.push({ theme, order: group.order });
     }
@@ -422,33 +474,43 @@ export function resolveThemeLabelCollisions(
   };
 
   const counts = new Map<string, number>();
+
   for (const entry of entries) {
     counts.set(entry.theme.id, (counts.get(entry.theme.id) ?? 0) + 1);
   }
+
   const relabelled = entries.map(({ theme, sourceName }) => {
     if ((counts.get(theme.id) ?? 0) < 2) return theme;
     const stem = sourceName?.replace(/\.[^.]+$/, "");
     const fromFile = stem ? humanizeThemeName(stem) : null;
+
     const renamed =
       fromFile && fromFile.toLowerCase() !== theme.label.toLowerCase()
         ? rename(theme, fromFile)
         : null;
+
     return renamed ?? theme;
   });
 
   const seen = new Set<string>();
+
   return relabelled.map((theme) => {
     if (!seen.has(theme.id)) {
       seen.add(theme.id);
+
       return theme;
     }
+
     for (let suffix = 2; suffix < 100; suffix += 1) {
       const candidate = rename(theme, `${theme.label} ${suffix}`);
+
       if (candidate && !seen.has(candidate.id)) {
         seen.add(candidate.id);
+
         return candidate;
       }
     }
+
     return theme;
   });
 }

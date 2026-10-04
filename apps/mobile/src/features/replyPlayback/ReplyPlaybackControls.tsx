@@ -1,3 +1,4 @@
+import { Match } from "effect";
 import { useSyncExternalStore } from "react";
 import { Pressable, View } from "react-native";
 import {
@@ -26,28 +27,31 @@ export function ReplyPlaybackControls({
     controller.getSnapshot,
     controller.getSnapshot,
   );
+
   const state =
     snapshot.status !== "idle" && sameReplyPlaybackIdentity(snapshot.identity, request.identity)
       ? snapshot.status
       : "idle";
-  const label =
-    state === "loading"
-      ? "Preparing audio"
-      : state === "playing"
-        ? "Pause readout"
-        : state === "paused"
-          ? "Resume readout"
-          : state === "error"
-            ? "Retry readout"
-            : "Read aloud";
+
+  const label = Match.value(state).pipe(
+    Match.when("loading", () => "Preparing audio"),
+    Match.when("playing", () => "Pause readout"),
+    Match.when("paused", () => "Resume readout"),
+    Match.when("error", () => "Retry readout"),
+    Match.orElse(() => "Read aloud"),
+  );
+
   const disabled = Boolean(unavailableReason) || state === "loading";
+
   const activate = () => {
     if (disabled) return;
+
     if (state === "playing") controller.pause();
     else if (state === "paused") void controller.resume();
     else if (state === "error") void controller.retry();
     else void controller.start({ ...request, automatic: false });
   };
+
   return (
     <View className="gap-1">
       <View className="flex-row flex-wrap items-center gap-2">

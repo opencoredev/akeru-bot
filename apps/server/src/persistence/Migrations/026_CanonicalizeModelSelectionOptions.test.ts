@@ -290,6 +290,7 @@ layer("026_CanonicalizeModelSelectionOptions", (it) => {
           FROM projection_projects
           ORDER BY project_id
         `;
+
       assert.deepStrictEqual(
         projectRows.map((row) => ({
           projectId: row.projectId,
@@ -334,6 +335,7 @@ layer("026_CanonicalizeModelSelectionOptions", (it) => {
           FROM projection_threads
           ORDER BY thread_id
         `;
+
       assert.deepStrictEqual(
         threadRows.map((row) => ({
           threadId: row.threadId,

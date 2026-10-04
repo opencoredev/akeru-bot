@@ -4,10 +4,12 @@ import { createMigratingStorage, readMigratedLocalStorage } from "./storageKeyMi
 import type { StateStorage } from "./storage";
 
 const NEW_KEY = "akeru:test";
+
 const LEGACY_KEY = "t3code:test";
 
 function makeStorage(initial?: Record<string, string>) {
   const store = new Map(Object.entries(initial ?? {}));
+
   const backing: StateStorage = {
     getItem: (name) => store.get(name) ?? null,
     setItem: (name, value) => {
@@ -17,6 +19,7 @@ function makeStorage(initial?: Record<string, string>) {
       store.delete(name);
     },
   };
+
   return { store, backing };
 }
 
@@ -35,10 +38,12 @@ describe("createMigratingStorage", () => {
 
   it("reads the legacy key from asynchronous storage", async () => {
     const { backing } = makeStorage({ [LEGACY_KEY]: "old" });
+
     const asyncBacking: StateStorage = {
       ...backing,
       getItem: async (name) => backing.getItem(name),
     };
+
     const storage = createMigratingStorage(asyncBacking, NEW_KEY, LEGACY_KEY);
     expect(await storage.getItem(NEW_KEY)).toBe("old");
   });
@@ -53,10 +58,12 @@ describe("createMigratingStorage", () => {
 
   it("keeps the legacy value when the new write rejects", async () => {
     const { store, backing } = makeStorage({ [LEGACY_KEY]: "old" });
+
     const failing: StateStorage = {
       ...backing,
       setItem: () => Promise.reject(new Error("quota exceeded")),
     };
+
     const storage = createMigratingStorage(failing, NEW_KEY, LEGACY_KEY);
     await expect(storage.setItem(NEW_KEY, "new")).rejects.toThrow("quota exceeded");
     expect(store.get(LEGACY_KEY)).toBe("old");
@@ -65,10 +72,12 @@ describe("createMigratingStorage", () => {
 
   it("surfaces a successful write even when legacy cleanup rejects", async () => {
     const { store, backing } = makeStorage({ [LEGACY_KEY]: "old" });
+
     const failingRemove: StateStorage = {
       ...backing,
       removeItem: () => Promise.reject(new Error("storage locked")),
     };
+
     const storage = createMigratingStorage(failingRemove, NEW_KEY, LEGACY_KEY);
     await expect(storage.setItem(NEW_KEY, "new")).resolves.toBeUndefined();
     expect(store.get(NEW_KEY)).toBe("new");
@@ -85,6 +94,7 @@ describe("readMigratedLocalStorage", () => {
     const denied = () => {
       throw new DOMException("denied", "SecurityError");
     };
+
     vi.stubGlobal("window", {
       localStorage: { getItem: denied, setItem: denied, removeItem: denied },
     });

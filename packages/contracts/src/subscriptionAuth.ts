@@ -8,7 +8,7 @@
  */
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
-import { AkeruMemoryApprovalRequest } from "./akeruMemory.ts";
+import { AkeruMemoryApprovalRequest } from "./akeruMemory/base.ts";
 import { BotId, IsoDateTime, NonNegativeInt, TrimmedNonEmptyString } from "./baseSchemas.ts";
 import { McpServerId } from "./mcpServer.ts";
 import { ProviderInstanceId } from "./providerInstance.ts";
@@ -20,9 +20,11 @@ export const SubscriptionProviderId = Schema.Literals([
   "kimi-for-coding",
   "opencode-go",
 ]);
+
 export type SubscriptionProviderId = typeof SubscriptionProviderId.Type;
 
 export const SubscriptionAuthMode = Schema.Literals(["oauth", "api-key"]);
+
 export type SubscriptionAuthMode = typeof SubscriptionAuthMode.Type;
 
 export const SubscriptionBaseUrl = TrimmedNonEmptyString.check(
@@ -30,6 +32,7 @@ export const SubscriptionBaseUrl = TrimmedNonEmptyString.check(
     (value) => {
       try {
         const url = new URL(value);
+
         return (
           (url.protocol === "https:" || url.protocol === "http:") &&
           !url.username &&
@@ -113,6 +116,7 @@ export const SubscriptionProviderStatus = Schema.Struct({
     Schema.withDecodingDefault(Effect.succeed([])),
   ),
 });
+
 export type SubscriptionProviderStatus = typeof SubscriptionProviderStatus.Type;
 
 export const ProviderAccessStatus = Schema.Struct({
@@ -151,6 +155,7 @@ export const ProviderAccessStatus = Schema.Struct({
     Schema.withDecodingDefault(Effect.succeed([])),
   ),
 });
+
 export type ProviderAccessStatus = typeof ProviderAccessStatus.Type;
 
 export const BotInboxItem = Schema.Struct({
@@ -177,11 +182,13 @@ export const BotInboxItem = Schema.Struct({
   // Present on approval requests that ask to save shared memory.
   memoryApproval: Schema.optional(AkeruMemoryApprovalRequest),
 });
+
 export type BotInboxItem = typeof BotInboxItem.Type;
 
 export const BotInboxResolveInput = Schema.Struct({
   id: TrimmedNonEmptyString,
 });
+
 export type BotInboxResolveInput = typeof BotInboxResolveInput.Type;
 
 export const SubscriptionAuthStatuses = Schema.Struct({
@@ -192,12 +199,14 @@ export const SubscriptionAuthStatuses = Schema.Struct({
   access: Schema.Array(ProviderAccessStatus).pipe(Schema.withDecodingDefault(Effect.succeed([]))),
   inbox: Schema.Array(BotInboxItem).pipe(Schema.withDecodingDefault(Effect.succeed([]))),
 });
+
 export type SubscriptionAuthStatuses = typeof SubscriptionAuthStatuses.Type;
 
 export const SubscriptionAuthHealthTestInput = Schema.Struct({
   provider: SubscriptionProviderId,
   instanceId: Schema.optional(ProviderInstanceId),
 });
+
 export type SubscriptionAuthHealthTestInput = typeof SubscriptionAuthHealthTestInput.Type;
 
 export const SubscriptionAuthStartInput = Schema.Struct({
@@ -207,6 +216,7 @@ export const SubscriptionAuthStartInput = Schema.Struct({
   /** Custom endpoints apply to API-key authentication only. */
   baseUrl: Schema.optional(SubscriptionBaseUrl),
 });
+
 export type SubscriptionAuthStartInput = typeof SubscriptionAuthStartInput.Type;
 
 /**
@@ -222,11 +232,13 @@ export const SubscriptionAuthStartResult = Schema.Struct({
   instructions: Schema.optional(Schema.String),
   completion: Schema.Literals(["poll", "paste"]),
 });
+
 export type SubscriptionAuthStartResult = typeof SubscriptionAuthStartResult.Type;
 
 export const SubscriptionAuthPollInput = Schema.Struct({
   loginId: Schema.String,
 });
+
 export type SubscriptionAuthPollInput = typeof SubscriptionAuthPollInput.Type;
 
 export const SubscriptionAuthCompleteInput = Schema.Struct({
@@ -234,6 +246,7 @@ export const SubscriptionAuthCompleteInput = Schema.Struct({
   /** Pasted authorization input or API key. */
   code: Schema.String,
 });
+
 export type SubscriptionAuthCompleteInput = typeof SubscriptionAuthCompleteInput.Type;
 
 export const SubscriptionAuthLoginProgress = Schema.Union([
@@ -245,12 +258,14 @@ export const SubscriptionAuthLoginProgress = Schema.Union([
   Schema.Struct({ status: Schema.Literal("pending"), nextPollMs: Schema.Number }),
   Schema.Struct({ status: Schema.Literal("failed"), error: Schema.String }),
 ]);
+
 export type SubscriptionAuthLoginProgress = typeof SubscriptionAuthLoginProgress.Type;
 
 export const SubscriptionAuthLogoutInput = Schema.Struct({
   provider: SubscriptionProviderId,
   instanceId: Schema.optional(ProviderInstanceId),
 });
+
 export type SubscriptionAuthLogoutInput = typeof SubscriptionAuthLogoutInput.Type;
 
 export class SubscriptionAuthError extends Schema.TaggedErrorClass<SubscriptionAuthError>()(
@@ -267,6 +282,7 @@ export class SubscriptionAuthError extends Schema.TaggedErrorClass<SubscriptionA
 export const McpServerAuthenticateInput = Schema.Struct({
   mcpServerId: McpServerId,
 });
+
 export type McpServerAuthenticateInput = typeof McpServerAuthenticateInput.Type;
 
 export const McpServerAuthenticationProgress = Schema.Union([
@@ -280,6 +296,7 @@ export const McpServerAuthenticationProgress = Schema.Union([
     recoveryFailures: Schema.Array(TrimmedNonEmptyString),
   }),
 ]);
+
 export type McpServerAuthenticationProgress = typeof McpServerAuthenticationProgress.Type;
 
 export class McpServerAuthenticationError extends Schema.TaggedErrorClass<McpServerAuthenticationError>()(

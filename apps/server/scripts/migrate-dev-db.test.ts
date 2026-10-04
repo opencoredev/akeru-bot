@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
@@ -46,6 +47,7 @@ const createFixtureSource = Effect.fn("createMigrateDevDbFixtureSource")(functio
         ["monitored-thread", "project-kept", "stopped", null, '{"kind":"pr"}'],
         ["deleted-project-thread", "project-deleted", "stopped", null, null],
       ] as const;
+
       for (const [threadId, projectId, status, settledAt, monitorJson] of threads) {
         yield* sql`INSERT INTO projection_threads
           (thread_id, project_id, title, created_at, updated_at, settled_at, monitor_json)
@@ -56,10 +58,12 @@ const createFixtureSource = Effect.fn("createMigrateDevDbFixtureSource")(functio
           (event_id, aggregate_kind, stream_id, stream_version, event_type, occurred_at, actor_kind, payload_json, metadata_json)
           VALUES (${`event-${threadId}`}, 'thread', ${threadId}, 0, 'thread.created', '2026-08-01', 'user', '{}', '{}')`;
       }
+
       yield* sql`INSERT INTO auth_sessions (session_id, subject, scopes, method, issued_at, expires_at)
         VALUES ('session-1', 'user', '[]', 'pairing', '2026-08-01', '2027-08-01')`;
     }),
   );
+
   return databasePath;
 });
 
@@ -78,19 +82,25 @@ it.layer(NodeServices.layer)("migrate-dev-db", (it) => {
       );
 
       assert.equal(result.databasePath, path.join(destDir, "userdata", "state.sqlite"));
+
       const kept = yield* withDatabase(
         result.databasePath,
         Effect.gen(function* () {
           const sql = yield* SqlClient.SqlClient;
+
           const threads = yield* sql<{ thread_id: string }>`
             SELECT thread_id FROM projection_threads ORDER BY thread_id`;
+
           const events = yield* sql<{ stream_id: string }>`
             SELECT stream_id FROM orchestration_events`;
+
           const [auth] = yield* sql<{ count: number }>`
             SELECT COUNT(*) AS count FROM auth_sessions`;
+
           return { threads, events, authCount: auth?.count ?? 0 };
         }),
       );
+
       assert.deepStrictEqual(
         kept.threads.map((row) => row.thread_id),
         ["stopped-thread"],
@@ -124,8 +134,10 @@ it.layer(NodeServices.layer)("migrate-dev-db", (it) => {
         { baseDir: destDir, source, projects: 5, threadsPerProject: 10 },
         { sharedHome: sourceDir },
       ).pipe(Effect.flip);
+
       assert.equal(error._tag, "MigrateDevDbSlotCollisionError");
-      if (error._tag === "MigrateDevDbSlotCollisionError") {
+
+      if (Predicate.isTagged(error, "MigrateDevDbSlotCollisionError")) {
         assert.equal(error.slot, 1);
         assert.equal(error.appliedName, "SomebodyElsesMigration");
       }
@@ -151,8 +163,10 @@ it.layer(NodeServices.layer)("migrate-dev-db", (it) => {
         { baseDir: destDir, source, projects: 5, threadsPerProject: 10 },
         { sharedHome: sourceDir },
       ).pipe(Effect.flip);
+
       assert.equal(error._tag, "MigrateDevDbServerRunningError");
-      if (error._tag === "MigrateDevDbServerRunningError") {
+
+      if (Predicate.isTagged(error, "MigrateDevDbServerRunningError")) {
         assert.equal(error.pid, process.pid);
       }
     }),
@@ -174,6 +188,7 @@ it.layer(NodeServices.layer)("migrate-dev-db", (it) => {
         { baseDir: destDir, source: leftoverSnapshot, projects: 5, threadsPerProject: 10 },
         { sharedHome: sharedDir },
       ).pipe(Effect.flip);
+
       assert.equal(error._tag, "MigrateDevDbSourceIsDestinationError");
       assert.equal(yield* fs.exists(leftoverSnapshot), true);
     }),
@@ -189,6 +204,7 @@ it.layer(NodeServices.layer)("migrate-dev-db", (it) => {
         { baseDir: sourceDir, source, projects: 5, threadsPerProject: 10 },
         { sharedHome: sourceDir },
       ).pipe(Effect.flip);
+
       assert.equal(error._tag, "MigrateDevDbSharedHomeError");
     }),
   );

@@ -1,6 +1,6 @@
 {
   "name": "@akeru/client-runtime",
-  "version": "0.0.2",
+  "version": "0.0.4",
   "private": true,
   "type": "module",
   "exports": {
@@ -227,6 +227,18 @@
     "./state/thread-search": {
       "types": "./src/state/threadSearch.ts",
       "default": "./src/state/threadSearch.ts"
+    },
+    "./work-log-command": {
+      "types": "./src/work-log-command.ts",
+      "default": "./src/work-log-command.ts"
+    },
+    "./bot-step-usage": {
+      "types": "./src/bot-step-usage.ts",
+      "default": "./src/bot-step-usage.ts"
+    },
+    "./usage": {
+      "types": "./src/usage.ts",
+      "default": "./src/usage.ts"
     }
   },
   "scripts": {

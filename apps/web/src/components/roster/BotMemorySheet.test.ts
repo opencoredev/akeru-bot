@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 import { EnvironmentId, ThreadId } from "@akeru/contracts";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
@@ -7,28 +8,34 @@ const controls = vi.hoisted(() => ({
   buttons: [] as Array<{ readonly label: string; readonly onClick?: () => void }>,
   inspect: vi.fn(() => "inspect-documents"),
   listFacts: vi.fn(() => "list-facts"),
-  mutate: vi.fn(async (_input: unknown) => ({ _tag: "Success", value: {} })),
+  mutate: vi.fn(async <T>(_input: T) => ({ _tag: "Success", value: {} })),
   query: vi.fn(),
   toast: vi.fn(),
 }));
 
 vi.mock("../ui/button", async () => {
   const React = await import("react");
+
   return {
     Button: ({ children, onClick, ...props }: React.ComponentProps<"button">) => {
       const label = React.Children.toArray(children)
-        .filter((child): child is string => typeof child === "string")
+        .filter((child): child is string => Predicate.isString(child))
         .join("")
         .trim();
+
       controls.buttons.push({ label, ...(onClick ? { onClick: () => onClick({} as never) } : {}) });
+
       return React.createElement("button", { ...props, onClick }, children);
     },
   };
 });
+
 vi.mock("../ui/sheet", async () => {
   const React = await import("react");
+
   const Wrapper = ({ children }: { readonly children?: React.ReactNode }) =>
     React.createElement("div", null, children);
+
   return {
     Sheet: Wrapper,
     SheetDescription: Wrapper,
@@ -39,6 +46,7 @@ vi.mock("../ui/sheet", async () => {
     SheetTitle: Wrapper,
   };
 });
+
 vi.mock("../../state/memory", () => ({
   memoryEnvironment: {
     inspectDocuments: controls.inspect,
@@ -48,8 +56,11 @@ vi.mock("../../state/memory", () => ({
     clearObservations: "clear-observations",
   },
 }));
+
 vi.mock("../../state/query", () => ({ useEnvironmentQuery: controls.query }));
+
 vi.mock("../../state/use-atom-command", () => ({ useAtomCommand: () => controls.mutate }));
+
 vi.mock("../ui/toast", () => ({ toastManager: { add: controls.toast } }));
 
 import { BotMemorySheet } from "./BotMemorySheet";
@@ -71,6 +82,7 @@ describe("BotMemorySheet", () => {
       if (input === "list-facts") {
         return { data: { facts: [] }, error: null, isPending: false, refresh: vi.fn() };
       }
+
       return {
         data: {
           botId: "bot-1",
@@ -127,6 +139,7 @@ describe("BotMemorySheet", () => {
         },
       }),
     );
+
     expect(markup).toContain("Thread observation");
     expect(markup).toContain("Condensed 2 times to stay short.");
     expect(markup).toContain("About you");

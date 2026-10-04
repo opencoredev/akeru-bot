@@ -29,6 +29,7 @@ function makeStubInstance(
     restartAttempt: 0,
     restartScheduled: false,
   };
+
   return {
     id,
     label: Effect.succeed(label),
@@ -128,9 +129,10 @@ describe("DesktopBackendPool", () => {
 
   it.effect("layerTest dies when no instances are supplied", () =>
     Effect.exit(
-      Effect.gen(function* () {
-        yield* DesktopBackendPool.DesktopBackendPool;
-      }).pipe(Effect.provide(DesktopBackendPool.layerTest([]))),
+      DesktopBackendPool.DesktopBackendPool.pipe(
+        Effect.asVoid,
+        Effect.provide(DesktopBackendPool.layerTest([])),
+      ),
     ).pipe(Effect.map((exit) => assert.equal(exit._tag, "Failure"))),
   );
 
@@ -138,9 +140,11 @@ describe("DesktopBackendPool", () => {
     Effect.scoped(
       Effect.gen(function* () {
         const labelRef = yield* Ref.make("Windows");
+
         const pool = yield* DesktopBackendPool.DesktopBackendPool.pipe(
           Effect.provide(makePoolLayer(labelRef)),
         );
+
         const primary = yield* pool.primary;
 
         yield* Ref.set(labelRef, "WSL (Ubuntu)");

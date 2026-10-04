@@ -45,6 +45,7 @@ export function PolicyNotice() {
   const hydrated = useClientSettingsHydrated();
   const settings = useClientSettings();
   const updateSettings = useUpdateClientSettings();
+
   const open = shouldShowPolicyNotice({
     hydrated,
     isDesktop: isElectron,
@@ -62,7 +63,7 @@ export function PolicyNotice() {
             their listed services.
           </DialogDescription>
         </DialogHeader>
-        <DialogPanel className="space-y-3 text-sm text-muted-foreground">
+        <DialogPanel tone="muted" className="space-y-3">
           <p>
             Read the{" "}
             <a

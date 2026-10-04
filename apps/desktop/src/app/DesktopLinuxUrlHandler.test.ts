@@ -1,3 +1,4 @@
+import * as ChildProcess from "effect/unstable/process/ChildProcess";
 import { assert, describe, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
@@ -17,7 +18,9 @@ interface RecordedRegistration {
   readonly commands: Array<{ readonly command: string; readonly args: ReadonlyArray<string> }>;
 }
 
-const makeEnvironment = (overrides: Record<string, unknown> = {}) =>
+const makeEnvironment = (
+  overrides: Partial<DesktopEnvironment.DesktopEnvironment["Service"]> = {},
+) =>
   DesktopEnvironment.DesktopEnvironment.of({
     platform: "linux",
     isPackaged: true,
@@ -29,7 +32,7 @@ const makeEnvironment = (overrides: Record<string, unknown> = {}) =>
     appImagePath: Option.some("/home/alice/Applications/T3-Code.AppImage"),
     path: { join: (...parts: ReadonlyArray<string>) => parts.join("/") },
     ...overrides,
-  } as unknown as DesktopEnvironment.DesktopEnvironment["Service"]);
+  } as DesktopEnvironment.DesktopEnvironment["Service"]);
 
 const mockProcess = (exitCode: number) =>
   ChildProcessSpawner.makeHandle({
@@ -49,7 +52,7 @@ const mockProcess = (exitCode: number) =>
 const makeHandlerLayer = (
   recorded: RecordedRegistration,
   input: {
-    readonly environment?: Record<string, unknown>;
+    readonly environment?: Partial<DesktopEnvironment.DesktopEnvironment["Service"]>;
     readonly xdgMimeExitCode?: number;
     readonly writeError?: PlatformError.PlatformError;
     readonly mimeappsContent?: string;
@@ -86,14 +89,15 @@ const makeHandlerLayer = (
         Layer.succeed(
           ChildProcessSpawner.ChildProcessSpawner,
           ChildProcessSpawner.make((command) => {
-            const childProcess = command as unknown as {
-              readonly command: string;
-              readonly args: ReadonlyArray<string>;
-            };
+            if (!ChildProcess.isStandardCommand(command))
+              return Effect.die("Expected a standard command");
+            const childProcess = command;
+
             recorded.commands.push({
               command: childProcess.command,
               args: childProcess.args,
             });
+
             return Effect.succeed(mockProcess(input.xdgMimeExitCode ?? 0));
           }),
         ),
@@ -145,6 +149,7 @@ describe("DesktopLinuxUrlHandler", () => {
       desktopEntryPath: "/home/alice/.local/share/applications/akeru-url-handler.desktop",
       cause: new Error("boom"),
     });
+
     assert.equal(
       writeError.message,
       "Failed to register the akeru:// URL handler (step: write-desktop-entry).",
@@ -159,6 +164,7 @@ describe("DesktopLinuxUrlHandler", () => {
       scheme: "akeru",
       exitCode: 4,
     });
+
     assert.equal(
       exitError.message,
       "Failed to register the akeru:// URL handler (step: set-default-handler, xdg-mime exit code 4).",
@@ -235,6 +241,7 @@ describe("DesktopLinuxUrlHandler", () => {
       const mimeappsWrite = recorded.files.find(
         (file) => file.path === "/home/alice/.config/mimeapps.list",
       );
+
       assert.equal(
         mimeappsWrite?.content,
         ["[Default Applications]", "x-scheme-handler/akeru=akeru-url-handler.desktop"].join("\n"),

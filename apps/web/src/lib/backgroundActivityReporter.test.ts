@@ -21,6 +21,7 @@ describe("wasRecentlyInteracted", () => {
   it.effect("retains an observed subscription until its returned finalizer runs", () =>
     Effect.gen(function* () {
       const environmentId = EnvironmentId.make("environment-observation-test");
+
       const release = yield* observeBackgroundActivitySubscription({
         environmentId,
         method: WS_METHODS.subscribeResourceTelemetry,
@@ -37,6 +38,7 @@ describe("wasRecentlyInteracted", () => {
   it.effect("ignores subscriptions that do not keep background work alive", () =>
     Effect.gen(function* () {
       const environmentId = EnvironmentId.make("environment-ignored-test");
+
       const release = yield* observeBackgroundActivitySubscription({
         environmentId,
         method: WS_METHODS.subscribeServerLifecycle,

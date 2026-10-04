@@ -6,9 +6,12 @@ export function resolveBrowserRecordingStopTarget(
   if (explicitTabId !== undefined) {
     return activeTabIds.has(explicitTabId) ? explicitTabId : null;
   }
+
   if (implicitTabId !== null && activeTabIds.has(implicitTabId)) {
     return implicitTabId;
   }
+
   if (activeTabIds.size !== 1) return null;
+
   return activeTabIds.values().next().value ?? null;
 }

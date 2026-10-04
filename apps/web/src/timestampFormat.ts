@@ -32,6 +32,7 @@ export function resolveTimestampLocale(
   systemLocale: string | null | undefined,
 ): string | undefined {
   const tag = systemLocale?.trim();
+
   if (!tag) return undefined;
 
   try {
@@ -40,6 +41,7 @@ export function resolveTimestampLocale(
     // structurally invalid tag; a well-formed tag ICU has no data for resolves
     // here and is left to ICU's own fallback.
     Intl.DateTimeFormat.supportedLocalesOf([tag]);
+
     return tag;
   } catch {
     return undefined;
@@ -48,6 +50,7 @@ export function resolveTimestampLocale(
 
 function readHostSystemLocale(): string | null {
   if (typeof window === "undefined") return null;
+
   return window.desktopBridge?.getSystemLocale?.() ?? null;
 }
 
@@ -61,6 +64,7 @@ function getTimestampFormatter(
 ): Intl.DateTimeFormat {
   const cacheKey = `${timestampFormat}:${includeSeconds ? "seconds" : "minutes"}`;
   const cachedFormatter = timestampFormatterCache.get(cacheKey);
+
   if (cachedFormatter) {
     return cachedFormatter;
   }
@@ -69,18 +73,23 @@ function getTimestampFormatter(
     timestampLocale,
     getTimestampFormatOptions(timestampFormat, includeSeconds),
   );
+
   timestampFormatterCache.set(cacheKey, formatter);
+
   return formatter;
 }
 
 export function parseTimestampDate(isoDate: string): Date | null {
   const date = new Date(isoDate);
+
   return Number.isNaN(date.getTime()) ? null : date;
 }
 
 export function formatTimestamp(isoDate: string, timestampFormat: TimestampFormat): string {
   const date = parseTimestampDate(isoDate);
+
   if (!date) return "";
+
   return getTimestampFormatter(timestampFormat, true).format(date);
 }
 
@@ -91,7 +100,9 @@ const monthNameFormatter = new Intl.DateTimeFormat(undefined, { month: "long" })
 
 function ordinalSuffix(day: number): string {
   const lastTwo = day % 100;
+
   if (lastTwo >= 11 && lastTwo <= 13) return "th";
+
   switch (day % 10) {
     case 1:
       return "st";
@@ -113,17 +124,21 @@ export function formatChatTimestampTooltip(
   timestampFormat: TimestampFormat,
 ): string {
   const date = parseTimestampDate(isoDate);
+
   if (!date) return "";
   const time = formatShortTimestamp(isoDate, timestampFormat);
   const day = date.getDate();
   const month = monthNameFormatter.format(date);
   const year = date.getFullYear();
+
   return `${time}, ${day}${ordinalSuffix(day)} ${month} ${year}`;
 }
 
 export function formatShortTimestamp(isoDate: string, timestampFormat: TimestampFormat): string {
   const date = parseTimestampDate(isoDate);
+
   if (!date) return "";
+
   return getTimestampFormatter(timestampFormat, false).format(date);
 }
 
@@ -131,6 +146,7 @@ const numericDateFormatter = new Intl.DateTimeFormat(timestampLocale, {
   month: "numeric",
   day: "numeric",
 });
+
 const numericDateWithYearFormatter = new Intl.DateTimeFormat(timestampLocale, {
   month: "numeric",
   day: "numeric",
@@ -149,6 +165,7 @@ export function formatDayAwareTimestamp(
   nowMs: number = Date.now(),
 ): string {
   const date = parseTimestampDate(isoDate);
+
   if (!date) return "";
   const time = getTimestampFormatter(timestampFormat, false).format(date);
 
@@ -159,9 +176,12 @@ export function formatDayAwareTimestamp(
   const dayDiff = Math.round((startOfToday - startOfMessageDay) / 86_400_000);
 
   if (dayDiff <= 0) return time;
+
   if (dayDiff === 1) return `yesterday at ${time}`;
+
   const dateFormatter =
     date.getFullYear() === now.getFullYear() ? numericDateFormatter : numericDateWithYearFormatter;
+
   return `${dateFormatter.format(date)} ${time}`;
 }
 
@@ -171,6 +191,7 @@ export function formatDayAwareTimestamp(
  * so callers can style the numeric portion independently.
  */
 type RelativeTimeParts = { value: string; suffix: string | null };
+
 export type RelativeTimeState =
   | { status: "missing" }
   | { status: "invalid" }
@@ -178,29 +199,39 @@ export type RelativeTimeState =
 
 export function formatRelativeTime(isoDate: string): RelativeTimeParts | null {
   const date = parseTimestampDate(isoDate);
+
   if (!date) return null;
   const diffMs = Date.now() - date.getTime();
+
   if (diffMs < 0) return { value: "just now", suffix: null };
   const seconds = Math.floor(diffMs / 1000);
+
   if (seconds < 60) return { value: "just now", suffix: null };
   const minutes = Math.floor(seconds / 60);
+
   if (minutes < 60) return { value: `${minutes}m`, suffix: "ago" };
   const hours = Math.floor(minutes / 60);
+
   if (hours < 24) return { value: `${hours}h`, suffix: "ago" };
   const days = Math.floor(hours / 24);
+
   return { value: `${days}d`, suffix: "ago" };
 }
 
 export function formatRelativeTimeLabel(isoDate: string) {
   const relative = formatRelativeTime(isoDate);
+
   if (!relative) return "";
+
   return relative.suffix ? `${relative.value} ${relative.suffix}` : relative.value;
 }
 
 export function getRelativeTimeState(isoDate: string | null): RelativeTimeState {
   if (!isoDate) return { status: "missing" };
   const relative = formatRelativeTime(isoDate);
+
   if (!relative) return { status: "invalid" };
+
   return { status: "relative", ...relative };
 }
 
@@ -210,21 +241,28 @@ export function getRelativeTimeState(isoDate: string | null): RelativeTimeState 
  */
 export function formatElapsedDurationLabel(isoDate: string, nowMs: number = Date.now()): string {
   const date = parseTimestampDate(isoDate);
+
   if (!date) return "";
   const diffMs = nowMs - date.getTime();
+
   if (diffMs <= 0) return "just now";
 
   const seconds = Math.floor(diffMs / 1000);
+
   if (seconds < 5) return "just now";
+
   if (seconds < 60) return `${seconds}s`;
 
   const minutes = Math.floor(seconds / 60);
+
   if (minutes < 60) return `${minutes}m`;
 
   const hours = Math.floor(minutes / 60);
+
   if (hours < 24) return `${hours}h`;
 
   const days = Math.floor(hours / 24);
+
   return `${days}d`;
 }
 
@@ -233,23 +271,32 @@ export function formatElapsedDurationLabel(isoDate: string, nowMs: number = Date
  */
 export function formatRelativeTimeUntil(isoDate: string): RelativeTimeParts | null {
   const date = parseTimestampDate(isoDate);
+
   if (!date) return null;
   const diffMs = date.getTime() - Date.now();
+
   if (diffMs <= 0) return { value: "Expired", suffix: null };
   const seconds = Math.floor(diffMs / 1000);
+
   if (seconds < 5) return { value: "Soon", suffix: null };
+
   if (seconds < 60) return { value: `${seconds}s`, suffix: "left" };
   const minutes = Math.floor(seconds / 60);
+
   if (minutes < 60) return { value: `${minutes}m`, suffix: "left" };
   const hours = Math.floor(minutes / 60);
+
   if (hours < 24) return { value: `${hours}h`, suffix: "left" };
   const days = Math.floor(hours / 24);
+
   return { value: `${days}d`, suffix: "left" };
 }
 
 export function formatRelativeTimeUntilLabel(isoDate: string): string {
   const relative = formatRelativeTimeUntil(isoDate);
+
   if (!relative) return "";
+
   return relative.suffix ? `${relative.value} ${relative.suffix}` : relative.value;
 }
 
@@ -259,17 +306,22 @@ export function formatRelativeTimeUntilLabel(isoDate: string): string {
  */
 export function formatExpiresInLabel(isoDate: string, nowMs: number = Date.now()): string {
   const date = parseTimestampDate(isoDate);
+
   if (!date) return "";
   const diffMs = date.getTime() - nowMs;
+
   if (diffMs <= 0) return "Expired";
 
   const totalSeconds = Math.floor(diffMs / 1000);
+
   if (totalSeconds < 5) return "Expires in a moment";
+
   if (totalSeconds < 60) return `Expires in ${totalSeconds}s`;
 
   if (totalSeconds < 3600) {
     const minutes = Math.floor(totalSeconds / 60);
     const seconds = totalSeconds % 60;
+
     return seconds === 0 ? `Expires in ${minutes}m` : `Expires in ${minutes}m ${seconds}s`;
   }
 
@@ -279,21 +331,29 @@ export function formatExpiresInLabel(isoDate: string, nowMs: number = Date.now()
     const minutes = Math.floor(rem / 60);
     const seconds = rem % 60;
     const parts = [`${hours}h`];
+
     if (minutes > 0) parts.push(`${minutes}m`);
+
     if (seconds > 0) parts.push(`${seconds}s`);
+
     return `Expires in ${parts.join(" ")}`;
   }
 
   const days = Math.floor(totalSeconds / 86_400);
   const remAfterDays = totalSeconds % 86_400;
+
   if (remAfterDays === 0) return `Expires in ${days}d`;
   const hours = Math.floor(remAfterDays / 3600);
   const rem = remAfterDays % 3600;
   const minutes = Math.floor(rem / 60);
   const seconds = rem % 60;
   const tail: string[] = [];
+
   if (hours > 0) tail.push(`${hours}h`);
+
   if (minutes > 0) tail.push(`${minutes}m`);
+
   if (seconds > 0) tail.push(`${seconds}s`);
+
   return tail.length > 0 ? `Expires in ${days}d ${tail.join(" ")}` : `Expires in ${days}d`;
 }

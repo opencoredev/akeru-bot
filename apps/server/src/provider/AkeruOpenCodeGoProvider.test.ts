@@ -13,6 +13,7 @@ describe("AkeruOpenCodeGoProvider", () => {
       const request = vi.fn(
         async (_input: string | URL | Request, _init?: RequestInit) => new Response("{}"),
       );
+
       await buildAkeruOpenCodeGoFetch(
         protocol,
         async () => "custom-key",
@@ -32,6 +33,8 @@ describe("AkeruOpenCodeGoProvider", () => {
   it("selects the protocol required by each model family", () => {
     expect(openCodeGoProtocol("gpt-5.6-luna")).toBe("responses");
     expect(openCodeGoProtocol("muse-spark-1.3-contributor")).toBe("responses");
+    expect(openCodeGoProtocol("gpt-6-luna")).toBe("responses");
+    expect(openCodeGoProtocol("grok-4.7")).toBe("responses");
     expect(openCodeGoProtocol("qwen3.8-max")).toBe("anthropic");
     expect(openCodeGoProtocol("deepseek-v4-pro")).toBe("chat-completions");
   });
@@ -49,6 +52,7 @@ describe("AkeruOpenCodeGoProvider", () => {
       expect(headers.get("x-api-key")).toBeNull();
       expect(headers.get("user-agent")).toBe("akeru-bot/0.0.37");
       expect(headers.get("x-opencode-client")).toBe("akeru-bot");
+
       return new Response("{}", { status: 200 });
     });
 

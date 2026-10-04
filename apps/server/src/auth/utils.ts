@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import type {
   AuthClientMetadata,
   AuthClientMetadataDeviceType,
@@ -67,9 +68,11 @@ export function isRemoteReachableHost(host: string | undefined): boolean {
   if (host === "0.0.0.0" || host === "::" || host === "[::]") {
     return true;
   }
+
   if (!host || host.length === 0) {
     return false;
   }
+
   return !(
     host === "localhost" ||
     host === "127.0.0.1" ||
@@ -80,7 +83,7 @@ export function isRemoteReachableHost(host: string | undefined): boolean {
 }
 
 export function base64UrlEncode(input: string | Uint8Array): string {
-  return typeof input === "string"
+  return Predicate.isString(input)
     ? Encoding.encodeBase64Url(new TextEncoder().encode(input))
     : Encoding.encodeBase64Url(input);
 }
@@ -96,25 +99,31 @@ export function signPayload(payload: string, secret: Uint8Array): string {
 export function timingSafeEqualBase64Url(left: string, right: string): boolean {
   const leftBuffer = Buffer.from(left, "base64url");
   const rightBuffer = Buffer.from(right, "base64url");
+
   if (leftBuffer.length !== rightBuffer.length) {
     return false;
   }
+
   return NodeCrypto.timingSafeEqual(leftBuffer, rightBuffer);
 }
 
 function normalizeNonEmptyString(value: string | null | undefined): string | undefined {
-  if (typeof value !== "string") {
+  if (!Predicate.isString(value)) {
     return undefined;
   }
+
   const trimmed = value.trim();
+
   return trimmed.length > 0 ? trimmed : undefined;
 }
 
 function normalizeIpAddress(value: string | null | undefined): string | undefined {
   const normalized = normalizeNonEmptyString(value);
+
   if (!normalized) {
     return undefined;
   }
+
   return normalized.startsWith("::ffff:") ? normalized.slice("::ffff:".length) : normalized;
 }
 
@@ -124,15 +133,19 @@ function inferDeviceType(userAgent: string | undefined): AuthClientMetadataDevic
   }
 
   const normalized = userAgent.toLowerCase();
+
   if (/bot|crawler|spider|slurp|curl|wget/.test(normalized)) {
     return "bot";
   }
+
   if (/ipad|tablet/.test(normalized)) {
     return "tablet";
   }
+
   if (/iphone|android.+mobile|mobile/.test(normalized)) {
     return "mobile";
   }
+
   return "desktop";
 }
 
@@ -140,13 +153,21 @@ function inferBrowser(userAgent: string | undefined): string | undefined {
   if (!userAgent) {
     return undefined;
   }
+
   const normalized = userAgent.toLowerCase();
+
   if (/edg\//.test(normalized)) return "Edge";
+
   if (/opr\//.test(normalized)) return "Opera";
+
   if (/firefox\//.test(normalized)) return "Firefox";
+
   if (/electron\//.test(normalized)) return "Electron";
+
   if (/chrome\//.test(normalized) || /crios\//.test(normalized)) return "Chrome";
+
   if (/safari\//.test(normalized) && !/chrome\//.test(normalized)) return "Safari";
+
   return undefined;
 }
 
@@ -154,28 +175,42 @@ function inferOs(userAgent: string | undefined): string | undefined {
   if (!userAgent) {
     return undefined;
   }
+
   const normalized = userAgent.toLowerCase();
+
   if (/iphone|ipad|ipod/.test(normalized)) return "iOS";
+
   if (/android/.test(normalized)) return "Android";
+
   if (/mac os x|macintosh/.test(normalized)) return "macOS";
+
   if (/windows nt/.test(normalized)) return "Windows";
+
   if (/linux/.test(normalized)) return "Linux";
+
   return undefined;
 }
 
-function readRemoteAddressFromSource(source: unknown): string | undefined {
-  if (!source || typeof source !== "object") {
+function readRemoteAddressFromSource(
+  source: HttpServerRequest.HttpServerRequest["source"],
+): string | undefined {
+  if (!source || !Predicate.isObjectKeyword(source)) {
     return undefined;
   }
 
-  const candidate = source as {
-    readonly remoteAddress?: string | null;
-    readonly socket?: {
-      readonly remoteAddress?: string | null;
-    };
-  };
+  const socket = Predicate.hasProperty(source, "socket") ? source.socket : undefined;
 
-  return normalizeIpAddress(candidate.socket?.remoteAddress ?? candidate.remoteAddress);
+  const socketAddress = Predicate.hasProperty(socket, "remoteAddress")
+    ? socket.remoteAddress
+    : undefined;
+
+  const directAddress = Predicate.hasProperty(source, "remoteAddress")
+    ? source.remoteAddress
+    : undefined;
+
+  const address = socketAddress ?? directAddress;
+
+  return Predicate.isString(address) ? normalizeIpAddress(address) : undefined;
 }
 
 export function deriveAuthClientMetadata(input: {
@@ -186,6 +221,7 @@ export function deriveAuthClientMetadata(input: {
   const ipAddress = readRemoteAddressFromSource(input.request.source);
   const os = input.presented?.os ?? inferOs(userAgent);
   const browser = inferBrowser(userAgent);
+
   return {
     ...(input.presented?.label ? { label: input.presented.label } : {}),
     ...(ipAddress ? { ipAddress } : {}),

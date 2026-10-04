@@ -1,0 +1,183 @@
+@utility surface-glass {
+  background: color-mix(in srgb, var(--background) var(--glass-opacity), transparent);
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturation));
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturation));
+
+  @supports not ((-webkit-backdrop-filter: blur(1px)) or (backdrop-filter: blur(1px))) {
+    background: var(--background) !important;
+  }
+}
+
+@utility alert-glass {
+  --alert-glass-tint: transparent;
+  background:
+    linear-gradient(
+      color-mix(in srgb, var(--alert-glass-tint) 4%, transparent),
+      color-mix(in srgb, var(--alert-glass-tint) 4%, transparent)
+    ),
+    color-mix(in srgb, var(--background) var(--glass-opacity), transparent) !important;
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturation));
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturation));
+
+  &[data-variant="error"] {
+    --alert-glass-tint: var(--destructive);
+  }
+
+  &[data-variant="info"] {
+    --alert-glass-tint: var(--info);
+  }
+
+  &[data-variant="success"] {
+    --alert-glass-tint: var(--success);
+  }
+
+  &[data-variant="warning"] {
+    --alert-glass-tint: var(--warning);
+  }
+
+  @supports not ((-webkit-backdrop-filter: blur(1px)) or (backdrop-filter: blur(1px))) {
+    background: var(--background) !important;
+  }
+}
+
+@utility dialog-glass {
+  background: var(--popover);
+  border-color: color-mix(in srgb, var(--contrast-foreground) 10%, transparent);
+  box-shadow: 0 24px 64px -24px rgb(0 0 0 / 65%);
+
+  @variant dark {
+    border-color: color-mix(in srgb, var(--color-white) 8%, transparent);
+    box-shadow:
+      inset 0 1px rgb(255 255 255 / 4%),
+      0 24px 72px -20px rgb(0 0 0 / 90%);
+  }
+}
+
+/* A real scrim, not a tint. The command palette opens straight over
+   conversation text, and a weak backdrop let that text read as part of the
+   result list. Dark mode needs more because its canvas is near-black. No
+   backdrop-filter: blurring the whole viewport behind every dialog costs a
+   full-screen GPU pass for an effect the scrim already achieves. */
+
+@utility dialog-backdrop {
+  background: color-mix(in srgb, var(--background) 78%, transparent);
+
+  @variant dark {
+    background: color-mix(in srgb, var(--background) 82%, transparent);
+  }
+}
+
+@utility dropdown-glass {
+  background: var(--popover);
+  border: 1px solid color-mix(in srgb, var(--contrast-foreground) 10%, transparent);
+}
+
+/* Akeru Noir popovers read as elevated panels, Linear-style: a surface one
+   step above the canvas, a whisper of light at the edge, and rounder corners
+   than the classic chassis. */
+
+html[data-theme-id="akeru-noir"] :is([data-slot] .dropdown-glass, .dropdown-glass) {
+  background: var(--popover);
+  border-color: color-mix(in srgb, var(--contrast-foreground) 7%, transparent);
+  border-radius: 0.75rem;
+}
+
+/* Noir dialogs are solid elevated panels: the surface itself carries the
+   elevation, so the edge light and inset highlight go away. */
+
+html[data-theme-id="akeru-noir"] .dialog-glass {
+  background: var(--card);
+  border-color: color-mix(in srgb, var(--contrast-foreground) 6%, transparent);
+  box-shadow: 0 32px 80px -24px rgb(0 0 0 / 80%);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+@utility topbar-scroll-fade {
+  --topbar-scroll-fade-height: 2.5rem;
+  -webkit-mask-image:
+    linear-gradient(
+      to bottom,
+      transparent 0%,
+      rgb(0 0 0 / 10%) 10%,
+      rgb(0 0 0 / 30%) 24%,
+      rgb(0 0 0 / 58%) 42%,
+      rgb(0 0 0 / 82%) 62%,
+      rgb(0 0 0 / 96%) 82%,
+      black 100%
+    ),
+    linear-gradient(black, black), linear-gradient(black, black);
+  -webkit-mask-position: top, bottom, right;
+  -webkit-mask-repeat: no-repeat;
+  -webkit-mask-size:
+    100% var(--topbar-scroll-fade-height),
+    100% calc(100% - var(--topbar-scroll-fade-height)),
+    var(--app-scrollbar-width) 100%;
+  mask-image:
+    linear-gradient(
+      to bottom,
+      transparent 0%,
+      rgb(0 0 0 / 10%) 10%,
+      rgb(0 0 0 / 30%) 24%,
+      rgb(0 0 0 / 58%) 42%,
+      rgb(0 0 0 / 82%) 62%,
+      rgb(0 0 0 / 96%) 82%,
+      black 100%
+    ),
+    linear-gradient(black, black), linear-gradient(black, black);
+  mask-position: top, bottom, right;
+  mask-repeat: no-repeat;
+  mask-size:
+    100% var(--topbar-scroll-fade-height),
+    100% calc(100% - var(--topbar-scroll-fade-height)),
+    var(--app-scrollbar-width) 100%;
+
+  @variant sm {
+    --topbar-scroll-fade-height: 3rem;
+  }
+}
+
+/* Virtualizers own their native scroll element, so they cannot use ScrollArea's
+   viewport fade. Keep the scrollbar lane opaque while sharing the same fade
+   contract across those lists. */
+
+@utility virtualized-scroll-fade {
+  -webkit-mask-image: var(--virtualized-scroll-fade-mask), linear-gradient(black, black);
+  mask-image: var(--virtualized-scroll-fade-mask), linear-gradient(black, black);
+  -webkit-mask-position: left, right;
+  mask-position: left, right;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-size:
+    calc(100% - var(--app-scrollbar-width)) 100%,
+    var(--app-scrollbar-width) 100%;
+  mask-size:
+    calc(100% - var(--app-scrollbar-width)) 100%,
+    var(--app-scrollbar-width) 100%;
+}
+
+/* Stage-channel art needs a mask and pseudo-element gradient, so keep the
+   behavior composable without tying it to the global components layer. */
+
+@utility sidebar-stage-backdrop {
+  --stage-fade: var(--sidebar-stage-fade, var(--app-chrome-background));
+  mask-image: linear-gradient(to bottom, black 0%, black 55%, transparent 92%);
+  -webkit-mask-image: linear-gradient(to bottom, black 0%, black 55%, transparent 92%);
+
+  &::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+      to bottom,
+      transparent 0%,
+      transparent 28%,
+      color-mix(in srgb, var(--stage-fade) 10%, transparent) 40%,
+      color-mix(in srgb, var(--stage-fade) 30%, transparent) 52%,
+      color-mix(in srgb, var(--stage-fade) 58%, transparent) 64%,
+      color-mix(in srgb, var(--stage-fade) 82%, transparent) 75%,
+      color-mix(in srgb, var(--stage-fade) 96%, transparent) 85%,
+      var(--stage-fade) 93%
+    );
+  }
+}

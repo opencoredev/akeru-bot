@@ -1,17 +1,17 @@
+import { Schema } from "effect";
+import { AkeruDelegationRecord, EnvironmentId, ThreadId } from "@akeru/contracts";
+import { Predicate } from "effect";
 import { useAtomValue } from "@effect/atom-react";
 import { Atom } from "effect/unstable/reactivity";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Alert } from "react-native";
 import * as Cause from "effect/Cause";
-
 import {
   CommandId,
   MessageId,
-  type EnvironmentId,
   type ModelSelection,
   DEFAULT_PROVIDER_INTERACTION_MODE,
   type RuntimeMode,
-  type ThreadId,
 } from "@akeru/contracts";
 import { safeErrorLogAttributes } from "@akeru/client-runtime/errors";
 import {
@@ -22,8 +22,7 @@ import {
 } from "@akeru/client-runtime/state/threads";
 import { isAtomCommandInterrupted } from "@akeru/client-runtime/state/runtime";
 import { deriveActiveWorkStartedAt } from "@akeru/shared/orchestrationTiming";
-
-import { makeQueuedMessageMetadata } from "../lib/commandMetadata";
+import { createQueuedMessageMetadata } from "../lib/commandMetadata";
 import {
   convertPastedImagesToAttachments,
   pasteComposerClipboard,
@@ -36,14 +35,12 @@ import {
   createThreadFeedBuilder,
   deriveThreadFeedDelegations,
   unchangedPrefixLength,
-  type ThreadFeedDelegations,
 } from "../lib/threadActivity";
 import { tryOpenExternalUrl } from "../lib/openExternalUrl";
 import {
   appendComposerDraftAttachments,
   appendComposerDraftText,
   clearComposerDraftContent,
-  composerDraftsAtom,
   ensureComposerDraftsLoaded,
   getComposerDraftSnapshot,
   mergeComposerDraftContent,
@@ -62,6 +59,13 @@ import { useThreadOutboxMessages } from "./use-thread-outbox";
 import { threadEnvironment } from "./threads";
 import { useAtomCommand } from "./use-atom-command";
 
+const decodeFeedDelegations = Schema.decodeUnknownSync(
+  Schema.Struct({
+    delegations: Schema.Array(AkeruDelegationRecord),
+    waitingOnChildren: Schema.Boolean,
+  }),
+);
+
 export function useThreadDraftForThread(input: {
   readonly environmentId?: EnvironmentId;
   readonly threadId?: ThreadId;
@@ -70,6 +74,7 @@ export function useThreadDraftForThread(input: {
     input.environmentId && input.threadId
       ? scopedThreadKey(input.environmentId, input.threadId)
       : null;
+
   const draft = useComposerDraft(threadKey);
 
   return {
@@ -81,10 +86,10 @@ export function useThreadDraftForThread(input: {
 const EMPTY_FEEDBACK_SUBMISSIONS: ReadonlyArray<CodexFeedbackSubmission> = Object.freeze([]);
 
 const feedDelegationsAtom = Atom.family((key: string) => {
-  const [environmentId, threadId] = key.split("\n") as [
-    EnvironmentId | undefined,
-    ThreadId | undefined,
-  ];
+  const [environmentKey, threadKey] = key.split("\n");
+  const environmentId = environmentKey ? EnvironmentId.make(environmentKey) : undefined;
+  const threadId = threadKey ? ThreadId.make(threadKey) : undefined;
+
   return Atom.make((get) =>
     deriveThreadFeedDelegations(
       threadId,
@@ -102,9 +107,11 @@ export function useThreadComposerState() {
   const buildSelectedThreadFeed = useMemo(() => createThreadFeedBuilder(), []);
   const openedAuthorizationActivitiesRef = useRef(new Set<string>());
   const queuedMessagesByThreadKey = useThreadOutboxMessages();
+
   const [feedbackSubmissionsByThreadKey, setFeedbackSubmissionsByThreadKey] = useState<
     Record<string, ReadonlyArray<CodexFeedbackSubmission>>
   >({});
+
   const uploadThreadFeedback = useAtomCommand(threadEnvironment.uploadFeedback, {
     reportFailure: false,
   });
@@ -119,18 +126,25 @@ export function useThreadComposerState() {
     // Activity updates usually append, so only the unseen tail is scanned.
     const start = unchangedPrefixLength(scannedAuthorizationActivitiesRef.current, activities);
     scannedAuthorizationActivitiesRef.current = activities;
+
     for (let index = start; index < activities.length; index += 1) {
       const activity = activities[index];
+
       if (activity?.kind !== "mcp.oauth.authorization-required") continue;
+
       if (openedAuthorizationActivitiesRef.current.has(activity.id)) continue;
-      if (!activity.payload || typeof activity.payload !== "object") continue;
-      const authorizationUrl = (activity.payload as Record<string, unknown>).authorizationUrl;
-      if (typeof authorizationUrl !== "string") continue;
+
+      if (!activity.payload || !Predicate.isObject(activity.payload)) continue;
+      const authorizationUrl = activity.payload.authorizationUrl;
+
+      if (!Predicate.isString(authorizationUrl)) continue;
+
       try {
         if (new URL(authorizationUrl).protocol !== "https:") continue;
       } catch {
         continue;
       }
+
       openedAuthorizationActivitiesRef.current.add(activity.id);
       void tryOpenExternalUrl(authorizationUrl, "mcp-oauth");
       // Leave later rows unscanned so the next update can open them.
@@ -142,10 +156,12 @@ export function useThreadComposerState() {
   const selectedThreadKey = selectedThreadShell
     ? scopedThreadKey(selectedThreadShell.environmentId, selectedThreadShell.id)
     : null;
+
   const selectedThreadQueuedMessages = useMemo(
     () => (selectedThreadKey ? (queuedMessagesByThreadKey[selectedThreadKey] ?? []) : []),
     [queuedMessagesByThreadKey, selectedThreadKey],
   );
+
   // Delegations live on the environment snapshot, not the thread detail.
   const selectedThreadDelegations = useAtomValue(
     feedDelegationsAtom(
@@ -154,13 +170,16 @@ export function useThreadComposerState() {
         : "\n",
     ),
   );
+
   const selectedThreadFeedDelegations = useMemo(
-    () => JSON.parse(selectedThreadDelegations) as ThreadFeedDelegations,
+    () => decodeFeedDelegations(JSON.parse(selectedThreadDelegations)),
     [selectedThreadDelegations],
   );
+
   const selectedThreadFeedbackSubmissions = selectedThreadKey
     ? (feedbackSubmissionsByThreadKey[selectedThreadKey] ?? EMPTY_FEEDBACK_SUBMISSIONS)
     : EMPTY_FEEDBACK_SUBMISSIONS;
+
   const selectedThreadLocalMessages = useMemo(
     () =>
       selectedThreadFeedbackSubmissions.flatMap((submission) =>
@@ -170,10 +189,13 @@ export function useThreadComposerState() {
       ),
     [selectedThreadFeedbackSubmissions],
   );
+
   const selectedThreadActivities = selectedThreadDetail?.activities;
   const selectedThreadMessages = selectedThreadDetail?.messages;
+
   const selectedThreadFeed = useMemo(() => {
     if (!selectedThreadActivities || !selectedThreadMessages) return [];
+
     return buildSelectedThreadFeed(
       { activities: selectedThreadActivities, messages: selectedThreadMessages },
       {
@@ -199,6 +221,7 @@ export function useThreadComposerState() {
 
   const selectedThreadSessionActivity = useMemo(() => {
     const selectedThread = selectedThreadDetail ?? selectedThreadShell;
+
     if (!selectedThread?.session) {
       return null;
     }
@@ -211,6 +234,7 @@ export function useThreadComposerState() {
 
   const activeWorkStartedAt = useMemo(() => {
     const selectedThread = selectedThreadDetail ?? selectedThreadShell;
+
     if (!selectedThread) {
       return null;
     }
@@ -232,6 +256,7 @@ export function useThreadComposerState() {
     const thread = selectedThreadDetail ?? selectedThreadShell;
     const text = draft.text.trim();
     const attachments = draft.attachments;
+
     if (text.length === 0 && attachments.length === 0) {
       return null;
     }
@@ -239,17 +264,22 @@ export function useThreadComposerState() {
     const provider = selectedEnvironmentRuntime?.serverConfig?.providers.find(
       (entry) => entry.instanceId === thread.modelSelection.instanceId,
     );
+
     const feedbackCommand =
       attachments.length === 0 &&
       (provider?.driver === "codex" || thread.session?.providerName === "codex")
         ? parseCodexFeedbackCommand(text)
         : null;
+
     if (feedbackCommand) {
       if (thread.session === null) {
         Alert.alert(t("Start a Codex chat first"), t("Send a message before you submit feedback."));
+
         return null;
       }
-      const metadata = makeQueuedMessageMetadata();
+
+      const metadata = createQueuedMessageMetadata();
+
       const result = await submitCodexFeedback({
         submission: {
           id: MessageId.make(metadata.messageId),
@@ -261,6 +291,7 @@ export function useThreadComposerState() {
           setFeedbackSubmissionsByThreadKey((current) => {
             const existing = current[threadKey] ?? [];
             const found = existing.some((entry) => entry.id === submission.id);
+
             return {
               ...current,
               [threadKey]: found
@@ -278,17 +309,21 @@ export function useThreadComposerState() {
             },
           }),
       });
-      if (result._tag === "Failure") {
+
+      if (Predicate.isTagged(result, "Failure")) {
         if (isAtomCommandInterrupted(result)) {
           return null;
         }
+
         const error = Cause.squash(result.cause);
         Alert.alert(
           t("Could not send feedback to OpenAI"),
           error instanceof Error ? error.message : t("An error occurred."),
         );
+
         return null;
       }
+
       const feedbackId = result.value.feedbackId;
       Alert.alert(t("Feedback sent to OpenAI"), t("Thread ID: {id}", { id: feedbackId }), [
         { text: t("OK"), style: "cancel" },
@@ -297,11 +332,13 @@ export function useThreadComposerState() {
           onPress: () => copyTextWithHaptic(feedbackId, { target: "Codex feedback thread ID" }),
         },
       ]);
+
       return null;
     }
 
-    const metadata = makeQueuedMessageMetadata();
+    const metadata = createQueuedMessageMetadata();
     const messageId = MessageId.make(metadata.messageId);
+
     // Enqueue publishes the queued atom synchronously (the durable write
     // happens behind it), so clearing the draft here gives send feedback on
     // the tap frame instead of after file I/O. If the write fails the message
@@ -319,8 +356,9 @@ export function useThreadComposerState() {
       interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
       createdAt: metadata.createdAt,
     });
+
     clearComposerDraftContent(threadKey);
-    enqueuePromise.catch((error: unknown) => {
+    enqueuePromise.catch((error) => {
       // Restore text via merge (idempotent) but attachments via the uncapped
       // append: the merge path slots existing attachments first and truncates
       // at the send limit, which would silently drop this message's images if
@@ -331,6 +369,7 @@ export function useThreadComposerState() {
         error instanceof Error ? error.message : "Failed to save the queued message.",
       );
     });
+
     return messageId;
   }, [
     selectedEnvironmentRuntime?.serverConfig?.providers,
@@ -358,12 +397,15 @@ export function useThreadComposerState() {
     }
 
     const threadKey = scopedThreadKey(selectedThreadShell.environmentId, selectedThreadShell.id);
+
     const result = await pickComposerImages({
       existingCount: getComposerDraftSnapshot(threadKey).attachments.length,
     });
+
     if (result.images.length > 0) {
       appendComposerDraftAttachments(threadKey, result.images);
     }
+
     if (result.error) {
       setPendingConnectionError(result.error);
     }
@@ -375,15 +417,19 @@ export function useThreadComposerState() {
     }
 
     const threadKey = scopedThreadKey(selectedThreadShell.environmentId, selectedThreadShell.id);
+
     const result = await pasteComposerClipboard({
       existingCount: getComposerDraftSnapshot(threadKey).attachments.length,
     });
+
     if (result.images.length > 0) {
       appendComposerDraftAttachments(threadKey, result.images);
     }
+
     if (result.text) {
       appendComposerDraftText(threadKey, result.text);
     }
+
     if (result.error) {
       setPendingConnectionError(result.error);
     }
@@ -396,11 +442,13 @@ export function useThreadComposerState() {
       }
 
       const threadKey = scopedThreadKey(selectedThreadShell.environmentId, selectedThreadShell.id);
+
       try {
         const images = await convertPastedImagesToAttachments({
           uris,
           existingCount: getComposerDraftSnapshot(threadKey).attachments.length,
         });
+
         if (images.length > 0) {
           appendComposerDraftAttachments(threadKey, images);
         }
@@ -433,6 +481,7 @@ export function useThreadComposerState() {
       if (!selectedThreadKey) {
         return;
       }
+
       updateComposerDraftSettings(selectedThreadKey, { modelSelection: value });
     },
     [selectedThreadKey],
@@ -443,6 +492,7 @@ export function useThreadComposerState() {
       if (!selectedThreadKey) {
         return;
       }
+
       updateComposerDraftSettings(selectedThreadKey, { runtimeMode: value });
     },
     [selectedThreadKey],

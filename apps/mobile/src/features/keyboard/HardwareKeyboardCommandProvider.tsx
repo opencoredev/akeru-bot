@@ -15,15 +15,19 @@ export function HardwareKeyboardCommandProvider({
   pathname,
 }: PropsWithChildren<{ readonly pathname: string }>) {
   const navigation = useNavigation();
+
   const registrationVersion = useSyncExternalStore(
     subscribeToHardwareKeyboardCommandRegistrations,
     getHardwareKeyboardCommandRegistrationVersion,
     getHardwareKeyboardCommandRegistrationVersion,
   );
+
   const enabledCommands = useMemo(() => {
     const commands = new Set<HardwareKeyboardCommand>(getRegisteredHardwareKeyboardCommands());
     commands.add("newTask");
+
     if (pathname !== "/" || navigation.canGoBack()) commands.add("back");
+
     return [...commands];
   }, [pathname, registrationVersion, navigation]);
 
@@ -33,14 +37,17 @@ export function HardwareKeyboardCommandProvider({
 
       if (command === "newTask") {
         navigation.navigate("NewTaskSheet", { screen: "NewTask" });
+
         return;
       }
+
       if (command === "back") {
         if (navigation.canGoBack()) {
           navigation.goBack();
         } else {
           navigation.dispatch(StackActions.replace("Home"));
         }
+
         return;
       }
     },

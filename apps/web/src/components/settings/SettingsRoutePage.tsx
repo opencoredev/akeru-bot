@@ -23,7 +23,10 @@ export function SettingsRoutePage() {
   const label = t(settingsSectionLabel(section));
 
   return (
-    <SidebarInset className="h-dvh min-h-0 overflow-hidden overscroll-y-none bg-background text-foreground isolate">
+    <SidebarInset
+      tone="foreground"
+      className="h-dvh min-h-0 overflow-hidden overscroll-y-none isolate"
+    >
       {/* No fill here: the experimental shell paints the inset with var(--card), like chat. */}
       <div className="flex min-h-0 min-w-0 flex-1 flex-col text-foreground">
         {sidebarExperiment ? (
@@ -32,7 +35,7 @@ export function SettingsRoutePage() {
           <WorkspacePageHeader electron={isElectron}>
             <h1 className="flex min-w-0 items-center gap-2 text-sm font-medium text-foreground">
               {navItem ? (
-                <AppIcon icon={navItem.icon} className="size-4 shrink-0 text-muted-foreground" />
+                <AppIcon icon={navItem.icon} className="size-4 shrink-0" tone="muted" />
               ) : null}
               <span className="truncate">{label}</span>
             </h1>

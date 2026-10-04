@@ -1,3 +1,4 @@
+import type { PreviewAutomationRequest } from "@akeru/contracts";
 import * as Effect from "effect/Effect";
 import type {
   PreviewAutomationOperation,
@@ -25,6 +26,7 @@ export function normalizePreviewOpenInput(
   input: PreviewAutomationOpenInput,
 ): PreviewAutomationOpenInput {
   const open = input.open ?? input.show;
+
   return {
     ...input,
     ...(open === undefined ? {} : { open, show: open }),
@@ -34,7 +36,7 @@ export function normalizePreviewOpenInput(
 
 const invoke = Effect.fn("PreviewToolkit.invoke")(function* <A>(
   operation: PreviewAutomationOperation,
-  input: unknown,
+  input: PreviewAutomationRequest["input"],
   timeoutMs?: number,
   tabId?: PreviewTabId,
 ): Effect.fn.Return<
@@ -44,6 +46,7 @@ const invoke = Effect.fn("PreviewToolkit.invoke")(function* <A>(
 > {
   const scope = yield* McpInvocationContext.requireMcpCapability("preview");
   const broker = yield* PreviewAutomationBroker.PreviewAutomationBroker;
+
   return yield* broker.invoke<A>({
     scope,
     operation,
@@ -55,13 +58,11 @@ const invoke = Effect.fn("PreviewToolkit.invoke")(function* <A>(
 
 const invokeTargeted = <A>(
   operation: PreviewAutomationOperation,
-  input: {
-    readonly tabId?: PreviewTabId | undefined;
-    readonly [key: string]: unknown;
-  },
+  input: { readonly tabId?: PreviewTabId | undefined },
   timeoutMs?: number,
 ) => {
   const { tabId, ...operationInput } = input;
+
   return invoke<A>(operation, operationInput, timeoutMs, tabId);
 };
 
@@ -78,6 +79,7 @@ const handlers = {
   preview_snapshot: (input) => {
     // Output selection is MCP-only; the browser still produces a complete snapshot.
     const { includeImage: _includeImage, ...operationInput } = input ?? {};
+
     return invokeTargeted<PreviewAutomationSnapshot>("snapshot", operationInput);
   },
   preview_click: (input) =>

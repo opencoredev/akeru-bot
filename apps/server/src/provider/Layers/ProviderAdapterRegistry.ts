@@ -110,8 +110,10 @@ const makeProviderAdapterRegistry = Effect.fn("makeProviderAdapterRegistry")(fun
     registry.listInstances.pipe(
       Effect.map((instances) => {
         const kinds = new Set<ProviderDriverKind>();
+
         for (const instance of instances) {
           const defaultId = defaultInstanceIdForDriver(instance.driverKind);
+
           if (instance.instanceId === defaultId) {
             // Only the default-instance rows show up through the legacy
             // shim — custom instances like `codex_personal` have no
@@ -119,6 +121,7 @@ const makeProviderAdapterRegistry = Effect.fn("makeProviderAdapterRegistry")(fun
             kinds.add(instance.driverKind);
           }
         }
+
         return Array.from(kinds);
       }),
     );
@@ -148,6 +151,7 @@ export { makeProviderAdapterRegistry };
 // Re-export for consumers that need the accessor shape. The service tag
 // itself lives in `Services/ProviderAdapterRegistry.ts`.
 export { ProviderAdapterRegistry } from "../Services/ProviderAdapterRegistry.ts";
+
 // Re-export for consumers (including tests) that construct a
 // `ProviderInstanceId` before calling `getByInstance`.
 export { ProviderInstanceId };

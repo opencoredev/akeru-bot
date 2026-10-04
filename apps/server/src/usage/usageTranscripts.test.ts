@@ -73,11 +73,13 @@ describe("parseCodexLine", () => {
     timestamp: "2026-08-01T05:17:41.289Z",
     payload: { type: "session_meta", id: "019fbbc1-b12c-7360-a685-28c181f0025f" },
   });
+
   const turnContext = JSON.stringify({
     type: "turn_context",
     timestamp: "2026-08-01T05:17:42.694Z",
     payload: { type: "turn_context", model: "gpt-5.6-sol" },
   });
+
   const tokenCount = (inputTokens: number, cached: number, output: number, reasoning: number) =>
     JSON.stringify({
       type: "event_msg",
@@ -163,9 +165,11 @@ describe("parseCodexLine", () => {
               }),
         },
       });
+
     const stamped = (timestamp: string, line: string) => {
       const parsed = JSON.parse(line) as { timestamp: string };
       parsed.timestamp = timestamp;
+
       return JSON.stringify(parsed);
     };
 
@@ -199,6 +203,7 @@ describe("parseCodexLine", () => {
         stamped("2026-08-01T05:00:06.000Z", tokenCount(300, 0, 30, 0)),
         state,
       );
+
       expect(real).not.toBeNull();
       expect(real?.totals.outputTokens).toBe(30);
 
@@ -207,6 +212,7 @@ describe("parseCodexLine", () => {
         stamped("2026-08-01T05:00:06.100Z", tokenCount(400, 0, 40, 0)),
         state,
       );
+
       expect(next).not.toBeNull();
     });
 
@@ -227,10 +233,12 @@ describe("parseCodexLine", () => {
       const state = initialCodexScanState();
       parseCodexLine(meta({ id: "root", timestamp: "2026-08-01T05:00:00.000Z" }), state);
       parseCodexLine(stamped("2026-08-01T05:00:00.100Z", turnContext), state);
+
       const record = parseCodexLine(
         stamped("2026-08-01T05:00:00.200Z", tokenCount(100, 0, 10, 0)),
         state,
       );
+
       expect(record).not.toBeNull();
     });
   });

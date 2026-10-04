@@ -14,7 +14,6 @@ import {
 import * as Effect from "effect/Effect";
 
 import { exportAkeruMemory } from "./MemoryExport.ts";
-import type { EntityMemoryRepositoryShape } from "./Services/EntityMemoryRepository.ts";
 
 const access = {
   tenantId: AkeruMemoryTenantId.make("local"),
@@ -64,9 +63,11 @@ const revision = (number: number, deletionState: "active" | "tombstoned") =>
 it.effect("exports readable complete history with checksums and tombstones", () => {
   const current = revision(2, "tombstoned");
   const initial = revision(1, "active");
+
   const repository = {
     listByPartitions: () => Effect.succeed([initial, current]),
-  } as unknown as EntityMemoryRepositoryShape;
+  };
+
   return Effect.gen(function* () {
     const archive = yield* exportAkeruMemory({
       repository,
@@ -79,6 +80,7 @@ it.effect("exports readable complete history with checksums and tombstones", () 
 
     assert.equal(archive.schemaVersion, 2);
     assert.equal(archive.files.length, 2);
+
     if (archive.schemaVersion !== 2) return assert.fail("Expected a V2 archive.");
     assert.equal(archive.target, "bot");
     assert.equal(archive.revisions.length, 2);

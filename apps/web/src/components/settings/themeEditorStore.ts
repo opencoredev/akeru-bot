@@ -51,8 +51,10 @@ export function toggleThemeEditorForTheme(input: {
   initialAppearance: ThemeAppearance;
 }): void {
   const store = useThemeEditorStore.getState();
+
   if (store.session) {
     store.closeThemeEditor();
+
     return;
   }
 

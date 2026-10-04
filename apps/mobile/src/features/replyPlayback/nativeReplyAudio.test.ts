@@ -8,22 +8,28 @@ import {
 
 function setup() {
   let listener: (event: NativeReplyAudioEvent) => void = () => {};
+
   const unsubscribe = vi.fn();
+
   const player = {
     play: vi.fn(async () => {}),
     pause: vi.fn(),
     dispose: vi.fn(),
     subscribe: vi.fn((next: typeof listener) => {
       listener = next;
+
       return unsubscribe;
     }),
   } satisfies NativeReplyAudioPlayer;
+
   const callbacks = {
     onEnded: vi.fn(),
     onError: vi.fn(),
     onInterrupted: vi.fn(),
   };
+
   const handle = createNativeReplyAudioHandle(player, callbacks);
+
   return {
     player,
     callbacks,
@@ -36,10 +42,12 @@ function setup() {
 function deferred() {
   let resolve!: () => void;
   let reject!: (error: Error) => void;
+
   const promise = new Promise<void>((yes, no) => {
     resolve = yes;
     reject = no;
   });
+
   return { promise, resolve, reject };
 }
 
@@ -114,6 +122,7 @@ describe("createNativeReplyAudioHandle", () => {
     const error = new Error("native failure");
     player.play.mockImplementation(() => {
       if (synchronous) throw error;
+
       return Promise.reject(error);
     });
     await expect(handle.play()).rejects.toBe(error);

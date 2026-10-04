@@ -54,11 +54,13 @@ const makeHarnessWith = (options?: {
       readonly childThreadId: ThreadId;
       readonly text: string;
     }>();
+
     const interrupted: ThreadId[] = [];
     const discarded: ThreadId[] = [];
     const discards = yield* Queue.unbounded<ThreadId>();
     let created = 0;
     let ids = 0;
+
     const port: AkeruWorkerPort = {
       createChild: () =>
         (options?.createGate ? Deferred.await(options.createGate) : Effect.void).pipe(
@@ -75,9 +77,12 @@ const makeHarnessWith = (options?: {
           Effect.asVoid,
         ),
     };
+
     const runtime = yield* makeAkeruWorkerRuntime(port, { makeId: () => String(++ids) });
+
     return { runtime, turns, interrupted, discarded, discards };
   });
+
 const makeHarness = makeHarnessWith();
 
 const phaseOf = (status: AkeruWorkerStatus) => status.phase._tag;
@@ -86,9 +91,11 @@ it.effect("returns the worker result and runs the child with a narrowed grant", 
   Effect.scoped(
     Effect.gen(function* () {
       const { runtime, turns } = yield* makeHarness;
+
       const spawned = yield* Effect.forkChild(
         runtime.spawn(parent, { task: "Summarize the README", expectedResult: "Three bullets" }),
       );
+
       const turn = yield* Queue.take(turns);
       assert.include(turn.text, "Task: Summarize the README");
       assert.include(turn.text, "Expected result: Three bullets");
@@ -163,9 +170,11 @@ it.effect("refuses to start workers from a worker", () =>
   Effect.scoped(
     Effect.gen(function* () {
       const { runtime } = yield* makeHarness;
+
       const error = yield* Effect.flip(
         runtime.spawn({ ...parent, depth: 1 }, { task: "Nested", background: true }),
       );
+
       assert.strictEqual(error.reason, "depth_limit");
       assert.strictEqual(error.message, "Temporary workers cannot start other workers.");
     }),
@@ -204,6 +213,7 @@ it.effect("sends follow-ups and completes after the last open turn", () =>
         workerId: running.workerId,
         message: "Also add a title",
       });
+
       assert.strictEqual(phaseOf(messaged), "Running");
       const followUp = yield* Queue.take(turns);
       assert.deepStrictEqual(followUp, {
@@ -228,6 +238,7 @@ it.effect("sends follow-ups and completes after the last open turn", () =>
       const error = yield* Effect.flip(
         runtime.message(parent, { workerId: running.workerId, message: "More" }),
       );
+
       assert.strictEqual(error.reason, "not_running");
     }),
   ),
@@ -295,12 +306,14 @@ it.effect("hides workers from other chats", () =>
     Effect.gen(function* () {
       const { runtime } = yield* makeHarness;
       const running = yield* runtime.spawn(parent, { task: "Mine", background: true });
+
       const error = yield* Effect.flip(
         runtime.check(
           { threadId: ThreadId.make("other-thread") },
           { workerId: running.workerId as AkeruWorkerId },
         ),
       );
+
       assert.strictEqual(error.reason, "not_found");
     }),
   ),
@@ -327,10 +340,12 @@ it.effect("keeps workers of a newer turn when an earlier turn ends", () =>
   Effect.scoped(
     Effect.gen(function* () {
       const { runtime, turns } = yield* makeHarness;
+
       const running = yield* runtime.spawn(
         { ...parent, turnId: TurnId.make("next-turn") },
         { task: "Next turn work", background: true },
       );
+
       yield* Queue.take(turns);
       yield* runtime.parentTurnEnded(parent.threadId, parent.turnId);
       const checked = yield* runtime.check(parent, { workerId: running.workerId });

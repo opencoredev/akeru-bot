@@ -174,8 +174,9 @@ The sidebar shows pinned bots and groups as launcher cards at the top, followed 
 
 To archive a bot, open its menu and select **Archive bot**. Archived bots leave the roster and stop
 taking messages, but their chats are kept. A message sent from another device that still shows the
-bot is refused with a note that the bot is archived. Open **Archived** at the bottom of the roster and select
-**Restore** to bring one back.
+bot is refused with a note that the bot is archived. Archived bots are listed in **Settings >
+Archived**, where **Restore** brings one back and the delete button removes it right away. Akeru
+deletes an archived bot automatically 7 days after it was archived. Its chats stay in your history.
 
 Pins only change the roster layout. They do not change group membership or settle chats.
 
@@ -231,7 +232,7 @@ Open the bot's settings and choose a provider under **Workspace > Image generati
 
 Open the bot's settings page and select **Delete** under **Danger**, then confirm. On mobile, open
 the chat's settings and select **Delete bot** under **Danger**. Deleting removes the bot from the
-roster. Its chats stay in your history.
+roster. Its chats stay in your history and move to **Settings > Archived**.
 
 Deleting stops anything the bot is doing. Running replies stop, work it handed to other bots or
 received from them is canceled, and a voice call with the bot ends. In a group chat the bot was

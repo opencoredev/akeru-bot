@@ -55,9 +55,12 @@ function CommandDialogPopup({
   className,
   children,
   onBackdropPointerDown,
+  variant,
   ...props
 }: CommandDialogPrimitive.Popup.Props & {
   onBackdropPointerDown?: React.PointerEventHandler<HTMLDivElement>;
+  /** "palette" drops the popup padding so the list runs edge to edge. */
+  variant?: "palette";
 }) {
   return (
     <CommandDialogPortal>
@@ -71,6 +74,7 @@ function CommandDialogPopup({
             // treatment: a translucent palette makes the message underneath
             // read as part of the result list.
             "pointer-events-auto max-h-105 max-w-xl bg-popover text-foreground",
+            variant === "palette" && "p-0",
             className,
           )}
           data-slot="command-dialog-popup"
@@ -167,10 +171,15 @@ function CommandGroup({ className, ...props }: React.ComponentProps<typeof Autoc
 
 function CommandGroupLabel({
   className,
+  variant,
   ...props
-}: React.ComponentProps<typeof AutocompleteGroupLabel>) {
+}: React.ComponentProps<typeof AutocompleteGroupLabel> & { variant?: "palette" }) {
   return (
-    <AutocompleteGroupLabel className={className} data-slot="command-group-label" {...props} />
+    <AutocompleteGroupLabel
+      className={variant === "palette" ? cn("ps-2.25", className) : className}
+      data-slot="command-group-label"
+      {...props}
+    />
   );
 }
 
@@ -178,11 +187,33 @@ function CommandCollection({ ...props }: React.ComponentProps<typeof Autocomplet
   return <AutocompleteCollection data-slot="command-collection" {...props} />;
 }
 
-function CommandItem({ className, ...props }: React.ComponentProps<typeof AutocompleteItem>) {
+const PALETTE_ITEM_CLASSES =
+  "gap-2 hover:bg-transparent hover:text-inherit data-highlighted:bg-transparent data-highlighted:text-inherit data-selected:bg-transparent data-selected:text-inherit [&[data-highlighted][data-selected]]:bg-transparent [&[data-highlighted][data-selected]]:text-inherit";
+
+const COMPOSER_ITEM_CLASSES =
+  "gap-3 rounded-lg px-3 py-2! hover:bg-transparent hover:text-inherit data-highlighted:bg-transparent data-highlighted:text-inherit";
+
+// Items whose highlight the caller drives from its own keyboard state; `-active` marks that row.
+const COMMAND_ITEM_VARIANT_CLASSES = {
+  default: undefined,
+  palette: PALETTE_ITEM_CLASSES,
+  "palette-active": `${PALETTE_ITEM_CLASSES} bg-accent! text-accent-foreground!`,
+  composer: COMPOSER_ITEM_CLASSES,
+  "composer-active": `${COMPOSER_ITEM_CLASSES} bg-accent! text-accent-foreground!`,
+} as const;
+
+function CommandItem({
+  className,
+  variant = "default",
+  ...props
+}: React.ComponentProps<typeof AutocompleteItem> & {
+  variant?: keyof typeof COMMAND_ITEM_VARIANT_CLASSES;
+}) {
   return (
     <AutocompleteItem
       className={cn(
         "py-1.5 data-selected:bg-foreground/[0.06] data-highlighted:bg-foreground/[0.09] data-highlighted:text-foreground [&[data-highlighted][data-selected]]:bg-foreground/[0.09] [&[data-highlighted][data-selected]]:text-foreground",
+        COMMAND_ITEM_VARIANT_CLASSES[variant],
         className,
       )}
       data-slot="command-item"

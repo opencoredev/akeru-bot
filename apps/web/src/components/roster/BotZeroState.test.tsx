@@ -1,4 +1,3 @@
-// @effect-diagnostics nodeBuiltinImport:off - The submit guard reads its source.
 import * as NodeFS from "node:fs";
 
 import { renderToStaticMarkup } from "react-dom/server";
@@ -12,8 +11,11 @@ const testState = vi.hoisted(() => ({
 vi.mock("../../state/environments", () => ({
   usePrimaryEnvironmentId: () => testState.environmentId,
 }));
+
 vi.mock("../../state/bots", () => ({ botEnvironment: { create: "create-bot-atom" } }));
+
 vi.mock("../../state/use-atom-command", () => ({ useAtomCommand: () => testState.createBot }));
+
 vi.mock("../ui/toast", () => ({ toastManager: { add: vi.fn() } }));
 
 import { BotZeroState } from "./BotZeroState";

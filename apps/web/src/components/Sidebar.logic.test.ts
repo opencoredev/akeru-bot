@@ -13,6 +13,7 @@ const localEnvironmentId = EnvironmentId.make("environment-local");
 
 function makeProject(overrides: Partial<Project> = {}): Project {
   const { defaultModelSelection, ...rest } = overrides;
+
   return {
     id: ProjectId.make("project-1"),
     environmentId: localEnvironmentId,
@@ -66,6 +67,7 @@ describe("sortScopedProjectsForSidebar", () => {
   it("keeps identical project ids in different environments separate", () => {
     const remoteEnvironmentId = EnvironmentId.make("environment-remote");
     const sharedProjectId = ProjectId.make("shared-project");
+
     const projects = [
       makeProject({
         environmentId: localEnvironmentId,
@@ -78,6 +80,7 @@ describe("sortScopedProjectsForSidebar", () => {
         title: "Remote project",
       }),
     ];
+
     const threads = [
       makeThread({
         environmentId: localEnvironmentId,
@@ -109,6 +112,7 @@ describe("sortScopedProjectsForSidebar", () => {
         updatedAt: "2026-03-09T10:00:00.000Z",
       }),
     ];
+
     const threads = [
       makeThread({
         id: ThreadId.make("thread-visible"),

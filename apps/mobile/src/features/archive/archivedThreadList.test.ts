@@ -68,11 +68,13 @@ function makeSnapshot(
 describe("buildArchivedThreadGroups", () => {
   it("groups archived threads by project and sorts newest first", () => {
     const project = makeProject({ id: ProjectId.make("project-1"), title: "T3 Code" });
+
     const older = makeThread({
       id: ThreadId.make("thread-older"),
       projectId: project.id,
       title: "Older",
     });
+
     const newer = makeThread({
       archivedAt: "2026-06-03T00:00:00.000Z",
       id: ThreadId.make("thread-newer"),
@@ -95,17 +97,20 @@ describe("buildArchivedThreadGroups", () => {
     const secondEnvironmentId = EnvironmentId.make("environment-2");
     const firstProject = makeProject({ id: ProjectId.make("project-1"), title: "T3 Code" });
     const secondProject = makeProject({ id: ProjectId.make("project-2"), title: "Website" });
+
     const firstThread = makeThread({
       branch: "fix/archive-screen",
       id: ThreadId.make("thread-1"),
       projectId: firstProject.id,
       title: "Build settings route",
     });
+
     const secondThread = makeThread({
       id: ThreadId.make("thread-2"),
       projectId: secondProject.id,
       title: "Unrelated",
     });
+
     const snapshots = [
       makeSnapshot([firstProject], [firstThread]),
       makeSnapshot([secondProject], [secondThread], secondEnvironmentId),
@@ -129,6 +134,7 @@ describe("buildArchivedThreadGroups", () => {
 
   it("ignores non-archived entries returned in a snapshot", () => {
     const project = makeProject({ id: ProjectId.make("project-1"), title: "T3 Code" });
+
     const active = makeThread({
       archivedAt: null,
       id: ThreadId.make("thread-active"),

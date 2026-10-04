@@ -37,6 +37,7 @@ describe("entity memory access", () => {
         botId: BotId.make("bot-1"),
         groupId: null,
       });
+
       const second = yield* resolveAuthorizedMemoryPartitions({
         ...base,
         botId: BotId.make("bot-2"),
@@ -87,6 +88,7 @@ describe("entity memory access", () => {
           groupMemberBotIds: [],
         }),
       );
+
       assert.equal(exit._tag, "Failure");
     }),
   );
@@ -100,6 +102,7 @@ describe("entity memory access", () => {
         respondingBotId: BotId.make("bot-2"),
         groupMemberBotIds: [BotId.make("bot-1"), BotId.make("bot-2")],
       });
+
       const after = yield* Effect.exit(
         resolveAuthorizedMemoryPartitions({
           ...base,
@@ -117,9 +120,11 @@ describe("entity memory access", () => {
 
   it("keeps the workspace partition stable when the project root moves", () => {
     const beforeMove = deriveAkeruWorkspaceId(base.projectId);
+
     const afterMove = deriveAkeruWorkspaceId(
       { ...base, workspaceRoot: "/workspace/two" }.projectId,
     );
+
     assert.equal(beforeMove, afterMove);
     assert.notEqual(beforeMove, deriveAkeruWorkspaceId(ProjectId.make("project-2")));
   });
@@ -129,10 +134,12 @@ describe("entity memory access", () => {
       const legacyWorkspaceId = AkeruMemoryPartitionId.make(
         `workspace:${NodeCrypto.createHash("sha256").update(base.workspaceRoot).digest("hex")}`,
       );
+
       const partitions = yield* resolveMemoryArchivePartitions(
         { ...base, botId: BotId.make("bot-1"), groupId: null },
         "workspace",
       );
+
       assert.deepEqual(partitions, [
         {
           tenantId: base.tenantId,
@@ -153,6 +160,7 @@ describe("entity memory access", () => {
   it.effect("does not authorize legacy workspace memory after a project replaces its owner", () =>
     Effect.gen(function* () {
       const replacementProjectId = ProjectId.make("project-2");
+
       const partitions = yield* resolveMemoryArchivePartitions(
         {
           ...base,

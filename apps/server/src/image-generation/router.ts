@@ -103,14 +103,17 @@ export function imageRoutePlan(input: {
   readonly settings: ImageGenerationSettings;
   readonly botOverride: ImageProviderId | null;
   readonly explicit: ImageProviderId | undefined;
-}): { readonly intended: ImageProviderId | null; readonly candidates: ImageProviderId[] } {
+}): ImageRoutePlanResult {
   if (input.explicit) return { intended: input.explicit, candidates: [input.explicit] };
+
   const ordered = [
     input.botOverride,
     input.settings.defaultProvider,
     ...input.settings.fallbackOrder,
   ].filter((provider): provider is ImageProviderId => provider !== null);
+
   const candidates = [...new Set(ordered)];
+
   return { intended: candidates[0] ?? null, candidates };
 }
 
@@ -150,13 +153,16 @@ export const routeImageRequest = Effect.fn("routeImageRequest")(function* (
   input: ImageRouteInput,
 ): Effect.fn.Return<ImageRouteResult> {
   const { request, settings } = input;
+
   const plan = imageRoutePlan({
     settings,
     botOverride: input.botOverride,
     explicit: request.provider,
   });
+
   const attempts: ImageGenerationAttempt[] = [];
   const parts: ImageRoutePart[] = [];
+
   const adapterRequest = {
     operation: request.operation,
     prompt: request.prompt,
@@ -184,14 +190,18 @@ export const routeImageRequest = Effect.fn("routeImageRequest")(function* (
     input.inputImages.length > 0 && request.allowProvider
       ? plan.candidates.filter((provider) => provider === request.allowProvider)
       : [];
+
   const candidates = [...consented, ...plan.candidates.filter((p) => !consented.includes(p))];
   let lastFailure: { kind: ImageGenerationFailureKind; message: string } | undefined;
   let remainingCount = adapterRequest.count;
+
   for (const provider of candidates) {
     const label = IMAGE_PROVIDER_LABELS[provider];
+
     if (!providerEnabled(settings, provider)) continue;
 
     const availability = input.availability(provider);
+
     if (availability.state === "unavailable") {
       attempts.push({ provider, outcome: availability.kind });
       // An unavailable fallback cannot hide the failure of a provider that ran the request.
@@ -202,13 +212,16 @@ export const routeImageRequest = Effect.fn("routeImageRequest")(function* (
     const adapter = input.adapters[provider];
     const providerRequest = { ...adapterRequest, count: remainingCount };
     const unsupported = unsupportedReason(label, adapter.capabilities, providerRequest);
+
     if (unsupported) {
       attempts.push({ provider, outcome: "unsupported" });
+
       // The intended provider defines the request's capability. An unsupported
       // fallback cannot erase an earlier availability or provider failure.
       if (provider === plan.intended) {
         return { status: "failed", kind: "unsupported", message: unsupported, attempts, parts };
       }
+
       lastFailure ??= { kind: "unsupported", message: unsupported };
       continue;
     }
@@ -221,6 +234,7 @@ export const routeImageRequest = Effect.fn("routeImageRequest")(function* (
       const intendedLabel = plan.intended
         ? IMAGE_PROVIDER_LABELS[plan.intended]
         : "The selected provider";
+
       return {
         status: "needs-consent",
         provider,
@@ -231,6 +245,7 @@ export const routeImageRequest = Effect.fn("routeImageRequest")(function* (
     }
 
     const callCount = provider === "chatgpt" ? remainingCount : 1;
+
     for (let index = 0; index < callCount; index += 1) {
       const outcome = yield* runAdapter(
         adapter,
@@ -242,28 +257,36 @@ export const routeImageRequest = Effect.fn("routeImageRequest")(function* (
           Effect.succeed({ ok: false as const, failure }),
         ),
       );
+
       if (input.onAttempt) {
         yield* input.onAttempt(
           provider,
           outcome.ok ? { ok: true } : { ok: false, failure: outcome.failure },
         );
       }
+
       if (!outcome.ok || outcome.output.images.length === 0) {
         const failure = outcome.ok
           ? new ImageAdapterFailure("provider-failed", `${label} returned no image.`)
           : outcome.failure;
+
         attempts.push({ provider, outcome: failure.kind });
         lastFailure = { kind: failure.kind, message: failure.message };
+
         if (!IMAGE_FALLBACK_FAILURE_KINDS.has(failure.kind)) {
           return { status: "failed", ...lastFailure, attempts, parts };
         }
+
         break;
       }
+
       const output = { ...outcome.output, images: outcome.output.images.slice(0, remainingCount) };
+
       if (input.onOutput) yield* input.onOutput(provider, output, parts.length);
       parts.push({ provider, output });
       attempts.push({ provider, outcome: "completed" });
       remainingCount -= output.images.length;
+
       if (remainingCount === 0) {
         return { status: "completed", provider: parts[0]!.provider, parts, attempts };
       }
@@ -278,3 +301,8 @@ export const routeImageRequest = Effect.fn("routeImageRequest")(function* (
     parts,
   };
 });
+
+type ImageRoutePlanResult = {
+  readonly intended: ImageProviderId | null;
+  readonly candidates: ImageProviderId[];
+};

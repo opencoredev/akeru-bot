@@ -15,15 +15,17 @@ import { IsoDateTime, TrimmedNonEmptyString } from "./baseSchemas.ts";
 
 /** The image provider identity shown to users; distinct from subscription ids. */
 export const ImageProviderId = Schema.Literals(["chatgpt", "grok"]);
+
 export type ImageProviderId = typeof ImageProviderId.Type;
 
 export const IMAGE_PROVIDER_IDS = ["chatgpt", "grok"] as const;
 
 export function isImageProviderId(value: string): value is ImageProviderId {
-  return (IMAGE_PROVIDER_IDS as readonly string[]).includes(value);
+  return IMAGE_PROVIDER_IDS.some((provider) => provider === value);
 }
 
 export const ImageProviderOperation = Schema.Literals(["generate", "edit"]);
+
 export type ImageProviderOperation = typeof ImageProviderOperation.Type;
 
 export const ImageProviderHealth = Schema.Literals([
@@ -38,6 +40,7 @@ export const ImageProviderHealth = Schema.Literals([
   "unsupported",
   "disabled",
 ]);
+
 export type ImageProviderHealth = typeof ImageProviderHealth.Type;
 
 /**
@@ -66,6 +69,7 @@ export const ImageProviderStatus = Schema.Struct({
     }),
   ),
 });
+
 export type ImageProviderStatus = typeof ImageProviderStatus.Type;
 
 /**
@@ -83,6 +87,7 @@ export const ImageGenerationSettings = Schema.Struct({
     Schema.withDecodingDefault(Effect.succeed(["chatgpt", "grok"])),
   ),
 }).pipe(Schema.withDecodingDefault(Effect.succeed({})));
+
 export type ImageGenerationSettings = typeof ImageGenerationSettings.Type;
 
 export const ImageGenerationSettingsPatch = Schema.Struct({
@@ -97,16 +102,19 @@ export const ImageGenerationSettingsPatch = Schema.Struct({
     ),
   ),
 });
+
 export type ImageGenerationSettingsPatch = typeof ImageGenerationSettingsPatch.Type;
 
 export const ImageProviderListResult = Schema.Struct({
   providers: Schema.Array(ImageProviderStatus),
 });
+
 export type ImageProviderListResult = typeof ImageProviderListResult.Type;
 
 export const ImageProviderHealthTestInput = Schema.Struct({
   provider: ImageProviderId,
 });
+
 export type ImageProviderHealthTestInput = typeof ImageProviderHealthTestInput.Type;
 
 export class ImageGenerationError extends Schema.TaggedErrorClass<ImageGenerationError>()(
@@ -129,14 +137,18 @@ export const ImageAspectRatio = Schema.Literals([
   "4:3",
   "3:4",
 ]);
+
 export type ImageAspectRatio = typeof ImageAspectRatio.Type;
 
 /** Provider-neutral quality tier; adapters map it to their own size/quality knobs. */
 export const ImageQuality = Schema.Literals(["standard", "high"]);
+
 export type ImageQuality = typeof ImageQuality.Type;
 
 export const IMAGE_GENERATION_MAX_COUNT = 4;
+
 export const IMAGE_EDIT_MAX_INPUT_IMAGES = 4;
+
 export const IMAGE_PROMPT_MAX_CHARS = 4_000;
 
 /**
@@ -163,13 +175,14 @@ export const ImageGenerationRequest = Schema.Struct({
   provider: Schema.optionalKey(ImageProviderId),
   allowProvider: Schema.optionalKey(ImageProviderId),
 });
+
 export type ImageGenerationRequest = typeof ImageGenerationRequest.Type;
 
 const decodeImageGenerationRequestSync = Schema.decodeUnknownSync(ImageGenerationRequest);
 
 /** Strict decode: unknown option keys are rejected rather than ignored. */
 export function decodeImageGenerationRequest(
-  input: unknown,
+  input: Parameters<typeof decodeImageGenerationRequestSync>[0],
 ):
   | { readonly ok: true; readonly request: ImageGenerationRequest }
   | { readonly ok: false; readonly message: string } {
@@ -180,6 +193,7 @@ export function decodeImageGenerationRequest(
     };
   } catch (error) {
     const detail = error instanceof Error ? error.message : String(error);
+
     return { ok: false, message: `Invalid image request: ${detail.slice(0, 400)}` };
   }
 }
@@ -194,6 +208,7 @@ export const ImageArtifact = Schema.Struct({
   provider: ImageProviderId,
   model: Schema.optionalKey(TrimmedNonEmptyString),
 });
+
 export type ImageArtifact = typeof ImageArtifact.Type;
 
 /**
@@ -210,6 +225,7 @@ export const ImageGenerationFailureKind = Schema.Literals([
   "timeout",
   "cancelled",
 ]);
+
 export type ImageGenerationFailureKind = typeof ImageGenerationFailureKind.Type;
 
 export const IMAGE_FALLBACK_FAILURE_KINDS: ReadonlySet<ImageGenerationFailureKind> = new Set([
@@ -223,6 +239,7 @@ export const ImageGenerationAttempt = Schema.Struct({
   provider: ImageProviderId,
   outcome: Schema.Union([Schema.Literal("completed"), ImageGenerationFailureKind]),
 });
+
 export type ImageGenerationAttempt = typeof ImageGenerationAttempt.Type;
 
 export const ImageGenerationResult = Schema.Union([
@@ -247,4 +264,5 @@ export const ImageGenerationResult = Schema.Union([
     attempts: Schema.Array(ImageGenerationAttempt),
   }),
 ]);
+
 export type ImageGenerationResult = typeof ImageGenerationResult.Type;

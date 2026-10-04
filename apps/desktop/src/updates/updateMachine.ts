@@ -44,6 +44,7 @@ export function reduceDesktopUpdateStateOnCheckStart(
   checkedAt: string,
 ): DesktopUpdateState {
   const hasDownloadedUpdate = state.downloadedVersion !== null;
+
   return {
     ...state,
     status: "checking",
@@ -91,8 +92,10 @@ export function reduceDesktopUpdateStateOnUpdateAvailable(
   releaseNotes: ReadonlyArray<DesktopUpdateReleaseNote> = [],
 ): DesktopUpdateState {
   const isDownloadedVersion = state.downloadedVersion === version;
+
   const nextReleaseNotes =
     isDownloadedVersion && releaseNotes.length === 0 ? state.releaseNotes : releaseNotes;
+
   return {
     ...state,
     status: isDownloadedVersion ? "downloaded" : "available",

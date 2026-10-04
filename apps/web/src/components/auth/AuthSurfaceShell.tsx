@@ -16,7 +16,7 @@ export function AuthSurfaceShell({
 }) {
   return (
     <div className="flex min-h-dvh flex-col items-center justify-center bg-background px-4 py-10 text-foreground sm:px-6">
-      <main className="w-full max-w-[420px]">
+      <main className="w-full max-w-105">
         <p className="mb-4 px-1 text-sm font-medium text-muted-foreground">{APP_DISPLAY_NAME}</p>
         <section className="overflow-hidden rounded-2xl border bg-card text-card-foreground">
           {children}

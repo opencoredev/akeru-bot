@@ -9,6 +9,7 @@ describe("boundConfiguredLocalServerUrls", () => {
       { length: CONFIGURED_LOCAL_SERVER_URLS_MAX_ITEMS + 1 },
       (_, index) => `http://localhost:${3_000 + index}`,
     );
+
     urls.unshift(
       "https://example.com",
       "not a URL",

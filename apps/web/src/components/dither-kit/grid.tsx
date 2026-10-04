@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { useChartPart } from "./chart-context";
 
 export function Grid({
@@ -11,6 +10,7 @@ export function Grid({
   strokeDasharray?: string;
 }) {
   const ctx = useChartPart("Grid");
+
   if (!ctx.ready) return null;
   const { width } = ctx.plot;
 
@@ -21,10 +21,9 @@ export function Grid({
           .ticks(4)
           .map((t) => <line key={`h-${t}`} x1={0} x2={width} y1={ctx.y(t)} y2={ctx.y(t)} />)}
       {vertical &&
-        ctx.data.map((_, i) => (
+        ctx.dataMarks.map(({ index: i, key }) => (
           <line
-            // biome-ignore lint/suspicious/noArrayIndexKey: index is the stable x position
-            key={`v-${i}`}
+            key={key}
             x1={ctx.xCenter(i) ?? 0}
             x2={ctx.xCenter(i) ?? 0}
             y1={0}

@@ -59,6 +59,7 @@ describe("resolveBrowserViewportLayout", () => {
       { width: 600, height: 700 },
       { _tag: "freeform", width: 1440, height: 900 },
     );
+
     expect(layout).toMatchObject({
       canvasWidth: 600,
       canvasHeight: 700,

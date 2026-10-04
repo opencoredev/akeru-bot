@@ -2,7 +2,6 @@ import { WsRpcGroup } from "@akeru/contracts";
 import * as Effect from "effect/Effect";
 import { RpcClient } from "effect/unstable/rpc";
 
-export const makeWsRpcProtocolClient = RpcClient.make(WsRpcGroup);
-type RpcClientFactory = typeof makeWsRpcProtocolClient;
-export type WsRpcProtocolClient =
-  RpcClientFactory extends Effect.Effect<infer Client, any, any> ? Client : never;
+export const wsRpcProtocolClient = RpcClient.make(WsRpcGroup);
+
+export type WsRpcProtocolClient = Effect.Success<typeof wsRpcProtocolClient>;

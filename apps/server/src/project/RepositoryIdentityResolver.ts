@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import type { RepositoryIdentity } from "@akeru/contracts";
 import {
   detectSourceControlProviderFromGitRemoteUrl,
@@ -13,7 +14,9 @@ import * as Layer from "effect/Layer";
 import * as ProcessRunner from "../processRunner.ts";
 
 const DEFAULT_REPOSITORY_IDENTITY_CACHE_CAPACITY = 512;
+
 const DEFAULT_POSITIVE_CACHE_TTL = Duration.minutes(1);
+
 const DEFAULT_NEGATIVE_CACHE_TTL = Duration.minutes(1);
 
 export interface RepositoryIdentityResolverOptions {
@@ -31,17 +34,23 @@ export class RepositoryIdentityResolver extends Context.Service<
 
 function parseRemoteFetchUrls(stdout: string): Map<string, string> {
   const remotes = new Map<string, string>();
+
   for (const line of stdout.split("\n")) {
     const trimmed = line.trim();
+
     if (trimmed.length === 0) continue;
     const match = /^(\S+)\s+(\S+)\s+\((fetch|push)\)$/.exec(trimmed);
+
     if (!match) continue;
     const [, remoteName = "", remoteUrl = "", direction = ""] = match;
+
     if (direction !== "fetch" || remoteName.length === 0 || remoteUrl.length === 0) {
       continue;
     }
+
     remotes.set(remoteName, remoteUrl);
   }
+
   return remotes;
 }
 
@@ -52,6 +61,7 @@ function pickPrimaryRemote(
   // separate product kept for porting and must not replace this repo's identity.
   for (const preferredRemoteName of ["origin", "upstream"] as const) {
     const remoteUrl = remotes.get(preferredRemoteName);
+
     if (remoteUrl) {
       return { remoteName: preferredRemoteName, remoteUrl };
     }
@@ -59,6 +69,7 @@ function pickPrimaryRemote(
 
   const [remoteName, remoteUrl] =
     [...remotes.entries()].toSorted(([left], [right]) => left.localeCompare(right))[0] ?? [];
+
   return remoteName && remoteUrl ? { remoteName, remoteUrl } : null;
 }
 
@@ -102,11 +113,13 @@ const resolveRepositoryIdentityCacheKey = Effect.fn("RepositoryIdentityResolver.
         timeoutBehavior: "timedOutResult",
       })
       .pipe(Effect.option);
-    if (topLevelResult._tag === "None" || topLevelResult.value.code !== 0) {
+
+    if (Predicate.isTagged(topLevelResult, "None") || topLevelResult.value.code !== 0) {
       return null;
     }
 
     const candidate = topLevelResult.value.stdout.trim();
+
     return candidate.length > 0 ? candidate : null;
   },
 );
@@ -117,6 +130,7 @@ const resolveRepositoryIdentityFromCacheKey = Effect.fn(
   cacheKey: string,
 ): Effect.fn.Return<RepositoryIdentity | null, never, ProcessRunner.ProcessRunner> {
   const processRunner = yield* ProcessRunner.ProcessRunner;
+
   const remoteResult = yield* processRunner
     .run({
       command: "git",
@@ -124,11 +138,13 @@ const resolveRepositoryIdentityFromCacheKey = Effect.fn(
       timeoutBehavior: "timedOutResult",
     })
     .pipe(Effect.option);
-  if (remoteResult._tag === "None" || remoteResult.value.code !== 0) {
+
+  if (Predicate.isTagged(remoteResult, "None") || remoteResult.value.code !== 0) {
     return null;
   }
 
   const remote = pickPrimaryRemote(parseRemoteFetchUrls(remoteResult.value.stdout));
+
   return remote ? buildRepositoryIdentity({ ...remote, rootPath: cacheKey }) : null;
 });
 
@@ -174,7 +190,9 @@ export const make = Effect.fn("RepositoryIdentityResolver.make")(function* (
     "RepositoryIdentityResolver.resolve",
   )(function* (cwd) {
     const cacheKey = yield* Cache.get(repositoryRootCache, cwd);
+
     if (cacheKey === null) return null;
+
     return yield* Cache.get(repositoryIdentityCache, cacheKey);
   });
 

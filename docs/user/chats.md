@@ -46,7 +46,7 @@ first, with how long ago each one was active. The chat you are looking at is hig
 chat to open it in place of the newest one. Sending a message there makes it the newest chat again.
 Select the newest chat, or start a **New chat** from the same list, to go back to the bot's usual
 view. **New chat** appears once the open chat has a message. Archived chats stay in **Settings >
-Archived chats**.
+Archived**.
 
 The open chat is remembered for this session only. Reloading the page, or archiving or deleting the
 open chat, returns the bot to its newest chat.
@@ -79,7 +79,7 @@ does not: the bot then opens its next newest chat, or an empty chat if it has no
 
 ## Archived chats
 
-**Settings > Archived chats** lists the chats you archived on this environment, grouped by bot or
+**Settings > Archived** lists the chats you archived on this environment, grouped by bot or
 group, newest first. Select **Unarchive** to bring a chat back, or the delete button to remove it
 for good. An unarchived chat becomes the bot's open chat again when it is the bot's newest chat.
 Work one bot handed to another does not appear here, because it never shows as a chat of its own.

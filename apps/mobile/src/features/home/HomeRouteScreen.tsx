@@ -55,14 +55,17 @@ export function HomeRouteScreen() {
     regenerateThreadTitle,
     unsettleThread,
   } = useThreadListActions();
+
   const pendingTasks = usePendingNewTasks();
   const { openPendingTask, confirmDeletePendingTask } = usePendingTaskListActions();
+
   const environments = useMemo(() => {
     const connectionStateByEnvironmentId = new Map(
       workspaceEnvironments.map(
         (environment) => [environment.environmentId, environment.connectionState] as const,
       ),
     );
+
     return Arr.sort(
       Object.values(savedConnectionsById).map((connection) => ({
         environmentId: connection.environmentId,
@@ -73,14 +76,18 @@ export function HomeRouteScreen() {
       Order.mapInput(Order.String, (environment: { readonly label: string }) => environment.label),
     );
   }, [savedConnectionsById, workspaceEnvironments]);
+
   const availableEnvironmentIds = useMemo(
     () => new Set(environments.map((environment) => environment.environmentId)),
     [environments],
   );
+
   const { options: listOptions, setSelectedEnvironmentId } =
     useHomeListOptions(availableEnvironmentIds);
+
   const selectedEnvironmentId = listOptions.selectedEnvironmentId;
   const [selectedProjectKey, setSelectedProjectKey] = useState<string | null>(null);
+
   const projectFilterOptions = useMemo(
     () =>
       buildHomeProjectScopes({
@@ -93,6 +100,7 @@ export function HomeRouteScreen() {
       })),
     [listOptions.projectGroupingMode, projects, selectedEnvironmentId],
   );
+
   useEffect(() => {
     if (
       selectedProjectKey !== null &&
@@ -181,6 +189,7 @@ export function HomeRouteScreen() {
             const targets = environmentsToRetry(workspaceEnvironments, (environmentId) =>
               appAtomRegistry.get(environmentShell.stateValueAtom(environmentId)),
             );
+
             for (const environmentId of targets) {
               void retryEnvironment(environmentId);
             }

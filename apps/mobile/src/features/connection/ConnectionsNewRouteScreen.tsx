@@ -25,21 +25,25 @@ export function ConnectionsNewRouteScreen({
   route,
 }: StaticScreenProps<ConnectionsNewRouteParams | undefined>) {
   const { t } = useMobileI18n();
+
   const {
     connectionPairingUrl,
     onChangeConnectionPairingUrl,
     onConnectPress,
     pairingConnectionError,
   } = useRemoteConnections();
+
   const navigation = useNavigation();
   const params = route.params ?? {};
   // Deep-link prefill exists for development automation only. A production
   // link must not arrive with attacker-chosen host and token already filled.
   const routePairingUrl = __DEV__ ? (params.pairingUrl?.trim() ?? "") : "";
+
   const shouldAutoConnect =
     __DEV__ &&
     routePairingUrl.length > 0 &&
     (params.autoConnect === "1" || params.autoConnect === "true");
+
   const insets = useSafeAreaInsets();
   const [hostInput, setHostInput] = useState("");
   const [codeInput, setCodeInput] = useState("");
@@ -87,13 +91,16 @@ export function ConnectionsNewRouteScreen({
     if (cameraPermission?.granted) {
       setScannerLocked(false);
       setShowScanner(true);
+
       return;
     }
 
     const permission = await requestCameraPermission();
+
     if (permission.granted) {
       setScannerLocked(false);
       setShowScanner(true);
+
       return;
     }
 
@@ -102,6 +109,7 @@ export function ConnectionsNewRouteScreen({
         t("Camera access needed"),
         t("Allow camera access to scan an environment pairing QR code."),
       );
+
       return;
     }
 
@@ -153,8 +161,10 @@ export function ConnectionsNewRouteScreen({
     async (pairingUrl: string, replaceWithHome: boolean) => {
       setIsSubmitting(true);
       onChangeConnectionPairingUrl(pairingUrl);
+
       try {
         const result = await onConnectPress(pairingUrl);
+
         if (AsyncResult.isSuccess(result)) {
           if (replaceWithHome || !navigation.canGoBack()) {
             navigation.dispatch(StackActions.replace("Home"));

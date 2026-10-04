@@ -5,7 +5,11 @@ import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 import { afterEach, vi } from "vite-plus/test";
 
-import { makeCatalogBackend, makeCatalogStore, migrateLegacyConnectionDatabase } from "./storage";
+import {
+  catalogBackendForDatabase,
+  cachedCatalogStore,
+  migrateLegacyConnectionDatabase,
+} from "./storage";
 
 const emptyCatalog = {
   schemaVersion: 1,
@@ -13,6 +17,7 @@ const emptyCatalog = {
   profiles: [],
   credentials: [],
 } as const;
+
 const decodeCatalog = Schema.decodeUnknownSync(Schema.fromJsonString(ConnectionCatalogDocument));
 
 afterEach(() => {
@@ -20,12 +25,13 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-describe("makeCatalogStore", () => {
+describe("cachedCatalogStore", () => {
   it.effect("quarantines malformed catalogs and starts from an empty document", () =>
     Effect.gen(function* () {
       const writes: string[] = [];
       const quarantined: string[] = [];
-      const store = yield* makeCatalogStore({
+
+      const store = yield* cachedCatalogStore({
         read: Effect.succeed("{not-json"),
         write: (raw) => Effect.sync(() => writes.push(raw)),
         quarantine: (raw) => Effect.sync(() => quarantined.push(raw)),
@@ -44,7 +50,8 @@ describe("makeCatalogStore", () => {
         reason: "remote-unavailable",
         detail: "permission denied",
       });
-      const store = yield* makeCatalogStore({
+
+      const store = yield* cachedCatalogStore({
         read: Effect.fail(failure),
         write: () => Effect.void,
       });
@@ -54,7 +61,7 @@ describe("makeCatalogStore", () => {
   );
 });
 
-describe("makeCatalogBackend", () => {
+describe("catalogBackendForDatabase", () => {
   it.effect("fails writes when desktop secure storage declines the catalog", () =>
     Effect.gen(function* () {
       const setConnectionCatalog = vi.fn().mockResolvedValue(false);
@@ -64,7 +71,7 @@ describe("makeCatalogBackend", () => {
           setConnectionCatalog,
         },
       });
-      const backend = makeCatalogBackend({} as IDBDatabase);
+      const backend = catalogBackendForDatabase({} as IDBDatabase);
 
       const error = yield* backend.write("{}").pipe(Effect.flip);
 
@@ -81,6 +88,7 @@ describe("migrateLegacyConnectionDatabase", () => {
       const fakeIndexedDB = yield* Effect.promise(() =>
         import("fake-indexeddb").then((module) => new module.IDBFactory()),
       );
+
       vi.stubGlobal("indexedDB", fakeIndexedDB);
       vi.stubGlobal(
         "IDBKeyRange",
@@ -89,6 +97,7 @@ describe("migrateLegacyConnectionDatabase", () => {
 
       // Seed the legacy database exactly the way the pre-rebrand client did.
       const legacyOpen = indexedDB.open("t3code:connection-runtime", 4);
+
       const legacy = yield* Effect.promise(
         () =>
           new Promise<IDBDatabase>((resolve, reject) => {
@@ -101,6 +110,7 @@ describe("migrateLegacyConnectionDatabase", () => {
             legacyOpen.addEventListener("error", () => reject(legacyOpen.error));
           }),
       );
+
       yield* Effect.promise(
         () =>
           new Promise<void>((resolve, reject) => {
@@ -117,6 +127,7 @@ describe("migrateLegacyConnectionDatabase", () => {
 
       // Open the new database (empty) the same way the layer does.
       const migratedOpen = indexedDB.open("akeru:connection-runtime", 4);
+
       const migrated = yield* Effect.promise(
         () =>
           new Promise<IDBDatabase>((resolve, reject) => {
@@ -161,6 +172,7 @@ describe("migrateLegacyConnectionDatabase", () => {
       // Legacy database is retired; reopening it yields a fresh empty DB.
       const deletedCheck = indexedDB.open("t3code:connection-runtime", 4);
       let created = false;
+
       const legacyAfter = yield* Effect.promise(
         () =>
           new Promise<IDBDatabase>((resolve, reject) => {
@@ -171,6 +183,7 @@ describe("migrateLegacyConnectionDatabase", () => {
             deletedCheck.addEventListener("error", () => reject(deletedCheck.error));
           }),
       );
+
       expect(created).toBe(true);
       expect(Array.from(legacyAfter.objectStoreNames)).toHaveLength(0);
       legacyAfter.close();
@@ -183,8 +196,10 @@ describe("migrateLegacyConnectionDatabase", () => {
       const fakeIndexedDB = yield* Effect.promise(() =>
         import("fake-indexeddb").then((module) => new module.IDBFactory()),
       );
+
       vi.stubGlobal("indexedDB", fakeIndexedDB);
       const stores = ["catalog", "shell", "thread", "server-config", "vcs-refs"];
+
       const open = (name: string) =>
         Effect.promise(
           () =>
@@ -197,6 +212,7 @@ describe("migrateLegacyConnectionDatabase", () => {
               request.addEventListener("error", () => reject(request.error));
             }),
         );
+
       const change = (database: IDBDatabase, apply: (store: IDBObjectStore) => void) =>
         Effect.promise(
           () =>
@@ -207,6 +223,7 @@ describe("migrateLegacyConnectionDatabase", () => {
               apply(tx.objectStore("shell"));
             }),
         );
+
       const seedLegacy = Effect.gen(function* () {
         const legacy = yield* open("t3code:connection-runtime");
         yield* change(legacy, (store) => store.put("legacy-shell", "env-1"));
@@ -229,10 +246,12 @@ describe("migrateLegacyConnectionDatabase", () => {
               .transaction("shell", "readonly")
               .objectStore("shell")
               .get("env-1");
+
             request.addEventListener("success", () => resolve(request.result));
             request.addEventListener("error", () => reject(request.error));
           }),
       );
+
       expect(restored).toBeUndefined();
       migrated.close();
     }),

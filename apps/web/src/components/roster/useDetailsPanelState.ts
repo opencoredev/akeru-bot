@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 import { useEffect, useState, type TransitionEvent } from "react";
 
 // Longest width transition (duration-slow) plus slack. A hidden aside never
@@ -9,7 +10,7 @@ export type DetailsPanelState = "opening" | "open" | "closing" | "closed";
 function prefersReducedMotion(): boolean {
   return (
     typeof window !== "undefined" &&
-    typeof window.matchMedia === "function" &&
+    Predicate.isFunction(window.matchMedia) &&
     window.matchMedia("(prefers-reduced-motion: reduce)").matches
   );
 }
@@ -26,11 +27,13 @@ export function useDetailsPanelState(open: boolean) {
   const [lastOpen, setLastOpen] = useState(open);
   const [moving, setMoving] = useState(false);
   const [toggled, setToggled] = useState(false);
+
   if (open !== lastOpen) {
     setLastOpen(open);
     setToggled(true);
     setMoving(!prefersReducedMotion());
   }
+
   const state: DetailsPanelState = open
     ? moving
       ? "opening"
@@ -38,14 +41,18 @@ export function useDetailsPanelState(open: boolean) {
     : moving
       ? "closing"
       : "closed";
+
   useEffect(() => {
     if (!moving) return;
     const timer = window.setTimeout(() => setMoving(false), SETTLE_FALLBACK_MS);
+
     return () => window.clearTimeout(timer);
   }, [moving, open]);
+
   const onTransitionEnd = (event: TransitionEvent<HTMLElement>) => {
     if (event.target !== event.currentTarget || event.propertyName !== "width") return;
     setMoving(false);
   };
+
   return { state, toggled, onTransitionEnd };
 }

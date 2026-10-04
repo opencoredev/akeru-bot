@@ -1,4 +1,3 @@
-// @effect-diagnostics nodeBuiltinImport:off - The focus contract reads its source.
 import * as NodeFS from "node:fs";
 
 import { renderToStaticMarkup } from "react-dom/server";
@@ -41,6 +40,7 @@ describe("RoutinePanel focus targets", () => {
     const markup = renderToStaticMarkup(
       <RoutinePanel botName="Akeru" status="ready" routines={[routine]} />,
     );
+
     expect(markup).toContain('data-routine-row="routine-1"');
   });
 
@@ -55,6 +55,7 @@ describe("RoutinePanel focus targets", () => {
         onDeleteRequest={() => undefined}
       />,
     );
+
     expect(markup).toContain("data-routine-back");
   });
 

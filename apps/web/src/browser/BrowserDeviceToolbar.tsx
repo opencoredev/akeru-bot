@@ -1,5 +1,9 @@
 "use client";
 
+import { ViewportSetting } from "./browserViewportSetting";
+
+import { hasTag } from "~/lib/taggedUnion";
+
 import {
   PREVIEW_VIEWPORT_MAX_AREA,
   PREVIEW_VIEWPORT_MAX_DIMENSION,
@@ -29,6 +33,7 @@ import { commitViewportAndAspectRatio } from "./browserDeviceToolbarState";
 import { ScreenRotationIcon } from "./ScreenRotationIcon";
 
 const RESPONSIVE_VALUE = "responsive";
+
 const SELECT_ITEMS = [
   { value: RESPONSIVE_VALUE, label: "Responsive" },
   ...PREVIEW_VIEWPORT_PRESETS.map((preset) => ({ value: preset.id, label: preset.label })),
@@ -50,21 +55,26 @@ export function BrowserDeviceToolbar({
   onChange,
 }: Props) {
   const [pending, setPending] = useState(false);
+
   const [customSize, setCustomSize] = useState<{
     readonly width: string;
     readonly height: string;
   } | null>(null);
+
   const presentedSize = customSize ?? {
     width: String(setting.width),
     height: String(setting.height),
   };
+
   const selectedValue =
-    setting._tag === "preset" &&
+    hasTag(setting, "preset") &&
     PREVIEW_VIEWPORT_PRESETS.some((preset) => preset.id === setting.presetId)
       ? setting.presetId
       : RESPONSIVE_VALUE;
+
   const customWidth = Number(presentedSize.width);
   const customHeight = Number(presentedSize.height);
+
   const customValid =
     Number.isInteger(customWidth) &&
     Number.isInteger(customHeight) &&
@@ -88,9 +98,11 @@ export function BrowserDeviceToolbar({
   const applyCustomSize = () => {
     if (!customValid || (customWidth === setting.width && customHeight === setting.height)) {
       setCustomSize(null);
+
       return;
     }
-    apply({ _tag: "freeform", width: customWidth, height: customHeight });
+
+    apply(ViewportSetting.freeform({ width: customWidth, height: customHeight }));
   };
 
   const updateCustomDimension = (axis: "width" | "height", value: string) => {
@@ -99,7 +111,9 @@ export function BrowserDeviceToolbar({
         width: axis === "width" ? value : (current?.width ?? String(setting.width)),
         height: axis === "height" ? value : (current?.height ?? String(setting.height)),
       };
+
       const numeric = Number(value);
+
       if (
         aspectRatio === null ||
         !Number.isInteger(numeric) ||
@@ -108,6 +122,7 @@ export function BrowserDeviceToolbar({
       ) {
         return next;
       }
+
       const resized = resizeFreeformViewport(
         setting,
         axis === "width"
@@ -117,18 +132,23 @@ export function BrowserDeviceToolbar({
         axis === "width" ? "east" : "south",
         aspectRatio,
       );
+
       return { width: String(resized.width), height: String(resized.height) };
     });
   };
 
   const selectViewport = (value: string | null) => {
     if (!value) return;
+
     if (value === RESPONSIVE_VALUE) {
-      if (setting._tag === "freeform") return;
-      apply({ _tag: "freeform", width: setting.width, height: setting.height });
+      if (hasTag(setting, "freeform")) return;
+      apply(ViewportSetting.freeform({ width: setting.width, height: setting.height }));
+
       return;
     }
+
     const preset = PREVIEW_VIEWPORT_PRESETS.find((candidate) => candidate.id === value);
+
     if (!preset) return;
     apply(
       resolvePreviewViewport({ mode: "preset", preset: preset.id }),
@@ -139,9 +159,11 @@ export function BrowserDeviceToolbar({
   const rotate = () => {
     const hasCustomSize =
       customValid && (customWidth !== setting.width || customHeight !== setting.height);
+
     const source = hasCustomSize
-      ? ({ _tag: "freeform", width: customWidth, height: customHeight } as const)
+      ? ViewportSetting.freeform({ width: customWidth, height: customHeight })
       : setting;
+
     apply(
       { ...source, width: source.height, height: source.width },
       aspectRatio === null ? null : 1 / aspectRatio,
@@ -154,15 +176,20 @@ export function BrowserDeviceToolbar({
 
   return (
     <div
-      className="sticky left-0 top-0 z-50 flex items-center gap-0.5 overflow-x-auto border-b border-border/70 bg-background/95 px-1.5 shadow-xs backdrop-blur-md [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-      style={{ width, height: BROWSER_DEVICE_TOOLBAR_HEIGHT }}
+      className="sticky left-0 top-0 z-50 flex h-(--toolbar-height) w-(--toolbar-width) items-center gap-0.5 overflow-x-auto border-b border-border/70 bg-background/95 px-1.5 shadow-xs backdrop-blur-md scrollbar-none [&::-webkit-scrollbar]:hidden"
+      style={{
+        "--toolbar-width": `${width}px`,
+        "--toolbar-height": `${BROWSER_DEVICE_TOOLBAR_HEIGHT}px`,
+      }}
       role="toolbar"
       aria-label="Browser device toolbar"
       data-browser-device-toolbar
       onBlur={(event) => {
         const nextTarget = event.relatedTarget;
+
         if (nextTarget instanceof Node && event.currentTarget.contains(nextTarget)) return;
         const eventTarget = event.target;
+
         if (
           (nextTarget instanceof HTMLElement &&
             nextTarget.closest('[data-slot="select-positioner"]')) ||
@@ -171,11 +198,12 @@ export function BrowserDeviceToolbar({
         ) {
           return;
         }
+
         applyCustomSize();
       }}
     >
       {width >= 560 ? (
-        <span className="mr-0.5 shrink-0 text-[11px] font-medium text-muted-foreground">
+        <span className="mr-0.5 shrink-0 text-11px font-medium text-muted-foreground">
           Dimensions
         </span>
       ) : null}
@@ -189,10 +217,8 @@ export function BrowserDeviceToolbar({
         <SelectTrigger
           variant="ghost"
           size="xs"
-          className={cn(
-            "shrink-0 justify-between px-1.5 font-medium",
-            width >= 440 ? "w-36" : "w-24",
-          )}
+          presentation="device-toolbar"
+          className={cn("shrink-0 justify-between", width >= 440 ? "w-36" : "w-24")}
           aria-label="Browser device preset"
         >
           <SelectValue />
@@ -244,10 +270,8 @@ export function BrowserDeviceToolbar({
           onChange={(event) => updateCustomDimension("width", event.target.value)}
           aria-label="Viewport width"
           aria-invalid={!customValid}
-          className={cn(
-            "h-6 rounded-md text-center tabular-nums [&_[data-slot=input]]:h-full [&_[data-slot=input]]:px-1 [&_[data-slot=input]]:text-xs [&_[data-slot=input]]:leading-none [&_[data-slot=input]::-webkit-inner-spin-button]:appearance-none [&_[data-slot=input]]:[appearance:textfield]",
-            width >= 360 ? "w-14" : "w-11",
-          )}
+          variant="viewport-dimension"
+          className={width >= 360 ? "w-14" : "w-11"}
         />
         <span className="text-xs text-muted-foreground">×</span>
         <Input
@@ -271,10 +295,8 @@ export function BrowserDeviceToolbar({
           onChange={(event) => updateCustomDimension("height", event.target.value)}
           aria-label="Viewport height"
           aria-invalid={!customValid}
-          className={cn(
-            "h-6 rounded-md text-center tabular-nums [&_[data-slot=input]]:h-full [&_[data-slot=input]]:px-1 [&_[data-slot=input]]:text-xs [&_[data-slot=input]]:leading-none [&_[data-slot=input]::-webkit-inner-spin-button]:appearance-none [&_[data-slot=input]]:[appearance:textfield]",
-            width >= 360 ? "w-14" : "w-11",
-          )}
+          variant="viewport-dimension"
+          className={width >= 360 ? "w-14" : "w-11"}
         />
       </form>
 
@@ -289,7 +311,7 @@ export function BrowserDeviceToolbar({
                 aspectRatio === null ? "Lock viewport aspect ratio" : "Unlock viewport aspect ratio"
               }
               aria-pressed={aspectRatio !== null}
-              className={cn(aspectRatio !== null && "bg-accent text-foreground")}
+              presentation={aspectRatio !== null ? "toolbar-toggle-on" : undefined}
               disabled={pending || !customValid}
               onPointerDown={(event) => event.preventDefault()}
               onClick={toggleAspectRatio}
@@ -321,10 +343,11 @@ export function BrowserDeviceToolbar({
         size="icon-xs"
         type="button"
         aria-label="Close device toolbar"
-        className="sticky right-0 ml-auto bg-background/95"
+        presentation="toolbar-sticky"
+        className="sticky right-0 ml-auto"
         disabled={pending}
         onClick={() => {
-          apply({ _tag: "fill" }, null);
+          apply(ViewportSetting.fill(), null);
         }}
       >
         <X />

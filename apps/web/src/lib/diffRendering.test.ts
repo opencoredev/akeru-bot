@@ -58,7 +58,9 @@ describe("getRenderablePatch", () => {
     const parsed = getRenderablePatch(patch, "review", {
       compactPartialHunkOffsets: true,
     });
+
     expect(parsed?.kind).toBe("files");
+
     if (parsed?.kind !== "files") return;
 
     const file = parsed.files[0];
@@ -83,6 +85,7 @@ describe("getRenderablePatch", () => {
 
     const parsed = getRenderablePatch(patch, "checkpoint");
     expect(parsed?.kind).toBe("files");
+
     if (parsed?.kind !== "files") return;
     expect(parsed.files[0]?.hunks[0]?.unifiedLineStart).toBe(47);
   });
@@ -98,12 +101,15 @@ describe("buildFileDiffRenderKey", () => {
       "-before",
       "+after",
     ].join("\n");
+
     const parsed = getRenderablePatch(patch, "hydrated-key");
     expect(parsed?.kind).toBe("files");
+
     if (parsed?.kind !== "files") return;
 
     const file = parsed.files[0];
     expect(file).toBeDefined();
+
     if (!file) return;
     const key = buildFileDiffRenderKey(file);
     file.cacheKey = `${file.cacheKey}:hydrated`;
@@ -136,6 +142,7 @@ describe("getDiffLineStat", () => {
 
     const parsed = getRenderablePatch(patch);
     expect(parsed?.kind).toBe("files");
+
     if (parsed?.kind !== "files") return;
 
     expect(getDiffLineStat(parsed.files)).toEqual({ additions: 3, deletions: 2 });

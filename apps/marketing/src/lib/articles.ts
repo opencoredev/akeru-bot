@@ -15,7 +15,9 @@ export interface Article {
 
 const bot = (name: string) => {
   const match = HERO_BOTS.find((candidate) => candidate.name === name);
+
   if (!match) throw new Error(`Unknown hero bot: ${name}`);
+
   return match;
 };
 

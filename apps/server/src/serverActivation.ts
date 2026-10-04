@@ -14,10 +14,13 @@ export const forkParked = <A, E, R>(
 ): Effect.Effect<void, never, Scope.Scope | R> =>
   Effect.gen(function* () {
     const activation = yield* ServerActivation;
+
     if (activation === undefined) {
       yield* Effect.forkScoped(effect);
+
       return;
     }
+
     const parked = yield* Deferred.make<void>();
     yield* Effect.forkScoped(
       Deferred.succeed(parked, undefined).pipe(Effect.andThen(activation), Effect.andThen(effect)),

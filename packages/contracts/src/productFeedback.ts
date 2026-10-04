@@ -3,8 +3,11 @@ import * as Schema from "effect/Schema";
 import { TrimmedNonEmptyString, TrimmedString } from "./baseSchemas.ts";
 
 export const PRODUCT_FEEDBACK_BODY_MAX_BYTES = 16_384;
+
 export const PRODUCT_FEEDBACK_TEXT_MAX_CHARS = 4_000;
+
 export const PRODUCT_FEEDBACK_ELEMENT_LABEL_MAX_CHARS = 120;
+
 export const AKERU_PRODUCT_FEEDBACK_TOOL_NAME = "akeru_product_feedback";
 
 const ShortText = TrimmedNonEmptyString.check(Schema.isMaxLength(128));
@@ -24,12 +27,14 @@ export const ProductFeedbackElement = Schema.Struct({
     TrimmedNonEmptyString.check(Schema.isMaxLength(PRODUCT_FEEDBACK_ELEMENT_LABEL_MAX_CHARS)),
   ),
 });
+
 export type ProductFeedbackElement = typeof ProductFeedbackElement.Type;
 
 /** Editable fields that an agent may propose. No network or host metadata is accepted here. */
 export const ProductFeedbackToolDraft = Schema.Struct({
   feedback: TrimmedNonEmptyString.check(Schema.isMaxLength(PRODUCT_FEEDBACK_TEXT_MAX_CHARS)),
 });
+
 export type ProductFeedbackToolDraft = typeof ProductFeedbackToolDraft.Type;
 
 export const ProductFeedbackSubmission = Schema.Struct({
@@ -44,6 +49,7 @@ export const ProductFeedbackSubmission = Schema.Struct({
   turnstileToken: Schema.optionalKey(TrimmedNonEmptyString.check(Schema.isMaxLength(2_048))),
   website: TrimmedString.check(Schema.isMaxLength(0)),
 });
+
 export type ProductFeedbackSubmission = typeof ProductFeedbackSubmission.Type;
 
 export const StoredProductFeedbackSubmission = Schema.Struct({
@@ -51,12 +57,14 @@ export const StoredProductFeedbackSubmission = Schema.Struct({
   feedback: ProductFeedbackSubmission.fields.feedback,
   element: ProductFeedbackSubmission.fields.element,
 });
+
 export type StoredProductFeedbackSubmission = typeof StoredProductFeedbackSubmission.Type;
 
 export const ProductFeedbackReceipt = Schema.Struct({
   feedbackId: TrimmedNonEmptyString.check(Schema.isMaxLength(64)),
   receivedAt: TrimmedNonEmptyString.check(Schema.isMaxLength(64)),
 });
+
 export type ProductFeedbackReceipt = typeof ProductFeedbackReceipt.Type;
 
 export const ProductFeedbackRejectionReason = Schema.Literals([
@@ -71,6 +79,7 @@ export const ProductFeedbackRejectionReason = Schema.Literals([
   "disabled",
   "internal",
 ]);
+
 export type ProductFeedbackRejectionReason = typeof ProductFeedbackRejectionReason.Type;
 
 export const ProductFeedbackRejection = Schema.Struct({
@@ -79,4 +88,5 @@ export const ProductFeedbackRejection = Schema.Struct({
   retryAfterSeconds: Schema.optionalKey(Schema.Int.check(Schema.isGreaterThanOrEqualTo(1))),
   challengeSiteKey: Schema.optionalKey(TrimmedNonEmptyString.check(Schema.isMaxLength(128))),
 });
+
 export type ProductFeedbackRejection = typeof ProductFeedbackRejection.Type;

@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import * as NodeV8 from "node:v8";
 
 import {
@@ -19,10 +20,12 @@ import { PersistenceDecodeError } from "../Errors.ts";
 import { OrchestrationEventStore } from "../Services/OrchestrationEventStore.ts";
 import { OrchestrationEventStoreLive } from "./OrchestrationEventStore.ts";
 import { SqlitePersistenceMemory } from "./Sqlite.ts";
+
 const isPersistenceDecodeError = Schema.is(PersistenceDecodeError);
 
 function messageEvent(threadId: ThreadId, id: string): Omit<OrchestrationEvent, "sequence"> {
   const now = "2026-01-01T00:00:00.000Z";
+
   return {
     type: "thread.message-sent",
     eventId: EventId.make(id),
@@ -90,13 +93,15 @@ layer("OrchestrationEventStore", (it) => {
         FROM orchestration_events
         WHERE event_id = ${appended.eventId}
       `;
+
       assert.equal(storedRows.length, 1);
-      assert.equal(typeof storedRows[0]?.payloadJson, "string");
-      assert.equal(typeof storedRows[0]?.metadataJson, "string");
+      assert.equal(Predicate.isString(storedRows[0]?.payloadJson), true);
+      assert.equal(Predicate.isString(storedRows[0]?.metadataJson), true);
 
       const replayed = yield* Stream.runCollect(eventStore.readFromSequence(0, 10)).pipe(
         Effect.map((chunk) => Array.from(chunk)),
       );
+
       assert.equal(replayed.length, 1);
       assert.equal(replayed[0]?.type, "project.created");
       assert.equal(replayed[0]?.metadata.adapterKey, "codex");
@@ -144,8 +149,10 @@ layer("OrchestrationEventStore", (it) => {
       const replayResult = yield* Effect.result(
         Stream.runCollect(eventStore.readFromSequence(0, 10)),
       );
+
       assert.equal(replayResult._tag, "Failure");
-      if (replayResult._tag === "Failure") {
+
+      if (Predicate.isTagged(replayResult, "Failure")) {
         assert.ok(isPersistenceDecodeError(replayResult.failure));
         assert.ok(
           replayResult.failure.operation.includes(
@@ -153,6 +160,7 @@ layer("OrchestrationEventStore", (it) => {
           ),
         );
       }
+
       const scopedResult = yield* eventStore
         .readAggregateRange({
           aggregateKind: "project",
@@ -161,8 +169,10 @@ layer("OrchestrationEventStore", (it) => {
           toSequenceInclusive: invalidRows[0]!.sequence,
         })
         .pipe(Stream.runCollect, Effect.result);
+
       assert.equal(scopedResult._tag, "Failure");
-      if (scopedResult._tag === "Failure") {
+
+      if (Predicate.isTagged(scopedResult, "Failure")) {
         assert.ok(isPersistenceDecodeError(scopedResult.failure));
         assert.ok(
           scopedResult.failure.operation.includes(
@@ -195,6 +205,7 @@ layer("OrchestrationEventStore", (it) => {
       const events = yield* store
         .readFromSequence(first.sequence - 1, last.sequence - first.sequence + 1, last.sequence)
         .pipe(Stream.runCollect);
+
       assert.deepEqual(
         events.map((event) => event.sequence),
         [first.sequence, last.sequence],
@@ -208,9 +219,11 @@ layer("OrchestrationEventStore", (it) => {
       const sql = yield* SqlClient.SqlClient;
       const threadId = ThreadId.make("shared-stream-id");
       const first = yield* store.append(messageEvent(threadId, "scoped-first"));
+
       const pruned = yield* store.append(
         messageEvent(ThreadId.make("pruned-thread"), "pruned-event"),
       );
+
       const second = yield* store.append(messageEvent(threadId, "scoped-second"));
       // The same stream ID in a different aggregate is not part of this thread.
       // Its invalid JSON must never reach the event decoder.
@@ -239,6 +252,7 @@ layer("OrchestrationEventStore", (it) => {
           limit: 100,
         })
         .pipe(Stream.runCollect);
+
       assert.deepEqual(
         events.map((event) => event.sequence),
         [second.sequence, last.sequence],
@@ -250,6 +264,7 @@ layer("OrchestrationEventStore", (it) => {
     Effect.gen(function* () {
       const store = yield* OrchestrationEventStore;
       const sql = yield* SqlClient.SqlClient;
+
       const rows = yield* sql<{ readonly sequence: number }>`
         INSERT INTO orchestration_events (
           event_id, aggregate_kind, stream_id, stream_version, event_type, occurred_at,
@@ -269,12 +284,14 @@ layer("OrchestrationEventStore", (it) => {
             '2026-01-01T00:00:00.000Z', 'provider', printf('%.*c', 2000, 'x'), '{}')
         RETURNING sequence
       `;
+
       const range = {
         aggregateKind: "thread" as const,
         aggregateId: "stats-thread",
         fromSequenceExclusive: 0,
         toSequenceInclusive: rows.at(-1)!.sequence,
       };
+
       assert.deepEqual(yield* store.getAggregateReplayStats({ ...range, maxEvents: 2 }), {
         eventCount: 3,
         payloadBytes: 33,
@@ -304,12 +321,15 @@ layer("OrchestrationEventStore", (it) => {
     Effect.gen(function* () {
       const store = yield* OrchestrationEventStore;
       const threadId = ThreadId.make("paged-thread");
+
       const persisted = yield* Effect.forEach(
         Array.from({ length: 502 }, (_, index) => index),
         (index) => store.append(messageEvent(threadId, `paged-${index}`)),
       );
+
       const head = persisted.at(-1)!.sequence;
       let appendedDuringReplay = false;
+
       const replayed = yield* store
         .readAggregateRange({
           aggregateKind: "thread",
@@ -322,21 +342,25 @@ layer("OrchestrationEventStore", (it) => {
           Stream.tap(() => {
             if (appendedDuringReplay) return Effect.void;
             appendedDuringReplay = true;
+
             return store.append(messageEvent(threadId, "appended-during-replay"));
           }),
           Stream.runCollect,
         );
+
       assert.deepEqual(
         replayed.map((event) => event.sequence),
         persisted.map((event) => event.sequence),
       );
       const limited = store.readFromSequence(persisted[0]!.sequence, 501.9);
+
       for (let run = 0; run < 2; run++) {
         assert.deepEqual(
           (yield* Stream.runCollect(limited)).map((event) => event.sequence),
           persisted.slice(1).map((event) => event.sequence),
         );
       }
+
       assert.deepEqual(yield* Stream.runCollect(store.readFromSequence(0, -1)), []);
     }),
   );
@@ -352,9 +376,17 @@ for (const reader of ["all", "aggregate"] as const) {
         (index) => store.append(messageEvent(threadId, `retention-${reader}-${index}`)),
         { discard: true },
       );
-      // oxlint-disable-next-line typescript/no-extraneous-class -- Identifies page markers for V8's heap query.
-      class ReplayPage {}
+
+      class ReplayPage {
+        readonly sequence: number;
+
+        constructor(sequence: number) {
+          this.sequence = sequence;
+        }
+      }
+
       let count = 0;
+
       const replay =
         reader === "all"
           ? store.readAll()
@@ -365,14 +397,17 @@ for (const reader of ["all", "aggregate"] as const) {
               toSequenceInclusive: 1_501,
               limit: 1_501,
             });
+
       yield* Stream.runForEach(replay, (event) =>
         Effect.sync(() => {
           assert.equal(event.sequence, count + 1);
+
           if (count % 500 === 0) {
             // Count live page markers after full GC, without timing or heap-size thresholds.
-            Object.assign(event, { replayPage: new ReplayPage() });
+            Object.assign(event, { replayPage: new ReplayPage(event.sequence) });
             assert.isAtMost(NodeV8.queryObjects(ReplayPage, { format: "count" }), 1);
           }
+
           count++;
         }),
       );

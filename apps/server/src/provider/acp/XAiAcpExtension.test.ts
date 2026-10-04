@@ -1,4 +1,3 @@
-// @effect-diagnostics nodeBuiltinImport:off
 import * as NodePath from "node:path";
 import * as NodeURL from "node:url";
 
@@ -10,14 +9,15 @@ import { describe, expect } from "vite-plus/test";
 
 import {
   extractXAiAskUserQuestions,
-  makeXAiAskUserQuestionCancelledResponse,
-  makeXAiAskUserQuestionResponse,
+  xAiAskUserQuestionCancelledResponse,
+  xAiAskUserQuestionResponse,
   makeXAiPromptCompletionRuntime,
   XAiAskUserQuestionRequest,
 } from "./XAiAcpExtension.ts";
 import * as AcpSessionRuntime from "./AcpSessionRuntime.ts";
 
 const __dirname = NodePath.dirname(NodeURL.fileURLToPath(import.meta.url));
+
 const mockAgentPath = NodePath.join(__dirname, "../../../scripts/acp-mock-agent.ts");
 
 const makePromptCompletionRuntime = (env: NodeJS.ProcessEnv) =>
@@ -32,6 +32,7 @@ const makePromptCompletionRuntime = (env: NodeJS.ProcessEnv) =>
       clientInfo: { name: "t3-test", version: "0.0.0" },
       authMethodId: "test",
     });
+
     return yield* makeXAiPromptCompletionRuntime(runtime);
   });
 
@@ -85,6 +86,7 @@ describe("XAiAcpExtension", () => {
         ],
       },
     };
+
     const decoded = decodeXAiAskUserQuestionRequest(payload);
     const questions = extractXAiAskUserQuestions(decoded);
 
@@ -136,7 +138,7 @@ describe("XAiAcpExtension", () => {
   });
 
   it("maps UI question ids back to xAI question text in accepted responses", () => {
-    const response = makeXAiAskUserQuestionResponse(
+    const response = xAiAskUserQuestionResponse(
       {
         sessionId: "session-1",
         toolCallId: "tool-call-1",
@@ -164,7 +166,7 @@ describe("XAiAcpExtension", () => {
   });
 
   it("orders accepted answers by the original xAI question order", () => {
-    const response = makeXAiAskUserQuestionResponse(
+    const response = xAiAskUserQuestionResponse(
       {
         sessionId: "session-1",
         toolCallId: "tool-call-1",
@@ -199,7 +201,7 @@ describe("XAiAcpExtension", () => {
   });
 
   it("encodes typed custom answers as xAI Other annotations", () => {
-    const response = makeXAiAskUserQuestionResponse(
+    const response = xAiAskUserQuestionResponse(
       {
         method: "x.ai/ask_user_question",
         params: {
@@ -234,13 +236,13 @@ describe("XAiAcpExtension", () => {
   });
 
   it("encodes interrupted dialogs as xAI cancelled responses", () => {
-    expect(makeXAiAskUserQuestionCancelledResponse()).toEqual({
+    expect(xAiAskUserQuestionCancelledResponse()).toEqual({
       outcome: "cancelled",
     });
   });
 
   it("does not echo preview annotations for multi-select answers", () => {
-    const response = makeXAiAskUserQuestionResponse(
+    const response = xAiAskUserQuestionResponse(
       {
         sessionId: "session-1",
         toolCallId: "tool-call-1",
@@ -280,14 +282,16 @@ describe("XAiAcpExtension", () => {
       const runtime = yield* makePromptCompletionRuntime({
         T3_ACP_EMIT_XAI_PROMPT_COMPLETE_THEN_HANG: "1",
       });
+
       yield* runtime.start();
 
       const promptResult = yield* runtime.prompt({
         prompt: [{ type: "text", text: "hi" }],
       });
+
       const promptId = promptResult._meta?.promptId;
 
-      expect(typeof promptId).toBe("string");
+      expect(promptId).toBeTypeOf("string");
       expect(promptResult).toMatchObject({
         stopReason: "end_turn",
         _meta: {
@@ -304,11 +308,13 @@ describe("XAiAcpExtension", () => {
       const runtime = yield* makePromptCompletionRuntime({
         T3_ACP_EMIT_STALE_XAI_PROMPT_COMPLETE_BEFORE_SECOND_HANG: "1",
       });
+
       yield* runtime.start();
 
       const firstPromptResult = yield* runtime.prompt({
         prompt: [{ type: "text", text: "first" }],
       });
+
       expect(firstPromptResult).toMatchObject({
         stopReason: "end_turn",
         _meta: { promptId: "mock-stale-xai-prompt-1" },
@@ -317,8 +323,9 @@ describe("XAiAcpExtension", () => {
       const secondPromptResult = yield* runtime.prompt({
         prompt: [{ type: "text", text: "second" }],
       });
+
       const secondPromptId = secondPromptResult._meta?.promptId;
-      expect(typeof secondPromptId).toBe("string");
+      expect(secondPromptId).toBeTypeOf("string");
       expect(secondPromptId).not.toBe("mock-stale-xai-prompt-1");
       expect(secondPromptResult).toMatchObject({
         stopReason: "end_turn",

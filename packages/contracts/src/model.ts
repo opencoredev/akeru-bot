@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 import * as SchemaTransformation from "effect/SchemaTransformation";
@@ -5,6 +6,7 @@ import { TrimmedNonEmptyString } from "./baseSchemas.ts";
 import { ProviderDriverKind } from "./providerInstance.ts";
 
 export const ProviderOptionDescriptorType = Schema.Literals(["select", "boolean"]);
+
 export type ProviderOptionDescriptorType = typeof ProviderOptionDescriptorType.Type;
 
 export const ProviderOptionChoice = Schema.Struct({
@@ -13,6 +15,7 @@ export const ProviderOptionChoice = Schema.Struct({
   description: Schema.optional(TrimmedNonEmptyString),
   isDefault: Schema.optional(Schema.Boolean),
 });
+
 export type ProviderOptionChoice = typeof ProviderOptionChoice.Type;
 
 const ProviderOptionDescriptorBase = {
@@ -28,6 +31,7 @@ export const SelectProviderOptionDescriptor = Schema.Struct({
   currentValue: Schema.optional(TrimmedNonEmptyString),
   promptInjectedValues: Schema.optional(Schema.Array(TrimmedNonEmptyString)),
 });
+
 export type SelectProviderOptionDescriptor = typeof SelectProviderOptionDescriptor.Type;
 
 export const BooleanProviderOptionDescriptor = Schema.Struct({
@@ -35,21 +39,25 @@ export const BooleanProviderOptionDescriptor = Schema.Struct({
   type: Schema.Literal("boolean"),
   currentValue: Schema.optional(Schema.Boolean),
 });
+
 export type BooleanProviderOptionDescriptor = typeof BooleanProviderOptionDescriptor.Type;
 
 export const ProviderOptionDescriptor = Schema.Union([
   SelectProviderOptionDescriptor,
   BooleanProviderOptionDescriptor,
 ]);
+
 export type ProviderOptionDescriptor = typeof ProviderOptionDescriptor.Type;
 
 export const ProviderOptionSelectionValue = Schema.Union([TrimmedNonEmptyString, Schema.Boolean]);
+
 export type ProviderOptionSelectionValue = typeof ProviderOptionSelectionValue.Type;
 
 export const ProviderOptionSelection = Schema.Struct({
   id: TrimmedNonEmptyString,
   value: ProviderOptionSelectionValue,
 });
+
 export type ProviderOptionSelection = typeof ProviderOptionSelection.Type;
 
 /**
@@ -91,50 +99,64 @@ export const ProviderOptionSelections = Schema.Union([
   Schema.Array(ProviderOptionSelection),
   ProviderOptionSelectionsFromLegacyObject,
 ]);
+
 export type ProviderOptionSelections = typeof ProviderOptionSelections.Type;
 
 function coerceLegacyOptionsObjectToArray(
-  record: Record<string, unknown>,
+  record: typeof LegacyProviderOptionSelectionsObject.Type,
 ): ReadonlyArray<ProviderOptionSelection> {
   const entries: Array<ProviderOptionSelection> = [];
+
   for (const [rawKey, rawValue] of Object.entries(record)) {
-    const id = typeof rawKey === "string" ? rawKey.trim() : "";
+    const id = Predicate.isString(rawKey) ? rawKey.trim() : "";
+
     if (id.length === 0) continue;
-    if (typeof rawValue === "string") {
+
+    if (Predicate.isString(rawValue)) {
       const trimmed = rawValue.trim();
+
       if (trimmed.length > 0) entries.push({ id, value: trimmed });
-    } else if (typeof rawValue === "boolean") {
+    } else if (Predicate.isBoolean(rawValue)) {
       entries.push({ id, value: rawValue });
     }
     // Drop anything else (numbers, null, nested objects/arrays) to match the
     // permissive normalization performed by migration 026.
   }
+
   return entries;
 }
 
-function canonicalSelectionsToLegacyObject(
-  selections: ReadonlyArray<ProviderOptionSelection>,
-): Record<string, string | boolean> {
+function canonicalSelectionsToLegacyObject(selections: ReadonlyArray<ProviderOptionSelection>) {
   const out: Record<string, string | boolean> = {};
+
   for (const { id, value } of selections) {
     out[id] = value;
   }
+
   return out;
 }
 
 export const ModelCapabilities = Schema.Struct({
   optionDescriptors: Schema.optional(Schema.Array(ProviderOptionDescriptor)),
 });
+
 export type ModelCapabilities = typeof ModelCapabilities.Type;
 
 const CODEX_DRIVER_KIND = ProviderDriverKind.make("codex");
+
 const CLAUDE_DRIVER_KIND = ProviderDriverKind.make("claudeAgent");
+
 const GROK_DRIVER_KIND = ProviderDriverKind.make("grok");
+
 const KIMI_DRIVER_KIND = ProviderDriverKind.make("kimi");
+
 const OPENCODE_DRIVER_KIND = ProviderDriverKind.make("opencode");
+
 const OPENCODE_GO_DRIVER_KIND = ProviderDriverKind.make("opencodeGo");
 
-export const DEFAULT_MODEL = "gpt-6-sol";
+const CUSTOM_OPENAI_DRIVER_KIND = ProviderDriverKind.make("customOpenai");
+
+export const DEFAULT_MODEL = "gpt-6.1-sol";
 
 /**
  * Codex default-model preference, most preferred first. The provider snapshot
@@ -142,11 +164,14 @@ export const DEFAULT_MODEL = "gpt-6-sol";
  * default; when none are available, Codex's own `isDefault` flag wins.
  */
 export const PREFERRED_DEFAULT_CODEX_MODELS: ReadonlyArray<string> = [
+  "gpt-6.1-sol",
   "gpt-6-sol",
   "gpt-5.6-sol",
   "gpt-5.6-terra",
 ];
+
 export const DEFAULT_TEXT_GENERATION_MODEL = "gpt-5.6-luna";
+
 export const DEFAULT_TEXT_GENERATION_REASONING_EFFORT = "low";
 
 export const DEFAULT_MODEL_BY_PROVIDER: Partial<Record<ProviderDriverKind, string>> = {
@@ -180,7 +205,12 @@ export const MODEL_SLUG_ALIASES_BY_PROVIDER: Partial<
     "gpt-5.3-spark": "gpt-5.3-codex-spark",
   },
   [CLAUDE_DRIVER_KIND]: {
-    opus: "claude-opus-5",
+    opus: "claude-opus-5-5",
+    "opus-5.5": "claude-opus-5-5",
+    "claude-opus-5.5": "claude-opus-5-5",
+    fable: "claude-fable-5-1",
+    "fable-5.1": "claude-fable-5-1",
+    "claude-fable-5.1": "claude-fable-5-1",
     "opus-5": "claude-opus-5",
     "claude-opus-5.0": "claude-opus-5",
     "claude-opus-5-0": "claude-opus-5",
@@ -216,4 +246,33 @@ export const PROVIDER_DISPLAY_NAMES: Partial<Record<ProviderDriverKind, string>>
   [KIMI_DRIVER_KIND]: "Kimi For Coding",
   [OPENCODE_DRIVER_KIND]: "OpenCode",
   [OPENCODE_GO_DRIVER_KIND]: "OpenCode Go",
+  [CUSTOM_OPENAI_DRIVER_KIND]: "Custom API",
 };
+
+/**
+ * The account a user signs in with for each built-in driver. Use in sign-in
+ * and setup copy, where "Connect ChatGPT" means more than "Connect Codex".
+ */
+export const PROVIDER_ACCOUNT_NAMES: Partial<Record<ProviderDriverKind, string>> = {
+  [CODEX_DRIVER_KIND]: "ChatGPT",
+  [CLAUDE_DRIVER_KIND]: "Claude",
+  [GROK_DRIVER_KIND]: "Grok",
+  [KIMI_DRIVER_KIND]: "Kimi For Coding",
+  [OPENCODE_DRIVER_KIND]: "OpenCode",
+  [OPENCODE_GO_DRIVER_KIND]: "OpenCode Go",
+};
+
+/**
+ * The account name for a built-in instance still using its stock name, so a
+ * name the user chose ("Work Codex") wins over "ChatGPT". Undefined otherwise.
+ */
+export function stockProviderAccountName(
+  driver: ProviderDriverKind,
+  displayName: string | undefined,
+): string | undefined {
+  const name = displayName?.trim();
+
+  return !name || name === PROVIDER_DISPLAY_NAMES[driver]
+    ? PROVIDER_ACCOUNT_NAMES[driver]
+    : undefined;
+}

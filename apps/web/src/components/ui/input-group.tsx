@@ -55,6 +55,10 @@ const inputGroupAddonVariants = cva(
         "inline-start":
           "has-[>:last-child[data-slot=badge]]:-ms-1.5 has-[>button]:-ms-2 order-first ps-[calc(--spacing(3)-1px)] has-[>kbd:last-child]:ms-[-0.35rem] [[data-size=sm]+&]:ps-[calc(--spacing(2.5)-1px)]",
       },
+      /** "address" fades the addon in while the enclosing `group/address` is hovered. */
+      reveal: {
+        address: "opacity-0 transition-opacity group-hover/address:opacity-100",
+      },
     },
   },
 );
@@ -62,24 +66,31 @@ const inputGroupAddonVariants = cva(
 function InputGroupAddon({
   className,
   align = "inline-start",
+  reveal,
   ...props
 }: React.ComponentProps<"div"> & VariantProps<typeof inputGroupAddonVariants>) {
   return (
     <div
-      className={cn(inputGroupAddonVariants({ align }), className)}
+      className={cn(inputGroupAddonVariants({ align, reveal }), className)}
       data-align={align}
       data-slot="input-group-addon"
       onMouseDown={(e) => {
-        const target = e.target as HTMLElement;
+        const target = e.target;
+
+        if (!(target instanceof Element)) return;
+
         const isInteractive = target.closest(
           "button, a, input, select, textarea, [role='button'], [role='combobox'], [role='listbox'], [data-slot='select-trigger']",
         );
+
         if (isInteractive) return;
         e.preventDefault();
         const parent = e.currentTarget.parentElement;
+
         const input = parent?.querySelector<HTMLInputElement | HTMLTextAreaElement>(
           "input, textarea",
         );
+
         if (input && !parent?.querySelector("input:focus, textarea:focus")) {
           input.focus();
         }
@@ -101,8 +112,19 @@ function InputGroupText({ className, ...props }: React.ComponentProps<"span">) {
   );
 }
 
-function InputGroupInput({ className, ...props }: InputProps) {
-  return <Input className={className} unstyled {...props} />;
+/** `reserveRevealSpace` makes room for an addon revealed on `group/address` hover. */
+function InputGroupInput({
+  className,
+  reserveRevealSpace = false,
+  ...props
+}: InputProps & { reserveRevealSpace?: boolean }) {
+  return (
+    <Input
+      className={cn(reserveRevealSpace && "group-hover/address:pe-7 transition-padding", className)}
+      unstyled
+      {...props}
+    />
+  );
 }
 
 function InputGroupTextarea({ className, ...props }: TextareaProps) {

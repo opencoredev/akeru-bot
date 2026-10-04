@@ -37,6 +37,7 @@ const DesktopSettingsPatch = Schema.Struct({
 });
 
 const decodeDesktopSettingsPatch = Schema.decodeEffect(Schema.fromJsonString(DesktopSettingsPatch));
+
 const encodeDesktopSettingsPatch = Schema.encodeEffect(Schema.fromJsonString(DesktopSettingsPatch));
 
 function makeEnvironmentLayer(baseDir: string, appVersion = "0.0.17") {
@@ -67,9 +68,11 @@ const withSettings = <A, E, R>(
 ) =>
   Effect.gen(function* () {
     const fileSystem = yield* FileSystem.FileSystem;
+
     const baseDir = yield* fileSystem.makeTempDirectoryScoped({
       prefix: "t3-desktop-settings-test-",
     });
+
     return yield* effect.pipe(
       Effect.provide(
         DesktopAppSettings.layer.pipe(
@@ -136,6 +139,7 @@ describe("DesktopSettings", () => {
           enabled: true,
           port: Option.some(9443),
         });
+
         assert.isTrue(tailscale.changed);
         assert.equal(tailscale.settings.tailscaleServePort, 9443);
       }),
@@ -175,6 +179,7 @@ describe("DesktopSettings", () => {
           enabled: false,
           port: Option.none(),
         });
+
         assert.isFalse(tailscale.changed);
 
         const updateChannel = yield* settings.setUpdateChannel("latest");
@@ -302,6 +307,7 @@ describe("DesktopSettings", () => {
         const persisted = yield* decodeDesktopSettingsPatch(
           yield* fileSystem.readFileString(environment.desktopSettingsPath),
         );
+
         assert.deepEqual(persisted, {
           mainWindowBounds: { x: -1200, y: 40, width: 1440, height: 960 },
           mainWindowMaximized: true,

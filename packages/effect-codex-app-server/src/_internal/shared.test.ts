@@ -8,6 +8,7 @@ import * as Shared from "./shared.ts";
 const decodeNestedNumberPayload = Schema.decodeUnknownEffect(
   Schema.Struct({ profile: Schema.Struct({ token: Schema.Number }) }),
 );
+
 const encodeUnknownJson = Schema.encodeSync(Schema.fromJsonString(Schema.Unknown));
 
 it.effect("preserves schema decode diagnostics without deriving the message from the cause", () =>
@@ -57,6 +58,7 @@ it.effect("preserves schema encode diagnostics", () =>
 it.effect("does not invent a cause when a method has no payload schema", () =>
   Effect.gen(function* () {
     const secret = "unexpected-payload-secret";
+
     const error = yield* Shared.decodeOptionalPayload<never, never>("initialized", undefined, {
       token: secret,
     }).pipe(Effect.flip);
@@ -74,14 +76,17 @@ it.effect("does not invent a cause when a method has no payload schema", () =>
 it.effect("keeps invalid payload values only in the exact schema cause", () =>
   Effect.gen(function* () {
     const secret = "codex-schema-payload-secret";
+
     const cause = yield* decodeNestedNumberPayload({ profile: { token: secret } }).pipe(
       Effect.flip,
     );
+
     const error = CodexError.CodexAppServerRequestError.invalidPayload(
       "thread/start",
       "decode-payload",
       cause,
     );
+
     const { cause: directCause, ...directDiagnostics } = error;
 
     assert.strictEqual(directCause, cause);
@@ -99,10 +104,12 @@ it.effect("keeps invalid payload values only in the exact schema cause", () =>
 it.effect("retains the request-handler error as the internal error cause", () =>
   Effect.gen(function* () {
     const rootCause = new Error("socket closed");
+
     const source = new CodexError.CodexAppServerTransportError({
       operation: "read-input-stream",
       cause: rootCause,
     });
+
     const error = yield* Shared.runHandler(
       (_payload: void) => Effect.fail(source),
       undefined,
@@ -125,6 +132,7 @@ it.effect("retains the request-handler error as the internal error cause", () =>
 it.effect("passes request errors through without adding a wrapper", () =>
   Effect.gen(function* () {
     const source = CodexError.CodexAppServerRequestError.invalidParams("Invalid thread id");
+
     const error = yield* Shared.runHandler(
       (_payload: void) => Effect.fail(source),
       undefined,

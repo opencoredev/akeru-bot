@@ -1,3 +1,4 @@
+import { Match } from "effect";
 import {
   BROWSER_MENTION_LABEL,
   collectComposerInlineTokens,
@@ -51,7 +52,9 @@ export function botPromptMentionTrigger(
   caret: number,
 ): BotPromptMentionTrigger | null {
   const trigger = detectComposerTrigger(draft, caret);
+
   if (trigger?.kind !== "path" || trigger.query.startsWith('"')) return null;
+
   return { query: trigger.query, rangeStart: trigger.rangeStart, rangeEnd: trigger.rangeEnd };
 }
 
@@ -89,11 +92,13 @@ export interface BotPromptMentionBot {
 export function botPromptMention(
   bot: BotPromptMentionBot,
   bots: ReadonlyArray<BotPromptMentionBot>,
-): { readonly source: string; readonly detail: string | null } {
+) {
   const detail = composerBotMentionDetail(bot, bots);
+
   // A bot named `browser` would read as the browser mention, so it keeps its id token.
   if (detail === null && `@${bot.name}` !== COMPOSER_BROWSER_MENTION)
     return { source: `@${bot.name}`, detail };
+
   return { source: serializeComposerBotMention(bot.id) ?? `@${bot.name}`, detail };
 }
 
@@ -116,6 +121,7 @@ export function buildBotPromptMentionItems(input: {
   const threadOnly = isBotPromptThreadQuery(query);
   const pathLike = isBotPromptPathQuery(query);
   const items: BotPromptMentionItem[] = [];
+
   if (
     input.browserAvailable &&
     !threadOnly &&
@@ -123,6 +129,7 @@ export function buildBotPromptMentionItems(input: {
   ) {
     items.push({ kind: "browser", key: "browser", label: BROWSER_MENTION_LABEL });
   }
+
   if (!threadOnly) {
     for (const bot of input.bots) {
       if (bot.name.toLowerCase().startsWith(query)) {
@@ -136,6 +143,7 @@ export function buildBotPromptMentionItems(input: {
       }
     }
   }
+
   for (const thread of input.threads) {
     if (pathLike && !thread.title.toLowerCase().includes(query)) continue;
     items.push({
@@ -145,6 +153,7 @@ export function buildBotPromptMentionItems(input: {
       threadId: thread.id,
     });
   }
+
   if (!threadOnly) {
     for (const entry of input.paths ?? []) {
       const slash = entry.path.lastIndexOf("/");
@@ -157,6 +166,7 @@ export function buildBotPromptMentionItems(input: {
       });
     }
   }
+
   return items;
 }
 
@@ -178,12 +188,14 @@ export function applyBotPromptMention(
   draft: string,
   trigger: BotPromptMentionTrigger,
   item: BotPromptMentionItem,
-): { readonly text: string; readonly caret: number } {
+) {
   const source = mentionSource(item);
+
   if (source === null) return { text: draft, caret: trigger.rangeEnd };
   const before = draft.slice(0, trigger.rangeStart);
   const after = draft.slice(trigger.rangeEnd).replace(/^[ \t]/, "");
   const inserted = `${source} `;
+
   return { text: `${before}${inserted}${after}`, caret: before.length + inserted.length };
 }
 
@@ -206,12 +218,11 @@ export function botPromptMentionChips(
   botName: (botId: string) => string | null = () => null,
 ): BotPromptMentionChip[] {
   return collectComposerMentionDisplays(draft, threadTitle, botName).map((display) => ({
-    key:
-      display.kind === "browser"
-        ? "browser"
-        : display.kind === "bot"
-          ? `bot:${display.botId}`
-          : `thread:${display.threadId}`,
+    key: Match.value(display).pipe(
+      Match.when({ kind: "browser" }, () => "browser"),
+      Match.when({ kind: "bot" }, (display) => `bot:${display.botId}`),
+      Match.orElse((display) => `thread:${display.threadId}`),
+    ),
     kind: display.kind,
     label: display.label,
     source: display.source,
@@ -229,10 +240,13 @@ export function removeBotPromptMention(draft: string, chip: BotPromptMentionChip
         token.type === "bot-mention") &&
       token.source === chip.source,
   );
+
   let next = draft;
+
   for (const token of tokens.toReversed()) {
     const end = next[token.end] === " " ? token.end + 1 : token.end;
     next = `${next.slice(0, token.start)}${next.slice(end)}`;
   }
+
   return next;
 }

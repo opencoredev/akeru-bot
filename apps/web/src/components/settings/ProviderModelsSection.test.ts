@@ -1,15 +1,27 @@
+import { Predicate } from "effect";
 import { createElement, type ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vite-plus/test";
 import { ProviderDriverKind, ProviderInstanceId, type ServerProviderModel } from "@akeru/contracts";
 
+/** Base UI trigger wrappers read `nativeEvent` before calling the handler. */
+type TriggerClick = { readonly nativeEvent: object };
+
 const mocks = vi.hoisted(() => ({
-  buttons: new Map<string, { onClick?: () => void }>(),
+  buttons: new Map<string, { onClick?: (event?: TriggerClick) => void }>(),
+  labelledButtons: new Map<string, { onClick?: (event?: TriggerClick) => void }>(),
 }));
 
 vi.mock("../ui/button", () => ({
-  Button: (props: { children: ReactNode; onClick?: () => void }) => {
-    if (typeof props.children === "string") mocks.buttons.set(props.children, props);
+  Button: (props: {
+    children: ReactNode;
+    onClick?: (event?: TriggerClick) => void;
+    "aria-label"?: string;
+  }) => {
+    if (Predicate.isString(props.children)) mocks.buttons.set(props.children, props);
+
+    if (props["aria-label"]) mocks.labelledButtons.set(props["aria-label"], props);
+
     return null;
   },
 }));
@@ -48,25 +60,35 @@ describe("ProviderModelsSection bulk visibility control", () => {
   function renderSection(input: {
     models: ReadonlyArray<ServerProviderModel>;
     hiddenModels?: ReadonlyArray<string>;
+    customModels?: ReadonlyArray<string>;
+    favoriteModels?: ReadonlyArray<string>;
+    modelOrder?: ReadonlyArray<string>;
   }) {
     mocks.buttons.clear();
+    mocks.labelledButtons.clear();
     const onHiddenModelsChange = vi.fn();
+    const onChange = vi.fn();
+    const onFavoriteModelsChange = vi.fn();
+    const onModelOrderChange = vi.fn();
     renderToStaticMarkup(
       createElement(ProviderModelsSection, {
         instanceId: ProviderInstanceId.make("codex"),
         driverKind: ProviderDriverKind.make("codex"),
         models: input.models,
-        customModels: input.models.filter((entry) => entry.isCustom).map((entry) => entry.slug),
+        customModels:
+          input.customModels ??
+          input.models.flatMap((entry) => (entry.isCustom ? [entry.slug] : [])),
         hiddenModels: input.hiddenModels ?? [],
-        favoriteModels: [],
-        modelOrder: [],
-        onChange: vi.fn(),
+        favoriteModels: input.favoriteModels ?? [],
+        modelOrder: input.modelOrder ?? [],
+        onChange,
         onHiddenModelsChange,
-        onFavoriteModelsChange: vi.fn(),
-        onModelOrderChange: vi.fn(),
+        onFavoriteModelsChange,
+        onModelOrderChange,
       }),
     );
-    return { onHiddenModelsChange };
+
+    return { onHiddenModelsChange, onChange, onFavoriteModelsChange, onModelOrderChange };
   }
 
   it("omits the bulk control when every model is custom", () => {
@@ -96,5 +118,41 @@ describe("ProviderModelsSection bulk visibility control", () => {
     expect(mocks.buttons.has("Disable all")).toBe(false);
     mocks.buttons.get("Enable all")?.onClick?.();
     expect(onHiddenModelsChange).toHaveBeenCalledWith(["legacy", "custom"]);
+  });
+
+  it("removes a hand-added model the endpoint also reports and keeps its preferences", () => {
+    const { onChange, onFavoriteModelsChange, onModelOrderChange } = renderSection({
+      models: [model("gpt-4o-mini"), model("llama-3.3")],
+      customModels: ["gpt-4o-mini"],
+      favoriteModels: ["gpt-4o-mini"],
+      modelOrder: ["gpt-4o-mini", "llama-3.3"],
+    });
+
+    const remove = mocks.labelledButtons.get("Remove gpt-4o-mini");
+    expect(remove).toBeDefined();
+    // The tooltip trigger wraps the handler, so it reads `nativeEvent` first.
+    remove?.onClick?.({ nativeEvent: {} });
+    expect(onChange).toHaveBeenCalledWith([]);
+    expect(onFavoriteModelsChange).not.toHaveBeenCalled();
+    expect(onModelOrderChange).not.toHaveBeenCalled();
+  });
+
+  it("clears the preferences of a hand-added model that leaves the list", () => {
+    const { onChange, onFavoriteModelsChange, onModelOrderChange } = renderSection({
+      models: [model("llama-3.3"), model("my-model", true)],
+      favoriteModels: ["my-model"],
+      modelOrder: ["my-model", "llama-3.3"],
+    });
+
+    mocks.labelledButtons.get("Remove my-model")?.onClick?.({ nativeEvent: {} });
+    expect(onChange).toHaveBeenCalledWith([]);
+    expect(onFavoriteModelsChange).toHaveBeenCalledWith([]);
+    expect(onModelOrderChange).toHaveBeenCalledWith(["llama-3.3"]);
+  });
+
+  it("leaves catalog-only models without a remove control", () => {
+    renderSection({ models: [model("gpt-4o-mini")], customModels: [] });
+
+    expect(mocks.labelledButtons.has("Remove gpt-4o-mini")).toBe(false);
   });
 });

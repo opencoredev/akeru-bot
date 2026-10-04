@@ -29,10 +29,13 @@ describe("bot conversation message projection atom", () => {
     const projection = createBotConversationMessageProjectionAtom(source);
     const registry = AtomRegistry.make();
     const observed: BotConversationMessageProjection[] = [];
+
     const unsubscribe = registry.subscribe(projection, (value) => observed.push(value), {
       immediate: true,
     });
+
     const first = message("routine:first", "user", false);
+
     const second = {
       ...message("routine:second", "user", false),
       createdAt: "2026-09-18T01:00:00.000Z",
@@ -65,6 +68,7 @@ describe("bot conversation message projection atom", () => {
     const projection = createBotConversationMessageProjectionAtom(source);
     const registry = AtomRegistry.make();
     const observed: BotConversationMessageProjection[] = [];
+
     const unsubscribe = registry.subscribe(projection, (value) => observed.push(value), {
       immediate: true,
     });
@@ -106,6 +110,7 @@ describe("bot conversation message projection atom", () => {
     const projection = createBotConversationMessageProjectionAtom(source);
     const registry = AtomRegistry.make();
     const observed: string[] = [];
+
     const unsubscribe = registry.subscribe(
       projection,
       (value) => observed.push(value.lastMessageRole ?? "none"),

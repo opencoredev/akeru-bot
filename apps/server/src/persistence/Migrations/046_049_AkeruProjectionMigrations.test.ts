@@ -64,6 +64,7 @@ memoryLayer()("Akeru projection migration slots", (it) => {
           usage_cap_json AS "usageCap"
         FROM projection_bots
       `;
+
       assert.deepEqual(bots, [
         { botId: "bot-from-045", runtimeMode: "full-access", usageCap: null },
       ]);
@@ -77,6 +78,7 @@ memoryLayer()("Akeru projection migration slots", (it) => {
           disabled_mcp_server_ids_json AS "disabledMcpServerIds"
         FROM projection_bots WHERE bot_id = 'bot-from-045'
       `;
+
       assert.deepEqual(profile, [{ label: null, description: null, disabledMcpServerIds: "[]" }]);
 
       const executor = yield* sql<{
@@ -88,6 +90,7 @@ memoryLayer()("Akeru projection migration slots", (it) => {
         FROM projection_mcp_servers
         WHERE mcp_server_id = 'builtin-executor'
       `;
+
       assert.deepEqual(executor, [
         { command: "bunx", argsJson: '["-y","executor","mcp"]', enabled: 1 },
       ]);
@@ -95,9 +98,11 @@ memoryLayer()("Akeru projection migration slots", (it) => {
       const threadColumns = yield* sql<{ readonly name: string }>`
         PRAGMA table_info(projection_threads)
       `;
+
       const groupColumns = yield* sql<{ readonly name: string }>`
         PRAGMA table_info(projection_groups)
       `;
+
       const tableRows = yield* sql<{ readonly name: string }>`
         SELECT name FROM sqlite_master
         WHERE type = 'table' AND name = 'projection_mcp_servers'

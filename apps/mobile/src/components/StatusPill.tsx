@@ -15,6 +15,7 @@ export function StatusPill(
   },
 ) {
   const size = props.size ?? "default";
+
   return (
     <View
       className={cn(

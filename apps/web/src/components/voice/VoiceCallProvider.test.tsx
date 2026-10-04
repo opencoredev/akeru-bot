@@ -36,28 +36,36 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("@effect/atom-react", () => ({ useAtomValue: () => [] }));
+
 vi.mock("@tanstack/react-router", () => ({ useNavigate: () => mocks.navigate }));
+
 vi.mock("../../hooks/useSettings", () => ({
-  usePrimarySettings: (
-    selector?: (settings: { voice: { enabled: boolean; provider: string } }) => unknown,
+  usePrimarySettings: <T,>(
+    selector?: (settings: { voice: { enabled: boolean; provider: string } }) => T,
   ) => {
     const settings = { voice: { enabled: true, provider: mocks.voiceProvider } };
+
     return selector ? selector(settings) : settings;
   },
 }));
+
 vi.mock("../../modelSelection", () => ({
   resolveAppModelSelectionState: () => ({ instanceId: "codex", model: "gpt-5.6" }),
 }));
+
 vi.mock("../../providerInstances", () => ({
-  applyProviderInstanceSettings: (entries: unknown) => entries,
+  applyProviderInstanceSettings: <T,>(entries: T) => entries,
   deriveProviderInstanceEntries: () => [],
-  sortProviderInstanceEntries: (entries: unknown) => entries,
+  sortProviderInstanceEntries: <T,>(entries: T) => entries,
 }));
+
 vi.mock("../../state/entities", () => ({ useProjects: () => [mocks.activeProject] }));
+
 vi.mock("../../state/environments", () => ({
   useEnvironmentConnectionState: () => ({ data: null }),
   usePrimaryEnvironmentId: () => "env-1",
 }));
+
 vi.mock("../../state/server", () => ({
   primaryServerProvidersAtom: {},
   serverEnvironment: {
@@ -65,13 +73,16 @@ vi.mock("../../state/server", () => ({
     hangupVoiceCall: mocks.hangupAtom,
   },
 }));
+
 vi.mock("../../state/use-atom-command", () => ({
-  useAtomCommand: (atom: unknown) =>
+  useAtomCommand: <T,>(atom: T) =>
     atom === mocks.startAtom ? mocks.startVoiceCall : mocks.hangupVoiceCall,
 }));
+
 vi.mock("../roster/botEngineSelection", () => ({
   resolveStickyBotEngine: () => ({ instanceId: "codex", model: "gpt-5.6" }),
 }));
+
 vi.mock("../roster/useBotThreadRuntime", () => ({
   useBotThreadRuntime: () => ({
     appendTranscript: mocks.appendTranscript,
@@ -85,19 +96,24 @@ vi.mock("../roster/useBotThreadRuntime", () => ({
     sending: false,
   }),
 }));
+
 vi.mock("../roster/rosterStore", () => {
   const state = { bots: [mocks.bot], selectedBotId: mocks.bot.id, selectBot: mocks.selectBot };
+
   return {
-    useRosterStore: Object.assign((selector: (value: typeof state) => unknown) => selector(state), {
+    useRosterStore: Object.assign(<T,>(selector: (value: typeof state) => T) => selector(state), {
       getState: () => state,
     }),
   };
 });
+
 vi.mock("../ui/toast", () => ({ toastManager: { add: mocks.toast } }));
+
 vi.mock("./browserVoiceAudio", () => ({
   // A silent microphone: capture waits until the call scope is cancelled.
-  captureVoiceUtterance: (_microphone: unknown, signal: AbortSignal) => {
+  captureVoiceUtterance: <T,>(_microphone: T, signal: AbortSignal) => {
     mocks.captureSignals.push(signal);
+
     return new Promise((_, reject) =>
       signal.addEventListener("abort", () => reject(signal.reason), { once: true }),
     );
@@ -109,30 +125,29 @@ import { VoiceCallProvider, useVoiceCall } from "./VoiceCall";
 
 type VoiceControls = ReturnType<typeof useVoiceCall>;
 
-let latestPeer: TestPeer | null = null;
+class TestDataChannel extends EventTarget {
+  readyState: RTCDataChannelState = "open";
+  readonly send = vi.fn();
+}
 
 class TestPeer {
+  /** Every peer the call constructed, newest last, so tests can drive connection events. */
+  static readonly instances: TestPeer[] = [];
   iceGatheringState: RTCIceGatheringState = "complete";
   connectionState: RTCPeerConnectionState = "connected";
   localDescription: RTCSessionDescription | null = null;
   ontrack: ((event: RTCTrackEvent) => void) | null = null;
   onconnectionstatechange: (() => void) | null = null;
-  readonly events = {
-    readyState: "open" as RTCDataChannelState,
-    onmessage: null as ((event: MessageEvent) => void) | null,
-    onerror: null as (() => void) | null,
-    onclose: null as (() => void) | null,
-    send: vi.fn(),
-  };
+  readonly events = new TestDataChannel();
   constructor() {
-    latestPeer = this;
+    TestPeer.instances.push(this);
   }
   addTrack() {}
   addEventListener() {}
   removeEventListener() {}
   close() {}
   createDataChannel() {
-    return this.events as unknown as RTCDataChannel;
+    return this.events;
   }
   async createOffer(): Promise<RTCSessionDescriptionInit> {
     return { type: "offer", sdp: "offer-sdp" };
@@ -145,16 +160,21 @@ class TestPeer {
 
 function renderControls(): VoiceControls {
   let controls: VoiceControls | null = null;
+
   function Probe() {
     controls = useVoiceCall();
+
     return null;
   }
+
   renderToStaticMarkup(
     <VoiceCallProvider>
       <Probe />
     </VoiceCallProvider>,
   );
+
   if (controls === null) throw new Error("Voice controls did not mount.");
+
   return controls;
 }
 
@@ -169,6 +189,7 @@ describe("voice call provider", () => {
     addEventListener: vi.fn(),
     removeEventListener: vi.fn(),
   };
+
   const microphone = {
     getTracks: () => [track],
     getAudioTracks: () => [track],
@@ -176,7 +197,7 @@ describe("voice call provider", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    latestPeer = null;
+    TestPeer.instances.length = 0;
     mocks.voiceProvider = "chatgpt";
     mocks.captureSignals = [];
     vi.stubGlobal("RTCPeerConnection", TestPeer);
@@ -207,9 +228,11 @@ describe("voice call provider", () => {
 
   it("refuses a second start while the first call is pending and lets hangup cancel it", async () => {
     let resolveMicrophone!: (value: typeof microphone) => void;
+
     const pendingMicrophone = new Promise<typeof microphone>((resolve) => {
       resolveMicrophone = resolve;
     });
+
     vi.stubGlobal("navigator", {
       mediaDevices: { getUserMedia: vi.fn(() => pendingMicrophone) },
     });
@@ -262,19 +285,19 @@ describe("voice call provider", () => {
       },
       video: false,
     });
-    latestPeer?.events.onmessage?.(
+    TestPeer.instances.at(-1)?.events.dispatchEvent(
       new MessageEvent("message", {
         data: JSON.stringify({ type: "output_audio_buffer.started" }),
       }),
     );
     expect(track.enabled).toBe(false);
-    latestPeer?.events.onmessage?.(
+    TestPeer.instances.at(-1)?.events.dispatchEvent(
       new MessageEvent("message", {
         data: JSON.stringify({ type: "response.done", response: { status: "completed" } }),
       }),
     );
     expect(track.enabled).toBe(false);
-    latestPeer?.events.onmessage?.(
+    TestPeer.instances.at(-1)?.events.dispatchEvent(
       new MessageEvent("message", {
         data: JSON.stringify({ type: "output_audio_buffer.stopped" }),
       }),
@@ -289,6 +312,7 @@ describe("voice call provider", () => {
     const controls = renderControls();
     controls.startOrReturn(mocks.bot as never);
     await flushVoiceStart();
+
     const event = new MessageEvent("message", {
       data: JSON.stringify({
         type: "response.function_call_arguments.done",
@@ -298,12 +322,13 @@ describe("voice call provider", () => {
         arguments: JSON.stringify({ message: "Run tests" }),
       }),
     });
-    latestPeer?.events.onmessage?.(event);
-    latestPeer?.events.onmessage?.(event);
+
+    TestPeer.instances.at(-1)?.events.dispatchEvent(event);
+    TestPeer.instances.at(-1)?.events.dispatchEvent(event);
     await Promise.resolve();
     expect(mocks.send).toHaveBeenCalledOnce();
     controls.hangup();
-    latestPeer?.events.onmessage?.(event);
+    TestPeer.instances.at(-1)?.events.dispatchEvent(event);
     expect(mocks.send).toHaveBeenCalledOnce();
   });
 
@@ -314,6 +339,7 @@ describe("voice call provider", () => {
     const controls = renderControls();
     controls.startOrReturn(mocks.bot as never);
     await flushVoiceStart();
+
     const replayed = new MessageEvent("message", {
       data: JSON.stringify({
         event_id: "event-1",
@@ -321,8 +347,9 @@ describe("voice call provider", () => {
         transcript: "Hello",
       }),
     });
-    latestPeer?.events.onmessage?.(replayed);
-    latestPeer?.events.onmessage?.(replayed);
+
+    TestPeer.instances.at(-1)?.events.dispatchEvent(replayed);
+    TestPeer.instances.at(-1)?.events.dispatchEvent(replayed);
     expect(mocks.appendTranscript).toHaveBeenCalledOnce();
   });
 
@@ -353,7 +380,7 @@ describe("voice call provider", () => {
       environmentId: "env-1",
       input: { botId: mocks.bot.id },
     });
-    expect(latestPeer).toBeNull();
+    expect(TestPeer.instances).toHaveLength(0);
     expect(mocks.captureSignals).toHaveLength(1);
 
     controls.hangup();

@@ -1,3 +1,4 @@
+import * as Match from "effect/Match";
 import type {
   VcsRef,
   SourceControlProviderInfo,
@@ -11,6 +12,7 @@ import * as Result from "effect/Result";
 import { detectSourceControlProviderFromRemoteUrl } from "./sourceControl.ts";
 
 export const WORKTREE_BRANCH_PREFIX = "akeru";
+
 // Canonical form is `akeru/<8 hex>`. Older builds generated `t3code/<8 hex>` and `t3code/<uuid>`
 // via Crypto.randomUUID() (always RFC 4122 v4), so the matcher also accepts exactly
 // that shape — version nibble `4`, variant nibble `[89ab]` — to keep those threads
@@ -47,9 +49,11 @@ export function sanitizeBranchFragment(raw: string): string {
  */
 export function sanitizeFeatureBranchName(raw: string): string {
   const sanitized = sanitizeBranchFragment(raw);
+
   if (sanitized.includes("/")) {
     return sanitized.startsWith("feature/") ? sanitized : `feature/${sanitized}`;
   }
+
   return `feature/${sanitized}`;
 }
 
@@ -64,9 +68,11 @@ export function resolveAutoFeatureBranchName(
   preferredBranch?: string,
 ): string {
   const preferred = preferredBranch?.trim();
+
   const resolvedBase = sanitizeFeatureBranchName(
     preferred && preferred.length > 0 ? preferred : AUTO_FEATURE_BRANCH_FALLBACK,
   );
+
   const existingNames = new Set(existingBranchNames.map((refName) => refName.toLowerCase()));
 
   if (!existingNames.has(resolvedBase)) {
@@ -74,6 +80,7 @@ export function resolveAutoFeatureBranchName(
   }
 
   let suffix = 2;
+
   while (existingNames.has(`${resolvedBase}-${suffix}`)) {
     suffix += 1;
   }
@@ -86,9 +93,11 @@ export function resolveAutoFeatureBranchName(
  */
 export function deriveLocalBranchNameFromRemoteRef(branchName: string): string {
   const firstSeparatorIndex = branchName.indexOf("/");
+
   if (firstSeparatorIndex <= 0 || firstSeparatorIndex === branchName.length - 1) {
     return branchName;
   }
+
   return branchName.slice(firstSeparatorIndex + 1);
 }
 
@@ -101,6 +110,7 @@ export function buildTemporaryWorktreeBranchName(
     .toLowerCase()
     .replace(/[^0-9a-f]/g, "")
     .slice(0, 8);
+
   return `${WORKTREE_BRANCH_PREFIX}/${token}`;
 }
 
@@ -117,10 +127,12 @@ export function isTemporaryWorktreeBranch(refName: string): boolean {
 export function stripWorktreeBranchPrefix(refName: string): string {
   for (const prefix of [WORKTREE_BRANCH_PREFIX, "t3code"]) {
     const marker = `${prefix}/`;
+
     if (refName.startsWith(marker)) {
       return refName.slice(marker.length);
     }
   }
+
   return refName;
 }
 
@@ -137,6 +149,7 @@ export function buildPullRequestWorktreeBranchName(
   const sanitizedHeadBranch = sanitizeBranchFragment(headBranch).trim();
   const suffix = sanitizedHeadBranch.length > 0 ? sanitizedHeadBranch : "head";
   const prefix = options?.legacy ? "t3code" : WORKTREE_BRANCH_PREFIX;
+
   return `${prefix}/pr-${pullRequestNumber}/${suffix}`;
 }
 
@@ -165,10 +178,12 @@ export function normalizeGitRemoteUrl(value: string): string {
   if (/^(?:ssh|https?|git):\/\//i.test(normalized)) {
     try {
       const url = new URL(normalized);
+
       const repositoryPath = url.pathname
         .split("/")
         .filter((segment) => segment.length > 0)
         .join("/");
+
       if (url.hostname && repositoryPath.includes("/")) {
         return `${url.hostname}/${repositoryPath}`;
       }
@@ -180,6 +195,7 @@ export function normalizeGitRemoteUrl(value: string): string {
   const scpStyleHostAndPath = /^[a-zA-Z0-9._-]+@([^:/\s]+):([^/\s]+(?:\/[^/\s]+)+)$/i.exec(
     normalized,
   );
+
   if (scpStyleHostAndPath?.[1] && scpStyleHostAndPath[2]) {
     return `${scpStyleHostAndPath[1]}/${scpStyleHostAndPath[2]}`;
   }
@@ -192,6 +208,7 @@ export function normalizeGitRemoteUrl(value: string): string {
  */
 export function parseGitHubRepositoryNameWithOwnerFromRemoteUrl(url: string | null): string | null {
   const trimmed = url?.trim() ?? "";
+
   if (trimmed.length === 0) {
     return null;
   }
@@ -200,7 +217,9 @@ export function parseGitHubRepositoryNameWithOwnerFromRemoteUrl(url: string | nu
     /^(?:git@github\.com:|ssh:\/\/git@github\.com\/|https:\/\/github\.com\/|git:\/\/github\.com\/)([^/\s]+\/[^/\s]+?)(?:\.git)?\/?$/i.exec(
       trimmed,
     );
+
   const repositoryNameWithOwner = match?.[1]?.trim() ?? "";
+
   return repositoryNameWithOwner.length > 0 ? repositoryNameWithOwner : null;
 }
 
@@ -210,12 +229,14 @@ function deriveLocalBranchNameCandidatesFromRemoteRef(
 ): ReadonlyArray<string> {
   const candidates = new Set<string>();
   const firstSlashCandidate = deriveLocalBranchNameFromRemoteRef(branchName);
+
   if (firstSlashCandidate.length > 0) {
     candidates.add(firstSlashCandidate);
   }
 
   if (remoteName) {
     const remotePrefix = `${remoteName}/`;
+
     if (branchName.startsWith(remotePrefix) && branchName.length > remotePrefix.length) {
       candidates.add(branchName.slice(remotePrefix.length));
     }
@@ -249,6 +270,7 @@ export function dedupeRemoteBranchesWithLocalMatches(
       refName.name,
       refName.remoteName,
     );
+
     return !localBranchCandidates.some((candidate) => localBranchNames.has(candidate));
   });
 }
@@ -305,25 +327,31 @@ export function applyGitStatusStreamEvent(
   current: VcsStatusResult | null,
   event: VcsStatusStreamEvent,
 ): VcsStatusResult {
-  switch (event._tag) {
-    case "snapshot":
-      return mergeGitStatusParts(event.local, event.remote);
-    case "localUpdated":
-      return mergeGitStatusParts(event.local, current ? toRemoteStatusPart(current) : null);
-    case "remoteUpdated":
-      if (current === null) {
-        return mergeGitStatusParts(
-          {
-            isRepo: true,
-            hasPrimaryRemote: false,
-            isDefaultRef: false,
-            refName: null,
-            hasWorkingTreeChanges: false,
-            workingTree: { files: [], insertions: 0, deletions: 0 },
-          },
-          event.remote,
-        );
-      }
-      return mergeGitStatusParts(toLocalStatusPart(current), event.remote);
-  }
+  return Match.value(event).pipe(
+    Match.tagsExhaustive({
+      snapshot: (event) => {
+        return mergeGitStatusParts(event.local, event.remote);
+      },
+      localUpdated: (event) => {
+        return mergeGitStatusParts(event.local, current ? toRemoteStatusPart(current) : null);
+      },
+      remoteUpdated: (event) => {
+        if (current === null) {
+          return mergeGitStatusParts(
+            {
+              isRepo: true,
+              hasPrimaryRemote: false,
+              isDefaultRef: false,
+              refName: null,
+              hasWorkingTreeChanges: false,
+              workingTree: { files: [], insertions: 0, deletions: 0 },
+            },
+            event.remote,
+          );
+        }
+
+        return mergeGitStatusParts(toLocalStatusPart(current), event.remote);
+      },
+    }),
+  );
 }

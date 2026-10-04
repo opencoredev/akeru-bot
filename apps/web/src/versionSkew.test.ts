@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 // Pinned so the direction cases below read as fixed versions instead of
 // arithmetic on whatever version this checkout happens to be at.
 const branding = vi.hoisted(() => ({ APP_VERSION: "0.0.34" }));
+
 vi.mock("./branding", () => branding);
 
 import { APP_VERSION } from "./branding";
@@ -88,6 +89,7 @@ describe("versionSkew", () => {
 
   it("keys dismissals by environment, client version, and server version", () => {
     const environmentId = EnvironmentId.make("environment-dismissal");
+
     const key = buildVersionMismatchDismissalKey(environmentId, {
       clientVersion: APP_VERSION,
       serverVersion: "9.9.9",

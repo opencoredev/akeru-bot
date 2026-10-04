@@ -1,3 +1,4 @@
+import { Schema } from "effect";
 import { useAtomValue } from "@effect/atom-react";
 import { useMemo } from "react";
 import type { EnvironmentProject, EnvironmentThreadShell } from "@akeru/client-runtime/state/shell";
@@ -8,17 +9,22 @@ import type {
   ServerConfig,
 } from "@akeru/contracts";
 import { Atom } from "effect/unstable/reactivity";
-
 import { environmentProjects } from "./projects";
 import { environmentServerConfigsAtom, serverEnvironment } from "./server";
 import { environmentThreadShells } from "./threads";
 
+const decodeTitlePairs = Schema.decodeUnknownSync(
+  Schema.Array(Schema.Tuple([Schema.String, Schema.NullOr(Schema.String)])),
+);
+
 const EMPTY_PROJECT_ATOM = Atom.make<EnvironmentProject | null>(null).pipe(
   Atom.withLabel("mobile-project:empty"),
 );
+
 const EMPTY_THREAD_SHELL_ATOM = Atom.make<EnvironmentThreadShell | null>(null).pipe(
   Atom.withLabel("mobile-thread-shell:empty"),
 );
+
 const EMPTY_SERVER_CONFIG_ATOM = Atom.make<ServerConfig | null>(null).pipe(
   Atom.withLabel("mobile-server-config:empty"),
 );
@@ -56,6 +62,7 @@ export function useServerConfigs(): ReadonlyMap<EnvironmentId, ServerConfig> {
 }
 
 const NO_THREAD_TITLES_ATOM = Atom.make("[]").pipe(Atom.withLabel("mobile-thread-titles:empty"));
+
 // Keyed by the newline-joined thread ids. The value is a JSON string so the atom
 // only notifies when one of these titles changes, not on every shell update.
 const threadTitlesAtom = Atom.family((threadIdsKey: string) =>
@@ -63,6 +70,7 @@ const threadTitlesAtom = Atom.family((threadIdsKey: string) =>
     const titles = new Map<string, string>(
       get(environmentThreadShells.threadShellsAtom).map((shell) => [shell.id, shell.title]),
     );
+
     return JSON.stringify(
       threadIdsKey.split("\n").map((threadId) => [threadId, titles.get(threadId) ?? null]),
     );
@@ -73,11 +81,14 @@ const threadTitlesAtom = Atom.family((threadIdsKey: string) =>
 export function useThreadTitles(threadIds: ReadonlyArray<string>): ReadonlyMap<string, string> {
   const key = threadIds.join("\n");
   const json = useAtomValue(key === "" ? NO_THREAD_TITLES_ATOM : threadTitlesAtom(key));
+
   return useMemo(() => {
     const titles = new Map<string, string>();
-    for (const [threadId, title] of JSON.parse(json) as Array<[string, string | null]>) {
+
+    for (const [threadId, title] of decodeTitlePairs(JSON.parse(json))) {
       if (title !== null) titles.set(threadId, title);
     }
+
     return titles;
   }, [json]);
 }

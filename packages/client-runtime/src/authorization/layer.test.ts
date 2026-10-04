@@ -9,10 +9,12 @@ import { remoteHttpClientLayer } from "../rpc/http.ts";
 import * as RemoteEnvironmentAuthorization from "./service.ts";
 
 const ENVIRONMENT_ID = EnvironmentId.make("environment-1");
+
 const ENDPOINT = {
   httpBaseUrl: "https://environment.example.test",
   wsBaseUrl: "wss://environment.example.test",
 };
+
 const DESCRIPTOR = {
   environmentId: ENVIRONMENT_ID,
   label: "Remote environment",
@@ -24,13 +26,16 @@ const DESCRIPTOR = {
 function makeHarness(responses: ReadonlyArray<Response>) {
   const calls: Array<readonly [RequestInfo | URL, RequestInit]> = [];
   let responseIndex = 0;
+
   const fetchFn = ((input, init) => {
     calls.push([input, init ?? {}]);
     const response = responses[responseIndex++];
+
     return response === undefined
       ? Promise.reject(new Error(`Unexpected fetch call to ${String(input)}`))
       : Promise.resolve(response);
   }) satisfies typeof fetch;
+
   const layer = RemoteEnvironmentAuthorization.layer.pipe(
     Layer.provide(
       Layer.mergeAll(
@@ -45,6 +50,7 @@ function makeHarness(responses: ReadonlyArray<Response>) {
       ),
     ),
   );
+
   return { calls, layer };
 }
 
@@ -62,6 +68,7 @@ describe("RemoteEnvironmentAuthorization", () => {
 
       const [first, second] = yield* Effect.gen(function* () {
         const remote = yield* RemoteEnvironmentAuthorization.RemoteEnvironmentAuthorization;
+
         const authorize = () =>
           remote.authorizeBearer({
             expectedEnvironmentId: ENVIRONMENT_ID,
@@ -69,6 +76,7 @@ describe("RemoteEnvironmentAuthorization", () => {
             wsBaseUrl: ENDPOINT.wsBaseUrl,
             bearerToken: "bearer-token",
           });
+
         return [yield* authorize(), yield* authorize()] as const;
       }).pipe(Effect.provide(harness.layer));
 
@@ -86,6 +94,7 @@ describe("RemoteEnvironmentAuthorization", () => {
   it.effect("revalidates a bearer descriptor after the cache expires", () =>
     Effect.gen(function* () {
       const reassignedEnvironmentId = EnvironmentId.make("environment-2");
+
       const harness = makeHarness([
         Response.json(DESCRIPTOR),
         websocketTicket("first-ticket"),
@@ -94,6 +103,7 @@ describe("RemoteEnvironmentAuthorization", () => {
 
       const failure = yield* Effect.gen(function* () {
         const remote = yield* RemoteEnvironmentAuthorization.RemoteEnvironmentAuthorization;
+
         const authorize = () =>
           remote.authorizeBearer({
             expectedEnvironmentId: ENVIRONMENT_ID,
@@ -101,8 +111,10 @@ describe("RemoteEnvironmentAuthorization", () => {
             wsBaseUrl: ENDPOINT.wsBaseUrl,
             bearerToken: "bearer-token",
           });
+
         yield* authorize();
         yield* TestClock.adjust("10 seconds");
+
         return yield* authorize().pipe(Effect.flip);
       }).pipe(Effect.provide(Layer.merge(harness.layer, TestClock.layer())));
 

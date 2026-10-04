@@ -5,6 +5,7 @@ import { toastManager } from "./ui/toast";
 
 function describeSlowRequests(requests: ReadonlyArray<SlowRpcAckRequest>): string {
   const count = requests.length;
+
   // Thresholds vary per method, so report the smallest one the batch has passed.
   const thresholdSeconds = Math.round(
     Math.min(...requests.map((request) => request.thresholdMs)) / 1000,
@@ -22,7 +23,7 @@ function SlowRequestDetails({ requests }: { requests: ReadonlyArray<SlowRpcAckRe
           key={request.requestId}
         >
           <div className="wrap-break-word font-medium text-foreground">{request.tag}</div>
-          <div className="mt-0.5 text-[10px] opacity-75">
+          <div className="mt-0.5 text-10px opacity-75">
             Started {new Date(request.startedAt).toLocaleTimeString()}
           </div>
         </li>
@@ -41,6 +42,7 @@ export function SlowRpcRequestToastCoordinator() {
         toastManager.close(toastIdRef.current);
         toastIdRef.current = null;
       }
+
       return;
     }
 

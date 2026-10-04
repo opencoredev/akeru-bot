@@ -1,3 +1,5 @@
+import { flow } from "effect/Function";
+import * as Option from "effect/Option";
 import {
   ApprovalRequestId,
   type OrchestrationThreadActivity,
@@ -26,11 +28,13 @@ export interface PendingUserInput {
 }
 
 const isRequestId = Schema.is(ApprovalRequestId);
+
 const isProviderRequestKind = Schema.is(ProviderRequestKind);
+
 const isProviderApprovalOption = Schema.is(ProviderApprovalOption);
 
 /** Older activities use native request types instead of a request kind. */
-export function requestKindFromRequestType(requestType: unknown): ProviderRequestKind | null {
+function requestKindFromNativeType(requestType: string): ProviderRequestKind | null {
   switch (requestType) {
     case "command_execution_approval":
     case "exec_command_approval":
@@ -48,23 +52,37 @@ export function requestKindFromRequestType(requestType: unknown): ProviderReques
   }
 }
 
-function parseQuestions(value: unknown): UserInputQuestion[] {
-  if (!Array.isArray(value)) return [];
+const decodeNativeRequestType = Schema.decodeUnknownOption(Schema.String);
+
+export const requestKindFromRequestType = flow(
+  decodeNativeRequestType,
+  Option.match({ onNone: () => null, onSome: requestKindFromNativeType }),
+);
+
+const decodeQuestionsArray = Schema.decodeUnknownOption(Schema.Array(Schema.Unknown));
+
+function parseQuestionArray(value: ReadonlyArray<Schema.Unknown["Type"]>): UserInputQuestion[] {
   const parsed: UserInputQuestion[] = [];
+
   for (const question of value) {
     if (!Predicate.isObject(question) || !Array.isArray(question.options)) continue;
+
     if (
-      typeof question.id !== "string" ||
-      typeof question.header !== "string" ||
-      typeof question.question !== "string"
+      !Predicate.isString(question.id) ||
+      !Predicate.isString(question.header) ||
+      !Predicate.isString(question.question)
     ) {
       continue;
     }
+
     const options = question.options.flatMap((option) => {
       if (!Predicate.isObject(option)) return [];
-      if (typeof option.label !== "string" || typeof option.description !== "string") return [];
+
+      if (!Predicate.isString(option.label) || !Predicate.isString(option.description)) return [];
+
       return [{ label: option.label, description: option.description }];
     });
+
     if (question.options.length > 0 && options.length === 0) continue;
     parsed.push({
       id: question.id,
@@ -74,8 +92,14 @@ function parseQuestions(value: unknown): UserInputQuestion[] {
       multiSelect: question.multiSelect === true,
     });
   }
+
   return parsed;
 }
+
+const parseQuestions = flow(
+  decodeQuestionsArray,
+  Option.match({ onNone: () => [], onSome: parseQuestionArray }),
+);
 
 const requestActivityKinds = new Set([
   "approval.requested",
@@ -104,9 +128,10 @@ const staleRequestFailureDetails = {
 
 function isStaleRequestFailure(
   kind: keyof typeof staleRequestFailureDetails,
-  payload: Record<string, unknown>,
+  detailValue: OrchestrationThreadActivity["payload"],
 ): boolean {
-  const detail = typeof payload.detail === "string" ? payload.detail.toLowerCase() : "";
+  const detail = Predicate.isString(detailValue) ? detailValue.toLowerCase() : "";
+
   return staleRequestFailureDetails[kind].some((fragment) => detail.includes(fragment));
 }
 
@@ -123,12 +148,16 @@ export function derivePendingRequests(activities: ReadonlyArray<OrchestrationThr
   for (const activity of activities) {
     if (activity.kind !== "tool.started") continue;
     const payload = Predicate.isObject(activity.payload) ? activity.payload : undefined;
+
     if (!payload) continue;
-    const toolCallId = typeof payload.toolCallId === "string" ? payload.toolCallId : null;
+    const toolCallId = Predicate.isString(payload.toolCallId) ? payload.toolCallId : null;
     const data = Predicate.isObject(payload.data) ? payload.data : null;
+
     if (!toolCallId || !data) continue;
+
     const toolArgs =
-      data.args ?? (typeof data.command === "string" ? { command: data.command } : undefined);
+      data.args ?? (Predicate.isString(data.command) ? { command: data.command } : undefined);
+
     if (toolArgs !== undefined) toolArgsByCallId.set(toolCallId, toolArgs);
   }
 
@@ -137,6 +166,7 @@ export function derivePendingRequests(activities: ReadonlyArray<OrchestrationThr
   for (const activity of activities) {
     if (!requestActivityKinds.has(activity.kind)) continue;
     const payload = Predicate.isObject(activity.payload) ? activity.payload : undefined;
+
     if (!payload) continue;
 
     if (activity.kind === "tool.started") continue;
@@ -152,22 +182,25 @@ export function derivePendingRequests(activities: ReadonlyArray<OrchestrationThr
       ) {
         continue;
       }
+
       const requestKind = isProviderRequestKind(payload.requestKind)
         ? payload.requestKind
         : requestKindFromRequestType(payload.requestType);
+
       const options = Array.isArray(payload.options)
         ? payload.options.filter(isProviderApprovalOption)
         : [];
+
       const args = payload.args ?? toolArgsByCallId.get(requestId);
       approvals.set(requestId, {
         requestId,
         requestKind: requestKind ?? "command",
         createdAt: activity.createdAt,
-        ...(typeof payload.detail === "string" && payload.detail ? { detail: payload.detail } : {}),
-        ...(typeof payload.appName === "string" && payload.appName
+        ...(Predicate.isString(payload.detail) && payload.detail ? { detail: payload.detail } : {}),
+        ...(Predicate.isString(payload.appName) && payload.appName
           ? { appName: payload.appName }
           : {}),
-        ...(typeof payload.toolName === "string" && payload.toolName
+        ...(Predicate.isString(payload.toolName) && payload.toolName
           ? { toolName: payload.toolName }
           : {}),
         ...(args !== undefined ? { args } : {}),
@@ -176,19 +209,20 @@ export function derivePendingRequests(activities: ReadonlyArray<OrchestrationThr
     } else if (activity.kind === "user-input.requested") {
       if (closedUserInputs.has(requestId)) continue;
       const questions = parseQuestions(payload.questions);
+
       if (questions.length === 0) continue;
       userInputs.set(requestId, { requestId, createdAt: activity.createdAt, questions });
     } else if (
       activity.kind === "approval.resolved" ||
       (activity.kind === "provider.approval.respond.failed" &&
-        isStaleRequestFailure(activity.kind, payload))
+        isStaleRequestFailure(activity.kind, payload.detail))
     ) {
       closedApprovals.add(requestId);
       approvals.delete(requestId);
     } else if (
       activity.kind === "user-input.resolved" ||
       (activity.kind === "provider.user-input.respond.failed" &&
-        isStaleRequestFailure(activity.kind, payload))
+        isStaleRequestFailure(activity.kind, payload.detail))
     ) {
       closedUserInputs.add(requestId);
       userInputs.delete(requestId);
@@ -199,6 +233,7 @@ export function derivePendingRequests(activities: ReadonlyArray<OrchestrationThr
     left: { readonly createdAt: string },
     right: { readonly createdAt: string },
   ) => left.createdAt.localeCompare(right.createdAt);
+
   return {
     approvals: [...approvals.values()].sort(byCreatedAt),
     userInputs: [...userInputs.values()].sort(byCreatedAt),

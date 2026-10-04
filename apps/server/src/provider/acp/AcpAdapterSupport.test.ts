@@ -43,6 +43,7 @@ describe("AcpAdapterSupport", () => {
 
   it("maps an exited ACP process to a closed session instead of a request error", () => {
     const cause = new EffectAcpErrors.AcpProcessExitedError({ code: 1 });
+
     const error = mapAcpToAdapterError(
       ProviderDriverKind.make("cursor"),
       ThreadId.make("thread-1"),

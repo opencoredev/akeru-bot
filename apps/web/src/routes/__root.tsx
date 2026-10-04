@@ -1,3 +1,4 @@
+import { hasTag } from "~/lib/taggedUnion";
 import { type ServerLifecycleWelcomePayload } from "@akeru/contracts";
 import { squashAtomCommandFailure } from "@akeru/client-runtime/state/runtime";
 import { Outlet, createRootRoute, useLocation } from "@tanstack/react-router";
@@ -55,7 +56,9 @@ export const Route = createRootRoute({
     if (isHostedPairingLink(window.location.href)) {
       return { authGateState: { status: "hosted-pairing" } as const };
     }
+
     const authGateState = await resolveInitialServerAuthGateState();
+
     return {
       authGateState,
     };
@@ -76,6 +79,7 @@ function RootRouteView() {
     const frame = window.requestAnimationFrame(() => {
       syncBrowserChromeTheme();
     });
+
     return () => {
       window.cancelAnimationFrame(frame);
     };
@@ -190,6 +194,7 @@ function FontAppearanceSync() {
 function DocumentTitleSync() {
   const primaryServerVersion =
     useAtomValue(primaryServerConfigAtom)?.environment.serverVersion ?? null;
+
   const title = resolveServerBackedAppDisplayName({
     baseName: APP_BASE_NAME,
     fallbackDisplayName: APP_DISPLAY_NAME,
@@ -215,13 +220,16 @@ function AuthenticatedTracingBootstrap() {
 function EventRouter() {
   const { t } = useI18n();
   const primaryEnvironment = usePrimaryEnvironment();
+
   const openInEditor = useAtomCommand(shellEnvironment.openInEditor, {
     reportFailure: false,
   });
+
   const serverConfig = useAtomValue(primaryServerConfigAtom);
   const serverConfigEvent = useAtomValue(primaryServerConfigEventAtom);
   const serverWelcome = useAtomValue(primaryServerWelcomeAtom);
   const handledConfigEventRef = useRef(serverConfigEvent);
+
   const [keybindingsToastController] = useState<KeybindingsUpdateToastController>(() =>
     createKeybindingsUpdateToastController({}),
   );
@@ -234,16 +242,18 @@ function EventRouter() {
 
   const handleServerConfigUpdated = useEffectEvent(() => {
     const decision = keybindingsToastController.handle(serverConfigEvent);
+
     if (!decision) {
       return;
     }
 
-    if (decision._tag === "Success") {
+    if (hasTag(decision, "Success")) {
       toastManager.add({
         type: "success",
         title: t("Keybindings updated"),
         description: t("Keybindings configuration reloaded successfully."),
       });
+
       return;
     }
 
@@ -261,9 +271,11 @@ function EventRouter() {
             }
 
             const editor = resolveAndPersistPreferredEditor(serverConfig.availableEditors);
+
             if (!editor) {
               return;
             }
+
             void (async () => {
               const result = await openInEditor({
                 environmentId: primaryEnvironment.environmentId,
@@ -272,9 +284,11 @@ function EventRouter() {
                   editor,
                 },
               });
-              if (result._tag === "Success") {
+
+              if (hasTag(result, "Success")) {
                 return;
               }
+
               const error = squashAtomCommandFailure(result);
               toastManager.add(
                 stackedThreadToast({
@@ -307,6 +321,7 @@ function EventRouter() {
     if (serverConfigEvent === null || handledConfigEventRef.current === serverConfigEvent) {
       return;
     }
+
     handledConfigEventRef.current = serverConfigEvent;
     handleServerConfigUpdated();
   }, [serverConfigEvent]);

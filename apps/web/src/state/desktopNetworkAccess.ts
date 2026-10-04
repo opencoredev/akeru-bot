@@ -57,9 +57,11 @@ export function createDesktopNetworkAccessStateAtom(
 ) {
   const loadDesktopNetworkAccess = Effect.fn("loadDesktopNetworkAccess")(function* () {
     const bridge = getBridge();
+
     if (!bridge) {
       return yield* new DesktopNetworkAccessUnavailableError();
     }
+
     const [serverExposureState, advertisedEndpoints] = yield* Effect.all(
       [
         Effect.tryPromise({
@@ -73,6 +75,7 @@ export function createDesktopNetworkAccessStateAtom(
       ],
       { concurrency: "unbounded" },
     );
+
     return {
       advertisedEndpoints,
       serverExposureState,

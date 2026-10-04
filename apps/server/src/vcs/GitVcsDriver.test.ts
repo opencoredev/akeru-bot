@@ -6,7 +6,6 @@ import * as Path from "effect/Path";
 import * as PlatformError from "effect/PlatformError";
 import { ChildProcessSpawner } from "effect/unstable/process";
 import { assert, it } from "@effect/vitest";
-
 import { GitCommandError } from "@akeru/contracts";
 import * as ServerConfig from "../config.ts";
 import * as GitVcsDriver from "./GitVcsDriver.ts";
@@ -16,6 +15,7 @@ import { runVcsDriverContractSuite } from "./testing/VcsDriverContractHarness.ts
 const ServerConfigLayer = ServerConfig.layerTest(process.cwd(), {
   prefix: "t3-git-vcs-contract-",
 });
+
 const GitContractLayer = Layer.mergeAll(GitVcsDriver.vcsLayer, GitVcsDriver.layer).pipe(
   Layer.provide(ServerConfigLayer),
   Layer.provideMerge(VcsProcess.layer),
@@ -95,6 +95,7 @@ it.effect("GitVcsDriver forwards execute env to the VCS process", () => {
             Effect.sync(() => {
               observedEnv = input.env;
               observedAppendTruncationMarker = input.appendTruncationMarker;
+
               return {
                 exitCode: ChildProcessSpawner.ExitCode(0),
                 stdout: "",

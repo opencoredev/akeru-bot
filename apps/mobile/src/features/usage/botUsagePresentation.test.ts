@@ -31,7 +31,9 @@ const snapshot: AkeruBotUsageSnapshot = {
 function rowValue(view: ReturnType<typeof botUsageView>, key: string) {
   if (view.kind !== "ready") throw new Error(`expected a ready view, got ${view.kind}`);
   const row = view.rows.find((candidate) => candidate.key === key);
+
   if (row === undefined) throw new Error(`missing row ${key}`);
+
   return row;
 }
 
@@ -90,6 +92,7 @@ describe("botUsageView", () => {
 
   it("builds every measurement, the cap, cost, pool, and reservations", () => {
     const view = botUsageView({ data: snapshot, error: null, isPending: false });
+
     if (view.kind !== "ready") throw new Error("expected a ready view");
     expect(view.rows.map((row) => row.key)).toEqual([
       "input",
@@ -143,6 +146,7 @@ describe("botUsageView", () => {
       unavailable: true,
     });
     expect(rowValue(view, "cap").value).toBe("No cap");
+
     // Nothing reserved gets no row, matching web.
     if (view.kind !== "ready") throw new Error("expected a ready view");
     expect(view.rows.some((row) => row.key === "reserved")).toBe(false);

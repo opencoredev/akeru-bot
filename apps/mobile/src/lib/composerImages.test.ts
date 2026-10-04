@@ -17,14 +17,17 @@ vi.mock("expo-file-system", () => ({
 
     async base64(): Promise<string> {
       const entry = files.get(this.uri);
+
       if (!entry || entry.deleted) {
         throw new Error("missing file");
       }
+
       return entry.base64;
     }
 
     delete(): void {
       const entry = files.get(this.uri);
+
       if (entry) {
         entry.deleted = true;
       }
@@ -86,6 +89,7 @@ describe("native pasted image cleanup", () => {
   it("converts owned files to data-backed previews and deletes the source", async () => {
     const uri =
       "file:///private/var/mobile/Containers/Data/Application/app/tmp/t3-composer-paste/id.png";
+
     files.set(uri, { base64: "aGVsbG8=", deleted: false });
 
     const attachments = await convertPastedImagesToAttachments({
@@ -105,8 +109,10 @@ describe("native pasted image cleanup", () => {
   it("deletes rejected and overflow owned files without deleting user-owned files", async () => {
     const rejected =
       "file:///private/var/mobile/Containers/Data/Application/app/tmp/t3-composer-paste/bad.png";
+
     const overflow =
       "file:///private/var/mobile/Containers/Data/Application/app/tmp/t3-composer-paste/overflow.png";
+
     const userOwned = "file:///private/var/mobile/photos/library.png";
     files.set(rejected, { base64: "", deleted: false });
     files.set(overflow, { base64: "aGVsbG8=", deleted: false });

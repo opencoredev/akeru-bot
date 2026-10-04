@@ -75,6 +75,7 @@ describe("latestOwnerThreadIds", () => {
       },
       thread("plain", "2026-06-04T00:00:00.000Z", {}),
     ]);
+
     expect(latest.byBot.get("a")).toBe("a-new");
     expect(latest.byGroup.get("g")).toBe("g-1");
     expect(latest.byBot.size).toBe(1);
@@ -84,10 +85,12 @@ describe("latestOwnerThreadIds", () => {
 describe("latest owner thread atoms", () => {
   function harness(initial: ReadonlyArray<OrchestrationThreadShell>) {
     const snapshotAtom = Atom.make<OrchestrationShellSnapshot | null>(snapshot(initial));
+
     const atoms = createEnvironmentThreadShellAtoms({
       catalogValueAtom: Atom.make(EMPTY_ENVIRONMENT_CATALOG_STATE),
       snapshotAtom: () => snapshotAtom,
     });
+
     return { registry: AtomRegistry.make(), snapshotAtom, atoms };
   }
 
@@ -97,6 +100,7 @@ describe("latest owner thread atoms", () => {
         ...thread(id, completedAt, owner),
         latestTurn: { completedAt },
       }) as OrchestrationThreadShell;
+
     const a1 = completed("a-1", "2026-06-01T00:00:00.000Z", { botId: "a" });
     const a2 = completed("a-2", "2026-06-02T00:00:00.000Z", { botId: "a" });
     const pending = thread("a-3", "2026-06-03T00:00:00.000Z", { botId: "a" });
@@ -131,6 +135,7 @@ describe("latest owner thread atoms", () => {
     const before = registry.get(mapAtom);
     expect(registry.get(botAtom)).toBe("a-1");
     let notifications = 0;
+
     const unsubscribe = registry.subscribe(botAtom, () => {
       notifications += 1;
     });

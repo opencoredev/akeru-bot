@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 import type {
   EnvironmentId,
   ImageGenerationSettings,
@@ -50,8 +51,9 @@ const IMAGE_PROVIDER_ICONS: Readonly<Record<ImageProviderId, string>> = {
 };
 
 function commandError(result: AtomCommandResult<unknown, unknown>): string {
-  if (result._tag !== "Failure") return "The request failed.";
+  if (!Predicate.isTagged(result, "Failure")) return "The request failed.";
   const error = squashAtomCommandFailure(result);
+
   return error instanceof Error ? error.message : "The request failed.";
 }
 
@@ -63,6 +65,7 @@ function confirmAction(message: string): Promise<boolean> {
 
 export function ImageGenerationSettingsPanel() {
   const environmentId = useSettingsEnvironmentId();
+
   return (
     <SettingsPageContainer>
       {environmentId === null ? (
@@ -86,15 +89,19 @@ export function ImageGenerationSettingsContent({
 }) {
   const settings = useEnvironmentSettings(environmentId, (value) => value.imageGeneration);
   const updateSettings = useUpdateEnvironmentSettings(environmentId);
+
   const providersQuery = useEnvironmentQuery(
     serverEnvironment.imageProviders({ environmentId, input: {} }),
   );
+
   const testProvider = useAtomCommand(serverEnvironment.testImageProvider, {
     reportFailure: false,
   });
+
   const logoutSubscription = useAtomCommand(serverEnvironment.logoutSubscriptionAuth, {
     reportFailure: false,
   });
+
   const [busy, setBusy] = useState<{ provider: ImageProviderId; action: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -113,24 +120,30 @@ export function ImageGenerationSettingsContent({
     setError(null);
     const result = await testProvider({ environmentId, input: { provider } });
     setBusy(null);
-    if (result._tag === "Failure") setError(commandError(result));
+
+    if (Predicate.isTagged(result, "Failure")) setError(commandError(result));
     providersQuery.refresh();
   };
 
   const disconnect = async (provider: ImageProviderId) => {
     const label = IMAGE_PROVIDER_LABELS[provider];
+
     const confirmed = await confirmAction(
       `Disconnect the ${label} subscription? Chats that use ${label} will also be signed out.`,
     );
+
     if (!confirmed) return;
     setBusy({ provider, action: "disconnect" });
     setError(null);
+
     const result = await logoutSubscription({
       environmentId,
       input: { provider: IMAGE_PROVIDER_SUBSCRIPTIONS[provider] },
     });
+
     setBusy(null);
-    if (result._tag === "Failure") setError(commandError(result));
+
+    if (Predicate.isTagged(result, "Failure")) setError(commandError(result));
     providersQuery.refresh();
   };
 
@@ -240,7 +253,7 @@ export function ImageProviderRow({
           />
           {label}
           {disconnected ? null : (
-            <Badge variant={health.variant} className="h-4 px-1.5 text-[10px]">
+            <Badge variant={health.variant} presentation="connection-kind">
               {health.label}
             </Badge>
           )}
@@ -350,6 +363,7 @@ export function ImageGenerationRoutingSection({
     const next = [...order].sort((a, b) => (a === first ? -1 : b === first ? 1 : 0));
     const validation = fallbackOrderError(next, settings);
     setOrderError(validation);
+
     if (!validation) onChange({ fallbackOrder: next });
   };
 
@@ -369,6 +383,7 @@ export function ImageGenerationRoutingSection({
             disabled={enabledProviders.length === 0}
             onValueChange={(value) => {
               const next = IMAGE_PROVIDER_IDS.find((id) => id === value);
+
               if (next) onChange({ defaultProvider: next });
             }}
           >

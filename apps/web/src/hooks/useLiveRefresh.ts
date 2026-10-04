@@ -90,8 +90,11 @@ const lastRefreshedAtByView = new Map<string, number>();
  * writes a number and nothing else, so a mousemove costs what a mousemove costs.
  */
 let lastInteractedAt = 0;
+
 let interactionWatchers = 0;
+
 const INTERACTION_EVENTS = ["pointerdown", "pointermove", "keydown", "wheel"] as const;
+
 const noteInteraction = () => {
   lastInteractedAt = Date.now();
 };
@@ -101,14 +104,19 @@ function watchInteraction(): () => void {
     // Arriving is itself the reader doing something, and it is what makes the first interval tick
     // after a mount count.
     lastInteractedAt = Date.now();
+
     for (const event of INTERACTION_EVENTS) {
       document.addEventListener(event, noteInteraction, { passive: true });
     }
   }
+
   interactionWatchers += 1;
+
   return () => {
     interactionWatchers -= 1;
+
     if (interactionWatchers > 0) return;
+
     for (const event of INTERACTION_EVENTS) {
       document.removeEventListener(event, noteInteraction);
     }
@@ -132,30 +140,39 @@ export function useLiveRefresh(
 
   useEffect(() => {
     if (!enabled) return;
+
     const read = (now: number) => {
       lastRefreshedAtByView.set(viewId, now);
       latest.current?.();
     };
+
     const visible = () => document.visibilityState === "visible";
+
     const onArrival = () => {
       const now = Date.now();
       const lastRefreshedAt = lastRefreshedAtByView.get(viewId);
+
       if (lastRefreshedAt === undefined) {
         // Nothing read yet, so nothing to refresh: the mount's own read is what fills this in.
         lastRefreshedAtByView.set(viewId, now);
+
         return;
       }
+
       if (shouldRefreshOnArrival({ visible: visible(), now, lastRefreshedAt })) read(now);
     };
+
     const onInterval = () => {
       const now = Date.now();
       const lastRefreshedAt = lastRefreshedAtByView.get(viewId) ?? now;
+
       if (shouldRefreshOnInterval({ visible: visible(), now, lastRefreshedAt, lastInteractedAt })) {
         read(now);
       }
     };
 
     let timer: ReturnType<typeof setInterval> | undefined;
+
     // The timer exists only while the window is showing: a tab sitting behind another one should
     // cost the host nothing, and the reads it missed collapse into the single one it makes on the
     // way back. Nothing else moves the window between showing and hidden, so nothing else re-arms.
@@ -163,6 +180,7 @@ export function useLiveRefresh(
       clearInterval(timer);
       timer = visible() ? setInterval(onInterval, LIVE_REFRESH_INTERVAL_MS) : undefined;
     };
+
     const onVisibilityChange = () => {
       onArrival();
       syncTimer();
@@ -173,6 +191,7 @@ export function useLiveRefresh(
     syncTimer();
     window.addEventListener("focus", onArrival);
     document.addEventListener("visibilitychange", onVisibilityChange);
+
     return () => {
       clearInterval(timer);
       window.removeEventListener("focus", onArrival);

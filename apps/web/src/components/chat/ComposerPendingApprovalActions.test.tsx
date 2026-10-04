@@ -50,6 +50,7 @@ describe("ComposerPendingApprovalActions", () => {
 
   it("limits provider-supplied approval labels so narrow rows can wrap", () => {
     const label = "Allow ".repeat(40).trim();
+
     const markup = renderToStaticMarkup(
       <ComposerPendingApprovalActions
         requestId={ApprovalRequestId.make("approval-long-label")}
@@ -155,6 +156,7 @@ describe("ComposerPendingApprovalActions", () => {
         onRespondToApproval={async () => undefined}
       />,
     );
+
     expect(fallbackMarkup).toContain("Create routine");
     expect(fallbackMarkup).toContain(">Don&#x27;t create<");
     expect(fallbackMarkup).not.toContain("Enable Auto Review");

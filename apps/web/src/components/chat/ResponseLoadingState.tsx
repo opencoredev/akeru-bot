@@ -1,4 +1,4 @@
-import { useEffect, useRef, type CSSProperties } from "react";
+import { useEffect, useRef } from "react";
 
 import { useI18n } from "~/i18n";
 import { cn } from "~/lib/utils";
@@ -18,6 +18,7 @@ import { cn } from "~/lib/utils";
 export const LOADER_CELL_DELAYS_MS: readonly number[] = Array.from({ length: 9 }, (_, index) => {
   const row = Math.floor(index / 3);
   const column = index % 3;
+
   return (column + Math.abs(row - 1)) * 90;
 });
 
@@ -25,32 +26,39 @@ export const LOADER_CELL_DELAYS_MS: readonly number[] = Array.from({ length: 9 }
 export const LOADER_RESTING_CELLS: readonly boolean[] = Array.from({ length: 9 }, (_, index) => {
   const row = Math.floor(index / 3);
   const column = index % 3;
+
   return column === 2 - Math.abs(row - 1);
 });
 
 /** `4s` under a minute, `1m 04s` under an hour, then `7h 48m`. Kept short so the line never reflows. */
 export function formatLoadingElapsed(elapsedMs: number): string {
   const elapsedSeconds = Math.floor(Math.max(0, elapsedMs) / 1000);
+
   if (elapsedSeconds < 60) return `${elapsedSeconds}s`;
+
   if (elapsedSeconds >= 3600) {
     const hours = Math.floor(elapsedSeconds / 3600);
     const minutes = Math.floor((elapsedSeconds % 3600) / 60);
+
     return `${hours}h ${String(minutes).padStart(2, "0")}m`;
   }
+
   const minutes = Math.floor(elapsedSeconds / 60);
   const seconds = Math.floor(elapsedSeconds % 60);
+
   return `${minutes}m ${String(seconds).padStart(2, "0")}s`;
 }
 
 export function LoaderMeter({ className }: { readonly className?: string }) {
+  // SAFETY: React CSSProperties omits custom properties; these values are CSS variables consumed by the component stylesheet.
   return (
-    <span aria-hidden="true" className={cn("grid shrink-0 grid-cols-3 gap-[3px]", className)}>
+    <span aria-hidden="true" className={cn("grid shrink-0 grid-cols-3 gap-0.75", className)}>
       {LOADER_CELL_DELAYS_MS.map((delay, index) => (
         <i
           key={`r${Math.floor(index / 3)}c${index % 3}`}
-          className="response-loading-pixel size-1 rounded-[1px] bg-current"
+          className="response-loading-pixel size-1 rounded-1px bg-current"
           data-lit={LOADER_RESTING_CELLS[index] ? "" : undefined}
-          style={{ animationDelay: `${delay}ms` } as CSSProperties}
+          style={{ "--response-loading-pixel-delay": `${delay}ms` }}
         />
       ))}
     </span>
@@ -67,8 +75,10 @@ function LoadingElapsed({ startedAt }: { readonly startedAt: number }) {
         textRef.current.textContent = formatLoadingElapsed(Date.now() - startedAt);
       }
     };
+
     update();
     const intervalId = window.setInterval(update, 1000);
+
     return () => window.clearInterval(intervalId);
   }, [startedAt]);
 
@@ -112,7 +122,7 @@ export function ResponseLoadingState({
       <LoaderMeter key={label} />
       <span
         className={cn(
-          "min-w-0 truncate text-[13px] font-medium",
+          "min-w-0 truncate text-13px font-medium",
           stalled ? "text-foreground" : "bot-status-shimmer",
         )}
       >

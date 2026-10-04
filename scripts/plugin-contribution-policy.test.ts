@@ -1,4 +1,5 @@
-// @effect-diagnostics nodeBuiltinImport:off - Tests inspect repository policy files.
+import type * as Schema from "effect/Schema";
+import * as Predicate from "effect/Predicate";
 import * as NodeFS from "node:fs";
 import * as NodePath from "node:path";
 import { describe, expect, it } from "vite-plus/test";
@@ -15,8 +16,8 @@ function text(path: string): string {
   return NodeFS.readFileSync(new URL(`../${path}`, import.meta.url), "utf8");
 }
 
-function yaml(path: string): Record<string, unknown> {
-  return parse(text(path)) as Record<string, unknown>;
+function yaml(path: string): Record<string, Schema.Json | undefined> {
+  return parse(text(path)) as Record<string, Schema.Json | undefined>;
 }
 
 function labelsForPath(config: PathLabelConfig, path: string): string[] {
@@ -24,7 +25,8 @@ function labelsForPath(config: PathLabelConfig, path: string): string[] {
     rules.some((rule) =>
       rule["changed-files"].some((condition) => {
         const patterns = condition["any-glob-to-any-file"];
-        return (typeof patterns === "string" ? [patterns] : patterns).some((pattern) =>
+
+        return (Predicate.isString(patterns) ? [patterns] : patterns).some((pattern) =>
           NodePath.matchesGlob(path, pattern),
         );
       }),
@@ -51,6 +53,7 @@ describe("plugin contribution policy", () => {
         validations?: { required?: boolean };
       }>;
     };
+
     const required = form.body
       .filter((field) => field.validations?.required)
       .map((field) => field.id);
@@ -107,9 +110,11 @@ describe("plugin contribution policy", () => {
 
   it("uses one path-label job and mints no auth or category labels", () => {
     const pathLabels = yaml(".github/path-labels.yml") as PathLabelConfig;
+
     const issueLabelWorkflow = yaml(".github/workflows/issue-labels.yml") as {
-      jobs: Record<string, unknown>;
+      jobs: Record<string, Schema.Json | undefined>;
     };
+
     const issueLabels = text(".github/workflows/issue-labels.yml");
     const mintedLabels = [...issueLabels.matchAll(/name: "([^"]+)"/g)].map((match) => match[1]);
 
@@ -138,6 +143,7 @@ describe("plugin contribution policy", () => {
     const ci = yaml(".github/workflows/ci.yml") as {
       jobs: Record<string, { steps?: Array<{ run?: string }> }>;
     };
+
     const commands = Object.values(ci.jobs).flatMap(
       (job) => job.steps?.map((step) => step.run) ?? [],
     );
@@ -152,6 +158,7 @@ describe("plugin contribution policy", () => {
     const issueConfig = yaml(".github/ISSUE_TEMPLATE/config.yml") as {
       contact_links: Array<{ name: string; url: string }>;
     };
+
     const contributionGuide = text("CONTRIBUTING.md");
     const pullRequestTemplate = text(".github/pull_request_template.md");
 

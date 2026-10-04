@@ -1,4 +1,4 @@
-// @effect-diagnostics nodeBuiltinImport:off
+import * as Predicate from "effect/Predicate";
 import * as NodeFS from "node:fs";
 import * as NodeOS from "node:os";
 import * as NodePath from "node:path";
@@ -32,10 +32,11 @@ function plugin(command = "./bin/launcher") {
       },
     }),
   );
+
   return root;
 }
 
-function listing(root: string, overrides?: Record<string, unknown>) {
+function listing(root: string, overrides?: { enabled?: boolean }) {
   return JSON.stringify({
     installed: [
       {
@@ -55,11 +56,13 @@ describe("Codex Computer Use resolver", () => {
     for (const directory of directories) {
       NodeFS.rmSync(directory, { recursive: true, force: true });
     }
+
     directories.clear();
   });
 
   it("resolves the enabled official launcher without persisting its path", async () => {
     const root = plugin();
+
     const result = await resolveCodexComputerUseServer({
       platform: "darwin",
       run: async () => listing(root),
@@ -74,7 +77,8 @@ describe("Codex Computer Use resolver", () => {
         TMPDIR: expect.stringMatching(/akeru-computer-use-/),
       },
     });
-    if (typeof result.env?.TMPDIR === "string") directories.add(result.env.TMPDIR);
+
+    if (Predicate.isString(result.env?.TMPDIR)) directories.add(result.env.TMPDIR);
   });
 
   it("fails closed for unsupported, missing, disabled, and malformed plugins", async () => {
@@ -150,9 +154,11 @@ describe("Codex Computer Use resolver", () => {
       screenshot: { url: expect.stringMatching(/^data:image\/png/) },
     });
     const frameUrl = (result as { screenshot: { url: string } }).screenshot.url;
+
     const frame = PNG.sync.read(
       Buffer.from(frameUrl.slice("data:image/png;base64,".length), "base64"),
     );
+
     expect([...frame.data]).toEqual([0, 0, 0, 255]);
     expect(NodeFS.existsSync(path)).toBe(false);
 
@@ -161,11 +167,13 @@ describe("Codex Computer Use resolver", () => {
       mimeType: "image/png",
       data: PNG.sync.write(png).toString("base64"),
     }) as { data: string };
+
     expect([...PNG.sync.read(Buffer.from(inline.data, "base64")).data]).toEqual([0, 0, 0, 255]);
 
     const dataUrl = sanitizeCodexComputerUseResult({
       screenshot: { url: `data:image/png;base64,${PNG.sync.write(png).toString("base64")}` },
     }) as { screenshot: { url: string } };
+
     expect([
       ...PNG.sync.read(
         Buffer.from(dataUrl.screenshot.url.slice("data:image/png;base64,".length), "base64"),
@@ -181,6 +189,7 @@ describe("Codex Computer Use resolver", () => {
         { temporaryDirectory: directory },
       ),
     ).toThrow("unreadable screenshot");
+
     try {
       sanitizeCodexComputerUseResult(
         {

@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import { describe, expect, it } from "@effect/vitest";
 import * as Deferred from "effect/Deferred";
 import * as Duration from "effect/Duration";
@@ -23,7 +24,9 @@ type ChildProcessCommand = {
 };
 
 // Accesses private properties of ChildProcessCommand for testing purposes
-function asChildProcessCommand(command: unknown): ChildProcessCommand {
+function asChildProcessCommand(
+  command: Parameters<Parameters<typeof ChildProcessSpawner.make>[0]>[0],
+): ChildProcessCommand {
   return command as ChildProcessCommand;
 }
 
@@ -41,14 +44,12 @@ function makeHandle(input: {
     kill: () => Effect.void,
     unref: Effect.succeed(Effect.void),
     stdin: input.stdin ?? Sink.drain,
-    stdout:
-      typeof input.stdout === "string"
-        ? Stream.encodeText(Stream.make(input.stdout))
-        : (input.stdout ?? Stream.empty),
-    stderr:
-      typeof input.stderr === "string"
-        ? Stream.encodeText(Stream.make(input.stderr))
-        : (input.stderr ?? Stream.empty),
+    stdout: Predicate.isString(input.stdout)
+      ? Stream.encodeText(Stream.make(input.stdout))
+      : (input.stdout ?? Stream.empty),
+    stderr: Predicate.isString(input.stderr)
+      ? Stream.encodeText(Stream.make(input.stderr))
+      : (input.stderr ?? Stream.empty),
     all: Stream.empty,
     getInputFd: () => Sink.drain,
     getOutputFd: () => Stream.empty,
@@ -86,6 +87,7 @@ describe("runProcess", () => {
         Effect.sync(() => {
           expect(command.command).toBe("fake");
           expect(command.args).toEqual(["stdout-bytes", "32"]);
+
           return makeHandle({ stdout: "x".repeat(32) });
         }),
       );
@@ -106,15 +108,18 @@ describe("runProcess", () => {
       Effect.sync(() => {
         expect(command.command).toBe("fake");
         expect(command.args).toEqual(["--service"]);
+
         return makeHandle({ stdout: "service ok" });
       }),
     );
+
     const layer = ProcessRunner.layer.pipe(
       Layer.provide(Layer.succeed(ChildProcessSpawner.ChildProcessSpawner, spawner)),
     );
 
     return Effect.gen(function* () {
       const runner = yield* ProcessRunner.ProcessRunner;
+
       const result = yield* runner.run({
         command: "fake",
         args: ["--service"],
@@ -136,6 +141,7 @@ describe("runProcess", () => {
           '^"feature^ ^&^ release^"',
         ]);
         expect(command.options.shell).toBe(true);
+
         return makeHandle({ stdout: "[]" });
       }),
     );
@@ -170,6 +176,7 @@ describe("runProcess", () => {
         method: "spawn",
         pathOrDescriptor: "/actual/fake",
       });
+
       const spawner = makeSpawner(() => Effect.fail(cause));
 
       const error = yield* runWith(spawner)({
@@ -180,9 +187,11 @@ describe("runProcess", () => {
       }).pipe(Effect.flip);
 
       expect(error._tag).toBe("ProcessSpawnError");
-      if (error._tag !== "ProcessSpawnError") {
+
+      if (!Predicate.isTagged(error, "ProcessSpawnError")) {
         return expect.fail("Expected ProcessSpawnError");
       }
+
       expect(error).toMatchObject({
         command: "fake",
         argumentCount: 2,
@@ -211,9 +220,11 @@ describe("runProcess", () => {
       }).pipe(Effect.flip);
 
       expect(error._tag).toBe("ProcessOutputLimitError");
-      if (error._tag !== "ProcessOutputLimitError") {
+
+      if (!Predicate.isTagged(error, "ProcessOutputLimitError")) {
         return expect.fail("Expected ProcessOutputLimitError");
       }
+
       expect(error).toMatchObject({
         stream: "stdout",
         maxBytes: 128,
@@ -228,6 +239,7 @@ describe("runProcess", () => {
   it.effect("accepts output at the byte limit followed by an empty chunk", () =>
     Effect.gen(function* () {
       const output = new TextEncoder().encode("exactly");
+
       const spawner = makeSpawner(() =>
         Effect.succeed(
           makeHandle({
@@ -249,6 +261,7 @@ describe("runProcess", () => {
   it.effect("fails fast on output limit before timeout for long-running output", () =>
     Effect.gen(function* () {
       const textChunk = "x".repeat(64);
+
       const spawner = makeSpawner(() =>
         Effect.succeed(
           makeHandle({
@@ -293,12 +306,14 @@ describe("runProcess", () => {
     Effect.gen(function* () {
       const stdinWritten = yield* Deferred.make<void>();
       const decoder = new TextDecoder();
+
       const spawner = makeSpawner(() =>
         Effect.succeed(
           makeHandle({
             stdout: "stdin payload",
             stdin: Sink.forEach((chunk: Uint8Array) => {
               const text = decoder.decode(chunk, { stream: true });
+
               return text.includes("stdin payload")
                 ? Deferred.succeed(stdinWritten, undefined)
                 : Effect.void;
@@ -342,6 +357,7 @@ describe("runProcess", () => {
           }),
         ),
       );
+
       const errorFiber = yield* runWith(spawner)({
         command: "fake",
         args: ["sleep"],
@@ -355,9 +371,11 @@ describe("runProcess", () => {
       const error = yield* Fiber.join(errorFiber);
 
       expect(error._tag).toBe("ProcessTimeoutError");
-      if (error._tag !== "ProcessTimeoutError") {
+
+      if (!Predicate.isTagged(error, "ProcessTimeoutError")) {
         return expect.fail("Expected ProcessTimeoutError");
       }
+
       expect(error).toMatchObject({
         command: "fake",
         argumentCount: 1,
@@ -378,6 +396,7 @@ describe("runProcess", () => {
           }),
         ),
       );
+
       const resultFiber = yield* runWith(spawner)({
         command: "fake",
         args: ["sleep"],
@@ -408,6 +427,7 @@ describe("isWindowsCommandNotFound", () => {
         1,
         "wird nicht als interner oder externer Befehl, betriebsfahiges Programm oder Batch-Datei erkannt",
       ).pipe(Effect.provideService(HostProcessPlatform, "win32"));
+
       expect(isCommandNotFound).toBe(true);
     }),
   );

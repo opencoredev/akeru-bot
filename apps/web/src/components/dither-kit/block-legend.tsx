@@ -1,4 +1,3 @@
-// @ts-nocheck
 import type { ChartConfig } from "./chart-context";
 import { cn } from "./lib";
 import { rgb, seedOfColor } from "./palette";
@@ -19,7 +18,7 @@ import { rgb, seedOfColor } from "./palette";
 export function BlockLegend({
   config,
   values,
-  valueFormatter = (v) => String(v),
+  valueFormatter = String,
   align = "start",
   className,
 }: {
@@ -41,12 +40,16 @@ export function BlockLegend({
       {Object.entries(config).map(([name, entry]) => {
         const seed = seedOfColor(entry.color);
         const value = values?.[name];
+
         return (
           <li
             key={name}
-            className="flex items-center gap-1.5 font-mono text-[11px] text-muted-foreground"
+            className="flex items-center gap-1.5 font-mono text-11px text-muted-foreground"
           >
-            <span className="size-2 rounded-[1px]" style={{ backgroundColor: rgb(seed.fill) }} />
+            <span
+              className="size-2 rounded-1px swatch-fill"
+              style={{ "--swatch": rgb(seed.fill) }}
+            />
             <span>{entry.label ?? name}</span>
             {value !== undefined ? (
               <span className="text-foreground">{valueFormatter(value)}</span>

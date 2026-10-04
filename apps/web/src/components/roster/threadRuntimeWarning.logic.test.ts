@@ -13,7 +13,9 @@ import {
 } from "./threadRuntimeWarning.logic";
 
 const turnId = TurnId.make("turn-warning");
+
 const timestamp = "2026-09-11T12:00:00.000Z";
+
 const runningTurn: OrchestrationLatestTurn = {
   turnId,
   state: "running",
@@ -22,7 +24,9 @@ const runningTurn: OrchestrationLatestTurn = {
   completedAt: null,
   assistantMessageId: null,
 };
+
 const warningPayload = { message: "Claude is paused until the usage window resets." };
+
 const warning: OrchestrationThreadActivity = {
   id: EventId.make("warning-current"),
   tone: "info",
@@ -113,12 +117,14 @@ describe("activeThreadRuntimeWarning", () => {
 describe("latestThreadRuntimeError", () => {
   it("keeps a failed turn's provider error visible after the session recovers", () => {
     const failedTurn = { ...runningTurn, state: "error" as const, completedAt: timestamp };
+
     const activity = {
       ...warning,
       kind: "runtime.error",
       tone: "error" as const,
       payload: { message: "The usage limit has been reached" },
     };
+
     expect(latestThreadRuntimeError([activity], failedTurn)).toBe(
       "The usage limit has been reached",
     );
@@ -131,6 +137,7 @@ describe("latestThreadRuntimeError", () => {
 
 describe("latestBotThreadFailure", () => {
   const laterTimestamp = "2026-09-11T12:05:00.000Z";
+
   const startFailed: OrchestrationThreadActivity = {
     ...warning,
     id: EventId.make("activity-start-failed"),
@@ -172,6 +179,7 @@ describe("latestBotThreadFailure", () => {
       completedAt: timestamp,
       unavailability: "limit-reached" as const,
     };
+
     expect(
       latestBotThreadFailure({
         activities: [
@@ -199,6 +207,7 @@ describe("latestBotThreadFailure", () => {
       completedAt: timestamp,
       unavailability: "limit-reached" as const,
     };
+
     expect(
       latestBotThreadFailure({
         activities: [startFailed],

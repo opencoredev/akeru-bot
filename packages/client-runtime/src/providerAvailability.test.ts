@@ -90,6 +90,7 @@ describe("providerAvailabilityReason", () => {
       availability: "unavailable",
       unavailability: "missing-login",
     });
+
     const reason = providerAvailabilityReason(snapshot);
     expect(reason).toBe("missing-login");
     expect(
@@ -121,16 +122,19 @@ describe("presentProviderUnavailability", () => {
 
   it("gives every reason distinct copy without em dashes or thread wording", () => {
     const titles = new Set<string>();
+
     for (const reason of reasons) {
       const presentation = presentProviderUnavailability({
         reason,
         providerName: "Claude",
         modelName: "Claude Sonnet",
       });
+
       titles.add(presentation.title);
       const copy = `${presentation.title} ${presentation.description}`;
       expect(copy).not.toMatch(/—|\bthread\b/i);
     }
+
     expect(titles.size).toBe(reasons.length);
   });
 
@@ -149,6 +153,7 @@ describe("presentProviderUnavailability", () => {
 
   it("renders every reason in the active interface language", () => {
     const zh = createTranslator("zh-CN", zhCNCatalog).t;
+
     for (const reason of reasons) {
       const english = presentProviderUnavailability({ reason, providerName: "Claude" });
       const presentation = presentProviderUnavailability({ reason, providerName: "Claude" }, zh);
@@ -201,12 +206,20 @@ describe("latestTurnFailure", () => {
           activity({
             kind: "provider.turn.start.failed",
             createdAt: "2026-01-01T00:00:02.000Z",
-            payload: { detail: "OAuth token expired", unavailability: "expired-login" },
+            payload: {
+              detail: "OAuth token expired",
+              unavailability: "expired-login",
+              providerInstanceId: "codex",
+            },
           }),
         ],
         "2026-01-01T00:00:01.000Z",
       ),
-    ).toEqual({ detail: "OAuth token expired", unavailability: "expired-login" });
+    ).toEqual({
+      detail: "OAuth token expired",
+      unavailability: "expired-login",
+      providerInstanceId: "codex",
+    });
   });
 
   it("reads a mid-turn runtime error without a category", () => {

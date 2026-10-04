@@ -21,8 +21,9 @@ function formatRemainingSeconds(seconds: number): string {
   return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
 }
 
-function getPromptErrorMessage(error: unknown): string {
-  const message = error instanceof Error ? error.message : "SSH password prompt failed.";
+function getPromptErrorMessage(cause: unknown): string {
+  const message = cause instanceof Error ? cause.message : "SSH password prompt failed.";
+
   return message.includes("expired") || message.includes("no longer pending")
     ? "This SSH password prompt expired. Try connecting again."
     : message;
@@ -34,6 +35,7 @@ export function SshPasswordPromptDialog() {
 
   useEffect(() => {
     const bridge = window.desktopBridge;
+
     if (!bridge?.onSshPasswordPrompt) {
       return;
     }
@@ -80,6 +82,7 @@ function ActiveSshPasswordPrompt({
       inputRef.current?.focus();
       inputRef.current?.select();
     });
+
     return () => {
       window.cancelAnimationFrame(frame);
     };
@@ -89,6 +92,7 @@ function ActiveSshPasswordPrompt({
     const interval = window.setInterval(() => {
       setNow(Date.now());
     }, 1_000);
+
     return () => {
       window.clearInterval(interval);
     };
@@ -98,8 +102,10 @@ function ActiveSshPasswordPrompt({
   const remainingMs = Number.isFinite(expiresAtMs) ? Math.max(0, expiresAtMs - now) : null;
   const isExpired = remainingMs !== null && remainingMs <= 0;
   const remainingSeconds = remainingMs === null ? null : Math.ceil(remainingMs / 1_000);
+
   const remainingLabel =
     remainingSeconds === null ? null : formatRemainingSeconds(remainingSeconds);
+
   const visibleResponseError = isExpired
     ? "This SSH password prompt expired. Try connecting again."
     : responseError;
@@ -110,14 +116,17 @@ function ActiveSshPasswordPrompt({
     }
 
     const requestId = request.requestId;
+
     if (nextPassword !== null && isExpired) {
       setResponseError("This SSH password prompt expired. Try connecting again.");
+
       return;
     }
 
     isRespondingRef.current = true;
     setIsResponding(true);
     setResponseError(null);
+
     try {
       await window.desktopBridge?.resolveSshPasswordPrompt(requestId, nextPassword);
       onRemove(requestId);
@@ -140,8 +149,10 @@ function ActiveSshPasswordPrompt({
   const cancelPrompt = () => {
     if (isExpired) {
       dismissExpiredPrompt();
+
       return;
     }
+
     void respond(null);
   };
 

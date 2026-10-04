@@ -11,52 +11,57 @@ import * as DesktopUpdates from "../../updates/DesktopUpdates.ts";
 import * as IpcChannels from "../channels.ts";
 import * as DesktopIpc from "../DesktopIpc.ts";
 
-export const getUpdateState = DesktopIpc.makeIpcMethod({
+export const getUpdateState = DesktopIpc.defineIpcMethod({
   channel: IpcChannels.UPDATE_GET_STATE_CHANNEL,
   payload: Schema.Void,
   result: DesktopUpdateStateSchema,
   handler: Effect.fn("desktop.ipc.updates.getState")(function* () {
     const updates = yield* DesktopUpdates.DesktopUpdates;
+
     return yield* updates.getState;
   }),
 });
 
-export const setUpdateChannel = DesktopIpc.makeIpcMethod({
+export const setUpdateChannel = DesktopIpc.defineIpcMethod({
   channel: IpcChannels.UPDATE_SET_CHANNEL_CHANNEL,
   payload: DesktopUpdateChannelSchema,
   result: DesktopUpdateStateSchema,
   handler: Effect.fn("desktop.ipc.updates.setChannel")(function* (channel) {
     const updates = yield* DesktopUpdates.DesktopUpdates;
+
     return yield* updates.setChannel(channel);
   }),
 });
 
-export const downloadUpdate = DesktopIpc.makeIpcMethod({
+export const downloadUpdate = DesktopIpc.defineIpcMethod({
   channel: IpcChannels.UPDATE_DOWNLOAD_CHANNEL,
   payload: Schema.Void,
   result: DesktopUpdateActionResultSchema,
   handler: Effect.fn("desktop.ipc.updates.download")(function* () {
     const updates = yield* DesktopUpdates.DesktopUpdates;
+
     return yield* updates.download;
   }),
 });
 
-export const installUpdate = DesktopIpc.makeIpcMethod({
+export const installUpdate = DesktopIpc.defineIpcMethod({
   channel: IpcChannels.UPDATE_INSTALL_CHANNEL,
   payload: Schema.Void,
   result: DesktopUpdateActionResultSchema,
   handler: Effect.fn("desktop.ipc.updates.install")(function* () {
     const updates = yield* DesktopUpdates.DesktopUpdates;
+
     return yield* updates.install;
   }),
 });
 
-export const checkForUpdate = DesktopIpc.makeIpcMethod({
+export const checkForUpdate = DesktopIpc.defineIpcMethod({
   channel: IpcChannels.UPDATE_CHECK_CHANNEL,
   payload: Schema.Void,
   result: DesktopUpdateCheckResultSchema,
   handler: Effect.fn("desktop.ipc.updates.check")(function* () {
     const updates = yield* DesktopUpdates.DesktopUpdates;
+
     return yield* updates.check("web-ui");
   }),
 });

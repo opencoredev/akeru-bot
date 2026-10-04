@@ -13,28 +13,28 @@ export class BrowserViewportCommitTimeoutError extends Error {
 }
 
 const handlers = new Map<string, BrowserViewportHandler>();
+
 const commitTails = new Map<string, Promise<void>>();
 
-const queueBrowserViewportMutation = <A>(
-  tabId: string,
-  start: () => Promise<A>,
-): {
-  readonly started: Promise<{ readonly operation: Promise<A> }>;
-  readonly execution: Promise<A>;
-} => {
+const queueBrowserViewportMutation = <A>(tabId: string, start: () => Promise<A>) => {
   const previous = commitTails.get(tabId) ?? Promise.resolve();
+
   const started = previous
     .catch(() => undefined)
     .then(() => ({
       operation: Promise.resolve().then(start),
     }));
+
   const execution = started.then(({ operation }) => operation);
   const tail = execution.then(() => undefined);
   commitTails.set(tabId, tail);
+
   const clear = () => {
     if (commitTails.get(tabId) === tail) commitTails.delete(tabId);
   };
+
   void tail.then(clear, clear);
+
   return { started, execution };
 };
 
@@ -52,12 +52,14 @@ export function runBrowserViewportMutation<A>(
 
 const runHandlerWithTimeout = (tabId: string, operation: Promise<void>): Promise<void> => {
   let timeoutId: ReturnType<typeof setTimeout> | undefined;
+
   const timeout = new Promise<never>((_resolve, reject) => {
     timeoutId = setTimeout(
       () => reject(new BrowserViewportCommitTimeoutError(tabId)),
       BROWSER_VIEWPORT_COMMIT_TIMEOUT_MS,
     );
   });
+
   return Promise.race([operation, timeout]).finally(() => {
     if (timeoutId !== undefined) clearTimeout(timeoutId);
   });
@@ -68,6 +70,7 @@ export function subscribeBrowserViewportChange(
   handler: BrowserViewportHandler,
 ): () => void {
   handlers.set(tabId, handler);
+
   return () => {
     if (handlers.get(tabId) === handler) handlers.delete(tabId);
   };
@@ -79,12 +82,15 @@ export function commitBrowserViewportChange(
 ): Promise<void> {
   const { started } = queueBrowserViewportMutation(tabId, () => {
     const handler = handlers.get(tabId);
+
     return handler
       ? handler(setting)
       : Promise.reject(new Error(`No visible browser viewport handler for tab ${tabId}`));
   });
+
   // The queue follows the real handler lifetime, while the caller-facing
   // timeout starts only once this commit reaches the front of that queue.
   const result = started.then(({ operation }) => runHandlerWithTimeout(tabId, operation));
+
   return result;
 }

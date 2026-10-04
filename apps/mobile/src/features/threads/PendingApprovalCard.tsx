@@ -1,9 +1,9 @@
+import { Match } from "effect";
 import { routineApprovalSummary } from "@akeru/client-runtime/routines";
 import {
   AKERU_CREATE_ROUTINE_TOOL_NAME,
   AKERU_PRODUCT_FEEDBACK_TOOL_NAME,
   type ApprovalRequestId,
-  type ProviderApprovalDecision,
   type ProviderApprovalOption,
 } from "@akeru/contracts";
 import { Pressable, View } from "react-native";
@@ -15,29 +15,34 @@ import type { PendingApproval } from "../../lib/threadActivity";
 export interface PendingApprovalCardProps {
   readonly approval: PendingApproval;
   readonly respondingApprovalId: ApprovalRequestId | null;
-  readonly onRespond: (
-    requestId: ApprovalRequestId,
-    decision: ProviderApprovalDecision,
-  ) => Promise<unknown>;
+  readonly onRespond: ReturnType<
+    typeof import("../../state/use-selected-thread-requests").useSelectedThreadRequests
+  >["onRespondToApproval"];
 }
 
 export function PendingApprovalCard(props: PendingApprovalCardProps) {
   const { t } = useMobileI18n();
+
   const defaultOptions = [
     { decision: "accept", label: t("Allow once") },
     { decision: "acceptForSession", label: t("Allow session") },
     { decision: "decline", label: t("Decline") },
   ] satisfies ReadonlyArray<ProviderApprovalOption>;
+
   const feedbackOptions = [
     { decision: "decline", label: t("Cancel") },
   ] satisfies ReadonlyArray<ProviderApprovalOption>;
+
   const isProductFeedback = props.approval.toolName === AKERU_PRODUCT_FEEDBACK_TOOL_NAME;
+
   // A routine approval shows what the bot proposes, so it is never approved blind.
   const routine =
     props.approval.toolName === AKERU_CREATE_ROUTINE_TOOL_NAME
       ? routineApprovalSummary(props.approval.args, t)
       : null;
+
   const options = isProductFeedback ? feedbackOptions : (props.approval.options ?? defaultOptions);
+
   // Opaque for the same reason as PendingUserInputCard: nothing blurs the feed
   // behind this card, so a translucent surface bleeds messages through it.
   return (
@@ -79,24 +84,22 @@ export function PendingApprovalCard(props: PendingApprovalCardProps) {
         {options.map((option) => (
           <Pressable
             key={option.decision}
-            className={`items-center justify-center rounded-[14px] px-3.5 py-3 ${
-              option.decision === "accept"
-                ? "bg-blue-500"
-                : option.decision === "decline"
-                  ? "bg-rose-100 dark:bg-rose-500/18"
-                  : "bg-neutral-200 dark:bg-neutral-800"
-            }`}
+            className={`items-center justify-center rounded-[14px] px-3.5 py-3 ${Match.value(
+              option.decision,
+            ).pipe(
+              Match.when("accept", () => "bg-blue-500"),
+              Match.when("decline", () => "bg-rose-100 dark:bg-rose-500/18"),
+              Match.orElse(() => "bg-neutral-200 dark:bg-neutral-800"),
+            )}`}
             disabled={props.respondingApprovalId === props.approval.requestId}
             onPress={() => void props.onRespond(props.approval.requestId, option.decision)}
           >
             <Text
-              className={`text-sm ${
-                option.decision === "accept"
-                  ? "font-t3-extrabold text-white"
-                  : option.decision === "decline"
-                    ? "font-t3-bold text-rose-700 dark:text-rose-300"
-                    : "font-t3-bold text-neutral-950 dark:text-neutral-50"
-              }`}
+              className={`text-sm ${Match.value(option.decision).pipe(
+                Match.when("accept", () => "font-t3-extrabold text-white"),
+                Match.when("decline", () => "font-t3-bold text-rose-700 dark:text-rose-300"),
+                Match.orElse(() => "font-t3-bold text-neutral-950 dark:text-neutral-50"),
+              )}`}
             >
               {option.label}
             </Text>

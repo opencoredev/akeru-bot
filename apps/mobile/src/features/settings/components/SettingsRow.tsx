@@ -22,6 +22,7 @@ export function SettingsRow(props: {
   const navigation = useNavigation();
   const icon = useThemeColor("--color-icon");
   const chevron = useThemeColor("--color-chevron");
+
   const content = (
     <View
       className={
@@ -56,6 +57,7 @@ export function SettingsRow(props: {
   );
 
   const target = props.target;
+
   if (target) {
     return (
       <Pressable
@@ -75,6 +77,7 @@ export function SettingsRow(props: {
   }
 
   const fullScreenTarget = props.fullScreenTarget;
+
   if (fullScreenTarget) {
     return (
       <Pressable

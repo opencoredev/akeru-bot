@@ -24,21 +24,24 @@ export interface IncomingShareInboxDependencies {
   readonly cleanupReplayedPayloads?: (payloads: ReadonlyArray<SharePayload>) => Promise<void>;
   readonly idForPayloads: (payloads: ReadonlyArray<SharePayload>) => Promise<string>;
   readonly now: () => string;
-  readonly onClearError?: (error: unknown) => void;
-  readonly onCleanupError?: (error: unknown) => void;
+  readonly onClearError?: (cause: unknown) => void;
+  readonly onCleanupError?: (cause: unknown) => void;
 }
 
 export function sortAndDedupeIncomingShares(
   drafts: ReadonlyArray<IncomingShareDraft>,
 ): ReadonlyArray<IncomingShareDraft> {
   const ids = new Set<string>();
+
   return [...drafts]
     .sort((left, right) => right.createdAt.localeCompare(left.createdAt))
     .filter((draft) => {
       if (ids.has(draft.id)) {
         return false;
       }
+
       ids.add(draft.id);
+
       return true;
     });
 }
@@ -76,11 +79,13 @@ export class IncomingShareInbox {
     return this.runExclusive(async () => {
       const loaded = await this.dependencies.loadDrafts();
       const persisted = sortAndDedupeIncomingShares(loaded);
+
       if (!options.ingestNative) {
         return persisted;
       }
 
       const payloads = this.dependencies.getPayloads();
+
       if (payloads.length === 0) {
         return persisted;
       }
@@ -89,11 +94,14 @@ export class IncomingShareInbox {
       // acknowledges it. Use a content-derived id so a crash after the durable
       // write but before acknowledgement reuses the same inbox item.
       const shareId = await this.dependencies.idForPayloads(payloads);
+
       if (loaded.some((draft) => draft.id === shareId)) {
         if (this.dependencies.cleanupReplayedPayloads) {
           await this.cleanup(() => this.dependencies.cleanupReplayedPayloads!(payloads));
         }
+
         this.clearNativePayloads();
+
         return persisted;
       }
 
@@ -102,7 +110,9 @@ export class IncomingShareInbox {
         id: shareId,
         createdAt: this.dependencies.now(),
       });
+
       const { draft } = built;
+
       if (!hasIncomingShareContent(draft)) {
         // Unsupported native payloads cannot become actionable on retry and
         // would otherwise reopen the project picker on every foreground.
@@ -119,6 +129,7 @@ export class IncomingShareInbox {
       await this.dependencies.writeDraft(draft);
       await this.cleanup(built.cleanup);
       this.clearNativePayloads();
+
       return sortAndDedupeIncomingShares([draft, ...persisted]);
     });
   }
@@ -129,6 +140,7 @@ export class IncomingShareInbox {
       // native handoff. Payload equality cannot identify duplicate handoffs:
       // users may intentionally share identical content more than once.
       await this.dependencies.removeDraft(shareId);
+
       return sortAndDedupeIncomingShares(await this.dependencies.loadDrafts());
     });
   }
@@ -140,9 +152,11 @@ export class IncomingShareInbox {
     return this.runExclusive(async () => {
       const persisted = await this.dependencies.loadDrafts();
       const target = persisted.find((draft) => draft.id === shareId);
+
       if (!target) {
         throw new Error("The shared content is no longer available.");
       }
+
       if (target.destination) {
         if (
           target.destination.environmentId !== destination.environmentId ||
@@ -150,11 +164,13 @@ export class IncomingShareInbox {
         ) {
           throw new Error("The shared content is already reserved for another project draft.");
         }
+
         return sortAndDedupeIncomingShares(persisted);
       }
 
       const reserved = { ...target, destination };
       await this.dependencies.writeDraft(reserved);
+
       return sortAndDedupeIncomingShares(
         persisted.map((draft) => (draft.id === shareId ? reserved : draft)),
       );
@@ -168,14 +184,17 @@ export class IncomingShareInbox {
     return this.runExclusive(async () => {
       const persisted = await this.dependencies.loadDrafts();
       const target = persisted.find((draft) => draft.id === shareId);
+
       if (!target) {
         // Conditional release is idempotent: if another operation already
         // consumed the share, no reservation remains to clean up.
         return sortAndDedupeIncomingShares(persisted);
       }
+
       if (!target.destination) {
         return sortAndDedupeIncomingShares(persisted);
       }
+
       if (
         target.destination.environmentId !== expectedDestination.environmentId ||
         target.destination.projectId !== expectedDestination.projectId
@@ -185,6 +204,7 @@ export class IncomingShareInbox {
 
       const { destination: _destination, ...unreserved } = target;
       await this.dependencies.writeDraft(unreserved);
+
       return sortAndDedupeIncomingShares(
         persisted.map((draft) => (draft.id === shareId ? unreserved : draft)),
       );

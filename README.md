@@ -8,7 +8,8 @@ Do not push or publish this fork unless Leo asks.
 
 ## Run locally
 
-Requires Node.js 22.16+, 23.11+, or 24.10+.
+Requires Node.js `^24.13.1` for contributor setup. To run the packaged server instead, see
+[Install and first run](docs/user/install.md).
 
 Install Vite+:
 
@@ -23,7 +24,9 @@ vp i
 vp run dev
 ```
 
-Checkout state is `.akeru/` in this tree. The installed T3 Code app keeps using `~/.t3`.
+Development state defaults to `<worktree>/.akeru/userdata` in a linked worktree and
+`~/.akeru/dev` in the main checkout. See [dev state directories](docs/internals/scripts.md#dev-state-directories)
+for explicit-home and environment precedence. The installed T3 Code app keeps using `~/.t3`.
 
 ## License
 

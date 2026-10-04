@@ -10,6 +10,7 @@ export const DELEGATION_DRIVER_KINDS = [
   "grok",
   "kimi",
   "opencodeGo",
+  "customOpenai",
 ] as const;
 
 const delegationDriverKinds: ReadonlySet<string> = new Set(DELEGATION_DRIVER_KINDS);

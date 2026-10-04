@@ -1,3 +1,4 @@
+import * as Match from "effect/Match";
 import { describe, expect, it } from "vite-plus/test";
 
 import type { RelayRouteBinding } from "@akeru/contracts";
@@ -27,12 +28,11 @@ describe("relay validation", () => {
     const offered = { ...expected, ...change } as RelayRouteBinding;
     expect(validateRelayRouteBinding({ offered, expected })).toEqual({
       ok: false,
-      reason:
-        _field === "protocolVersion"
-          ? "unsupported-protocol"
-          : _field === "routeId"
-            ? "route-mismatch"
-            : "environment-mismatch",
+      reason: Match.value(_field).pipe(
+        Match.when("protocolVersion", () => "unsupported-protocol"),
+        Match.when("routeId", () => "route-mismatch"),
+        Match.orElse(() => "environment-mismatch"),
+      ),
     });
   });
 
@@ -59,6 +59,7 @@ describe("relay validation", () => {
       enrollmentSecret: "enroll-a",
       expectedEnrollmentSecret: "enroll-a",
     });
+
     expect(result).toEqual({ ok: false, reason: "environment-mismatch" });
     expect(JSON.stringify(result)).not.toContain("enroll-a");
   });

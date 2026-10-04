@@ -21,10 +21,13 @@ describe("ResourceMonitorBinary", () => {
       const getReport = vi.spyOn(process.report, "getReport").mockImplementation(() => {
         throw new Error("Linux libc detection must not run on Windows");
       });
+
       const fileSystem = yield* FileSystem.FileSystem;
+
       const baseDir = yield* fileSystem.makeTempDirectoryScoped({
         prefix: "t3-resource-monitor-binary-",
       });
+
       const binaryPath = `${baseDir}/t3-resource-monitor.exe`;
       yield* fileSystem.writeFileString(binaryPath, "binary");
 
@@ -45,9 +48,11 @@ describe("ResourceMonitorBinary", () => {
   it.effect("resolves an executable override", () =>
     Effect.gen(function* () {
       const fileSystem = yield* FileSystem.FileSystem;
+
       const baseDir = yield* fileSystem.makeTempDirectoryScoped({
         prefix: "t3-resource-monitor-binary-",
       });
+
       const binaryPath = `${baseDir}/t3-resource-monitor`;
       yield* fileSystem.writeFileString(binaryPath, "binary");
       yield* fileSystem.chmod(binaryPath, 0o755);
@@ -69,9 +74,11 @@ describe("ResourceMonitorBinary", () => {
   it.effect("resolves an executable override on an unsupported platform", () =>
     Effect.gen(function* () {
       const fileSystem = yield* FileSystem.FileSystem;
+
       const baseDir = yield* fileSystem.makeTempDirectoryScoped({
         prefix: "t3-resource-monitor-binary-",
       });
+
       const binaryPath = `${baseDir}/custom-resource-monitor`;
       yield* fileSystem.writeFileString(binaryPath, "binary");
       yield* fileSystem.chmod(binaryPath, 0o755);
@@ -92,9 +99,11 @@ describe("ResourceMonitorBinary", () => {
   it.effect("rejects a non-executable POSIX override", () =>
     Effect.gen(function* () {
       const fileSystem = yield* FileSystem.FileSystem;
+
       const baseDir = yield* fileSystem.makeTempDirectoryScoped({
         prefix: "t3-resource-monitor-binary-",
       });
+
       const binaryPath = `${baseDir}/t3-resource-monitor`;
       yield* fileSystem.writeFileString(binaryPath, "binary");
       yield* fileSystem.chmod(binaryPath, 0o644);
@@ -108,6 +117,7 @@ describe("ResourceMonitorBinary", () => {
           T3CODE_RESOURCE_MONITOR_PATH: binaryPath,
         }),
       );
+
       const error = yield* Effect.flip(service.resolve);
 
       assert.instanceOf(error, ResourceMonitorBinary.ResourceMonitorBinaryNotExecutable);
@@ -118,15 +128,18 @@ describe("ResourceMonitorBinary", () => {
   it.effect("rejects unsupported platform and architecture pairs", () =>
     Effect.gen(function* () {
       const fileSystem = yield* FileSystem.FileSystem;
+
       const baseDir = yield* fileSystem.makeTempDirectoryScoped({
         prefix: "t3-resource-monitor-binary-",
       });
+
       const service = yield* ResourceMonitorBinary.make().pipe(
         Effect.provide(ServerConfig.layerTest(process.cwd(), baseDir)),
         Effect.provideService(HostProcessPlatform, "freebsd"),
         Effect.provideService(HostProcessArchitecture, "ia32"),
         Effect.provideService(HostProcessEnvironment, {}),
       );
+
       const error = yield* Effect.flip(service.resolve);
 
       assert.instanceOf(error, ResourceMonitorBinary.ResourceMonitorBinaryUnsupported);
@@ -136,9 +149,11 @@ describe("ResourceMonitorBinary", () => {
   it.effect("rejects bundled glibc binaries on musl Linux hosts", () =>
     Effect.gen(function* () {
       const fileSystem = yield* FileSystem.FileSystem;
+
       const baseDir = yield* fileSystem.makeTempDirectoryScoped({
         prefix: "t3-resource-monitor-binary-",
       });
+
       const service = yield* ResourceMonitorBinary.make().pipe(
         Effect.provide(ServerConfig.layerTest(process.cwd(), baseDir)),
         Effect.provideService(HostProcessPlatform, "linux"),
@@ -146,6 +161,7 @@ describe("ResourceMonitorBinary", () => {
         Effect.provideService(ResourceMonitorBinary.ResourceMonitorHostLinuxLibc, "musl"),
         Effect.provideService(HostProcessEnvironment, {}),
       );
+
       const error = yield* Effect.flip(service.resolve);
 
       assert.instanceOf(error, ResourceMonitorBinary.ResourceMonitorBinaryUnsupported);

@@ -8,7 +8,10 @@ import {
   routeAgentNotificationResponseOnce,
 } from "./notificationPayload";
 
-function responseWithData(data: Record<string, unknown>, identifier = "notification-1") {
+function responseWithData(
+  data: { readonly deepLink?: string; readonly environmentId?: string; readonly threadId?: string },
+  identifier = "notification-1",
+) {
   return {
     notification: {
       request: {
@@ -158,6 +161,7 @@ describe("routeAgentNotificationResponseOnce", () => {
   it("does not navigate twice when the initial and listener responses refer to one notification", () => {
     const handledResponseIds = new Set<string>();
     const navigations: Array<string> = [];
+
     const response = responseWithData({
       environmentId: "env",
       threadId: "thread",

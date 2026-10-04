@@ -20,6 +20,7 @@ it.layer(Layer.mergeAll(NodeSqliteClient.layerMemory()))(
           readonly notnull: number;
           readonly dflt_value: string | null;
         }>`PRAGMA table_info(projection_thread_sessions)`;
+
         const mcpServerIds = columns.find((column) => column.name === "mcp_server_ids_json");
         assert.equal(mcpServerIds?.notnull, 1);
         assert.equal(mcpServerIds?.dflt_value, "'[]'");

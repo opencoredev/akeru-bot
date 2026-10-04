@@ -51,7 +51,159 @@
           "globalTimersInEffect": "error",
           "globalFetch": "error",
           "globalFetchInEffect": "error"
-        }
+        },
+        // Exceptions apply to whole categories of code; inline @effect-diagnostics comments are
+        // not allowed. See docs/internals/lint.md. Globs match absolute paths, so each needs a
+        // leading **/ and must end in a file pattern; a bare directory glob matches nothing.
+        "overrides": [
+          {
+            // Tests and their harnesses create temp directories with node:fs, parse captured
+            // output with JSON.parse, and pin fixtures to fixed dates. None of it runs in the product.
+            "include": [
+              "**/*.test.ts",
+              "**/*.test.tsx",
+              "**/*.test-support.ts",
+              "**/*.integration.ts",
+              "**/test/**/*.ts",
+              "**/test/**/*.tsx",
+              "**/testUtils/**/*.ts",
+              "**/test-support/**/*.ts"
+            ],
+            "options": {
+              "diagnosticSeverity": {
+                "nodeBuiltinImport": "off",
+                "preferSchemaOverJson": "off",
+                "globalDate": "off",
+                "globalDateInEffect": "off",
+                // Some tests stub globalThis.fetch to observe SDKs that call it directly.
+                "globalFetch": "off",
+                "globalFetchInEffect": "off"
+              }
+            }
+          },
+          {
+            // Electron guest-page preload bundles and standalone launchers run outside Effect.
+            // Desktop pre-ready reads preserve synchronous startup ordering; the native key
+            // watchdog and server entry detection also require their platform boundaries.
+            "include": [
+              "**/apps/desktop/src/preview/*Preload.ts",
+              "**/apps/desktop/src/preview/AnnotationElementCapture.ts",
+              "**/apps/desktop/src/app/*PreReadyPlatform.ts",
+              "**/apps/desktop/src/window/QuitHold.ts",
+              "**/apps/server/src/serviceLauncher.ts",
+              "**/apps/server/src/serviceLauncherDatabase.ts",
+              "**/apps/server/src/serviceLauncherState.ts",
+              "**/apps/server/src/entrypoint.ts"
+            ],
+            "options": {
+              "diagnosticSeverity": {
+                "nodeBuiltinImport": "off",
+                "globalDate": "off",
+                "globalTimers": "off"
+              }
+            }
+          },
+          {
+            // Native filesystem capabilities absent from FileSystem: adopting or duplicating
+            // inherited raw descriptors, non-following lstat, bigint/nanosecond metadata,
+            // POSIX X_OK access checks, and statfs. File.stat and ino/dev are available.
+            "include": [
+              "**/apps/server/src/bootstrap.ts",
+              "**/apps/server/src/http.ts",
+              "**/apps/server/src/orchestration/workflowScriptQuery.ts",
+              "**/apps/server/src/resourceTelemetry/DesktopTelemetryTransport.ts",
+              "**/apps/server/src/memory/BotMemory.ts",
+              "**/apps/server/src/memory/BotMemoryFileStorage.ts",
+              "**/apps/server/src/memory/BotMemoryTypes.ts",
+              "**/apps/server/src/provider/Layers/EventNdjsonLogger.ts",
+              "**/apps/server/src/subscription-auth/credentialStore.ts",
+              "**/apps/server/src/subscription-auth/service.ts",
+              "**/apps/server/src/remote/diagnostics.ts",
+              "**/packages/shared/src/shell/commandResolution.ts"
+            ],
+            "options": {
+              "diagnosticSeverity": {
+                "nodeBuiltinImport": "off"
+              }
+            }
+          },
+          {
+            // SDK boundaries requiring native transport/process cancellation or synchronous
+            // snapshot dispatch ordering.
+            // Promise signatures alone do not justify avoiding Effect services.
+            "include": [
+              "**/apps/server/src/provider/AkeruPreviewSnapshotAttachment.ts",
+              "**/apps/server/src/provider/AkeruWebFetch.ts",
+              "**/apps/server/src/provider/CodexComputerUse.ts",
+              "**/apps/server/src/provider/browser/LightpandaProcess.ts",
+              "**/apps/server/src/voiceCall/ChatGptRealtime.ts"
+            ],
+            "options": {
+              "diagnosticSeverity": {
+                "nodeBuiltinImport": "off",
+                "globalFetch": "off",
+                "globalTimers": "off"
+              }
+            }
+          },
+          {
+            // The Mastra SDK FileStat interface requires native Date values, including Invalid Date.
+            "include": ["**/apps/server/src/provider/botWorkspaceFilesystem.ts"],
+            "options": { "diagnosticSeverity": { "globalDate": "off" } }
+          },
+          {
+            // Migration backlog: synchronous APIs, initialization, and constructor-owned sink
+            // lifecycles whose callers must move together. Also retained: interactive inherited-
+            // terminal child semantics (triage) and measured native streaming performance
+            // (usageTranscriptReader). Remove a file once its constraint is addressed.
+            "include": [
+              "**/apps/server/src/subscription-auth/healthService.ts",
+              "**/packages/shared/src/logging.ts",
+              "**/packages/shared/src/shell/environment.ts",
+              "**/apps/server/src/attachmentPaths.ts",
+              "**/apps/server/src/attachmentStore.ts",
+              "**/apps/server/src/bot-inbox/service.ts",
+              "**/apps/server/src/cli/triage.ts",
+              "**/apps/server/src/usage/usageTranscriptReader.ts",
+              "**/apps/server/src/provider/tools/AkeruPluginCatalog.ts",
+              "**/apps/server/src/provider/Layers/agentController/EventIdentity.ts"
+            ],
+            "options": {
+              "diagnosticSeverity": {
+                "nodeBuiltinImport": "off",
+                "globalDate": "off"
+              }
+            }
+          },
+          {
+            // Build, release, and dev scripts are one-shot Node processes on a developer or CI
+            // machine. Console output is their interface, and they often run before workspace
+            // packages are built.
+            "include": ["**/scripts/**/*.ts"],
+            "options": {
+              "diagnosticSeverity": {
+                "nodeBuiltinImport": "off",
+                "globalConsole": "off",
+                "globalDate": "off",
+                "globalFetch": "off",
+                "globalTimers": "off"
+              }
+            }
+          },
+          {
+            // The feedback Worker is a plain Cloudflare fetch handler with no Effect runtime.
+            // fetch, console, Date, and crypto are the Workers platform APIs it is built on.
+            "include": ["**/infra/feedback/**/*.ts"],
+            "options": {
+              "diagnosticSeverity": {
+                "cryptoRandomUUID": "off",
+                "globalConsole": "off",
+                "globalDate": "off",
+                "globalFetch": "off"
+              }
+            }
+          }
+        ]
       }
     ]
   }

@@ -23,9 +23,13 @@ import type {
 import { isWorkspaceImagePreviewPath } from "@akeru/shared/filePreview";
 
 const WORKSPACE_INDEX_MAX_ENTRIES = 25_000;
+
 const WORKSPACE_INDEX_PAGE_SIZE = WORKSPACE_INDEX_MAX_ENTRIES + 2;
+
 const WORKSPACE_INDEX_SCAN_TIMEOUT = "15 seconds";
+
 const WORKSPACE_INDEX_SCAN_TIMEOUT_MS = 15_000;
+
 const WORKSPACE_INDEX_IDLE_TTL = "15 minutes";
 
 export class WorkspaceSearchIndexCreateFailed extends Schema.TaggedErrorClass<WorkspaceSearchIndexCreateFailed>()(
@@ -126,11 +130,13 @@ function trimDirectorySeparator(input: string): string {
 
 function parentPathOf(input: string): string | undefined {
   const separatorIndex = input.lastIndexOf("/");
+
   return separatorIndex === -1 ? undefined : input.slice(0, separatorIndex);
 }
 
 function toProjectEntry(item: MixedItem): ProjectEntry | null {
   const normalizedPath = trimDirectorySeparator(toPosixPath(item.item.relativePath));
+
   if (!normalizedPath) {
     return null;
   }
@@ -143,11 +149,13 @@ function toProjectEntry(item: MixedItem): ProjectEntry | null {
 
 function toFileEntry(item: FileItem): ProjectEntry | null {
   const normalizedPath = trimDirectorySeparator(toPosixPath(item.relativePath));
+
   return normalizedPath ? { path: normalizedPath, kind: "file" } : null;
 }
 
 function toDirectoryEntry(item: DirItem): ProjectEntry | null {
   const normalizedPath = trimDirectorySeparator(toPosixPath(item.relativePath));
+
   return normalizedPath ? { path: normalizedPath, kind: "directory" } : null;
 }
 
@@ -158,8 +166,10 @@ function mapFileSearchResult(
 ): ProjectSearchEntriesResult {
   const entries = result.items.flatMap((item) => {
     const entry = toFileEntry(item);
+
     return entry && (!imageOnly || isWorkspaceImagePreviewPath(entry.path)) ? [entry] : [];
   });
+
   return {
     entries: entries.slice(0, limit),
     truncated: entries.length > limit || result.totalMatched > result.items.length,
@@ -172,9 +182,12 @@ function mapDirectorySearchResult(
 ): ProjectSearchEntriesResult {
   const entries = result.items.flatMap((item) => {
     const entry = toDirectoryEntry(item);
+
     return entry ? [entry] : [];
   });
+
   const rootDirectoryCount = result.items.some((item) => item.relativePath.length === 0) ? 1 : 0;
+
   return {
     entries: entries.slice(0, limit),
     truncated: result.totalMatched - rootDirectoryCount > limit,
@@ -184,13 +197,16 @@ function mapDirectorySearchResult(
 function mapMixedSearchResult(
   result: MixedSearchResult,
   limit: number,
-): { readonly entries: ProjectEntry[]; readonly truncated: boolean } {
+): MapMixedSearchResultResult {
   const entries: ProjectEntry[] = [];
+
   for (const item of result.items) {
     const entry = toProjectEntry(item);
+
     if (entry) {
       entries.push(entry);
     }
+
     if (entries.length >= limit) {
       break;
     }
@@ -201,6 +217,7 @@ function mapMixedSearchResult(
   )
     ? 1
     : 0;
+
   return {
     entries,
     truncated: result.totalMatched - rootDirectoryCount > limit,
@@ -209,22 +226,38 @@ function mapMixedSearchResult(
 
 function withDirectoryAncestors(entries: ReadonlyArray<ProjectEntry>): ProjectEntry[] {
   const entryByPath = new Map(entries.map((entry) => [entry.path, entry]));
+
   for (const entry of entries) {
     let parentPath = parentPathOf(entry.path);
+
     while (parentPath) {
       if (!entryByPath.has(parentPath)) {
         entryByPath.set(parentPath, { path: parentPath, kind: "directory" });
       }
+
       parentPath = parentPathOf(parentPath);
     }
   }
+
   return [...entryByPath.values()];
 }
 
-const createFinder = Effect.fn("WorkspaceSearchIndex.createFinder")(function* (cwd: string) {
+type WorkspaceFinder = Pick<
+  FileFinder,
+  "destroy" | "waitForIndexReady" | "directorySearch" | "fileSearch" | "mixedSearch" | "scanFiles"
+>;
+
+type WorkspaceFinderFactory = (
+  options: Parameters<typeof FileFinder.create>[0],
+) => Result<WorkspaceFinder>;
+
+const createFinder = Effect.fn("WorkspaceSearchIndex.createFinder")(function* (
+  cwd: string,
+  create: WorkspaceFinderFactory,
+) {
   const result = yield* Effect.try({
     try: () =>
-      FileFinder.create({
+      create({
         basePath: cwd,
         disableMmapCache: true,
         // Only paths are searched, so skip the content index's scan CPU and memory.
@@ -240,7 +273,9 @@ const createFinder = Effect.fn("WorkspaceSearchIndex.createFinder")(function* (c
         cause,
       }),
   });
+
   if (result.ok) return result.value;
+
   return yield* new WorkspaceSearchIndexCreateFailed({
     cwd,
     reason: result.error,
@@ -249,7 +284,7 @@ const createFinder = Effect.fn("WorkspaceSearchIndex.createFinder")(function* (c
 
 const waitForIndexReady = Effect.fn("WorkspaceSearchIndex.waitForIndexReady")(function* <E>(
   cwd: string,
-  finder: FileFinder,
+  finder: WorkspaceFinder,
   onFailure: (input: { readonly reason: string; readonly cause?: unknown }) => E,
 ): Effect.fn.Return<void, E | WorkspaceSearchIndexScanTimedOut> {
   const result = yield* Effect.tryPromise({
@@ -260,9 +295,11 @@ const waitForIndexReady = Effect.fn("WorkspaceSearchIndex.waitForIndexReady")(fu
         cause,
       }),
   });
+
   if (!result.ok) {
     return yield* Effect.fail(onFailure({ reason: result.error }));
   }
+
   if (!result.value) {
     return yield* new WorkspaceSearchIndexScanTimedOut({
       cwd,
@@ -271,13 +308,17 @@ const waitForIndexReady = Effect.fn("WorkspaceSearchIndex.waitForIndexReady")(fu
   }
 });
 
-export const make = Effect.fn("WorkspaceSearchIndex.make")(function* (cwd: string) {
-  const finder = yield* Effect.acquireRelease(createFinder(cwd), (finder) =>
+export const make = Effect.fn("WorkspaceSearchIndex.make")(function* (
+  cwd: string,
+  create: WorkspaceFinderFactory = FileFinder.create,
+) {
+  const finder = yield* Effect.acquireRelease(createFinder(cwd, create), (finder) =>
     Effect.try({
       try: () => finder.destroy(),
       catch: (cause) => new WorkspaceSearchIndexDestroyFailed({ cwd, cause }),
     }).pipe(Effect.orDie),
   );
+
   yield* waitForIndexReady(
     cwd,
     finder,
@@ -306,6 +347,7 @@ export const make = Effect.fn("WorkspaceSearchIndex.make")(function* (cwd: strin
           cause,
         }),
     });
+
     if (!result.ok) {
       return yield* new WorkspaceSearchIndexSearchFailed({
         cwd,
@@ -314,6 +356,7 @@ export const make = Effect.fn("WorkspaceSearchIndex.make")(function* (cwd: strin
         reason: result.error,
       });
     }
+
     return result.value;
   });
 
@@ -329,12 +372,14 @@ export const make = Effect.fn("WorkspaceSearchIndex.make")(function* (cwd: strin
           cause,
         }),
     });
+
     if (!result.ok) {
       return yield* new WorkspaceSearchIndexRefreshFailed({
         cwd,
         reason: result.error,
       });
     }
+
     yield* waitForIndexReady(
       cwd,
       finder,
@@ -352,11 +397,15 @@ export const make = Effect.fn("WorkspaceSearchIndex.make")(function* (cwd: strin
       const result = yield* runSearch("", WORKSPACE_INDEX_PAGE_SIZE, "mixedSearch", () =>
         finder.mixedSearch("", { pageSize: WORKSPACE_INDEX_PAGE_SIZE }),
       );
+
       const mapped = mapMixedSearchResult(result, WORKSPACE_INDEX_MAX_ENTRIES);
+
       const sortedEntries = withDirectoryAncestors(mapped.entries).toSorted((left, right) =>
         left.path.localeCompare(right.path),
       );
+
       const entries = sortedEntries.slice(0, WORKSPACE_INDEX_MAX_ENTRIES);
+
       return {
         entries,
         truncated: mapped.truncated || entries.length < sortedEntries.length,
@@ -368,21 +417,27 @@ export const make = Effect.fn("WorkspaceSearchIndex.make")(function* (cwd: strin
     "WorkspaceSearchIndex.search",
   )(function* (query, limit, kind, imageOnly) {
     const pageSize = imageOnly ? WORKSPACE_INDEX_PAGE_SIZE : Math.max(1, limit + 1);
+
     if (kind === "file" || imageOnly) {
       const result = yield* runSearch(query, pageSize, "fileSearch", () =>
         finder.fileSearch(query, { pageSize }),
       );
+
       return mapFileSearchResult(result, limit, imageOnly);
     }
+
     if (kind === "directory") {
       const result = yield* runSearch(query, pageSize, "directorySearch", () =>
         finder.directorySearch(query, { pageSize }),
       );
+
       return mapDirectorySearchResult(result, limit);
     }
+
     const result = yield* runSearch(query, pageSize, "mixedSearch", () =>
       finder.mixedSearch(query, { pageSize }),
     );
+
     return mapMixedSearchResult(result, limit);
   });
 
@@ -404,3 +459,5 @@ export class WorkspaceSearchIndexMap extends LayerMap.Service<WorkspaceSearchInd
     idleTimeToLive: WORKSPACE_INDEX_IDLE_TTL,
   },
 ) {}
+
+type MapMixedSearchResultResult = { readonly entries: ProjectEntry[]; readonly truncated: boolean };

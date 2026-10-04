@@ -1,4 +1,3 @@
-// @effect-diagnostics nodeBuiltinImport:off
 import * as NodeFS from "node:fs";
 import * as NodeOS from "node:os";
 import * as NodePath from "node:path";
@@ -17,11 +16,13 @@ function writeManifest(root: string, relativePath: string, dependency: string): 
     manifestPath,
     `${JSON.stringify({ dependencies: { example: dependency } }, null, 2)}\n`,
   );
+
   return manifestPath;
 }
 
 it("accepts registry, workspace, and repository-owned file dependencies", () => {
   const root = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "akeru-public-deps-"));
+
   const manifests = [
     writeManifest(root, "apps/server/package.json", "0.2.0"),
     writeManifest(root, "packages/example/package.json", "workspace:*"),
@@ -33,6 +34,7 @@ it("accepts registry, workspace, and repository-owned file dependencies", () => 
 
 it("rejects file dependencies that escape the repository", () => {
   const root = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "akeru-public-deps-"));
+
   const manifestPath = writeManifest(
     root,
     "apps/server/package.json",
@@ -63,4 +65,29 @@ it("rejects external local paths left in the lockfile", () => {
       specifier: "external local path",
     },
   ]);
+});
+
+it("imports only Node built-ins because CI runs it before installing dependencies", () => {
+  const source = NodeFS.readFileSync(
+    NodePath.join(import.meta.dirname, "check-public-dependencies.ts"),
+    "utf8",
+  );
+
+  const specifiers = [...source.matchAll(/^import .* from "([^"]+)";$/gmu)].map(
+    (match) => match[1],
+  );
+
+  assert.isAbove(specifiers.length, 0);
+  assert.deepStrictEqual(
+    specifiers.filter((specifier) => !specifier?.startsWith("node:")),
+    [],
+  );
+});
+
+it("rejects manifests with non-string dependency specifiers", () => {
+  const root = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "akeru-public-deps-"));
+  const manifestPath = NodePath.join(root, "package.json");
+  NodeFS.writeFileSync(manifestPath, JSON.stringify({ dependencies: { example: 1 } }));
+
+  assert.throws(() => findExternalLocalDependencies(root, [manifestPath]), /non-string/u);
 });

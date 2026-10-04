@@ -3,7 +3,11 @@ import { EventId, type OrchestrationThreadActivity, TurnId } from "@akeru/contra
 
 import { deriveLatestContextWindowSnapshot, formatContextWindowTokens } from "./contextWindow";
 
-function makeActivity(id: string, kind: string, payload: unknown): OrchestrationThreadActivity {
+function makeActivity(
+  id: string,
+  kind: string,
+  payload: OrchestrationThreadActivity["payload"],
+): OrchestrationThreadActivity {
   return {
     id: EventId.make(id),
     tone: "info",

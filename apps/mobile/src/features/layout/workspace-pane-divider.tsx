@@ -24,17 +24,21 @@ export function WorkspacePaneDivider(props: WorkspacePaneDividerProps) {
   const [dragging, setDragging] = useState(false);
   const dividerColor = useThemeColor("--color-border");
   const activeDividerColor = useThemeColor("--color-primary");
+
   const handleResizeStart = useCallback(() => {
     setDragging(true);
     latestProps.current.onResizeStart?.();
   }, []);
+
   const handleResize = useCallback((translationX: number) => {
     latestProps.current.onResizeBy(translationX * latestProps.current.resizeDirection);
   }, []);
+
   const handleResizeEnd = useCallback(() => {
     setDragging(false);
     latestProps.current.onResizeEnd?.();
   }, []);
+
   const resizeGesture = useMemo(
     () =>
       Gesture.Pan()
@@ -54,11 +58,13 @@ export function WorkspacePaneDivider(props: WorkspacePaneDividerProps) {
 
   const handleAccessibilityAction = (event: AccessibilityActionEvent) => {
     props.onResizeStart?.();
+
     if (event.nativeEvent.actionName === "increment") {
       props.onResizeBy(ACCESSIBILITY_RESIZE_STEP);
     } else if (event.nativeEvent.actionName === "decrement") {
       props.onResizeBy(-ACCESSIBILITY_RESIZE_STEP);
     }
+
     props.onResizeEnd?.();
   };
 

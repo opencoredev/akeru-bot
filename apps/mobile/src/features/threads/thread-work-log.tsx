@@ -1,3 +1,4 @@
+import { Match } from "effect";
 import { useMobileI18n } from "../../lib/i18n";
 import * as Haptics from "expo-haptics";
 import { memo } from "react";
@@ -33,6 +34,7 @@ function triggerDisclosureFeedback() {
 function stripShellWrapper(value: string): string {
   const trimmed = value.trim();
   const match = trimmed.match(/^\/bin\/zsh -lc ['"]?([\s\S]*?)['"]?$/);
+
   return (match?.[1] ?? trimmed).trim();
 }
 
@@ -42,6 +44,7 @@ function compactActivityDetail(detail: string | null): string | null {
   }
 
   const cleaned = stripShellWrapper(detail).replace(/\s+/g, " ").trim();
+
   return cleaned.length > 0 ? cleaned : null;
 }
 
@@ -77,8 +80,10 @@ function workRowSymbolName(icon: ThreadFeedActivity["icon"]): AppSymbolName {
 // Entering fades only for rows created moments ago: rows remount whenever the
 // list scrolls them back into view, and old rows must not replay an entrance.
 const FRESH_ROW_WINDOW_MS = 3_000;
+
 function isFreshRow(createdAt: string): boolean {
   const timestamp = Date.parse(createdAt);
+
   return Number.isFinite(timestamp) && Date.now() - timestamp < FRESH_ROW_WINDOW_MS;
 }
 
@@ -97,8 +102,11 @@ export function visibleWorkLogActivities(
 // the scaled text-2xs line height. Values mirror the classNames below — keep
 // them in sync; a mismatch only costs a one-time correction on measure.
 const WORK_ROW_HEIGHT = 32; // min-h-8
+
 const WORK_ROW_GAP = 1; // gap-px
+
 const WORK_LOG_HEADER_PADDING = 2; // pb-0.5 under the "work log" label
+
 const WORK_LOG_BOTTOM_MARGIN = 4; // mb-1
 
 export const WORK_GROUP_TOGGLE_HEIGHT = 36; // min-h-8 (32) + mb-1 (4)
@@ -108,12 +116,16 @@ export function collapsedWorkLogHeight(
   baseFontSize: number,
 ): number {
   const rows = visibleWorkLogActivities(activities);
+
   if (rows.length === 0) {
     return 0;
   }
+
   const onlyToolRows = rows.every((row) => row.toolLike);
+
   const headerHeight =
     scaledTypographyLineHeight(MOBILE_TYPOGRAPHY.caption, baseFontSize) + WORK_LOG_HEADER_PADDING;
+
   return (
     WORK_LOG_BOTTOM_MARGIN +
     (onlyToolRows ? 0 : headerHeight) +
@@ -126,7 +138,7 @@ type ThreadWorkLogProps = {
   readonly activities: ReadonlyArray<ThreadFeedActivity>;
   readonly copiedRowId: string | null;
   readonly expandedRows: Readonly<Record<string, boolean>>;
-  readonly iconSubtleColor: import("react-native").ColorValue;
+  readonly iconSubtleColor: import("react-native").ColorValue | undefined;
   readonly onCopyRow: (rowId: string, value: string) => void;
   readonly onToggleRow: (rowId: string) => void;
 };
@@ -147,17 +159,22 @@ export function threadWorkLogPropsEqual(
   ) {
     return false;
   }
+
   for (const activity of next.activities) {
     const id = activity.id;
+
     if ((previous.copiedRowId === id) !== (next.copiedRowId === id)) return false;
+
     if ((previous.expandedRows[id] ?? false) !== (next.expandedRows[id] ?? false)) return false;
   }
+
   return true;
 }
 
 export const ThreadWorkLog = memo(function ThreadWorkLog(props: ThreadWorkLogProps) {
   const { t } = useMobileI18n();
   const pressedBackground = useThemeColor("--color-subtle");
+
   const rows = visibleWorkLogActivities(props.activities).map((activity) => ({
     ...activity,
     detail: compactActivityDetail(activity.detail),
@@ -260,13 +277,17 @@ export const ThreadWorkLog = memo(function ThreadWorkLog(props: ThreadWorkLogPro
                     <View className="h-4 w-4 items-center justify-center">
                       {row.status ? (
                         <SymbolView
-                          name={
-                            row.status === "failure"
-                              ? { ios: "xmark", android: "close" }
-                              : row.status === "success"
-                                ? { ios: "checkmark", android: "check" }
-                                : { ios: "minus", android: "remove" }
-                          }
+                          name={Match.value(row.status).pipe(
+                            Match.when(
+                              "failure",
+                              () => ({ ios: "xmark", android: "close" }) as const,
+                            ),
+                            Match.when(
+                              "success",
+                              () => ({ ios: "checkmark", android: "check" }) as const,
+                            ),
+                            Match.orElse(() => ({ ios: "minus", android: "remove" }) as const),
+                          )}
                           size={11}
                           tintColor={row.status === "failure" ? "#e11d48" : props.iconSubtleColor}
                           type="monochrome"
@@ -306,11 +327,12 @@ export const ThreadWorkLog = memo(function ThreadWorkLog(props: ThreadWorkLogPro
 export function ThreadWorkGroupToggle(props: {
   readonly expanded: boolean;
   readonly hiddenCount: number;
-  readonly iconSubtleColor: import("react-native").ColorValue;
+  readonly iconSubtleColor: import("react-native").ColorValue | undefined;
   readonly onlyToolActivities: boolean;
   readonly onToggle: () => void;
 }) {
   const pressedBackground = useThemeColor("--color-subtle");
+
   const noun = props.onlyToolActivities
     ? props.hiddenCount === 1
       ? "tool call"
@@ -318,7 +340,9 @@ export function ThreadWorkGroupToggle(props: {
     : props.hiddenCount === 1
       ? "log entry"
       : "log entries";
+
   const collapsedLabel = `Show ${props.hiddenCount} previous ${noun}`;
+
   const expandedLabel = props.onlyToolActivities
     ? "Show fewer tool calls"
     : "Show fewer log entries";

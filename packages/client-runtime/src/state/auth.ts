@@ -22,6 +22,7 @@ function upsertByKey<A>(
   key: (value: A) => string,
 ): ReadonlyArray<A> {
   const nextKey = key(next);
+
   return [...values.filter((value) => key(value) !== nextKey), next];
 }
 
@@ -66,12 +67,14 @@ export function projectAuthAccessSnapshot(
   event: AuthAccessStreamEvent,
 ): readonly [AuthAccessSnapshot, ReadonlyArray<AuthAccessStreamEvent>] {
   const snapshot = applyAuthAccessStreamEvent(current, event);
+
   const projected: AuthAccessStreamSnapshotEvent = {
     version: 1,
     revision: event.revision,
     type: "snapshot",
     payload: snapshot,
   };
+
   return [snapshot, [projected]];
 }
 

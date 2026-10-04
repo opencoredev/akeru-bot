@@ -4,14 +4,40 @@ import { Collapsible as CollapsiblePrimitive } from "@base-ui/react/collapsible"
 
 import { cn } from "~/lib/utils";
 
-function Collapsible({ ...props }: CollapsiblePrimitive.Root.Props) {
-  return <CollapsiblePrimitive.Root data-slot="collapsible" {...props} />;
+function Collapsible({
+  className,
+  presentation,
+  ...props
+}: CollapsiblePrimitive.Root.Props & { presentation?: "markdown-details" }) {
+  return (
+    <CollapsiblePrimitive.Root
+      className={
+        presentation === "markdown-details"
+          ? cn("chat-markdown-details border-y border-border/60", className)
+          : className
+      }
+      data-slot="collapsible"
+      {...props}
+    />
+  );
 }
 
-function CollapsibleTrigger({ className, ...props }: CollapsiblePrimitive.Trigger.Props) {
+function CollapsibleTrigger({
+  className,
+  presentation,
+  ...props
+}: CollapsiblePrimitive.Trigger.Props & {
+  presentation?: "settings-section" | "markdown-summary";
+}) {
   return (
     <CollapsiblePrimitive.Trigger
-      className={cn("cursor-pointer", className)}
+      className={cn(
+        "cursor-pointer",
+        presentation === "settings-section" &&
+          "group flex min-h-8 w-full items-center gap-2 px-3 sm:px-4",
+        presentation === "markdown-summary" && "gap-2 py-2 text-sm font-medium text-foreground",
+        className,
+      )}
       data-slot="collapsible-trigger"
       {...props}
     />

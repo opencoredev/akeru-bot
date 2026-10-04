@@ -5,12 +5,7 @@ import {
   PrimaryEnvironmentAuth,
   SshEnvironmentGateway,
 } from "@akeru/client-runtime/platform";
-import {
-  ConnectionBlockedError,
-  ConnectionTransientError,
-  Connectivity,
-  Wakeups,
-} from "@akeru/client-runtime/connection";
+import { ConnectionBlockedError, Connectivity, Wakeups } from "@akeru/client-runtime/connection";
 import { AuthStandardClientScopes } from "@akeru/contracts";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
@@ -33,9 +28,11 @@ function networkStatus(state: Network.NetworkState): "unknown" | "offline" | "on
   if (state.isConnected === false) {
     return "offline";
   }
+
   if (state.isConnected === true) {
     return "online";
   }
+
   return "unknown";
 }
 
@@ -53,13 +50,16 @@ const connectivityLayer = Connectivity.layer({
     Effect.acquireRelease(
       Effect.sync(() => {
         let active = true;
+
         const networkSubscription = Network.addNetworkStateListener((state) => {
           Queue.offerUnsafe(queue, networkStatus(state));
         });
+
         const appStateSubscription = AppState.addEventListener("change", (state) => {
           if (state !== "active") {
             return;
           }
+
           void Network.getNetworkStateAsync()
             .then((current) => {
               if (active) {
@@ -68,6 +68,7 @@ const connectivityLayer = Connectivity.layer({
             })
             .catch(() => undefined);
         });
+
         return {
           close: () => {
             active = false;
@@ -86,11 +87,14 @@ const wakeupsLayer = Wakeups.layer({
     Effect.acquireRelease(
       Effect.sync(() => {
         let backgroundedAtMs = AppState.currentState === "background" ? Date.now() : null;
+
         return AppState.addEventListener("change", (state) => {
           if (state === "background") {
             backgroundedAtMs = Date.now();
+
             return;
           }
+
           if (state === "active") {
             Queue.offerUnsafe(queue, mobileApplicationActiveWakeup(backgroundedAtMs, Date.now()));
             backgroundedAtMs = null;
@@ -149,6 +153,7 @@ const platformConnectionSourceLayer = Layer.succeed(
 const providedConnectionStorageLayer = connectionStorageLayer.pipe(
   Layer.provide(Runtime.runtimeContextLayer),
 );
+
 const providedCapabilitiesLayer = capabilitiesLayer.pipe(
   Layer.provide(Runtime.runtimeContextLayer),
 );

@@ -9,11 +9,13 @@ export interface WorkspaceEntryCandidate {
 
 function basenameOfPath(path: string): string {
   const separatorIndex = Math.max(path.lastIndexOf("/"), path.lastIndexOf("\\"));
+
   return separatorIndex >= 0 ? path.slice(separatorIndex + 1) : path;
 }
 
 export function needsWorkspaceBasenameLookup(relativePath: string): boolean {
   const trimmed = relativePath.trim();
+
   return trimmed.length > 0 && !trimmed.includes("/") && !trimmed.includes("\\");
 }
 
@@ -22,16 +24,20 @@ export function pickWorkspaceBasenameMatch(
   entries: ReadonlyArray<WorkspaceEntryCandidate>,
 ): string | null {
   const target = basename.trim();
+
   if (!target) return null;
   const files = entries.filter((entry) => entry.kind === "file");
   const exact = files.find((entry) => basenameOfPath(entry.path) === target);
+
   if (exact) return exact.path;
   // Folded matching covers casing that drifted from disk, but `FOO.ts` against
   // both `Foo.ts` and `foo.ts` has no right answer, so it resolves to nothing
   // rather than opening whichever the index ranked first.
   const folded = target.toLowerCase();
+
   const foldedMatches = files.filter(
     (entry) => basenameOfPath(entry.path).toLowerCase() === folded,
   );
+
   return foldedMatches.length === 1 ? (foldedMatches[0]?.path ?? null) : null;
 }

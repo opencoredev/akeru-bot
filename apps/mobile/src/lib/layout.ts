@@ -10,23 +10,35 @@ function clamp(value: number, min: number, max: number): number {
  * windows to adopt the persistent sidebar as they resize.
  */
 export const SPLIT_LAYOUT_MIN_WIDTH = 720;
+
 export const SPLIT_LAYOUT_MIN_HEIGHT = 600;
 
 export const SPLIT_SIDEBAR_MIN_WIDTH = 280;
+
 export const SPLIT_SIDEBAR_MAX_WIDTH = 460;
+
 const SPLIT_SIDEBAR_DEFAULT_MAX_WIDTH = 380;
 
 export const AUXILIARY_PANE_MIN_CONTENT_WIDTH = 960;
+
 export const CHAT_CONTENT_MAX_WIDTH = 960;
 
 export const AUXILIARY_PANE_MIN_WIDTH = 260;
+
 export const AUXILIARY_PANE_MAX_WIDTH = 480;
+
 const AUXILIARY_PANE_DEFAULT_MAX_WIDTH = 320;
+
 const FILE_INSPECTOR_MIN_VIEWPORT_WIDTH = 820;
+
 const FILE_INSPECTOR_MIN_MAIN_WIDTH = 560;
+
 const STABLE_FORM_SHEET_MAX_HEIGHT = 720;
+
 const STABLE_FORM_SHEET_VERTICAL_MARGIN = 64;
+
 const STABLE_FORM_SHEET_MIN_DETENT = 0.62;
+
 const STABLE_FORM_SHEET_MAX_DETENT = 0.92;
 
 export type LayoutVariant = "compact" | "split";
@@ -101,8 +113,10 @@ export function deriveWorkspacePaneLayout(input: {
 }): WorkspacePaneLayout {
   const viewportWidth = Math.max(0, input.viewportWidth);
   const auxiliaryPaneRole = input.auxiliaryPaneRole ?? "supplementary";
+
   const preferredPrimarySidebarVisible =
     input.layout.usesSplitView && input.primarySidebarPreferredVisible;
+
   const preferredPrimarySidebarWidth = preferredPrimarySidebarVisible
     ? (input.layout.listPaneWidth ?? 0)
     : 0;
@@ -114,7 +128,9 @@ export function deriveWorkspacePaneLayout(input: {
       preferredWidth: input.auxiliaryPanePreferredWidth,
       reservedLeadingWidth: preferredPrimarySidebarWidth,
     });
+
     const auxiliaryPaneVisible = fileInspector.supported && input.auxiliaryPanePreferredVisible;
+
     const primarySidebarSuppressedByAuxiliary =
       preferredPrimarySidebarVisible &&
       auxiliaryPaneVisible &&
@@ -122,8 +138,10 @@ export function deriveWorkspacePaneLayout(input: {
       input.layout.listPaneWidth !== null &&
       viewportWidth - input.layout.listPaneWidth - fileInspector.width <
         FILE_INSPECTOR_MIN_MAIN_WIDTH;
+
     const primarySidebarVisible =
       preferredPrimarySidebarVisible && !primarySidebarSuppressedByAuxiliary;
+
     const primarySidebarWidth = primarySidebarVisible ? (input.layout.listPaneWidth ?? 0) : 0;
 
     return {
@@ -137,9 +155,12 @@ export function deriveWorkspacePaneLayout(input: {
   }
 
   const contentPaneWidth = Math.max(0, viewportWidth - preferredPrimarySidebarWidth);
+
   const supportsAuxiliaryPane =
     input.layout.usesSplitView && contentPaneWidth >= AUXILIARY_PANE_MIN_CONTENT_WIDTH;
+
   const auxiliaryPaneVisible = supportsAuxiliaryPane && input.auxiliaryPanePreferredVisible;
+
   const defaultAuxiliaryPaneWidth = clamp(
     Math.round(contentPaneWidth * 0.28),
     AUXILIARY_PANE_MIN_WIDTH,
@@ -168,10 +189,13 @@ export function deriveFileInspectorPaneLayout(input: {
   readonly reservedLeadingWidth?: number;
 }): FileInspectorPaneLayout {
   const viewportWidth = Math.max(0, input.viewportWidth);
+
   const reservedLeadingWidth = Number.isFinite(input.reservedLeadingWidth)
     ? Math.max(0, input.reservedLeadingWidth ?? 0)
     : 0;
+
   const availableContentWidth = Math.max(0, viewportWidth - reservedLeadingWidth);
+
   const supported =
     input.layout.usesSplitView && viewportWidth >= FILE_INSPECTOR_MIN_VIEWPORT_WIDTH;
 
@@ -198,9 +222,11 @@ export function constrainPrimarySidebarWidth(
   viewportWidth = Number.POSITIVE_INFINITY,
 ): number {
   const safeWidth = Number.isFinite(preferredWidth) ? preferredWidth : SPLIT_SIDEBAR_MIN_WIDTH;
+
   const viewportMax = Number.isFinite(viewportWidth)
     ? Math.max(SPLIT_SIDEBAR_MIN_WIDTH, viewportWidth - 360)
     : SPLIT_SIDEBAR_MAX_WIDTH;
+
   return clamp(
     Math.round(safeWidth),
     SPLIT_SIDEBAR_MIN_WIDTH,
@@ -219,13 +245,16 @@ export function constrainAuxiliaryPaneWidth(input: {
   const safePreferredWidth = Number.isFinite(input.preferredWidth)
     ? input.preferredWidth
     : AUXILIARY_PANE_MIN_WIDTH;
+
   const availableWidth = Number.isFinite(input.availableWidth)
     ? Math.max(0, input.availableWidth)
     : 0;
+
   const maxWidth = Math.max(
     AUXILIARY_PANE_MIN_WIDTH,
     Math.min(AUXILIARY_PANE_MAX_WIDTH, availableWidth - FILE_INSPECTOR_MIN_MAIN_WIDTH),
   );
+
   return clamp(Math.round(safePreferredWidth), AUXILIARY_PANE_MIN_WIDTH, maxWidth);
 }
 
@@ -235,6 +264,7 @@ export function deriveCenteredContentHorizontalPadding(input: {
   readonly minimumPadding: number;
 }): number {
   const viewportWidth = Number.isFinite(input.viewportWidth) ? Math.max(0, input.viewportWidth) : 0;
+
   const minimumPadding = Number.isFinite(input.minimumPadding)
     ? Math.max(0, input.minimumPadding)
     : 0;
@@ -259,10 +289,12 @@ export function deriveStableFormSheetDetent(containerHeight: number): number {
     STABLE_FORM_SHEET_MAX_HEIGHT,
     Math.max(0, containerHeight - STABLE_FORM_SHEET_VERTICAL_MARGIN),
   );
+
   const detent = clamp(
     targetHeight / containerHeight,
     STABLE_FORM_SHEET_MIN_DETENT,
     STABLE_FORM_SHEET_MAX_DETENT,
   );
+
   return Math.round(detent * 1_000) / 1_000;
 }

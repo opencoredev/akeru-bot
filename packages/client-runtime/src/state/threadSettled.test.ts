@@ -15,7 +15,9 @@ import {
 } from "./threadSettled.ts";
 
 const NOW = "2026-04-10T00:00:00.000Z";
+
 const FRESH = "2026-04-09T00:00:00.000Z";
+
 const STALE = "2026-04-06T23:59:59.999Z";
 
 function makeShell(input: {
@@ -25,6 +27,7 @@ function makeShell(input: {
   readonly pending?: "approval" | "user-input";
 }): OrchestrationThreadShell {
   const threadId = ThreadId.make("thread-1");
+
   return {
     id: threadId,
     projectId: ProjectId.make("project-1"),
@@ -72,6 +75,7 @@ function makeShell(input: {
 describe("threadLastActivityAt", () => {
   it("returns the latest real user or turn activity and ignores thread/session updates", () => {
     const shell = makeShell({ activityAt: null, sessionStatus: "running" });
+
     const withActivity: OrchestrationThreadShell = {
       ...shell,
       latestUserMessageAt: "2026-04-04T00:00:00.000Z",
@@ -109,22 +113,26 @@ describe("effectiveSettled", () => {
       activityAt: STALE,
       sessionStatus: "starting",
     });
+
     expect(effectiveSettled(shell, { now: NOW })).toBe(false);
   });
 
   it("keeps a new turn active from queued through starting and running", () => {
     const requestedAt = "2026-04-09T12:00:00.000Z";
     const transitionNow = "2026-04-09T12:00:30.000Z";
+
     const base = makeShell({
       settledOverride: null,
       activityAt: STALE,
     });
+
     const queued: OrchestrationThreadShell = {
       ...base,
       latestUserMessageAt: requestedAt,
       latestTurn: null,
       session: null,
     };
+
     const starting: OrchestrationThreadShell = {
       ...queued,
       session: {
@@ -137,6 +145,7 @@ describe("effectiveSettled", () => {
         updatedAt: requestedAt,
       },
     };
+
     const running: OrchestrationThreadShell = {
       ...starting,
       session: {
@@ -165,6 +174,7 @@ describe("hasQueuedTurnStart", () => {
       ...makeShell({ activityAt: FRESH }),
       latestUserMessageAt: QUEUED_AT,
     };
+
     expect(hasQueuedTurnStart(staleTurn, JUST_AFTER)).toBe(true);
   });
 
@@ -181,9 +191,11 @@ describe("hasQueuedTurnStart", () => {
       ...makeShell({ activityAt: QUEUED_AT }),
       latestUserMessageAt: QUEUED_AT,
     };
+
     expect(hasQueuedTurnStart(adopted, JUST_AFTER)).toBe(false);
 
     const failed = makeShell({ activityAt: FRESH });
+
     const failedShell = {
       ...failed,
       latestUserMessageAt: QUEUED_AT,
@@ -197,6 +209,7 @@ describe("hasQueuedTurnStart", () => {
         updatedAt: NOW,
       },
     };
+
     expect(hasQueuedTurnStart(failedShell, JUST_AFTER)).toBe(false);
   });
 
@@ -212,13 +225,16 @@ describe("hasQueuedTurnStart", () => {
       latestTurn: null,
       session: null,
     };
+
     expect(hasQueuedTurnStart(skewed, { now: "2026-04-09T12:00:00.000Z" })).toBe(false);
+
     // A small negative age (within the grace window) still reads as queued.
     const slightlyAhead = {
       latestUserMessageAt: "2026-04-09T12:00:30.000Z",
       latestTurn: null,
       session: null,
     };
+
     expect(hasQueuedTurnStart(slightlyAhead, { now: "2026-04-09T12:00:00.000Z" })).toBe(true);
   });
 });
@@ -245,6 +261,7 @@ describe("canSettle", () => {
       ...makeShell({ activityAt: FRESH }),
       latestUserMessageAt: "2026-04-09T12:00:00.000Z",
     };
+
     const justAfter = "2026-04-09T12:00:30.000Z";
     expect(canSettle(queued, { now: justAfter })).toBe(false);
     expect(effectiveSettled(queued, { now: justAfter })).toBe(false);
@@ -261,11 +278,13 @@ describe("canSettle", () => {
     const messageAt = "2026-04-09T12:00:00.000Z";
     const flooredNow = "2026-04-09T12:01:00.000Z";
     const base = makeShell({ settledOverride: "settled", activityAt: null });
+
     const settledAfterMessage = {
       ...base,
       latestUserMessageAt: messageAt,
       settledAt: "2026-04-09T12:02:10.000Z",
     };
+
     expect(hasQueuedTurnStart(settledAfterMessage, { now: flooredNow })).toBe(true);
     expect(effectiveSettled(settledAfterMessage, { now: flooredNow })).toBe(true);
 
@@ -276,6 +295,7 @@ describe("canSettle", () => {
       latestUserMessageAt: "2026-04-09T12:03:00.000Z",
       settledAt: "2026-04-09T12:02:10.000Z",
     };
+
     expect(effectiveSettled(messageAfterSettle, { now: "2026-04-09T12:03:30.000Z" })).toBe(false);
   });
 
@@ -287,6 +307,7 @@ describe("canSettle", () => {
       activityAt: FRESH,
       pending: "user-input",
     });
+
     expect(canSettle(blocked, { now: NOW })).toBe(false);
     expect(effectiveSettled(blocked, { now: NOW })).toBe(false);
   });

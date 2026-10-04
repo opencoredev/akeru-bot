@@ -1,5 +1,7 @@
 "use client";
 
+import { Predicate } from "effect";
+
 import { Menu as MenuPrimitive } from "@base-ui/react/menu";
 import { ChevronRightIcon } from "lucide-react";
 import type * as React from "react";
@@ -28,8 +30,11 @@ function MenuPopup({
   alignOffset,
   side = "bottom",
   anchor,
+  presentation,
   ...props
 }: MenuPrimitive.Popup.Props & {
+  /** "padded" adds an outer inset, used by the compact reaction picker. */
+  presentation?: "padded";
   align?: MenuPrimitive.Positioner.Props["align"];
   sideOffset?: MenuPrimitive.Positioner.Props["sideOffset"];
   alignOffset?: MenuPrimitive.Positioner.Props["alignOffset"];
@@ -37,9 +42,10 @@ function MenuPopup({
   anchor?: MenuPrimitive.Positioner.Props["anchor"];
 }) {
   const hasExplicitWidthClass =
-    typeof className === "string" &&
+    Predicate.isString(className) &&
     className.split(/\s+/).some((classToken) => {
       const utility = classToken.split(":").at(-1) ?? classToken;
+
       return /^(?:min-|max-)?w-/.test(utility);
     });
 
@@ -58,6 +64,7 @@ function MenuPopup({
           className={cn(
             "relative flex origin-(--transform-origin) rounded-xl border border-border/80 bg-card shadow-[0_18px_48px_-24px_rgb(0_0_0/55%)] outline-none focus:outline-none dark:shadow-[0_22px_56px_-24px_rgb(0_0_0/80%)]",
             !hasExplicitWidthClass && "min-w-32",
+            presentation === "padded" && "p-1.5",
             className,
           )}
           data-slot="menu-popup"

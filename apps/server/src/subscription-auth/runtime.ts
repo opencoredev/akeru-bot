@@ -21,6 +21,7 @@ import type { ApiKeyCredential } from "./types.ts";
 export { instanceUsesSavedCredential } from "@akeru/contracts";
 
 const explicitEnvironmentKeys = Symbol("subscriptionInstanceEnvironmentKeys");
+
 type SubscriptionEnvironment = NodeJS.ProcessEnv & {
   readonly [explicitEnvironmentKeys]?: ReadonlySet<string>;
 };
@@ -47,8 +48,10 @@ export function subscriptionProviderSettingsPatch(
 
   for (const [driver, subscriptionProvider] of subscriptionProviderDrivers) {
     const driverKind = ProviderDriverKind.make(driver);
+
     if (Object.hasOwn(settings.providerInstances, defaultInstanceIdForDriver(driverKind))) continue;
     const enabled = connected.get(subscriptionProvider) ?? false;
+
     if (settings.providers[driver].enabled === enabled) continue;
     Object.assign(providers, { [driver]: { enabled } });
   }
@@ -69,10 +72,11 @@ export function mergeSubscriptionInstanceEnvironment(
 
 /** Drivers call this after they add their own isolation variables to a merged environment. */
 export function withExplicitEnvironmentKeys(
-  environment: NodeJS.ProcessEnv,
+  environment: SubscriptionEnvironment,
   keys: Iterable<string>,
 ): SubscriptionEnvironment {
-  const existing = (environment as SubscriptionEnvironment)[explicitEnvironmentKeys];
+  const existing = environment[explicitEnvironmentKeys];
+
   return {
     ...environment,
     [explicitEnvironmentKeys]: new Set([...(existing ?? []), ...keys]),
@@ -81,11 +85,14 @@ export function withExplicitEnvironmentKeys(
 
 function hasExplicitEnvironmentKey(environment: SubscriptionEnvironment, key: string): boolean {
   const keys = environment[explicitEnvironmentKeys];
+
   return keys ? keys.has(key) : environment !== process.env && Object.hasOwn(environment, key);
 }
 
 const ConfigRecord = Schema.Record(Schema.String, Schema.Unknown);
+
 const decodeConfig = Schema.decodeUnknownSync(Schema.fromJsonString(ConfigRecord));
+
 const decodeRecord = Schema.decodeUnknownSync(ConfigRecord);
 
 /** Read saved API keys when a provider process starts, not when the provider registry starts. */
@@ -97,9 +104,11 @@ export const subscriptionRuntimeEnvironment = Effect.fn("subscriptionRuntimeEnvi
     instanceId?: string,
   ) {
     const connectionKeys = SUBSCRIPTION_CONNECTION_ENV_KEYS[provider] ?? [];
+
     if (connectionKeys.some((key) => hasExplicitEnvironmentKey(environment, key)))
       return environment;
     const auth = yield* SubscriptionAuthService.forSecretsDir(secretsDir);
+
     return withApiKeyCredential(
       provider,
       environment,
@@ -115,11 +124,13 @@ function withApiKeyCredential(
 ): NodeJS.ProcessEnv {
   if (!credential) return environment;
   const { [explicitEnvironmentKeys]: _explicitKeys, ...env } = environment;
+
   switch (provider) {
     case "anthropic":
       delete env.CLAUDE_CODE_OAUTH_TOKEN;
       delete env.ANTHROPIC_AUTH_TOKEN;
       env.ANTHROPIC_API_KEY = credential.access;
+
       if (credential.baseUrl) env.ANTHROPIC_BASE_URL = anthropicApiBaseUrl(credential.baseUrl);
       else delete env.ANTHROPIC_BASE_URL;
       break;
@@ -131,6 +142,7 @@ function withApiKeyCredential(
       const providers = decodeRecord(config.provider ?? {});
       const providerConfig = decodeRecord(providers["opencode-go"] ?? {});
       const options = decodeRecord(providerConfig.options ?? {});
+
       if (
         hasExplicitEnvironmentKey(environment, "OPENCODE_CONFIG_CONTENT") &&
         (Object.hasOwn(options, "apiKey") || Object.hasOwn(options, "baseURL"))
@@ -153,6 +165,7 @@ function withApiKeyCredential(
       break;
     }
   }
+
   return env;
 }
 
@@ -164,9 +177,12 @@ export function subscriptionRequestUrl(
 ): string | URL | Request {
   if (!baseUrl) return input;
   const url = input instanceof Request ? input.url : String(input);
+
   if (!url.startsWith(`${defaultBaseUrl}/`)) {
     throw new Error("The provider request does not match its API base URL.");
   }
+
   const target = `${baseUrl}${url.slice(defaultBaseUrl.length)}`;
+
   return input instanceof Request ? new Request(target, input) : target;
 }

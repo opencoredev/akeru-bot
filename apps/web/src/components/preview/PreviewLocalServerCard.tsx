@@ -11,6 +11,7 @@ interface Props {
 
 export function PreviewLocalServerCard({ threadRef, server, onOpen }: Props) {
   const subtitle = describeServer(server);
+
   return (
     <button
       type="button"
@@ -30,5 +31,6 @@ export function PreviewLocalServerCard({ threadRef, server, onOpen }: Props) {
 
 function describeServer(server: PreviewableServer): string {
   if (server.processName) return server.processName;
+
   return "Listening";
 }

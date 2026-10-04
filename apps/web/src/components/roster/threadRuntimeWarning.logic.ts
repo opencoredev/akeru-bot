@@ -1,3 +1,4 @@
+import { Predicate, Option, Schema } from "effect";
 import {
   isServerProviderUnavailability,
   latestTurnFailure,
@@ -10,6 +11,14 @@ import type {
   ServerProviderUnavailability,
 } from "@akeru/contracts";
 
+const decodeWarningPayload = Schema.decodeUnknownOption(
+  Schema.Struct({
+    key: Schema.optionalKey(Schema.Unknown),
+    resolved: Schema.optionalKey(Schema.Unknown),
+    message: Schema.optionalKey(Schema.Unknown),
+  }),
+);
+
 export function activeThreadRuntimeWarning(
   activities: ReadonlyArray<OrchestrationThreadActivity>,
   latestTurn: OrchestrationLatestTurn | null,
@@ -17,27 +26,31 @@ export function activeThreadRuntimeWarning(
   if (latestTurn?.state !== "running") return null;
 
   const resolvedKeys = new Set<string>();
+
   const newestFirst = activities.toSorted(
     (left, right) =>
       (right.sequence ?? -1) - (left.sequence ?? -1) ||
       right.createdAt.localeCompare(left.createdAt) ||
       right.id.localeCompare(left.id),
   );
+
   for (const activity of newestFirst) {
     if (!activity || activity.kind !== "runtime.warning" || activity.turnId !== latestTurn.turnId) {
       continue;
     }
-    const payload =
-      activity.payload && typeof activity.payload === "object"
-        ? (activity.payload as Record<string, unknown>)
-        : null;
-    const key = typeof payload?.key === "string" ? payload.key : null;
+
+    const payload = Option.getOrNull(decodeWarningPayload(activity.payload));
+
+    const key = Predicate.isString(payload?.key) ? payload.key : null;
+
     if (payload?.resolved === true) {
       if (key) resolvedKeys.add(key);
       continue;
     }
+
     if (key && resolvedKeys.has(key)) continue;
-    return typeof payload?.message === "string" && payload.message.trim().length > 0
+
+    return Predicate.isString(payload?.message) && payload.message.trim().length > 0
       ? payload.message
       : activity.summary;
   }
@@ -51,6 +64,7 @@ export function latestThreadRuntimeError(
   latestTurn: OrchestrationLatestTurn | null,
 ): string | null {
   if (!latestTurn || latestTurn.state !== "error") return null;
+
   const activity = activities
     .toSorted(
       (left, right) =>
@@ -60,12 +74,12 @@ export function latestThreadRuntimeError(
     .find(
       (candidate) => candidate.kind === "runtime.error" && candidate.turnId === latestTurn.turnId,
     );
+
   if (!activity) return null;
-  const payload =
-    activity.payload && typeof activity.payload === "object"
-      ? (activity.payload as Record<string, unknown>)
-      : null;
-  return typeof payload?.message === "string" && payload.message.trim()
+
+  const payload = Option.getOrNull(decodeWarningPayload(activity.payload));
+
+  return Predicate.isString(payload?.message) && payload.message.trim()
     ? payload.message
     : activity.summary;
 }
@@ -73,6 +87,8 @@ export function latestThreadRuntimeError(
 export interface BotThreadFailure {
   readonly message: string;
   readonly unavailability: ServerProviderUnavailability | null;
+  /** The provider instance that failed, so its repair survives a model change. */
+  readonly providerInstanceId?: string;
 }
 
 /** A failed command, keeping the category the server attached to a provider failure. */
@@ -80,8 +96,12 @@ export function commandFailure(
   result: Parameters<typeof squashAtomCommandFailure>[0],
 ): BotThreadFailure {
   const error = squashAtomCommandFailure(result);
+
   const unavailability =
-    error && typeof error === "object" && "unavailability" in error ? error.unavailability : null;
+    error && Predicate.isObjectOrArray(error) && "unavailability" in error
+      ? error.unavailability
+      : null;
+
   return {
     message: error instanceof Error ? error.message : "Could not send the message.",
     unavailability: isServerProviderUnavailability(unavailability) ? unavailability : null,
@@ -105,6 +125,7 @@ export function latestBotThreadFailure(input: {
   readonly lastUserMessageAt: string | null;
 }): BotThreadFailure | null {
   const { activities, latestTurn, session, lastUserMessageAt } = input;
+
   if (
     latestTurn?.state === "error" &&
     (lastUserMessageAt === null || latestTurn.requestedAt >= lastUserMessageAt)
@@ -114,25 +135,32 @@ export function latestBotThreadFailure(input: {
       latestTurn.errorMessage ??
       session?.lastError ??
       null;
+
     if (!message) return null;
+
+    const failure = latestTurnFailure(activities, latestTurn.requestedAt);
+
     return {
       message,
       unavailability:
-        latestTurn.unavailability ??
-        session?.unavailability ??
-        latestTurnFailure(activities, latestTurn.requestedAt)?.unavailability ??
-        null,
+        latestTurn.unavailability ?? session?.unavailability ?? failure?.unavailability ?? null,
+      ...(failure?.providerInstanceId ? { providerInstanceId: failure.providerInstanceId } : {}),
     };
   }
+
   const unanswered =
     lastUserMessageAt !== null &&
     (latestTurn === null || latestTurn.requestedAt < lastUserMessageAt);
+
   if (!unanswered || session?.status !== "error") return null;
   const failure = latestTurnFailure(activities, lastUserMessageAt);
   const message = failure?.detail ?? session.lastError;
+
   if (!message) return null;
+
   return {
     message,
     unavailability: failure?.unavailability ?? session.unavailability ?? null,
+    ...(failure?.providerInstanceId ? { providerInstanceId: failure.providerInstanceId } : {}),
   };
 }

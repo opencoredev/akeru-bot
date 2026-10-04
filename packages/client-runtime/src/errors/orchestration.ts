@@ -3,8 +3,8 @@ import * as Schema from "effect/Schema";
 
 const isOrchestrationDispatchCommandError = Schema.is(OrchestrationDispatchCommandError);
 
-export function wasBootstrapThreadDeleted(error: unknown): boolean {
+export function wasBootstrapThreadDeleted(cause: unknown): boolean {
   return (
-    isOrchestrationDispatchCommandError(error) && error.bootstrapThreadDisposition === "deleted"
+    isOrchestrationDispatchCommandError(cause) && cause.bootstrapThreadDisposition === "deleted"
   );
 }

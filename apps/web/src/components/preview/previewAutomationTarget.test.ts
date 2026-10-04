@@ -47,6 +47,7 @@ describe("preview automation target selection", () => {
   it("reuses the provider session's pinned tab instead of the mutable UI tab", () => {
     const uiActive = snapshot("tab-ui-active");
     const agentTab = snapshot("tab-opened-by-agent");
+
     const state = {
       snapshot: uiActive,
       sessions: { [uiActive.tabId]: uiActive, [agentTab.tabId]: agentTab },

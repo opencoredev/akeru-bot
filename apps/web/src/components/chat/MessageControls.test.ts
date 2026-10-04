@@ -86,6 +86,7 @@ describe("message controls", () => {
       { messageId: "message-1", label: "Akeru", text: "First line\n\nThird line" },
       "My reply\nwith another line",
     );
+
     expect(parseReplyPrompt(sent)).toEqual({
       label: "Akeru",
       quotedText: "First line\n\nThird line",
@@ -142,6 +143,7 @@ describe("message controls", () => {
     const flush = renderToStaticMarkup(
       createElement(MessageControls, { copyText: "Hello", flushStart: true }),
     );
+
     const inset = renderToStaticMarkup(createElement(MessageControls, { copyText: "Hello" }));
 
     expect(flush).toContain("-ms-1.5");

@@ -70,14 +70,17 @@ export function useSelectedThreadRequests() {
     threadEnvironment.respondToApproval,
     "thread approval response",
   );
+
   const respondToUserInput = useAtomCommand(
     threadEnvironment.respondToUserInput,
     "thread user input response",
   );
+
   const { selectedThread: selectedThreadShell } = useThreadSelection();
   const selectedThread = useSelectedThreadDetail();
   const userInputDraftsByRequestKey = useAtomValue(userInputDraftsByRequestKeyAtom);
   const [respondingApprovalId, setRespondingApprovalId] = useState<ApprovalRequestId | null>(null);
+
   const [respondingUserInputId, setRespondingUserInputId] = useState<ApprovalRequestId | null>(
     null,
   );
@@ -87,22 +90,28 @@ export function useSelectedThreadRequests() {
     () => (selectedThread ? sortThreadActivities(selectedThread.activities) : []),
     [selectedThread],
   );
+
   const activePendingApprovals = useMemo(
     () => derivePendingApprovals(sortedActivities),
     [sortedActivities],
   );
+
   const activePendingApproval = activePendingApprovals[0] ?? null;
+
   const activePendingUserInputs = useMemo(
     () => derivePendingUserInputs(sortedActivities),
     [sortedActivities],
   );
+
   const activePendingUserInput = activePendingUserInputs[0] ?? null;
+
   const activePendingUserInputDrafts =
     activePendingUserInput && selectedThreadShell
       ? (userInputDraftsByRequestKey[
           scopedRequestKey(selectedThreadShell.environmentId, activePendingUserInput.requestId)
         ] ?? {})
       : {};
+
   const activePendingUserInputAnswers = activePendingUserInput
     ? buildPendingUserInputAnswers(activePendingUserInput.questions, activePendingUserInputDrafts)
     : null;
@@ -138,6 +147,7 @@ export function useSelectedThreadRequests() {
       }
 
       setRespondingApprovalId(requestId);
+
       const result = await respondToApproval({
         environmentId: selectedThreadShell.environmentId,
         input: {
@@ -146,7 +156,9 @@ export function useSelectedThreadRequests() {
           decision,
         },
       });
+
       setRespondingApprovalId((current) => (current === requestId ? null : current));
+
       return result;
     },
     [respondToApproval, selectedThreadShell],
@@ -158,6 +170,7 @@ export function useSelectedThreadRequests() {
     }
 
     setRespondingUserInputId(activePendingUserInput.requestId);
+
     const result = await respondToUserInput({
       environmentId: selectedThreadShell.environmentId,
       input: {
@@ -166,9 +179,11 @@ export function useSelectedThreadRequests() {
         answers: activePendingUserInputAnswers,
       },
     });
+
     setRespondingUserInputId((current) =>
       current === activePendingUserInput.requestId ? null : current,
     );
+
     return result;
   }, [
     activePendingUserInput,

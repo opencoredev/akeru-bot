@@ -48,6 +48,7 @@ function loadPrompt(prompt: string, skills: ReadonlyArray<ServerProviderSkill>) 
   editor.update(
     () => {
       const paragraph = $createParagraphNode();
+
       for (const segment of splitPromptIntoComposerSegments(prompt)) {
         if (segment.type === "skill") {
           paragraph.append($createComposerSkillNode(segment.name, metadata.get(segment.name)));
@@ -55,19 +56,23 @@ function loadPrompt(prompt: string, skills: ReadonlyArray<ServerProviderSkill>) 
           paragraph.append($createTextNode(segment.text));
         }
       }
+
       $getRoot().clear().append(paragraph);
     },
     { discrete: true },
   );
+
   return editor;
 }
 
 function readChips(editor: ReturnType<typeof createSkillEditor>) {
   return editor.getEditorState().read(() => {
     const paragraph = $getRoot().getFirstChild();
+
     const chips = $isElementNode(paragraph)
       ? paragraph.getChildren().filter((node) => node instanceof ComposerSkillNode)
       : [];
+
     return {
       markup: chips.map((chip) => renderToStaticMarkup(chip.decorate())),
       text: $getRoot().getTextContent(),

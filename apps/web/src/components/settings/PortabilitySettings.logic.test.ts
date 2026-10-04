@@ -64,6 +64,7 @@ describe("canApplyPortabilityPreview", () => {
         changes: [{ recordType: "mcp-server", id: "mcp-1", title: "MCP server" }],
       }),
     ).toBe(true);
+
     const partial = {
       ...preview,
       changes: [{ recordType: "mcp-server" as const, id: "mcp-1", title: "MCP server" }],
@@ -76,6 +77,7 @@ describe("canApplyPortabilityPreview", () => {
         },
       ],
     };
+
     expect(canApplyPortabilityPreview(partial)).toBe(true);
     expect(
       canApplyPortabilityPreview({
@@ -107,6 +109,7 @@ describe("updatePortabilityProjectFolderMap", () => {
   it("keeps prior folder picks and can clear one mapping", () => {
     const first = ProjectId.make("project-1");
     const second = ProjectId.make("project-2");
+
     const withBoth = updatePortabilityProjectFolderMap(
       updatePortabilityProjectFolderMap({}, first, " /tmp/first "),
       second,

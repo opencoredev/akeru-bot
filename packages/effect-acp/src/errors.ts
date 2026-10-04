@@ -1,3 +1,5 @@
+import * as Match from "effect/Match";
+import * as Predicate from "effect/Predicate";
 import * as Schema from "effect/Schema";
 import type * as SchemaIssue from "effect/SchemaIssue";
 
@@ -11,9 +13,11 @@ export const AcpRequestOperation = Schema.Literals([
   "receive-response",
   "receive-streaming-response",
 ]);
+
 export type AcpRequestOperation = typeof AcpRequestOperation.Type;
 
 export const AcpRequestId = Schema.Union([Schema.String, Schema.Number]);
+
 export type AcpRequestId = typeof AcpRequestId.Type;
 
 export const AcpSchemaIssueKind = Schema.Literals([
@@ -29,6 +33,7 @@ export const AcpSchemaIssueKind = Schema.Literals([
   "Forbidden",
   "OneOf",
 ]);
+
 export type AcpSchemaIssueKind = typeof AcpSchemaIssueKind.Type;
 
 export interface AcpSchemaIssueDiagnostics {
@@ -46,22 +51,31 @@ const schemaIssueDiagnostics = (root: SchemaIssue.Issue): AcpSchemaIssueDiagnost
     issueCount += 1;
     issueKinds.add(issue._tag);
     maximumPathDepth = Math.max(maximumPathDepth, pathDepth);
-    switch (issue._tag) {
-      case "Filter":
-      case "Encoding":
-        visit(issue.issue, pathDepth);
-        break;
-      case "Pointer":
-        visit(issue.issue, pathDepth + issue.path.length);
-        break;
-      case "Composite":
-      case "AnyOf":
-        for (const child of issue.issues) visit(child, pathDepth);
-        break;
-    }
+
+    Match.value(issue).pipe(
+      Match.tags({
+        Filter: (issue) => {
+          visit(issue.issue, pathDepth);
+        },
+        Encoding: (issue) => {
+          visit(issue.issue, pathDepth);
+        },
+        Pointer: (issue) => {
+          visit(issue.issue, pathDepth + issue.path.length);
+        },
+        Composite: (issue) => {
+          for (const child of issue.issues) visit(child, pathDepth);
+        },
+        AnyOf: (issue) => {
+          for (const child of issue.issues) visit(child, pathDepth);
+        },
+      }),
+      Match.orElse(() => {}),
+    );
   };
 
   visit(root, 0);
+
   return {
     issueCount,
     issueKinds: [...issueKinds],
@@ -110,6 +124,7 @@ export const AcpProtocolParseOperation = Schema.Literals([
   "decode-wire-message",
   "decode-notification-payload",
 ]);
+
 export type AcpProtocolParseOperation = typeof AcpProtocolParseOperation.Type;
 
 export class AcpProtocolParseError extends Schema.TaggedErrorClass<AcpProtocolParseError>()(
@@ -126,6 +141,7 @@ export class AcpProtocolParseError extends Schema.TaggedErrorClass<AcpProtocolPa
 ) {
   override get message() {
     const method = this.method === undefined ? "" : ` for method '${this.method}'`;
+
     return `ACP protocol operation '${this.operation}' failed${method}.`;
   }
 
@@ -170,6 +186,7 @@ export class AcpTransportError extends Schema.TaggedErrorClass<AcpTransportError
 ) {
   override get message() {
     const method = this.method ? ` for method ${this.method}` : "";
+
     return this.operation
       ? `ACP transport operation ${this.operation} failed${method}.`
       : "ACP transport operation failed.";
@@ -255,9 +272,10 @@ export class AcpRequestError extends Schema.TaggedErrorClass<AcpRequestError>()(
   }
 
   static fromCoreHandlerError(error: AcpError, method: string) {
-    if (error._tag === "AcpRequestError") {
+    if (Predicate.isTagged(error, "AcpRequestError")) {
       return error;
     }
+
     return AcpRequestError.internalError(
       `ACP request handler failed for method '${method}'`,
       undefined,
@@ -270,9 +288,10 @@ export class AcpRequestError extends Schema.TaggedErrorClass<AcpRequestError>()(
   }
 
   static fromExtensionHandlerError(error: AcpError, method: string) {
-    if (error._tag === "AcpRequestError") {
+    if (Predicate.isTagged(error, "AcpRequestError")) {
       return error;
     }
+
     return AcpRequestError.internalError(
       `ACP extension request handler failed for method '${method}'`,
       undefined,
@@ -284,7 +303,7 @@ export class AcpRequestError extends Schema.TaggedErrorClass<AcpRequestError>()(
     );
   }
 
-  static parseError(message = "Parse error", data?: unknown) {
+  static parseError(message = "Parse error", data?: AcpSchema.Error["data"]) {
     return new AcpRequestError({
       code: -32700,
       errorMessage: message,
@@ -292,7 +311,7 @@ export class AcpRequestError extends Schema.TaggedErrorClass<AcpRequestError>()(
     });
   }
 
-  static invalidRequest(message = "Invalid request", data?: unknown) {
+  static invalidRequest(message = "Invalid request", data?: AcpSchema.Error["data"]) {
     return new AcpRequestError({
       code: -32600,
       errorMessage: message,
@@ -307,7 +326,7 @@ export class AcpRequestError extends Schema.TaggedErrorClass<AcpRequestError>()(
     });
   }
 
-  static invalidParams(message = "Invalid params", data?: unknown) {
+  static invalidParams(message = "Invalid params", data?: AcpSchema.Error["data"]) {
     return new AcpRequestError({
       code: -32602,
       errorMessage: message,
@@ -317,6 +336,7 @@ export class AcpRequestError extends Schema.TaggedErrorClass<AcpRequestError>()(
 
   static invalidExtensionPayload(method: string, cause: Schema.SchemaError) {
     const diagnostics = schemaIssueDiagnostics(cause.issue);
+
     return new AcpRequestError({
       code: -32602,
       errorMessage: `Invalid payload for ACP extension method '${method}'.`,
@@ -330,7 +350,7 @@ export class AcpRequestError extends Schema.TaggedErrorClass<AcpRequestError>()(
 
   static internalError(
     message = "Internal error",
-    data?: unknown,
+    data?: AcpSchema.Error["data"],
     diagnostics: AcpRequestDiagnostics = {},
   ) {
     return new AcpRequestError({
@@ -341,7 +361,7 @@ export class AcpRequestError extends Schema.TaggedErrorClass<AcpRequestError>()(
     });
   }
 
-  static authRequired(message = "Authentication required", data?: unknown) {
+  static authRequired(message = "Authentication required", data?: AcpSchema.Error["data"]) {
     return new AcpRequestError({
       code: -32000,
       errorMessage: message,
@@ -349,7 +369,7 @@ export class AcpRequestError extends Schema.TaggedErrorClass<AcpRequestError>()(
     });
   }
 
-  static resourceNotFound(message = "Resource not found", data?: unknown) {
+  static resourceNotFound(message = "Resource not found", data?: AcpSchema.Error["data"]) {
     return new AcpRequestError({
       code: -32002,
       errorMessage: message,

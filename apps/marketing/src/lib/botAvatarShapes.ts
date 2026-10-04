@@ -4,15 +4,23 @@
 
 import { REST_FRAME, wrapOnBelt, type MotionFrame } from "./botAvatarMotion";
 
-export type BotBlobShape =
-  | "circle"
-  | "squircle"
-  | "square"
-  | "pill"
-  | "triangle"
-  | "hex"
-  | "cloud"
-  | "drop";
+const BOT_BLOB_SHAPES = [
+  "circle",
+  "squircle",
+  "square",
+  "pill",
+  "triangle",
+  "hex",
+  "cloud",
+  "drop",
+] as const;
+
+export type BotBlobShape = (typeof BOT_BLOB_SHAPES)[number];
+
+/** Reads a shape name from markup, such as the `data-avatar-shape` attribute. */
+export function parseBotBlobShape(value: string | undefined): BotBlobShape | null {
+  return BOT_BLOB_SHAPES.find((shape) => shape === value) ?? null;
+}
 
 /** Where the face sits on each body, and how large it draws. */
 const FACE_LAYOUT: Record<BotBlobShape, { x: number; y: number; scale: number }> = {
@@ -59,13 +67,17 @@ export function eyeTransform(shape: BotBlobShape, frame: MotionFrame, index: 0 |
   let x = faceX + (eye.x + frame.gazeX) * face.scale;
   const y = faceY + (eye.y + frame.gazeY) * face.scale;
   let width = frame.eyeWidth * face.scale;
+
   if (frame.spin !== 0) {
     const wrapped = wrapOnBelt(x, 50, BELT_RADIUS, frame.spin);
+
     if (!wrapped) return null;
     x = wrapped.x;
     width *= wrapped.width;
   }
+
   const height = frame.eyeHeight[index] * face.scale;
+
   return `translate(${x.toFixed(2)} ${y.toFixed(2)}) rotate(${eye.rotate}) scale(${width.toFixed(3)} ${height.toFixed(3)})`;
 }
 
@@ -79,6 +91,8 @@ export function bodyTransform(frame: MotionFrame) {
 /** Stable 0..1 offset per name, so a row of working bots does not bob in unison. */
 export function botAvatarSeed(seed: string): number {
   let hash = 0;
+
   for (let i = 0; i < seed.length; i++) hash = (hash * 31 + seed.charCodeAt(i)) | 0;
+
   return (Math.abs(hash) % 1000) / 1000;
 }

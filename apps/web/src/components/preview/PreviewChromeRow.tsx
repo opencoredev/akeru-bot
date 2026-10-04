@@ -86,6 +86,7 @@ export function PreviewChromeRow({
   useEffect(() => {
     if (focusUrlNonce == null) return;
     const node = inputRef.current;
+
     if (!node) return;
     node.focus();
   }, [focusUrlNonce]);
@@ -93,6 +94,7 @@ export function PreviewChromeRow({
   const submit = (event?: FormEvent | KeyboardEvent) => {
     event?.preventDefault();
     const next = draft.trim();
+
     if (next.length === 0) return;
     onSubmit(next);
     inputRef.current?.blur();
@@ -166,11 +168,7 @@ export function PreviewChromeRow({
                 <InputGroupInput
                   ref={inputRef}
                   value={inputFocused ? draft : url}
-                  className={cn(
-                    onOpenInBrowser &&
-                      !inputFocused &&
-                      "group-hover/address:pe-7 transition-[padding]",
-                  )}
+                  reserveRevealSpace={Boolean(onOpenInBrowser) && !inputFocused}
                   onChange={(event) => setDraft(event.target.value)}
                   onFocus={() => {
                     setDraft(url);
@@ -182,6 +180,7 @@ export function PreviewChromeRow({
                   }}
                   onKeyDown={(event) => {
                     if (event.key === "Enter") submit(event);
+
                     if (event.key === "Escape") {
                       event.preventDefault();
                       setDraft(url);
@@ -200,7 +199,8 @@ export function PreviewChromeRow({
           {onOpenInBrowser && !inputFocused ? (
             <InputGroupAddon
               align="inline-end"
-              className="pointer-events-none absolute inset-y-0 right-0 opacity-0 transition-opacity group-hover/address:pointer-events-auto group-hover/address:opacity-100"
+              reveal="address"
+              className="pointer-events-none absolute inset-y-0 right-0 group-hover/address:pointer-events-auto"
             >
               <Tooltip>
                 <TooltipTrigger
@@ -278,8 +278,7 @@ export function PreviewChromeRow({
       <div
         aria-hidden
         data-loading={loading}
-        className="preview-loading-progress pointer-events-none absolute bottom-0 left-0 z-10 h-0.5 w-full origin-left rounded-r-full bg-primary"
-        style={{ boxShadow: "0 0 6px 1px var(--color-ring)" }}
+        className="preview-loading-progress pointer-events-none absolute bottom-0 left-0 z-10 h-0.5 w-full origin-left rounded-r-full bg-primary shadow-progress-glow"
       />
     </div>
   );

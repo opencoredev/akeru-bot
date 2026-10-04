@@ -6,6 +6,7 @@ const PrimaryEnvironmentTargetSource = Schema.Literals([
   "window-origin",
   "desktop-managed",
 ]);
+
 type PrimaryEnvironmentTargetSource = typeof PrimaryEnvironmentTargetSource.Type;
 
 const PrimaryEnvironmentUrlKind = Schema.Literals([
@@ -14,6 +15,7 @@ const PrimaryEnvironmentUrlKind = Schema.Literals([
   "development-server-url",
   "window-location-url",
 ]);
+
 type PrimaryEnvironmentUrlKind = typeof PrimaryEnvironmentUrlKind.Type;
 
 export class PrimaryEnvironmentUrlInvalidError extends Schema.TaggedErrorClass<PrimaryEnvironmentUrlInvalidError>()(
@@ -53,14 +55,17 @@ export class DesktopEnvironmentBootstrapIncompleteError extends Schema.TaggedErr
       ...(this.hasHttpBaseUrl ? [] : ["httpBaseUrl"]),
       ...(this.hasWsBaseUrl ? [] : ["wsBaseUrl"]),
     ];
+
     return `Desktop bootstrap is missing ${missing.join(" and ")} for the local environment.`;
   }
 }
 
 export const isPrimaryEnvironmentUrlInvalidError = Schema.is(PrimaryEnvironmentUrlInvalidError);
+
 export const isPrimaryEnvironmentProtocolUnsupportedError = Schema.is(
   PrimaryEnvironmentProtocolUnsupportedError,
 );
+
 export const isDesktopEnvironmentBootstrapIncompleteError = Schema.is(
   DesktopEnvironmentBootstrapIncompleteError,
 );
@@ -80,6 +85,7 @@ function getDesktopLocalEnvironmentBootstrap(): DesktopEnvironmentBootstrap | nu
   // plural list may include a second WSL entry; the primary-target
   // resolver only cares about the primary, so just find it.
   const bootstraps = window.desktopBridge?.getLocalEnvironmentBootstraps() ?? [];
+
   return bootstraps.find((entry) => entry.id === PRIMARY_LOCAL_ENVIRONMENT_ID) ?? null;
 }
 
@@ -126,7 +132,9 @@ function swapBaseUrlProtocol(
     source: "configured",
     urlKind,
   });
+
   url.protocol = nextProtocol;
+
   return url.toString();
 }
 
@@ -144,6 +152,7 @@ export function isLoopbackHostname(hostname: string): boolean {
 function resolveHttpRequestBaseUrl(primaryTarget: PrimaryEnvironmentTarget): string {
   const httpBaseUrl = primaryTarget.target.httpBaseUrl;
   const configuredDevServerUrl = import.meta.env.VITE_DEV_SERVER_URL?.trim();
+
   if (!configuredDevServerUrl) {
     return httpBaseUrl;
   }
@@ -153,11 +162,13 @@ function resolveHttpRequestBaseUrl(primaryTarget: PrimaryEnvironmentTarget): str
     source: "window-origin",
     urlKind: "window-location-url",
   });
+
   const targetUrl = parseTargetUrl({
     rawValue: httpBaseUrl,
     source: primaryTarget.source,
     urlKind: "http-base-url",
   });
+
   const devServerUrl = parseTargetUrl({
     rawValue: configuredDevServerUrl,
     baseUrl: currentUrl.origin,
@@ -198,6 +209,7 @@ function resolveConfiguredPrimaryTarget(): PrimaryEnvironmentTarget | null {
     (configuredWsBaseUrl?.toLowerCase().startsWith("wss:")
       ? swapBaseUrlProtocol(configuredWsBaseUrl, "https:", "websocket-base-url")
       : swapBaseUrlProtocol(configuredWsBaseUrl!, "http:", "websocket-base-url"));
+
   const resolvedWsBaseUrl =
     configuredWsBaseUrl ??
     (configuredHttpBaseUrl?.toLowerCase().startsWith("https:")
@@ -219,7 +231,9 @@ function resolveWindowOriginPrimaryTarget(): PrimaryEnvironmentTarget {
     source: "window-origin",
     urlKind: "http-base-url",
   });
+
   const httpBaseUrl = url.toString();
+
   if (url.protocol === "http:") {
     url.protocol = "ws:";
   } else if (url.protocol === "https:") {
@@ -230,6 +244,7 @@ function resolveWindowOriginPrimaryTarget(): PrimaryEnvironmentTarget {
       protocol: url.protocol,
     });
   }
+
   return {
     source: "window-origin",
     target: {
@@ -241,12 +256,15 @@ function resolveWindowOriginPrimaryTarget(): PrimaryEnvironmentTarget {
 
 function resolveDesktopPrimaryTarget(): PrimaryEnvironmentTarget | null {
   const desktopBootstrap = getDesktopLocalEnvironmentBootstrap();
+
   if (!desktopBootstrap) {
     return null;
   }
+
   if (!desktopBootstrap.httpBaseUrl && !desktopBootstrap.wsBaseUrl) {
     return null;
   }
+
   if (!desktopBootstrap.httpBaseUrl || !desktopBootstrap.wsBaseUrl) {
     throw new DesktopEnvironmentBootstrapIncompleteError({
       hasHttpBaseUrl: Boolean(desktopBootstrap.httpBaseUrl),
@@ -282,10 +300,13 @@ export function resolvePrimaryEnvironmentHttpUrl(
     source: primaryTarget.source,
     urlKind: "http-base-url",
   });
+
   url.pathname = pathname;
+
   if (searchParams) {
     url.search = new URLSearchParams(searchParams).toString();
   }
+
   return url.toString();
 }
 

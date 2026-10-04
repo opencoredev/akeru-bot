@@ -66,6 +66,7 @@ describe("reduceConversationFollowState", () => {
       { followingEnd: false },
       { type: "scroll-to-end" },
     );
+
     const inProgress = reduceConversationFollowState(started, {
       type: "scroll",
       isAtEnd: false,

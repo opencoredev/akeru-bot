@@ -10,6 +10,7 @@ import { COLLAPSED_SIDEBAR_TITLEBAR_INSET_CLASS } from "../workspaceTitlebar";
  */
 export function detailsToggleInsetClass(detailsPanelOpen: boolean | undefined): string | null {
   if (detailsPanelOpen === undefined) return null;
+
   return detailsPanelOpen
     ? "max-[980px]:pr-[calc(var(--workspace-controls-right)+var(--workspace-titlebar-control-size)+var(--workspace-titlebar-control-gap))]!"
     : "pr-[calc(var(--workspace-controls-right)+var(--workspace-titlebar-control-size)+var(--workspace-titlebar-control-gap))]!";
@@ -32,13 +33,13 @@ export function WorkspacePageHeader({
     <header
       data-workspace-header=""
       className={cn(
-        "flex h-[var(--workspace-topbar-height)] min-h-[var(--workspace-topbar-height)] shrink-0 items-center gap-3 pl-[calc(env(safe-area-inset-left)+0.75rem)] pr-[calc(env(safe-area-inset-right)+0.75rem)] transition-[padding-left] duration-200 ease-linear motion-reduce:transition-none sm:pl-[calc(env(safe-area-inset-left)+1.25rem)] sm:pr-[calc(env(safe-area-inset-right)+1.25rem)]",
+        "flex h-(--workspace-topbar-height) min-h-(--workspace-topbar-height) shrink-0 items-center gap-3 pl-safe-left-0.75rem pr-safe-right-0.75rem transition-padding-left duration-200 ease-linear motion-reduce:transition-none sm:pl-safe-left-1.25rem sm:pr-safe-right-1.25rem",
         electron && "drag-region",
-        reserveNativeControls && "wco:pr-[var(--workspace-native-controls-inset)]",
+        reserveNativeControls && "wco:pr-(--workspace-native-controls-inset)",
         COLLAPSED_SIDEBAR_TITLEBAR_INSET_CLASS,
         // Below md the main sidebar hides and a fixed toggle sits at the left
         // edge of the top bar, so the title starts after it.
-        "max-md:pl-[calc(var(--workspace-controls-left)+var(--workspace-titlebar-control-size)+var(--workspace-titlebar-control-gap))]!",
+        "max-md:pl-titlebar-controls-end!",
         detailsToggleInsetClass(detailsPanelOpen),
         className,
       )}

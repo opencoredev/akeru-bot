@@ -1,10 +1,10 @@
-// @effect-diagnostics nodeBuiltinImport:off
 import * as NodeFS from "node:fs";
 import * as NodePath from "node:path";
 import * as NodeURL from "node:url";
 import { assert, it } from "@effect/vitest";
 
 const root = NodeURL.fileURLToPath(new URL("../", import.meta.url));
+
 const guidance = [
   "AGENTS.md",
   "docs/internals/scripts.md",
@@ -22,6 +22,7 @@ for (const relativePath of guidance) {
     const content = NodeFS.readFileSync(filename, "utf8");
     const links = Array.from(content.matchAll(/\]\(([^)]+)\)/g), (match) => match[1]!);
     const localLinks = links.filter((link) => !/^(?:[a-z]+:|#)/i.test(link));
+
     for (const link of localLinks) {
       const target = NodePath.resolve(NodePath.dirname(filename), link.split("#")[0]!);
       assert.isTrue(NodeFS.existsSync(target), `${relativePath}: ${link}`);

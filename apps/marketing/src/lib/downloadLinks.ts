@@ -5,8 +5,24 @@ import {
   resolveAssetDownload,
 } from "./releases";
 
-const UNSIGNED_PROMPT =
+export const UNSIGNED_INSTALL_PROMPT =
   "This build is unsigned. Your system may ask you to confirm the install. Continue?";
+
+const guardedLinks = new WeakSet<EventTarget>();
+
+// Asks before an unsigned build downloads. A link is guarded at most once, so running
+// the page script again never stacks prompts.
+export function guardUnsignedDownload(
+  link: EventTarget,
+  assetSuffix: string,
+  confirmInstall: (prompt: string) => boolean = (prompt) => window.confirm(prompt),
+) {
+  if (!requiresUnsignedInstall(assetSuffix) || guardedLinks.has(link)) return;
+  guardedLinks.add(link);
+  link.addEventListener("click", (event) => {
+    if (!confirmInstall(UNSIGNED_INSTALL_PROMPT)) event.preventDefault();
+  });
+}
 
 // Wires every download link on the page. Links ship with a direct asset URL baked
 // in at build time, so they work before this runs.
@@ -21,26 +37,26 @@ export function initDownloadLinks() {
   document.querySelectorAll<HTMLAnchorElement>("a[data-download-auto]").forEach((link) => {
     if (!target) return;
     const url = link.dataset[`url${target.os[0]?.toUpperCase()}${target.os.slice(1)}`];
+
     if (!url) return;
     link.href = url;
     link.dataset.os = target.os;
     link.dataset.asset = target.assetSuffix;
     link.removeAttribute("target");
     const label = link.querySelector("[data-download-label]");
+
     if (label && link.dataset.downloadAuto !== "short") label.textContent = target.label;
   });
 
   const links = document.querySelectorAll<HTMLAnchorElement>("a[data-asset]");
+
   if (links.length === 0) return;
   const release = fetchLatestRelease();
   links.forEach((link) => {
     const suffix = link.dataset.asset;
+
     if (!suffix) return;
     void resolveAssetDownload(link, suffix, release);
-    if (requiresUnsignedInstall(suffix)) {
-      link.addEventListener("click", (event) => {
-        if (!window.confirm(UNSIGNED_PROMPT)) event.preventDefault();
-      });
-    }
+    guardUnsignedDownload(link, suffix);
   });
 }

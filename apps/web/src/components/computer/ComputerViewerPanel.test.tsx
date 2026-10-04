@@ -14,6 +14,7 @@ import { describe, expect, it, vi } from "vite-plus/test";
 import { ComputerViewerPanel, computerViewerKeyAction } from "./ComputerViewerPanel";
 
 const threadId = ThreadId.make("thread-computer");
+
 const frame: ComputerFrame = { mimeType: "image/png", data: "AAAA", width: 1280, height: 800 };
 
 function serverState(overrides: Partial<ComputerState> = {}): ComputerState {
@@ -49,6 +50,7 @@ function render(
   capability: ComputerCapabilityExplanation = "available",
 ) {
   const state = controller.getState();
+
   return renderToStaticMarkup(
     <ComputerViewerPanel
       botName="Akeru"
@@ -77,6 +79,7 @@ async function shownController(port = fakePort()) {
   const controller = createComputerViewerController({ port });
   await controller.show();
   controller.receive({ _tag: "frame", frame });
+
   return controller;
 }
 
@@ -157,6 +160,7 @@ describe("ComputerViewerPanel", () => {
     const controller = await shownController(
       fakePort({ acquire: vi.fn(async () => ({ ok: false as const, code: "busy" as const })) }),
     );
+
     await controller.takeControl();
     const html = render(controller);
     expect(html).toContain('data-computer-notice="busy"');
@@ -172,6 +176,7 @@ describe("ComputerViewerPanel", () => {
         })),
       }),
     });
+
     await controller.show();
     const html = render(controller, "provider");
     expect(actions(html)).toEqual([]);

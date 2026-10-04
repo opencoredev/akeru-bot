@@ -33,10 +33,13 @@ function rangeIncludesIndex(start: number, end: number, index: number): boolean 
 function pushTextSegment(segments: ComposerPromptSegment[], text: string): void {
   if (!text) return;
   const last = segments[segments.length - 1];
+
   if (last && last.type === "text") {
     last.text += text;
+
     return;
   }
+
   segments.push({ type: "text", text });
 }
 
@@ -72,9 +75,11 @@ function forEachPromptSegmentSlice(
     ) {
       return true;
     }
+
     if (visitor({ type: "terminal-context", promptOffset: index }) === true) {
       return true;
     }
+
     textCursor = index + 1;
   }
 
@@ -100,6 +105,7 @@ function forEachPromptTextSlice(
     if (slice.type !== "text") {
       return false;
     }
+
     return visitor(slice.text, slice.promptOffset);
   });
 }
@@ -116,22 +122,26 @@ function forEachMentionMatch(
       if (match.type !== "mention") {
         continue;
       }
+
       if (visitor(match, promptOffset) === true) {
         return true;
       }
     }
+
     return false;
   });
 }
 
 function splitPromptTextIntoComposerSegments(text: string): ComposerPromptSegment[] {
   const segments: ComposerPromptSegment[] = [];
+
   if (!text) {
     return segments;
   }
 
   const tokenMatches = collectComposerInlineTokens(text);
   let cursor = 0;
+
   for (const match of tokenMatches) {
     if (match.start < cursor) {
       continue;
@@ -194,6 +204,7 @@ export function selectionTouchesMentionBoundary(
     ) {
       return true;
     }
+
     return false;
   });
 }
@@ -211,6 +222,7 @@ export function splitPromptIntoComposerSegments(
   forEachPromptSegmentSlice(prompt, (slice) => {
     if (slice.type === "text") {
       segments.push(...splitPromptTextIntoComposerSegments(slice.text));
+
       return false;
     }
 
@@ -219,6 +231,7 @@ export function splitPromptIntoComposerSegments(
       context: terminalContexts[terminalContextIndex] ?? null,
     });
     terminalContextIndex += 1;
+
     return false;
   });
 

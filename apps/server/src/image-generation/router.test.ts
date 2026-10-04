@@ -43,6 +43,7 @@ function fakeAdapter(
 ): FakeAdapter {
   const calls: ImageAdapterRequest[] = [];
   const signals: AbortSignal[] = [];
+
   return {
     provider,
     capabilities: provider === "chatgpt" ? CHATGPT_IMAGE_CAPABILITIES : GROK_IMAGE_CAPABILITIES,
@@ -51,10 +52,13 @@ function fakeAdapter(
     run: (request, signal) => {
       calls.push(request);
       signals.push(signal);
+
       if (behavior === "ok") {
         return Promise.resolve({ images: [pngBytes(16, 16)], model: `${provider}-model` });
       }
+
       if (behavior === "hang") return new Promise(() => {});
+
       return Promise.reject(behavior);
     },
   };
@@ -71,6 +75,7 @@ function routeInput(
     chatgpt: fakeAdapter("chatgpt"),
     grok: fakeAdapter("grok"),
   }) as Record<ImageProviderId, FakeAdapter>;
+
   return {
     settings: bothEnabled,
     botOverride: null,
@@ -107,6 +112,7 @@ describe("routeImageRequest", () => {
       const input = routeInput({
         settings: { ...bothEnabled, grokEnabled: false, defaultProvider: null },
       });
+
       const result = yield* routeImageRequest(input);
       expect(result.status).toBe("completed");
       expect(result.status === "completed" && result.provider).toBe("chatgpt");
@@ -120,6 +126,7 @@ describe("routeImageRequest", () => {
         settings: { ...bothEnabled, chatgptEnabled: false },
         request: { aspectRatio: "16:9" },
       });
+
       const result = yield* routeImageRequest(input);
       expect(result.status === "completed" && result.provider).toBe("grok");
       expect(input.adapters.chatgpt.calls).toHaveLength(0);
@@ -140,6 +147,7 @@ describe("routeImageRequest", () => {
       const result = yield* routeImageRequest(
         routeInput({ settings: { ...bothEnabled, chatgptEnabled: false, grokEnabled: false } }),
       );
+
       expect(result).toMatchObject({ status: "failed", kind: "disabled", attempts: [] });
     }),
   );
@@ -152,6 +160,7 @@ describe("routeImageRequest", () => {
             ? { state: "unavailable", kind: "revoked", message: "Reconnect ChatGPT." }
             : { state: "available" },
       });
+
       const result = yield* routeImageRequest(input);
       expect(result).toMatchObject({
         status: "completed",
@@ -176,6 +185,7 @@ describe("routeImageRequest", () => {
           }),
         }),
       );
+
       expect(result).toMatchObject({
         status: "failed",
         kind: "unavailable",
@@ -194,6 +204,7 @@ describe("routeImageRequest", () => {
             ? { state: "unavailable", kind: "revoked", message: "Reconnect ChatGPT." }
             : { state: "available" },
       });
+
       const result = yield* routeImageRequest(input);
       expect(result).toMatchObject({
         status: "failed",
@@ -211,6 +222,7 @@ describe("routeImageRequest", () => {
   it.effect("falls back after a provider failure", () =>
     Effect.gen(function* () {
       const outcomes: Array<[ImageProviderId, boolean]> = [];
+
       const input = routeInput({
         adapters: {
           chatgpt: fakeAdapter("chatgpt", new ImageAdapterFailure("provider-failed", "boom")),
@@ -218,6 +230,7 @@ describe("routeImageRequest", () => {
         },
         onAttempt: (provider, outcome) => Effect.sync(() => outcomes.push([provider, outcome.ok])),
       });
+
       const result = yield* routeImageRequest(input);
       expect(result.status === "completed" && result.provider).toBe("grok");
       expect(outcomes).toEqual([
@@ -241,6 +254,7 @@ describe("routeImageRequest", () => {
               : { state: "available" },
         }),
       );
+
       expect(result).toMatchObject({ status: "failed", kind: "provider-failed", message: "boom" });
     }),
   );
@@ -250,6 +264,7 @@ describe("routeImageRequest", () => {
       const chatgpt = fakeAdapter("chatgpt");
       const run = chatgpt.run;
       let calls = 0;
+
       const input = routeInput({
         request: { count: 2, provider: "chatgpt" },
         adapters: {
@@ -257,6 +272,7 @@ describe("routeImageRequest", () => {
             ...chatgpt,
             run: (request, signal) => {
               calls += 1;
+
               return calls === 2
                 ? Promise.reject(new ImageAdapterFailure("provider-failed", "Second failed."))
                 : run(request, signal);
@@ -265,6 +281,7 @@ describe("routeImageRequest", () => {
           grok: fakeAdapter("grok"),
         },
       });
+
       const result = yield* routeImageRequest(input);
       expect(result).toMatchObject({ status: "failed", kind: "provider-failed" });
       expect(result.parts).toHaveLength(1);
@@ -279,6 +296,7 @@ describe("routeImageRequest", () => {
       const run = chatgpt.run;
       let calls = 0;
       const fallbackCounts: number[] = [];
+
       const input = routeInput({
         request: { count: 3 },
         adapters: {
@@ -286,10 +304,13 @@ describe("routeImageRequest", () => {
             ...chatgpt,
             run: (request, signal) => {
               calls += 1;
+
               if (calls === 2) {
                 chatgpt.calls.push(request);
+
                 return Promise.reject(new ImageAdapterFailure("provider-failed", "Second failed."));
               }
+
               return run(request, signal);
             },
           },
@@ -297,6 +318,7 @@ describe("routeImageRequest", () => {
             ...fakeAdapter("grok"),
             run: (request) => {
               fallbackCounts.push(request.count);
+
               return Promise.resolve({
                 images: Array.from({ length: request.count }, () => pngBytes(16, 16)),
                 model: "grok-model",
@@ -305,6 +327,7 @@ describe("routeImageRequest", () => {
           },
         },
       });
+
       const result = yield* routeImageRequest(input);
       expect(result.status).toBe("completed");
       expect(input.adapters.chatgpt.calls.map((call) => call.count)).toEqual([1, 1]);
@@ -322,6 +345,7 @@ describe("routeImageRequest", () => {
           grok: fakeAdapter("grok"),
         },
       });
+
       const result = yield* routeImageRequest(input);
       expect(result).toMatchObject({
         status: "failed",
@@ -341,6 +365,7 @@ describe("routeImageRequest", () => {
           grok: fakeAdapter("grok"),
         },
       });
+
       const result = yield* routeImageRequest(input);
       expect(result).toMatchObject({ status: "failed", kind: "provider-failed" });
       expect(input.adapters.grok.calls).toHaveLength(0);
@@ -354,6 +379,7 @@ describe("routeImageRequest", () => {
         inputImages: [...editImage, ...editImage],
         request: { operation: "edit", inputImages: ["a", "b"] },
       });
+
       const result = yield* routeImageRequest(input);
       expect(result).toMatchObject({ status: "failed", kind: "unsupported" });
       expect(input.adapters.grok.calls).toHaveLength(0);
@@ -367,11 +393,13 @@ describe("routeImageRequest", () => {
         chatgpt: fakeAdapter("chatgpt", new ImageAdapterFailure("timeout", "Slow.")),
         grok: fakeAdapter("grok"),
       };
+
       const withoutConsent = routeInput({
         adapters: failing,
         inputImages: editImage,
         request: { operation: "edit", inputImages: ["a"] },
       });
+
       const result = yield* routeImageRequest(withoutConsent);
       expect(result).toMatchObject({ status: "needs-consent", provider: "grok" });
       expect(failing.grok.calls).toHaveLength(0);
@@ -381,6 +409,7 @@ describe("routeImageRequest", () => {
         inputImages: editImage,
         request: { operation: "edit", inputImages: ["a"], allowProvider: "grok" },
       });
+
       const retried = yield* routeImageRequest(withConsent);
       expect(retried.status === "completed" && retried.provider).toBe("grok");
       expect(failing.grok.calls[0]!.inputImages).toHaveLength(1);
@@ -395,6 +424,7 @@ describe("routeImageRequest", () => {
       const input = routeInput({
         adapters: { chatgpt: fakeAdapter("chatgpt", "hang"), grok: fakeAdapter("grok") },
       });
+
       const fiber = yield* routeImageRequest(input).pipe(Effect.forkScoped);
       yield* Effect.yieldNow;
       yield* TestClock.adjust(IMAGE_REQUEST_TIMEOUT);
@@ -416,6 +446,7 @@ describe("routeImageRequest", () => {
       const input = routeInput({
         adapters: { chatgpt: fakeAdapter("chatgpt", "hang"), grok: fakeAdapter("grok") },
       });
+
       const fiber = yield* routeImageRequest(input).pipe(Effect.forkScoped);
       yield* Effect.yieldNow;
       yield* TestClock.adjust(Duration.seconds(5));

@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 import {
-  makeQuitShortcutHandler,
+  createQuitShortcutHandler,
   QUIT_DOUBLE_PRESS_MS,
   QUIT_HOLD_DURATION_MS,
   QUIT_HOLD_RELEASE_GRACE_MS,
@@ -10,7 +10,9 @@ import type { QuitHoldKeyInput } from "./QuitHold.ts";
 import type { QuitConfirmationMode, QuitShortcutHintEvent } from "@akeru/contracts";
 
 const HOLD_DOWN = { state: "down", mode: "hold" } as const;
+
 const DOUBLE_CLICK_DOWN = { state: "down", mode: "double-click" } as const;
+
 const UP = { state: "up" } as const;
 
 function makeInput(overrides: Partial<QuitHoldKeyInput>): QuitHoldKeyInput {
@@ -34,20 +36,24 @@ function makeHarness(options?: {
   const notifications: Array<QuitShortcutHintEvent> = [];
   const concealWindow = vi.fn();
   const quit = vi.fn();
-  const handler = makeQuitShortcutHandler({
+
+  const handler = createQuitShortcutHandler({
     platform: options?.platform ?? "darwin",
     getMode: options?.getMode ?? (() => Promise.resolve(options?.mode ?? "hold")),
     notify: (event) => notifications.push(event),
     concealWindow,
     quit,
   });
+
   const preventDefault = vi.fn();
+
   const send = async (input: QuitHoldKeyInput) => {
     handler({ preventDefault }, input);
     // Let the getMode promise settle.
     await Promise.resolve();
     await Promise.resolve();
   };
+
   // Simulates the OS auto-repeating the held shortcut every `intervalMs`.
   const holdFor = async (
     durationMs: number,
@@ -59,10 +65,11 @@ function makeHarness(options?: {
       await send(makeInput({ isAutoRepeat: true, ...repeatOverrides }));
     }
   };
+
   return { notifications, concealWindow, quit, preventDefault, send, holdFor };
 }
 
-describe("makeQuitShortcutHandler", () => {
+describe("createQuitShortcutHandler", () => {
   beforeEach(() => {
     vi.useFakeTimers();
   });
@@ -226,12 +233,14 @@ describe("makeQuitShortcutHandler", () => {
 
   it("honors direct mode when the key is released before its mode read settles", async () => {
     let resolveMode: ((mode: QuitConfirmationMode) => void) | undefined;
+
     const harness = makeHarness({
       getMode: () =>
         new Promise((resolve) => {
           resolveMode = resolve;
         }),
     });
+
     await harness.send(makeInput({}));
     await harness.send(makeInput({ type: "keyUp" }));
 
@@ -245,12 +254,14 @@ describe("makeQuitShortcutHandler", () => {
 
   it("does not arm hold mode after a released key's mode read settles", async () => {
     let resolveMode: ((mode: QuitConfirmationMode) => void) | undefined;
+
     const harness = makeHarness({
       getMode: () =>
         new Promise((resolve) => {
           resolveMode = resolve;
         }),
     });
+
     await harness.send(makeInput({}));
     await harness.send(makeInput({ type: "keyUp" }));
 
@@ -266,9 +277,11 @@ describe("makeQuitShortcutHandler", () => {
     "quits on a quick second press without waiting for a pending %s mode read",
     async (mode) => {
       const resolvers: Array<(mode: QuitConfirmationMode) => void> = [];
+
       const harness = makeHarness({
         getMode: () => new Promise((resolve) => resolvers.push(resolve)),
       });
+
       await harness.send(makeInput({}));
       await harness.send(makeInput({ type: "keyUp" }));
       vi.advanceTimersByTime(QUIT_DOUBLE_PRESS_MS - 100);
@@ -292,9 +305,11 @@ describe("makeQuitShortcutHandler", () => {
     // Press #1's mode is still pending when the user releases and
     // presses again; its late resolution must not act for press #2.
     const resolvers: Array<(mode: QuitConfirmationMode) => void> = [];
+
     const harness = makeHarness({
       getMode: () => new Promise((resolve) => resolvers.push(resolve)),
     });
+
     await harness.send(makeInput({}));
     await harness.send(makeInput({ type: "keyUp" }));
     // Outside the double-press window, so the second press starts a new hold.
@@ -354,12 +369,14 @@ describe("makeQuitShortcutHandler", () => {
 
   it("expires a delayed double-press hint from keydown rather than mode resolution", async () => {
     let resolveMode: ((mode: QuitConfirmationMode) => void) | undefined;
+
     const harness = makeHarness({
       getMode: () =>
         new Promise((resolve) => {
           resolveMode = resolve;
         }),
     });
+
     await harness.send(makeInput({}));
     vi.advanceTimersByTime(100);
     await harness.send(makeInput({ type: "keyUp" }));

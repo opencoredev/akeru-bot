@@ -22,8 +22,10 @@ export const makeProviderMaintenanceCommandCoordinator = Effect.fn(
       if (runningTargets.has(targetKey)) {
         return [false, runningTargets] as const;
       }
+
       const next = new Set(runningTargets);
       next.add(targetKey);
+
       return [true, next] as const;
     });
   });
@@ -32,23 +34,29 @@ export const makeProviderMaintenanceCommandCoordinator = Effect.fn(
     Ref.update(runningTargetsRef, (runningTargets) => {
       const next = new Set(runningTargets);
       next.delete(targetKey);
+
       return next;
     });
 
   const getLock = Effect.fn("getProviderMaintenanceCommandLock")(function* (lockKey: string) {
     const existing = (yield* Ref.get(locksRef)).get(lockKey);
+
     if (existing) {
       return existing;
     }
 
     const lock = yield* Semaphore.make(1);
+
     return yield* Ref.modify(locksRef, (locks) => {
       const current = locks.get(lockKey);
+
       if (current) {
         return [current, locks] as const;
       }
+
       const next = new Map(locks);
       next.set(lockKey, lock);
+
       return [lock, next] as const;
     });
   });
@@ -61,15 +69,18 @@ export const makeProviderMaintenanceCommandCoordinator = Effect.fn(
   }) =>
     Effect.gen(function* () {
       const acquired = yield* acquireTarget(targetKey);
+
       if (!acquired) {
         return yield* Effect.fail(input.makeAlreadyRunningError(targetKey));
       }
 
       return yield* Effect.gen(function* () {
         const lock = yield* getLock(lockKey);
+
         if (onQueued) {
           yield* onQueued;
         }
+
         return yield* lock.withPermits(1)(run);
       }).pipe(Effect.ensuring(releaseTarget(targetKey)));
     });

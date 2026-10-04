@@ -31,8 +31,10 @@ export function createDesktopUpdateStateAtom(getBridge: () => DesktopUpdateBridg
   const updates = Stream.callback<DesktopUpdateState | null>((queue) =>
     Effect.gen(function* () {
       const bridge = getBridge();
+
       if (!bridge) {
         Queue.offerUnsafe(queue, null);
+
         return yield* Effect.never;
       }
 
@@ -65,6 +67,7 @@ export function createDesktopUpdateStateAtom(getBridge: () => DesktopUpdateBridg
             }).pipe(Effect.as(null)),
         }),
       );
+
       if (!receivedUpdate && initialState !== null) {
         Queue.offerUnsafe(queue, initialState);
       }

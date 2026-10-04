@@ -1,6 +1,7 @@
+import { hasTag } from "~/lib/taggedUnion";
+import type { AssetResource } from "@akeru/contracts";
 import type {
   AssetCreateUrlResult,
-  AssetResource,
   EnvironmentId,
   PreviewOpenInput,
   PreviewSessionSnapshot,
@@ -18,6 +19,8 @@ import {
   rememberPreviewUrl,
 } from "~/previewStateStore";
 import { useRightPanelStore } from "~/rightPanelStore";
+
+const assetResource = Data.taggedEnum<AssetResource>();
 
 export const isBrowserPreviewFile = (path: string): boolean =>
   /\.(?:html?|pdf)$/i.test(path.split(/[?#]/, 1)[0] ?? "");
@@ -42,6 +45,7 @@ export async function openUrlInPreview<E>(input: {
     environmentId: input.threadRef.environmentId,
     input: { threadId: input.threadRef.threadId, url: input.url },
   });
+
   return mapAtomCommandResult(result, (snapshot) => {
     applyPreviewServerSnapshot(input.threadRef, snapshot);
     rememberPreviewUrl(input.threadRef, input.url);
@@ -68,25 +72,29 @@ export async function openFileInPreview<AssetError, PreviewError>(input: {
       ),
     );
   }
+
   const assetResult = await input.createAssetUrl({
     environmentId: input.threadRef.environmentId,
     input: {
-      resource: {
-        _tag: "workspace-file",
+      resource: assetResource["workspace-file"]({
         threadId: input.threadRef.threadId,
         path: input.filePath,
-      },
+      }),
     },
   });
-  if (assetResult._tag === "Failure") {
+
+  if (hasTag(assetResult, "Failure")) {
     return AsyncResult.failure(assetResult.cause);
   }
+
   const assetUrl = resolveAssetUrl(input.httpBaseUrl, assetResult.value.relativeUrl);
+
   if (assetUrl === null) {
     return AsyncResult.failure(
       Cause.die(new Error("The environment returned an invalid asset URL.")),
     );
   }
+
   return openUrlInPreview({
     threadRef: input.threadRef,
     url: assetUrl,

@@ -1,3 +1,5 @@
+import * as Match from "effect/Match";
+import * as Predicate from "effect/Predicate";
 import {
   HostProcessArchitecture,
   HostProcessEnvironment,
@@ -70,14 +72,14 @@ export type ResourceMonitorLinuxLibc = "gnu" | "musl";
 
 function detectResourceMonitorLinuxLibc(): ResourceMonitorLinuxLibc {
   try {
-    const report = process.report?.getReport() as
-      | {
-          readonly header?: {
-            readonly glibcVersionRuntime?: unknown;
-          };
-        }
-      | undefined;
-    return typeof report?.header?.glibcVersionRuntime === "string" ? "gnu" : "musl";
+    const report = process.report?.getReport();
+    const header = Predicate.hasProperty(report, "header") ? report.header : undefined;
+
+    const glibc = Predicate.hasProperty(header, "glibcVersionRuntime")
+      ? header.glibcVersionRuntime
+      : undefined;
+
+    return Predicate.isString(glibc) ? "gnu" : "musl";
   } catch {
     return "musl";
   }
@@ -100,6 +102,7 @@ export function resourceMonitorPlatformKey(
   ) {
     return undefined;
   }
+
   return `${platform}-${architecture}`;
 }
 
@@ -109,29 +112,33 @@ export function resourceMonitorRustTarget(
   linuxLibc?: ResourceMonitorLinuxLibc,
 ): string | undefined {
   if (platform === "darwin") {
-    return architecture === "arm64"
-      ? "aarch64-apple-darwin"
-      : architecture === "x64"
-        ? "x86_64-apple-darwin"
-        : undefined;
+    return Match.value(architecture).pipe(
+      Match.when("arm64", () => "aarch64-apple-darwin"),
+      Match.when("x64", () => "x86_64-apple-darwin"),
+      Match.orElse(() => undefined),
+    );
   }
+
   if (platform === "linux") {
     if (linuxLibc !== "gnu") {
       return undefined;
     }
-    return architecture === "arm64"
-      ? "aarch64-unknown-linux-gnu"
-      : architecture === "x64"
-        ? "x86_64-unknown-linux-gnu"
-        : undefined;
+
+    return Match.value(architecture).pipe(
+      Match.when("arm64", () => "aarch64-unknown-linux-gnu"),
+      Match.when("x64", () => "x86_64-unknown-linux-gnu"),
+      Match.orElse(() => undefined),
+    );
   }
+
   if (platform === "win32") {
-    return architecture === "arm64"
-      ? "aarch64-pc-windows-msvc"
-      : architecture === "x64"
-        ? "x86_64-pc-windows-msvc"
-        : undefined;
+    return Match.value(architecture).pipe(
+      Match.when("arm64", () => "aarch64-pc-windows-msvc"),
+      Match.when("x64", () => "x86_64-pc-windows-msvc"),
+      Match.orElse(() => undefined),
+    );
   }
+
   return undefined;
 }
 
@@ -146,10 +153,12 @@ export const make = Effect.fn("resourceTelemetry.resourceMonitorBinary.make")(fu
   const executableName = binaryName(platform);
   const platformKey = resourceMonitorPlatformKey(platform, architecture);
   const rustTarget = resourceMonitorRustTarget(platform, architecture, linuxLibc);
+
   const overrideCandidates = [
     environment.T3CODE_RESOURCE_MONITOR_PATH,
     config.resourceMonitorPath,
   ].filter((candidate): candidate is string => Boolean(candidate));
+
   const bundledCandidates =
     platformKey === undefined || rustTarget === undefined
       ? []
@@ -182,6 +191,7 @@ export const make = Effect.fn("resourceTelemetry.resourceMonitorBinary.make")(fu
             executableName,
           ),
         ];
+
   if (overrideCandidates.length === 0 && bundledCandidates.length === 0) {
     return ResourceMonitorBinary.of({
       resolve: Effect.fail(
@@ -198,10 +208,12 @@ export const make = Effect.fn("resourceTelemetry.resourceMonitorBinary.make")(fu
   const resolve: ResourceMonitorBinary["Service"]["resolve"] = Effect.gen(function* () {
     for (const candidate of candidates) {
       const exists = yield* fileSystem.exists(candidate).pipe(Effect.orElseSucceed(() => false));
+
       if (!exists) continue;
 
       if (platform !== "win32") {
         const stat = yield* fileSystem.stat(candidate).pipe(Effect.option);
+
         if (Option.isSome(stat) && (stat.value.mode & 0o111) === 0) {
           return yield* new ResourceMonitorBinaryNotExecutable({
             path: candidate,

@@ -1,4 +1,3 @@
-// @effect-diagnostics nodeBuiltinImport:off globalTimers:off
 /**
  * Public-web backends for the WebFetch and WebSearch catalog tools.
  *
@@ -14,14 +13,18 @@ import * as NodeHttps from "node:https";
 import * as NodeNet from "node:net";
 
 export const AKERU_WEB_FETCH_MAX_BYTES = 2 * 1024 * 1024;
+
 export const AKERU_WEB_FETCH_TIMEOUT_MS = 15_000;
+
 export const AKERU_WEB_FETCH_MAX_REDIRECTS = 5;
+
 export const AKERU_WEB_FETCH_TRUNCATION_MARKER = "\n\n[WebFetch truncated the response at";
 
 // Separate lists because a BlockList also matches IPv4 addresses against
 // IPv4-mapped IPv6 rules, which would block every public IPv4 address.
 const PRIVATE_IPV4 = (() => {
   const list = new NodeNet.BlockList();
+
   for (const [network, prefix] of [
     ["0.0.0.0", 8],
     ["10.0.0.0", 8],
@@ -36,11 +39,13 @@ const PRIVATE_IPV4 = (() => {
   ] as const) {
     list.addSubnet(network, prefix, "ipv4");
   }
+
   return list;
 })();
 
 const PRIVATE_IPV6 = (() => {
   const list = new NodeNet.BlockList();
+
   for (const [network, prefix] of [
     ["::", 128],
     ["::1", 128],
@@ -59,14 +64,18 @@ const PRIVATE_IPV6 = (() => {
   ] as const) {
     list.addSubnet(network, prefix, "ipv6");
   }
+
   return list;
 })();
 
 /** True for loopback, private, link-local, CGNAT, multicast, and mapped addresses. */
 export function isAkeruPrivateAddress(address: string): boolean {
   const family = NodeNet.isIP(address);
+
   if (family === 4) return PRIVATE_IPV4.check(address, "ipv4");
+
   if (family === 6) return PRIVATE_IPV6.check(address, "ipv6");
+
   return false;
 }
 
@@ -77,15 +86,19 @@ export function isAkeruPrivateAddress(address: string): boolean {
  */
 export function parseAkeruPublicUrl(raw: string): URL {
   let url: URL;
+
   try {
     url = new URL(raw);
   } catch {
     throw new Error("WebFetch URL must be valid HTTP or HTTPS.");
   }
+
   if (!["http:", "https:"].includes(url.protocol) || url.username || url.password) {
     throw new Error("WebFetch only accepts public HTTP(S) URLs without credentials.");
   }
+
   const host = url.hostname.toLowerCase().replace(/^\[|\]$/g, "");
+
   if (
     host === "localhost" ||
     host.endsWith(".localhost") ||
@@ -95,6 +108,7 @@ export function parseAkeruPublicUrl(raw: string): URL {
   ) {
     throw new Error("WebFetch rejects private, loopback, and local addresses.");
   }
+
   return url;
 }
 
@@ -132,18 +146,24 @@ async function resolvePinnedAddress(
   const host = url.hostname.replace(/^\[|\]$/g, "");
   const literal = NodeNet.isIP(host);
   const records = literal !== 0 ? [{ address: host, family: literal }] : await lookup(host);
+
   if (records.length === 0) throw new Error(`WebFetch could not resolve ${host}.`);
+
   if (records.some((record) => NodeNet.isIP(record.address) === 0)) {
     throw new Error(`WebFetch could not resolve ${host} to a valid address.`);
   }
+
   if (records.some((record) => !allowAddress(record.address))) {
     throw new Error("WebFetch rejects private, loopback, and local addresses.");
   }
+
   const first = records[0]!;
+
   return { address: first.address, family: NodeNet.isIP(first.address) === 6 ? 6 : 4 };
 }
 
 function pinnedLookup(pinned: PinnedAddress): NodeHttp.RequestOptions["lookup"] {
+  // SAFETY: This lookup implements both Node DNS overloads, returning a list only when all is requested.
   return ((
     _hostname: string,
     options: { readonly all?: boolean },
@@ -172,6 +192,7 @@ function requestHop(
   timeoutMs: number,
 ): Promise<HopResponse> {
   const transport = url.protocol === "https:" ? NodeHttps : NodeHttp;
+
   return new Promise((resolve, reject) => {
     const request = transport.request(
       url,
@@ -191,17 +212,21 @@ function requestHop(
         const status = response.statusCode ?? 0;
         const location = response.headers.location;
         const contentType = response.headers["content-type"] ?? null;
+
         if (status >= 300 && status < 400) {
           response.resume();
           resolve({ status, location, contentType, body: Buffer.alloc(0), truncated: false });
+
           return;
         }
+
         const chunks: Buffer[] = [];
         let received = 0;
         let truncated = false;
         response.on("data", (chunk: Buffer) => {
           if (truncated) return;
           const remaining = maxBytes - received;
+
           if (chunk.length > remaining) {
             chunks.push(chunk.subarray(0, remaining));
             received = maxBytes;
@@ -209,8 +234,10 @@ function requestHop(
             resolve({ status, location, contentType, body: Buffer.concat(chunks), truncated });
             response.destroy();
             request.destroy();
+
             return;
           }
+
           chunks.push(chunk);
           received += chunk.length;
         });
@@ -227,6 +254,7 @@ function requestHop(
         });
       },
     );
+
     // `timeout` only covers idle sockets. The deadline also bounds a server
     // that trickles bytes to hold the request open.
     const deadline = setTimeout(() => request.destroy(new Error("WebFetch timed out.")), timeoutMs);
@@ -245,6 +273,7 @@ function lookupWithDeadline(lookup: AkeruWebFetchLookup, timeoutMs: number): Ake
         () => reject(new Error(`WebFetch timed out resolving ${hostname}.`)),
         timeoutMs,
       );
+
       lookup(hostname).then(
         (records) => {
           clearTimeout(deadline);
@@ -260,29 +289,37 @@ function lookupWithDeadline(lookup: AkeruWebFetchLookup, timeoutMs: number): Ake
 
 export function createAkeruWebFetch(options: AkeruWebFetchOptions = {}) {
   const timeoutMs = options.timeoutMs ?? AKERU_WEB_FETCH_TIMEOUT_MS;
+
   const lookup = lookupWithDeadline(
     options.lookup ?? ((hostname) => NodeDnsPromises.lookup(hostname, { all: true })),
     timeoutMs,
   );
+
   const allowAddress = options.allowAddress ?? ((address) => !isAkeruPrivateAddress(address));
   const maxBytes = options.maxBytes ?? AKERU_WEB_FETCH_MAX_BYTES;
   const maxRedirects = options.maxRedirects ?? AKERU_WEB_FETCH_MAX_REDIRECTS;
 
   return async (input: { readonly url: string }): Promise<AkeruWebFetchResult> => {
     let url = parseAkeruPublicUrl(input.url);
+
     for (let redirects = 0; ; redirects += 1) {
       const pinned = await resolvePinnedAddress(url, lookup, allowAddress);
       const hop = await requestHop(url, pinned, maxBytes, timeoutMs);
+
       if (hop.status >= 300 && hop.status < 400) {
         if (!hop.location) throw new Error("WebFetch received a redirect without a location.");
+
         if (redirects >= maxRedirects) throw new Error("WebFetch followed too many redirects.");
         url = parseAkeruPublicUrl(new URL(hop.location, url).toString());
         continue;
       }
+
       if (hop.status < 200 || hop.status >= 300) {
         throw new Error(`WebFetch failed with HTTP ${hop.status}.`);
       }
+
       const text = new TextDecoder().decode(hop.body);
+
       return {
         url: url.toString(),
         status: hop.status,

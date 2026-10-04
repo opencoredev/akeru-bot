@@ -1,4 +1,3 @@
-// @effect-diagnostics nodeBuiltinImport:off - tests use POSIX path joining to match the Linux startup boundary.
 import * as NodePath from "node:path";
 import { assert, describe, it } from "@effect/vitest";
 
@@ -17,6 +16,7 @@ describe("DesktopEarlyElectronStartup", () => {
       joinPath,
       readFileString: (path) => {
         assert.equal(path, "/home/user/.t3-test/userdata/desktop-settings.json");
+
         return JSON.stringify({ linuxPasswordStore: "kwallet6" });
       },
     });
@@ -58,6 +58,7 @@ describe("DesktopEarlyElectronStartup", () => {
       joinPath,
       readFileString: (path) => {
         assert.equal(path, "/userdata/desktop-settings.json");
+
         return JSON.stringify({ linuxPasswordStore: "kwallet6" });
       },
     });
@@ -76,6 +77,7 @@ describe("DesktopEarlyElectronStartup", () => {
       joinPath,
       readFileString: (path) => {
         assert.equal(path, "/home/user/.t3-test/userdata/desktop-settings.json");
+
         return JSON.stringify({ linuxPasswordStore: "auto" });
       },
     });
@@ -95,6 +97,7 @@ describe("DesktopEarlyElectronStartup", () => {
       joinPath,
       readFileString: (path) => {
         assert.equal(path, "/home/user/.akeru/dev/desktop-settings.json");
+
         return JSON.stringify({ linuxPasswordStore: "kwallet" });
       },
     });
@@ -112,6 +115,7 @@ describe("DesktopEarlyElectronStartup", () => {
       joinPath,
       readFileString: (path) => {
         assert.equal(path, "/home/user/.akeru/dev/desktop-settings.json");
+
         return JSON.stringify({ linuxPasswordStore: "gnome-libsecret" });
       },
     });

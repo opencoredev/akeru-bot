@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import { createReplyPlaybackSession } from "@akeru/client-runtime/reply-playback";
 import { storedReplySynthesisCapability } from "@akeru/client-runtime/reply-playback";
 import { useAtomValue } from "@effect/atom-react";
@@ -8,10 +9,22 @@ import { usePrimaryEnvironmentId } from "~/state/environments";
 import { createBrowserReplyAudio } from "./replyPlaybackAudio";
 import { synthesizeVoiceChunks } from "@akeru/client-runtime/voice";
 
+type ReplySynthesisResult = {
+  readonly _tag: string;
+  readonly value?: { readonly audioBase64: string; readonly mimeType: "audio/mpeg" };
+};
+
+function isSynthesisSuccess(
+  value: ReplySynthesisResult,
+): value is ReplySynthesisResult & { readonly _tag: "Success" } {
+  return Predicate.isTagged(value, "Success");
+}
+
 const OTHER_ENVIRONMENT_SPEECH_UNAVAILABLE =
   "Reading replies aloud is only available for this device's primary environment.";
 
 let operationSequence = 0;
+
 const operationId = () => `voice-${Date.now()}-${operationSequence++}`;
 
 export function useWebReplyPlaybackSession() {
@@ -21,21 +34,31 @@ export function useWebReplyPlaybackSession() {
   const cancel = useAtomCommand(serverEnvironment.cancelVoice, { reportFailure: false });
   const voice = settings.voice;
   const voiceRef = useRef(voice);
+
   const session = useMemo(
     () =>
       createWebReplyPlaybackSession({
         ...(environmentId ? { environmentId } : {}),
         voice: () => voiceRef.current,
-        ...(environmentId ? { synthesize: synthesize as never, cancel: cancel as never } : {}),
+        ...(environmentId
+          ? {
+              synthesize: ({ input }) => synthesize({ environmentId, input }),
+              cancel: async ({ input }) => {
+                await cancel({ environmentId, input });
+              },
+            }
+          : {}),
       }),
     [cancel, environmentId, synthesize],
   );
+
   // Voice setting changes update the live session, so playback and automatic readout survive them.
   // The per-environment check still applies, so other environments' replies stay unavailable.
   useEffect(() => {
     voiceRef.current = voice;
     session.refreshSynthesis();
   }, [session, voice]);
+
   return session;
 }
 
@@ -48,15 +71,16 @@ export function createWebReplyPlaybackSession(
     readonly synthesize?: (target: {
       environmentId: string;
       input: { operationId: string; text: string };
-    }) => Promise<{ _tag: string; value?: { audioBase64: string; mimeType: "audio/mpeg" } }>;
+    }) => Promise<ReplySynthesisResult>;
     readonly cancel?: (target: {
       environmentId: string;
       input: { operationId: string };
-    }) => Promise<unknown>;
+    }) => Promise<void>;
   } = {},
 ) {
   const environmentId = options.environmentId ?? null;
-  const readVoice = () => (typeof options.voice === "function" ? options.voice() : options.voice);
+  const readVoice = () => (Predicate.isFunction(options.voice) ? options.voice() : options.voice);
+
   return createReplyPlaybackSession({
     storage: {
       getItem: async (key) =>
@@ -80,26 +104,32 @@ export function createWebReplyPlaybackSession(
     prepare: async (request, signal, events) => {
       if (!environmentId || !options.synthesize || !options.cancel)
         throw new Error("Voice synthesis is unavailable.");
+
       if (request.identity.environmentId !== environmentId)
         throw new Error(OTHER_ENVIRONMENT_SPEECH_UNAVAILABLE);
       const id = operationId();
+
       const abort = () => {
         void options.cancel?.({ environmentId, input: { operationId: id } });
       };
+
       signal.addEventListener("abort", abort, { once: true });
+
       try {
         const parts: BlobPart[] = [];
         let mimeType = "audio/mpeg";
+
         for (const result of await synthesizeVoiceChunks(request.text, signal, (text) =>
           options.synthesize!({ environmentId, input: { operationId: id, text } }),
         )) {
-          if (result._tag !== "Success" || !result.value)
+          if (!isSynthesisSuccess(result) || !result.value)
             throw new Error("Voice synthesis failed.");
           signal.throwIfAborted();
           const binary = atob(result.value.audioBase64);
           parts.push(Uint8Array.from(binary, (value) => value.charCodeAt(0)));
           mimeType = result.value.mimeType;
         }
+
         return createBrowserReplyAudio(new Blob(parts, { type: mimeType }), events);
       } finally {
         signal.removeEventListener("abort", abort);

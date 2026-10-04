@@ -1,6 +1,6 @@
 {
   "name": "@akeru/tailscale",
-  "version": "0.0.2",
+  "version": "0.0.4",
   "private": true,
   "type": "module",
   "exports": {
@@ -15,7 +15,6 @@
   },
   "dependencies": {
     "@akeru/shared": "workspace:*",
-    "@effect/platform-node": "catalog:",
     "effect": "catalog:"
   },
   "devDependencies": {

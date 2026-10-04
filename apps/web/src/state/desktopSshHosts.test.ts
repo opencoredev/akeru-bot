@@ -42,14 +42,17 @@ describe("desktopSshHostsState", () => {
 
   it("retains the desktop bridge failure as the discovery error cause", async () => {
     const cause = new Error("ssh config unavailable");
+
     const atom = createDesktopSshHostsStateAtom(() => ({
       discoverSshHosts: async () => Promise.reject(cause),
     }));
+
     const registry = AtomRegistry.make();
     registry.mount(atom);
 
     await vi.waitFor(() => expect(AsyncResult.isFailure(registry.get(atom))).toBe(true));
     const result = registry.get(atom);
+
     if (!AsyncResult.isFailure(result)) throw new Error("Expected SSH host discovery to fail.");
 
     expect(Cause.squash(result.cause)).toEqual(

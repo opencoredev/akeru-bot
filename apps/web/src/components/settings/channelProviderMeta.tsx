@@ -171,15 +171,20 @@ export function channelProviderMeta(provider: ChannelProvider): ChannelProviderM
 /** Permissions: view channels, send messages, read history, threads, reactions. */
 export function discordInviteUrl(applicationId: string): string | null {
   const trimmed = applicationId.trim();
+
   if (!/^\d{15,21}$/u.test(trimmed)) return null;
+
   return `https://discord.com/oauth2/authorize?client_id=${trimmed}&scope=bot&permissions=397552987200`;
 }
 
 /** Route a pasted Slack token to its field by prefix. */
 export function slackPasteTarget(pasted: string): "botToken" | "appToken" | null {
   const value = pasted.trim();
+
   if (value.startsWith("xoxb-")) return "botToken";
+
   if (value.startsWith("xapp-")) return "appToken";
+
   return null;
 }
 

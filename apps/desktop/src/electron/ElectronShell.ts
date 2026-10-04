@@ -1,3 +1,5 @@
+import { flow } from "effect/Function";
+import * as Schema from "effect/Schema";
 import { REMOTE_CAPABLE_EDITOR_IDS, remoteSchemeForEditor } from "@akeru/contracts";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
@@ -10,9 +12,11 @@ import * as Electron from "electron";
 // `zed://ssh/<host>/<path>`) must reach the OS handler; every other non-web
 // scheme stays blocked.
 const SAFE_WEB_PROTOCOLS = new Set(["http:", "https:"]);
+
 const REMOTE_EDITOR_PROTOCOLS = new Set(
   REMOTE_CAPABLE_EDITOR_IDS.flatMap((id) => {
     const scheme = remoteSchemeForEditor(id);
+
     return scheme === undefined ? [] : [`${scheme}:`];
   }),
 );
@@ -26,16 +30,21 @@ function isZedSshUrl(url: URL): boolean {
   if (url.host !== "ssh") {
     return false;
   }
+
   const encodedHost = url.pathname.split("/")[1];
+
   if (!encodedHost) {
     return false;
   }
+
   let host: string;
+
   try {
     host = decodeURIComponent(encodedHost);
   } catch {
     return false;
   }
+
   return ZED_SSH_HOST.test(host) && url.pathname.length > encodedHost.length + 1;
 }
 
@@ -49,25 +58,27 @@ const isRemoteEditorUrl = (url: URL) =>
       url.pathname.startsWith("/ssh-remote+") &&
       url.pathname.length > "/ssh-remote+".length);
 
-export function parseSafeExternalUrl(rawUrl: unknown): Option.Option<string> {
-  if (typeof rawUrl !== "string") {
-    return Option.none();
-  }
+export const parseSafeExternalUrl = flow(
+  Schema.decodeUnknownOption(Schema.String),
+  Option.flatMap((rawUrl) => {
+    try {
+      const url = new URL(rawUrl);
 
-  try {
-    const url = new URL(rawUrl);
-    return SAFE_WEB_PROTOCOLS.has(url.protocol) || isRemoteEditorUrl(url)
-      ? Option.some(url.href)
-      : Option.none();
-  } catch {
-    return Option.none();
-  }
-}
+      return SAFE_WEB_PROTOCOLS.has(url.protocol) || isRemoteEditorUrl(url)
+        ? Option.some(url.href)
+        : Option.none();
+    } catch {
+      return Option.none();
+    }
+  }),
+);
 
 export class ElectronShell extends Context.Service<
   ElectronShell,
   {
-    readonly openExternal: (rawUrl: unknown) => Effect.Effect<boolean>;
+    readonly openExternal: (
+      rawUrl: Parameters<typeof parseSafeExternalUrl>[0],
+    ) => Effect.Effect<boolean>;
     readonly copyText: (text: string) => Effect.Effect<void>;
   }
 >()("@akeru/desktop/electron/ElectronShell") {}

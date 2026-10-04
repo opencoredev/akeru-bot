@@ -11,6 +11,7 @@ const settingsHooks = vi.hoisted(() => ({
 vi.mock("react", async (importOriginal) => {
   const actual = await importOriginal<typeof import("react")>();
   const { reactHookHarness } = await import("../../test/reactHookHarness");
+
   return {
     ...actual,
     useMemo: reactHookHarness.useMemo,
@@ -20,6 +21,7 @@ vi.mock("react", async (importOriginal) => {
 
 vi.mock("react/compiler-runtime", async () => {
   const { reactHookHarness } = await import("../../test/reactHookHarness");
+
   return { c: reactHookHarness.useMemoCache };
 });
 
@@ -29,6 +31,7 @@ vi.mock("../../hooks/useSettings", () => ({
 }));
 
 import { AddProviderInstanceDialog } from "./AddProviderInstanceDialog";
+import { DRIVER_OPTIONS } from "./providerDriverMeta";
 
 const remoteEnvironmentId = EnvironmentId.make("remote-device");
 
@@ -45,6 +48,7 @@ describe("AddProviderInstanceDialog environment routing", () => {
       open: true,
       environmentId: remoteEnvironmentId,
       environmentLabel: "Remote device",
+      driverOption: DRIVER_OPTIONS[0]!,
       onOpenChange: vi.fn(),
     });
 

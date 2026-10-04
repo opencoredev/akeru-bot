@@ -1,0 +1,199 @@
+/* Single-property utilities Tailwind does not ship, kept here so components
+   use a named class instead of an arbitrary property. */
+
+/* Thin horizontal scrollbar with a soft thumb for long single-line content. */
+@utility scrollbar-subtle {
+  scrollbar-color: color-mix(in srgb, var(--contrast-border) 78%, transparent) transparent;
+  scrollbar-width: thin;
+
+  &::-webkit-scrollbar-thumb {
+    background-color: color-mix(in srgb, var(--contrast-border) 78%, transparent);
+  }
+}
+
+@utility scrollbar-gutter-stable-both {
+  scrollbar-gutter: stable both-edges;
+}
+
+@utility app-region-no-drag {
+  -webkit-app-region: no-drag;
+}
+
+@utility appearance-textfield {
+  appearance: textfield;
+}
+
+@utility word-break-word {
+  word-break: break-word;
+}
+
+@utility overflow-anchor-none {
+  overflow-anchor: none;
+}
+
+/* Lines an inline icon up with the text baseline. */
+@utility align-icon {
+  vertical-align: -0.125em;
+}
+
+/* Skips layout and paint for offscreen chat rows, reserving 96px meanwhile. */
+@utility content-visibility-row {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 96px;
+}
+
+@utility will-change-opacity-transform {
+  will-change: opacity, transform;
+}
+
+/* Diagonal hatching for empty chart bars. */
+@utility bg-hatched {
+  background-image: repeating-linear-gradient(
+    135deg,
+    transparent 0,
+    transparent 4px,
+    var(--border) 4px,
+    var(--border) 5px
+  );
+}
+
+/* Paints the active row tint over an opaque sidebar fill. */
+@utility sidebar-row-active-fill {
+  background-image:
+    linear-gradient(var(--sidebar-row-active), var(--sidebar-row-active)),
+    linear-gradient(var(--sidebar), var(--sidebar));
+}
+
+/* Sidebar panel drawn as a floating shell card. */
+@utility sidebar-shell-card {
+  --sidebar-row-active: color-mix(in srgb, var(--sidebar-foreground) 7%, transparent);
+  --sidebar-row-hover: color-mix(in srgb, var(--sidebar-foreground) 4%, transparent);
+  --card: var(--shell-card);
+  --sidebar: var(--shell-card);
+}
+
+@utility details-width {
+  --details-width: 22rem;
+}
+
+@utility details-width-wide {
+  --details-width: min(48rem, 52vw);
+}
+
+/* Shorter topbar fade for pages whose header sits close to the content. */
+@utility topbar-scroll-fade-compact {
+  &.topbar-scroll-fade {
+    --topbar-scroll-fade-height: 1.5rem;
+  }
+}
+
+/* Composer prompt typography, following the prompt font preferences. Coarse
+   pointers on narrow screens keep at least 16px so mobile browsers do not zoom. */
+@utility composer-prompt-font {
+  font-family: var(--font-composer, var(--font-sans));
+  font-size: var(--font-size-prompt, 0.875rem);
+
+  @media (max-width: 39.999rem) and (pointer: coarse) {
+    font-size: max(var(--font-size-prompt, 1rem), 16px);
+  }
+}
+
+/* Faint track drawn in the current text color, such as a progress ring. */
+@utility stroke-current-faint {
+  stroke: color-mix(in srgb, currentColor 22%, transparent);
+}
+
+/* Low-resolution canvas scaled up without smoothing. */
+@utility image-pixelated {
+  image-rendering: pixelated;
+}
+
+/* Dither chart bloom canvas. Charts set --bloom-opacity, and --bloom-filter and
+   --bloom-blend while bloom is on; unset values fall back to none and normal. */
+@utility dither-bloom-layer {
+  filter: var(--bloom-filter);
+  opacity: var(--bloom-opacity);
+  mix-blend-mode: var(--bloom-blend);
+  transition: opacity 220ms ease;
+}
+
+/* Provider status dot and badge cut out of the surface behind them, from
+   --indicator-background. */
+@utility indicator-ring {
+  box-shadow: 0 0 0 2px var(--indicator-background);
+}
+
+@utility indicator-border {
+  border-color: var(--indicator-background);
+}
+
+/* Color swatch filled from --swatch. The selected swatch adds a ring with a
+   card-colored gap. */
+@utility swatch-fill {
+  background-color: var(--swatch);
+}
+
+@utility swatch-ring {
+  box-shadow:
+    inset 0 0 0 2px var(--card),
+    0 0 0 2px var(--swatch);
+}
+
+/* Color picker hue track: the full hue spectrum, left to right. */
+@utility bg-hue-spectrum {
+  background: linear-gradient(to right, #f00, #ff0, #0f0, #0ff, #00f, #f0f, #f00);
+}
+
+/* Color picker fill at full saturation and brightness for the hue angle in
+   --hue. */
+@utility bg-pure-hue {
+  background-color: hsl(var(--hue) 100% 50%);
+}
+
+/* Color picker saturation and brightness field, layered over a background
+   color set to the pure hue. */
+@utility bg-saturation-value-plane {
+  background-image:
+    linear-gradient(to top, #000, transparent), linear-gradient(to right, #fff, transparent);
+}
+
+/* Rainbow wheel that marks a custom color picker trigger. */
+@utility bg-color-wheel {
+  background: conic-gradient(
+    from 90deg,
+    #ff3b30,
+    #ffcc00,
+    #34c759,
+    #00c7be,
+    #0a84ff,
+    #bf5af2,
+    #ff375f,
+    #ff3b30
+  );
+}
+
+/* Color picker thumbs ease to keyboard steps and click-to-jump targets. */
+@utility transition-picker-thumb {
+  transition:
+    left 80ms linear,
+    top 80ms linear,
+    background-color 80ms linear;
+}
+
+/* Theme card ball painted from the previewed theme's colors. */
+@utility theme-preview-ball {
+  filter: blur(var(--preview-blur));
+  transform: scale(var(--preview-scale));
+  background-color: var(--preview-base);
+  background-image: var(--preview-glow);
+}
+
+/* Sortable list item transition from dnd-kit, read from --sortable-transition. */
+@utility transition-sortable {
+  transition: var(--sortable-transition);
+}
+
+/* Chart marks that fade in once the entrance has drawn. */
+@utility transition-entrance-fade {
+  transition: opacity 300ms ease;
+}

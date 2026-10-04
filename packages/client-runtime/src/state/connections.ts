@@ -30,6 +30,7 @@ export function createEnvironmentCatalogAtoms<R, E>(
 ) {
   const commandScheduler = createAtomCommandScheduler();
   const serial = { mode: "serial" as const, key: () => "environment-catalog" };
+
   const catalogAtom = runtime.atom(
     Stream.unwrap(
       EnvironmentRegistry.EnvironmentRegistry.pipe(
@@ -88,6 +89,7 @@ export function createEnvironmentCatalogAtoms<R, E>(
         Effect.flatMap((registry) => registry.register(target)),
       ),
   });
+
   const remove = createRuntimeCommand(runtime, {
     label: "environment-catalog:remove",
     scheduler: commandScheduler,
@@ -97,6 +99,7 @@ export function createEnvironmentCatalogAtoms<R, E>(
         Effect.flatMap((registry) => registry.remove(environmentId)),
       ),
   });
+
   const retryNow = createRuntimeCommand(runtime, {
     label: "environment-catalog:retry-now",
     scheduler: commandScheduler,

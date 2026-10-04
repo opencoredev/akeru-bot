@@ -38,6 +38,7 @@ function resolveSidebarUpdatePresentation({
   readonly showCheckIcon: boolean;
 }) {
   const showUpdateDetails = action !== "none" || isDownloading;
+
   const iconStatus = showCheckIcon
     ? "checking"
     : action === "install"
@@ -68,7 +69,7 @@ function SidebarUpdateArchitectureWarningContent() {
   if (!visible || !description) return null;
 
   return (
-    <Alert variant="warning" className="rounded-2xl border-warning/40 bg-warning/8 text-xs">
+    <Alert variant="warning" presentation="sidebar-warning">
       <TriangleAlertIcon />
       <AlertTitle>{t("Intel build on Apple Silicon")}</AlertTitle>
       <AlertDescription>{description}</AlertDescription>
@@ -98,16 +99,19 @@ function SidebarUpdateControl() {
 
   const action = state ? resolveDesktopUpdateButtonAction(state) : "none";
   const isDownloading = state?.status === "downloading";
+
   const showCheckIcon = shouldShowDesktopUpdateCheckIcon({
     isAnimationLatched: isCheckAnimationLatched,
     isChecking: state?.status === "checking",
     prefersReducedMotion,
   });
+
   const { iconStatus, showUpdateDetails, showUpdateIconState } = resolveSidebarUpdatePresentation({
     action,
     isDownloading,
     showCheckIcon,
   });
+
   const tooltip = showUpdateDetails
     ? state
       ? getDesktopUpdateButtonTooltip(state)
@@ -115,16 +119,20 @@ function SidebarUpdateControl() {
     : showCheckIcon
       ? t("Checking for updates…")
       : t("Check for updates");
+
   const disabled = showCheckIcon
     ? true
     : showUpdateDetails
       ? isDesktopUpdateButtonDisabled(state)
       : !canCheckForUpdate(state);
+
   const isInteractionDisabled = disabled || isActionPending;
 
   const handleAction = useCallback(async () => {
     const bridge = window.desktopBridge;
+
     if (!bridge || !state) return;
+
     if (isInteractionDisabled) return;
 
     setIsActionPending(true);
@@ -136,8 +144,10 @@ function SidebarUpdateControl() {
           if (result.completed) {
             showDesktopUpdateDownloadedToast();
           }
+
           if (!shouldToastDesktopUpdateActionResult(result)) return;
           const actionError = getDesktopUpdateActionError(result);
+
           if (!actionError) return;
           toastManager.add(
             stackedThreadToast({
@@ -157,11 +167,13 @@ function SidebarUpdateControl() {
           );
         })
         .finally(() => setIsActionPending(false));
+
       return;
     }
 
     if (action === "install") {
       let confirmed = false;
+
       try {
         confirmed = await ensureLocalApi().dialogs.confirm(
           getDesktopUpdateInstallConfirmationMessage(state),
@@ -175,17 +187,22 @@ function SidebarUpdateControl() {
             description: error instanceof Error ? error.message : "Update confirmation failed.",
           }),
         );
+
         return;
       }
+
       if (!confirmed) {
         setIsActionPending(false);
+
         return;
       }
+
       void bridge
         .installUpdate()
         .then((result) => {
           if (!shouldToastDesktopUpdateActionResult(result)) return;
           const actionError = getDesktopUpdateActionError(result);
+
           if (!actionError) return;
           toastManager.add(
             stackedThreadToast({
@@ -205,6 +222,7 @@ function SidebarUpdateControl() {
           );
         })
         .finally(() => setIsActionPending(false));
+
       return;
     }
 
@@ -212,6 +230,7 @@ function SidebarUpdateControl() {
       setIsCheckAnimationLatched(true);
       setCheckAnimationKey((key) => key + 1);
     }
+
     void bridge
       .checkForUpdate()
       .then((result) => {
@@ -256,11 +275,9 @@ function SidebarUpdateControl() {
               aria-label={tooltip}
               aria-disabled={isInteractionDisabled || undefined}
               className={cn(
-                "inline-flex size-8 items-center justify-center rounded-[var(--control-radius)] outline-hidden ring-ring transition-colors focus-visible:ring-2",
+                "inline-flex size-8 items-center justify-center rounded-(--control-radius) outline-hidden ring-ring transition-colors focus-visible:ring-2",
                 isInteractionDisabled ? "cursor-not-allowed" : "cursor-pointer",
-                showUpdateIconState
-                  ? "text-sidebar-foreground"
-                  : "text-[var(--sidebar-icon-color)]",
+                showUpdateIconState ? "text-sidebar-foreground" : "text-(--sidebar-icon-color)",
                 !isInteractionDisabled &&
                   "hover:bg-sidebar-row-hover hover:text-sidebar-foreground",
                 disabled && !showUpdateIconState && "opacity-60",

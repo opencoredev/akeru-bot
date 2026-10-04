@@ -14,11 +14,13 @@ export class LRUCache<T> {
 
   get(key: string): T | null {
     const entry = this.cache.get(key);
+
     if (!entry) {
       return null;
     }
 
     this.promote(key, entry);
+
     return entry.value;
   }
 
@@ -28,6 +30,7 @@ export class LRUCache<T> {
     }
 
     const existing = this.cache.get(key);
+
     if (existing) {
       this.totalSize -= existing.approximateSize;
       this.cache.delete(key);
@@ -54,14 +57,17 @@ export class LRUCache<T> {
       this.cache.size > 0
     ) {
       const oldestKey = this.cache.keys().next().value;
+
       if (oldestKey === undefined) {
         break;
       }
 
       const oldestEntry = this.cache.get(oldestKey);
+
       if (oldestEntry) {
         this.totalSize -= oldestEntry.approximateSize;
       }
+
       this.cache.delete(oldestKey);
     }
   }

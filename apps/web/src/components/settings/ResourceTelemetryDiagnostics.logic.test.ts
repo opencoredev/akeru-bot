@@ -67,6 +67,7 @@ describe("resourceHistoryCpuScaleMax", () => {
       { avgCpuPercent: 1, maxCpuPercent: 100 },
       { avgCpuPercent: 8, maxCpuPercent: 8 },
     ];
+
     expect(resourceHistoryCpuScaleMax(buckets)).toBe(8);
   });
 });

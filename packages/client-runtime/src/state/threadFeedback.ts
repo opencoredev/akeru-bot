@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import {
   MessageId,
   type OrchestrationMessage,
@@ -25,10 +26,13 @@ export type CodexFeedbackSubmission = CodexFeedbackSubmissionDetails &
 
 export function parseCodexFeedbackCommand(text: string): { readonly reason?: string } | null {
   const match = /^\/feedback(?:\s+([\s\S]*))?$/iu.exec(text.trim());
+
   if (!match) {
     return null;
   }
+
   const reason = match[1]?.trim();
+
   return reason ? { reason } : {};
 }
 
@@ -66,7 +70,8 @@ export async function submitCodexFeedback<E>(input: {
   input.clearDraft();
 
   const result = await input.upload();
-  if (result._tag === "Success") {
+
+  if (Predicate.isTagged(result, "Success")) {
     input.onUpdate({
       ...input.submission,
       status: "sent",

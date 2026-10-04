@@ -8,6 +8,7 @@ export default Effect.gen(function* () {
   if (!columns.some((column) => column.name === "label")) {
     yield* sql`ALTER TABLE projection_bots ADD COLUMN label TEXT`;
   }
+
   if (!columns.some((column) => column.name === "description")) {
     yield* sql`ALTER TABLE projection_bots ADD COLUMN description TEXT`;
   }

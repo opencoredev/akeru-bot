@@ -153,10 +153,12 @@ export const make = Effect.fn("resourceTelemetry.resourceTelemetry.make")(functi
   const desktopHealthSubscription = yield* desktopReceiver.subscribeHealth;
   const desktopSubscription = yield* desktopReceiver.subscribe;
   const initialDesktop = desktopSubscription.latest;
+
   if (Option.isSome(initialDesktop)) {
     const electronRoot = initialDesktop.value.electronProcesses.find(
       (process) => process.pid === initialDesktop.value.electronPid,
     );
+
     yield* nativeClient
       .setExternalProcesses([
         {
@@ -167,9 +169,11 @@ export const make = Effect.fn("resourceTelemetry.resourceTelemetry.make")(functi
       .pipe(Effect.ignore);
     yield* nativeClient.setHostPowerState(initialDesktop.value.power).pipe(Effect.ignore);
   }
+
   const initialNativeHealth = nativeHealthSubscription.latest;
   const initialDesktopHealth = desktopHealthSubscription.latest;
   const initialAttribution = yield* attribution.snapshot;
+
   const initialMerge = mergeProcesses({
     serverPid: process.pid,
     sidecarPid: Option.map(initialNativeHealth.hello, (hello) => hello.sidecarPid),
@@ -180,6 +184,7 @@ export const make = Effect.fn("resourceTelemetry.resourceTelemetry.make")(functi
     counters: emptyTelemetryCounters(),
     updatePrevious: false,
   });
+
   const initialSnapshot: ResourceTelemetrySnapshot = {
     readAt: initialReadAt,
     sampleIntervalMs: initialNativeHealth.sampleIntervalMs,
@@ -197,6 +202,7 @@ export const make = Effect.fn("resourceTelemetry.resourceTelemetry.make")(functi
       nativeSnapshot: Option.none(),
     }),
   };
+
   const state = yield* Ref.make<TelemetryState>({
     nativeSnapshot: Option.none(),
     desktopSnapshot: initialDesktop,
@@ -206,18 +212,23 @@ export const make = Effect.fn("resourceTelemetry.resourceTelemetry.make")(functi
     lastNativeSequence: 0,
     lastNativeGeneration: initialNativeHealth.restartCount,
   });
+
   const liveState = yield* Ref.make<LiveTelemetryState>({
     retainCount: 0,
     scope: Option.none(),
   });
+
   const liveMutex = yield* Semaphore.make(1);
+
   const refreshHealth = mutex.withPermits(1)(
     Effect.gen(function* () {
       const current = yield* Ref.get(state);
+
       const [nativeHealth, desktopHealth] = yield* Effect.all([
         nativeClient.health,
         desktopReceiver.health,
       ]);
+
       const snapshot: ResourceTelemetrySnapshot = {
         ...current.latest,
         health: buildHealth({
@@ -226,10 +237,12 @@ export const make = Effect.fn("resourceTelemetry.resourceTelemetry.make")(functi
           nativeSnapshot: current.nativeSnapshot,
         }),
       };
+
       yield* Ref.set(state, {
         ...current,
         latest: snapshot,
       });
+
       if ((yield* Ref.get(liveState)).retainCount > 0) {
         yield* PubSub.publish(changes, snapshot);
       }
@@ -247,6 +260,7 @@ export const make = Effect.fn("resourceTelemetry.resourceTelemetry.make")(functi
         const current = yield* Ref.get(state);
         const nativeHealth = yield* nativeClient.health;
         const incomingNativeSnapshot = input.nativeSnapshot;
+
         if (
           incomingNativeSnapshot &&
           (incomingNativeSnapshot.generation < nativeHealth.restartCount ||
@@ -256,30 +270,37 @@ export const make = Effect.fn("resourceTelemetry.resourceTelemetry.make")(functi
         ) {
           return current.latest;
         }
+
         const nativeSnapshot = incomingNativeSnapshot
           ? Option.some(incomingNativeSnapshot.snapshot)
           : current.nativeSnapshot;
+
         const desktopSnapshot = input.desktopSnapshot
           ? Option.some(input.desktopSnapshot)
           : current.desktopSnapshot;
+
         const [desktopHealth, attributionSnapshot] = yield* Effect.all([
           desktopReceiver.health,
           attribution.snapshot,
         ]);
+
         const recordedElectronRoots = Option.match(nativeSnapshot, {
           onNone: () => [],
           onSome: (snapshot) => snapshot.externalProcesses ?? [],
         });
+
         const electronRootPids = new Set(recordedElectronRoots.map((process) => process.pid));
         Option.match(desktopSnapshot, {
           onNone: () => undefined,
           onSome: (desktop) => electronRootPids.add(desktop.electronPid),
         });
+
         const electronRootStartTimes = new Map(
           recordedElectronRoots.flatMap((process) =>
             process.startTimeMs === undefined ? [] : [[process.pid, process.startTimeMs] as const],
           ),
         );
+
         const merged = mergeProcesses({
           serverPid: process.pid,
           sidecarPid: Option.map(nativeHealth.hello, (hello) => hello.sidecarPid),
@@ -292,7 +313,9 @@ export const make = Effect.fn("resourceTelemetry.resourceTelemetry.make")(functi
           counters: current.counters,
           updatePrevious: input.updatePrevious,
         });
+
         const readAt = DateTime.makeUnsafe(merged.sampledAtMs);
+
         const snapshot: ResourceTelemetrySnapshot = {
           readAt,
           sampleIntervalMs: nativeHealth.sampleIntervalMs,
@@ -313,6 +336,7 @@ export const make = Effect.fn("resourceTelemetry.resourceTelemetry.make")(functi
             nativeSnapshot,
           }),
         };
+
         yield* Ref.set(state, {
           nativeSnapshot,
           desktopSnapshot,
@@ -323,20 +347,24 @@ export const make = Effect.fn("resourceTelemetry.resourceTelemetry.make")(functi
             incomingNativeSnapshot?.snapshot.sequence ?? current.lastNativeSequence,
           lastNativeGeneration: incomingNativeSnapshot?.generation ?? current.lastNativeGeneration,
         });
+
         if (!input.publishWhenLive || (yield* Ref.get(liveState)).retainCount > 0) {
           yield* PubSub.publish(changes, snapshot);
         }
+
         return snapshot;
       }),
     );
 
   const ingestNative = (snapshot: NativeTelemetryClient.NativeTelemetrySnapshot) =>
     rebuild({ nativeSnapshot: snapshot, updatePrevious: true });
+
   const ingestDesktop = (snapshot: DesktopHostTelemetrySnapshot) =>
     Effect.gen(function* () {
       const electronRoot = snapshot.electronProcesses.find(
         (process) => process.pid === snapshot.electronPid,
       );
+
       yield* nativeClient
         .setExternalProcesses([
           {
@@ -346,6 +374,7 @@ export const make = Effect.fn("resourceTelemetry.resourceTelemetry.make")(functi
         ])
         .pipe(Effect.ignore);
       yield* nativeClient.setHostPowerState(snapshot.power).pipe(Effect.ignore);
+
       return yield* rebuild({
         desktopSnapshot: snapshot,
         updatePrevious: false,
@@ -362,8 +391,10 @@ export const make = Effect.fn("resourceTelemetry.resourceTelemetry.make")(functi
     Effect.uninterruptible(
       Effect.gen(function* () {
         const current = yield* Ref.get(liveState);
+
         if (current.retainCount > 0) {
           yield* Ref.set(liveState, { ...current, retainCount: current.retainCount + 1 });
+
           return;
         }
 
@@ -391,43 +422,55 @@ export const make = Effect.fn("resourceTelemetry.resourceTelemetry.make")(functi
   const releaseLive = liveMutex.withPermits(1)(
     Effect.gen(function* () {
       const current = yield* Ref.get(liveState);
+
       if (current.retainCount <= 1) {
         yield* Ref.set(liveState, { retainCount: 0, scope: Option.none() });
+
         if (Option.isSome(current.scope)) {
           yield* Scope.close(current.scope.value, Exit.void).pipe(Effect.ignore);
         }
+
         yield* desktopReceiver.setDiagnosticsDemand(false).pipe(Effect.ignore);
+
         return;
       }
+
       yield* Ref.set(liveState, { ...current, retainCount: current.retainCount - 1 });
     }),
   );
 
   const latest = Ref.get(state).pipe(Effect.map((current) => current.latest));
+
   const subscribe = subscribeBeforeSnapshot(
     changes,
     Effect.acquireRelease(acquireLive, () => releaseLive).pipe(Effect.andThen(latest)),
     mutex,
   );
+
   const liveChanges = Stream.unwrap(Effect.map(subscribe, ({ changes }) => changes));
 
   const readHistory: ResourceTelemetry["Service"]["readHistory"] = (input) =>
     Effect.gen(function* () {
       const readAt = yield* DateTime.now;
       const normalizedInput = normalizeResourceTelemetryHistoryInput(input);
+
       const historyResult = yield* Effect.result(
         nativeClient.readHistory(normalizedInput.windowMs),
       );
+
       if (Result.isFailure(historyResult)) {
         yield* Effect.logWarning("Failed to read native resource telemetry history", {
           cause: historyResult.failure.message,
         });
       }
+
       const [nativeHealth, desktopHealth] = yield* Effect.all([
         nativeClient.health,
         desktopReceiver.health,
       ]);
+
       const current = yield* Ref.get(state);
+
       return buildResourceTelemetryHistory({
         readAt,
         windowMs: normalizedInput.windowMs,
@@ -444,6 +487,7 @@ export const make = Effect.fn("resourceTelemetry.resourceTelemetry.make")(functi
         }),
       });
     });
+
   yield* nativeHealthSubscription.changes.pipe(
     Stream.runForEach(() => refreshHealth),
     Effect.forkScoped,

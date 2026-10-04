@@ -6,6 +6,7 @@ import { ARTICLES as articles } from "../../lib/articles";
 const [featured, ...rest] = articles;
 
 const siteOrigin = Astro.site ?? new URL(Astro.url.origin);
+
 const structuredData = [
   {
     "@context": "https://schema.org",

@@ -1,4 +1,4 @@
-// @effect-diagnostics nodeBuiltinImport:off - This test inspects installed package artifacts on disk.
+import type * as Schema from "effect/Schema";
 import * as NodeFS from "node:fs";
 import * as NodeModule from "node:module";
 import * as NodePath from "node:path";
@@ -7,7 +7,9 @@ import { auth } from "@modelcontextprotocol/client";
 import { describe, expect, it, vi } from "vite-plus/test";
 
 const requirePackage = NodeModule.createRequire(import.meta.url);
+
 const packageEntry = requirePackage.resolve("@mastra/mcp");
+
 const packageRoot = NodePath.dirname(NodePath.dirname(packageEntry));
 
 function readPackageFile(path: string): string {
@@ -15,18 +17,24 @@ function readPackageFile(path: string): string {
 }
 
 const commonJsMcp = requirePackage("@mastra/mcp") as typeof import("@mastra/mcp");
+
 const commonJsClient = requirePackage(
   "@modelcontextprotocol/client",
 ) as typeof import("@modelcontextprotocol/client");
+
 const runtimes = [
   { name: "ESM", InMemoryOAuthStorage, MCPOAuthClientProvider, auth },
   { name: "CommonJS", ...commonJsMcp, auth: commonJsClient.auth },
 ];
 
 const issuer = "https://oauth.example.test";
+
 const resourceUrl = "https://mcp.example.test/mcp";
+
 const redirectUrl = "http://127.0.0.1:1458/oauth/callback";
+
 const oldScope = "openid offline_access thread:read";
+
 const currentScope = `${oldScope} thread:update`;
 
 function oauthFixture(options: {
@@ -37,6 +45,7 @@ function oauthFixture(options: {
   runtime: (typeof runtimes)[number];
 }) {
   const storage = new options.runtime.InMemoryOAuthStorage();
+
   const clientMetadata = {
     redirect_uris: [redirectUrl],
     client_name: "Akeru OAuth test",
@@ -44,13 +53,16 @@ function oauthFixture(options: {
     response_types: ["code"],
     token_endpoint_auth_method: "none",
   };
+
   const clientInformation = {
     ...clientMetadata,
     client_id: "cached-client",
     issuer,
     ...(options.registeredScope === undefined ? {} : { scope: options.registeredScope }),
   };
+
   storage.set("client_info", JSON.stringify(clientInformation));
+
   if (options.expiredRefreshToken) {
     storage.set(
       "tokens",
@@ -62,7 +74,9 @@ function oauthFixture(options: {
       }),
     );
   }
+
   const onRedirectToAuthorization = vi.fn<(url: URL) => void>();
+
   const provider = new options.runtime.MCPOAuthClientProvider({
     redirectUrl,
     clientMetadata,
@@ -70,9 +84,12 @@ function oauthFixture(options: {
     ...(options.staticClient ? { clientInformation } : {}),
     onRedirectToAuthorization,
   });
-  const registrations: Record<string, unknown>[] = [];
+
+  const registrations: Record<string, Schema.Json | undefined>[] = [];
+
   const fetchFn: typeof fetch = async (input, init) => {
     const url = String(input);
+
     if (url === `${resourceUrl}/metadata`) {
       return Response.json({
         resource: resourceUrl,
@@ -80,6 +97,7 @@ function oauthFixture(options: {
         scopes_supported: currentScope.split(" "),
       });
     }
+
     if (url === `${issuer}/.well-known/oauth-authorization-server`) {
       return Response.json({
         issuer,
@@ -91,12 +109,15 @@ function oauthFixture(options: {
         scopes_supported: currentScope.split(" "),
       });
     }
+
     if (url === `${issuer}/token` && options.expiredRefreshToken) {
       return Response.json({ error: "invalid_grant" }, { status: 400 });
     }
+
     if (url === `${issuer}/register`) {
-      const metadata = JSON.parse(String(init?.body)) as Record<string, unknown>;
+      const metadata = JSON.parse(String(init?.body)) as Record<string, Schema.Json | undefined>;
       registrations.push(metadata);
+
       return Response.json(
         {
           ...metadata,
@@ -106,14 +127,17 @@ function oauthFixture(options: {
         { status: 201 },
       );
     }
+
     throw new Error(`Unexpected OAuth request: ${url}`);
   };
+
   const authorize = () =>
     options.runtime.auth(provider, {
       serverUrl: resourceUrl,
       resourceMetadataUrl: new URL(`${resourceUrl}/metadata`),
       fetchFn,
     });
+
   return { provider, storage, registrations, onRedirectToAuthorization, authorize };
 }
 
@@ -174,6 +198,7 @@ describe.each(runtimes)("@mastra/mcp OAuth registration scopes ($name)", (runtim
         registrationScope: oldScope,
         expiredRefreshToken,
       });
+
       await expect(fixture.authorize()).rejects.toThrow("registered scopes");
       expect(fixture.registrations).toHaveLength(1);
       expect(fixture.onRedirectToAuthorization).not.toHaveBeenCalled();

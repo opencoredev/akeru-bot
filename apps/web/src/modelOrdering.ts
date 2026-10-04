@@ -44,6 +44,7 @@ export function sortModelsForProviderInstance<T extends ModelSlugItem>(
   const favoriteModels = toSet(options?.favoriteModels);
   const orderBySlug = rankByValue(modelOrder);
   const originalOrder = rankByValue(Arr.map(models, (model) => model.slug));
+
   const orders: Array<Order.Order<T>> = [
     ...(options?.groupFavorites === true
       ? [byTrueFirst<T>((model) => favoriteModels.has(model.slug))]
@@ -64,12 +65,15 @@ export function sortProviderModelItems<T extends ProviderModelItem>(
   },
 ): T[] {
   const favoriteModelKeys = toSet(options?.favoriteModelKeys);
+
   const instanceOrder = new Map(
     Arr.map(options?.instanceOrder ?? [], (instanceId, index) => [instanceId, index] as const),
   );
+
   const originalOrder = rankByValue(
     Arr.map(items, (item) => providerModelKey(item.instanceId, item.slug)),
   );
+
   const orders: Array<Order.Order<T>> = [
     ...(options?.groupFavorites === true
       ? [

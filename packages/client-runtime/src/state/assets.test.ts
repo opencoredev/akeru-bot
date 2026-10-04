@@ -1,9 +1,10 @@
+import * as Effect from "effect/Effect";
 import { describe, expect, it } from "@effect/vitest";
 import { EnvironmentId, ThreadId } from "@akeru/contracts";
 import * as Layer from "effect/Layer";
 import { Atom } from "effect/unstable/reactivity";
 
-import type { EnvironmentRegistry } from "../connection/registry.ts";
+import { EnvironmentRegistry } from "../connection/registry.ts";
 import {
   createAssetEnvironmentAtoms,
   InvalidAssetCollectionKeyError,
@@ -34,12 +35,13 @@ describe("asset collection keys", () => {
 
 describe("createAssetEnvironmentAtoms", () => {
   it("keys asset URL queries by environment and resource", () => {
-    const runtime = Atom.runtime(Layer.empty) as unknown as Atom.AtomRuntime<
-      EnvironmentRegistry,
-      never
-    >;
+    const runtime = Atom.runtime(
+      Layer.mergeAll(Layer.effect(EnvironmentRegistry, Effect.die("Unused test service"))),
+    );
+
     const assets = createAssetEnvironmentAtoms(runtime);
     const environmentId = EnvironmentId.make("environment-1");
+
     const originalTarget = {
       environmentId,
       input: {
@@ -96,12 +98,13 @@ describe("createAssetEnvironmentAtoms", () => {
   });
 
   it("keys collections while preserving independent resource queries", () => {
-    const runtime = Atom.runtime(Layer.empty) as unknown as Atom.AtomRuntime<
-      EnvironmentRegistry,
-      never
-    >;
+    const runtime = Atom.runtime(
+      Layer.mergeAll(Layer.effect(EnvironmentRegistry, Effect.die("Unused test service"))),
+    );
+
     const assets = createAssetEnvironmentAtoms(runtime);
     const environmentId = EnvironmentId.make("environment-1");
+
     const resources = [
       { _tag: "attachment" as const, attachmentId: "attachment-1" },
       { _tag: "attachment" as const, attachmentId: "attachment-2" },

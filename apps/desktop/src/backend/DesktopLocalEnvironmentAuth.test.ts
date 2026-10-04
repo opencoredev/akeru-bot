@@ -1,3 +1,6 @@
+import { BackendInstanceId } from "./DesktopBackendManager.ts";
+import type { DesktopBackendStartConfig } from "./DesktopBackendManager.ts";
+import type { DesktopBackendInstance } from "./DesktopBackendManager.ts";
 import { assert, describe, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -14,6 +17,10 @@ const config = {
   executablePath: "/electron",
   entryPath: "/server/bin.mjs",
   cwd: "/server",
+  args: [],
+  extendEnv: false,
+  bootstrapDelivery: "fd3",
+  preflightFailure: Option.none(),
   env: {},
   bootstrap: {
     mode: "desktop",
@@ -27,12 +34,17 @@ const config = {
   },
   httpBaseUrl: new URL("http://127.0.0.1:3773"),
   captureOutput: true,
-};
+} satisfies DesktopBackendStartConfig;
+
+function testInstance(input: Partial<DesktopBackendInstance>) {
+  return input as DesktopBackendInstance;
+}
 
 describe("DesktopLocalEnvironmentAuth", () => {
   it.effect("exchanges the desktop bootstrap credential only once", () =>
     Effect.gen(function* () {
       const requestCount = yield* Ref.make(0);
+
       const httpClientLayer = Layer.succeed(
         HttpClient.HttpClient,
         HttpClient.make((request) =>
@@ -55,21 +67,28 @@ describe("DesktopLocalEnvironmentAuth", () => {
           ),
         ),
       );
+
       const poolLayer = Layer.succeed(DesktopBackendPool.DesktopBackendPool, {
         list: Effect.succeed([
-          {
-            id: PRIMARY_LOCAL_ENVIRONMENT_ID,
+          testInstance({
+            id: BackendInstanceId(PRIMARY_LOCAL_ENVIRONMENT_ID),
             label: Effect.succeed("Windows"),
             currentConfig: Effect.succeed(Option.some(config)),
-          },
+          }),
         ]),
-      } as unknown as DesktopBackendPool.DesktopBackendPool["Service"]);
+        get: () => Effect.die("Unexpected get"),
+        primary: Effect.die("Unexpected primary"),
+        register: () => Effect.die("Unexpected register"),
+        unregister: () => Effect.die("Unexpected unregister"),
+      });
+
       const testLayer = DesktopLocalEnvironmentAuth.layer.pipe(
         Layer.provide(Layer.mergeAll(poolLayer, httpClientLayer)),
       );
 
       const [first, second] = yield* Effect.gen(function* () {
         const auth = yield* DesktopLocalEnvironmentAuth.DesktopLocalEnvironmentAuth;
+
         return yield* Effect.all([auth.getBearerToken, auth.getBearerToken]);
       }).pipe(Effect.provide(testLayer));
 

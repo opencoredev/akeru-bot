@@ -29,6 +29,7 @@ export const AuthSessionClientMetadataRecord = Schema.Struct({
   os: Schema.NullOr(Schema.String),
   browser: Schema.NullOr(Schema.String),
 });
+
 export type AuthSessionClientMetadataRecord = typeof AuthSessionClientMetadataRecord.Type;
 
 export const AuthSessionRecord = Schema.Struct({
@@ -42,6 +43,7 @@ export const AuthSessionRecord = Schema.Struct({
   lastConnectedAt: Schema.NullOr(Schema.DateTimeUtcFromString),
   revokedAt: Schema.NullOr(Schema.DateTimeUtcFromString),
 });
+
 export type AuthSessionRecord = typeof AuthSessionRecord.Type;
 
 export const CreateAuthSessionInput = Schema.Struct({
@@ -53,34 +55,40 @@ export const CreateAuthSessionInput = Schema.Struct({
   issuedAt: Schema.DateTimeUtcFromString,
   expiresAt: Schema.DateTimeUtcFromString,
 });
+
 export type CreateAuthSessionInput = typeof CreateAuthSessionInput.Type;
 
 export const GetAuthSessionByIdInput = Schema.Struct({
   sessionId: AuthSessionId,
 });
+
 export type GetAuthSessionByIdInput = typeof GetAuthSessionByIdInput.Type;
 
 export const ListActiveAuthSessionsInput = Schema.Struct({
   now: Schema.DateTimeUtcFromString,
 });
+
 export type ListActiveAuthSessionsInput = typeof ListActiveAuthSessionsInput.Type;
 
 export const RevokeAuthSessionInput = Schema.Struct({
   sessionId: AuthSessionId,
   revokedAt: Schema.DateTimeUtcFromString,
 });
+
 export type RevokeAuthSessionInput = typeof RevokeAuthSessionInput.Type;
 
 export const RevokeOtherAuthSessionsInput = Schema.Struct({
   currentSessionId: AuthSessionId,
   revokedAt: Schema.DateTimeUtcFromString,
 });
+
 export type RevokeOtherAuthSessionsInput = typeof RevokeOtherAuthSessionsInput.Type;
 
 export const SetAuthSessionLastConnectedAtInput = Schema.Struct({
   sessionId: AuthSessionId,
   lastConnectedAt: Schema.DateTimeUtcFromString,
 });
+
 export type SetAuthSessionLastConnectedAtInput = typeof SetAuthSessionLastConnectedAtInput.Type;
 
 export const SetAuthSessionClientConnectionInput = Schema.Struct({
@@ -88,6 +96,7 @@ export const SetAuthSessionClientConnectionInput = Schema.Struct({
   surface: Schema.NullOr(ClientSurface),
   appVersion: Schema.NullOr(Schema.String),
 });
+
 export type SetAuthSessionClientConnectionInput = typeof SetAuthSessionClientConnectionInput.Type;
 
 export class AuthSessionRepository extends Context.Service<

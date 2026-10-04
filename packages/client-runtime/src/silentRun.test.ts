@@ -33,6 +33,7 @@ const silent = (id: string, createdAt: string, turnId = "turn-1") =>
     turnId,
     payload: { provider: "kimi", lastActivityAt: "2026-09-25T10:00:00.000Z" },
   });
+
 const cleared = (id: string, createdAt: string) =>
   activity({
     id,

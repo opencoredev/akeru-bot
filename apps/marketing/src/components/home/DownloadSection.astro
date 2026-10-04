@@ -1,0 +1,177 @@
+---
+import BotAvatar from "../BotAvatar.astro";
+import { HERO_BOTS } from "../../lib/heroBots";
+import { RELEASES_URL, releaseAssetUrl, resolveBuildVersion } from "../../lib/releases";
+
+const version = await resolveBuildVersion();
+
+// `asset` is the release-asset suffix; the href is baked from the build-time version.
+const platforms = [
+  { os: "mac", name: "macOS", detail: "Apple silicon · DMG", asset: "arm64.dmg" },
+  { os: "win", name: "Windows", detail: "x64 · Installer", asset: "x64.exe" },
+  { os: "linux", name: "Linux", detail: "x64 · AppImage", asset: "x64.AppImage" },
+].map((platform) => ({ ...platform, href: releaseAssetUrl(version, platform.asset) }));
+---
+<section class="download">
+  <div class="download-band">
+    <div class="download-roster" aria-hidden="true">
+      {
+        HERO_BOTS.map((bot) => (
+          <span data-bot-hover>
+            <BotAvatar name={bot.name} shape={bot.shape} color={bot.color} size={30} />
+          </span>
+        ))
+      }
+    </div>
+    <div class="download-head">
+      <h2>Download Akeru Bot</h2>
+      <p>Free and MIT licensed. Bring your own subscription.</p>
+    </div>
+    <div class="platform-cards">
+      {
+        platforms.map((platform) => (
+          <a class="platform-card" data-os={platform.os} data-asset={platform.asset} href={platform.href}>
+            <span class="platform-card-text">
+              <span class="platform-card-name">{platform.name}</span>
+              <span class="platform-card-detail">{platform.detail}</span>
+            </span>
+          </a>
+        ))
+      }
+    </div>
+    <a class="download-notes" href={`${RELEASES_URL}/tag/v${version}`} target="_blank" rel="noopener noreferrer">
+      Version {version} release notes
+    </a>
+  </div>
+</section>
+
+<style>
+  /* ── Download band ── */
+
+  .download {
+    display: flex;
+    padding: 0 64px 104px;
+  }
+
+  .download-band {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 32px;
+    width: 100%;
+    padding: 64px 56px;
+    border-radius: 24px;
+    background: var(--color-card);
+    box-shadow: var(--shadow-panel);
+  }
+
+  .download-roster {
+    display: flex;
+    gap: 8px;
+  }
+
+  .download-roster span[data-bot-hover] {
+    display: flex;
+    padding: 3px;
+  }
+
+  .download-head {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    text-align: center;
+  }
+
+  .download-head h2 {
+    font-size: 36px;
+    font-weight: 600;
+    letter-spacing: -0.03em;
+    line-height: 42px;
+  }
+
+  .download-head p {
+    font-size: 16px;
+    line-height: 26px;
+    color: var(--color-muted-foreground);
+  }
+
+  .platform-cards {
+    display: flex;
+    justify-content: center;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+
+  .platform-card {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    width: 248px;
+    padding: 20px;
+    border-radius: 16px;
+    background: var(--color-background);
+    box-shadow: inset 0 0 0 1px var(--color-border);
+    transition:
+      background-color var(--duration-quick) ease,
+      box-shadow var(--duration-quick) ease;
+  }
+
+  .platform-card:hover {
+    background: var(--color-selected);
+    box-shadow: inset 0 0 0 1px var(--color-input);
+  }
+
+  .platform-card-text {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+  }
+
+  .platform-card-name {
+    font-size: 17px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    line-height: 22px;
+  }
+
+  .platform-card-detail {
+    font-size: 13px;
+    line-height: 18px;
+    color: var(--color-muted-foreground);
+  }
+
+  .download-notes {
+    font-size: 14px;
+    line-height: 20px;
+    color: var(--color-muted-foreground);
+    text-decoration: underline;
+    text-decoration-color: var(--color-input);
+    text-underline-offset: 4px;
+    transition: color var(--duration-quick) ease;
+  }
+
+  .download-notes:hover {
+    color: var(--color-foreground);
+  }
+
+  @media (max-width: 900px) {
+    .download {
+      padding: 0 20px 64px;
+    }
+
+    .download-band {
+      padding: 40px 20px;
+      gap: 26px;
+    }
+
+    .download-head h2 {
+      font-size: 28px;
+      line-height: 34px;
+    }
+
+    .platform-card {
+      width: 100%;
+    }
+  }
+</style>

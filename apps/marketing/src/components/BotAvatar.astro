@@ -14,6 +14,7 @@ interface Props {
 }
 
 const { name, shape, color, size = 32, working = false, class: className } = Astro.props;
+
 const maskId = `bot-eyes-${name.toLowerCase().replace(/[^a-z0-9]/g, "")}-${Math.random().toString(36).slice(2, 8)}`;
 ---
 

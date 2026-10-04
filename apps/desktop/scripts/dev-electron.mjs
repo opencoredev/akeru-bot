@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import * as NodeChildProcess from "node:child_process";
 import * as NodeFS from "node:fs";
 import * as NodeOS from "node:os";
@@ -11,12 +12,15 @@ import {
 import { waitForResources } from "./wait-for-resources.mjs";
 
 const devServerUrl = process.env.VITE_DEV_SERVER_URL?.trim();
+
 if (!devServerUrl) {
   throw new Error("VITE_DEV_SERVER_URL is required for desktop development.");
 }
 
 const devServer = new URL(devServerUrl);
+
 const port = Number.parseInt(devServer.port, 10);
+
 if (!Number.isInteger(port) || port <= 0) {
   throw new Error(`VITE_DEV_SERVER_URL must include an explicit port: ${devServerUrl}`);
 }
@@ -26,14 +30,18 @@ const requiredFiles = [
   "dist-electron/preload.cjs",
   "../server/dist/bin.mjs",
 ];
+
 const watchedDirectories = [
   { directory: "dist-electron", files: new Set(["main.cjs", "preload.cjs"]) },
   { directory: "../server/dist", files: new Set(["bin.mjs"]) },
 ];
+
 const forcedShutdownTimeoutMs = 1_500;
+
 const restartDebounceMs = 120;
+
 const remoteDebuggingPort = process.env.T3CODE_DESKTOP_REMOTE_DEBUGGING_PORT?.trim();
-// oxlint-disable-next-line akeru/no-global-process-runtime -- Standalone dev script has no Effect runtime.
+
 const hostPlatform = NodeOS.platform();
 
 await waitForResources({
@@ -44,18 +52,26 @@ await waitForResources({
 });
 
 const childEnv = { ...process.env };
+
 delete childEnv.ELECTRON_RUN_AS_NODE;
+
 const devProtocolClient = resolveDevProtocolClient();
+
 if (devProtocolClient) {
   childEnv.T3CODE_DESKTOP_APP_USER_MODEL_ID = devProtocolClient.appBundleId;
   childEnv.T3CODE_DESKTOP_PROTOCOL_REGISTRATION_MANAGED = "1";
 }
 
 let shuttingDown = false;
+
 let restartTimer = null;
+
 let currentApp = null;
+
 let restartQueue = Promise.resolve();
+
 const expectedExits = new WeakSet();
+
 const watchers = [];
 
 const ownedProcessGroups = new Map();
@@ -63,10 +79,12 @@ const ownedProcessGroups = new Map();
 function signalApp(app, signal) {
   if (hostPlatform === "win32") {
     app.kill(signal);
+
     return;
   }
 
   const pid = ownedProcessGroups.get(app);
+
   if (pid === undefined) {
     return;
   }
@@ -77,6 +95,7 @@ function signalApp(app, signal) {
     if (error.code !== "ESRCH") {
       throw error;
     }
+
     ownedProcessGroups.delete(app);
   }
 }
@@ -97,10 +116,13 @@ function startApp() {
   const electronArgs = remoteDebuggingPort
     ? ["--remote-debugging-address=127.0.0.1", `--remote-debugging-port=${remoteDebuggingPort}`]
     : [];
+
   const launchArgs = devProtocolClient
     ? electronArgs
     : [...electronArgs, `--t3code-dev-root=${desktopDir}`, "dist-electron/main.cjs"];
+
   const electronCommand = resolveElectronLaunchCommand(launchArgs);
+
   const app = NodeChildProcess.spawn(electronCommand.electronPath, electronCommand.args, {
     cwd: desktopDir,
     env: childEnv,
@@ -111,10 +133,12 @@ function startApp() {
   if (hostPlatform !== "win32" && Number.isInteger(app.pid) && app.pid > 0) {
     ownedProcessGroups.set(app, app.pid);
   }
+
   currentApp = app;
 
   app.once("error", () => {
     releaseApp(app);
+
     if (currentApp === app) {
       currentApp = null;
     }
@@ -126,11 +150,13 @@ function startApp() {
 
   app.once("exit", (code, signal) => {
     releaseApp(app);
+
     if (currentApp === app) {
       currentApp = null;
     }
 
     const exitedAbnormally = signal !== null || code !== 0;
+
     if (!shuttingDown && !expectedExits.has(app) && exitedAbnormally) {
       scheduleRestart();
     }
@@ -139,6 +165,7 @@ function startApp() {
 
 async function stopApp() {
   const app = currentApp;
+
   if (!app) {
     return;
   }
@@ -186,6 +213,7 @@ function scheduleRestart() {
       .catch(() => undefined)
       .then(async () => {
         await stopApp();
+
         if (!shuttingDown) {
           startApp();
         }
@@ -199,7 +227,7 @@ function startWatchers() {
       NodePath.join(desktopDir, directory),
       { persistent: true },
       (_eventType, filename) => {
-        if (typeof filename !== "string" || !files.has(filename)) {
+        if (!Predicate.isString(filename) || !files.has(filename)) {
           return;
         }
 
@@ -231,14 +259,17 @@ async function shutdown(exitCode) {
 }
 
 startWatchers();
+
 startApp();
 
 process.once("SIGINT", () => {
   void shutdown(130);
 });
+
 process.once("SIGTERM", () => {
   void shutdown(143);
 });
+
 process.once("SIGHUP", () => {
   void shutdown(129);
 });

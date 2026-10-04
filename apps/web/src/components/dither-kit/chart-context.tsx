@@ -1,4 +1,5 @@
-// @ts-nocheck
+import { chartRows, type ChartValue } from "./chartValue";
+import { Predicate } from "effect";
 import type { ScaleLinear } from "d3-scale";
 import { createContext, use, useCallback, useMemo, useState } from "react";
 import type { CommonChart } from "./common-context";
@@ -28,10 +29,12 @@ export type Margins = {
   left: number;
 };
 
-type Row = Record<string, unknown>;
+type Row = Record<string, ChartValue>;
 
 export type AreaVariant = "gradient" | "dotted" | "hatched" | "solid";
+
 export type StrokeVariant = "solid" | "dashed";
+
 export type SeriesKind = "area" | "line" | "bar";
 
 /** What each series part (<Area />, <Line />, <Bar />) registers so the canvas
@@ -49,6 +52,7 @@ export type ChartContextValue = {
   configKeys: string[]; // series order — drives stacking + legend
   data: Row[];
   dataLength: number;
+  dataMarks: ReturnType<typeof chartRows<Row>>;
   stackType: StackType;
 
   margins: Margins;
@@ -117,9 +121,11 @@ const ROOT_OF: Record<ChartType, string> = {
 /** Generic accessor for internal layers (canvas/overlay) that work for any root. */
 export function useChart() {
   const ctx = use(ChartContext);
+
   if (!ctx) {
     throw new Error("Chart parts must be used within a chart root (e.g. <AreaChart />).");
   }
+
   return ctx;
 }
 
@@ -130,12 +136,16 @@ export function useChart() {
  */
 export function useChartPart(part: string, kind?: ChartType | ChartType[]): ChartContextValue {
   const ctx = use(ChartContext);
+
   if (!ctx) {
-    const where = kind ? ROOT_OF[Array.isArray(kind) ? kind[0] : kind] : "a chart root";
+    const firstKind = Array.isArray(kind) ? kind[0] : kind;
+    const where = firstKind ? ROOT_OF[firstKind] : "a chart root";
     throw new Error(`<${part} /> must be used within ${where}.`);
   }
+
   if (kind) {
     const allowed = Array.isArray(kind) ? kind : [kind];
+
     if (!allowed.includes(ctx.chartType)) {
       throw new Error(
         `<${part} /> is not valid inside ${ROOT_OF[ctx.chartType]} — it belongs in ${allowed
@@ -144,6 +154,7 @@ export function useChartPart(part: string, kind?: ChartType | ChartType[]): Char
       );
     }
   }
+
   return ctx;
 }
 
@@ -154,13 +165,16 @@ export { ChartContext };
  * render pattern (https://react.dev/reference/react/useState) instead of a ref:
  * the revision is derived purely from render inputs, so it stays consistent
  * across the memoized values below rather than lagging a render behind. */
-export function useRevision(data: unknown, token: number) {
+export function useRevision<T>(data: T, token: number) {
   const [prev, setPrev] = useState({ data, token, revision: 0 });
+
   if (prev.data !== data || prev.token !== token) {
     const next = { data, token, revision: prev.revision + 1 };
     setPrev(next);
+
     return next.revision;
   }
+
   return prev.revision;
 }
 
@@ -212,6 +226,7 @@ export function useChartController({
 
   // Memoized: configKeys is the dep that drives `bands`, `common` and the
   // canvas `targets` memo — a fresh array each render would bust all of them.
+  const dataMarks = useMemo(() => chartRows(data), [data]);
   const configKeys = useMemo(() => Object.keys(config), [config]);
   const revision = useRevision(data, replayToken);
 
@@ -228,6 +243,7 @@ export function useChartController({
   const registerSeries = useCallback((spec: SeriesSpec) => {
     setSeriesSpecs((prev) => {
       const cur = prev[spec.dataKey];
+
       return cur &&
         cur.kind === spec.kind &&
         cur.variant === spec.variant &&
@@ -236,11 +252,13 @@ export function useChartController({
         : { ...prev, [spec.dataKey]: spec };
     });
   }, []);
+
   const unregisterSeries = useCallback((dataKey: string) => {
     setSeriesSpecs((prev) => {
       if (!(dataKey in prev)) return prev;
       const next = { ...prev };
       delete next[dataKey];
+
       return next;
     });
   }, []);
@@ -259,6 +277,7 @@ export function useChartController({
   // render, so `margins` never keeps its identity. Pin one off the four numbers
   // so it doesn't, on its own, invalidate the value or the plot geometry.
   const { top: mTop, right: mRight, bottom: mBottom, left: mLeft } = margins;
+
   const stableMargins = useMemo(
     () => ({ top: mTop, right: mRight, bottom: mBottom, left: mLeft }),
     [mTop, mRight, mBottom, mLeft],
@@ -273,9 +292,11 @@ export function useChartController({
   // each replay. Adjust-state-during-render instead of an effect, so the reset
   // lands in the same render as the revision bump.
   const [entrance, setEntrance] = useState({ revision, done: !animate });
+
   if (entrance.revision !== revision) {
     setEntrance({ revision, done: !animate });
   }
+
   const entranceDone = entrance.revision === revision ? entrance.done : !animate;
   // Stable across renders at the same revision; the canvas holds this in a ref.
   const markEntranceDone = useCallback(() => setEntrance({ revision, done: true }), [revision]);
@@ -295,24 +316,32 @@ export function useChartController({
   const xPoint = useMemo(() => buildXScale(data.length, plotWidth), [data.length, plotWidth]);
   const xBand = useMemo(() => buildBandScale(data.length, plotWidth), [data.length, plotWidth]);
   const bandwidth = isBar ? xBand.bandwidth() : 0;
+
   const xCenter = useCallback(
     (i: number) => (isBar ? (xBand(i) ?? 0) + xBand.bandwidth() / 2 : (xPoint(i) ?? 0)),
     [isBar, xBand, xPoint],
   );
+
   const indexAtX = useCallback(
     (px: number) =>
       isBar ? indexAtBand(px, data.length, plotWidth) : nearestIndex(px, data.length, plotWidth),
     [isBar, data.length, plotWidth],
   );
+
   const stacked = stackType === "stacked" || stackType === "percent";
+
   const barSlot = useCallback(
     (i: number, si: number, n: number) => {
       const center = xCenter(i);
+
       if (stacked) {
         const w = bandwidth * 0.9;
+
         return { x: center - w / 2, width: w };
       }
+
       const slot = bandwidth / Math.max(n, 1);
+
       return {
         x: center - bandwidth / 2 + si * slot + slot * 0.08,
         width: slot * 0.84,
@@ -320,6 +349,7 @@ export function useChartController({
     },
     [xCenter, stacked, bandwidth],
   );
+
   const y = useMemo(() => buildYScale(min, max, plotHeight), [min, max, plotHeight]);
 
   // Stable so `common` and the value stay stable; re-created only on config.
@@ -343,26 +373,33 @@ export function useChartController({
       // keep enough headroom that the upward-lifted card never clips the top.
       tooltipTop: (() => {
         const floor = mTop + 44;
+
         if (hoverIndex == null) return floor;
         let minY = Number.POSITIVE_INFINITY;
+
         for (const key of configKeys) {
           const b = bands[key]?.[hoverIndex];
+
           if (b) minY = Math.min(minY, y(b[1]));
         }
+
         if (!Number.isFinite(minY)) return floor;
+
         return Math.max(floor, mTop + minY);
       })(),
       heading: (i, labelKey) => (labelKey ? String(data[i]?.[labelKey] ?? "") : null),
       itemsAt: (i) =>
         configKeys.map((name) => {
           const raw = data[i]?.[name];
+
           return {
             name,
             label: config[name]?.label ?? name,
-            value: typeof raw === "number" ? raw : 0,
+            value: Predicate.isNumber(raw) ? raw : 0,
             seed: seedOf(name),
             dimmed: (() => {
               const emphasis = selectedDataKey ?? focusDataKey;
+
               return emphasis !== null && emphasis !== name;
             })(),
           };
@@ -400,6 +437,7 @@ export function useChartController({
       configKeys,
       data,
       dataLength: data.length,
+      dataMarks,
       stackType,
       margins: stableMargins,
       plot: { width: plotWidth, height: plotHeight },
@@ -442,6 +480,7 @@ export function useChartController({
       config,
       configKeys,
       data,
+      dataMarks,
       stackType,
       stableMargins,
       plotWidth,

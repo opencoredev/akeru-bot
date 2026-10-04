@@ -11,14 +11,19 @@ function currentMinute(): string {
 }
 
 let nowMinute = currentMinute();
+
 let timerId: number | null = null;
+
 let timerIsInterval = false;
+
 const listeners = new Set<() => void>();
 
 function tick(): void {
   const next = currentMinute();
+
   if (next !== nowMinute) {
     nowMinute = next;
+
     for (const listener of listeners) listener();
   }
 }
@@ -41,9 +46,12 @@ function subscribe(listener: () => void): () => void {
   if (listeners.size === 0) {
     startTimer();
   }
+
   listeners.add(listener);
+
   return () => {
     listeners.delete(listener);
+
     if (listeners.size === 0 && timerId !== null) {
       if (timerIsInterval) window.clearInterval(timerId);
       else window.clearTimeout(timerId);
@@ -61,6 +69,7 @@ function getSnapshot(): string {
   if (timerId === null) {
     nowMinute = currentMinute();
   }
+
   return nowMinute;
 }
 

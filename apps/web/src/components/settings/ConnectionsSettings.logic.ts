@@ -67,9 +67,11 @@ export async function applyWslEnableSelection(input: {
   // mode/distro changes while WSL is active, so the final enable observes the
   // complete selection and is the only call that may relaunch.
   await bridge.setWslOnly(mode === "wsl-only");
+
   if (persistedDistro !== nextDistro) {
     await bridge.setWslDistro(nextDistro);
   }
+
   return await bridge.setWslBackendEnabled(true);
 }
 
@@ -84,6 +86,7 @@ export function parsePairingUrlFields(
   baseOrigin: string,
 ): { readonly host: string; readonly pairingCode: string } | null {
   const trimmed = input.trim();
+
   if (!trimmed) return null;
 
   try {
@@ -91,13 +94,18 @@ export function parsePairingUrlFields(
       /^[a-zA-Z][a-zA-Z\d+.-]*:\/\//u.test(trimmed) || trimmed.startsWith("//")
         ? trimmed
         : `https://${trimmed}`;
+
     const url = new URL(urlLikeInput, baseOrigin);
     const hostedPairingRequest = readHostedPairingRequest(url);
+
     if (hostedPairingRequest) {
       return { host: hostedPairingRequest.host, pairingCode: hostedPairingRequest.token };
     }
+
     const pairingCode = getPairingTokenFromUrl(url);
+
     if (!pairingCode) return null;
+
     return { host: url.origin, pairingCode };
   } catch {
     return null;

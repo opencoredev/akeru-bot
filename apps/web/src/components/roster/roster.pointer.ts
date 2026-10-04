@@ -5,6 +5,7 @@ import { getOwnerDocument, getWindow } from "@dnd-kit/utilities";
 // Search unmounts the drag context while its owning sidebar remains mounted.
 export function RosterDragLifecycle({ onUnmount }: { onUnmount: () => void }) {
   useLayoutEffect(() => onUnmount, [onUnmount]);
+
   return null;
 }
 
@@ -13,6 +14,19 @@ type Options = {
   onAttach: (sensor: RosterPointerSensor) => void;
   onFinish: (started: boolean) => void;
 };
+
+type RosterSensorProps = Pick<
+  SensorProps<Options>,
+  | "active"
+  | "event"
+  | "options"
+  | "onAbort"
+  | "onCancel"
+  | "onEnd"
+  | "onMove"
+  | "onPending"
+  | "onStart"
+>;
 
 /** A roster gesture ends on release, cancellation, or loss of its window.
  * Own the listeners so unmounting the list can cancel the sensor too. */
@@ -30,7 +44,8 @@ export class RosterPointerSensor {
   private readonly document: Document;
   private readonly window: Window;
 
-  constructor(private readonly props: SensorProps<Options>) {
+  constructor(private readonly props: RosterSensorProps) {
+    // SAFETY: the sensor activator accepts only pointerdown events before constructing this sensor.
     this.pointer = props.event as PointerEvent;
     this.document = getOwnerDocument(this.pointer.target);
     this.window = getWindow(this.pointer.target);
@@ -58,10 +73,12 @@ export class RosterPointerSensor {
   private suppressClick = (event: Event) => {
     // Keyboard-generated clicks report detail 0. Do not consume those; they
     // are a later activation, not the pointer release from this gesture.
-    if ("detail" in event && (event as MouseEvent).detail === 0) {
+    if ("detail" in event && event.detail === 0) {
       this.clearClickSuppression();
+
       return;
     }
+
     event.stopPropagation();
     this.clearClickSuppression();
   };
@@ -69,15 +86,18 @@ export class RosterPointerSensor {
 
   private move = (event: PointerEvent) => {
     if (this.phase === "finished" || event.pointerId !== this.pointer.pointerId) return;
+
     // A release outside the window can be missed. Never activate or continue
     // a drag when the initiating button is no longer held.
     if ((event.buttons & 1) === 0) return this.cancel();
     const coordinates = { x: event.clientX, y: event.clientY };
+
     if (this.phase === "pending") {
       const offset = {
         x: event.clientX - this.pointer.clientX,
         y: event.clientY - this.pointer.clientY,
       };
+
       if (Math.hypot(offset.x, offset.y) <= this.props.options.distance) {
         this.props.onPending(
           this.props.active,
@@ -85,15 +105,19 @@ export class RosterPointerSensor {
           this.coordinates(),
           offset,
         );
+
         return;
       }
+
       this.phase = "dragging";
       this.document.addEventListener("click", this.suppressClick, { capture: true });
       this.document.addEventListener("selectionchange", this.clearSelection);
       this.clearSelection();
       this.props.onStart(this.coordinates());
+
       return;
     }
+
     if (this.phase === "dragging") {
       if (event.cancelable) event.preventDefault();
       this.props.onMove(coordinates);
@@ -129,6 +153,7 @@ export class RosterPointerSensor {
     this.document.removeEventListener("dragstart", this.preventDefault);
     this.document.removeEventListener("contextmenu", this.preventDefault);
     this.document.removeEventListener("selectionchange", this.clearSelection);
+
     // Cancellation can precede release by an arbitrary amount of time. Consume
     // that release click, or let a fresh pointerdown end suppression if release
     // happened outside the document. Ordinary clicks never install this guard.
@@ -138,12 +163,14 @@ export class RosterPointerSensor {
       // keyboard activation must not inherit that capture-phase suppressor.
       this.document.addEventListener("keydown", this.clearClickSuppression, { capture: true });
     }
+
     try {
       // Release the roster preview before dnd-kit clears its transforms.
       // Its public end/cancel event can be omitted before its first layout.
       this.props.options.onFinish(!aborted);
     } finally {
       if (aborted) this.props.onAbort(this.props.active);
+
       if (cancelled) this.props.onCancel();
       else this.props.onEnd();
     }

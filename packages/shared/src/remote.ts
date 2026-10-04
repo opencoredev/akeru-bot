@@ -1,8 +1,11 @@
 import * as Schema from "effect/Schema";
 
 const PAIRING_TOKEN_PARAM = "token";
+
 const HOSTED_PAIRING_HOST_PARAM = "host";
+
 const HOSTED_PAIRING_LABEL_PARAM = "label";
+
 const SUPPORTED_REMOTE_BACKEND_PROTOCOLS = new Set(["http:", "https:", "ws:", "wss:"]);
 
 export const readHashParams = (url: URL): URLSearchParams =>
@@ -67,6 +70,7 @@ export const RemotePairingTargetError = Schema.Union([
   RemotePairingTokenMissingError,
   RemotePairingCodeMissingError,
 ]);
+
 export type RemotePairingTargetError = typeof RemotePairingTargetError.Type;
 
 const hasSupportedRemoteBackendProtocol = (url: URL): boolean =>
@@ -77,55 +81,68 @@ const normalizeRemoteBaseUrl = (
   source: RemoteBackendUrlInvalidError["source"],
 ): URL => {
   const trimmed = rawValue.trim();
+
   if (!trimmed) {
     throw new RemoteBackendUrlMissingError();
   }
 
   const withoutLeadingSlashes = trimmed.replace(/^\/+/, "");
+
   const normalizedInput = /^[a-zA-Z][a-zA-Z\d+-]*:\/\//.test(withoutLeadingSlashes)
     ? withoutLeadingSlashes
     : `https://${withoutLeadingSlashes}`;
+
   let url: URL;
+
   try {
     url = new URL(normalizedInput);
   } catch (cause) {
     throw new RemoteBackendUrlInvalidError({ source, cause });
   }
+
   if (!hasSupportedRemoteBackendProtocol(url)) {
     throw new RemoteBackendUrlInvalidError({
       source,
       protocol: url.protocol,
     });
   }
+
   url.pathname = "/";
   url.search = "";
   url.hash = "";
+
   return url;
 };
 
 const toHttpBaseUrl = (url: URL): string => {
   const next = new URL(url.toString());
+
   if (next.protocol === "ws:") {
     next.protocol = "http:";
   } else if (next.protocol === "wss:") {
     next.protocol = "https:";
   }
+
   next.pathname = "/";
   next.search = "";
   next.hash = "";
+
   return next.toString();
 };
 
 const toWsBaseUrl = (url: URL): string => {
   const next = new URL(url.toString());
+
   if (next.protocol === "http:") {
     next.protocol = "ws:";
   } else if (next.protocol === "https:") {
     next.protocol = "wss:";
   }
+
   next.pathname = "/";
   next.search = "";
   next.hash = "";
+
   return next.toString();
 };
 
@@ -143,22 +160,27 @@ export interface HostedPairingRequest {
 
 export const getPairingTokenFromUrl = (url: URL): string | null => {
   const hashToken = readHashParams(url).get(PAIRING_TOKEN_PARAM)?.trim() ?? "";
+
   if (hashToken.length > 0) {
     return hashToken;
   }
 
   const searchToken = url.searchParams.get(PAIRING_TOKEN_PARAM)?.trim() ?? "";
+
   return searchToken.length > 0 ? searchToken : null;
 };
 
 export const stripPairingTokenFromUrl = (url: URL): URL => {
   const next = new URL(url.toString());
   const hashParams = readHashParams(next);
+
   if (hashParams.has(PAIRING_TOKEN_PARAM)) {
     hashParams.delete(PAIRING_TOKEN_PARAM);
     next.hash = hashParams.toString();
   }
+
   next.searchParams.delete(PAIRING_TOKEN_PARAM);
+
   return next;
 };
 
@@ -166,6 +188,7 @@ export const setPairingTokenOnUrl = (url: URL, credential: string): URL => {
   const next = new URL(url.toString());
   next.searchParams.delete(PAIRING_TOKEN_PARAM);
   next.hash = new URLSearchParams([[PAIRING_TOKEN_PARAM, credential]]).toString();
+
   return next;
 };
 
@@ -191,24 +214,30 @@ export const resolveRemotePairingTarget = (input: {
   readonly pairingCode?: string;
 }): ResolvedRemotePairingTarget => {
   const pairingUrl = input.pairingUrl?.trim() ?? "";
+
   if (pairingUrl.length > 0) {
     let url: URL;
+
     try {
       url = new URL(pairingUrl);
     } catch (cause) {
       throw new RemotePairingUrlInvalidError({ cause });
     }
+
     if (!hasSupportedRemoteBackendProtocol(url)) {
       throw new RemotePairingUrlInvalidError({
         protocol: url.protocol,
       });
     }
+
     const hostedPairingRequest = readHostedPairingRequest(url);
+
     if (hostedPairingRequest) {
       const hostedBackendUrl = normalizeRemoteBaseUrl(
         hostedPairingRequest.host,
         "hosted-pairing-host",
       );
+
       return {
         credential: hostedPairingRequest.token,
         httpBaseUrl: toHttpBaseUrl(hostedBackendUrl),
@@ -217,9 +246,11 @@ export const resolveRemotePairingTarget = (input: {
     }
 
     const credential = getPairingTokenFromUrl(url) ?? "";
+
     if (!credential) {
       throw new RemotePairingTokenMissingError({ host: url.host });
     }
+
     return {
       credential,
       httpBaseUrl: toHttpBaseUrl(url),
@@ -229,10 +260,13 @@ export const resolveRemotePairingTarget = (input: {
 
   const host = input.host?.trim() ?? "";
   const pairingCode = input.pairingCode?.trim() ?? "";
+
   if (!host) {
     throw new RemoteBackendUrlMissingError();
   }
+
   const normalizedHost = normalizeRemoteBaseUrl(host, "direct-host");
+
   if (!pairingCode) {
     throw new RemotePairingCodeMissingError({ host: normalizedHost.host });
   }

@@ -11,6 +11,7 @@ function makeDragEvent(options?: {
   movedWithinTarget?: boolean;
 }) {
   const preventDefault = vi.fn();
+
   const event = {
     dataTransfer: {
       types: options?.types ?? ["Files"],
@@ -23,6 +24,7 @@ function makeDragEvent(options?: {
     },
     preventDefault,
   } satisfies WorkspaceFileDragEvent;
+
   return { event, preventDefault };
 }
 
@@ -30,6 +32,7 @@ function makeHost() {
   const setDragActive = vi.fn();
   const addFiles = vi.fn();
   const host = { setDragActive, addFiles } satisfies WorkspaceFileDropHost;
+
   return { host, setDragActive, addFiles };
 }
 

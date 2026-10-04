@@ -22,11 +22,15 @@
  */
 
 const FENCED_CODE_BLOCK = /^ {0,3}(?:```|~~~)/m;
+
 // Trades some precision for a simple check, favoring false positives over false
 // negatives: list-shaped paragraph may get a wider bubble
 const ORDERED_LIST_ITEM = /^ {0,3}\d{1,9}[.)](?:[ \t]+|$)/;
+
 const INDENTED_ORDERED_LIST_ITEM = /^( {4,})\d{1,9}[.)](?:[ \t]+|$)/;
+
 const ANY_LIST_ITEM = /^( *)(?:[-+*]|\d{1,9}[.)])(?:[ \t]+|$)/;
+
 const BLOCKQUOTE_PREFIX = /^ {0,3}>[ \t]?/;
 
 export interface WideMarkdownBlockOptions {
@@ -35,9 +39,11 @@ export interface WideMarkdownBlockOptions {
 
 function stripBlockquotePrefixes(line: string): string {
   let content = line;
+
   while (BLOCKQUOTE_PREFIX.test(content)) {
     content = content.replace(BLOCKQUOTE_PREFIX, "");
   }
+
   return content;
 }
 
@@ -46,13 +52,16 @@ function hasOrderedListItem(text: string): boolean {
 
   for (const rawLine of text.split("\n")) {
     const line = stripBlockquotePrefixes(rawLine);
+
     if (ORDERED_LIST_ITEM.test(line)) {
       return true;
     }
 
     const nestedMatch = INDENTED_ORDERED_LIST_ITEM.exec(line);
+
     const parentMatch =
       previousNonEmptyLine === null ? null : ANY_LIST_ITEM.exec(previousNonEmptyLine);
+
     if (nestedMatch && parentMatch && parentMatch[1].length < nestedMatch[1].length) {
       return true;
     }
@@ -67,9 +76,11 @@ function hasOrderedListItem(text: string): boolean {
 
 function isTableDelimiterRow(line: string): boolean {
   const trimmed = line.trim();
+
   if (!trimmed.includes("|") || !trimmed.includes("-")) {
     return false;
   }
+
   return /^[|\-: \t]+$/.test(trimmed);
 }
 
@@ -80,11 +91,14 @@ export function hasWideMarkdownBlock(
   if (FENCED_CODE_BLOCK.test(text)) {
     return true;
   }
+
   if (options.includeOrderedLists !== false && hasOrderedListItem(text)) {
     return true;
   }
+
   if (!text.includes("|")) {
     return false;
   }
+
   return text.split("\n").some(isTableDelimiterRow);
 }

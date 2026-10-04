@@ -5,7 +5,7 @@
 
 import { IDLE_BEAT_LENGTH_MS, subscribeIdleBeat } from "./botAvatarIdleBeat";
 import { BotMotion, type MotionFrame } from "./botAvatarMotion";
-import { bodyTransform, botAvatarSeed, eyeTransform, type BotBlobShape } from "./botAvatarShapes";
+import { bodyTransform, botAvatarSeed, eyeTransform, parseBotBlobShape } from "./botAvatarShapes";
 
 /** Minimum frame spacing for the working pose, about 30fps with rAF jitter headroom. */
 const WORKING_FRAME_MS = 1000 / 30 - 2;
@@ -20,9 +20,11 @@ const handles = new WeakMap<HTMLElement, BotAvatarHandle>();
 
 export function mountBotAvatar(wrapper: HTMLElement): BotAvatarHandle | null {
   const existing = handles.get(wrapper);
+
   if (existing) return existing;
   const body = wrapper.querySelector<HTMLElement>(".bot-body");
-  const shape = wrapper.dataset.avatarShape as BotBlobShape | undefined;
+  const shape = parseBotBlobShape(wrapper.dataset.avatarShape);
+
   if (!body || !shape) return null;
 
   const eyes = Array.from(wrapper.querySelectorAll<SVGRectElement>(".bot-eyes rect"));
@@ -42,19 +44,24 @@ export function mountBotAvatar(wrapper: HTMLElement): BotAvatarHandle | null {
 
   const render = (frame: MotionFrame) => {
     const nextBody = bodyTransform(frame);
+
     if (nextBody !== lastBody) {
       body.style.transform = nextBody;
       lastBody = nextBody;
     }
+
     eyes.forEach((eye, i) => {
       const written = lastEyes[i];
+
       if (!written) return;
-      const transform = eyeTransform(shape, frame, (i % 2) as 0 | 1);
+      const transform = eyeTransform(shape, frame, i % 2 === 0 ? 0 : 1);
       const isVisible = transform !== null;
+
       if (isVisible !== written.visible) {
         eye.setAttribute("visibility", isVisible ? "visible" : "hidden");
         written.visible = isVisible;
       }
+
       if (transform && transform !== written.transform) {
         eye.setAttribute("transform", transform);
         written.transform = transform;
@@ -67,19 +74,25 @@ export function mountBotAvatar(wrapper: HTMLElement): BotAvatarHandle | null {
     // the full display rate.
     if (last !== 0 && working && !hovered && !motion.spinning && time - last < WORKING_FRAME_MS) {
       frameId = visible ? requestAnimationFrame(tick) : null;
+
       if (frameId === null) last = 0;
+
       return;
     }
+
     const dt = last === 0 ? 1 / 60 : (time - last) / 1000;
     last = time;
+
     const { frame, active } = motion.tick(dt, {
       working,
       hovered,
       pointer,
       reducedMotion: reducedMotion.matches,
     });
+
     render(frame);
     frameId = active && visible ? requestAnimationFrame(tick) : null;
+
     if (frameId === null) last = 0;
   };
 
@@ -95,6 +108,7 @@ export function mountBotAvatar(wrapper: HTMLElement): BotAvatarHandle | null {
       y: clamp((event.clientY - (rect.top + rect.height / 2)) / Math.max(rect.height, 1)),
     };
   };
+
   reducedMotion.addEventListener("change", wake);
   hoverTarget.addEventListener("pointerenter", (event) => {
     hovered = true;
@@ -110,6 +124,7 @@ export function mountBotAvatar(wrapper: HTMLElement): BotAvatarHandle | null {
 
   new IntersectionObserver(([entry]) => {
     visible = entry?.isIntersecting ?? true;
+
     if (visible) wake();
   }).observe(wrapper);
 
@@ -138,9 +153,11 @@ export function mountBotAvatar(wrapper: HTMLElement): BotAvatarHandle | null {
     },
     beat,
   };
+
   handles.set(wrapper, handle);
   syncIdle();
   wake();
+
   return handle;
 }
 

@@ -36,6 +36,7 @@ export const ComposerMentionPopover = memo(function ComposerMentionPopover(props
   const shells = useThreadShells();
   const environmentBots = useAtomValue(environmentBotsAtom(props.environmentId));
   const groups = useAtomValue(environmentGroupsAtom(props.environmentId));
+
   const bots = useMemo(
     () =>
       groupMentionBots(
@@ -45,13 +46,17 @@ export const ComposerMentionPopover = memo(function ComposerMentionPopover(props
       ),
     [environmentBots, groups, props.groupId, props.providers],
   );
+
   const environmentIds = useMemo(() => [props.environmentId], [props.environmentId]);
   const search = useThreadSearch(environmentIds, threadMentionQuery(props.query));
+
   const items = useMemo(() => {
     const matchedIds = new Set<string>();
+
     for (const match of search.matches) {
       if (match.environmentId === props.environmentId) matchedIds.add(match.threadId);
     }
+
     const mentions = buildComposerMentionItems({
       query: props.query,
       browserAvailable: props.browserAvailable,
@@ -61,6 +66,7 @@ export const ComposerMentionPopover = memo(function ComposerMentionPopover(props
       currentProjectId: props.projectId,
       matchedIds,
     });
+
     // `@chat:` skips file search, so file results from an earlier query are stale.
     return isThreadMentionQuery(props.query) ? mentions : [...mentions, ...props.fileItems];
   }, [
@@ -76,6 +82,7 @@ export const ComposerMentionPopover = memo(function ComposerMentionPopover(props
   ]);
 
   if (items.length === 0) return null;
+
   return (
     <View className="absolute inset-x-0 bottom-full z-10 mb-2">
       <ComposerCommandPopover

@@ -4,6 +4,7 @@ import * as Option from "effect/Option";
 
 const trimNonEmptyOption = (value: string): Option.Option<string> => {
   const trimmed = value.trim();
+
   return trimmed.length > 0 ? Option.some(trimmed) : Option.none();
 };
 

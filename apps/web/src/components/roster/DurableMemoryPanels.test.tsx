@@ -1,12 +1,13 @@
+import type { DurableFactFixture } from "../test-support/fixtures";
+import { makeReviewItem, decodeMemoryPreview, makeDurableFact } from "../test-support/fixtures";
 import {
   DURABLE_MEMORY_EXPORT_SCOPES,
-  type DurableImportReviewItem,
   type DurableMemoryExportScope,
   type DurableMemoryFact,
   type ImportConflictDecision,
   resolveImportConflicts,
 } from "@akeru/client-runtime/durable-memory";
-import type { AkeruMemoryImportPreview } from "@akeru/contracts";
+
 import { isValidElement, type ReactElement, type ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vite-plus/test";
@@ -14,8 +15,10 @@ import { describe, expect, it, vi } from "vite-plus/test";
 vi.mock("../../i18n", async () => {
   const { createTranslator } = await import("@akeru/client-runtime/i18n");
   const translator = createTranslator("en");
+
   return { useI18n: () => ({ ...translator, t: translator.translate }) };
 });
+
 import { DurableFactList, DurableImportReview, DurableScopePicker } from "./DurableMemoryPanels";
 
 import { Button } from "../ui/button";
@@ -31,35 +34,41 @@ type ButtonElement = ReactElement<{
 // The panels are stateless, so their rendered element trees expose every button handler directly.
 function buttons(node: ReactNode): ButtonElement[] {
   if (Array.isArray(node)) return node.flatMap(buttons);
+
   if (!isValidElement<{ children?: ReactNode }>(node)) return [];
+
   if (node.type === Button) return [node as ButtonElement];
+
   return buttons(node.props.children);
 }
 
 function button(node: ReactNode, label: string, index = 0) {
   const match = buttons(node).filter((item) => item.props.children === label)[index];
+
   if (!match) throw new Error(`No "${label}" button`);
+
   return match;
 }
 
 const conflict = (rootId: string, localFact: string, archiveFact: string) =>
-  ({
+  makeReviewItem({
     rootId,
     classification: "conflicting",
     reason: "Local and archive histories diverge.",
     localFact,
     archiveFact,
-  }) as unknown as DurableImportReviewItem;
+  });
 
 describe("DurableImportReview conflict choices", () => {
-  const preview = {
+  const preview = decodeMemoryPreview({
     previewHash: "a".repeat(64),
     items: [
-      { rootId: "m1", classification: "conflicting", reason: "" },
-      { rootId: "m2", classification: "new", reason: "" },
-      { rootId: "m3", classification: "conflicting", reason: "" },
+      { rootId: "m1", classification: "conflicting", reason: "Fixture review item" },
+      { rootId: "m2", classification: "new", reason: "Fixture review item" },
+      { rootId: "m3", classification: "conflicting", reason: "Fixture review item" },
     ],
-  } as unknown as AkeruMemoryImportPreview;
+  });
+
   const groups = [
     {
       classification: "conflicting" as const,
@@ -71,13 +80,13 @@ describe("DurableImportReview conflict choices", () => {
     {
       classification: "new" as const,
       items: [
-        {
+        makeReviewItem({
           rootId: "m2",
           classification: "new",
           reason: "Missing locally.",
           localFact: null,
           archiveFact: "Works in UTC.",
-        } as unknown as DurableImportReviewItem,
+        }),
       ],
     },
   ];
@@ -85,15 +94,17 @@ describe("DurableImportReview conflict choices", () => {
   it("gives each conflict its own choice and applies only after every choice", () => {
     const onApply = vi.fn();
     let choices: Record<string, ImportConflictDecision> = {};
+
     const render = () => {
       const resolution = resolveImportConflicts(preview, choices);
+
       return DurableImportReview({
         groups,
         choices,
         unresolvedCount: resolution.ready ? 0 : resolution.unresolved.length,
         busy: false,
         onChoose: (rootId, decision) => {
-          choices = { ...choices, [rootId]: decision };
+          choices[rootId] = decision;
         },
         onApply,
         onCancel: () => {},
@@ -135,6 +146,7 @@ describe("DurableImportReview conflict choices", () => {
 describe("DurableScopePicker", () => {
   it("offers every export scope and reports the selected one", () => {
     let value: DurableMemoryExportScope = "bot";
+
     const render = () =>
       DurableScopePicker({
         label: "Durable export scope",
@@ -144,6 +156,7 @@ describe("DurableScopePicker", () => {
           value = scope;
         },
       });
+
     let tree = render();
     expect(buttons(tree).map((item) => item.props.children)).toEqual([
       "This chat",
@@ -161,8 +174,8 @@ describe("DurableScopePicker", () => {
   });
 });
 
-const listedFact = (overrides: Partial<Record<keyof DurableMemoryFact, unknown>> = {}) =>
-  ({
+const listedFact = (overrides: Partial<DurableFactFixture> = {}) =>
+  makeDurableFact({
     rootId: "m1",
     fact: "Prefers detailed replies.",
     scope: "bot-user",
@@ -176,7 +189,7 @@ const listedFact = (overrides: Partial<Record<keyof DurableMemoryFact, unknown>>
     revision: 2,
     supersededFact: "Prefers short replies.",
     ...overrides,
-  }) as unknown as DurableMemoryFact;
+  });
 
 function renderFactList(
   props: Partial<Parameters<typeof DurableFactList>[0]> & {
@@ -269,6 +282,7 @@ describe("DurableFactList", () => {
         ],
       }),
     );
+
     expect(markup).toContain("Launch plan");
     expect(markup).toContain("another bot");
     expect(markup).toContain("another chat");
@@ -280,6 +294,7 @@ describe("DurableFactList", () => {
     const markup = renderToStaticMarkup(
       renderFactList({ facts: [listedFact({ sourceThreadId: null })] }),
     );
+
     expect(markup).not.toContain("Source chat");
     expect(markup).not.toContain("unknown chat");
     expect(markup).toContain("Bots");
@@ -303,6 +318,7 @@ describe("DurableFactList", () => {
       facts: [listedFact({ scope: "project" })],
       policy: { canOperate: true, memoryEnabled: true, privateBotMemory: false },
     });
+
     expect(labels(tree)).toEqual(["Edit", "Unpin", "Approve", "Reject", "Forget", "Delete"]);
   });
 
@@ -320,6 +336,7 @@ describe("DurableFactList", () => {
       onIntent,
       onCancelEdit,
     });
+
     expect(labels(unchanged)).toEqual(["Save", "Cancel"]);
     expect(button(unchanged, "Save").props.disabled).toBe(true);
     button(unchanged, "Cancel").props.onClick();
@@ -330,6 +347,7 @@ describe("DurableFactList", () => {
       editing: { rootId: "m1", draft: "Prefers bullet points." },
       onIntent,
     });
+
     expect(button(changed, "Save").props.disabled).toBe(false);
     button(changed, "Save").props.onClick();
     expect(onIntent).toHaveBeenCalledWith(fact, {
@@ -353,6 +371,7 @@ describe("DurableFactList", () => {
       onCancelDelete,
       onIntent,
     });
+
     expect(labels(confirming)).toEqual(["Delete for good", "Keep"]);
     expect(renderToStaticMarkup(confirming)).toContain("Delete this fact for good?");
     button(confirming, "Keep").props.onClick();
@@ -364,11 +383,13 @@ describe("DurableFactList", () => {
   it("closes an open edit or delete confirmation once Memory turns off", () => {
     const off = { canOperate: true, memoryEnabled: false, privateBotMemory: true };
     const fact = listedFact();
+
     const editing = renderFactList({
       facts: [fact],
       policy: off,
       editing: { rootId: "m1", draft: "Prefers bullet points." },
     });
+
     expect(labels(editing)).toEqual([]);
     expect(renderToStaticMarkup(editing)).toContain("Prefers detailed replies.");
     const confirming = renderFactList({ facts: [fact], policy: off, confirmingDeleteRootId: "m1" });

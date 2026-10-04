@@ -11,15 +11,16 @@ export function groupChatBots(
   group: OrchestrationGroup,
   bots: ReadonlyArray<OrchestrationBot>,
 ): ReadonlyArray<OrchestrationBot> {
-  const memberIds = new Set(
-    group.members.filter(isGroupBotMember).map((member) => member.botId as string),
-  );
+  const memberIds = new Set(group.members.filter(isGroupBotMember).map((member) => member.botId));
+
   return bots
     .filter((bot) => bot.archivedAt === null && memberIds.has(bot.id))
     .slice()
     .sort((a, b) => {
       if (a.id === group.bossBotId) return -1;
+
       if (b.id === group.bossBotId) return 1;
+
       return 0;
     });
 }
@@ -49,10 +50,12 @@ export function resolveThreadIdentity(input: {
   readonly providerName: (driver: string | null) => string | null;
 }): ThreadIdentity {
   const { thread, bots, groups, providerDriver, providerName } = input;
+
   const group =
     thread.groupId != null
       ? (groups.find((candidate) => candidate.id === thread.groupId) ?? null)
       : null;
+
   if (group !== null) {
     return {
       title: group.name,
@@ -61,8 +64,10 @@ export function resolveThreadIdentity(input: {
       isGroup: true,
     };
   }
+
   const bot =
     thread.botId != null ? (bots.find((candidate) => candidate.id === thread.botId) ?? null) : null;
+
   return {
     title: bot?.name ?? providerName(providerDriver) ?? thread.title,
     bots: bot === null ? [] : [bot],

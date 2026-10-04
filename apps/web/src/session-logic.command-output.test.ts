@@ -1,12 +1,10 @@
+import type * as Schema from "effect/Schema";
 import { EventId, TurnId, type OrchestrationThreadActivity } from "@akeru/contracts";
 import { describe, expect, it } from "vite-plus/test";
 
 import { deriveWorkLogEntries } from "./session-logic";
 
-function makeCommandActivity(
-  id: string,
-  payload: Record<string, unknown>,
-): OrchestrationThreadActivity {
+function makeCommandActivity(id: string, payload: Schema.JsonObject): OrchestrationThreadActivity {
   return {
     id: EventId.make(id),
     createdAt: "2026-07-17T10:00:00.000Z",

@@ -38,6 +38,7 @@ const makeProjectionGroupRepository = Effect.gen(function* () {
         updated_at = excluded.updated_at
     `,
   });
+
   const getGroupRow = SqlSchema.findOneOption({
     Request: GetProjectionGroupInput,
     Result: ProjectionGroupDbRow,
@@ -49,6 +50,7 @@ const makeProjectionGroupRepository = Effect.gen(function* () {
       WHERE group_id = ${groupId}
     `,
   });
+
   const listGroupRows = SqlSchema.findAll({
     Request: Schema.Void,
     Result: ProjectionGroupDbRow,
@@ -60,6 +62,7 @@ const makeProjectionGroupRepository = Effect.gen(function* () {
       ORDER BY created_at ASC, group_id ASC
     `,
   });
+
   const deleteGroupRow = SqlSchema.void({
     Request: GetProjectionGroupInput,
     execute: ({ groupId }) => sql`DELETE FROM projection_groups WHERE group_id = ${groupId}`,
@@ -69,14 +72,17 @@ const makeProjectionGroupRepository = Effect.gen(function* () {
     upsertGroupRow(row).pipe(
       Effect.mapError(toPersistenceSqlError("ProjectionGroupRepository.upsert:query")),
     );
+
   const getById: ProjectionGroupRepositoryShape["getById"] = (input) =>
     getGroupRow(input).pipe(
       Effect.mapError(toPersistenceSqlError("ProjectionGroupRepository.getById:query")),
     );
+
   const listAll: ProjectionGroupRepositoryShape["listAll"] = () =>
     listGroupRows(undefined).pipe(
       Effect.mapError(toPersistenceSqlError("ProjectionGroupRepository.listAll:query")),
     );
+
   const deleteById: ProjectionGroupRepositoryShape["deleteById"] = (input) =>
     deleteGroupRow(input).pipe(
       Effect.mapError(toPersistenceSqlError("ProjectionGroupRepository.deleteById:query")),

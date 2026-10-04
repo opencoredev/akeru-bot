@@ -55,6 +55,7 @@ describe("ghosttyUnshiftedCodepoint", () => {
       ["Digit1", "&"],
       ["KeyC", "j"],
     ]);
+
     expect(ghosttyUnshiftedCodepoint({ code: "Digit1", key: "1", shiftKey: true }, layoutMap)).toBe(
       "&".codePointAt(0),
     );

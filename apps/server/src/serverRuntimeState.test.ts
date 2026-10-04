@@ -15,7 +15,7 @@ const isServerRuntimeStateError = Schema.is(ServerRuntimeState.ServerRuntimeStat
 
 interface CapturedLog {
   readonly message: unknown;
-  readonly annotations: Readonly<Record<string, unknown>>;
+  readonly annotations: typeof References.CurrentLogAnnotations.Service;
 }
 
 describe("serverRuntimeState", () => {
@@ -23,10 +23,13 @@ describe("serverRuntimeState", () => {
     Effect.gen(function* () {
       const fileSystem = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
+
       const root = yield* fileSystem.makeTempDirectoryScoped({
         prefix: "t3-server-runtime-state-test-",
       });
+
       const statePath = path.join(root, "runtime", "server.json");
+
       const state: ServerRuntimeState.PersistedServerRuntimeState = {
         version: 1,
         pid: 123,
@@ -46,7 +49,7 @@ describe("serverRuntimeState", () => {
 
   it.effect("records the dev web URL when the server fronts a dev server", () =>
     Effect.gen(function* () {
-      const state = yield* ServerRuntimeState.makePersistedServerRuntimeState({
+      const state = yield* ServerRuntimeState.persistedServerRuntimeState({
         config: { host: undefined, devUrl: new URL("http://localhost:5733") },
         port: 13_773,
       });
@@ -54,10 +57,11 @@ describe("serverRuntimeState", () => {
       assert.equal(state.devUrl, "http://localhost:5733/");
       assert.equal(state.origin, "http://127.0.0.1:13773");
 
-      const withoutDev = yield* ServerRuntimeState.makePersistedServerRuntimeState({
+      const withoutDev = yield* ServerRuntimeState.persistedServerRuntimeState({
         config: { host: undefined, devUrl: undefined },
         port: 13_773,
       });
+
       assert.isFalse("devUrl" in withoutDev);
     }),
   );
@@ -66,6 +70,7 @@ describe("serverRuntimeState", () => {
     Effect.gen(function* () {
       const fileSystem = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
+
       const root = yield* fileSystem.makeTempDirectoryScoped({
         prefix: "t3-server-runtime-state-test-",
       });
@@ -80,6 +85,7 @@ describe("serverRuntimeState", () => {
 
   it.effect("preserves malformed state decode failures", () => {
     const logs: CapturedLog[] = [];
+
     const logger = Logger.make(({ fiber, message }) => {
       logs.push({
         message,
@@ -90,9 +96,11 @@ describe("serverRuntimeState", () => {
     return Effect.gen(function* () {
       const fileSystem = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
+
       const root = yield* fileSystem.makeTempDirectoryScoped({
         prefix: "t3-server-runtime-state-test-",
       });
+
       const statePath = path.join(root, "server.json");
       yield* fileSystem.writeFileString(statePath, "{not json");
 
@@ -102,6 +110,7 @@ describe("serverRuntimeState", () => {
       assert.equal(logs[0]?.message, `Failed to decode server runtime state at ${statePath}.`);
       const error = logs[0]?.annotations.cause;
       assert.isTrue(isServerRuntimeStateError(error));
+
       if (isServerRuntimeStateError(error)) {
         assert.equal(error.operation, "decode");
         assert.equal(error.statePath, statePath);
@@ -117,6 +126,7 @@ describe("serverRuntimeState", () => {
 
   it.effect("preserves runtime state read failures", () => {
     const logs: CapturedLog[] = [];
+
     const logger = Logger.make(({ fiber, message }) => {
       logs.push({
         message,
@@ -127,9 +137,11 @@ describe("serverRuntimeState", () => {
     return Effect.gen(function* () {
       const fileSystem = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
+
       const root = yield* fileSystem.makeTempDirectoryScoped({
         prefix: "t3-server-runtime-state-test-",
       });
+
       const statePath = path.join(root, "server.json");
       yield* fileSystem.makeDirectory(statePath);
 
@@ -139,6 +151,7 @@ describe("serverRuntimeState", () => {
       assert.equal(logs[0]?.message, `Failed to read server runtime state at ${statePath}.`);
       const error = logs[0]?.annotations.cause;
       assert.isTrue(isServerRuntimeStateError(error));
+
       if (isServerRuntimeStateError(error)) {
         assert.equal(error.operation, "read");
         assert.equal(error.statePath, statePath);
@@ -156,9 +169,11 @@ describe("serverRuntimeState", () => {
     Effect.gen(function* () {
       const fileSystem = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
+
       const root = yield* fileSystem.makeTempDirectoryScoped({
         prefix: "t3-server-runtime-state-test-",
       });
+
       const blockedDirectory = path.join(root, "not-a-directory");
       const statePath = path.join(blockedDirectory, "server.json");
       yield* fileSystem.writeFileString(blockedDirectory, "blocked");
@@ -175,6 +190,7 @@ describe("serverRuntimeState", () => {
       }).pipe(Effect.flip);
 
       assert.isTrue(isServerRuntimeStateError(error));
+
       if (isServerRuntimeStateError(error)) {
         assert.equal(error.operation, "persist");
         assert.equal(error.statePath, statePath);

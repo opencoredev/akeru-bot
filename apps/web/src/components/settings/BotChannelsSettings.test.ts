@@ -125,10 +125,12 @@ describe("bot channel settings", () => {
 
   it("shows a connecting channel in the overview", () => {
     const connectionId = ChannelConnectionId.make("telegram-pending");
+
     const connection = {
       id: connectionId,
       provider: "telegram",
     } as Parameters<typeof channelState>[1][number];
+
     const bot = {
       id: botId,
       name: "Scout",
@@ -155,6 +157,7 @@ describe("bot channel settings", () => {
 
   it("finds saved connections assigned to archived bots", () => {
     const connectionId = ChannelConnectionId.make("photon-work");
+
     const bots = [
       {
         id: botId,
@@ -255,7 +258,7 @@ describe("isChannelIdentityConflict", () => {
 
 describe("channelFailureCategoryOf", () => {
   it("reads the category the server sent with a channel failure", () => {
-    const failure = (error: object) => ({ cause: Cause.fail(error) });
+    const failure = <E>(error: E) => ({ cause: Cause.fail(error) });
     expect(
       channelFailureCategoryOf(
         failure({ message: "Rejected.", channelFailureCategory: "credentials" }),

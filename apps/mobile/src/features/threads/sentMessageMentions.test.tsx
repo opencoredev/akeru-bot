@@ -6,13 +6,17 @@ vi.mock("react-native", () => ({
   Linking: { openURL: vi.fn() },
   useColorScheme: () => "light",
 }));
+
 vi.mock("../../../modules/t3-markdown-text/src/MarkdownTextPrimitive", () => ({
   MarkdownTextPrimitive: "t3-text",
 }));
+
 vi.mock("../../../modules/t3-markdown-text/src/markdownFileIcons", () => ({
   markdownFileIconSource: () => 0,
 }));
+
 vi.mock("../../state/entities", () => ({ useThreadTitles: () => new Map() }));
+
 vi.mock("../../state/bots", () => ({ useBotNames: () => new Map() }));
 
 import { decorateSkillRuns } from "../../../modules/t3-markdown-text/src/nativeMarkdownText";
@@ -20,9 +24,11 @@ import { NativeMarkdownSelectableText } from "../../../modules/t3-markdown-text/
 import { labelSentMessageMentions, sentMessageMentionSkills } from "./sentMessageMentions";
 
 const text = "check @chat:thread-9 and @chat:gone with @browser and $review";
+
 const displays = collectComposerMentionDisplays(text, (threadId) =>
   threadId === "thread-9" ? "Release plan" : null,
 );
+
 const textStyle = {
   color: "#000",
   strongColor: "#000",
@@ -49,6 +55,7 @@ describe("sent message mentions", () => {
     const runs = decorateSkillRuns([{ text }], skills);
     const element = NativeMarkdownSelectableText({ runs, textStyle });
     const tree = JSON.stringify(element);
+
     const shown = (element.props.children as Array<{ props: { children: string } }>)
       .map((child) => child.props.children)
       .join("");
@@ -77,6 +84,7 @@ describe("sent message mentions", () => {
       () => null,
       (botId) => (botId === "bot-2" ? "Mika" : null),
     );
+
     const skills = sentMessageMentionSkills(botDisplays, []);
     expect(skills.map((skill) => [skill.token, skill.displayName, skill.icon])).toEqual([
       ["@bot:bot-2", "Mika", "person.crop.circle"],

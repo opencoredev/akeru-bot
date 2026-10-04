@@ -18,8 +18,11 @@ import { parseThreadKey, threadKey } from "./entities.ts";
 import { THREAD_STATE_IDLE_TTL_MS } from "./threadRetention.ts";
 
 const EMPTY_MESSAGES: ReadonlyArray<OrchestrationMessage> = Object.freeze([]);
+
 const EMPTY_ACTIVITIES: ReadonlyArray<OrchestrationThreadActivity> = Object.freeze([]);
+
 const EMPTY_PROPOSED_PLANS: ReadonlyArray<OrchestrationProposedPlan> = Object.freeze([]);
+
 const EMPTY_CHECKPOINTS: ReadonlyArray<OrchestrationCheckpointSummary> = Object.freeze([]);
 
 /**
@@ -38,6 +41,7 @@ export function mergeEnvironmentThread(
   if (detail === null || shell === null) {
     return detail;
   }
+
   if (detail.environmentId !== shell.environmentId || detail.id !== shell.id) {
     return detail;
   }
@@ -75,6 +79,7 @@ export function createEnvironmentThreadDetailAtoms<E>(
 ) {
   const threadStateValueAtomFamily = Atom.family((key: string) => {
     const ref = parseThreadKey(key);
+
     return Atom.make((get) =>
       Option.getOrElse(
         AsyncResult.value(get(threadStateAtom(ref.environmentId, ref.threadId))),
@@ -90,13 +95,17 @@ export function createEnvironmentThreadDetailAtoms<E>(
     const ref = parseThreadKey(key);
     let previousSource: OrchestrationThread | null = null;
     let previousValue: EnvironmentThread | null = null;
+
     return Atom.make((get) => {
       const source = Option.getOrNull(get(threadStateValueAtomFamily(key)).data);
+
       if (source === previousSource) {
         return previousValue;
       }
+
       previousSource = source;
       previousValue = source === null ? null : scopeThread(ref.environmentId, source);
+
       return previousValue;
     }).pipe(
       Atom.setIdleTTL(THREAD_STATE_IDLE_TTL_MS),

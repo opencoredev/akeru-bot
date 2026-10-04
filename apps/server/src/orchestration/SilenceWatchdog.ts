@@ -44,12 +44,15 @@ export const startSilenceWatchdog = (input: {
       let lastActivity = yield* Clock.currentTimeMillis;
       let silent = false;
       let paused = 0;
+
       while (true) {
         const elapsed = (yield* Clock.currentTimeMillis) - lastActivity;
+
         if (!silent && paused === 0 && elapsed >= SILENCE_WATCHDOG_SILENT_MS) {
           yield* input.callbacks.onSilent(lastActivity);
           silent = true;
         }
+
         // Only an unpaused, not-yet-silent turn needs a timer; otherwise wait for a signal.
         const signal =
           silent || paused > 0
@@ -59,15 +62,20 @@ export const startSilenceWatchdog = (input: {
                   Effect.timeoutOption(Duration.millis(SILENCE_WATCHDOG_SILENT_MS - elapsed)),
                 ),
               );
+
         if (signal === "stop") return;
+
         if (signal === "activity") {
           lastActivity = yield* Clock.currentTimeMillis;
+
           if (silent) {
             silent = false;
             yield* input.callbacks.onResumed;
           }
         }
+
         if (signal === "pause") paused += 1;
+
         if (signal === "resume") {
           // Time spent waiting on the user never counts toward silence.
           paused = Math.max(0, paused - 1);
@@ -77,14 +85,17 @@ export const startSilenceWatchdog = (input: {
     }).pipe(Effect.ensuring(Deferred.succeed(stopped, void 0)), Effect.forkScoped);
 
     const offer = (signal: WatchdogSignal) => Queue.offer(wake, signal).pipe(Effect.asVoid);
+
     const stop = Effect.gen(function* () {
       if (!stopRequested) {
         stopRequested = true;
         yield* offer("stop");
       }
+
       yield* Deferred.await(stopped);
       yield* Fiber.interrupt(fiber);
     });
+
     return {
       touch: offer("activity"),
       suspend: offer("pause"),

@@ -28,18 +28,20 @@ export type SettingsDeepLinkId = (typeof SETTINGS_DEEP_LINK_IDS)[number];
 const settingsDeepLinkIds = new Set<string>(SETTINGS_DEEP_LINK_IDS);
 
 /** Retired sections whose old chips still open a live page. */
-const RETIRED_SETTINGS_DEEP_LINK_IDS: Readonly<Record<string, SettingsDeepLinkId>> = {
-  "source-control": "general",
-};
+const RETIRED_SETTINGS_DEEP_LINK_IDS = new Map<string, SettingsDeepLinkId>([
+  ["source-control", "general"],
+]);
 
 export function parseSettingsDeepLinkId(href: string | undefined): SettingsDeepLinkId | null {
   if (!href) return null;
   let url: URL;
+
   try {
     url = new URL(href);
   } catch {
     return null;
   }
+
   if (
     url.protocol !== "grokbot:" ||
     url.hostname !== "app" ||
@@ -50,9 +52,12 @@ export function parseSettingsDeepLinkId(href: string | undefined): SettingsDeepL
   ) {
     return null;
   }
+
   const id = url.searchParams.get("id")?.trim() || "general";
-  if (settingsDeepLinkIds.has(id)) return id as SettingsDeepLinkId;
-  return RETIRED_SETTINGS_DEEP_LINK_IDS[id] ?? null;
+
+  if (isSettingsDeepLinkId(id)) return id;
+
+  return RETIRED_SETTINGS_DEEP_LINK_IDS.get(id) ?? null;
 }
 
 /** The in-app link a Settings chip opens, e.g. for "providers". */
@@ -66,4 +71,8 @@ export function settingsDeepLinkHref(id: SettingsDeepLinkId): string {
  */
 export function isAppDeepLink(href: string): boolean {
   return /^grokbot:/i.test(href.trim());
+}
+
+function isSettingsDeepLinkId(value: string): value is SettingsDeepLinkId {
+  return settingsDeepLinkIds.has(value);
 }

@@ -1,0 +1,48 @@
+html[data-theme-id] .chat-composer-glass-shell {
+  --chat-composer-glass-surface: var(--app-theme-surface-raised);
+  --chat-composer-outline: var(--app-theme-toolbar-border);
+
+  @variant dark {
+    --chat-composer-outline: color-mix(in srgb, var(--app-theme-input) 30%, var(--background));
+    --chat-composer-highlight: color-mix(in srgb, var(--app-theme-input) 12%, transparent);
+  }
+}
+
+html[data-theme-id]
+  :is(.chat-composer-banner-stack-cap, .chat-composer-drawer-surface, .chat-composer-top-drawer) {
+  --chat-composer-attached-surface: var(--app-theme-surface-raised);
+}
+
+html[data-theme-id]
+  :is(.chat-composer-banner-stack-cap, .chat-composer-drawer-surface, .chat-composer-top-drawer):is(
+    :not([data-variant]),
+    [data-variant="default"]
+  ) {
+  --chat-composer-attached-outline: var(--chat-composer-outline, var(--app-theme-toolbar-border));
+
+  @variant dark {
+    --chat-composer-attached-outline: var(
+      --chat-composer-outline,
+      color-mix(in srgb, var(--app-theme-input) 30%, var(--background))
+    );
+  }
+}
+
+html[data-theme-id="akeru-chat"] .chat-composer-glass-shell {
+  /* T3 Chat's visible composer edge is a dark plum, not the stock translucent
+     white outline. Its highlight is derived from --chat-input-gradient. */
+  @variant dark {
+    --chat-composer-outline: #241e28;
+    --chat-composer-highlight: color-mix(in srgb, #432d48 12%, transparent);
+  }
+}
+
+html[data-theme-id="akeru-chat"]
+  :is(.chat-composer-banner-stack-cap, .chat-composer-drawer-surface, .chat-composer-top-drawer):is(
+    :not([data-variant]),
+    [data-variant="default"]
+  ) {
+  @variant dark {
+    --chat-composer-attached-outline: #241e28;
+  }
+}

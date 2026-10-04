@@ -1,3 +1,4 @@
+import { Match } from "effect";
 import { useAtomValue } from "@effect/atom-react";
 import { scopeThreadRef } from "@akeru/client-runtime/environment";
 import type { EnvironmentId } from "@akeru/contracts";
@@ -11,13 +12,15 @@ import { useSettingsEnvironmentId } from "../../settingsDialogStore";
 import { environmentBotsAtom, environmentGroupsAtom } from "../../state/bots";
 import { Button } from "../ui/button";
 import { Spinner } from "../ui/spinner";
+import { ArchivedBotsSection } from "./ArchivedBotsSettings";
 import { buildArchivedChatSections, type ArchivedChat } from "./ArchivedChatsSettings.logic";
 import { SettingsPageContainer, SettingsRow, SettingsSection } from "./settingsLayout";
 
-/** Settings > Archived chats: every archived chat on this environment, by bot or group. */
+/** Settings > Archived: archived bots, then every archived chat on this environment, by bot or group. */
 export function ArchivedChatsSettingsPanel() {
   const { t } = useI18n();
   const environmentId = useSettingsEnvironmentId();
+
   return (
     <SettingsPageContainer>
       {environmentId === null ? (
@@ -28,7 +31,10 @@ export function ArchivedChatsSettingsPanel() {
           />
         </SettingsSection>
       ) : (
-        <ArchivedChatsContent key={environmentId} environmentId={environmentId} />
+        <>
+          <ArchivedBotsSection key={`bots-${environmentId}`} environmentId={environmentId} />
+          <ArchivedChatsContent key={environmentId} environmentId={environmentId} />
+        </>
       )}
     </SettingsPageContainer>
   );
@@ -42,6 +48,7 @@ function ArchivedChatsContent({ environmentId }: { readonly environmentId: Envir
   const bots = useAtomValue(environmentBotsAtom(environmentId));
   const groups = useAtomValue(environmentGroupsAtom(environmentId));
   const [busyThreadId, setBusyThreadId] = useState<string | null>(null);
+
   const sections = useMemo(
     () =>
       buildArchivedChatSections({
@@ -57,6 +64,7 @@ function ArchivedChatsContent({ environmentId }: { readonly environmentId: Envir
   const run = async (chat: ArchivedChat, action: "unarchive" | "delete") => {
     const threadRef = scopeThreadRef(chat.environmentId, chat.threadId);
     setBusyThreadId(chat.threadId);
+
     try {
       if (action === "unarchive") await actions.unarchive(threadRef);
       else await actions.delete(threadRef);
@@ -105,19 +113,21 @@ function ArchivedChatsContent({ environmentId }: { readonly environmentId: Envir
       id={index === 0 ? "archived-chats" : undefined}
       title={
         section.name ??
-        (section.kind === "group"
-          ? t("Deleted group")
-          : section.kind === "bot"
-            ? t("Removed bot")
-            : t("Other chats"))
+        Match.value(section).pipe(
+          Match.when({ kind: "group" }, () => t("Deleted group")),
+          Match.when({ kind: "bot" }, () => t("Removed bot")),
+          Match.orElse(() => t("Other chats")),
+        )
       }
     >
       {section.chats.map((chat) => {
         const busy = busyThreadId === chat.threadId;
+
         const archivedAt = formatDate(new Date(chat.archivedAt), {
           dateStyle: "medium",
           timeStyle: "short",
         });
+
         return (
           <SettingsRow
             key={chat.threadId}
@@ -126,16 +136,19 @@ function ArchivedChatsContent({ environmentId }: { readonly environmentId: Envir
             description={t("Archived {time}", { time: archivedAt })}
             control={
               <>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="outline"
-                  disabled={busy}
-                  onClick={() => void run(chat, "unarchive")}
-                >
-                  <ArchiveRestoreIcon className="size-3.5" />
-                  {t("Unarchive")}
-                </Button>
+                {/* A chat with no bot or group has no page on web, so unarchiving would hide it. */}
+                {section.kind === "other" ? null : (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    disabled={busy}
+                    onClick={() => void run(chat, "unarchive")}
+                  >
+                    <ArchiveRestoreIcon className="size-3.5" />
+                    {t("Unarchive")}
+                  </Button>
+                )}
                 <Button
                   type="button"
                   size="icon-sm"

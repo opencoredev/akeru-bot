@@ -19,12 +19,16 @@ export default defineRule({
     return {
       JSXOpeningElement(node) {
         if (node.name.type !== "JSXIdentifier") return;
+
         if (!INTRINSIC_ELEMENT_PATTERN.test(node.name.name)) return;
+
         if (TITLE_IS_AN_ACCESSIBLE_NAME.has(node.name.name)) return;
 
         for (const attribute of node.attributes) {
           if (attribute.type !== "JSXAttribute") continue;
+
           if (attribute.name.type !== "JSXIdentifier") continue;
+
           if (attribute.name.name !== "title") continue;
 
           context.report({

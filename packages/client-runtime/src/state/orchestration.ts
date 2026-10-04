@@ -19,6 +19,7 @@ export function createOrchestrationEnvironmentAtoms<R, E>(
   runtime: Atom.AtomRuntime<EnvironmentRegistry | Crypto.Crypto | R, E>,
 ) {
   const scheduler = createAtomCommandScheduler();
+
   return {
     cancelDelegation: createEnvironmentCommand(runtime, {
       label: "environment-data:commands:delegation:cancel",

@@ -5,9 +5,9 @@ import * as NodePath from "node:path";
 import * as NodeChildProcess from "node:child_process";
 
 const require = NodeModule.createRequire(import.meta.url);
-// oxlint-disable-next-line akeru/no-global-process-runtime -- Standalone repair script has no Effect runtime.
+
 const hostPlatform = NodeOS.platform();
-// oxlint-disable-next-line akeru/no-global-process-runtime -- Standalone repair script has no Effect runtime.
+
 const hostArch = NodeOS.arch();
 
 function getPlatformPath() {
@@ -33,6 +33,7 @@ function ensureExecutable(filePath) {
 
 function repairPathFile(electronDir, platformPath) {
   const pathFile = NodePath.join(electronDir, "path.txt");
+
   const currentPath = NodeFS.existsSync(pathFile)
     ? NodeFS.readFileSync(pathFile, "utf8")
     : undefined;
@@ -126,6 +127,7 @@ function installElectronRuntime(electronDir, version) {
       "-o",
       zipPath,
     ]);
+
     if (hostPlatform === "darwin") {
       runChecked("ditto", ["-x", "-k", zipPath, NodePath.join(electronDir, "dist")]);
     } else {
@@ -154,12 +156,14 @@ export function ensureElectronRuntime() {
     if (NodeFS.existsSync(NodePath.join(electronDir, "dist"))) {
       NodeFS.rmSync(NodePath.join(electronDir, "dist"), { recursive: true, force: true });
     }
+
     NodeFS.rmSync(NodePath.join(electronDir, "path.txt"), { force: true });
     installElectronRuntime(electronDir, electronPackageJson.version);
   }
 
   const missingAfterInstall = missingRuntimePaths(electronDir, platformPath);
   const invalidAfterInstall = invalidRuntimePaths(electronDir, platformPath);
+
   if (missingAfterInstall.length > 0 || invalidAfterInstall.length > 0) {
     throw new Error(
       `Electron runtime is incomplete after install.\nMissing:\n${missingAfterInstall

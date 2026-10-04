@@ -14,10 +14,14 @@ import {
   BotSandbox,
   BotSandboxBrowserSharing,
   BotPersonalityTone,
+} from "./orchestration/roster.ts";
+import {
   ChatAttachment,
-  ModelSelection,
   PROVIDER_SEND_TURN_MAX_ATTACHMENTS,
   PROVIDER_SEND_TURN_MAX_INPUT_CHARS,
+} from "./orchestration/attachments.ts";
+import {
+  ModelSelection,
   ProviderApprovalDecision,
   ProviderApprovalPolicy,
   ProviderInteractionMode,
@@ -25,7 +29,7 @@ import {
   ProviderSandboxMode,
   ProviderUserInputAnswers,
   RuntimeMode,
-} from "./orchestration.ts";
+} from "./orchestration/modelSelection.ts";
 import { ProviderInstanceId, ProviderDriverKind } from "./providerInstance.ts";
 
 const ProviderSessionStatus = Schema.Literals([
@@ -54,6 +58,7 @@ export const ProviderSession = Schema.Struct({
   updatedAt: IsoDateTime,
   lastError: Schema.optional(TrimmedNonEmptyString),
 });
+
 export type ProviderSession = typeof ProviderSession.Type;
 
 export const ProviderSessionStartInput = Schema.Struct({
@@ -78,6 +83,7 @@ export const ProviderSessionStartInput = Schema.Struct({
   persistentMemoryContext: Schema.optional(Schema.String),
   runtimeMode: RuntimeMode,
 });
+
 export type ProviderSessionStartInput = typeof ProviderSessionStartInput.Type;
 
 export const ProviderSendTurnInput = Schema.Struct({
@@ -100,6 +106,7 @@ export const ProviderSendTurnInput = Schema.Struct({
    */
   persistentMemoryContext: Schema.optional(Schema.String),
 });
+
 export type ProviderSendTurnInput = typeof ProviderSendTurnInput.Type;
 
 export const ProviderTurnStartResult = Schema.Struct({
@@ -107,17 +114,20 @@ export const ProviderTurnStartResult = Schema.Struct({
   turnId: TurnId,
   resumeCursor: Schema.optional(Schema.Unknown),
 });
+
 export type ProviderTurnStartResult = typeof ProviderTurnStartResult.Type;
 
 export const ProviderInterruptTurnInput = Schema.Struct({
   threadId: ThreadId,
   turnId: Schema.optional(TurnId),
 });
+
 export type ProviderInterruptTurnInput = typeof ProviderInterruptTurnInput.Type;
 
 export const ProviderStopSessionInput = Schema.Struct({
   threadId: ThreadId,
 });
+
 export type ProviderStopSessionInput = typeof ProviderStopSessionInput.Type;
 
 export const ProviderRespondToRequestInput = Schema.Struct({
@@ -125,6 +135,7 @@ export const ProviderRespondToRequestInput = Schema.Struct({
   requestId: ApprovalRequestId,
   decision: ProviderApprovalDecision,
 });
+
 export type ProviderRespondToRequestInput = typeof ProviderRespondToRequestInput.Type;
 
 export const ProviderRespondToUserInputInput = Schema.Struct({
@@ -132,17 +143,20 @@ export const ProviderRespondToUserInputInput = Schema.Struct({
   requestId: ApprovalRequestId,
   answers: ProviderUserInputAnswers,
 });
+
 export type ProviderRespondToUserInputInput = typeof ProviderRespondToUserInputInput.Type;
 
 export const ProviderUploadFeedbackInput = Schema.Struct({
   threadId: ThreadId,
   reason: Schema.optional(TrimmedNonEmptyString),
 });
+
 export type ProviderUploadFeedbackInput = typeof ProviderUploadFeedbackInput.Type;
 
 export const ProviderUploadFeedbackResult = Schema.Struct({
   feedbackId: TrimmedNonEmptyString,
 });
+
 export type ProviderUploadFeedbackResult = typeof ProviderUploadFeedbackResult.Type;
 
 export class ProviderUploadFeedbackError extends Schema.TaggedErrorClass<ProviderUploadFeedbackError>()(
@@ -176,4 +190,5 @@ export const ProviderEvent = Schema.Struct({
   textDelta: Schema.optional(Schema.String),
   payload: Schema.optional(Schema.Unknown),
 });
+
 export type ProviderEvent = typeof ProviderEvent.Type;

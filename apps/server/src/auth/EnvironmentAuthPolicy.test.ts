@@ -17,6 +17,7 @@ const makeEnvironmentAuthPolicyLayer = (
         ServerConfig.ServerConfig,
         Effect.gen(function* () {
           const config = yield* ServerConfig.ServerConfig;
+
           return {
             ...config,
             ...overrides,

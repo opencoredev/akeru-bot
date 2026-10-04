@@ -41,6 +41,7 @@ describe("ElectronShell", () => {
       openExternalMock.mockResolvedValue(undefined);
 
       const electronShell = yield* ElectronShell.ElectronShell;
+
       const result = yield* electronShell.openExternal(
         "vscode://vscode-remote/ssh-remote+example.com/home/user/project",
       );
@@ -69,6 +70,7 @@ describe("ElectronShell", () => {
       openExternalMock.mockResolvedValue(undefined);
 
       const electronShell = yield* ElectronShell.ElectronShell;
+
       const results = yield* Effect.all([
         electronShell.openExternal("zed://extension/attacker"),
         electronShell.openExternal("vscode://ssh/example.com/home/user/project"),
@@ -84,6 +86,7 @@ describe("ElectronShell", () => {
       openExternalMock.mockResolvedValue(undefined);
 
       const electronShell = yield* ElectronShell.ElectronShell;
+
       const results = yield* Effect.all([
         electronShell.openExternal("zed://ssh/user%40host/workspace"),
         electronShell.openExternal("zed://ssh/host%3A22/workspace"),
@@ -105,6 +108,7 @@ describe("ElectronShell", () => {
       openExternalMock.mockResolvedValue(undefined);
 
       const electronShell = yield* ElectronShell.ElectronShell;
+
       const results = yield* Effect.all([
         electronShell.openExternal(
           "vscode://user@vscode-remote/ssh-remote+example.com/home/user/project",
@@ -135,6 +139,7 @@ describe("ElectronShell", () => {
       openExternalMock.mockResolvedValue(undefined);
 
       const electronShell = yield* ElectronShell.ElectronShell;
+
       const result = yield* electronShell.openExternal(
         "vscode://ms-python.python/some-command?argument=attacker",
       );

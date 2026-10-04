@@ -26,10 +26,12 @@ describe("composioSearchResults", () => {
   it("drops toolkits the directory brokers, so Gmail keeps its pending blocker", () => {
     const gmail = catalog.find((plugin) => plugin.id === "gmail");
     expect(gmail?.connection.type).toBe("brokered");
+
     const results = composioSearchResults(
       [toolkit("gmail", "Gmail"), toolkit("slack", "Slack")],
       catalog,
     );
+
     expect(results.map((result) => result.slug)).toEqual(["slack"]);
   });
 
@@ -39,6 +41,7 @@ describe("composioSearchResults", () => {
       catalog,
       activeComposioToolkitIds(connections),
     );
+
     expect(results.map((result) => result.slug)).toEqual(["slack"]);
   });
 });
@@ -63,6 +66,7 @@ describe("ComposioAccounts", () => {
     const html = renderToStaticMarkup(
       <ComposioAccounts connections={[]} pendingId={null} onDisconnect={() => {}} />,
     );
+
     expect(html).toContain("No accounts connected yet");
   });
 
@@ -70,6 +74,7 @@ describe("ComposioAccounts", () => {
     const html = renderToStaticMarkup(
       <ComposioAccounts connections={connections} pendingId={null} onDisconnect={() => {}} />,
     );
+
     expect(html).toContain("Work Slack");
     expect(html).toContain("Waiting for sign-in");
     expect(html).toContain("Expired");
@@ -81,6 +86,7 @@ describe("ComposioAccounts", () => {
     const html = renderToStaticMarkup(
       <ComposioAccounts connections={connections} pendingId="key" onDisconnect={() => {}} />,
     );
+
     expect(html.match(/disabled=""/g)).toHaveLength(connections.length);
   });
 });
@@ -95,6 +101,7 @@ describe("ComposioToolkitResults", () => {
         onConnect={() => {}}
       />,
     );
+
     expect(html).toContain("From Composio");
     expect(html).toContain('aria-label="Connected Slack"');
     expect(html).toContain('aria-label="Connect Linear"');

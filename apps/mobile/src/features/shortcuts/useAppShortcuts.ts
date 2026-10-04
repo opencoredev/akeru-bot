@@ -38,6 +38,7 @@ function useShortcutNavigation(): void {
     if (!handledInitialAction.current) {
       handledInitialAction.current = true;
       const initialHref = QuickActions.initial ? shortcutHref(QuickActions.initial) : null;
+
       if (initialHref !== null) {
         linkTo(initialHref);
       }
@@ -45,10 +46,12 @@ function useShortcutNavigation(): void {
 
     const subscription = QuickActions.addListener((action) => {
       const href = shortcutHref(action);
+
       if (href !== null) {
         linkTo(href);
       }
     });
+
     return () => subscription.remove();
   }, [linkTo]);
 }
@@ -62,6 +65,7 @@ function useRecentThreadShortcutSync(state: NavigationState): void {
     () => (Platform.OS === "android" ? activeThreadRef(state) : null),
     [state],
   );
+
   const threadShell = useThreadShell(threadRef);
   // null until the persisted list loads; recording waits on it so the first
   // thread opened after a cold start cannot clobber older entries.
@@ -90,10 +94,12 @@ function useRecentThreadShortcutSync(state: NavigationState): void {
       })
       .catch((error) => {
         console.warn("[app-shortcuts] failed to load recent threads", error);
+
         if (!cancelled) {
           setRecents([]);
         }
       });
+
     return () => {
       cancelled = true;
     };
@@ -114,10 +120,13 @@ function useRecentThreadShortcutSync(state: NavigationState): void {
       if (current === null) {
         return current;
       }
+
       const next = withRecentThreadShortcut(current, { environmentId, threadId, title });
+
       if (next !== current) {
         persistableRef.current = true;
       }
+
       return next;
     });
   }, [loaded, environmentId, threadId, title]);
@@ -136,6 +145,7 @@ function useRecentThreadShortcutSync(state: NavigationState): void {
         () => undefined,
       );
     }
+
     void QuickActions.setItems(buildShortcutActions(recents)).catch((error) => {
       console.warn("[app-shortcuts] failed to update launcher shortcuts", error);
     });

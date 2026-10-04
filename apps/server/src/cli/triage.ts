@@ -9,7 +9,6 @@
  * agent CLI installed, the prompt and context are written to disk for the user
  * to paste into whatever agent they do have.
  */
-// @effect-diagnostics nodeBuiltinImport:off
 import * as NodeChildProcess from "node:child_process";
 import * as NodeOS from "node:os";
 import * as NodeReadlinePromises from "node:readline/promises";
@@ -82,6 +81,7 @@ export class TriageAgentSpawnError extends Schema.TaggedErrorClass<TriageAgentSp
 const isProcessAlive = (pid: number): boolean => {
   try {
     process.kill(pid, 0);
+
     return true;
   } catch (error) {
     return error instanceof Error && "code" in error && error.code === "EPERM";
@@ -95,12 +95,15 @@ const describeServerProcess = Effect.fn("triage.describeServerProcess")(function
   // readPersistedServerRuntimeState swallows read/decode failures itself and
   // returns none, so a corrupt state file reads as "not running" here.
   const state = yield* readPersistedServerRuntimeState(serverRuntimeStatePath);
+
   if (Option.isNone(state)) {
     return "not running (no server-runtime.json; the server may never have started here)";
   }
+
   if (!isProcessAlive(state.value.pid)) {
     return `not running (state file is stale: pid ${String(state.value.pid)} is dead; last origin ${state.value.origin})`;
   }
+
   return `running (pid ${String(state.value.pid)}, ${state.value.origin})`;
 });
 
@@ -110,17 +113,22 @@ const pickAgent = (agents: ReadonlyArray<TriageAgent>) =>
       input: process.stdin,
       output: process.stdout,
     });
+
     try {
       const menu = agents
         .map((agent, index) => `  [${String(index + 1)}] ${agent.label}`)
         .join("\n");
+
       for (;;) {
         const answer = (await readline.question(`Run triage with:\n${menu}\n> `)).trim();
         const byNumber = agents[Number.parseInt(answer, 10) - 1];
+
         if (byNumber !== undefined) {
           return byNumber;
         }
+
         const byId = agents.find((agent) => agent.id === answer.toLowerCase());
+
         if (byId !== undefined) {
           return byId;
         }
@@ -147,6 +155,7 @@ const runInteractiveSession = (input: {
       stdio: "inherit",
       shell: input.shell,
     });
+
     child.once("error", (cause) =>
       resume(Effect.fail(new TriageAgentSpawnError({ command: input.command, cause }))),
     );
@@ -186,12 +195,14 @@ export const triageCommand = Command.make("triage", {
       const paths = yield* ServerConfig.deriveServerPaths(baseDir, undefined, {});
 
       const now = yield* DateTime.now;
+
       const scratchDir = path.join(
         paths.stateDir,
         "triage",
         // ISO instant, made safe for Windows paths.
         DateTime.formatIso(now).replaceAll(":", "-").replace(".", "-"),
       );
+
       yield* fs.makeDirectory(scratchDir, { recursive: true });
 
       const version = packageJson.version;
@@ -223,6 +234,7 @@ export const triageCommand = Command.make("triage", {
       );
 
       const installed: Array<TriageAgent> = [];
+
       for (const agent of TRIAGE_AGENTS) {
         if (yield* isCommandAvailable(agent.command)) {
           installed.push(agent);
@@ -231,8 +243,10 @@ export const triageCommand = Command.make("triage", {
 
       const requested = Option.getOrUndefined(flags.agent);
       let selected: TriageAgent | undefined;
+
       if (requested !== undefined) {
         selected = installed.find((agent) => agent.id === requested);
+
         if (selected === undefined) {
           return yield* new TriageAgentUnavailableError({ agent: requested });
         }
@@ -244,6 +258,7 @@ export const triageCommand = Command.make("triage", {
         if (!process.stdin.isTTY || !process.stdout.isTTY) {
           return yield* new TriageAgentChoiceRequiredError();
         }
+
         selected = yield* pickAgent(installed);
       }
 
@@ -266,16 +281,20 @@ export const triageCommand = Command.make("triage", {
             "Paste the prompt file into any coding agent to run triage by hand.",
           ].join("\n"),
         );
+
         return;
       }
 
       const model = Option.getOrUndefined(flags.model);
+
       const spawnSpec = yield* resolveSpawnCommand(selected.command, [
         ...(model === undefined ? [] : ["--model", model]),
         buildTriageLaunchPrompt(promptFilePath),
       ]);
+
       yield* Console.log(`Starting ${selected.label}. It will ask what went wrong.\n`);
       const exitCode = yield* runInteractiveSession({ ...spawnSpec, cwd: scratchDir });
+
       if (exitCode !== 0) {
         process.exitCode = exitCode;
       }

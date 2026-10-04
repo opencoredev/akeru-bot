@@ -52,7 +52,7 @@ describe("ComposerCommandMenu", () => {
     expect(markup).toContain("font-sans text-xs font-medium");
     expect(markup).not.toContain("font-mono");
     expect(markup).not.toContain("grid-cols-");
-    expect(markup).toContain("max-w-[45%]");
+    expect(markup).toContain("max-w-9/20");
     expect(markup).toContain("text-left");
   });
 
@@ -87,7 +87,7 @@ describe("ComposerCommandMenu", () => {
     expect(markup).toContain('data-slot="badge"');
     expect(markup).toContain(">App Skill</span>");
     expect(markup).toContain("Open and control the in-app browser");
-    expect(markup).toContain("max-w-[48ch]");
+    expect(markup).toContain("max-w-48ch");
     expect(markup).toContain("text-secondary-label text-xs");
     expect(markup).toContain("ms-auto");
     expect(markup.indexOf("Open and control the in-app browser")).toBeLessThan(
@@ -144,7 +144,8 @@ describe("ComposerCommandMenu", () => {
     const [reviewRow = "", deployRow = ""] = markup.split(
       'data-composer-item-id="skill:codex:deploy"',
     );
-    expect(reviewRow).toContain('<span aria-hidden="true" class="flex size-[1.6em]');
+
+    expect(reviewRow).toContain('<span aria-hidden="true" class="flex size-1.6em');
     expect(reviewRow).toContain('data-skill-icon="own">🔍</span>');
     expect(reviewRow).not.toContain("lucide-user-round");
     expect(reviewRow).toContain(">Personal Skill</span>");

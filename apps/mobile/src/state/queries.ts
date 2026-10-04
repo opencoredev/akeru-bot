@@ -8,17 +8,25 @@ import { useAtomValue } from "@effect/atom-react";
 import * as Option from "effect/Option";
 import { Atom } from "effect/unstable/reactivity";
 import { useEffect, useMemo, useState } from "react";
-
 import { orchestrationEnvironment } from "./orchestration";
 import { projectEnvironment } from "./projects";
 import { useEnvironmentQuery } from "./query";
 import { useEnvironmentThread } from "./threads";
 import { normalizeComposerPathSearchQuery } from "./queryTargets";
 
+type ThreadSearchState = {
+  readonly matches: ReadonlyArray<EnvironmentThreadSearchMatch>;
+  readonly isPending: boolean;
+};
+
 const COMPOSER_PATH_SEARCH_DEBOUNCE_MS = 200;
+
 const COMPOSER_PATH_SEARCH_LIMIT = 20;
+
 const THREAD_SEARCH_DEBOUNCE_MS = 200;
+
 const EMPTY_THREAD_SEARCH_MATCHES: ReadonlyArray<EnvironmentThreadSearchMatch> = Object.freeze([]);
+
 const EMPTY_THREAD_SEARCH_ATOM = Atom.make({
   matches: EMPTY_THREAD_SEARCH_MATCHES,
   isLoading: false,
@@ -53,6 +61,7 @@ export function useDebouncedValue<A>(value: A, delayMs: number): A {
     const timer = setTimeout(() => {
       setDebounced(value);
     }, delayMs);
+
     return () => {
       clearTimeout(timer);
     };
@@ -64,22 +73,23 @@ export function useDebouncedValue<A>(value: A, delayMs: number): A {
 export function useThreadSearch(
   environmentIds: ReadonlyArray<EnvironmentId>,
   query: string,
-): {
-  readonly matches: ReadonlyArray<EnvironmentThreadSearchMatch>;
-  readonly isPending: boolean;
-} {
+): ThreadSearchState {
   const normalizedQuery = query.trim();
   const debouncedQuery = useDebouncedValue(normalizedQuery, THREAD_SEARCH_DEBOUNCE_MS);
   const canSearch = environmentIds.length > 0 && normalizedQuery.length >= 2;
   const settledQuery = canSearch && normalizedQuery === debouncedQuery ? debouncedQuery : null;
+
   const searchKey = useMemo(
     () => (settledQuery === null ? null : makeThreadSearchKey(environmentIds, settledQuery)),
     [environmentIds, settledQuery],
   );
+
   const result = useAtomValue(
     searchKey === null ? EMPTY_THREAD_SEARCH_ATOM : threadSearchResultsAtom(searchKey),
   );
+
   const isDebouncing = canSearch && normalizedQuery !== debouncedQuery;
+
   return {
     matches: isDebouncing ? EMPTY_THREAD_SEARCH_MATCHES : result.matches,
     isPending: canSearch && (isDebouncing || result.isLoading),
@@ -91,6 +101,7 @@ export function useThreadDetail(
   threadId: ThreadId | null,
 ): ThreadDetailView {
   const state = useEnvironmentThread(environmentId, threadId);
+
   return {
     data: Option.getOrNull(state.data),
     error: Option.getOrNull(state.error),
@@ -108,7 +119,9 @@ export function useComposerPathSearch(target: ComposerPathSearchTarget) {
     }),
     [target.cwd, target.environmentId, target.query],
   );
+
   const debouncedTarget = useDebouncedValue(normalizedTarget, COMPOSER_PATH_SEARCH_DEBOUNCE_MS);
+
   const result = useEnvironmentQuery(
     debouncedTarget.environmentId !== null &&
       debouncedTarget.cwd !== null &&

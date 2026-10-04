@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import { assert, describe, it } from "@effect/vitest";
 import * as Cause from "effect/Cause";
 import * as Effect from "effect/Effect";
@@ -28,6 +29,7 @@ describe("reportExpectedCliError", () => {
       const exit = yield* Effect.exit(
         Effect.fail(new ExpectedCliError()).pipe(reportExpectedCliError(["ExpectedCliError"])),
       );
+
       if (!Exit.isFailure(exit)) assert.fail("expected the command to fail");
       assert.isFalse(Runtime.getErrorReported(Cause.squash(exit.cause)));
       const errorLines = yield* TestConsole.errorLines;
@@ -42,6 +44,7 @@ describe("reportExpectedCliError", () => {
           reportExpectedCliError(["WrappingCliError"]),
         ),
       );
+
       if (!Exit.isFailure(exit)) assert.fail("expected the command to fail");
       assert.isFalse(Runtime.getErrorReported(Cause.squash(exit.cause)));
       const errorLines = yield* TestConsole.errorLines;
@@ -59,10 +62,11 @@ describe("reportExpectedCliError", () => {
           reportExpectedCliError(["ExpectedCliError"]),
         ),
       );
+
       if (!Exit.isFailure(exit)) assert.fail("expected the command to fail");
       assert.isTrue(Runtime.getErrorReported(Cause.squash(exit.cause)));
       const errorLines = yield* TestConsole.errorLines;
-      assert.isEmpty(errorLines.filter((line): line is string => typeof line === "string"));
+      assert.isEmpty(errorLines.filter((line): line is string => Predicate.isString(line)));
     }).pipe(Effect.provide(TestConsole.layer)),
   );
 });

@@ -19,7 +19,7 @@ export function LoadingScreen(props: {
     <View className="flex-1 bg-screen" style={{ paddingTop: insets.top }}>
       <StatusBar
         barStyle={colorScheme === "dark" ? "light-content" : "dark-content"}
-        backgroundColor={screenBg as string}
+        backgroundColor={screenBg}
         translucent
       />
       <View className="flex-1 items-center justify-center gap-5 px-6">

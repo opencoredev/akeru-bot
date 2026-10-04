@@ -19,6 +19,7 @@ describe("plugin connection", () => {
       {
         create: async () => {
           calls.push("create");
+
           return true;
         },
         update: async () => true,
@@ -26,6 +27,7 @@ describe("plugin connection", () => {
         authenticate: async (_serverId, onAuthorizationUrl) => {
           calls.push("authenticate");
           await onAuthorizationUrl("https://hoplite.ai/oauth/authorize");
+
           return true;
         },
         openAuthorizationUrl,
@@ -50,14 +52,17 @@ describe("plugin connection", () => {
         create: async () => true,
         update: async () => {
           calls.push("update");
+
           return true;
         },
         enable: async () => {
           calls.push("enable");
+
           return true;
         },
         authenticate: async () => {
           calls.push("authenticate");
+
           return true;
         },
         openAuthorizationUrl: async () => undefined,

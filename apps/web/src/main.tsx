@@ -14,6 +14,7 @@ import { AppRoot } from "./AppRoot";
 import { LanguageProvider, type TestLanguageCatalog } from "./i18n";
 
 // Browser verification injects this before navigation; production builds ignore it.
+// SAFETY: The verification harness sets this optional catalog before loading the app.
 const testLanguageCatalog = import.meta.env.DEV
   ? (window as Window & { __AKERU_TEST_I18N__?: TestLanguageCatalog }).__AKERU_TEST_I18N__
   : undefined;
@@ -28,7 +29,11 @@ if (isElectron) {
   syncDocumentWindowControlsOverlayClass();
 }
 
-ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
+const rootElement = document.getElementById("root");
+
+if (!rootElement) throw new Error("Missing app root element.");
+
+ReactDOM.createRoot(rootElement).render(
   <React.StrictMode>
     <LanguageProvider testCatalog={testLanguageCatalog}>
       <AppRoot router={router} />

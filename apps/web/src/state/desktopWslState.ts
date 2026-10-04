@@ -34,9 +34,11 @@ function getDesktopWslStateBridge(): DesktopWslStateBridge | undefined {
 export function createDesktopWslStateAtom(getBridge: () => DesktopWslStateBridge | undefined) {
   const loadDesktopWslState = Effect.fn("loadDesktopWslState")(function* () {
     const bridge = getBridge();
+
     if (!bridge) {
       return yield* new DesktopWslStateUnavailableError();
     }
+
     return yield* Effect.tryPromise({
       try: (): Promise<DesktopWslState> => bridge.getWslState(),
       catch: (cause) => new DesktopWslStateLoadError({ cause }),

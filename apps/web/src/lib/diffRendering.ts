@@ -13,8 +13,11 @@ export function resolveDiffThemeName(theme: "light" | "dark"): DiffThemeName {
 }
 
 const FNV_OFFSET_BASIS_32 = 0x811c9dc5;
+
 const FNV_PRIME_32 = 0x01000193;
+
 const SECONDARY_HASH_SEED = 0x9e3779b9;
+
 const SECONDARY_HASH_MULTIPLIER = 0x85ebca6b;
 
 export function fnv1a32(
@@ -23,21 +26,25 @@ export function fnv1a32(
   multiplier = FNV_PRIME_32,
 ): number {
   let hash = seed >>> 0;
+
   for (let index = 0; index < input.length; index += 1) {
     hash ^= input.charCodeAt(index);
     hash = Math.imul(hash, multiplier) >>> 0;
   }
+
   return hash >>> 0;
 }
 
 export function buildPatchCacheKey(patch: string, scope = "diff-panel"): string {
   const normalizedPatch = patch.trim();
   const primary = fnv1a32(normalizedPatch, FNV_OFFSET_BASIS_32, FNV_PRIME_32).toString(36);
+
   const secondary = fnv1a32(
     normalizedPatch,
     SECONDARY_HASH_SEED,
     SECONDARY_HASH_MULTIPLIER,
   ).toString(36);
+
   return `${scope}:${normalizedPatch.length}:${primary}:${secondary}`;
 }
 
@@ -86,14 +93,17 @@ export function compactPartialHunkOffsets(file: FileDiffMetadata): FileDiffMetad
 
   let splitLineStart = 0;
   let unifiedLineStart = 0;
+
   const hunks = file.hunks.map((hunk) => {
     const compactHunk = {
       ...hunk,
       splitLineStart,
       unifiedLineStart,
     };
+
     splitLineStart += hunk.splitLineCount;
     unifiedLineStart += hunk.unifiedLineCount;
+
     return compactHunk;
   });
 
@@ -113,6 +123,7 @@ export function getRenderablePatch(
 ): RenderablePatch | null {
   if (!patch) return null;
   const normalizedPatch = patch.trim();
+
   if (normalizedPatch.length === 0) return null;
 
   try {
@@ -120,11 +131,13 @@ export function getRenderablePatch(
       normalizedPatch,
       buildPatchCacheKey(normalizedPatch, cacheScope),
     );
+
     const files = parsedPatches.flatMap((parsedPatch) =>
       options.compactPartialHunkOffsets
         ? parsedPatch.files.map(compactPartialHunkOffsets)
         : parsedPatch.files,
     );
+
     if (files.length > 0) {
       return { kind: "files", files };
     }
@@ -145,9 +158,11 @@ export function getRenderablePatch(
 
 export function resolveFileDiffPath(fileDiff: FileDiffMetadata): string {
   const raw = fileDiff.name ?? fileDiff.prevName ?? "";
+
   if (raw.startsWith("a/") || raw.startsWith("b/")) {
     return raw.slice(2);
   }
+
   return raw;
 }
 
@@ -157,14 +172,17 @@ export function resolveFileDiffPath(fileDiff: FileDiffMetadata): string {
  */
 export function resolveFileDiffPreviousPath(fileDiff: FileDiffMetadata): string {
   const raw = fileDiff.prevName ?? fileDiff.name ?? "";
+
   if (raw.startsWith("a/") || raw.startsWith("b/")) {
     return raw.slice(2);
   }
+
   return raw;
 }
 
 export function buildFileDiffRenderKey(fileDiff: FileDiffMetadata): string {
   const cacheKey = fileDiff.cacheKey;
+
   if (!cacheKey) return `${fileDiff.prevName ?? "none"}:${fileDiff.name}`;
 
   return cacheKey.endsWith(":hydrated") ? cacheKey.slice(0, -":hydrated".length) : cacheKey;

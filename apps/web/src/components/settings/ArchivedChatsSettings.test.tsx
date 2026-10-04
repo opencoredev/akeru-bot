@@ -1,9 +1,6 @@
-import {
-  EnvironmentId,
-  type OrchestrationBot,
-  type OrchestrationShellSnapshot,
-  ThreadId,
-} from "@akeru/contracts";
+import { makeShellSnapshot } from "../test-support/fixtures";
+import { Predicate } from "effect";
+import { EnvironmentId, type OrchestrationBot, ThreadId } from "@akeru/contracts";
 import { Children, isValidElement, type ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
@@ -25,7 +22,7 @@ const mocks = vi.hoisted(() => ({
 function textOf(node: ReactNode): string {
   return Children.toArray(node)
     .map((child) =>
-      typeof child === "string"
+      Predicate.isString(child)
         ? child
         : isValidElement<{ children?: ReactNode }>(child)
           ? textOf(child.props.children)
@@ -38,21 +35,28 @@ function textOf(node: ReactNode): string {
 vi.mock("@effect/atom-react", () => ({
   useAtomValue: (atom: string) => (atom === "bots" ? mocks.bots : []),
 }));
+
 vi.mock("../../state/bots", () => ({
   environmentBotsAtom: () => "bots",
   environmentGroupsAtom: () => "groups",
 }));
+
+vi.mock("./ArchivedBotsSettings", () => ({ ArchivedBotsSection: () => null }));
+
 vi.mock("../../lib/archivedThreadsState", () => ({
   useArchivedThreadSnapshots: () => mocks.archive,
 }));
+
 vi.mock("../../hooks/useChatActions", () => ({
   useChatActions: () => ({ unarchive: mocks.unarchive, delete: mocks.delete }),
 }));
+
 vi.mock("../../settingsDialogStore", () => ({
   useSettingsEnvironmentId: () => "env-1",
   useSettingsDialogStore: () => null,
   clearSettingsTarget: vi.fn(),
 }));
+
 vi.mock("./settingsLayout", () => ({
   SettingsPageContainer: ({ children }: { children: ReactNode }) => <div>{children}</div>,
   SettingsSection: ({ title, children }: { title: string; children: ReactNode }) => (
@@ -69,9 +73,11 @@ vi.mock("./settingsLayout", () => ({
     </div>
   ),
 }));
+
 vi.mock("../ui/button", () => ({
   Button: (props: ButtonProps & { children: ReactNode }) => {
     mocks.buttons.set(props["aria-label"] ?? textOf(props.children), props);
+
     return null;
   },
 }));
@@ -82,6 +88,7 @@ const environmentId = EnvironmentId.make("env-1");
 
 function render(): string {
   mocks.buttons.clear();
+
   return renderToStaticMarkup(<ArchivedChatsSettingsPanel />);
 }
 
@@ -110,7 +117,7 @@ describe("ArchivedChatsSettingsPanel", () => {
       snapshots: [
         {
           environmentId,
-          snapshot: {
+          snapshot: makeShellSnapshot({
             bots: [],
             groups: [],
             threads: [
@@ -122,7 +129,7 @@ describe("ArchivedChatsSettingsPanel", () => {
                 archivedAt: "2026-09-20T00:00:00.000Z",
               },
             ],
-          } as unknown as OrchestrationShellSnapshot,
+          }),
         },
       ],
       error: "Failed to load archived chats.",
@@ -133,12 +140,36 @@ describe("ArchivedChatsSettingsPanel", () => {
     expect(markup).toContain("Could not load archived chats");
   });
 
+  it("offers only delete for chats whose bot was deleted", () => {
+    mocks.archive.snapshots = [
+      {
+        environmentId,
+        snapshot: makeShellSnapshot({
+          bots: [],
+          groups: [],
+          threads: [
+            {
+              id: "thread-1",
+              title: "Trip plans",
+              createdAt: "2026-09-01T00:00:00.000Z",
+              updatedAt: "2026-09-20T00:00:00.000Z",
+              archivedAt: "2026-09-20T00:00:00.000Z",
+            },
+          ],
+        }),
+      },
+    ];
+    expect(render()).toContain("Other chats");
+    expect(mocks.buttons.has("Unarchive")).toBe(false);
+    expect(mocks.buttons.has("Delete Trip plans")).toBe(true);
+  });
+
   it("lists archived chats under their bot and restores or deletes them", async () => {
     mocks.bots = [{ id: "bot-mori", name: "Mori" } as OrchestrationBot];
     mocks.archive.snapshots = [
       {
         environmentId,
-        snapshot: {
+        snapshot: makeShellSnapshot({
           bots: [],
           groups: [],
           threads: [
@@ -151,7 +182,7 @@ describe("ArchivedChatsSettingsPanel", () => {
               archivedAt: "2026-09-20T00:00:00.000Z",
             },
           ],
-        } as unknown as OrchestrationShellSnapshot,
+        }),
       },
     ];
     const markup = render();

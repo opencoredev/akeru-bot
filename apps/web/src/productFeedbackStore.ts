@@ -3,11 +3,12 @@ import {
   ProductFeedbackToolDraft,
   type ProductFeedbackElement,
 } from "@akeru/contracts";
-import * as Exit from "effect/Exit";
+import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 import { create } from "zustand";
 
-const decodeProductFeedbackToolDraft = Schema.decodeUnknownExit(ProductFeedbackToolDraft, {
+/** Decodes untrusted tool arguments; None when they carry anything besides the bounded draft fields. */
+export const decodeProductFeedbackToolArgs = Schema.decodeUnknownOption(ProductFeedbackToolDraft, {
   onExcessProperty: "error",
 });
 
@@ -69,24 +70,31 @@ export function openProductFeedbackWithPrefill(feedback: string): void {
 }
 
 export function productFeedbackDraftFromToolArgs(
-  args: unknown,
+  decoded: Option.Option<ProductFeedbackToolDraft>,
 ): Partial<ProductFeedbackDraft> | null {
-  const decoded = decodeProductFeedbackToolDraft(args);
-  if (Exit.isFailure(decoded)) return null;
+  if (Option.isNone(decoded)) return null;
+
   return { feedback: decoded.value.feedback };
 }
 
 function appendBounded(current: string, proposed: string, maxLength: number): string {
   const left = current.trim();
   const right = proposed.trim();
+
   if (!left) return right.slice(0, maxLength);
+
   if (!right || left === right) return left.slice(0, maxLength);
+
   return `${left}\n\n${right}`.slice(0, maxLength);
 }
 
-export function openProductFeedbackFromToolArgs(args: unknown): boolean {
-  const proposed = productFeedbackDraftFromToolArgs(args);
+export function openProductFeedbackFromToolArgs(
+  decoded: Option.Option<ProductFeedbackToolDraft>,
+): boolean {
+  const proposed = productFeedbackDraftFromToolArgs(decoded);
+
   if (!proposed?.feedback) return false;
   openProductFeedbackWithPrefill(proposed.feedback);
+
   return true;
 }

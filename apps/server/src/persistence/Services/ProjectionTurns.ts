@@ -32,6 +32,7 @@ export const ProjectionTurnState = Schema.Literals([
   "completed",
   "error",
 ]);
+
 export type ProjectionTurnState = typeof ProjectionTurnState.Type;
 
 export const ProjectionTurn = Schema.Struct({
@@ -51,6 +52,7 @@ export const ProjectionTurn = Schema.Struct({
   checkpointStatus: Schema.NullOr(OrchestrationCheckpointStatus),
   checkpointFiles: Schema.Array(OrchestrationCheckpointFile),
 });
+
 export type ProjectionTurn = typeof ProjectionTurn.Type;
 
 export const ProjectionTurnById = Schema.Struct({
@@ -70,6 +72,7 @@ export const ProjectionTurnById = Schema.Struct({
   checkpointStatus: Schema.NullOr(OrchestrationCheckpointStatus),
   checkpointFiles: Schema.Array(OrchestrationCheckpointFile),
 });
+
 export type ProjectionTurnById = typeof ProjectionTurnById.Type;
 
 export const ProjectionPendingTurnStart = Schema.Struct({
@@ -80,27 +83,32 @@ export const ProjectionPendingTurnStart = Schema.Struct({
   sourceProposedPlanId: Schema.NullOr(OrchestrationProposedPlanId),
   requestedAt: IsoDateTime,
 });
+
 export type ProjectionPendingTurnStart = typeof ProjectionPendingTurnStart.Type;
 
 export const ListProjectionTurnsByThreadInput = Schema.Struct({
   threadId: ThreadId,
 });
+
 export type ListProjectionTurnsByThreadInput = typeof ListProjectionTurnsByThreadInput.Type;
 
 export const GetProjectionTurnByTurnIdInput = Schema.Struct({
   threadId: ThreadId,
   turnId: TurnId,
 });
+
 export type GetProjectionTurnByTurnIdInput = typeof GetProjectionTurnByTurnIdInput.Type;
 
 export const GetProjectionPendingTurnStartInput = Schema.Struct({
   threadId: ThreadId,
 });
+
 export type GetProjectionPendingTurnStartInput = typeof GetProjectionPendingTurnStartInput.Type;
 
 export const DeleteProjectionTurnsByThreadInput = Schema.Struct({
   threadId: ThreadId,
 });
+
 export type DeleteProjectionTurnsByThreadInput = typeof DeleteProjectionTurnsByThreadInput.Type;
 
 export const ClearCheckpointTurnConflictInput = Schema.Struct({
@@ -108,6 +116,7 @@ export const ClearCheckpointTurnConflictInput = Schema.Struct({
   turnId: TurnId,
   checkpointTurnCount: NonNegativeInt,
 });
+
 export type ClearCheckpointTurnConflictInput = typeof ClearCheckpointTurnConflictInput.Type;
 
 export interface ProjectionTurnRepositoryShape {
