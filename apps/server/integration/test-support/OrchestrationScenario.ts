@@ -70,7 +70,7 @@ export function mastraWireModelFor(provider: IntegrationProvider): string {
   // its concrete model before reaching Mastra.
   if (provider === CLAUDE_AGENT_PROVIDER) return "anthropic/claude-opus-4-6[1m]";
 
-  if (provider === GROK_PROVIDER) return "xai/grok-4.6";
+  if (provider === GROK_PROVIDER) return "xai/grok-4.7";
 
   return `opencode-go/${modelFor(provider, "b")}`;
 }
