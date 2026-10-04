@@ -245,3 +245,45 @@ it("keeps a provider-only usage failure when no account limit was recorded", asy
   service.recordProviderInstanceFailure("codex", "Budget exceeded.");
   expect(service.providerInstanceRequestHealth("codex")?.health).toBe("failed-first-request");
 });
+
+it("keeps a limit cooldown when an older request reports success later", async () => {
+  const { authPath } = fixture();
+  const service = await makeTestSubscriptionAuthService(authPath);
+  const first = await service.startLogin("openai-codex", { authMode: "api-key" });
+  await service.completeLogin(first.loginId, "first-key");
+
+  const second = await service.startLogin("openai-codex", {
+    authMode: "api-key",
+    addAccount: true,
+  });
+
+  await service.completeLogin(second.loginId, "second-key");
+  const startedAt = new Date(Date.now() - 60_000).toISOString();
+  await service.getAccessToken("openai-codex", undefined, "thread-a");
+  await service.getAccessToken("openai-codex", undefined, "thread-b");
+  service.recordRequestFailure(
+    "openai-codex",
+    "Rate limit reached. Try again in 1h.",
+    new Date().toISOString(),
+    "request",
+    "thread-b",
+  );
+  service.recordRequestSuccess("openai-codex", startedAt, "thread-a");
+  expect(await service.getAccessToken("openai-codex")).toBe("second-key");
+});
+
+it("keeps a provider limit when backups exist but no account recorded the limit", async () => {
+  const { authPath } = fixture();
+  const service = await makeTestSubscriptionAuthService(authPath);
+  const first = await service.startLogin("openai-codex", { authMode: "api-key" });
+  await service.completeLogin(first.loginId, "first-key");
+
+  const second = await service.startLogin("openai-codex", {
+    authMode: "api-key",
+    addAccount: true,
+  });
+
+  await service.completeLogin(second.loginId, "second-key");
+  service.recordProviderInstanceFailure("codex", "Rate limit reached.");
+  expect(service.providerInstanceRequestHealth("codex")?.health).toBe("failed-first-request");
+});

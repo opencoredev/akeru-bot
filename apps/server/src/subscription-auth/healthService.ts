@@ -164,14 +164,15 @@ export class SubscriptionHealthService {
     this.reloadHealth();
     const previous = this.health[key];
 
-    const {
-      nextRetryAt: _nextRetryAt,
-      lastCredentialProbeFailure: _probeFailure,
-      ...rest
-    } = previous ?? {};
+    const { nextRetryAt, lastCredentialProbeFailure: _probeFailure, ...rest } = previous ?? {};
+
+    // A success from a request that started before a newer limit failure keeps that cooldown.
+    const failedLater =
+      previous?.lastFailedRequest !== undefined && previous.lastFailedRequest.at > at;
 
     this.health[key] = {
       ...rest,
+      ...(failedLater && nextRetryAt ? { nextRetryAt } : {}),
       lastSuccessfulRequestAt: at,
       healthTest: { status: "passed", checkedAt: at },
     };

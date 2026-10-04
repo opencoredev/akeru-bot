@@ -208,12 +208,12 @@ export class SubscriptionAccountState {
       health?.lastFailedRequest &&
       (health.health === "failed" || health.health === "failed-first-request") &&
       isAccountLimitMessage(health.lastFailedRequest.message) &&
-      (this.linkedAccountIds(provider).length > 1 ||
-        this.linkedAccountIds(provider).some((id) => {
-          const failure = this.health[credentialKey(provider, accountScope(id))]?.lastFailedRequest;
+      // Only a limit an account actually recorded can be routed around.
+      this.linkedAccountIds(provider).some((id) => {
+        const failure = this.health[credentialKey(provider, accountScope(id))]?.lastFailedRequest;
 
-          return failure !== undefined && isAccountLimitMessage(failure.message);
-        })) &&
+        return failure !== undefined && isAccountLimitMessage(failure.message);
+      }) &&
       this.accountReady(this.activeAccountKey(provider), this.clock.currentTimeMillisUnsafe())
     ) {
       return undefined;
