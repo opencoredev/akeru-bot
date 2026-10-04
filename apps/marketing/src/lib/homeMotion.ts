@@ -115,11 +115,33 @@ function stopActivity(element: HTMLElement) {
   setActivityLabel(element, activityLabels(element)[0] ?? "");
 }
 
-// Both demos stay on their static first frame under reduced motion.
-export function initStepDemos() {
-  if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+// Without a stage the create demo shows the finished bot, which is its static frame.
+function settleCreate(element: HTMLElement) {
+  resetCreate(element);
+  delete element.dataset.stage;
+  const name = element.querySelector<HTMLElement>("[data-create-name]");
 
-  document.querySelectorAll<HTMLElement>("[data-create]").forEach(resetCreate);
-  whileInView("[data-create]", playCreate, resetCreate);
-  whileInView("[data-activity]", startActivity, stopActivity);
+  if (name) name.textContent = element.dataset.name ?? "";
+}
+
+// Both demos hold a static frame under reduced motion, including when the visitor
+// turns it on while the page is open. They resume the next time they scroll into view.
+export function initStepDemos() {
+  const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
+  const creates = document.querySelectorAll<HTMLElement>("[data-create]");
+  const activities = document.querySelectorAll<HTMLElement>("[data-activity]");
+
+  const unlessReduced = (play: (element: HTMLElement) => void) => (element: HTMLElement) => {
+    if (!reducedMotion.matches) play(element);
+  };
+
+  reducedMotion.addEventListener("change", () => {
+    if (!reducedMotion.matches) return;
+    creates.forEach(settleCreate);
+    activities.forEach(stopActivity);
+  });
+
+  if (!reducedMotion.matches) creates.forEach(resetCreate);
+  whileInView("[data-create]", unlessReduced(playCreate), unlessReduced(resetCreate));
+  whileInView("[data-activity]", unlessReduced(startActivity), stopActivity);
 }

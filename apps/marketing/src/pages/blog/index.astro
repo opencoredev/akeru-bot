@@ -1,7 +1,7 @@
 ---
 import BlogCover from "../../components/BlogCover.astro";
 import Layout from "../../layouts/Layout.astro";
-import { ARTICLES as articles } from "../../lib/articles";
+import { ARTICLES as articles, formatPublished } from "../../lib/articles";
 
 const [featured, ...rest] = articles;
 
@@ -57,7 +57,9 @@ const structuredData = [
               <span class="article-category">{featured.category}</span>
               <h2>{featured.title}</h2>
               <p>{featured.summary}</p>
-              <span class="article-meta">{featured.readMinutes} min read</span>
+              <span class="article-meta">
+                <time datetime={featured.published}>{formatPublished(featured)}</time> · {featured.readMinutes} min read
+              </span>
             </div>
           </a>
         )
@@ -70,7 +72,9 @@ const structuredData = [
               <span class="article-category">{article.category}</span>
               <h2>{article.title}</h2>
               <p>{article.summary}</p>
-              <span class="article-meta">{article.readMinutes} min read</span>
+              <span class="article-meta">
+                <time datetime={article.published}>{formatPublished(article)}</time> · {article.readMinutes} min read
+              </span>
             </div>
           </a>
         ))

@@ -8,6 +8,7 @@ import {
   requiresUnsignedInstall,
   resolveAssetDownload,
   selectReleaseAsset,
+  upgradeReleaseInfo,
   type Release,
 } from "./releases";
 
@@ -59,6 +60,11 @@ describe("release downloads", () => {
   it("does not advertise macOS Intel or unknown systems", () => {
     NodeAssert.equal(detectDownloadTarget("Macintosh; Intel Mac OS X")?.assetSuffix, "arm64.dmg");
     NodeAssert.equal(detectDownloadTarget("Mozilla/5.0 (Android 16)"), null);
+    NodeAssert.equal(detectDownloadTarget("Mozilla/5.0 (Linux; Android 16; Pixel 9)"), null);
+    NodeAssert.equal(
+      detectDownloadTarget("Mozilla/5.0 (iPhone; CPU iPhone OS 26_0 like Mac OS X)"),
+      null,
+    );
   });
 
   it("bakes direct asset URLs for the build-time version", () => {
@@ -324,4 +330,70 @@ describe("bounded shared release requests", () => {
     expect(link.href).toBe(BAKED_URL);
     expect(vi.getTimerCount()).toBe(0);
   });
+});
+
+describe("release info labels", () => {
+  it("moves version text and notes links forward with the downloads", () => {
+    const label = { textContent: "1.2.2" };
+    const notes = { href: "https://github.com/opencoredev/akeru-bot/releases/tag/v1.2.2" };
+    upgradeReleaseInfo(release, [label], [notes]);
+    expect(label.textContent).toBe("1.2.3");
+    expect(notes.href).toBe(release.html_url);
+  });
+
+  it("never moves release info back to an older version", () => {
+    const label = { textContent: "1.3.0" };
+    const notes = { href: "https://github.com/opencoredev/akeru-bot/releases/tag/v1.3.0" };
+    upgradeReleaseInfo(release, [label], [notes]);
+    expect(label.textContent).toBe("1.3.0");
+    expect(notes.href).toBe("https://github.com/opencoredev/akeru-bot/releases/tag/v1.3.0");
+  });
+});
+
+describe("build-time release version", () => {
+  const fetchMock = vi.fn<typeof fetch>();
+
+  const redirectTo = (location: string | null) =>
+    new Response(null, { status: 302, headers: location ? { location } : {} });
+
+  beforeEach(() => {
+    vi.resetModules();
+    fetchMock.mockReset();
+    vi.stubGlobal("fetch", fetchMock);
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("reads the version from the latest-release redirect once per build", async () => {
+    fetchMock.mockResolvedValue(
+      redirectTo("https://github.com/opencoredev/akeru-bot/releases/tag/v1.4.0"),
+    );
+    const { resolveBuildVersion } = await import("./releases");
+
+    expect(await resolveBuildVersion()).toBe("1.4.0");
+    expect(await resolveBuildVersion()).toBe("1.4.0");
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock.mock.calls[0]?.[1]?.redirect).toBe("manual");
+  });
+
+  for (const [name, response] of [
+    ["a missing location", () => Promise.resolve(redirectTo(null))],
+    [
+      "a pre-release tag",
+      () =>
+        Promise.resolve(
+          redirectTo("https://github.com/opencoredev/akeru-bot/releases/tag/v1.4.0-rc.1"),
+        ),
+    ],
+    ["a failed request", () => Promise.reject(new Error("offline"))],
+  ] as const) {
+    it(`falls back to the pinned version after ${name}`, async () => {
+      fetchMock.mockImplementation(response);
+      const { resolveBuildVersion } = await import("./releases");
+
+      expect(await resolveBuildVersion()).toBe(FALLBACK_VERSION);
+    });
+  }
 });

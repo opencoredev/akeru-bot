@@ -20,8 +20,14 @@ const platforms = [
   <div class="download-page">
   <h1 class="heading">Download Akeru Bot</h1>
   <p class="subheading">
-    <span>Latest (v{version})</span>
-    <a class="changelog-link" href={`${RELEASES_URL}/tag/v${version}`} target="_blank" rel="noopener noreferrer">View changelog<span aria-hidden="true"> &#8599;</span></a>
+    <span>Latest (v<span data-release-version>{version}</span>)</span>
+    <a
+      class="changelog-link"
+      href={`${RELEASES_URL}/tag/v${version}`}
+      target="_blank"
+      rel="noopener noreferrer"
+      data-release-notes
+    >View changelog<span aria-hidden="true"> &#8599;</span></a>
   </p>
 
   <div class="platforms" id="platforms">

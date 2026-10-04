@@ -39,8 +39,14 @@ const platforms = [
         ))
       }
     </div>
-    <a class="download-notes" href={`${RELEASES_URL}/tag/v${version}`} target="_blank" rel="noopener noreferrer">
-      Version {version} release notes
+    <a
+      class="download-notes"
+      href={`${RELEASES_URL}/tag/v${version}`}
+      target="_blank"
+      rel="noopener noreferrer"
+      data-release-notes
+    >
+      Version <span data-release-version>{version}</span> release notes
     </a>
   </div>
 </section>

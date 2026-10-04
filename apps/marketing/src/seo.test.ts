@@ -58,8 +58,11 @@ describe("marketing search metadata", () => {
     const home = homeSource();
     const download = sourceFile("pages/download.astro");
 
-    // Downloads link straight to a release asset, never to the releases list.
-    expect(home).toContain("<span data-download-label>Download for macOS</span>");
+    // The hero opens /download until the client script picks a direct release asset,
+    // and never falls back to the GitHub releases list.
+    expect(home).toContain(
+      '<a class="btn-primary" href="/download" data-download-auto {...downloadUrls}>',
+    );
     expect(home).not.toContain("All downloads");
     expect(home).toContain("Your environment owns the chats, bot profiles, and memory.");
     expect(home).not.toContain("Everything stays on your machine");

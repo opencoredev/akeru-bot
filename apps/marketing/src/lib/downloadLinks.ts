@@ -3,6 +3,7 @@ import {
   fetchLatestRelease,
   requiresUnsignedInstall,
   resolveAssetDownload,
+  upgradeReleaseInfo,
 } from "./releases";
 
 export const UNSIGNED_INSTALL_PROMPT =
@@ -27,7 +28,8 @@ export function guardUnsignedDownload(
 // Wires every download link on the page. Links ship with a direct asset URL baked
 // in at build time, so they work before this runs.
 //
-// `data-download-auto` links pick the visitor's platform. Macs always get the arm64
+// `data-download-auto` links pick the visitor's platform. They ship pointing at
+// /download, so a browser without JS or an unknown platform still gets a choice. Macs always get the arm64
 // build: browsers cannot reliably tell Apple Silicon from Intel, and the release
 // workflow ships no Intel build. Do NOT add arch detection here.
 // `data-asset` links name a fixed asset and are upgraded if GitHub has a newer release.
@@ -59,4 +61,14 @@ export function initDownloadLinks() {
     void resolveAssetDownload(link, suffix, release);
     guardUnsignedDownload(link, suffix);
   });
+
+  void release.then(
+    (latest) =>
+      upgradeReleaseInfo(
+        latest,
+        document.querySelectorAll("[data-release-version]"),
+        document.querySelectorAll<HTMLAnchorElement>("a[data-release-notes]"),
+      ),
+    () => undefined,
+  );
 }

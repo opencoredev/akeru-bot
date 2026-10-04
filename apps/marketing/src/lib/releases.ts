@@ -90,6 +90,10 @@ async function lookupBuildVersion(): Promise<string> {
 }
 
 export function detectDownloadTarget(userAgent: string): DownloadTarget | null {
+  // Phones and tablets have no desktop build. Their user agents also claim Linux or
+  // Mac OS X, so check them first.
+  if (/Android|iPhone|iPad|iPod/i.test(userAgent)) return null;
+
   if (/Windows/i.test(userAgent)) return TARGETS.win;
 
   if (/Macintosh|Mac OS X/i.test(userAgent)) return TARGETS.mac;
@@ -135,6 +139,30 @@ export async function resolveAssetDownload(
     return asset;
   } catch {
     return null;
+  }
+}
+
+type ReleaseVersionLabel = { textContent: string | null };
+
+type ReleaseNotesLink = { href: string };
+
+// Version text and release-notes links are baked at build time too. When the links
+// above move to a newer release, these follow so the page names what it downloads.
+export function upgradeReleaseInfo(
+  latest: Release,
+  labels: Iterable<ReleaseVersionLabel>,
+  notesLinks: Iterable<ReleaseNotesLink>,
+) {
+  for (const label of labels) {
+    if (isNewerVersion(latest.tag_name, label.textContent ?? undefined)) {
+      label.textContent = latest.tag_name.slice(1);
+    }
+  }
+
+  for (const link of notesLinks) {
+    if (isNewerVersion(latest.tag_name, /\/tag\/(v[\d.]+)$/.exec(link.href)?.[1])) {
+      link.href = latest.html_url;
+    }
   }
 }
 

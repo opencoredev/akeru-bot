@@ -4,7 +4,7 @@ import Icon from "./Icon.astro";
 import { DOCS_URL, GITHUB_REPOSITORY_URL } from "../lib/site";
 import { DOWNLOAD_TARGETS, releaseAssetUrl, resolveBuildVersion } from "../lib/releases";
 
-// The nav CTA downloads the macOS build by default and swaps to the visitor's platform.
+// The nav CTA opens /download until the client script knows the visitor's platform.
 const buildVersion = await resolveBuildVersion();
 
 const downloadUrls = Object.fromEntries(
@@ -29,7 +29,7 @@ const downloadUrls = Object.fromEntries(
             target="_blank"
             rel="noopener noreferrer">GitHub</a
           >
-          <a class="nav-cta" href={downloadUrls["data-url-mac"]} data-download-auto="short" {...downloadUrls}>
+          <a class="nav-cta" href="/download" data-download-auto="short" {...downloadUrls}>
             Download
           </a>
           <details class="nav-menu">

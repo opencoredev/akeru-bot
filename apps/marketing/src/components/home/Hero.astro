@@ -4,8 +4,9 @@ import { HERO_BOTS } from "../../lib/heroBots";
 import { DOWNLOAD_TARGETS, releaseAssetUrl, resolveBuildVersion } from "../../lib/releases";
 import { docsUrl } from "../../lib/site";
 
-// Download links are baked to direct release assets at build time, so they never
-// depend on the GitHub API. The shared client script swaps to the visitor's platform.
+// Direct release assets are baked at build time, so they never depend on the GitHub
+// API. The shared client script picks the visitor's platform; until then the button
+// opens /download.
 const version = await resolveBuildVersion();
 
 const downloadUrls = Object.fromEntries(
@@ -30,8 +31,8 @@ const downloadUrls = Object.fromEntries(
       or connect Claude, Codex, Kimi, or OpenCode.
     </p>
     <div class="hero-actions">
-      <a class="btn-primary" href={downloadUrls["data-url-mac"]} data-os="mac" data-download-auto {...downloadUrls}>
-        <span data-download-label>Download for macOS</span>
+      <a class="btn-primary" href="/download" data-download-auto {...downloadUrls}>
+        <span data-download-label>Download</span>
       </a>
       <a class="btn-ghost" href={docsUrl("install")} target="_blank" rel="noopener noreferrer">
         <span>Read the docs</span>

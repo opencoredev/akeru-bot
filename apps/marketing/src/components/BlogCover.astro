@@ -13,6 +13,9 @@ const { article, size = "card" } = Astro.props;
 
 const { bot, cover } = article;
 
+// SVG ids are document-global, so each cover gets ids of its own.
+const idPrefix = `cover${article.href.replace(/[^a-z0-9]+/gi, "-")}-${size}`;
+
 const W = 640;
 
 const H = 360;
@@ -84,16 +87,16 @@ const milestones = points.length ? [points[2]!, points[7]!, points[12]!] : [];
 <div class:list={["blog-cover", `blog-cover--${size}`]} style={`--cover-color:${bot.color}`} aria-hidden="true">
   <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="xMidYMid slice">
     <defs>
-      <pattern id={`dots-${cover}`} width="16" height="16" patternUnits="userSpaceOnUse">
+      <pattern id={`${idPrefix}-dots`} width="16" height="16" patternUnits="userSpaceOnUse">
         <circle cx="1" cy="1" r="1" fill="rgb(255 255 255 / 0.06)"></circle>
       </pattern>
-      <radialGradient id={`glow-${cover}`} cx="50%" cy="100%" r="80%">
+      <radialGradient id={`${idPrefix}-glow`} cx="50%" cy="100%" r="80%">
         <stop offset="0%" stop-color={bot.color} stop-opacity="0.22"></stop>
         <stop offset="100%" stop-color={bot.color} stop-opacity="0"></stop>
       </radialGradient>
     </defs>
-    <rect width={W} height={H} fill={`url(#dots-${cover})`}></rect>
-    <rect width={W} height={H} fill={`url(#glow-${cover})`}></rect>
+    <rect width={W} height={H} fill={`url(#${idPrefix}-dots)`}></rect>
+    <rect width={W} height={H} fill={`url(#${idPrefix}-glow)`}></rect>
 
     {
       gridCells.map((cell) => (
