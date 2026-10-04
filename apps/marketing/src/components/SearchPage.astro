@@ -1,5 +1,9 @@
 ---
+import { ArrowLeft01Icon } from "@hugeicons/core-free-icons";
+import Icon from "./Icon.astro";
+import BlogCover from "./BlogCover.astro";
 import Layout from "../layouts/Layout.astro";
+import { articleFor } from "../lib/articles";
 
 interface Props {
   readonly title: string;
@@ -26,6 +30,7 @@ const {
 } = Astro.props;
 const siteOrigin = Astro.site ?? new URL(Astro.url.origin);
 const canonicalUrl = new URL(path, siteOrigin).href;
+const coverArticle = articleFor(path);
 const displayDate = new Intl.DateTimeFormat("en-US", {
   month: "short",
   day: "numeric",
@@ -98,9 +103,7 @@ const structuredData = [
   <article class="editorial-article">
     <header class="article-header">
       <a class="back-link" href="/blog" aria-label="Back to blog">
-        <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
-          <path d="M13 8H3M7 4 3 8l4 4" fill="none" stroke="currentColor" stroke-linecap="square" />
-        </svg>
+        <Icon icon={ArrowLeft01Icon} size={16} />
         <span>Blog</span>
       </a>
       <div class="article-meta">
@@ -110,6 +113,8 @@ const structuredData = [
       </div>
       <h1>{heading}</h1>
     </header>
+
+    {coverArticle && <div class="article-cover"><BlogCover article={coverArticle} size="feature" /></div>}
 
     <div class="article-layout">
       <div class="article-copy">
@@ -154,7 +159,7 @@ const structuredData = [
 
 <style>
   .editorial-article {
-    --color-editorial-muted-foreground: #b4b4b4;
+    --color-editorial-muted-foreground: #b5b5b5;
     width: min(1152px, calc(100% - 80px));
     margin: 0 auto;
     padding: 40px 0 140px;
@@ -168,6 +173,15 @@ const structuredData = [
     margin: 0 auto;
     padding: 96px 0 56px;
     text-align: center;
+  }
+
+  .article-cover {
+    max-width: 960px;
+    margin: 0 auto 64px;
+  }
+
+  .article-cover :global(.blog-cover) {
+    aspect-ratio: 12 / 5;
   }
 
   .back-link {

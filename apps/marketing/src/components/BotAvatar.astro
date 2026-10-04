@@ -1,0 +1,63 @@
+---
+// A blob avatar as static markup at its rest pose. botAvatarRuntime.ts moves it
+// on the client. The palette colors are all mid-luminance, so eyes are always
+// cut out of the body and the surface shows through.
+import { BODY, restEyeTransform, type BotBlobShape } from "../lib/botAvatarShapes";
+
+interface Props {
+  name: string;
+  shape: BotBlobShape;
+  color: string;
+  size?: number;
+  working?: boolean;
+  class?: string;
+}
+
+const { name, shape, color, size = 32, working = false, class: className } = Astro.props;
+const maskId = `bot-eyes-${name.toLowerCase().replace(/[^a-z0-9]/g, "")}-${Math.random().toString(36).slice(2, 8)}`;
+---
+
+<span
+  class:list={["bot-avatar", className]}
+  aria-hidden="true"
+  data-avatar-shape={shape}
+  data-name={name}
+  data-bot-state={working ? "working" : "idle"}
+  style={`--avatar-size:${size}px`}
+>
+  <span class="bot-body">
+    <svg viewBox="0 0 100 100" overflow="visible">
+      <mask id={maskId} maskUnits="userSpaceOnUse" x="-10" y="-10" width="120" height="120">
+        <rect x="-10" y="-10" width="120" height="120" fill="#fff"></rect>
+        <g class="bot-eyes" fill="#000">
+          <rect x="-4.2" y="-8.8" width="8.4" height="17.6" rx="4.2" transform={restEyeTransform(shape, 0)}></rect>
+          <rect x="-4.2" y="-8.8" width="8.4" height="17.6" rx="4.2" transform={restEyeTransform(shape, 1)}></rect>
+        </g>
+      </mask>
+      <path d={BODY[shape]} fill={color} mask={`url(#${maskId})`}></path>
+    </svg>
+  </span>
+</span>
+
+<style is:global>
+  .bot-avatar {
+    position: relative;
+    display: inline-block;
+    flex-shrink: 0;
+    width: var(--avatar-size);
+    height: var(--avatar-size);
+    user-select: none;
+  }
+
+  .bot-avatar .bot-body,
+  .bot-avatar svg {
+    display: block;
+    width: 100%;
+    height: 100%;
+    overflow: visible;
+  }
+
+  .bot-avatar .bot-body {
+    transform-origin: 50% 50%;
+  }
+</style>

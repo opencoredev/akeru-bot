@@ -1,0 +1,44 @@
+---
+// Renders a Hugeicons outline, the icon set the app uses, as an inline SVG.
+// Pass an icon from @hugeicons/core-free-icons, e.g. <Icon icon={Download04Icon} />.
+type IconData = ReadonlyArray<readonly [string, Readonly<Record<string, string | number>>]>;
+
+interface Props {
+  icon: IconData;
+  size?: number;
+  strokeWidth?: number;
+  class?: string;
+  [attribute: `data-${string}`]: string | undefined;
+}
+
+const { icon, size = 20, strokeWidth = 1.8, class: className, ...attributes } = Astro.props;
+
+const kebab = (name: string) => name.replace(/[A-Z]/g, (letter) => `-${letter.toLowerCase()}`);
+const escape = (value: string) => value.replace(/&/g, "&amp;").replace(/"/g, "&quot;");
+
+const body = icon
+  .map(([tag, attrs]) => {
+    const rendered = Object.entries(attrs)
+      .filter(([name]) => name !== "key")
+      .map(([name, value]) => {
+        const attr = kebab(name);
+        const text = attr === "stroke-width" ? String(strokeWidth) : String(value);
+        return `${attr}="${escape(text)}"`;
+      })
+      .join(" ");
+    return `<${tag} ${rendered}/>`;
+  })
+  .join("");
+---
+
+<svg
+  class={className}
+  width={size}
+  height={size}
+  viewBox="0 0 24 24"
+  fill="none"
+  xmlns="http://www.w3.org/2000/svg"
+  aria-hidden="true"
+  {...attributes}
+  set:html={body}
+/>

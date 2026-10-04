@@ -1,31 +1,31 @@
 ---
+import BotAvatar from "../components/BotAvatar.astro";
 import Layout from "../layouts/Layout.astro";
+import { HERO_BOTS } from "../lib/heroBots";
+import { GithubIcon, GlobeIcon } from "@hugeicons/core-free-icons";
+import Icon from "../components/Icon.astro";
+import { DOWNLOAD_TARGETS, RELEASES_URL, releaseAssetUrl, resolveBuildVersion } from "../lib/releases";
 import { docsUrl } from "../lib/site";
-import { RELEASES_URL } from "../lib/releases";
 
-// Stroke icons are Hugeicons outlines drawn on a 24x24 grid.
+// Download links are baked to direct release assets at build time, so they never
+// depend on the GitHub API. The shared client script swaps to the visitor's platform.
+const version = await resolveBuildVersion();
+const downloadUrls = Object.fromEntries(
+  DOWNLOAD_TARGETS.map((target) => [`data-url-${target.os}`, releaseAssetUrl(version, target.assetSuffix)]),
+);
+
 const bots = [
   {
     title: "One tool list per bot",
     body: "Pick the plugins and MCP servers each bot can reach.",
-    icon: `<path d="M19.5 4.5L21.5 2.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square" stroke-linejoin="round" />
-      <path d="M2.5 21.5L4.5 19.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square" stroke-linejoin="round" />
-      <path d="M12.761 17L7 11.24L4.121 14.12L3.761 18.08L5.921 20.24L9.881 19.88L12.761 17Z" fill="none" stroke="currentColor" stroke-width="1.5" />
-      <path d="M11.24 7L17 12.76L19.88 9.88L20.24 5.92L18.08 3.76L14.12 4.12L11.24 7Z" fill="none" stroke="currentColor" stroke-width="1.5" />
-      <path d="M8.5 12.5L10.5 10.5M11.5 15.5L13.5 13.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square" stroke-linejoin="round" />`,
   },
   {
     title: "Memory that outlives the conversation",
     body: "A bot carries what it learned into the next conversation.",
-    icon: `<ellipse cx="12" cy="5" rx="8" ry="3" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" />
-      <path d="M20 12C20 13.657 16.418 15 12 15C7.582 15 4 13.657 4 12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" />
-      <path d="M20 5V19C20 20.657 16.418 22 12 22C7.582 22 4 20.657 4 19V5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" />`,
   },
   {
     title: "Its own instructions",
     body: "Write a profile for each bot. The bot follows it in every chat.",
-    icon: `<path d="M15.5 7H8.5M12.499 11H8.499" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square" />
-      <path d="M20 22H6C4.895 22 4 21.105 4 20M4 20C4 18.895 4.895 18 6 18H20V2H6C4.895 2 4 2.895 4 4V20Z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square" />`,
   },
 ];
 
@@ -47,6 +47,32 @@ const steps = [
   },
 ];
 
+const features = [
+  {
+    title: "Helpers for big requests",
+    body: "A bot can hand parts of a request to temporary helpers, up to three at once, and pull their results back together.",
+  },
+  {
+    title: "Wherever you already talk",
+    body: "Reach your bots from Slack, Discord, Telegram, iMessage, or WhatsApp.",
+  },
+  {
+    title: "Voice calls",
+    body: "Call a bot from the web or desktop app when typing is too slow.",
+  },
+  {
+    title: "Sandboxes you pick",
+    body: "Run work in a local workspace or in E2B, Daytona, Vercel Sandbox, Upstash Box, Tenki, Railway, or Ascii Box.",
+  },
+  {
+    title: "Open it from any device",
+    body: "Use a phone, tablet, browser, or second computer. Nothing proxies through a hosted Akeru service.",
+  },
+  {
+    title: "Memory you can read",
+    body: "Inspect, edit, or clear the notes a bot keeps about you and your work.",
+  },
+];
 
 const demos = [
   {
@@ -72,26 +98,66 @@ const demos = [
   },
 ];
 
-// Brand marks are filled silhouettes so they hold up at 17px.
-const APPLE_MARK = `<path d="M12 5.75C12 3.75 13.5 1.75 15.5 1.75C15.5 3.75 14 5.75 12 5.75Z" fill="currentColor" />
-  <path d="M12.5 8.09C11.985 8.09 11.587 7.926 11.141 7.744C10.578 7.512 9.939 7.25 8.893 7.25C7.022 7.25 4 8.749 4 12.749C4 17.402 7.105 22.25 9.105 22.25C9.774 22.25 10.377 21.987 10.954 21.736C11.482 21.506 11.987 21.286 12.5 21.286C13.013 21.286 13.518 21.506 14.046 21.736C14.623 21.987 15.226 22.25 15.895 22.25C17.288 22.25 18.957 19.899 20 16.901C18.379 16.22 17.338 14.618 17.338 12.75C17.338 11.121 18.204 10.04 19.5 9.25C18.5 7.75 17.013 7.25 15.945 7.25C14.899 7.25 14.26 7.512 13.697 7.744C13.251 7.926 13.015 8.09 12.5 8.09Z" fill="currentColor" />`;
-
-const WINDOWS_MARK = `<path d="M3 3.9L11.1 2.75V11.2H3V3.9Z" fill="currentColor" />
-  <path d="M12.4 2.56L21 1.35V11.2H12.4V2.56Z" fill="currentColor" />
-  <path d="M3 12.5H11.1V20.95L3 19.8V12.5Z" fill="currentColor" />
-  <path d="M12.4 12.5H21V22.35L12.4 21.14V12.5Z" fill="currentColor" />`;
-
-const LINUX_MARK = `<path fill-rule="evenodd" clip-rule="evenodd" d="M9.8 18.2C8.4 19.4 5.6 20.2 4.8 21.0C4.1 21.7 5.0 22.3 6.5 22.3C8.4 22.3 10.0 21.5 10.6 20.4L9.8 18.2ZM14.2 18.2C15.6 19.4 18.4 20.2 19.2 21.0C19.9 21.7 19.0 22.3 17.5 22.3C15.6 22.3 14.0 21.5 13.4 20.4L14.2 18.2ZM6.2 10.6C4.8 12.0 3.9 14.5 4.2 16.5C4.4 17.9 5.5 18.2 6.0 17.1C6.5 16.0 6.4 13.4 6.9 12.0L6.2 10.6ZM17.8 10.6C19.2 12.0 20.1 14.5 19.8 16.5C19.6 17.9 18.5 18.2 18.0 17.1C17.5 16.0 17.6 13.4 17.1 12.0L17.8 10.6ZM12 5.4C15.5 5.4 18.4 10.1 18.4 15.0C18.4 19.0 15.5 21.3 12 21.3C8.5 21.3 5.6 19.0 5.6 15.0C5.6 10.1 8.5 5.4 12 5.4ZM12 1.5C14.2 1.5 15.9 3.4 15.9 5.9C15.9 8.4 14.2 10.1 12 10.1C9.8 10.1 8.1 8.4 8.1 5.9C8.1 3.4 9.8 1.5 12 1.5ZM10.5 3.9C9.9 3.9 9.5 4.6 9.5 5.4C9.5 6.2 9.9 6.9 10.5 6.9C11.1 6.9 11.5 6.2 11.5 5.4C11.5 4.6 11.1 3.9 10.5 3.9ZM13.5 3.9C12.9 3.9 12.5 4.6 12.5 5.4C12.5 6.2 12.9 6.9 13.5 6.9C14.1 6.9 14.5 6.2 14.5 5.4C14.5 4.6 14.1 3.9 13.5 3.9ZM12 6.6C10.9 6.6 10.0 7.2 10.0 8.0C10.0 8.8 10.9 9.4 12 9.4C13.1 9.4 14.0 8.8 14.0 8.0C14.0 7.2 13.1 6.6 12 6.6Z" fill="currentColor" />`;
-
-// `asset` is the release-asset suffix the client script resolves to a real URL.
+// `asset` is the release-asset suffix; the href is baked from the build-time version.
 const platforms = [
-  { os: "mac", name: "macOS", detail: "Apple silicon · DMG", mark: APPLE_MARK, asset: "arm64.dmg" },
-  { os: "win", name: "Windows", detail: "x64 · Installer", mark: WINDOWS_MARK, asset: "x64.exe" },
-  { os: "linux", name: "Linux", detail: "x64 · AppImage", mark: LINUX_MARK, asset: "x64.AppImage", unsigned: true },
+  { os: "mac", name: "macOS", detail: "Apple silicon · DMG", asset: "arm64.dmg" },
+  { os: "win", name: "Windows", detail: "x64 · Installer", asset: "x64.exe" },
+  { os: "linux", name: "Linux", detail: "x64 · AppImage", asset: "x64.AppImage" },
+].map((platform) => ({ ...platform, href: releaseAssetUrl(version, platform.asset) }));
+
+const [scout, relay, mira] = HERO_BOTS as [
+  (typeof HERO_BOTS)[number],
+  (typeof HERO_BOTS)[number],
+  (typeof HERO_BOTS)[number],
 ];
 
-const DOWNLOAD_GLYPH = `<path d="M7 11.5L12 17.5L17 11.5H14L14 3H10L10 11.5H7Z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square" />
-  <path d="M5 21H19" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square" />`;
+// BotActivityStatus from the app: the pixel comet circles this diamond while the
+// label steps through the plain-language updates a working bot reports.
+const GLYPH_CELLS = [
+  [2, 0],
+  [3, 1],
+  [4, 2],
+  [3, 3],
+  [2, 4],
+  [1, 3],
+  [0, 2],
+  [1, 1],
+] as const;
+const ACTIVITY_LABELS = [`${mira.name} is working`, "Reading a source", "Running checks", "Editing files"];
+
+// The onboarding celebration, with the same burst math as OnboardingCelebration.tsx.
+// A fixed seed keeps the build deterministic.
+const CONFETTI_COLORS = [relay.color, relay.color, scout.color, "#FFA826", mira.color];
+let seed = 7;
+const random = () => {
+  seed = (seed * 16807) % 2147483647;
+  return (seed - 1) / 2147483646;
+};
+const confetti = Array.from({ length: 16 }, (_, i) => {
+  const r = random();
+  const spread = (i / 15) * 2 - 1 + (random() - 0.5) * 0.2;
+  return {
+    x: Math.round(spread * 132),
+    y: Math.round(-46 - r * 104),
+    rotate: i % 2 === 0 ? 110 : -110,
+    scale: (0.65 + random() * 0.5).toFixed(2),
+    delay: Math.round(r * 0.12 * 0.66 * 1000),
+    square: r > 0.45,
+    color: CONFETTI_COLORS[i % CONFETTI_COLORS.length],
+  };
+});
+
+const GMAIL_LOGO = `<svg viewBox="52 42 88 66"><path fill="#4285f4" d="M58 108h14V74L52 59v43c0 3.32 2.69 6 6 6"/><path fill="#34a853" d="M120 108h14c3.32 0 6-2.69 6-6V59l-20 15"/><path fill="#fbbc04" d="M120 48v26l20-15v-8c0-7.42-8.47-11.65-14.4-7.2"/><path fill="#ea4335" d="M72 74V48l24 18 24-18v26L96 92"/><path fill="#c5221f" d="M52 51v8l20 15V48l-5.6-4.2c-5.94-4.45-14.4-.22-14.4 7.2"/></svg>`;
+
+const tools = [
+  { name: "Browser", detail: "Cloud browser", on: true, icon: GlobeIcon },
+  { name: "GitHub", detail: "MCP server", on: true, icon: GithubIcon },
+  { name: "Gmail", detail: "Composio", on: false, logo: GMAIL_LOGO },
+];
+
+const memories = ["Prefers aisle seats", "Sam leads design", "Ships on Thursdays", "Budget is €600"];
+
+const providers = ["Claude", "Codex", "Grok", "Kimi For Coding", "OpenCode"];
 ---
 
 <Layout
@@ -102,6 +168,15 @@ const DOWNLOAD_GLYPH = `<path d="M7 11.5L12 17.5L17 11.5H14L14 3H10L10 11.5H7Z" 
   <!-- ── Hero ─────────────────────────────────────────────────── -->
   <section class="hero">
     <div class="hero-copy">
+      <div class="hero-roster" aria-hidden="true">
+        {
+          HERO_BOTS.map((bot) => (
+            <span class="hero-roster-bot" data-bot-hover>
+              <BotAvatar name={bot.name} shape={bot.shape} color={bot.color} size={34} />
+            </span>
+          ))
+        }
+      </div>
       <h1 class="hero-title">An open-source Grok Bot alternative</h1>
       <p class="hero-sub">
         Akeru Bot gives each bot its own tools, instructions, and memory while keeping the
@@ -109,48 +184,101 @@ const DOWNLOAD_GLYPH = `<path d="M7 11.5L12 17.5L17 11.5H14L14 3H10L10 11.5H7Z" 
         or connect Claude, Codex, Kimi, or OpenCode.
       </p>
       <div class="hero-actions">
-        <a id="download-btn" class="btn-primary" href={RELEASES_URL}>
-          <svg class="os-mark" data-os="mac" width="17" height="17" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" set:html={APPLE_MARK} />
-          <svg class="os-mark" data-os="win" width="17" height="17" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" set:html={WINDOWS_MARK} />
-          <svg class="os-mark" data-os="linux" width="17" height="17" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" set:html={LINUX_MARK} />
-          <span id="download-label">All downloads</span>
+        <a class="btn-primary" href={downloadUrls["data-url-mac"]} data-os="mac" data-download-auto {...downloadUrls}>
+          <span data-download-label>Download for macOS</span>
         </a>
         <a class="btn-ghost" href={docsUrl("install")} target="_blank" rel="noopener noreferrer">
-          <svg width="17" height="17" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-            <path d="M15.5 7H8.5M12.499 11H8.499" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="square"></path>
-            <path d="M20 22H6C4.895 22 4 21.105 4 20M4 20C4 18.895 4.895 18 6 18H20V2H6C4.895 2 4 2.895 4 4V20Z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="square"></path>
-          </svg>
           <span>Read the docs</span>
         </a>
       </div>
       <p class="hero-note">Free and MIT licensed. No Akeru account required.</p>
     </div>
-    <div class="hero-shot">
+
+    <figure class="hero-shot">
       <img
         src="/app-screenshot.webp"
-        width="1440"
-        height="900"
-        alt="The Akeru Bot desktop app with three bots working in one shared workspace"
-        loading="eager"
+        srcset="/app-screenshot-1440.webp 1440w, /app-screenshot.webp 2880w"
+        sizes="(max-width: 1320px) calc(100vw - 40px), 1280px"
+        width="2880"
+        height="1800"
+        alt="Akeru Bot with five bots in the sidebar. Scout, a travel bot, answers which Lisbon flight has wifi."
+        fetchpriority="high"
         decoding="async"
       />
-    </div>
+    </figure>
   </section>
 
   <!-- ── Bots ─────────────────────────────────────────────────── -->
   <section id="bots" class="bots">
     <h2 class="section-title">Every bot has its own setup</h2>
-    <div class="triad">
+    <div class="setup-grid">
       {
-        bots.map((bot) => (
-          <div class="triad-cell">
-            <svg width="22" height="22" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" set:html={bot.icon} />
-            <h3>{bot.title}</h3>
-            <p>{bot.body}</p>
-          </div>
+        bots.map((bot, index) => (
+          <article class="setup-card">
+            <div class="setup-visual">
+              {index === 0 && (
+                <ul class="tool-list">
+                  {tools.map((tool) => (
+                    <li class="tool-row">
+                      {tool.icon ? (
+                        <span class="tool-logo" aria-hidden="true"><Icon icon={tool.icon} size={18} /></span>
+                      ) : (
+                        <span class="tool-logo" aria-hidden="true" set:html={tool.logo} />
+                      )}
+                      <span class="tool-text">
+                        <span class="tool-name">{tool.name}</span>
+                        <span class="tool-detail">{tool.detail}</span>
+                      </span>
+                      <button type="button" class="toggle" role="switch" aria-checked={tool.on ? "true" : "false"} aria-label={`${tool.name} for ${scout.name}`} data-toggle>
+                        <span class="toggle-thumb" />
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {index === 1 && (
+                <div class="memory">
+                  <div class="memory-head">
+                    <BotAvatar name={scout.name} shape={scout.shape} color={scout.color} size={22} />
+                    <span>{scout.name} remembers</span>
+                  </div>
+                  <ul class="memory-notes">
+                    {memories.map((note) => <li>{note}</li>)}
+                  </ul>
+                </div>
+              )}
+              {index === 2 && (
+                <div class="profile">
+                  <div class="profile-head">
+                    <BotAvatar name={relay.name} shape={relay.shape} color={relay.color} size={22} />
+                    <span>{relay.name}'s instructions</span>
+                  </div>
+                  <p class="profile-body">
+                    You maintain the checkout service. Run the tests before you call something fixed,
+                    and keep pull requests small.
+                  </p>
+                </div>
+              )}
+            </div>
+            <div class="setup-copy">
+              <h3>{bot.title}</h3>
+              <p>{bot.body}</p>
+            </div>
+          </article>
         ))
       }
     </div>
+
+    <ul class="features">
+      {
+        features.map((feature) => (
+          <li class="feature">
+            <h3>{feature.title}</h3>
+            <p>{feature.body}</p>
+          </li>
+        ))
+      }
+    </ul>
   </section>
 
   <!-- ── How it works ─────────────────────────────────────────── -->
@@ -165,10 +293,58 @@ const DOWNLOAD_GLYPH = `<path d="M7 11.5L12 17.5L17 11.5H14L14 3H10L10 11.5H7Z" 
       See how Akeru works with your Grok subscription, or follow the{" "}
       <a href="/guides/self-hosted-grok-bot">self-hosted Grok bot setup guide</a>.
     </p>
-    <ol class="steps">
+    <ol class="steps" data-steps>
       {
-        steps.map((step) => (
+        steps.map((step, index) => (
           <li class="step">
+            <div class="step-visual">
+              {index === 0 && (
+                <ul class="provider-chips" aria-label="Supported providers">
+                  {providers.map((provider) => <li>{provider}</li>)}
+                </ul>
+              )}
+              {index === 1 && (
+                <div class="create" data-create data-name={relay.name}>
+                  <div class="celebration">
+                    <span class="confetti" aria-hidden="true">
+                      {confetti.map((piece) => (
+                        <span
+                          class:list={["confetti-piece", { "is-square": piece.square }]}
+                          style={`--x:${piece.x}px;--y:${piece.y}px;--rotate:${piece.rotate}deg;--scale:${piece.scale};--delay:${piece.delay}ms;background:${piece.color}`}
+                        />
+                      ))}
+                    </span>
+                    <span class="create-slot" aria-hidden="true" />
+                    <BotAvatar name={relay.name} shape={relay.shape} color={relay.color} size={56} />
+                  </div>
+                  <div class="create-field">
+                    <span class="create-name" data-create-name>{relay.name}</span>
+                    <span class="create-caret" aria-hidden="true" />
+                  </div>
+                  <span class="create-provider">Claude</span>
+                </div>
+              )}
+              {index === 2 && (
+                <div class="chat-demo" data-activity data-labels={JSON.stringify(ACTIVITY_LABELS)}>
+                  <p class="chat-bubble">Can you look at the failing checkout test?</p>
+                  <div class="activity-row">
+                    <span class="activity-glyph">
+                      <svg aria-hidden="true" class="bot-thinking-glyph" viewBox="0 0 14 14">
+                        {GLYPH_CELLS.map(([x, y], index) => (
+                          <rect fill="currentColor" height="2" width="2" x={x * 3} y={y * 3} style={`--cell:${index}`} />
+                        ))}
+                      </svg>
+                    </span>
+                    <span class="bot-shimmer-text" data-activity-label>
+                      {ACTIVITY_LABELS[0]}...
+                      <span aria-hidden="true" class="bot-shimmer-sheen">
+                        <span class="bot-shimmer-sheen-text">{ACTIVITY_LABELS[0]}...</span>
+                      </span>
+                    </span>
+                  </div>
+                </div>
+              )}
+            </div>
             <span class="step-number" aria-hidden="true">{step.number}</span>
             <h3>{step.title}</h3>
             <p>{step.body}</p>
@@ -208,6 +384,15 @@ const DOWNLOAD_GLYPH = `<path d="M7 11.5L12 17.5L17 11.5H14L14 3H10L10 11.5H7Z" 
   <!-- ── Download ─────────────────────────────────────────────── -->
   <section class="download">
     <div class="download-band">
+      <div class="download-roster" aria-hidden="true">
+        {
+          HERO_BOTS.map((bot) => (
+            <span data-bot-hover>
+              <BotAvatar name={bot.name} shape={bot.shape} color={bot.color} size={30} />
+            </span>
+          ))
+        }
+      </div>
       <div class="download-head">
         <h2>Download Akeru Bot</h2>
         <p>Free and MIT licensed. Bring your own subscription.</p>
@@ -215,11 +400,7 @@ const DOWNLOAD_GLYPH = `<path d="M7 11.5L12 17.5L17 11.5H14L14 3H10L10 11.5H7Z" 
       <div class="platform-cards">
         {
           platforms.map((platform) => (
-            <a class="platform-card" data-os={platform.os} data-asset={platform.asset} href={RELEASES_URL}>
-              <span class="platform-card-top">
-                <svg width="24" height="24" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" set:html={platform.mark} />
-                <svg class="platform-card-glyph" width="18" height="18" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" set:html={DOWNLOAD_GLYPH} />
-              </span>
+            <a class="platform-card" data-os={platform.os} data-asset={platform.asset} href={platform.href}>
               <span class="platform-card-text">
                 <span class="platform-card-name">{platform.name}</span>
                 <span class="platform-card-detail">{platform.detail}</span>
@@ -228,8 +409,8 @@ const DOWNLOAD_GLYPH = `<path d="M7 11.5L12 17.5L17 11.5H14L14 3H10L10 11.5H7Z" 
           ))
         }
       </div>
-      <a class="btn-outline" href={RELEASES_URL} target="_blank" rel="noopener noreferrer">
-        All downloads
+      <a class="download-notes" href={`${RELEASES_URL}/tag/v${version}`} target="_blank" rel="noopener noreferrer">
+        Version {version} release notes
       </a>
     </div>
   </section>
@@ -237,58 +418,6 @@ const DOWNLOAD_GLYPH = `<path d="M7 11.5L12 17.5L17 11.5H14L14 3H10L10 11.5H7Z" 
 
 <script>
   import { pickMostVisibleDemo } from "../lib/demoPlayback";
-  import {
-    detectDownloadTarget,
-    fetchLatestRelease,
-    requiresUnsignedInstall,
-    resolveAssetDownload,
-  } from "../lib/releases";
-
-  const UNSIGNED_PROMPT =
-    "This build is unsigned. Your system may ask you to confirm the install. Continue?";
-
-  async function init() {
-    const button = document.getElementById("download-btn") as HTMLAnchorElement | null;
-    const label = document.getElementById("download-label");
-    const cards = document.querySelectorAll<HTMLAnchorElement>("a[data-asset]");
-
-    // Macs always get the arm64 build. Browsers cannot reliably tell Apple Silicon
-    // from Intel (the UA lies, GPU strings lie), and the release workflow ships no
-    // Intel build. Do NOT add arch detection here.
-    // The markup ships with href={RELEASES_URL}, so the button works before this
-    // script runs and when no platform is detected.
-    const platform = detectDownloadTarget(navigator.userAgent);
-    if (platform) {
-      if (label) label.textContent = platform.label;
-      if (button) {
-        button.dataset.os = platform.os;
-        button.dataset.asset = platform.assetSuffix;
-      }
-    } else if (label) {
-      label.textContent = "All downloads";
-    }
-
-    const release = fetchLatestRelease();
-    const cardDownloads = Array.from(cards, async (card) => {
-      const suffix = card.dataset.asset;
-      if (!suffix || card === button) return;
-      const asset = await resolveAssetDownload(card, suffix, release);
-      card.dataset.unsigned = asset && requiresUnsignedInstall(suffix) ? "true" : "";
-    });
-
-    if (button && platform) {
-      const asset = await resolveAssetDownload(button, platform.assetSuffix, release);
-      button.dataset.unsigned = asset && platform.unsigned ? "true" : "";
-      if (!asset && label) label.textContent = "All downloads";
-    }
-    await Promise.all(cardDownloads);
-
-    document.querySelectorAll<HTMLAnchorElement>("a[data-unsigned='true']").forEach((link) => {
-      link.addEventListener("click", (event) => {
-        if (!window.confirm(UNSIGNED_PROMPT)) event.preventDefault();
-      });
-    });
-  }
 
   function initDemoVideos() {
     const videos = Array.from(document.querySelectorAll<HTMLVideoElement>("video[data-demo-video]"));
@@ -337,19 +466,143 @@ const DOWNLOAD_GLYPH = `<path d="M7 11.5L12 17.5L17 11.5H14L14 3H10L10 11.5H7Z" 
     else window.addEventListener("load", preloadVideos, { once: true });
   }
 
-  init();
   initDemoVideos();
+</script>
+
+<script>
+  import { mountBotAvatar, mountBotAvatars } from "../lib/botAvatarRuntime";
+
+  mountBotAvatars();
+
+  document.querySelectorAll<HTMLButtonElement>("button[data-toggle]").forEach((toggle) => {
+    toggle.addEventListener("click", () => {
+      toggle.setAttribute("aria-checked", String(toggle.getAttribute("aria-checked") !== "true"));
+    });
+  });
+
+  const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  // Runs `enter` each time an element scrolls into view and `leave` when it scrolls out,
+  // so nothing animates off screen.
+  const whileInView = (
+    selector: string,
+    enter: (element: HTMLElement) => void,
+    leave: (element: HTMLElement) => void,
+  ) => {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          const element = entry.target as HTMLElement;
+          if (entry.isIntersecting) enter(element);
+          else leave(element);
+        });
+      },
+      { threshold: 0.6 },
+    );
+    document.querySelectorAll<HTMLElement>(selector).forEach((element) => observer.observe(element));
+  };
+
+  // "Create a bot": the name types in, the avatar pops into its slot with the onboarding
+  // confetti, then the provider chip lands. It resets off screen and replays on return.
+  const createTimers = new WeakMap<HTMLElement, number[]>();
+  const resetCreate = (element: HTMLElement) => {
+    createTimers.get(element)?.forEach((timer) => window.clearTimeout(timer));
+    createTimers.set(element, []);
+    element.dataset.stage = "empty";
+    const name = element.querySelector<HTMLElement>("[data-create-name]");
+    if (name) name.textContent = "";
+  };
+  const playCreate = (element: HTMLElement) => {
+    resetCreate(element);
+    const timers = createTimers.get(element) ?? [];
+    const name = element.querySelector<HTMLElement>("[data-create-name]");
+    const full = element.dataset.name ?? "";
+    const at = (ms: number, step: () => void) => timers.push(window.setTimeout(step, ms));
+    at(320, () => (element.dataset.stage = "typing"));
+    [...full].forEach((_, i) => {
+      at(420 + i * 95, () => {
+        if (name) name.textContent = full.slice(0, i + 1);
+      });
+    });
+    const typed = 420 + full.length * 95 + 260;
+    at(typed, () => {
+      element.dataset.stage = "created";
+      const avatar = element.querySelector<HTMLElement>(".bot-avatar");
+      if (avatar) mountBotAvatar(avatar)?.beat(900);
+    });
+    at(typed + 420, () => (element.dataset.stage = "done"));
+  };
+
+  // "Hand it work": BotActivityStatus steps through the updates a working bot reports.
+  // The app remounts the label on each change, which restarts the sheen; this does too.
+  const activityTimers = new WeakMap<HTMLElement, number>();
+  const activityLabels = (element: HTMLElement): string[] => JSON.parse(element.dataset.labels ?? "[]");
+  const setActivityLabel = (element: HTMLElement, text: string) => {
+    const label = element.querySelector<HTMLElement>("[data-activity-label]");
+    if (!label) return;
+    label.replaceChildren(document.createTextNode(`${text}...`));
+    const sheen = document.createElement("span");
+    sheen.className = "bot-shimmer-sheen";
+    sheen.setAttribute("aria-hidden", "true");
+    const sheenText = document.createElement("span");
+    sheenText.className = "bot-shimmer-sheen-text";
+    sheenText.textContent = `${text}...`;
+    sheen.append(sheenText);
+    label.append(sheen);
+  };
+
+  if (!reducedMotion) {
+    document.querySelectorAll<HTMLElement>("[data-create]").forEach(resetCreate);
+    whileInView("[data-create]", playCreate, resetCreate);
+    whileInView(
+      "[data-activity]",
+      (element) => {
+        element.dataset.active = "true";
+        const labels = activityLabels(element);
+        let index = 0;
+        activityTimers.set(
+          element,
+          window.setInterval(() => {
+            index = (index + 1) % labels.length;
+            setActivityLabel(element, labels[index] ?? "");
+          }, 2600),
+        );
+      },
+      (element) => {
+        delete element.dataset.active;
+        window.clearInterval(activityTimers.get(element));
+        setActivityLabel(element, activityLabels(element)[0] ?? "");
+      },
+    );
+  }
 </script>
 
 <style>
   /* ── Hero ── */
 
+  .hero-shot {
+    width: 100%;
+    max-width: 1280px;
+    margin: 0;
+    border: 1px solid var(--color-border);
+    border-radius: 16px;
+    overflow: hidden;
+    background: var(--color-card);
+    box-shadow: 0 40px 120px -40px rgb(0 0 0 / 0.8);
+  }
+
+  .hero-shot img {
+    display: block;
+    width: 100%;
+    height: auto;
+  }
+
   .hero {
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 44px;
-    padding: 116px 64px 104px;
+    gap: 64px;
+    padding: 72px 64px 112px;
     overflow: clip;
   }
 
@@ -357,22 +610,35 @@ const DOWNLOAD_GLYPH = `<path d="M7 11.5L12 17.5L17 11.5H14L14 3H10L10 11.5H7Z" 
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 26px;
+    gap: 24px;
     width: 100%;
   }
 
+  .hero-roster {
+    display: flex;
+    gap: 10px;
+    padding-bottom: 6px;
+  }
+
+  .hero-roster-bot {
+    display: flex;
+    padding: 4px;
+  }
+
   .hero-title {
-    font-size: 84px;
+    max-width: 880px;
+    font-size: 72px;
     font-weight: 600;
-    letter-spacing: -0.042em;
-    line-height: 88px;
+    letter-spacing: -0.04em;
+    line-height: 76px;
     text-align: center;
+    text-wrap: balance;
   }
 
   .hero-sub {
-    max-width: 760px;
-    font-size: 19px;
-    line-height: 30px;
+    max-width: 680px;
+    font-size: 18px;
+    line-height: 29px;
     text-align: center;
     color: var(--color-muted-foreground);
   }
@@ -381,43 +647,26 @@ const DOWNLOAD_GLYPH = `<path d="M7 11.5L12 17.5L17 11.5H14L14 3H10L10 11.5H7Z" 
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 12px;
+    gap: 10px;
     flex-wrap: wrap;
-    padding-top: 4px;
+    padding-top: 6px;
   }
 
   .hero-note {
     font-size: 14px;
     line-height: 18px;
-    color: var(--color-muted-foreground);
-  }
-
-  .hero-shot {
-    width: 100%;
-    aspect-ratio: 8 / 5;
-    border: 1px solid var(--color-border);
-    border-radius: 16px;
-    background: var(--color-card);
-    overflow: hidden;
-  }
-
-  .hero-shot img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-    object-position: top center;
+    color: var(--fg-dim);
   }
 
   /* ── Buttons ── */
 
   .btn-primary,
-  .btn-ghost,
-  .btn-outline {
+  .btn-ghost {
     display: flex;
     align-items: center;
     gap: 9px;
-    padding: 14px 22px;
-    border-radius: var(--radius-md);
+    padding: 13px 22px;
+    border-radius: 999px;
     font-size: 15px;
     line-height: 18px;
   }
@@ -426,98 +675,262 @@ const DOWNLOAD_GLYPH = `<path d="M7 11.5L12 17.5L17 11.5H14L14 3H10L10 11.5H7Z" 
     background: var(--color-primary);
     color: var(--color-primary-foreground);
     font-weight: 600;
-    transition: background-color 0.15s ease;
+    transition: background-color var(--duration-quick) ease;
   }
 
   .btn-primary:hover {
-    background: #2a5ad6;
+    background: var(--color-primary-hover);
   }
 
   .btn-ghost {
     background: var(--color-card);
     border: 1px solid var(--color-border);
     font-weight: 500;
-    transition: border-color 0.15s ease;
+    transition: border-color var(--duration-quick) ease;
   }
 
   .btn-ghost:hover {
     border-color: var(--color-input);
   }
 
-  .btn-outline {
-    border: 1px solid var(--color-border);
-    font-weight: 500;
-    transition: border-color 0.15s ease;
-  }
-
-  .btn-outline:hover {
-    border-color: var(--color-input);
-  }
-
-  /* Only the mark for the detected system shows. */
-  .os-mark {
-    display: none;
-  }
-
-  .btn-primary[data-os="mac"] .os-mark[data-os="mac"],
-  .btn-primary[data-os="win"] .os-mark[data-os="win"],
-  .btn-primary[data-os="linux"] .os-mark[data-os="linux"] {
-    display: block;
-  }
-
   /* ── Section shells ── */
 
   .section-title {
-    font-size: 46px;
+    font-size: 44px;
     font-weight: 600;
     letter-spacing: -0.03em;
-    line-height: 52px;
+    line-height: 50px;
     text-align: center;
   }
+
+  /* ── Bots ── */
 
   .bots {
     display: flex;
     flex-direction: column;
-    background: var(--color-band);
-    border-top: 1px solid var(--color-border);
-    padding: 112px 64px 0;
+    align-items: center;
+    padding: 104px 64px;
   }
 
-  .triad {
-    display: flex;
-    padding-top: 44px;
+  .setup-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 16px;
+    width: 100%;
+    margin-top: 52px;
   }
 
-  .triad-cell {
-    flex: 1 0 0;
+  /* Framed like the step cards: a bordered card with the visual on an inset panel. */
+  .setup-card {
     display: flex;
     flex-direction: column;
-    gap: 14px;
-    padding: 52px 44px 56px;
+    padding: 12px;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-panel);
+    background: var(--color-card);
   }
 
-  .triad-cell:first-child {
-    padding-left: 0;
+  .setup-visual {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 212px;
+    padding: 20px;
+    border: 1px solid var(--color-border);
+    border-radius: 12px;
+    background: var(--color-background);
   }
 
-  .triad-cell:last-child {
-    padding-right: 0;
+  .setup-copy {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 20px 14px 14px;
   }
 
-  .triad-cell + .triad-cell {
-    border-left: 1px solid var(--color-border);
-  }
-
-  .triad-cell h3 {
-    font-size: 19px;
+  .setup-copy h3 {
+    font-size: 18px;
     font-weight: 600;
     letter-spacing: -0.02em;
     line-height: 24px;
   }
 
-  .triad-cell p {
+  .setup-copy p {
     font-size: 14px;
-    line-height: 23px;
+    line-height: 22px;
+    color: var(--color-muted-foreground);
+  }
+
+  .tool-list {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    max-width: 280px;
+    list-style: none;
+    border-radius: 14px;
+    background: var(--color-card);
+    box-shadow: var(--shadow-panel);
+  }
+
+  .tool-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 11px 14px;
+  }
+
+  .tool-row + .tool-row {
+    border-top: 1px solid var(--color-border);
+  }
+
+  .tool-logo {
+    display: flex;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    border-radius: 9px;
+    background: var(--color-secondary);
+    box-shadow: inset 0 0 0 1px var(--color-border);
+    color: var(--color-foreground);
+  }
+
+  .tool-logo :global(svg) {
+    width: 18px;
+    height: 18px;
+  }
+
+  .tool-text {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    min-width: 0;
+  }
+
+  .tool-name {
+    font-size: 14px;
+    font-weight: 600;
+    line-height: 18px;
+  }
+
+  .tool-detail {
+    font-size: 12px;
+    line-height: 16px;
+    color: var(--fg-dim);
+  }
+
+  .toggle {
+    position: relative;
+    flex-shrink: 0;
+    width: 36px;
+    height: 22px;
+    padding: 0;
+    border: 0;
+    border-radius: 999px;
+    background: var(--color-input);
+    transition: background-color var(--duration-fast) var(--ease-smooth-out);
+  }
+
+  .toggle[aria-checked="true"] {
+    background: var(--color-primary);
+  }
+
+  .toggle-thumb {
+    position: absolute;
+    top: 3px;
+    left: 3px;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: #fff;
+    box-shadow: 0 1px 2px rgb(0 0 0 / 0.18);
+    transition:
+      transform var(--duration-fast) var(--ease-bounce),
+      background-color var(--duration-fast) var(--ease-smooth-out);
+  }
+
+  .toggle[aria-checked="true"] .toggle-thumb {
+    background: var(--color-background);
+    transform: translateX(14px);
+  }
+
+  .toggle:focus-visible {
+    outline: 2px solid var(--color-primary);
+    outline-offset: 2px;
+  }
+
+  .memory,
+  .profile {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    width: 100%;
+    max-width: 280px;
+  }
+
+  .memory-head,
+  .profile-head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    font-weight: 600;
+    line-height: 18px;
+  }
+
+  .memory-notes {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    list-style: none;
+  }
+
+  .memory-notes li {
+    padding: 6px 11px;
+    border-radius: 999px;
+    background: var(--color-card);
+    box-shadow: var(--shadow-panel);
+    font-size: 13px;
+    line-height: 17px;
+  }
+
+  .profile-body {
+    padding: 14px 16px;
+    border: 1px solid var(--color-input);
+    border-radius: 12px;
+    background: var(--color-card);
+    font-size: 13px;
+    line-height: 20px;
+    color: var(--color-muted-foreground);
+  }
+
+  .features {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 40px 48px;
+    width: 100%;
+    margin-top: 72px;
+    list-style: none;
+  }
+
+  .feature {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .feature h3 {
+    font-size: 16px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    line-height: 22px;
+  }
+
+  .feature p {
+    font-size: 14px;
+    line-height: 22px;
     color: var(--color-muted-foreground);
   }
 
@@ -527,8 +940,9 @@ const DOWNLOAD_GLYPH = `<path d="M7 11.5L12 17.5L17 11.5H14L14 3H10L10 11.5H7Z" 
     display: flex;
     flex-direction: column;
     align-items: center;
-    border-top: 1px solid var(--color-border);
     padding: 104px 64px 112px;
+    background: var(--color-band);
+    border-block: 1px solid var(--color-border);
   }
 
   .how-sub {
@@ -552,35 +966,49 @@ const DOWNLOAD_GLYPH = `<path d="M7 11.5L12 17.5L17 11.5H14L14 3H10L10 11.5H7Z" 
   }
 
   .steps {
-    display: flex;
-    gap: 24px;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 16px;
     width: 100%;
     margin-top: 56px;
     list-style: none;
   }
 
   .step {
-    flex: 1 0 0;
     display: flex;
     flex-direction: column;
-    gap: 12px;
-    padding: 28px;
-    border: 1px solid var(--color-border);
-    border-radius: var(--radius-lg);
+    gap: 10px;
+    padding: 12px 12px 28px;
+    border-radius: var(--radius-panel);
     background: var(--color-card);
+    box-shadow: var(--shadow-panel);
+  }
+
+  .step > :not(.step-visual) {
+    margin-inline: 16px;
+  }
+
+  .step-visual {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 168px;
+    margin-bottom: 10px;
+    border: 1px solid var(--color-border);
+    border-radius: 12px;
+    background: var(--color-background);
   }
 
   .step-number {
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 30px;
-    height: 30px;
-    margin-bottom: 6px;
+    width: 26px;
+    height: 26px;
     border-radius: 50%;
-    background: var(--color-primary-surface);
-    color: var(--color-primary-foreground);
-    font-size: 14px;
+    background: var(--color-selected);
+    color: var(--color-foreground);
+    font-size: 13px;
     font-weight: 600;
   }
 
@@ -593,8 +1021,315 @@ const DOWNLOAD_GLYPH = `<path d="M7 11.5L12 17.5L17 11.5H14L14 3H10L10 11.5H7Z" 
 
   .step p {
     font-size: 14px;
-    line-height: 23px;
+    line-height: 22px;
     color: var(--color-muted-foreground);
+  }
+
+  .provider-chips {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 6px;
+    max-width: 260px;
+    list-style: none;
+  }
+
+  .provider-chips li {
+    padding: 6px 12px;
+    border-radius: 999px;
+    background: var(--color-card);
+    box-shadow: var(--shadow-panel);
+    font-size: 13px;
+    font-weight: 500;
+    line-height: 17px;
+  }
+
+  .create {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .celebration {
+    position: relative;
+    display: grid;
+    place-items: center;
+    width: 56px;
+    height: 56px;
+  }
+
+  .celebration > :global(*) {
+    grid-area: 1 / 1;
+  }
+
+  /* The empty avatar slot shown before the bot exists. */
+  .create-slot {
+    width: 56px;
+    height: 56px;
+    border: 1px dashed var(--color-input);
+    border-radius: 50%;
+    opacity: 0;
+    transition: opacity var(--duration-fast) var(--ease-smooth-out);
+  }
+
+  .celebration :global(.bot-avatar) {
+    transition:
+      opacity var(--duration-fast) var(--ease-smooth-out),
+      transform var(--duration-very-slow) var(--ease-bounce),
+      filter var(--duration-fast) var(--ease-smooth-out);
+  }
+
+  .create-field {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    min-width: 132px;
+    height: 32px;
+    padding: 0 12px;
+    border-radius: 8px;
+    background: var(--color-card);
+    box-shadow: var(--shadow-panel);
+    font-size: 14px;
+    font-weight: 600;
+    transition: box-shadow var(--duration-fast) var(--ease-smooth-out);
+  }
+
+  .create-caret {
+    width: 1.5px;
+    height: 16px;
+    background: var(--color-foreground);
+    opacity: 0;
+  }
+
+  .create-provider {
+    padding: 3px 10px;
+    border-radius: 999px;
+    background: var(--color-selected);
+    color: var(--color-muted-foreground);
+    font-size: 12px;
+    font-weight: 500;
+    line-height: 16px;
+    transition:
+      opacity var(--duration-fast) var(--ease-smooth-out),
+      transform var(--duration-fast) var(--ease-smooth-out);
+  }
+
+  .create[data-stage="empty"] .create-slot,
+  .create[data-stage="typing"] .create-slot {
+    opacity: 1;
+  }
+
+  .create[data-stage="empty"] :global(.bot-avatar),
+  .create[data-stage="typing"] :global(.bot-avatar) {
+    opacity: 0;
+    transform: scale(0.6);
+    filter: blur(2px);
+  }
+
+  .create[data-stage="typing"] .create-field {
+    box-shadow: inset 0 0 0 1px var(--color-muted-foreground);
+  }
+
+  .create[data-stage="typing"] .create-caret {
+    animation: create-caret 900ms step-end infinite;
+  }
+
+  .create[data-stage="empty"] .create-provider,
+  .create[data-stage="typing"] .create-provider,
+  .create[data-stage="created"] .create-provider {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+
+  @keyframes create-caret {
+    0%,
+    100% {
+      opacity: 1;
+    }
+    50% {
+      opacity: 0;
+    }
+  }
+
+  .confetti {
+    position: absolute;
+    top: 28px;
+    left: 50%;
+    pointer-events: none;
+  }
+
+  .confetti-piece {
+    position: absolute;
+    top: -3px;
+    left: -3px;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    opacity: 0;
+  }
+
+  .confetti-piece.is-square {
+    border-radius: 2px;
+  }
+
+  .create[data-stage="created"] .confetti-piece,
+  .create[data-stage="done"] .confetti-piece {
+    animation: confetti-burst 780ms cubic-bezier(0.16, 1, 0.3, 1) var(--delay) both;
+  }
+
+  @keyframes confetti-burst {
+    0% {
+      opacity: 0;
+      transform: translate(0, 0) rotate(0deg) scale(0.4);
+    }
+    12% {
+      opacity: 1;
+    }
+    62% {
+      opacity: 1;
+      transform: translate(var(--x), var(--y)) rotate(var(--rotate)) scale(var(--scale));
+    }
+    100% {
+      opacity: 0;
+      transform: translate(var(--x), calc(var(--y) + 26px)) rotate(var(--rotate)) scale(var(--scale));
+    }
+  }
+
+  /* "Hand it work": a user message and the app's BotActivityStatus row under it. */
+  .chat-demo {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    width: 100%;
+    padding: 0 20px;
+  }
+
+  .chat-bubble {
+    align-self: flex-end;
+    max-width: 82%;
+    padding: 8px 12px;
+    border-radius: 16px;
+    background: var(--color-secondary);
+    font-size: 13px;
+    line-height: 18px;
+  }
+
+  .activity-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-width: 0;
+    padding: 4px 0;
+    font-size: 14px;
+    line-height: 20px;
+  }
+
+  .activity-glyph {
+    display: flex;
+    flex-shrink: 0;
+    justify-content: center;
+    width: 28px;
+    color: var(--color-foreground);
+  }
+
+  /* Ported from apps/web/src/index.css. Both loops pause while the row is off screen. */
+  .bot-thinking-glyph {
+    flex-shrink: 0;
+    width: 14px;
+    height: 14px;
+  }
+
+  .bot-thinking-glyph rect {
+    opacity: 0.12;
+    animation: bot-thinking-comet 720ms step-end infinite;
+    animation-delay: calc(var(--cell) * 90ms - 720ms);
+    animation-play-state: paused;
+  }
+
+  @keyframes bot-thinking-comet {
+    0% {
+      opacity: 1;
+    }
+    12.5% {
+      opacity: 0.7;
+    }
+    25% {
+      opacity: 0.45;
+    }
+    37.5% {
+      opacity: 0.25;
+    }
+    50%,
+    100% {
+      opacity: 0.12;
+    }
+  }
+
+  .bot-shimmer-text {
+    --bot-shimmer-duration: 1800ms;
+    position: relative;
+    min-width: 0;
+    overflow: hidden;
+    color: var(--color-foreground);
+    font-weight: 500;
+    white-space: nowrap;
+  }
+
+  .bot-shimmer-text :global(.bot-shimmer-sheen) {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    mask-image: linear-gradient(90deg, transparent 25%, #000 50%, transparent 75%);
+    animation: bot-shimmer-sheen var(--bot-shimmer-duration) linear infinite;
+    animation-play-state: paused;
+    will-change: transform;
+  }
+
+  .bot-shimmer-text :global(.bot-shimmer-sheen-text) {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: color-mix(in srgb, var(--color-background) 62%, transparent);
+    animation: bot-shimmer-sheen-counter var(--bot-shimmer-duration) linear infinite;
+    animation-play-state: paused;
+    will-change: transform;
+  }
+
+  .chat-demo[data-active] .bot-thinking-glyph rect,
+  .chat-demo[data-active] :global(.bot-shimmer-sheen),
+  .chat-demo[data-active] :global(.bot-shimmer-sheen-text) {
+    animation-play-state: running;
+  }
+
+  @keyframes bot-shimmer-sheen {
+    from {
+      transform: translateX(-75%);
+    }
+    to {
+      transform: translateX(75%);
+    }
+  }
+
+  @keyframes bot-shimmer-sheen-counter {
+    from {
+      transform: translateX(75%);
+    }
+    to {
+      transform: translateX(-75%);
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .bot-thinking-glyph rect {
+      animation: none;
+      opacity: calc(1 - var(--cell) * 0.11);
+    }
+
+    .bot-shimmer-text :global(.bot-shimmer-sheen) {
+      display: none;
+    }
   }
 
   /* ── Demos ── */
@@ -603,16 +1338,15 @@ const DOWNLOAD_GLYPH = `<path d="M7 11.5L12 17.5L17 11.5H14L14 3H10L10 11.5H7Z" 
     display: flex;
     flex-direction: column;
     align-items: center;
-    border-top: 1px solid var(--color-border);
     padding: 104px 64px;
   }
 
   .demo-row {
     display: flex;
     align-items: center;
-    gap: 88px;
+    gap: 80px;
     width: 100%;
-    margin-top: 96px;
+    margin-top: 88px;
   }
 
   /* The middle row mirrors, so the media side alternates down the page. */
@@ -624,15 +1358,15 @@ const DOWNLOAD_GLYPH = `<path d="M7 11.5L12 17.5L17 11.5H14L14 3H10L10 11.5H7Z" 
     flex-shrink: 0;
     display: flex;
     flex-direction: column;
-    gap: 18px;
-    width: 432px;
+    gap: 16px;
+    width: 400px;
   }
 
   .demo-copy h3 {
-    font-size: 34px;
+    font-size: 32px;
     font-weight: 600;
     letter-spacing: -0.03em;
-    line-height: 40px;
+    line-height: 38px;
   }
 
   .demo-copy p {
@@ -644,17 +1378,19 @@ const DOWNLOAD_GLYPH = `<path d="M7 11.5L12 17.5L17 11.5H14L14 3H10L10 11.5H7Z" 
   .demo-media {
     flex: 1 0 0;
     aspect-ratio: 8 / 5;
-    border: 1px solid var(--color-border);
-    border-radius: 16px;
+    padding: 8px;
+    border-radius: var(--radius-panel);
     background: var(--color-card);
-    overflow: hidden;
+    box-shadow: var(--shadow-panel);
   }
 
   .demo-media video {
     display: block;
     width: 100%;
     height: 100%;
+    border-radius: 12px;
     object-fit: cover;
+    background: var(--color-muted);
   }
 
   /* ── Download band ── */
@@ -668,25 +1404,29 @@ const DOWNLOAD_GLYPH = `<path d="M7 11.5L12 17.5L17 11.5H14L14 3H10L10 11.5H7Z" 
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 36px;
+    gap: 32px;
     width: 100%;
     padding: 64px 56px;
-    border: 1px solid var(--color-border);
-    border-radius: 20px;
-    background:
-      linear-gradient(
-        color-mix(in srgb, var(--color-background) 78%, transparent),
-        color-mix(in srgb, var(--color-background) 78%, transparent)
-      ),
-      url("/download-glow.webp") center / cover no-repeat,
-      var(--color-background);
+    border-radius: 24px;
+    background: var(--color-card);
+    box-shadow: var(--shadow-panel);
+  }
+
+  .download-roster {
+    display: flex;
+    gap: 8px;
+  }
+
+  .download-roster span[data-bot-hover] {
+    display: flex;
+    padding: 3px;
   }
 
   .download-head {
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 12px;
+    gap: 10px;
     text-align: center;
   }
 
@@ -700,7 +1440,7 @@ const DOWNLOAD_GLYPH = `<path d="M7 11.5L12 17.5L17 11.5H14L14 3H10L10 11.5H7Z" 
   .download-head p {
     font-size: 16px;
     line-height: 26px;
-    color: color-mix(in srgb, var(--color-foreground) 72%, transparent);
+    color: var(--color-muted-foreground);
   }
 
   .platform-cards {
@@ -714,33 +1454,19 @@ const DOWNLOAD_GLYPH = `<path d="M7 11.5L12 17.5L17 11.5H14L14 3H10L10 11.5H7Z" 
     display: flex;
     flex-direction: column;
     gap: 16px;
-    width: 264px;
+    width: 248px;
     padding: 20px;
-    border: 1px solid var(--color-border);
-    border-radius: var(--radius-lg);
-    background: color-mix(in srgb, var(--color-card) 80%, transparent);
+    border-radius: 16px;
+    background: var(--color-background);
+    box-shadow: inset 0 0 0 1px var(--color-border);
     transition:
-      border-color 0.15s ease,
-      background-color 0.15s ease;
+      background-color var(--duration-quick) ease,
+      box-shadow var(--duration-quick) ease;
   }
 
   .platform-card:hover {
-    border-color: var(--color-input);
-    background: color-mix(in srgb, var(--color-popover) 92%, transparent);
-  }
-
-  .platform-card-top {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-  }
-
-  .platform-card-glyph {
-    color: var(--color-muted-foreground);
-  }
-
-  .platform-card:hover .platform-card-glyph {
-    color: var(--color-foreground);
+    background: var(--color-selected);
+    box-shadow: inset 0 0 0 1px var(--color-input);
   }
 
   .platform-card-text {
@@ -762,6 +1488,20 @@ const DOWNLOAD_GLYPH = `<path d="M7 11.5L12 17.5L17 11.5H14L14 3H10L10 11.5H7Z" 
     color: var(--color-muted-foreground);
   }
 
+  .download-notes {
+    font-size: 14px;
+    line-height: 20px;
+    color: var(--color-muted-foreground);
+    text-decoration: underline;
+    text-decoration-color: var(--color-input);
+    text-underline-offset: 4px;
+    transition: color var(--duration-quick) ease;
+  }
+
+  .download-notes:hover {
+    color: var(--color-foreground);
+  }
+
   /* ── Small screens ── */
 
   @media (max-width: 1100px) {
@@ -781,17 +1521,27 @@ const DOWNLOAD_GLYPH = `<path d="M7 11.5L12 17.5L17 11.5H14L14 3H10L10 11.5H7Z" 
       width: 100%;
       flex: 0 0 auto;
     }
+
+    .setup-grid,
+    .steps {
+      grid-template-columns: minmax(0, 1fr);
+      max-width: 560px;
+    }
+
+    .features {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
   }
 
   @media (max-width: 900px) {
     .hero {
-      padding: 64px 24px 72px;
-      gap: 32px;
+      padding: 40px 20px 72px;
+      gap: 40px;
     }
 
     .hero-title {
-      font-size: 46px;
-      line-height: 50px;
+      font-size: 44px;
+      line-height: 48px;
     }
 
     .hero-sub {
@@ -799,37 +1549,21 @@ const DOWNLOAD_GLYPH = `<path d="M7 11.5L12 17.5L17 11.5H14L14 3H10L10 11.5H7Z" 
       line-height: 26px;
     }
 
-    .hero-shot {
-      border-radius: 12px;
-    }
-
     .section-title {
       font-size: 32px;
       line-height: 38px;
     }
 
-    .bots {
-      padding: 64px 24px 0;
+    .bots,
+    .how,
+    .demos {
+      padding: 64px 20px;
     }
 
-    .triad {
-      flex-direction: column;
-      padding-top: 24px;
-    }
-
-    .triad-cell,
-    .triad-cell:first-child,
-    .triad-cell:last-child {
-      padding: 28px 0;
-    }
-
-    .triad-cell + .triad-cell {
-      border-left: 0;
-      border-top: 1px solid var(--color-border);
-    }
-
-    .how {
-      padding: 64px 24px;
+    .features {
+      grid-template-columns: minmax(0, 1fr);
+      gap: 24px;
+      margin-top: 48px;
     }
 
     .how-sub {
@@ -838,13 +1572,7 @@ const DOWNLOAD_GLYPH = `<path d="M7 11.5L12 17.5L17 11.5H14L14 3H10L10 11.5H7Z" 
     }
 
     .steps {
-      flex-direction: column;
       margin-top: 32px;
-      gap: 12px;
-    }
-
-    .demos {
-      padding: 64px 24px;
     }
 
     .demo-copy h3 {
@@ -853,12 +1581,12 @@ const DOWNLOAD_GLYPH = `<path d="M7 11.5L12 17.5L17 11.5H14L14 3H10L10 11.5H7Z" 
     }
 
     .download {
-      padding: 0 24px 64px;
+      padding: 0 20px 64px;
     }
 
     .download-band {
-      padding: 40px 24px;
-      gap: 28px;
+      padding: 40px 20px;
+      gap: 26px;
     }
 
     .download-head h2 {
@@ -868,6 +1596,13 @@ const DOWNLOAD_GLYPH = `<path d="M7 11.5L12 17.5L17 11.5H14L14 3H10L10 11.5H7Z" 
 
     .platform-card {
       width: 100%;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .toggle,
+    .toggle-thumb {
+      transition: none;
     }
   }
 </style>

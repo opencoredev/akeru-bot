@@ -1,6 +1,8 @@
 ---
 import { GITHUB_REPOSITORY_URL, T3_CODE_WEBSITE_URL, DOCS_URL, docsUrl } from "../lib/site";
-import { RELEASES_URL } from "../lib/releases";
+import { DOWNLOAD_TARGETS, RELEASES_URL, releaseAssetUrl, resolveBuildVersion } from "../lib/releases";
+import { Menu01Icon } from "@hugeicons/core-free-icons";
+import Icon from "../components/Icon.astro";
 import PostHog from "../components/PostHog.astro";
 
 interface Props {
@@ -26,6 +28,12 @@ const {
   noindex = false,
   structuredData: pageStructuredData = [],
 } = Astro.props;
+
+// The nav CTA downloads the macOS build by default and swaps to the visitor's platform.
+const buildVersion = await resolveBuildVersion();
+const downloadUrls = Object.fromEntries(
+  DOWNLOAD_TARGETS.map((target) => [`data-url-${target.os}`, releaseAssetUrl(buildVersion, target.assetSuffix)]),
+);
 
 // Astro.site comes from astro.config.mjs. Falling back to the request URL keeps
 // preview deployments and `astro dev` from emitting a broken absolute image URL.
@@ -71,7 +79,7 @@ const structuredData = [
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="description" content={description} />
     {noindex && <meta name="robots" content="noindex, follow" />}
-    <meta name="theme-color" content="#0a0a0a" />
+    <meta name="theme-color" content="#111111" />
     <link rel="canonical" href={canonicalUrl.href} />
 
     <meta property="og:type" content={socialType} />
@@ -123,23 +131,12 @@ const structuredData = [
             target="_blank"
             rel="noopener noreferrer">GitHub</a
           >
-          <a class="nav-cta" href="/download">
+          <a class="nav-cta" href={downloadUrls["data-url-mac"]} data-download-auto="short" {...downloadUrls}>
             Download
-            <svg width="14" height="14" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-              <path
-                d="M7 11.5L12 17.5L17 11.5H14L14 3H10L10 11.5H7Z"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="1.8"
-                stroke-linecap="square"></path>
-              <path d="M5 21H19" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="square"></path>
-            </svg>
           </a>
           <details class="nav-menu">
             <summary aria-label="Open navigation menu">
-              <svg width="18" height="18" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-                <path d="M4 7H20M4 12H20M4 17H20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="square"></path>
-              </svg>
+              <Icon icon={Menu01Icon} size={18} />
             </summary>
             <div class="nav-menu-panel">
               <a href="/#bots">Bots</a>
@@ -212,6 +209,10 @@ const structuredData = [
         </div>
       </footer>
     </div>
+    <script>
+      import { initDownloadLinks } from "../lib/downloadLinks";
+      initDownloadLinks();
+    </script>
   </body>
 </html>
 
@@ -261,25 +262,37 @@ const structuredData = [
   }
 
   :root {
-    /* Akeru design tokens (Paper file "Akeru Bot") */
-    --color-background: #0a0a0a;
+    /* Dark tokens matched to the 0.2.0 app (apps/web/src/index.css), converted from oklch. */
+    /* Sampled from the app screenshot in the hero (public/app-screenshot.webp). */
+    --color-background: #111111;
     --color-foreground: #f5f5f5;
-    --color-card: #111111;
-    --color-popover: #191919;
-    --color-primary: #346bf1;
-    --color-primary-foreground: #ffffff;
-    --color-primary-surface: #121f3d;
-    --color-secondary: #141414;
-    --color-muted: #141414;
-    --color-muted-foreground: #8a8a8a;
-    --color-dim-foreground: #7b7b7b;
-    --color-border: #232323;
-    --color-input: #2c2c2c;
-    --color-destructive: #f26d6d;
-    --color-success: #34d399;
+    --color-card: #181818;
+    --color-popover: #181818;
+    --color-selected: #282828;
+    --color-primary: #f5f5f5;
+    --color-primary-hover: #ffffff;
+    --color-primary-foreground: #111111;
+    --color-secondary: #292929;
+    --color-muted: #1d1d1d;
+    --color-muted-foreground: #a1a1a1;
+    --color-dim-foreground: #868686;
+    --color-border: #2c2c2c;
+    --color-input: #3a3a3a;
+    --color-destructive: #f06464;
+    --color-success: #3ccf8e;
 
-    /* Panel background used by the section bands. */
-    --color-band: #0c0c0c;
+    /* Section bands sit flush with the page, like the app shell. */
+    --color-band: var(--color-background);
+
+    --shadow-panel: inset 0 0 0 1px var(--color-border);
+
+    /* Motion tokens shared with the app. */
+    --duration-quick: 150ms;
+    --duration-fast: 250ms;
+    --duration-slow: 400ms;
+    --duration-very-slow: 500ms;
+    --ease-smooth-out: cubic-bezier(0.22, 1, 0.36, 1);
+    --ease-bounce: cubic-bezier(0.34, 1.36, 0.64, 1);
 
     --font-sans: "Geist", system-ui, sans-serif;
     --font-serif: "EB Garamond", Georgia, serif;
@@ -287,16 +300,17 @@ const structuredData = [
     --radius-md: 10px;
     --radius-lg: 14px;
     --radius-media: 16px;
+    --radius-panel: 18px;
 
     /* Legacy aliases used by the download and legal pages */
     --bg: var(--color-background);
     --fg: var(--color-foreground);
     --fg-muted: var(--color-muted-foreground);
-    --fg-dim: #6f6f6f;
-    --fg-faint: #545454;
+    --fg-dim: #858585;
+    --fg-faint: #6b6b6b;
     --border: var(--color-border);
     --border-strong: var(--color-input);
-    --accent: var(--color-primary);
+    --accent: var(--color-foreground);
     --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, monospace;
   }
 
@@ -375,8 +389,7 @@ const structuredData = [
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 20px 64px;
-    border-bottom: 1px solid var(--color-border);
+    padding: 18px 64px;
   }
 
   .nav-side {
@@ -422,7 +435,7 @@ const structuredData = [
     align-items: center;
     gap: 8px;
     padding: 9px 16px;
-    border-radius: var(--radius-md);
+    border-radius: 999px;
     background: var(--color-primary);
     color: var(--color-primary-foreground);
     font-size: 14px;
@@ -432,7 +445,7 @@ const structuredData = [
   }
 
   .nav-cta:hover {
-    background: #2a5ad6;
+    background: var(--color-primary-hover);
   }
 
   /* Disclosure menu for small screens; needs no JS to open or close. */
@@ -448,8 +461,8 @@ const structuredData = [
     width: 36px;
     height: 36px;
     border: 1px solid var(--color-border);
-    border-radius: var(--radius-md);
-    cursor: pointer;
+    border-radius: 999px;
+    background: var(--color-card);
     list-style: none;
   }
 
@@ -473,6 +486,7 @@ const structuredData = [
     border: 1px solid var(--color-border);
     border-radius: var(--radius-lg);
     background: var(--color-popover);
+    box-shadow: var(--shadow-panel);
   }
 
   .nav-menu-panel a {
