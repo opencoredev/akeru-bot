@@ -405,3 +405,36 @@ it("unblocks the provider when the limited account is removed or signs in again"
   expect(service.providerInstanceRequestHealth("codex")).toBeUndefined();
   expect(await service.getAccessToken("openai-codex")).toBe("replacement-key");
 });
+
+it("keeps the provider blocked when the remaining account is still limited", async () => {
+  const { authPath } = fixture();
+  const service = await makeTestSubscriptionAuthService(authPath);
+  const first = await service.startLogin("openai-codex", { authMode: "api-key" });
+  await service.completeLogin(first.loginId, "first-key");
+
+  const second = await service.startLogin("openai-codex", {
+    authMode: "api-key",
+    addAccount: true,
+  });
+
+  await service.completeLogin(second.loginId, "second-key");
+  await service.getAccessToken("openai-codex", undefined, "thread-a");
+  service.recordRequestFailure(
+    "openai-codex",
+    "Usage cap reached.",
+    undefined,
+    "request",
+    "thread-a",
+  );
+  await service.getAccessToken("openai-codex", undefined, "thread-b");
+  service.recordRequestFailure(
+    "openai-codex",
+    "Usage cap reached.",
+    undefined,
+    "request",
+    "thread-b",
+  );
+  service.recordProviderInstanceFailure("codex", "Usage cap reached.");
+  await service.logout("openai-codex", accountScope("default"));
+  expect(service.providerInstanceRequestHealth("codex")?.health).toBe("failed-first-request");
+});

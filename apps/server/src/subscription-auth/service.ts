@@ -577,7 +577,7 @@ export class SubscriptionAuthService {
       this.reloadHealth();
       delete this.health[key];
       this.clearImageHealth(login.provider, login.instanceId);
-      this.healthService.clearProviderLimit(login.provider, key);
+      this.clearProviderLimitIfReady(login.provider, key);
       this.saveHealth();
 
       return this.startHealthCheck(login.provider, login.instanceId);
@@ -628,12 +628,20 @@ export class SubscriptionAuthService {
     this.reloadHealth();
     delete this.health[key];
     this.clearImageHealth(provider, instanceId);
-    this.healthService.clearProviderLimit(provider, key);
+    this.clearProviderLimitIfReady(provider, key);
     this.saveHealth();
 
     if (this.accounts.lastServedKey.get(provider) === key)
       this.accounts.lastServedKey.delete(provider);
     this.accounts.rememberAccountOrder(provider);
+  }
+
+  /** Lifts a provider-level limit only once a linked account can take the next request. */
+  private clearProviderLimitIfReady(provider: SubscriptionProviderId, key: string): void {
+    const now = this.clock.currentTimeMillisUnsafe();
+
+    if (this.accounts.accountReady(this.accounts.activeAccountKey(provider, now), now))
+      this.healthService.clearProviderLimit(provider, key);
   }
 
   private clearImageHealth(provider: SubscriptionProviderId, instanceId?: string): void {
@@ -709,7 +717,7 @@ export class SubscriptionAuthService {
     this.reloadHealth();
     delete this.health[key];
     this.clearImageHealth(login.provider, login.instanceId);
-    this.healthService.clearProviderLimit(login.provider, key);
+    this.clearProviderLimitIfReady(login.provider, key);
     this.saveHealth();
 
     return true;
