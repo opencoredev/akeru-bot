@@ -11,7 +11,7 @@ import { SubscriptionProviderId, type ProviderDriverKind } from "@akeru/contract
 import type { SubscriptionAuthService } from "../../subscription-auth/service.ts";
 import { akeruOpenAIProvider } from "../AkeruOpenAIProvider.ts";
 import { akeruKimiProvider, type AkeruKimiAccess } from "../AkeruKimiProvider.ts";
-import { akeruOpenCodeGoProvider } from "../AkeruOpenCodeGoProvider.ts";
+import { akeruOpenCodeGoProvider, type AkeruOpenCodeGoAccess } from "../AkeruOpenCodeGoProvider.ts";
 import { type AkeruMastraState } from "./AkeruHarnessTypes.ts";
 
 const decodeInlineConfig = Schema.decodeUnknownSync(
@@ -111,7 +111,10 @@ export function resolveAkeruMastraModel(
   modelId: string,
   authStorage: AuthStorage,
   getKimiAccess?: (instanceId?: string, threadId?: string) => Promise<AkeruKimiAccess | undefined>,
-  getOpenCodeGoApiKey?: (instanceId?: string, threadId?: string) => Promise<string | undefined>,
+  getOpenCodeGoApiKey?: (
+    instanceId?: string,
+    threadId?: string,
+  ) => Promise<AkeruOpenCodeGoAccess | undefined>,
   modelOptions?: AkeruMastraState["modelOptions"],
   getSubscriptionApiKey?: SubscriptionAuthService["getApiKeyCredential"],
   connection?: {
@@ -275,22 +278,29 @@ export function resolveAkeruMastraModel(
     const inlineConnection = openCodeGoInlineConnection(environment);
     const instanceApiKey = environment?.OPENCODE_API_KEY?.trim() || inlineConnection.apiKey;
 
-    const resolveApiKey = instanceApiKey
-      ? async () => instanceApiKey
+    const baseUrl = environment?.OPENCODE_BASE_URL?.trim() || inlineConnection.baseUrl;
+
+    const resolveAccess = instanceApiKey
+      ? async () => {
+          const resolvedBaseUrl =
+            baseUrl || (useSavedCredential ? savedApiKey("opencode-go")?.baseUrl : undefined);
+
+          return {
+            access: instanceApiKey,
+            ...(resolvedBaseUrl ? { baseUrl: resolvedBaseUrl } : {}),
+          };
+        }
       : useSavedCredential && getOpenCodeGoApiKey
-        ? () => getOpenCodeGoApiKey(instanceId, threadId)
+        ? async () => {
+            const credential = await getOpenCodeGoApiKey(instanceId, threadId);
+
+            return credential ? { ...credential, ...(baseUrl ? { baseUrl } : {}) } : undefined;
+          }
         : undefined;
 
-    if (!resolveApiKey) throw new Error("OpenCode Go subscription access is unavailable.");
+    if (!resolveAccess) throw new Error("OpenCode Go subscription access is unavailable.");
 
-    return akeruOpenCodeGoProvider(
-      trimmed.slice("opencode-go/".length),
-      resolveApiKey,
-      () =>
-        environment?.OPENCODE_BASE_URL?.trim() ||
-        inlineConnection.baseUrl ||
-        (useSavedCredential ? savedApiKey("opencode-go")?.baseUrl : undefined),
-    );
+    return akeruOpenCodeGoProvider(trimmed.slice("opencode-go/".length), resolveAccess);
   }
 
   if (trimmed.startsWith("custom-openai/")) {

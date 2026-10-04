@@ -233,12 +233,9 @@ describe("AkeruMastraHarness", () => {
       "opencode-go/gpt-5.6-luna",
     );
     assert.deepInclude(
-      resolveAkeruMastraModel(
-        "opencode-go/gpt-5.6-luna",
-        authStorage,
-        undefined,
-        async () => "go-key",
-      ),
+      resolveAkeruMastraModel("opencode-go/gpt-5.6-luna", authStorage, undefined, async () => ({
+        access: "go-key",
+      })),
       { provider: "opencode-go.responses", modelId: "gpt-5.6-luna" },
     );
     assert.throws(

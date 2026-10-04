@@ -191,3 +191,57 @@ it("keeps the provider available while another linked account can serve requests
   expect(service.providerInstanceRequestHealth("codex")?.health).toBe("failed-first-request");
   expect(await service.getAccessToken("openai-codex")).toBe("first-key");
 });
+
+it("disconnects the displayed active account after a reorder and then the remaining account", async () => {
+  const { authPath } = fixture();
+  const service = await makeTestSubscriptionAuthService(authPath);
+  const first = await service.startLogin("openai-codex", { authMode: "api-key" });
+  await service.completeLogin(first.loginId, "first-key");
+
+  const second = await service.startLogin("openai-codex", {
+    authMode: "api-key",
+    addAccount: true,
+  });
+
+  await service.completeLogin(second.loginId, "second-key");
+  const addedId = service.linkedAccountIds("openai-codex")[1]!;
+  await service.setAccountOrder("openai-codex", [addedId, "default"]);
+  expect(service.getApiKeyCredential("openai-codex")?.access).toBe("second-key");
+  await service.logout("openai-codex");
+  expect(service.linkedAccountIds("openai-codex")).toEqual(["default"]);
+  expect(await service.getAccessToken("openai-codex")).toBe("first-key");
+  await service.logout("openai-codex", "codex");
+  expect(service.linkedAccountIds("openai-codex")).toEqual([]);
+});
+
+it("recovers from an account spending limit after its cooldown with the backup removed", async () => {
+  const { authPath } = fixture();
+  const service = await makeTestSubscriptionAuthService(authPath);
+  const first = await service.startLogin("openai-codex", { authMode: "api-key" });
+  await service.completeLogin(first.loginId, "first-key");
+
+  const second = await service.startLogin("openai-codex", {
+    authMode: "api-key",
+    addAccount: true,
+  });
+
+  await service.completeLogin(second.loginId, "second-key");
+  const addedId = service.linkedAccountIds("openai-codex")[1]!;
+  const at = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
+  await service.getAccessToken("openai-codex");
+  service.recordRequestFailure("openai-codex", "Spending limit reached. Try again in 1h.", at);
+  service.recordProviderInstanceFailure("codex", "Spending limit reached.", at);
+  await service.logout("openai-codex", accountScope(addedId));
+  expect(service.linkedAccountIds("openai-codex")).toEqual(["default"]);
+  expect(service.providerInstanceRequestHealth("codex")).toBeUndefined();
+  expect(await service.getAccessToken("openai-codex")).toBe("first-key");
+});
+
+it("keeps a provider-only usage failure when no account limit was recorded", async () => {
+  const { authPath } = fixture();
+  const service = await makeTestSubscriptionAuthService(authPath);
+  const first = await service.startLogin("openai-codex", { authMode: "api-key" });
+  await service.completeLogin(first.loginId, "first-key");
+  service.recordProviderInstanceFailure("codex", "Budget exceeded.");
+  expect(service.providerInstanceRequestHealth("codex")?.health).toBe("failed-first-request");
+});

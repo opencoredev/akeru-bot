@@ -12,6 +12,7 @@ import {
 } from "@akeru/contracts";
 import * as Duration from "effect/Duration";
 import type { SubscriptionAuthService } from "../../subscription-auth/service.ts";
+import type { AkeruOpenCodeGoAccess } from "../AkeruOpenCodeGoProvider.ts";
 import { type AkeruKimiAccess } from "../AkeruKimiProvider.ts";
 import type { AkeruToolRuntime, AkeruToolResult } from "../tools/AkeruToolTypes.ts";
 import {
@@ -64,7 +65,7 @@ export interface AkeruMastraHarnessOptions {
   readonly getOpenCodeGoApiKey?: (
     instanceId?: string,
     threadId?: string,
-  ) => Promise<string | undefined>;
+  ) => Promise<AkeruOpenCodeGoAccess | undefined>;
   readonly getSubscriptionApiKey?: SubscriptionAuthService["getApiKeyCredential"];
   readonly getSubscriptionOAuth?: SubscriptionAuthService["getOAuthCredential"];
   readonly getSubscriptionAccessToken?: SubscriptionAuthService["getAccessToken"];

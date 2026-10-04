@@ -70,7 +70,9 @@ export class SubscriptionAccountState {
     }
   }
 
-  saveAccountOrder(): void {
+  private saveAccountOrder(provider: SubscriptionProviderId, accountIds: string[]): void {
+    this.reloadAccountOrder();
+    this.accountOrder[provider] = accountIds;
     this.healthService.writeSecureJson(this.orderPath, this.accountOrder);
     this.orderVersion = fileVersion(this.orderPath);
   }
@@ -178,8 +180,8 @@ export class SubscriptionAccountState {
 
   /** Keeps a newly signed-in account at the end of the order. */
   rememberAccountOrder(provider: SubscriptionProviderId): void {
-    this.accountOrder[provider] = this.linkedAccountIds(provider);
-    this.saveAccountOrder();
+    this.reloadAccountOrder();
+    this.saveAccountOrder(provider, this.linkedAccountIds(provider));
   }
 
   /** Reorder linked accounts. Ids that are not linked are ignored; missing ones keep their place at the end. */
@@ -188,10 +190,10 @@ export class SubscriptionAccountState {
     accountIds: ReadonlyArray<string>,
   ): Promise<void> {
     await this.reloadAsync();
+    this.reloadAccountOrder();
     const linked = this.linkedAccountIds(provider);
     const ordered = [...new Set(accountIds.filter((id) => linked.includes(id)))];
-    this.accountOrder[provider] = [...ordered, ...linked.filter((id) => !ordered.includes(id))];
-    this.saveAccountOrder();
+    this.saveAccountOrder(provider, [...ordered, ...linked.filter((id) => !ordered.includes(id))]);
   }
   providerInstanceRequestHealth(instanceId: string): RequestHealthStatus | undefined {
     const health = this.healthService.requestHealth(`provider:${instanceId}`);
@@ -200,13 +202,18 @@ export class SubscriptionAccountState {
       (candidate) => defaultInstanceByProvider[candidate] === instanceId,
     );
 
-    // A limit on one linked account does not block the provider while another is ready.
+    // An account limit does not block the provider once a linked account is ready.
     if (
       provider &&
       health?.lastFailedRequest &&
       (health.health === "failed" || health.health === "failed-first-request") &&
       isAccountLimitMessage(health.lastFailedRequest.message) &&
-      this.linkedAccountIds(provider).length > 1 &&
+      (this.linkedAccountIds(provider).length > 1 ||
+        this.linkedAccountIds(provider).some((id) => {
+          const failure = this.health[credentialKey(provider, accountScope(id))]?.lastFailedRequest;
+
+          return failure !== undefined && isAccountLimitMessage(failure.message);
+        })) &&
       this.accountReady(this.activeAccountKey(provider), this.clock.currentTimeMillisUnsafe())
     ) {
       return undefined;

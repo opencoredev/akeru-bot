@@ -131,7 +131,7 @@ export function createHarness(deps: {
       getKimiAccess: (instanceId, threadId) =>
         deps.subscriptionAuth.getKimiForCodingAccess(instanceId, threadId),
       getOpenCodeGoApiKey: async (instanceId, threadId) =>
-        deps.subscriptionAuth.getApiKeyCredential("opencode-go", instanceId, threadId)?.access,
+        deps.subscriptionAuth.getApiKeyCredential("opencode-go", instanceId, threadId),
       getSubscriptionApiKey: (provider, instanceId, threadId) =>
         deps.subscriptionAuth.getApiKeyCredential(provider, instanceId, threadId),
       getSubscriptionOAuth: (provider, instanceId, threadId) =>

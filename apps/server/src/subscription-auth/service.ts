@@ -612,8 +612,8 @@ export class SubscriptionAuthService {
   }
 
   async logout(provider: SubscriptionProviderId, instanceId?: string): Promise<void> {
-    this.reloadLocal();
-    const key = credentialKey(provider, instanceId);
+    await this.reloadAsync();
+    const key = this.accounts.liveKey(provider, instanceId);
 
     for (const [loginId, pending] of this.pendingLogins) {
       if (credentialKey(pending.provider, pending.instanceId) === key) {

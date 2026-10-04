@@ -4,6 +4,8 @@ import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
 import type { MastraModelConfig } from "@mastra/core/llm";
 import { subscriptionRequestUrl } from "../subscription-auth/runtime.ts";
 
+export type AkeruOpenCodeGoAccess = { readonly access: string; readonly baseUrl?: string };
+
 const OPEN_CODE_GO_BASE_URL = "https://opencode.ai/zen/go/v1";
 
 const OPEN_CODE_GO_USER_AGENT = "akeru-bot/0.0.37";
@@ -29,12 +31,12 @@ export function openCodeGoProtocol(modelId: string): OpenCodeGoProtocol {
 
 export function buildAkeruOpenCodeGoFetch(
   protocol: OpenCodeGoProtocol,
-  getApiKey: () => Promise<string | undefined>,
+  getAccess: () => Promise<AkeruOpenCodeGoAccess | undefined>,
   request: AkeruOpenCodeGoFetch = globalThis.fetch,
-  getBaseUrl: () => string | undefined = () => undefined,
 ): AkeruOpenCodeGoFetch {
   return async (input, init) => {
-    const apiKey = await getApiKey();
+    const credential = await getAccess();
+    const apiKey = credential?.access;
 
     if (!apiKey) throw new Error("OpenCode Go is not connected. Add an API key in Settings.");
 
@@ -55,7 +57,7 @@ export function buildAkeruOpenCodeGoFetch(
       headers.set("Authorization", `Bearer ${apiKey}`);
     }
 
-    return request(subscriptionRequestUrl(input, OPEN_CODE_GO_BASE_URL, getBaseUrl()), {
+    return request(subscriptionRequestUrl(input, OPEN_CODE_GO_BASE_URL, credential?.baseUrl), {
       ...init,
       headers,
       redirect: "error",
@@ -65,18 +67,14 @@ export function buildAkeruOpenCodeGoFetch(
 
 export function akeruOpenCodeGoProvider(
   modelId: string,
-  getApiKey: () => Promise<string | undefined>,
-  getBaseUrl?: () => string | undefined,
+  getAccess: () => Promise<AkeruOpenCodeGoAccess | undefined>,
 ): MastraModelConfig {
   const protocol = openCodeGoProtocol(modelId);
 
   // SAFETY: The request adapter implements Fetch; this SDK declaration also includes an unused Bun preconnect method.
-  const fetch = buildAkeruOpenCodeGoFetch(
-    protocol,
-    getApiKey,
-    globalThis.fetch,
-    getBaseUrl,
-  ) as NonNullable<NonNullable<Parameters<typeof createOpenAI>[0]>["fetch"]>;
+  const fetch = buildAkeruOpenCodeGoFetch(protocol, getAccess, globalThis.fetch) as NonNullable<
+    NonNullable<Parameters<typeof createOpenAI>[0]>["fetch"]
+  >;
 
   if (protocol === "responses") {
     return createOpenAI({
