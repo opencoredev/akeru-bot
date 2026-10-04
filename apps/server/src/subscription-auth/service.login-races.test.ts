@@ -30,7 +30,7 @@ describe("OAuth completion ownership", () => {
         checkHealthOnConnect: false,
       });
 
-      const request = vi.fn(async () =>
+      const request = vi.fn(async (_input: string | URL | Request) =>
         Response.json({ access_token: "access", refresh_token: "refresh", expires_in: 3600 }),
       );
 
@@ -60,7 +60,11 @@ describe("OAuth completion ownership", () => {
         const retry = await service.completeLogin(login.loginId, `code#${state}`);
         expect(retry.status).toBe(cancelDuringWrite ? "failed" : "connected");
         expect(service.isConnected("anthropic")).toBe(!cancelDuringWrite);
-        expect(request).toHaveBeenCalledOnce();
+        expect(
+          request.mock.calls.filter(([input]) =>
+            String(input instanceof Request ? input.url : input).includes("/oauth/token"),
+          ),
+        ).toHaveLength(1);
       } finally {
         updateSpy.mockRestore();
       }

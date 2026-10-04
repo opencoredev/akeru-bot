@@ -16,9 +16,8 @@ describe("AkeruOpenCodeGoProvider", () => {
 
       await buildAkeruOpenCodeGoFetch(
         protocol,
-        async () => "custom-key",
+        async () => ({ access: "custom-key", baseUrl: "http://localhost:8080/v1" }),
         request,
-        () => "http://localhost:8080/v1",
       )("https://opencode.ai/zen/go/v1/messages", { method: "POST", body: "{}" });
       expect(request).toHaveBeenCalledWith(
         "http://localhost:8080/v1/messages",
@@ -40,7 +39,9 @@ describe("AkeruOpenCodeGoProvider", () => {
   });
 
   it("builds a model while keeping the OpenCode Go model id", () => {
-    expect(akeruOpenCodeGoProvider("gpt-5.6-luna", async () => "go-key")).toMatchObject({
+    expect(
+      akeruOpenCodeGoProvider("gpt-5.6-luna", async () => ({ access: "go-key" })),
+    ).toMatchObject({
       modelId: "gpt-5.6-luna",
     });
   });
@@ -58,7 +59,7 @@ describe("AkeruOpenCodeGoProvider", () => {
 
     await buildAkeruOpenCodeGoFetch(
       "chat-completions",
-      async () => "go-key",
+      async () => ({ access: "go-key" }),
       request,
     )("https://opencode.ai/zen/go/v1/chat/completions", {
       method: "POST",

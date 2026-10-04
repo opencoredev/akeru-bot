@@ -4,11 +4,13 @@ import { useMobileI18n } from "../../lib/i18n";
 import { useCallback, useEffect, useState } from "react";
 import { Linking, Pressable, TextInput, View } from "react-native";
 import type {
-  EnvironmentId,
   ProviderInstanceId,
+  EnvironmentId,
+  SubscriptionAccountId,
   SubscriptionAuthLoginProgress,
   SubscriptionAuthStartResult,
   SubscriptionProviderId,
+  SubscriptionProviderStatus,
 } from "@akeru/contracts";
 import {
   anyProviderHealthChecking,
@@ -35,6 +37,35 @@ import { SettingsSection } from "./components/SettingsSection";
 import { copySignInCode } from "./copySignInCode";
 
 const RETRY_POLL_MS = 5000;
+
+/**
+ * Which account a sign-in, check, or removal applies to: one failover account,
+ * a new one, or a separately named instance. Empty means the account in use.
+ */
+type AccountTarget = {
+  readonly accountId?: SubscriptionAccountId;
+  readonly addAccount?: true;
+  readonly instanceId?: ProviderInstanceId;
+};
+
+/** One account row: a failover account, or a separately named instance when `instanceId` is set. */
+type AccountRow = {
+  readonly status: SubscriptionProviderStatus | undefined;
+  readonly account: AccountTarget;
+  readonly instanceId?: ProviderInstanceId;
+};
+
+function accountName(
+  status: SubscriptionProviderStatus | undefined,
+  providerLabel: string,
+  t: ReturnType<typeof useMobileI18n>["t"],
+): string {
+  if (providerUsesApiKey(status)) return t("API key");
+
+  return status?.plan
+    ? `${providerLabel} ${status.plan}`
+    : t("{provider} account", { provider: providerLabel });
+}
 
 function commandError(
   result: AtomCommandResult<unknown, unknown>,
@@ -86,9 +117,14 @@ export function ProviderConnections({ environmentId }: { readonly environmentId:
   const cancel = useAtomCommand(serverEnvironment.cancelSubscriptionAuth, { reportFailure: false });
   const logout = useAtomCommand(serverEnvironment.logoutSubscriptionAuth, { reportFailure: false });
   const test = useAtomCommand(serverEnvironment.testSubscriptionAuth, { reportFailure: false });
+
+  const order = useAtomCommand(serverEnvironment.setSubscriptionAccountOrder, {
+    reportFailure: false,
+  });
+
   const [flow, setFlow] = useState<SubscriptionAuthStartResult | null>(null);
   const [keyProvider, setKeyProvider] = useState<SubscriptionProviderId | null>(null);
-  const [activeInstanceId, setActiveInstanceId] = useState<ProviderInstanceId | undefined>();
+  const [target, setTarget] = useState<AccountTarget>({});
   const [code, setCode] = useState("");
   const [baseUrl, setBaseUrl] = useState("");
   const [busy, setBusy] = useState(false);
@@ -100,7 +136,7 @@ export function ProviderConnections({ environmentId }: { readonly environmentId:
       if (progress.status === "connected") {
         setFlow(null);
         setCode("");
-        setActiveInstanceId(undefined);
+        setTarget({});
         query.refresh();
 
         return true;
@@ -172,40 +208,40 @@ export function ProviderConnections({ environmentId }: { readonly environmentId:
     }
   };
 
-  const openKey = (provider: SubscriptionProviderId, instanceId?: ProviderInstanceId) => {
+  const openKey = (provider: SubscriptionProviderId, account: AccountTarget = {}) => {
     setError(null);
     setCode("");
-    setActiveInstanceId(instanceId);
+    setTarget(account);
     setBaseUrl(
-      providerSupportsBaseUrl(provider)
-        ? ((instanceId
-            ? query.data?.accounts.find(
-                (status) => status.provider === provider && status.instanceId === instanceId,
+      providerSupportsBaseUrl(provider) && !account.addAccount
+        ? ((account.accountId
+            ? query.data?.linkedAccounts.find(
+                (status) => status.provider === provider && status.accountId === account.accountId,
               )
-            : query.data?.providers.find((status) => status.provider === provider)
+            : account.instanceId
+              ? query.data?.accounts.find(
+                  (status) =>
+                    status.provider === provider && status.instanceId === account.instanceId,
+                )
+              : query.data?.providers.find((status) => status.provider === provider)
           )?.baseUrl ?? "")
         : "",
     );
     setKeyProvider(provider);
   };
 
-  const connect = async (provider: SubscriptionProviderId, instanceId?: ProviderInstanceId) => {
+  const connect = async (provider: SubscriptionProviderId, account: AccountTarget = {}) => {
     if (provider === "opencode-go") {
-      openKey(provider, instanceId);
+      openKey(provider, account);
 
       return;
     }
 
     setError(null);
     setCode("");
-    setActiveInstanceId(instanceId);
+    setTarget(account);
     setBusy(true);
-
-    const result = await start({
-      environmentId,
-      input: { provider, ...(instanceId ? { instanceId } : {}) },
-    });
-
+    const result = await start({ environmentId, input: { provider, ...account } });
     setBusy(false);
 
     if (Predicate.isTagged(result, "Failure")) {
@@ -233,7 +269,7 @@ export function ProviderConnections({ environmentId }: { readonly environmentId:
       environmentId,
       input: {
         ...apiKeyStartInput(keyProvider, baseUrl),
-        ...(activeInstanceId ? { instanceId: activeInstanceId } : {}),
+        ...target,
       },
     });
 
@@ -256,7 +292,7 @@ export function ProviderConnections({ environmentId }: { readonly environmentId:
       setKeyProvider(null);
       setCode("");
       setBaseUrl("");
-      setActiveInstanceId(undefined);
+      setTarget({});
       query.refresh();
     } else {
       if (Predicate.isTagged(result, "Failure")) setError(commandError(result, t));
@@ -287,7 +323,7 @@ export function ProviderConnections({ environmentId }: { readonly environmentId:
     setKeyProvider(null);
     setCode("");
     setBaseUrl("");
-    setActiveInstanceId(undefined);
+    setTarget({});
     setError(null);
 
     if (login) {
@@ -300,16 +336,36 @@ export function ProviderConnections({ environmentId }: { readonly environmentId:
   const runAction = async (
     provider: SubscriptionProviderId,
     action: "disconnect" | "test",
-    instanceId?: ProviderInstanceId,
+    account: AccountTarget,
   ) => {
     setError(null);
     setBusy(true);
 
     const result = await (action === "disconnect" ? logout : test)({
       environmentId,
-      input: { provider, ...(instanceId ? { instanceId } : {}) },
+      input: { provider, ...account },
     });
 
+    setBusy(false);
+
+    if (Predicate.isTagged(result, "Success")) query.refresh();
+    else if (Predicate.isTagged(result, "Failure")) setError(commandError(result, t));
+  };
+
+  const move = async (
+    provider: SubscriptionProviderId,
+    accountIds: ReadonlyArray<SubscriptionAccountId>,
+    index: number,
+    offset: -1 | 1,
+  ) => {
+    const next = [...accountIds];
+    const [moved] = next.splice(index, 1);
+
+    if (!moved) return;
+    next.splice(index + offset, 0, moved);
+    setError(null);
+    setBusy(true);
+    const result = await order({ environmentId, input: { provider, accountIds: next } });
     setBusy(false);
 
     if (Predicate.isTagged(result, "Success")) query.refresh();
@@ -441,74 +497,161 @@ export function ProviderConnections({ environmentId }: { readonly environmentId:
             {query.isPending ? (
               <Text className="text-sm text-foreground-muted">{t("Loading connections…")}</Text>
             ) : null}
-            {PROVIDER_CONNECTIONS.flatMap((provider) => [
-              {
-                provider,
-                status: query.data?.providers.find((entry) => entry.provider === provider.id),
-                instanceId: undefined,
-              },
-              ...(query.data?.accounts
-                .filter((entry) => entry.provider === provider.id)
-                .map((status) => ({ provider, status, instanceId: status.instanceId })) ?? []),
-            ]).map(({ provider, status, instanceId }) => {
-              const apiKey = providerUsesApiKey(status);
+            {PROVIDER_CONNECTIONS.map((provider) => {
+              const linked =
+                query.data?.linkedAccounts.filter((entry) => entry.provider === provider.id) ?? [];
+
+              const accountIds = linked.flatMap((entry) =>
+                entry.accountId ? [entry.accountId] : [],
+              );
+
+              // Failover accounts first, then any separately named accounts of this provider.
+              const rows = [
+                ...(linked.length > 0
+                  ? linked
+                  : [query.data?.providers.find((entry) => entry.provider === provider.id)]
+                ).map(
+                  (status): AccountRow => ({
+                    status,
+                    account: status?.accountId ? { accountId: status.accountId } : {},
+                  }),
+                ),
+                ...(query.data?.accounts
+                  .filter((entry) => entry.provider === provider.id)
+                  .map(
+                    (status): AccountRow => ({
+                      status,
+                      account: status.instanceId ? { instanceId: status.instanceId } : {},
+                      ...(status.instanceId ? { instanceId: status.instanceId } : {}),
+                    }),
+                  ) ?? []),
+              ];
 
               return (
-                <View
-                  key={`${provider.id}:${instanceId ?? "default"}`}
-                  className="gap-2 border-b border-border-subtle py-3"
-                >
-                  <Text className="text-base font-t3-medium text-foreground">
-                    {provider.label}
-                    {instanceId ? ` · ${instanceId}` : ""}
-                  </Text>
-                  <Text className="text-sm text-foreground-muted">
-                    {status ? t(providerConnectionLabel(status)) : t("Status unavailable")}
-                  </Text>
-                  {status?.baseUrl ? (
-                    <Text selectable className="text-sm text-foreground-muted">
-                      {status.baseUrl}
-                    </Text>
+                <View key={provider.id} className="gap-3 border-b border-border-subtle py-3">
+                  <Text className="text-base font-t3-medium text-foreground">{provider.label}</Text>
+                  {rows.map(({ status, account, instanceId }, index) => {
+                    const apiKey = providerUsesApiKey(status);
+                    const failover = instanceId === undefined && linked.length > 0;
+                    const name = accountName(status, provider.label, t);
+
+                    const resting =
+                      status?.nextRetryAt !== undefined &&
+                      Date.parse(status.nextRetryAt) > Date.now();
+
+                    const resetTime = status?.nextRetryAt
+                      ? new Date(status.nextRetryAt).toLocaleTimeString([], {
+                          hour: "numeric",
+                          minute: "2-digit",
+                        })
+                      : "";
+
+                    return (
+                      <View key={instanceId ?? account.accountId ?? "default"} className="gap-2">
+                        {instanceId ? (
+                          <Text className="text-sm font-t3-medium text-foreground">
+                            {`${name} · ${instanceId}`}
+                          </Text>
+                        ) : failover ? (
+                          <Text className="text-sm font-t3-medium text-foreground">
+                            {`${index + 1}. ${name}`}
+                          </Text>
+                        ) : null}
+                        {failover && linked.length > 1 ? (
+                          <Text className="text-sm text-foreground-muted">
+                            {index === 0
+                              ? t("Main account")
+                              : t("Backup {number}", { number: String(index) })}
+                            {status?.active ? ` · ${t("In use")}` : ""}
+                          </Text>
+                        ) : null}
+                        <Text className="text-sm text-foreground-muted">
+                          {status ? t(providerConnectionLabel(status)) : t("Status unavailable")}
+                        </Text>
+                        {resting ? (
+                          <Text className="text-sm text-foreground-muted">
+                            {t("Usage limit reached, back at {time}", { time: resetTime })}
+                          </Text>
+                        ) : null}
+                        {status?.baseUrl ? (
+                          <Text selectable className="text-sm text-foreground-muted">
+                            {status.baseUrl}
+                          </Text>
+                        ) : null}
+                        <View className="flex-row flex-wrap gap-2">
+                          <Action
+                            label={
+                              status?.connected
+                                ? apiKey && provider.id !== "opencode-go"
+                                  ? t("Use OAuth")
+                                  : t("Reconnect")
+                                : t("Connect")
+                            }
+                            disabled={busy || query.isPending}
+                            onPress={() => void connect(provider.id, account)}
+                          />
+                          {provider.id !== "opencode-go" ? (
+                            <Action
+                              label={apiKey ? t("Reconnect key") : t("API key")}
+                              disabled={busy || query.isPending}
+                              onPress={() => openKey(provider.id, account)}
+                            />
+                          ) : null}
+                          {status?.connected ? (
+                            <>
+                              <Action
+                                label={apiKey ? t("Check key") : t("Check OAuth")}
+                                disabled={busy}
+                                onPress={() => void runAction(provider.id, "test", account)}
+                              />
+                              <Action
+                                label={t("Disconnect")}
+                                disabled={busy}
+                                onPress={() => void runAction(provider.id, "disconnect", account)}
+                              />
+                            </>
+                          ) : null}
+                          {failover && linked.length > 1 && index > 0 ? (
+                            <Action
+                              label={t("Move up")}
+                              disabled={busy}
+                              onPress={() => void move(provider.id, accountIds, index, -1)}
+                            />
+                          ) : null}
+                          {failover && linked.length > 1 && index < linked.length - 1 ? (
+                            <Action
+                              label={t("Move down")}
+                              disabled={busy}
+                              onPress={() => void move(provider.id, accountIds, index, 1)}
+                            />
+                          ) : null}
+                        </View>
+                      </View>
+                    );
+                  })}
+                  {linked.length > 0 ? (
+                    <View className="gap-2">
+                      <View className="flex-row flex-wrap gap-2">
+                        {provider.id !== "opencode-go" ? (
+                          <Action
+                            label={t("Add account")}
+                            disabled={busy || query.isPending}
+                            onPress={() => void connect(provider.id, { addAccount: true })}
+                          />
+                        ) : null}
+                        <Action
+                          label={t("Add key")}
+                          disabled={busy || query.isPending}
+                          onPress={() => openKey(provider.id, { addAccount: true })}
+                        />
+                      </View>
+                    </View>
                   ) : null}
                   <ProviderAccessSummary
                     provider={provider.id}
-                    status={status}
+                    status={rows.find((row) => row.status?.active)?.status ?? rows[0]?.status}
                     models={providerAccessModelNames(serverProviders, provider.id)}
                   />
-                  <View className="flex-row flex-wrap gap-2">
-                    <Action
-                      label={
-                        status?.connected
-                          ? apiKey && provider.id !== "opencode-go"
-                            ? t("Use OAuth")
-                            : t("Reconnect")
-                          : t("Connect")
-                      }
-                      disabled={busy || query.isPending}
-                      onPress={() => void connect(provider.id, instanceId)}
-                    />
-                    {provider.id !== "opencode-go" ? (
-                      <Action
-                        label={apiKey ? t("Reconnect key") : t("API key")}
-                        disabled={busy || query.isPending}
-                        onPress={() => openKey(provider.id, instanceId)}
-                      />
-                    ) : null}
-                    {status?.connected ? (
-                      <>
-                        <Action
-                          label={apiKey ? t("Check key") : t("Check OAuth")}
-                          disabled={busy}
-                          onPress={() => void runAction(provider.id, "test", instanceId)}
-                        />
-                        <Action
-                          label={t("Disconnect")}
-                          disabled={busy}
-                          onPress={() => void runAction(provider.id, "disconnect", instanceId)}
-                        />
-                      </>
-                    ) : null}
-                  </View>
                 </View>
               );
             })}

@@ -20,7 +20,7 @@ import { useI18n } from "../../i18n";
 import { useChangedSinceMount } from "../../hooks/useChangedSinceMount";
 import { useClientSettings } from "../../hooks/useSettings";
 import { useTheme } from "../../hooks/useTheme";
-import { cn, isMacPlatform } from "../../lib/utils";
+import { cn } from "../../lib/utils";
 import { openPlugins } from "../../pluginsDialogStore";
 import { openProductFeedback } from "../../productFeedbackStore";
 import { openUsage } from "../../usageDialogStore";
@@ -104,7 +104,6 @@ export function ExperimentalSidebar() {
     if (onSettings || railOnly) void navigate({ to: "/" });
   };
 
-  const isMacosDesktop = isElectron && isMacPlatform(navigator.platform);
   const { resolvedTheme, setAppearanceMode } = useTheme();
   const nextAppearance = resolvedTheme === "dark" ? "light" : "dark";
   const panel = onSettings ? "settings" : place;
@@ -113,98 +112,109 @@ export function ExperimentalSidebar() {
   const { t } = useI18n();
 
   return (
-    <div className="flex h-full min-h-0 w-full overflow-hidden">
-      <nav
-        aria-label={t("Main")}
-        className="flex h-full w-(--rail-width) shrink-0 flex-col items-center pb-3"
-        style={{ "--rail-width": `${RAIL_WIDTH}px` }}
-      >
-        {/* macOS desktop keeps the full titlebar height clear for the traffic
-            lights. Elsewhere the first icon centers on the panel title row. */}
-        <div
-          className={cn(
-            "w-full shrink-0",
-            isMacosDesktop ? "h-(--workspace-topbar-height)" : "h-topbar-spacer",
-            isElectron && "drag-region",
-          )}
-        />
-        <div className="flex flex-col items-center gap-1.5">
-          <RailButton
-            label={t("Chats")}
-            icon={BubbleChatIcon}
-            active={!onSettings && !railOnly && place === "chats"}
-            onClick={() => choosePlace("chats")}
-          />
-          <RailButton
-            label={t("Routines")}
-            icon={Calendar03Icon}
-            active={!onSettings && !railOnly && place === "routines"}
-            onClick={() => choosePlace("routines")}
-          />
-          <RailButton
-            label={t("Plugins")}
-            icon={PuzzleIcon}
-            active={onPlugins}
-            onClick={() => {
-              if (!onPlugins) openPlugins();
-            }}
-          />
-          <RailButton
-            label={t("Usage")}
-            icon={Analytics01Icon}
-            active={onUsage}
-            onClick={() => {
-              if (!onUsage) openUsage();
-            }}
-          />
-        </div>
-        <div className="mt-auto flex flex-col items-center gap-1.5">
-          <RailButton
-            label={nextAppearance === "dark" ? t("Switch to dark mode") : t("Switch to light mode")}
-            icon={nextAppearance === "dark" ? Moon02Icon : Sun03Icon}
-            onClick={() => setAppearanceMode(nextAppearance)}
-          />
-          <RailButton
-            label={t("Feedback")}
-            icon={HelpCircleIcon}
-            onClick={() => openProductFeedback()}
-          />
-          <RailButton
-            label={t("Settings")}
-            icon={Settings02Icon}
-            active={onSettings}
-            onClick={() => {
-              revealPanel();
-
-              if (!onSettings) openSettings();
-            }}
-          />
-        </div>
-      </nav>
-      {/* The panel is a raised card; its row tokens are re-based on the card surface. */}
-      {/* Fixed width so collapsing clips the panel instead of squeezing its rows. */}
+    <div className="flex h-full min-h-0 w-full flex-col overflow-hidden">
+      {/* The macOS traffic lights are wider than the rail, so while they show
+          they get a titlebar strip across rail and panel. Fullscreen hides
+          them and drops the strip. */}
       <div
         className={cn(
-          "flex w-(--panel-width) shrink-0 py-2 pr-2",
-          railOnly && !isMobile && "hidden",
+          "hidden h-(--workspace-topbar-height) w-full shrink-0 in-data-[macos-traffic-lights]:block",
+          isElectron && "drag-region",
         )}
-        style={{ "--panel-width": `${PANEL_WIDTH}px` }}
-      >
-        <div className="flex min-w-0 flex-1 flex-col overflow-hidden rounded-2xl border border-sidebar-border/70 bg-sidebar shadow-(--shell-card-shadow) sidebar-shell-card">
+      />
+      <div className="flex min-h-0 w-full flex-1 overflow-hidden">
+        <nav
+          aria-label={t("Main")}
+          className="flex h-full w-(--rail-width) shrink-0 flex-col items-center pb-3"
+          style={{ "--rail-width": `${RAIL_WIDTH}px` }}
+        >
+          {/* The first icon centers on the panel title row. */}
           <div
-            key={panel}
-            className={cn("flex min-h-0 flex-1 flex-col", panelSwitched && "motion-place-enter")}
-          >
-            {Match.value(panel).pipe(
-              Match.when("settings", () => (
-                <>
-                  <PanelHeader title={t("Settings")} />
-                  <SettingsPanelNav />
-                </>
-              )),
-              Match.when("chats", () => <BotRosterSidebar chrome="panel" />),
-              Match.orElse(() => <RoutinesPanel />),
+            className={cn(
+              "h-topbar-spacer w-full shrink-0 in-data-[macos-traffic-lights]:h-0",
+              isElectron && "drag-region",
             )}
+          />
+          <div className="flex flex-col items-center gap-1.5">
+            <RailButton
+              label={t("Chats")}
+              icon={BubbleChatIcon}
+              active={!onSettings && !railOnly && place === "chats"}
+              onClick={() => choosePlace("chats")}
+            />
+            <RailButton
+              label={t("Routines")}
+              icon={Calendar03Icon}
+              active={!onSettings && !railOnly && place === "routines"}
+              onClick={() => choosePlace("routines")}
+            />
+            <RailButton
+              label={t("Plugins")}
+              icon={PuzzleIcon}
+              active={onPlugins}
+              onClick={() => {
+                if (!onPlugins) openPlugins();
+              }}
+            />
+            <RailButton
+              label={t("Usage")}
+              icon={Analytics01Icon}
+              active={onUsage}
+              onClick={() => {
+                if (!onUsage) openUsage();
+              }}
+            />
+          </div>
+          <div className="mt-auto flex flex-col items-center gap-1.5">
+            <RailButton
+              label={
+                nextAppearance === "dark" ? t("Switch to dark mode") : t("Switch to light mode")
+              }
+              icon={nextAppearance === "dark" ? Moon02Icon : Sun03Icon}
+              onClick={() => setAppearanceMode(nextAppearance)}
+            />
+            <RailButton
+              label={t("Feedback")}
+              icon={HelpCircleIcon}
+              onClick={() => openProductFeedback()}
+            />
+            <RailButton
+              label={t("Settings")}
+              icon={Settings02Icon}
+              active={onSettings}
+              onClick={() => {
+                revealPanel();
+
+                if (!onSettings) openSettings();
+              }}
+            />
+          </div>
+        </nav>
+        {/* The panel is a raised card; its row tokens are re-based on the card surface. */}
+        {/* Fixed width so collapsing clips the panel instead of squeezing its rows. */}
+        <div
+          className={cn(
+            "flex w-(--panel-width) shrink-0 py-2 pr-2 in-data-[macos-traffic-lights]:pt-0",
+            railOnly && !isMobile && "hidden",
+          )}
+          style={{ "--panel-width": `${PANEL_WIDTH}px` }}
+        >
+          <div className="flex min-w-0 flex-1 flex-col overflow-hidden rounded-2xl border border-sidebar-border/70 bg-sidebar shadow-(--shell-card-shadow) sidebar-shell-card">
+            <div
+              key={panel}
+              className={cn("flex min-h-0 flex-1 flex-col", panelSwitched && "motion-place-enter")}
+            >
+              {Match.value(panel).pipe(
+                Match.when("settings", () => (
+                  <>
+                    <PanelHeader title={t("Settings")} />
+                    <SettingsPanelNav />
+                  </>
+                )),
+                Match.when("chats", () => <BotRosterSidebar chrome="panel" />),
+                Match.orElse(() => <RoutinesPanel />),
+              )}
+            </div>
           </div>
         </div>
       </div>

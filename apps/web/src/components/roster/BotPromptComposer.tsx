@@ -362,9 +362,7 @@ export function BotPromptComposer({
           />
         </ComposerBanner.Dock>
         {composerBotId !== null ? (
-          <div className="mb-1 flex min-w-0 items-center px-1" data-testid="bot-composer-model">
-            <BotComposerModelControl botId={composerBotId} disabled={readOnly} />
-          </div>
+          <BotComposerModelControl botId={composerBotId} disabled={readOnly} />
         ) : null}
         <AnimatePresence initial={false}>
           {activitySlot ? (

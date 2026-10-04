@@ -5,7 +5,7 @@ import {
   type ProviderInstanceId,
 } from "@akeru/contracts";
 import { getAvailableThinkingLevelsForModel } from "@mastra/code-sdk/thinking";
-import { createModelCapabilities } from "@akeru/shared/model";
+import { createModelCapabilities, formatModelSlug } from "@akeru/shared/model";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 
@@ -43,31 +43,6 @@ export const CODEX_HARNESS_HISTORICAL_MODELS = [
   "gpt-5",
   "codex-mini-latest",
 ] as const;
-
-/**
- * Readable picker name for a harness model slug that has no catalog entry:
- * `gpt-6.1-sol` becomes "GPT-6.1 Sol" and `claude-opus-5-5` becomes
- * "Claude Opus 5.5".
- */
-export function harnessModelName(slug: string): string {
-  const words: string[] = [];
-
-  for (const part of slug.split("-")) {
-    const previous = words.at(-1);
-
-    if (/^\d{1,2}$/.test(part) && previous && /^\d+(\.\d+)*$/.test(previous)) {
-      words[words.length - 1] = `${previous}.${part}`;
-    } else if (/^\d/.test(part) && previous === "GPT") {
-      words[words.length - 1] = `GPT-${part}`;
-    } else if (part === "gpt") {
-      words.push("GPT");
-    } else {
-      words.push(/^\d/.test(part) ? part : part.charAt(0).toUpperCase() + part.slice(1));
-    }
-  }
-
-  return words.join(" ");
-}
 
 /** Codex model ids: the catalog's, newest first, then historical slugs that
  * saved threads may still reference. */
@@ -241,7 +216,7 @@ export const makeHarnessProviderStatus = Effect.fn("makeHarnessProviderStatus")(
         .filter((slug) => !draft.models.some((model) => !model.isCustom && model.slug === slug))
         .map((slug, index) => ({
           slug,
-          name: entries.get(slug)?.name ?? harnessModelName(slug),
+          name: entries.get(slug)?.name ?? formatModelSlug(slug),
           isCustom: false,
           ...(index === 0 && !draft.models.some((model) => !model.isCustom)
             ? { isDefault: true }
@@ -281,7 +256,7 @@ export const makeHarnessProviderStatus = Effect.fn("makeHarnessProviderStatus")(
             if (model.slug !== "grok-build" || model.isCustom) return model;
             const { isLegacy: _isLegacy, ...rest } = model;
 
-            return { ...rest, name: "Grok 4.6", isDefault: true };
+            return { ...rest, name: "Grok 4.7", isDefault: true };
           }),
         }
       : classified;

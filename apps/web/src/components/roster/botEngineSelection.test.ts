@@ -16,6 +16,7 @@ import {
   botEngineFailureContext,
   botEngineForModelPick,
   botEngineForOptions,
+  botEngineSubscriptionToConnect,
   botEngineTakesDelegatedWork,
   botEngineUnavailability,
   resolveStickyBotEngine,
@@ -113,7 +114,7 @@ describe("resolveStickyBotEngine", () => {
     expect(
       botEngineUnavailability({ instanceId, model: "gpt-4-retired" }, signedIn, zh),
     ).toMatchObject({
-      title: expect.stringMatching(/^gpt-4-retired 在 .+ 上不可用$/),
+      title: expect.stringMatching(/^GPT-4 Retired 在 .+ 上不可用$/),
       description: "请为此机器人选择其他模型。",
     });
     expect(botEngineUnavailability(null, signedIn, zh)).toMatchObject({
@@ -359,6 +360,31 @@ describe("botEngineFailureContext", () => {
         "missing-login",
       ),
     ).toMatchObject({ providerName: "Work Codex", provider: null });
+  });
+});
+
+describe("botEngineSubscriptionToConnect", () => {
+  const instanceEntries = deriveProviderInstanceEntries([makeComposerTestProvider()]);
+  const codex = { instanceId: ProviderInstanceId.make("codex"), model: "gpt-5.6-sol" };
+
+  it("names the subscription when signing in is the fix", () => {
+    expect(botEngineSubscriptionToConnect(codex, instanceEntries, "missing-login")).toBe(
+      "openai-codex",
+    );
+    // An unconnected default instance is hidden from the client entirely.
+    expect(botEngineSubscriptionToConnect(codex, [], "missing-provider")).toBe("openai-codex");
+  });
+
+  it("leaves other failures and custom instances to the usual notice", () => {
+    expect(botEngineSubscriptionToConnect(codex, instanceEntries, "limit-reached")).toBeNull();
+    expect(botEngineSubscriptionToConnect(codex, instanceEntries, null)).toBeNull();
+    expect(
+      botEngineSubscriptionToConnect(
+        { instanceId: ProviderInstanceId.make("codex_work"), model: "gpt-5.6-sol" },
+        instanceEntries,
+        "missing-login",
+      ),
+    ).toBeNull();
   });
 });
 

@@ -198,7 +198,7 @@ describe("HarnessTextGeneration", () => {
   for (const [driver, provider, model, transport] of [
     ["codex", "openai-codex", "gpt-6-sol", "gpt-6-sol"],
     ["claudeAgent", "anthropic", "claude-sonnet-5", "claude-sonnet-5"],
-    ["grok", "xai", "grok-build", "grok-4.6"],
+    ["grok", "xai", "grok-build", "grok-4.7"],
   ] as const) {
     it.effect(
       `generates ${driver} titles and branches with a saved credential, without a CLI`,

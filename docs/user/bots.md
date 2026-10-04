@@ -31,10 +31,10 @@ empty, the main view shows **Create bot**.
 ## Profile
 
 You can change the bot's avatar, name, label, description, model, voice access, and enabled tools.
-Select **Save** to apply the changes. The model button in the composer shows which model answers the
-next message. Select it to change the bot's model without leaving the chat. The model list also
-shows providers that cannot run right now, such as one that is signed out or turned off. Their
-models are dimmed and say why.
+Select **Save** to apply the changes. The model lives in the bot's settings under **Model & usage**,
+not in the chat. From a chat, use **Change model** in the command palette or its shortcut to jump
+straight there. The model list also shows providers that cannot run right now, such as one that is
+signed out or turned off. Their models are dimmed and say why.
 
 Reasoning controls how much thinking the bot spends before answering. Change it under **Reasoning**
 in the bot's settings on web or desktop. On mobile, open **Model and reasoning settings** in the

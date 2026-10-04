@@ -28,6 +28,39 @@ describe("Anthropic OAuth", () => {
     }),
   );
 
+  it.effect("records the Claude tier from the account profile", () =>
+    Effect.gen(function* () {
+      const { client, requests } = scriptedHttpClient((request) =>
+        request.url.endsWith("/api/oauth/profile")
+          ? Response.json({ organization: { rate_limit_tier: "default_claude_max_20x" } })
+          : Response.json(tokens),
+      );
+
+      const result = yield* AnthropicOAuth.refreshToken("refresh").pipe(
+        Effect.provideService(HttpClient.HttpClient, client),
+      );
+
+      expect(result.plan).toBe("Max 20x");
+      expect(requests[1]?.headers["authorization"]).toBe("Bearer access");
+    }),
+  );
+
+  it.effect("still signs in when the profile is unavailable", () =>
+    Effect.gen(function* () {
+      const { client } = scriptedHttpClient((request) =>
+        request.url.endsWith("/api/oauth/profile")
+          ? new Response("nope", { status: 500 })
+          : Response.json(tokens),
+      );
+
+      const result = yield* AnthropicOAuth.refreshToken("refresh").pipe(
+        Effect.provideService(HttpClient.HttpClient, client),
+      );
+
+      expect(result).toEqual({ access: "access", refresh: "refresh", expires: 3_300_000 });
+    }),
+  );
+
   it.effect("rejects a mismatched state before any request", () =>
     Effect.gen(function* () {
       const { client, requests } = scriptedHttpClient(() => Response.json(tokens));

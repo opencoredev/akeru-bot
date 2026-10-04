@@ -125,15 +125,16 @@ export function createHarness(deps: {
 
     const bundle = yield* makeMastraHarness({
       authStorage: deps.authStorage,
-      getKimiAccess: (instanceId) => deps.subscriptionAuth.getKimiForCodingAccess(instanceId),
-      getOpenCodeGoApiKey: async (instanceId) =>
-        deps.subscriptionAuth.getApiKeyCredential("opencode-go", instanceId)?.access,
-      getSubscriptionApiKey: (provider, instanceId) =>
-        deps.subscriptionAuth.getApiKeyCredential(provider, instanceId),
-      getSubscriptionOAuth: (provider, instanceId) =>
-        deps.subscriptionAuth.getOAuthCredential(provider, instanceId),
-      getSubscriptionAccessToken: (provider, instanceId) =>
-        deps.subscriptionAuth.getAccessToken(provider, instanceId),
+      getKimiAccess: (instanceId, threadId) =>
+        deps.subscriptionAuth.getKimiForCodingAccess(instanceId, threadId),
+      getOpenCodeGoApiKey: async (instanceId, threadId) =>
+        deps.subscriptionAuth.getApiKeyCredential("opencode-go", instanceId, threadId),
+      getSubscriptionApiKey: (provider, instanceId, threadId) =>
+        deps.subscriptionAuth.getApiKeyCredential(provider, instanceId, threadId),
+      getSubscriptionOAuth: (provider, instanceId, threadId) =>
+        deps.subscriptionAuth.getOAuthCredential(provider, instanceId, threadId),
+      getSubscriptionAccessToken: (provider, instanceId, threadId) =>
+        deps.subscriptionAuth.getAccessToken(provider, instanceId, threadId),
       getModelConnection: (providerInstanceId) => {
         const connection = deps.modelConnections.get(providerInstanceId);
 

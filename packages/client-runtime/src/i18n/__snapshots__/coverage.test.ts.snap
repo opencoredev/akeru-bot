@@ -2,7 +2,7 @@
 
 exports[`discovered interface message coverage > covers static calls and finite label sources without translating identifiers 1`] = `
 {
-  "directMessageCount": 1766,
+  "directMessageCount": 1781,
   "expressions": {
     "apps/mobile/src/components/DictationControls.tsx": [
       "announcements[status]);",
@@ -164,6 +164,9 @@ exports[`discovered interface message coverage > covers static calls and finite 
       "entry.planHint)} />",
       "entry.planHint)}",
       "entry.planHint)}",
+    ],
+    "apps/web/src/components/settings/ProviderLinkedAccounts.tsx": [
+      "state.label)}</span>;",
     ],
     "apps/web/src/components/settings/SandboxSettingsPanel.tsx": [
       "definition.description)}",
@@ -409,6 +412,7 @@ exports[`discovered interface message coverage > covers static calls and finite 
     "apps/web/src/components/chat/ModelPickerContent.tsx",
     "apps/web/src/components/chat/ModelPickerSidebar.tsx",
     "apps/web/src/components/chat/PluginSearchResultCard.tsx",
+    "apps/web/src/components/chat/ProviderConnectCard.tsx",
     "apps/web/src/components/chat/ProviderModelPicker.tsx",
     "apps/web/src/components/chat/ProviderUnavailableNotice.tsx",
     "apps/web/src/components/chat/ReplyPlaybackControls.tsx",
@@ -454,7 +458,6 @@ exports[`discovered interface message coverage > covers static calls and finite 
     "apps/web/src/components/roster/BotChannelsSheet.tsx",
     "apps/web/src/components/roster/BotChatMessageRows.tsx",
     "apps/web/src/components/roster/BotChatsSection.tsx",
-    "apps/web/src/components/roster/BotComposerModelControl.tsx",
     "apps/web/src/components/roster/BotConversationScrollArea.tsx",
     "apps/web/src/components/roster/BotDetailsPanel.tsx",
     "apps/web/src/components/roster/BotDurableMemory.tsx",
@@ -536,6 +539,7 @@ exports[`discovered interface message coverage > covers static calls and finite 
     "apps/web/src/components/settings/ProviderAccountControls.tsx",
     "apps/web/src/components/settings/ProviderDetailPage.tsx",
     "apps/web/src/components/settings/ProviderInstancesSection.tsx",
+    "apps/web/src/components/settings/ProviderLinkedAccounts.tsx",
     "apps/web/src/components/settings/ProvidersPanel.tsx",
     "apps/web/src/components/settings/SandboxSettingsPanel.tsx",
     "apps/web/src/components/settings/SettingsDialog.tsx",
@@ -551,6 +555,7 @@ exports[`discovered interface message coverage > covers static calls and finite 
     "apps/web/src/components/settings/VoiceSettings.tsx",
     "apps/web/src/components/settings/portabilityPresentation.ts",
     "apps/web/src/components/settings/settingsLayout.tsx",
+    "apps/web/src/components/settings/subscriptionProviders.ts",
     "apps/web/src/components/settings/useDesktopBackendSettings.ts",
     "apps/web/src/components/settings/useSettingsRestore.ts",
     "apps/web/src/components/settings/useSubscriptionAccounts.ts",

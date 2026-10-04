@@ -5,6 +5,7 @@ import { useSettingsEnvironmentId } from "../../settingsDialogStore";
 import { EMPTY_SERVER_PROVIDERS, serverEnvironment } from "../../state/server";
 import { PROVIDER_CATALOG, type ProviderCatalogEntry } from "./providerCatalog";
 import { ProviderInstancesSection } from "./ProviderInstancesSection";
+import { ProviderAccountsSection } from "./ProviderLinkedAccounts";
 import { ProviderAccountSection, useSubscriptionStatuses } from "./ProvidersPanel";
 import {
   accountConnectionState,
@@ -152,7 +153,10 @@ function ConnectedProviderDetail({
         plan={plans.get(entry.slug) ?? translate(entry.planHint)}
       />
       {entry.account ? (
-        <ProviderAccountSection environmentId={environmentId} definition={entry.account} />
+        <>
+          <ProviderAccountSection environmentId={environmentId} definition={entry.account} />
+          <ProviderAccountsSection environmentId={environmentId} definition={entry.account} />
+        </>
       ) : null}
       <ProviderInstancesSection
         environmentId={environmentId}

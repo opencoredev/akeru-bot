@@ -24,6 +24,7 @@ const DRIVER_KIND = ProviderDriverKind.make("opencodeGo");
 const decodeSettings = Schema.decodeSync(OpenCodeGoSettings);
 
 export const OPEN_CODE_GO_MODELS = [
+  "gpt-6-luna",
   "gpt-5.6-luna",
   "grok-4.5",
   "grok-4.6",

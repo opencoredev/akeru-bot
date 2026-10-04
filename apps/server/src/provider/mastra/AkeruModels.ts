@@ -5,18 +5,16 @@ import { opencodeClaudeMaxProvider } from "@mastra/code-sdk/providers/claude-max
 import { xaiProvider } from "@mastra/code-sdk/providers/xai";
 import { createAnthropic } from "@ai-sdk/anthropic";
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
-import { SubscriptionProviderId, type ProviderDriverKind } from "@akeru/contracts";
+import { type SubscriptionProviderId, type ProviderDriverKind } from "@akeru/contracts";
 import type { SubscriptionAuthService } from "../../subscription-auth/service.ts";
 import { akeruCodexOAuthProvider, akeruOpenAIProvider } from "../AkeruOpenAIProvider.ts";
 import { akeruKimiProvider, type AkeruKimiAccess } from "../AkeruKimiProvider.ts";
-import { akeruOpenCodeGoProvider } from "../AkeruOpenCodeGoProvider.ts";
+import { akeruOpenCodeGoProvider, type AkeruOpenCodeGoAccess } from "../AkeruOpenCodeGoProvider.ts";
 import { type AkeruMastraState } from "./AkeruHarnessTypes.ts";
 
 const decodeInlineConfig = Schema.decodeUnknownSync(
   Schema.Struct({ provider: Schema.optionalKey(Schema.Unknown) }),
 );
-
-const isSubscriptionProviderId = Schema.is(SubscriptionProviderId);
 
 export const DEFAULT_MODEL_ID = "openai/gpt-5.6-sol";
 
@@ -81,7 +79,7 @@ export const MASTRA_MODEL_PREFIX = {
 } as const;
 
 export function mastraModelId(provider: ProviderDriverKind, model: string): string {
-  const trimmed = provider === "grok" && model.trim() === "grok-build" ? "grok-4.6" : model.trim();
+  const trimmed = provider === "grok" && model.trim() === "grok-build" ? "grok-4.7" : model.trim();
   const prefix = Object.entries(MASTRA_MODEL_PREFIX).find(([driver]) => driver === provider)?.[1];
 
   if (!prefix) return trimmed.includes("/") ? trimmed : `${provider}/${trimmed}`;
@@ -125,8 +123,11 @@ export function openCodeGoInlineConnection(environment: NodeJS.ProcessEnv | unde
 export function resolveAkeruMastraModel(
   modelId: string,
   authStorage: AuthStorage,
-  getKimiAccess?: (instanceId?: string) => Promise<AkeruKimiAccess | undefined>,
-  getOpenCodeGoApiKey?: (instanceId?: string) => Promise<string | undefined>,
+  getKimiAccess?: (instanceId?: string, threadId?: string) => Promise<AkeruKimiAccess | undefined>,
+  getOpenCodeGoApiKey?: (
+    instanceId?: string,
+    threadId?: string,
+  ) => Promise<AkeruOpenCodeGoAccess | undefined>,
   _modelOptions?: AkeruMastraState["modelOptions"],
   getSubscriptionApiKey?: SubscriptionAuthService["getApiKeyCredential"],
   connection?: {
@@ -137,6 +138,8 @@ export function resolveAkeruMastraModel(
   },
   getSubscriptionOAuth?: SubscriptionAuthService["getOAuthCredential"],
   getSubscriptionAccessToken?: SubscriptionAuthService["getAccessToken"],
+  /** The thread this request serves, so its outcome is recorded on the account it used. */
+  threadId?: string,
 ) {
   const trimmed = modelId.trim();
 
@@ -148,23 +151,23 @@ export function resolveAkeruMastraModel(
   const instanceId = connection?.instanceId;
 
   const savedApiKey = (provider: Parameters<NonNullable<typeof getSubscriptionApiKey>>[0]) =>
-    instanceId ? getSubscriptionApiKey?.(provider, instanceId) : getSubscriptionApiKey?.(provider);
+    getSubscriptionApiKey?.(provider, instanceId, threadId);
 
-  // SAFETY: The scoped view inherits AuthStorage methods and state, and overrides only credential lookup.
-  const scopedAuthStorage =
-    instanceId && getSubscriptionOAuth && getSubscriptionAccessToken
-      ? Object.assign(Object.create(authStorage) as AuthStorage, {
-          reload: () => {},
-          get: (provider: string) =>
-            isSubscriptionProviderId(provider)
-              ? getSubscriptionOAuth(provider, instanceId)
-              : undefined,
-          getApiKey: (provider: string) =>
-            isSubscriptionProviderId(provider)
-              ? getSubscriptionAccessToken(provider, instanceId)
-              : undefined,
-        })
-      : authStorage;
+  // OAuth token refresh stays on the account selected for this model's transport.
+  const scopedAuthStorage = (providerId: SubscriptionProviderId) => {
+    if (!getSubscriptionOAuth || !getSubscriptionAccessToken) return authStorage;
+    const credential = getSubscriptionOAuth(providerId, instanceId, threadId);
+
+    // SAFETY: The scoped view inherits AuthStorage methods and state, and overrides only credential lookup.
+    return Object.assign(Object.create(authStorage) as AuthStorage, {
+      reload: () => {},
+      get: (provider: string) => (provider === providerId ? credential : undefined),
+      getApiKey: (provider: string) =>
+        provider === providerId && credential
+          ? getSubscriptionAccessToken(providerId, credential.scope ?? instanceId)
+          : undefined,
+    });
+  };
 
   if (trimmed.startsWith("openai/")) {
     const instanceApiKey = environment?.OPENAI_API_KEY?.trim();
@@ -181,15 +184,20 @@ export function resolveAkeruMastraModel(
         ? () => savedApiKey("openai-codex")
         : undefined;
 
-    if (getCredential?.()) {
-      return akeruOpenAIProvider(trimmed.slice("openai/".length), () => getCredential());
+    const credential = getCredential?.();
+
+    if (credential) {
+      return akeruOpenAIProvider(trimmed.slice("openai/".length), () => credential);
     }
 
     if (!useSavedCredential) {
       throw new Error("This Codex instance has no OPENAI_API_KEY transport for Akeru Mastra.");
     }
 
-    return akeruCodexOAuthProvider(trimmed.slice("openai/".length), scopedAuthStorage);
+    return akeruCodexOAuthProvider(
+      trimmed.slice("openai/".length),
+      scopedAuthStorage("openai-codex"),
+    );
   }
 
   if (trimmed.startsWith("anthropic/")) {
@@ -232,7 +240,10 @@ export function resolveAkeruMastraModel(
       );
     }
 
-    return opencodeClaudeMaxProvider(model, { ...contextHeaders, authStorage: scopedAuthStorage });
+    return opencodeClaudeMaxProvider(model, {
+      ...contextHeaders,
+      authStorage: scopedAuthStorage("anthropic"),
+    });
   }
 
   if (trimmed.startsWith("xai/")) {
@@ -260,7 +271,7 @@ export function resolveAkeruMastraModel(
       throw new Error("This Grok instance has no XAI_API_KEY transport for Akeru Mastra.");
     }
 
-    return xaiProvider(model, { authStorage: scopedAuthStorage });
+    return xaiProvider(model, { authStorage: scopedAuthStorage("xai") });
   }
 
   if (trimmed.startsWith("kimi-for-coding/")) {
@@ -273,7 +284,7 @@ export function resolveAkeruMastraModel(
     if (!getKimiAccess) throw new Error("Kimi For Coding subscription access is unavailable.");
 
     return akeruKimiProvider(trimmed.slice("kimi-for-coding/".length), () =>
-      getKimiAccess(instanceId),
+      getKimiAccess(instanceId, threadId),
     );
   }
 
@@ -281,22 +292,29 @@ export function resolveAkeruMastraModel(
     const inlineConnection = openCodeGoInlineConnection(environment);
     const instanceApiKey = environment?.OPENCODE_API_KEY?.trim() || inlineConnection.apiKey;
 
-    const resolveApiKey = instanceApiKey
-      ? async () => instanceApiKey
+    const baseUrl = environment?.OPENCODE_BASE_URL?.trim() || inlineConnection.baseUrl;
+
+    const resolveAccess = instanceApiKey
+      ? async () => {
+          const resolvedBaseUrl =
+            baseUrl || (useSavedCredential ? savedApiKey("opencode-go")?.baseUrl : undefined);
+
+          return {
+            access: instanceApiKey,
+            ...(resolvedBaseUrl ? { baseUrl: resolvedBaseUrl } : {}),
+          };
+        }
       : useSavedCredential && getOpenCodeGoApiKey
-        ? () => getOpenCodeGoApiKey(instanceId)
+        ? async () => {
+            const credential = await getOpenCodeGoApiKey(instanceId, threadId);
+
+            return credential ? { ...credential, ...(baseUrl ? { baseUrl } : {}) } : undefined;
+          }
         : undefined;
 
-    if (!resolveApiKey) throw new Error("OpenCode Go subscription access is unavailable.");
+    if (!resolveAccess) throw new Error("OpenCode Go subscription access is unavailable.");
 
-    return akeruOpenCodeGoProvider(
-      trimmed.slice("opencode-go/".length),
-      resolveApiKey,
-      () =>
-        environment?.OPENCODE_BASE_URL?.trim() ||
-        inlineConnection.baseUrl ||
-        (useSavedCredential ? savedApiKey("opencode-go")?.baseUrl : undefined),
-    );
+    return akeruOpenCodeGoProvider(trimmed.slice("opencode-go/".length), resolveAccess);
   }
 
   if (trimmed.startsWith("custom-openai/")) {

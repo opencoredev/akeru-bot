@@ -347,7 +347,7 @@ export function ProviderInstancesSection({
             {addDriverOption ? (
               <Button size="xs" variant="ghost-muted" onClick={() => setIsAddDialogOpen(true)}>
                 <PlusIcon className="size-3.5" />
-                {t("Add account")}
+                {account ? t("Add separate account") : t("Add account")}
               </Button>
             ) : null}
           </div>

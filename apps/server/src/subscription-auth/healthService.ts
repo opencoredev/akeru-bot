@@ -1,3 +1,5 @@
+import * as Schema from "effect/Schema";
+import { isAccountLimitMessage, limitRetryAt } from "./accountLimits.ts";
 import { decodeProviderHealth } from "./persistedSchemas.ts";
 import * as NodeFS from "node:fs";
 import type * as Path from "effect/Path";
@@ -23,9 +25,23 @@ import {
   oauthFailureKind,
   credentialKey,
   credentialAt,
+  defaultInstanceByProvider,
   refreshedCredential,
   runRefresh,
 } from "./serviceTypes.ts";
+
+/** Changes on every atomic rewrite: each write renames a fresh file into place. */
+export function fileVersion(path: string): string | undefined {
+  try {
+    const stat = NodeFS.statSync(path);
+
+    return `${stat.ino}:${stat.mtimeMs}:${stat.size}`;
+  } catch {
+    return undefined;
+  }
+}
+
+const decodeAccountOrder = Schema.decodeUnknownSync(Schema.Json);
 
 export class SubscriptionHealthService {
   private readonly clock: Clock.Clock;
@@ -59,6 +75,7 @@ export class SubscriptionHealthService {
   public readonly healthPath: string;
 
   public health: ProviderHealthData = {};
+  public healthVersion: string | undefined;
 
   public readonly healthChecks = new Map<string, Promise<void>>();
 
@@ -66,7 +83,15 @@ export class SubscriptionHealthService {
 
   public readonly checkHealthOnConnect: boolean;
 
+  public readAccountOrder(filePath: string) {
+    return NodeFS.existsSync(filePath)
+      ? decodeAccountOrder(JSON.parse(NodeFS.readFileSync(filePath, "utf-8")))
+      : {};
+  }
+
   public reloadHealth(): void {
+    this.healthVersion = fileVersion(this.healthPath);
+
     if (!NodeFS.existsSync(this.healthPath)) {
       this.health = {};
 
@@ -98,6 +123,7 @@ export class SubscriptionHealthService {
 
   public saveHealth(): void {
     this.writeSecureJson(this.healthPath, this.health);
+    this.healthVersion = fileVersion(this.healthPath);
   }
 
   recordRequestSuccess(
@@ -122,18 +148,42 @@ export class SubscriptionHealthService {
     this.recordHealthSuccess(`provider:${instanceId}`, at);
   }
 
+  public recordAccountFailure(
+    key: string,
+    message: string,
+    at: string,
+    failureKind: "request" | "revoked",
+  ): void {
+    this.reloadHealth();
+    const previous = this.health[key];
+
+    const revoked =
+      previous?.failureKind === "revoked" &&
+      previous.lastFailedRequest !== undefined &&
+      (previous.lastSuccessfulRequestAt === undefined ||
+        previous.lastFailedRequest.at >= previous.lastSuccessfulRequestAt);
+
+    this.recordHealthFailure(key, message, at, revoked ? "revoked" : failureKind);
+
+    if (failureKind !== "request" || !isAccountLimitMessage(message)) return;
+    this.health[key] = { ...this.health[key], nextRetryAt: limitRetryAt(message, at) };
+    this.saveHealth();
+  }
+
   public recordHealthSuccess(key: string, at: string): void {
     this.reloadHealth();
     const previous = this.health[key];
 
-    const {
-      nextRetryAt: _nextRetryAt,
-      lastCredentialProbeFailure: _probeFailure,
-      ...rest
-    } = previous ?? {};
+    const { nextRetryAt, lastCredentialProbeFailure: _probeFailure, ...rest } = previous ?? {};
+
+    // A limit cooldown runs out on its own clock. A success from a request that
+    // was already in flight, or a passing check, does not end it early.
+    const coolingDown =
+      nextRetryAt !== undefined && Date.parse(nextRetryAt) > this.clock.currentTimeMillisUnsafe();
 
     this.health[key] = {
       ...rest,
+      ...(coolingDown ? { nextRetryAt } : {}),
       lastSuccessfulRequestAt: at,
       healthTest: { status: "passed", checkedAt: at },
     };
@@ -572,7 +622,14 @@ export class SubscriptionHealthService {
     failureKind: "request" | "revoked" = "request",
     instanceId?: string,
   ): void {
-    const key = credentialKey(provider, instanceId);
+    this.recordOAuthFailureForKey(credentialKey(provider, instanceId), message, failureKind);
+  }
+
+  public recordOAuthFailureForKey(
+    key: string,
+    message: string,
+    failureKind: "request" | "revoked",
+  ): void {
     const checkedAt = DateTime.formatIso(DateTime.makeUnsafe(this.clock.currentTimeMillisUnsafe()));
     this.reloadHealth();
     const { nextRetryAt: _nextRetryAt, ...previous } = this.health[key] ?? {};
@@ -585,8 +642,22 @@ export class SubscriptionHealthService {
     this.saveHealth();
   }
 
+  /**
+   * Drops a usage limit recorded only on the provider's default instance once
+   * one of its backup accounts is removed or signs in again, so the provider
+   * is not left blocked by a limit no remaining account carries.
+   */
+  public clearProviderLimit(provider: SubscriptionProviderId, key: string): void {
+    if (key.startsWith("instance:")) return;
+    const providerKey = `provider:${defaultInstanceByProvider[provider]}`;
+    const failure = this.health[providerKey]?.lastFailedRequest;
+
+    if (failure !== undefined && isAccountLimitMessage(failure.message))
+      delete this.health[providerKey];
+  }
+
   public clearImageHealth(provider: SubscriptionProviderId, instanceId?: string): void {
-    if (instanceId !== undefined) return;
+    if (credentialKey(provider, instanceId) !== provider) return;
 
     if (provider === "openai-codex") delete this.health["image:chatgpt"];
 

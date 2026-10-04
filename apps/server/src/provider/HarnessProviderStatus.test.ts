@@ -1,36 +1,10 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import { codexModelCapabilities, harnessModelName } from "./HarnessProviderStatus.ts";
+import { codexModelCapabilities } from "./HarnessProviderStatus.ts";
 import {
   getClaudeModelCapabilities,
   normalizeClaudeCliEffort,
 } from "./Layers/claude/ClaudeModels.ts";
-
-describe("harnessModelName", () => {
-  it("formats model slugs as picker names", () => {
-    expect(
-      [
-        "gpt-6.1-sol",
-        "gpt-6-luna",
-        "gpt-5.3-codex-spark",
-        "gpt-5",
-        "gpt-daybreak-blue-latest",
-        "claude-opus-5-5",
-        "claude-sonnet-5",
-        "grok-4.20-beta",
-      ].map(harnessModelName),
-    ).toEqual([
-      "GPT-6.1 Sol",
-      "GPT-6 Luna",
-      "GPT-5.3 Codex Spark",
-      "GPT-5",
-      "GPT Daybreak Blue Latest",
-      "Claude Opus 5.5",
-      "Claude Sonnet 5",
-      "Grok 4.20 Beta",
-    ]);
-  });
-});
 
 describe("codexModelCapabilities", () => {
   const options = (slug: string, entry: Parameters<typeof codexModelCapabilities>[1]) =>

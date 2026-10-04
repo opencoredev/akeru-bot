@@ -18,6 +18,7 @@ describe("subscription auth storage", () => {
         anthropic: {
           type: "oauth",
           access: "first-token",
+          plan: "Max 20x",
           refresh: "refresh",
           expires: Date.now() + 60_000,
         },
@@ -49,6 +50,9 @@ describe("subscription auth storage", () => {
         accessToken: "refreshed-token",
         accountId: first?.accountId,
       });
+      expect(service.statuses().find((entry) => entry.provider === "anthropic")?.plan).toBe(
+        "Max 20x",
+      );
       expect(
         await (await makeTestSubscriptionAuthService(authPath)).getPlanAccess("anthropic"),
       ).toEqual({

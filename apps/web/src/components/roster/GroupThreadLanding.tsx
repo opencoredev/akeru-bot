@@ -55,7 +55,13 @@ import {
 } from "./BotChatMessageRows";
 import { useBotPromptMentionScope } from "./BotPromptMentions";
 import { BotTurnFailureRow } from "./BotTurnFailureRow";
-import { botEngineFailureContext, botEngineTakesDelegatedWork } from "./botEngineSelection";
+import {
+  botEngineFailureContext,
+  botEngineSubscriptionToConnect,
+  botEngineTakesDelegatedWork,
+} from "./botEngineSelection";
+import { ProviderConnectCard, providerConnectStep } from "../chat/ProviderConnectCard";
+import { useSubscriptionStatuses } from "../settings/ProvidersPanel";
 import { buildBotStepMeters } from "@akeru/client-runtime/bot-step-usage";
 import { useGroupPresence } from "./botPresence";
 import { groupBotMembers, isCurrentGroupPerson } from "./roster.logic";
@@ -133,12 +139,45 @@ export function GroupThreadLanding({ groupId }: { readonly groupId: string }) {
 
   const boss = group ? resolveAvailableGroupBoss(members, group.bossBotId) : null;
   // The boss answers a group message first, so its provider's skills label sent messages.
-  const bossCatalog = useBotEngineAvailability(boss?.engine ?? null).catalog;
+  const bossEngine = useBotEngineAvailability(boss?.engine ?? null);
+  const bossCatalog = bossEngine.catalog;
   // A mention sends the draft to that member, so the `$` and `/` pickers offer its provider's catalog.
   const [addressedBotId, setAddressedBotId] = useState<string | null>(null);
   const addressedBot = resolveGroupAddressedBot(members, boss, addressedBotId);
   const composerCatalog = useBotEngineAvailability(addressedBot?.engine ?? null).catalog;
   const noProviderNoticeId = useId();
+  // Signing in fixes a reply that failed on a missing account, or a boss that
+  // cannot answer yet, so the connect card replaces the failure copy.
+  const { statusByProvider: subscriptionStatuses } = useSubscriptionStatuses(environmentId);
+
+  const failedConnect = respondingBot
+    ? botEngineSubscriptionToConnect(
+        respondingEngine.selection,
+        respondingEngine.instanceEntries,
+        runtime.failure?.unavailability,
+      )
+    : null;
+
+  // A turn error that signing in cannot fix stays visible instead of the boss's card.
+  const bossConnect =
+    boss && !runtime.providerAvailable && !runtime.error
+      ? botEngineSubscriptionToConnect(
+          bossEngine.selection,
+          bossEngine.instanceEntries,
+          bossEngine.unavailability?.reason,
+        )
+      : null;
+
+  const connect =
+    failedConnect && respondingBot
+      ? { provider: failedConnect, botName: respondingBot.name }
+      : bossConnect && boss
+        ? { provider: bossConnect, botName: boss.name }
+        : null;
+
+  const connectNeeded =
+    connect !== null && providerConnectStep(subscriptionStatuses.get(connect.provider)) !== null;
+
   const replyPlayback = useOptionalReplyPlayback();
   const voiceCall = useOptionalVoiceCall();
   const [replyTarget, setReplyTarget] = useState<MessageReplyTarget | null>(null);
@@ -399,10 +438,21 @@ export function GroupThreadLanding({ groupId }: { readonly groupId: string }) {
           onOpenDetails={() => openSettings("advanced", "errors", environmentId)}
         />
         <ThreadRuntimeWarningBanner warning={runtimeWarning} />
+        {connectNeeded && connect ? (
+          <ProviderConnectCard
+            id={noProviderNoticeId}
+            environmentId={environmentId}
+            provider={connect.provider}
+            botName={connect.botName}
+            className="mt-2"
+          />
+        ) : null}
         <ThreadErrorBanner
           threadKey={`${runtime.linkedThreadRef?.environmentId ?? environmentId ?? "unknown"}:${runtime.linkedThreadRef?.threadId ?? group.id}`}
           error={
-            inboxItems.some((item) => item.lastFailure === runtime.error) ? null : runtime.error
+            connectNeeded || inboxItems.some((item) => item.lastFailure === runtime.error)
+              ? null
+              : runtime.error
           }
           context={failureContext}
           environmentId={environmentId}
@@ -501,7 +551,7 @@ export function GroupThreadLanding({ groupId }: { readonly groupId: string }) {
             return sent;
           }}
         />
-        {!runtime.providerAvailable ? (
+        {!runtime.providerAvailable && !connectNeeded ? (
           <ProviderUnavailableLine
             id={noProviderNoticeId}
             presentation={{

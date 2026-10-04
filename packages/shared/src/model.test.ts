@@ -8,6 +8,7 @@ import {
   buildProviderOptionSelectionsFromDescriptors,
   createModelCapabilities,
   createModelSelection,
+  formatModelSlug,
   getModelSelectionBooleanOptionValue,
   getModelSelectionStringOptionValue,
   getProviderOptionDescriptors,
@@ -188,6 +189,22 @@ describe("applyClaudePromptEffortPrefix", () => {
     expect(applyClaudePromptEffortPrefix("/home/theo/app.ts crashed on load", "ultrathink")).toBe(
       "Ultrathink:\n/home/theo/app.ts crashed on load",
     );
+  });
+});
+
+describe("formatModelSlug", () => {
+  it("names unlisted slugs the way providers write them", () => {
+    expect(formatModelSlug("gpt-5.5")).toBe("GPT-5.5");
+    expect(formatModelSlug("gpt-5.1-codex-max")).toBe("GPT-5.1 Codex Max");
+    expect(formatModelSlug("claude-opus-4-8")).toBe("Claude Opus 4.8");
+    expect(formatModelSlug("grok-4.20-beta")).toBe("Grok 4.20 Beta");
+    expect(formatModelSlug("glm-5.3")).toBe("GLM-5.3");
+    expect(formatModelSlug("qwen3.8-max")).toBe("Qwen3.8 Max");
+    expect(formatModelSlug("deepseek-v4-pro")).toBe("DeepSeek V4 Pro");
+    expect(formatModelSlug("openai/gpt-6.1-sol")).toBe("GPT-6.1 Sol");
+    expect(formatModelSlug("gpt-5.3-codex-spark")).toBe("GPT-5.3 Codex Spark");
+    expect(formatModelSlug("gpt-daybreak-blue-latest")).toBe("GPT Daybreak Blue Latest");
+    expect(formatModelSlug("claude-opus-5-5")).toBe("Claude Opus 5.5");
   });
 });
 

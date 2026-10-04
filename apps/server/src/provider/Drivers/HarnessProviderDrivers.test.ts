@@ -432,7 +432,7 @@ it.layer(testLayer)("Harness provider drivers without CLIs", (it) => {
 
             if (driver.driverKind === "grok") {
               expect(after.models).toContainEqual(
-                expect.objectContaining({ slug: "grok-build", name: "Grok 4.6", isDefault: true }),
+                expect.objectContaining({ slug: "grok-build", name: "Grok 4.7", isDefault: true }),
               );
 
               for (const slug of ["grok-4.6", "grok-4.5", "grok-code-fast-1"]) {

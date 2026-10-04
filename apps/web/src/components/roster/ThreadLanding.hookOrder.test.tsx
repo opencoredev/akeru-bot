@@ -98,6 +98,10 @@ vi.mock("../../state/query", () => ({
   useEnvironmentQuery: () => ({ data: mocks.queryData, refresh: mocks.refreshHistory }),
 }));
 
+vi.mock("../settings/ProvidersPanel", () => ({
+  useSubscriptionStatuses: () => ({ statusByProvider: new Map() }),
+}));
+
 vi.mock("../../state/server", () => ({
   primaryServerProvidersAtom: null,
   serverEnvironment: { subscriptionAuth: () => null, routineThreadRuns: () => null },

@@ -110,6 +110,29 @@ describe("OpenAI Codex device login", () => {
     }),
   );
 
+  it.effect("records the ChatGPT tier from the token claims", () =>
+    Effect.gen(function* () {
+      const { client } = scriptedHttpClient((request) =>
+        request.url.endsWith("/deviceauth/token")
+          ? Response.json({ authorization_code: "code", code_verifier: "verifier" })
+          : Response.json(
+              tokens({
+                "https://api.openai.com/auth": {
+                  chatgpt_account_id: "acct",
+                  chatgpt_plan_type: "pro",
+                },
+              }),
+            ),
+      );
+
+      const result = yield* CodexOAuth.pollDeviceLogin(pending).pipe(
+        Effect.provideService(HttpClient.HttpClient, client),
+      );
+
+      expect(result).toMatchObject({ status: "complete", credentials: { plan: "Pro" } });
+    }),
+  );
+
   it.effect("fails when no token carries an account id", () =>
     Effect.gen(function* () {
       const { client } = scriptedHttpClient((request) =>

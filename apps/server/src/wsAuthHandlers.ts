@@ -1,3 +1,4 @@
+import { accountScope } from "./subscription-auth/service.ts";
 import type * as RpcGroup from "effect/unstable/rpc/RpcGroup";
 import * as Effect from "effect/Effect";
 import * as Queue from "effect/Queue";
@@ -206,11 +207,12 @@ export const createWsAuthHandlers = ({
         { "rpc.aggregate": "server" },
       ),
 
-    [WS_METHODS.subscriptionAuthLogout]: ({ provider, instanceId }) =>
+    [WS_METHODS.subscriptionAuthLogout]: ({ provider, instanceId, accountId }) =>
       observeRpcEffect(
         WS_METHODS.subscriptionAuthLogout,
         Effect.tryPromise({
-          try: () => subscriptionAuth.logout(provider, instanceId),
+          try: () =>
+            subscriptionAuth.logout(provider, accountId ? accountScope(accountId) : instanceId),
           catch: (cause) =>
             new SubscriptionAuthError({
               reason: cause instanceof Error ? cause.message : String(cause),
@@ -223,11 +225,25 @@ export const createWsAuthHandlers = ({
         { "rpc.aggregate": "server" },
       ),
 
-    [WS_METHODS.subscriptionAuthHealthTest]: ({ provider, instanceId }) =>
+    [WS_METHODS.subscriptionAuthHealthTest]: ({ provider, instanceId, accountId }) =>
       observeRpcEffect(
         WS_METHODS.subscriptionAuthHealthTest,
         Effect.tryPromise({
-          try: () => subscriptionAuth.testHealth(provider, instanceId),
+          try: () =>
+            subscriptionAuth.testHealth(provider, accountId ? accountScope(accountId) : instanceId),
+          catch: (cause) =>
+            new SubscriptionAuthError({
+              reason: cause instanceof Error ? cause.message : String(cause),
+            }),
+        }).pipe(Effect.andThen(getAccessHealthSnapshot())),
+        { "rpc.aggregate": "server" },
+      ),
+
+    [WS_METHODS.subscriptionAuthSetAccountOrder]: ({ provider, accountIds }) =>
+      observeRpcEffect(
+        WS_METHODS.subscriptionAuthSetAccountOrder,
+        Effect.tryPromise({
+          try: () => subscriptionAuth.setAccountOrder(provider, accountIds),
           catch: (cause) =>
             new SubscriptionAuthError({
               reason: cause instanceof Error ? cause.message : String(cause),
@@ -302,6 +318,7 @@ export const createWsAuthHandlers = ({
     | typeof WS_METHODS.subscriptionAuthComplete
     | typeof WS_METHODS.subscriptionAuthCancel
     | typeof WS_METHODS.subscriptionAuthLogout
+    | typeof WS_METHODS.subscriptionAuthSetAccountOrder
     | typeof WS_METHODS.subscriptionAuthHealthTest
     | typeof WS_METHODS.imageProviderList
     | typeof WS_METHODS.imageProviderHealthTest

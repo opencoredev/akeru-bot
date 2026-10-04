@@ -211,7 +211,7 @@ When a refresh omits a historical model, its bundled catalog entry or known nati
 remain available.
 CLI workflow choices such as Ultracode and Ultrathink are excluded from its native effort picker.
 Grok includes its API model IDs
-alongside catalog additions. It labels the compatibility `grok-build` selection as Grok 4.6 and maps it to `grok-4.6` in
+alongside catalog additions. It labels the compatibility `grok-build` selection as Grok 4.7 and maps it to `grok-4.7` in
 `mastraModelId`, because the product slug is not an API model ID. Keeping the selection slug lets
 existing bots and the default model pass catalog validation. Custom models are retained.
 
@@ -269,6 +269,26 @@ catalog failures do not fail a workspace snapshot or change readiness. A missing
 silent; other skill discovery failures are logged as warnings. Claude still reads skill
 files directly, without a CLI. Codex's CLI-only skills and Claude's CLI slash-command discovery are
 not part of readiness snapshots. Version checks are skipped when there is no CLI version.
+
+### Backup subscription accounts
+
+A subscription provider can have several linked accounts. The first sign-in is account `default`,
+stored under the bare provider key in `subscription-auth.json`; each added account gets an
+`acct-<hex>` id stored under `account:<provider>:<id>`. Separately named provider instances keep
+their own `instance:<provider>:<instanceId>` key and never join the backup order.
+
+`SubscriptionAccountState` (`apps/server/src/subscription-auth/accountState.ts`) owns the order,
+persisted next to the credentials as `subscription-auth.json.accounts`. Credential reads for the
+default instance resolve to the first ready account: one is skipped while its `nextRetryAt` is in
+the future or its last failure was a revoked sign-in. When a request fails with a usage-limit
+message, `accountLimits.ts` benches that account until the reset time the provider gave, or for an
+hour. Every credential read takes the thread id, and outcomes are recorded on the account that
+served that thread, so concurrent chats on different accounts do not claim each other's failures.
+Order and health files are re-read when another server process rewrites them.
+
+`SubscriptionAuthStatuses.linkedAccounts` lists every linked account in order with `accountId`,
+`active`, and `plan`. `subscriptionAuth.setAccountOrder` reorders them, and start, logout, and
+health-test inputs accept an `accountId` or `addAccount`.
 
 ### Legacy Grok CLI probe
 

@@ -526,3 +526,49 @@ export function applyClaudePromptEffortPrefix(
 
   return `Ultrathink:\n${trimmed}`;
 }
+
+const MODEL_NAME_BRANDS = new Map([
+  ["gpt", "GPT"],
+  ["glm", "GLM"],
+  ["deepseek", "DeepSeek"],
+  ["minimax", "MiniMax"],
+  ["mimo", "MiMo"],
+  ["longcat", "LongCat"],
+]);
+
+/** Brands written with a hyphen before their version, as in "GPT-6.1". */
+const HYPHENATED_MODEL_BRANDS = new Set(["GPT", "GLM"]);
+
+/**
+ * Readable fallback name for a model slug the provider did not name, such as
+ * "gpt-5.5" → "GPT-5.5" or "claude-opus-4-8" → "Claude Opus 4.8". Use the
+ * provider's own model name when one exists.
+ */
+export function formatModelSlug(slug: string): string {
+  const parts = (slug.split("/").at(-1) ?? slug).split("-").filter((part) => part.length > 0);
+  const words: string[] = [];
+
+  for (const part of parts) {
+    const previous = words.at(-1);
+
+    // Claude slugs spell versions with hyphens: "opus-4-8" is Opus 4.8.
+    if (/^\d+$/.test(part) && previous !== undefined && /^\d+(\.\d+)*$/.test(previous)) {
+      words[words.length - 1] = `${previous}.${part}`;
+      continue;
+    }
+
+    const brand = MODEL_NAME_BRANDS.get(part.toLowerCase());
+    words.push(
+      brand ?? (/^\d/.test(part) ? part.toUpperCase() : part[0]!.toUpperCase() + part.slice(1)),
+    );
+  }
+
+  return words.reduce((name, word, index) => {
+    if (index === 0) return word;
+
+    const separator =
+      index === 1 && HYPHENATED_MODEL_BRANDS.has(words[0]!) && /^\d/.test(word) ? "-" : " ";
+
+    return `${name}${separator}${word}`;
+  }, "");
+}

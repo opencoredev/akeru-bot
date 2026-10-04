@@ -57,7 +57,7 @@ async function capturedRequest(
       mastraModelId(provider, modelId),
       auth,
       async () => ({ accessToken: "kimi-token" }),
-      async () => "go-key",
+      async () => ({ access: "go-key" }),
       modelOptions,
       oauth ? undefined : () => ({ type: "api-key", access: "test-key" }),
     );
