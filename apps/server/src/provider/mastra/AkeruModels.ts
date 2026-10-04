@@ -7,7 +7,7 @@ import { xaiProvider } from "@mastra/code-sdk/providers/xai";
 import { createAnthropic } from "@ai-sdk/anthropic";
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
 import { isThinkingLevelSetting } from "@mastra/code-sdk/thinking";
-import { SubscriptionProviderId, type ProviderDriverKind } from "@akeru/contracts";
+import { type SubscriptionProviderId, type ProviderDriverKind } from "@akeru/contracts";
 import type { SubscriptionAuthService } from "../../subscription-auth/service.ts";
 import { akeruOpenAIProvider } from "../AkeruOpenAIProvider.ts";
 import { akeruKimiProvider, type AkeruKimiAccess } from "../AkeruKimiProvider.ts";
@@ -17,8 +17,6 @@ import { type AkeruMastraState } from "./AkeruHarnessTypes.ts";
 const decodeInlineConfig = Schema.decodeUnknownSync(
   Schema.Struct({ provider: Schema.optionalKey(Schema.Unknown) }),
 );
-
-const isSubscriptionProviderId = Schema.is(SubscriptionProviderId);
 
 export const DEFAULT_MODEL_ID = "openai/gpt-5.6-sol";
 
@@ -140,23 +138,21 @@ export function resolveAkeruMastraModel(
   const savedApiKey = (provider: Parameters<NonNullable<typeof getSubscriptionApiKey>>[0]) =>
     getSubscriptionApiKey?.(provider, instanceId, threadId);
 
-  // Saved credentials always resolve through the subscription service, which
-  // picks the linked account to use and moves past one that hit a limit.
-  // SAFETY: The scoped view inherits AuthStorage methods and state, and overrides only credential lookup.
-  const scopedAuthStorage =
-    getSubscriptionOAuth && getSubscriptionAccessToken
-      ? Object.assign(Object.create(authStorage) as AuthStorage, {
-          reload: () => {},
-          get: (provider: string) =>
-            isSubscriptionProviderId(provider)
-              ? getSubscriptionOAuth(provider, instanceId, threadId)
-              : undefined,
-          getApiKey: (provider: string) =>
-            isSubscriptionProviderId(provider)
-              ? getSubscriptionAccessToken(provider, instanceId, threadId)
-              : undefined,
-        })
-      : authStorage;
+  // OAuth token refresh stays on the account selected for this model's transport.
+  const scopedAuthStorage = (providerId: SubscriptionProviderId) => {
+    if (!getSubscriptionOAuth || !getSubscriptionAccessToken) return authStorage;
+    const credential = getSubscriptionOAuth(providerId, instanceId, threadId);
+
+    // SAFETY: The scoped view inherits AuthStorage methods and state, and overrides only credential lookup.
+    return Object.assign(Object.create(authStorage) as AuthStorage, {
+      reload: () => {},
+      get: (provider: string) => (provider === providerId ? credential : undefined),
+      getApiKey: (provider: string) =>
+        provider === providerId && credential
+          ? getSubscriptionAccessToken(providerId, credential.scope ?? instanceId)
+          : undefined,
+    });
+  };
 
   if (trimmed.startsWith("openai/")) {
     const instanceApiKey = environment?.OPENAI_API_KEY?.trim();
@@ -173,8 +169,10 @@ export function resolveAkeruMastraModel(
         ? () => savedApiKey("openai-codex")
         : undefined;
 
-    if (getCredential?.()) {
-      return akeruOpenAIProvider(trimmed.slice("openai/".length), () => getCredential());
+    const credential = getCredential?.();
+
+    if (credential) {
+      return akeruOpenAIProvider(trimmed.slice("openai/".length), () => credential);
     }
 
     if (!useSavedCredential) {
@@ -184,7 +182,7 @@ export function resolveAkeruMastraModel(
     const reasoningEffort = modelOptions?.reasoningEffort;
 
     return openaiCodexProvider(trimmed.slice("openai/".length), {
-      authStorage: scopedAuthStorage,
+      authStorage: scopedAuthStorage("openai-codex"),
       ...(isThinkingLevelSetting(reasoningEffort) ? { thinkingLevel: reasoningEffort } : {}),
     });
   }
@@ -229,7 +227,10 @@ export function resolveAkeruMastraModel(
       );
     }
 
-    return opencodeClaudeMaxProvider(model, { ...contextHeaders, authStorage: scopedAuthStorage });
+    return opencodeClaudeMaxProvider(model, {
+      ...contextHeaders,
+      authStorage: scopedAuthStorage("anthropic"),
+    });
   }
 
   if (trimmed.startsWith("xai/")) {
@@ -257,7 +258,7 @@ export function resolveAkeruMastraModel(
       throw new Error("This Grok instance has no XAI_API_KEY transport for Akeru Mastra.");
     }
 
-    return xaiProvider(model, { authStorage: scopedAuthStorage });
+    return xaiProvider(model, { authStorage: scopedAuthStorage("xai") });
   }
 
   if (trimmed.startsWith("kimi-for-coding/")) {

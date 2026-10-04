@@ -80,6 +80,157 @@ it("pins OpenCode Go's key, endpoint, and outcome when another thread benches it
     ).toBe("recovered");
   } finally {
     vi.unstubAllGlobals();
+    vi.unstubAllEnvs();
+    NodeFS.rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+it.each(["openai-codex", "anthropic", "xai"] as const)(
+  "pins %s OAuth auth when a backup uses an API key",
+  async (provider) => {
+    const { authPath, directory } = fixture();
+    NodeFS.writeFileSync(
+      authPath,
+      JSON.stringify({
+        [provider]: {
+          type: "oauth",
+          access: "expired",
+          refresh: "main-refresh",
+          expires: 0,
+          accountId: "main-account",
+        },
+        [`account:${provider}:backup`]: { type: "api-key", access: "backup-key" },
+      }),
+    );
+    const service = await makeTestSubscriptionAuthService(authPath);
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("VITEST", undefined);
+
+    const request = vi.fn(async (input: string | URL | Request, _init?: RequestInit) => {
+      if (String(input).includes("token"))
+        return Response.json({
+          access_token: "refreshed-main",
+          refresh_token: "main-refresh",
+          expires_in: 3600,
+        });
+
+      return new Response("dispatch reached", { status: 503 });
+    });
+
+    vi.stubGlobal("fetch", request);
+
+    try {
+      const prefix = { "openai-codex": "openai", anthropic: "anthropic", xai: "xai" }[provider];
+
+      const model = resolveAkeruMastraModel(
+        `${prefix}/test-model`,
+        new AuthStorage(authPath),
+        undefined,
+        undefined,
+        undefined,
+        (id, scope, thread) => service.getApiKeyCredential(id, scope, thread),
+        undefined,
+        (id, scope, thread) => service.getOAuthCredential(id, scope, thread),
+        (id, scope, thread) => service.getAccessToken(id, scope, thread),
+        "thread-request",
+      ) as ReturnType<ReturnType<typeof createOpenAICompatible>>;
+
+      service.recordRequestFailure(
+        provider,
+        "Spending limit reached.",
+        undefined,
+        "request",
+        "thread-other",
+      );
+      expect(service.getApiKeyCredential(provider, undefined, "thread-backup")?.access).toBe(
+        "backup-key",
+      );
+      await expect(
+        model.doGenerate({
+          prompt: [{ role: "user", content: [{ type: "text", text: "Hello" }] }],
+        }),
+      ).rejects.toThrow();
+      const dispatch = request.mock.calls.find(([input]) => !String(input).includes("token"));
+      expect(dispatch).toBeDefined();
+      const headers = new Headers(dispatch?.[1]?.headers);
+      expect(headers.get("authorization")).toBe("Bearer refreshed-main");
+
+      if (provider === "openai-codex")
+        expect(headers.get("chatgpt-account-id")).toBe("main-account");
+      service.recordRequestSuccess(provider, undefined, "thread-request");
+      expect(
+        service
+          .linkedAccountStatuses()
+          .find((status) => status.provider === provider && status.accountId === "default")?.health,
+      ).toBe("recovered");
+    } finally {
+      vi.unstubAllGlobals();
+      vi.unstubAllEnvs();
+      NodeFS.rmSync(directory, { recursive: true, force: true });
+    }
+  },
+);
+
+it("pins Codex Responses auth when another thread selects an OAuth backup", async () => {
+  const { authPath, directory } = fixture();
+  NodeFS.writeFileSync(
+    authPath,
+    JSON.stringify({
+      "openai-codex": { type: "api-key", access: "main-key", baseUrl: "https://main.example/v1" },
+      "account:openai-codex:backup": {
+        type: "oauth",
+        access: "backup-token",
+        refresh: "backup-refresh",
+        expires: Date.now() + 60000,
+        accountId: "backup-account",
+      },
+    }),
+  );
+  const service = await makeTestSubscriptionAuthService(authPath);
+  vi.stubEnv("NODE_ENV", "production");
+  vi.stubEnv("VITEST", undefined);
+
+  const request = vi.fn(
+    async (_input: string | URL | Request, _init?: RequestInit) =>
+      new Response("dispatch reached", { status: 503 }),
+  );
+
+  vi.stubGlobal("fetch", request);
+
+  try {
+    const model = resolveAkeruMastraModel(
+      "openai/test-model",
+      new AuthStorage(authPath),
+      undefined,
+      undefined,
+      undefined,
+      (id, scope, thread) => service.getApiKeyCredential(id, scope, thread),
+      undefined,
+      undefined,
+      undefined,
+      "thread-request",
+    ) as ReturnType<ReturnType<typeof createOpenAICompatible>>;
+
+    service.recordRequestFailure(
+      "openai-codex",
+      "Spending limit reached.",
+      undefined,
+      "request",
+      "thread-other",
+    );
+    expect(service.getOAuthCredential("openai-codex", undefined, "thread-backup")?.access).toBe(
+      "backup-token",
+    );
+    await expect(
+      model.doGenerate({ prompt: [{ role: "user", content: [{ type: "text", text: "Hello" }] }] }),
+    ).rejects.toThrow();
+    expect(request.mock.calls[0]?.[0]).toBe("https://main.example/v1/responses");
+    expect(new Headers(request.mock.calls[0]?.[1]?.headers).get("authorization")).toBe(
+      "Bearer main-key",
+    );
+  } finally {
+    vi.unstubAllGlobals();
+    vi.unstubAllEnvs();
     NodeFS.rmSync(directory, { recursive: true, force: true });
   }
 });

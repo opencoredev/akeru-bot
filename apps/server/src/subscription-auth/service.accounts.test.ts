@@ -1,6 +1,6 @@
 import { fixture } from "./testUtils/subscriptionAuthStorage.ts";
 import * as NodeFS from "node:fs";
-import { describe, expect, it } from "vite-plus/test";
+import { describe, expect, it, vi } from "vite-plus/test";
 
 import { makeTestSubscriptionAuthService } from "./testUtils/subscriptionAuthService.ts";
 
@@ -286,4 +286,89 @@ it("keeps a provider limit when backups exist but no account recorded the limit"
   await service.completeLogin(second.loginId, "second-key");
   service.recordProviderInstanceFailure("codex", "Rate limit reached.");
   expect(service.providerInstanceRequestHealth("codex")?.health).toBe("failed-first-request");
+});
+
+it("keeps a rejected refresh revoked after the failed turn reports its outcome", async () => {
+  const { authPath, directory } = fixture();
+  NodeFS.writeFileSync(
+    authPath,
+    JSON.stringify({
+      "openai-codex": {
+        type: "oauth",
+        access: "expired",
+        refresh: "rejected",
+        expires: 0,
+        accountId: "main",
+      },
+      "account:openai-codex:backup": { type: "api-key", access: "backup-key" },
+    }),
+  );
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async () => Response.json({ error: "invalid_grant" }, { status: 400 })),
+  );
+
+  try {
+    const service = await makeTestSubscriptionAuthService(authPath);
+    expect(await service.getAccessToken("openai-codex", undefined, "failed-turn")).toBeUndefined();
+    expect(await service.getAccessToken("openai-codex", undefined, "backup-turn")).toBe(
+      "backup-key",
+    );
+    service.recordAccountRequestFailure(
+      "openai-codex",
+      "codex",
+      "Token unavailable",
+      new Date().toISOString(),
+      "failed-turn",
+    );
+    expect(
+      service
+        .linkedAccountStatuses()
+        .find((status) => status.provider === "openai-codex" && status.accountId === "default")
+        ?.health,
+    ).toBe("revoked");
+    expect(await service.getAccessToken("openai-codex")).toBe("backup-key");
+    service.recordRequestSuccess(
+      "openai-codex",
+      new Date(Date.now() + 1000).toISOString(),
+      "failed-turn",
+    );
+    service.recordRequestFailure(
+      "openai-codex",
+      "socket hang up",
+      new Date(Date.now() + 2000).toISOString(),
+      "request",
+      "failed-turn",
+    );
+    expect(service.getOAuthCredential("openai-codex")?.accountId).toBe("main");
+  } finally {
+    vi.unstubAllGlobals();
+    NodeFS.rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+it("keeps a limit cooldown when the limited account reports a later success", async () => {
+  const { authPath } = fixture();
+  const service = await makeTestSubscriptionAuthService(authPath);
+  const first = await service.startLogin("openai-codex", { authMode: "api-key" });
+  await service.completeLogin(first.loginId, "first-key");
+
+  const second = await service.startLogin("openai-codex", {
+    authMode: "api-key",
+    addAccount: true,
+  });
+
+  await service.completeLogin(second.loginId, "second-key");
+  await service.getAccessToken("openai-codex", undefined, "thread-a");
+  await service.getAccessToken("openai-codex", undefined, "thread-b");
+  const failedAt = new Date(Date.now() - 60_000).toISOString();
+  service.recordRequestFailure(
+    "openai-codex",
+    "Rate limit reached. Try again in 1h.",
+    failedAt,
+    "request",
+    "thread-b",
+  );
+  service.recordRequestSuccess("openai-codex", new Date().toISOString(), "thread-a");
+  expect(await service.getAccessToken("openai-codex")).toBe("second-key");
 });

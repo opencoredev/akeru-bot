@@ -754,7 +754,7 @@ export class SubscriptionAuthService {
     provider: SubscriptionProviderId,
     instanceId?: string,
     threadId?: string,
-  ): OAuthCredential | undefined {
+  ): (OAuthCredential & { readonly scope?: string }) | undefined {
     return this.credentialAccess.getOAuthCredential(provider, instanceId, threadId);
   }
 

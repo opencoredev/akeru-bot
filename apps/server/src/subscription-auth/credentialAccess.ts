@@ -157,17 +157,18 @@ export class SubscriptionCredentialAccess {
     return credential?.type === "api-key" ? credential : undefined;
   }
 
+  /** The OAuth credential and fixed scope to use when refreshing it. */
   getOAuthCredential(
     provider: SubscriptionProviderId,
     instanceId?: string,
     threadId?: string,
-  ): OAuthCredential | undefined {
-    const credential = credentialAt(
-      this.data,
-      this.accounts.servingKey(provider, instanceId, threadId),
-    );
+  ): (OAuthCredential & { readonly scope?: string }) | undefined {
+    const scope = this.pinnedScope(provider, instanceId, threadId);
+    const credential = credentialAt(this.data, credentialKey(provider, scope));
 
-    return credential?.type === "oauth" ? credential : undefined;
+    return credential?.type === "oauth"
+      ? { ...credential, ...(scope !== undefined ? { scope } : {}) }
+      : undefined;
   }
 
   async getOpenAICodexAccess(

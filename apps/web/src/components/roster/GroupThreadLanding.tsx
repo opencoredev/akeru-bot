@@ -158,8 +158,9 @@ export function GroupThreadLanding({ groupId }: { readonly groupId: string }) {
       )
     : null;
 
+  // A turn error that signing in cannot fix stays visible instead of the boss's card.
   const bossConnect =
-    boss && !runtime.providerAvailable
+    boss && !runtime.providerAvailable && !runtime.error
       ? botEngineSubscriptionToConnect(
           bossEngine.selection,
           bossEngine.instanceEntries,

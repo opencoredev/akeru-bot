@@ -153,7 +153,16 @@ export class SubscriptionHealthService {
     at: string,
     failureKind: "request" | "revoked",
   ): void {
-    this.recordHealthFailure(key, message, at, failureKind);
+    this.reloadHealth();
+    const previous = this.health[key];
+
+    const revoked =
+      previous?.failureKind === "revoked" &&
+      previous.lastFailedRequest !== undefined &&
+      (previous.lastSuccessfulRequestAt === undefined ||
+        previous.lastFailedRequest.at >= previous.lastSuccessfulRequestAt);
+
+    this.recordHealthFailure(key, message, at, revoked ? "revoked" : failureKind);
 
     if (failureKind !== "request" || !isAccountLimitMessage(message)) return;
     this.health[key] = { ...this.health[key], nextRetryAt: limitRetryAt(message, at) };
@@ -166,13 +175,14 @@ export class SubscriptionHealthService {
 
     const { nextRetryAt, lastCredentialProbeFailure: _probeFailure, ...rest } = previous ?? {};
 
-    // A success from a request that started before a newer limit failure keeps that cooldown.
-    const failedLater =
-      previous?.lastFailedRequest !== undefined && previous.lastFailedRequest.at > at;
+    // A limit cooldown runs out on its own clock. A success from a request that
+    // was already in flight, or a passing check, does not end it early.
+    const coolingDown =
+      nextRetryAt !== undefined && Date.parse(nextRetryAt) > this.clock.currentTimeMillisUnsafe();
 
     this.health[key] = {
       ...rest,
-      ...(failedLater && nextRetryAt ? { nextRetryAt } : {}),
+      ...(coolingDown ? { nextRetryAt } : {}),
       lastSuccessfulRequestAt: at,
       healthTest: { status: "passed", checkedAt: at },
     };
