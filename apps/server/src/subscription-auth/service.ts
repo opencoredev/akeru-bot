@@ -577,6 +577,7 @@ export class SubscriptionAuthService {
       this.reloadHealth();
       delete this.health[key];
       this.clearImageHealth(login.provider, login.instanceId);
+      this.healthService.clearProviderLimit(login.provider, key);
       this.saveHealth();
 
       return this.startHealthCheck(login.provider, login.instanceId);
@@ -627,6 +628,7 @@ export class SubscriptionAuthService {
     this.reloadHealth();
     delete this.health[key];
     this.clearImageHealth(provider, instanceId);
+    this.healthService.clearProviderLimit(provider, key);
     this.saveHealth();
 
     if (this.accounts.lastServedKey.get(provider) === key)
@@ -707,6 +709,7 @@ export class SubscriptionAuthService {
     this.reloadHealth();
     delete this.health[key];
     this.clearImageHealth(login.provider, login.instanceId);
+    this.healthService.clearProviderLimit(login.provider, key);
     this.saveHealth();
 
     return true;

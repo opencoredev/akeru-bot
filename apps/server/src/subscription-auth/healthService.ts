@@ -25,6 +25,7 @@ import {
   oauthFailureKind,
   credentialKey,
   credentialAt,
+  defaultInstanceByProvider,
   refreshedCredential,
   runRefresh,
 } from "./serviceTypes.ts";
@@ -639,6 +640,20 @@ export class SubscriptionHealthService {
       oauthCheck: { status: "failed", checkedAt },
     };
     this.saveHealth();
+  }
+
+  /**
+   * Drops a usage limit recorded only on the provider's default instance once
+   * one of its backup accounts is removed or signs in again, so the provider
+   * is not left blocked by a limit no remaining account carries.
+   */
+  public clearProviderLimit(provider: SubscriptionProviderId, key: string): void {
+    if (key.startsWith("instance:")) return;
+    const providerKey = `provider:${defaultInstanceByProvider[provider]}`;
+    const failure = this.health[providerKey]?.lastFailedRequest;
+
+    if (failure !== undefined && isAccountLimitMessage(failure.message))
+      delete this.health[providerKey];
   }
 
   public clearImageHealth(provider: SubscriptionProviderId, instanceId?: string): void {
