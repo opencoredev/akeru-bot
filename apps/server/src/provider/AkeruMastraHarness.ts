@@ -35,6 +35,7 @@ import {
   controllerModelId,
   controllerModelOptions,
   controllerModelConnection,
+  controllerResourceId,
 } from "./mastra/AkeruMemory.ts";
 import {
   AkeruMastraHarnessError,
@@ -232,6 +233,7 @@ export const makeAkeruMastraHarness = Effect.fnUntraced(function* (
         controllerModelConnection(requestContext, options.getModelConnection),
         options.getSubscriptionOAuth,
         options.getSubscriptionAccessToken,
+        controllerResourceId(requestContext),
       ),
     tools: ({ requestContext }) => resolveAkeruTools(requestContext, options),
     memory: observationalMemory.memory,

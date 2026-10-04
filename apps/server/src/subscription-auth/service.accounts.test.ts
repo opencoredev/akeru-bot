@@ -1,0 +1,193 @@
+import { fixture } from "./testUtils/subscriptionAuthStorage.ts";
+import * as NodeFS from "node:fs";
+import { describe, expect, it } from "vite-plus/test";
+
+import { makeTestSubscriptionAuthService } from "./testUtils/subscriptionAuthService.ts";
+
+import { accountScope, isAccountLimitMessage, limitRetryAt } from "./service.ts";
+
+describe("linked subscription accounts", () => {
+  it("uses linked accounts in priority order and skips one that hit a limit", async () => {
+    const { authPath } = fixture();
+    const service = await makeTestSubscriptionAuthService(authPath);
+    const first = await service.startLogin("openai-codex", { authMode: "api-key" });
+    expect(await service.completeLogin(first.loginId, "first-key")).toEqual({
+      status: "connected",
+    });
+
+    const second = await service.startLogin("openai-codex", {
+      authMode: "api-key",
+      addAccount: true,
+    });
+
+    expect(await service.completeLogin(second.loginId, "second-key")).toEqual({
+      status: "connected",
+    });
+    const [defaultId, addedId] = service.linkedAccountIds("openai-codex");
+    expect(defaultId).toBe("default");
+    expect(addedId).toMatch(/^acct-[a-z0-9]+$/);
+    expect(await service.getAccessToken("openai-codex")).toBe("first-key");
+
+    service.recordRequestFailure(
+      "openai-codex",
+      "You've hit your usage limit. Try again in 2 hours.",
+      new Date().toISOString(),
+    );
+    expect(await service.getAccessToken("openai-codex")).toBe("second-key");
+    expect(
+      service
+        .linkedAccountStatuses()
+        .filter((status) => status.provider === "openai-codex")
+        .map((status) => [status.accountId, status.active]),
+    ).toEqual([
+      ["default", false],
+      [addedId, true],
+    ]);
+    // An ordinary failure does not bench the account.
+    service.recordRequestFailure("openai-codex", "socket hang up", new Date().toISOString());
+    expect(await service.getAccessToken("openai-codex")).toBe("second-key");
+
+    await service.setAccountOrder("openai-codex", [addedId!, "default"]);
+    const restarted = await makeTestSubscriptionAuthService(authPath);
+    expect(restarted.linkedAccountIds("openai-codex")).toEqual([addedId, "default"]);
+    await restarted.logout("openai-codex", accountScope(addedId!));
+    expect(restarted.linkedAccountIds("openai-codex")).toEqual(["default"]);
+    expect(NodeFS.readFileSync(authPath, "utf-8")).not.toContain("second-key");
+  });
+
+  it("records each turn's outcome on the account that turn used", async () => {
+    const { authPath } = fixture();
+    const service = await makeTestSubscriptionAuthService(authPath);
+    const first = await service.startLogin("openai-codex", { authMode: "api-key" });
+    await service.completeLogin(first.loginId, "first-key");
+
+    const second = await service.startLogin("openai-codex", {
+      authMode: "api-key",
+      addAccount: true,
+    });
+
+    await service.completeLogin(second.loginId, "second-key");
+    const [, addedId] = service.linkedAccountIds("openai-codex");
+
+    expect(await service.getAccessToken("openai-codex", undefined, "thread-a")).toBe("first-key");
+    service.recordRequestFailure(
+      "openai-codex",
+      "You've hit your usage limit. Try again in 2 hours.",
+      new Date().toISOString(),
+      "request",
+      "thread-a",
+    );
+    // Thread B starts on the second account; a settings probe then reads the default scope.
+    expect(await service.getAccessToken("openai-codex", undefined, "thread-b")).toBe("second-key");
+    await service.getAccessToken("openai-codex");
+    // A late limit from thread A must not bench the account thread B is using.
+    service.recordRequestFailure(
+      "openai-codex",
+      "You've hit your usage limit. Try again in 2 hours.",
+      new Date().toISOString(),
+      "request",
+      "thread-a",
+    );
+    service.recordRequestSuccess("openai-codex", new Date().toISOString(), "thread-b");
+    expect(
+      service
+        .linkedAccountStatuses()
+        .filter((status) => status.provider === "openai-codex")
+        .map((status) => [status.accountId, status.active]),
+    ).toEqual([
+      ["default", false],
+      [addedId, true],
+    ]);
+  });
+
+  it("follows an account order saved by another service instance", async () => {
+    const { authPath } = fixture();
+    const controller = await makeTestSubscriptionAuthService(authPath);
+    const first = await controller.startLogin("openai-codex", { authMode: "api-key" });
+    await controller.completeLogin(first.loginId, "first-key");
+
+    const second = await controller.startLogin("openai-codex", {
+      authMode: "api-key",
+      addAccount: true,
+    });
+
+    await controller.completeLogin(second.loginId, "second-key");
+    const [, addedId] = controller.linkedAccountIds("openai-codex");
+    expect(await controller.getAccessToken("openai-codex")).toBe("first-key");
+
+    const settings = await makeTestSubscriptionAuthService(authPath);
+    await settings.setAccountOrder("openai-codex", [addedId!, "default"]);
+    expect(await controller.getAccessToken("openai-codex")).toBe("second-key");
+  });
+
+  it("reads a limit reset time from the provider message", () => {
+    const at = "2026-10-01T00:00:00.000Z";
+    expect(limitRetryAt("Rate limit reached. Try again in 1h 30m.", at)).toBe(
+      "2026-10-01T01:30:00.000Z",
+    );
+    expect(limitRetryAt("Usage limit reached.", at)).toBe("2026-10-01T01:00:00.000Z");
+    expect(isAccountLimitMessage("429 Too Many Requests")).toBe(true);
+    expect(isAccountLimitMessage("socket hang up")).toBe(false);
+  });
+
+  it("reads the ChatGPT tier from a login saved before tiers were recorded", async () => {
+    const { authPath } = fixture();
+    const claims = { "https://api.openai.com/auth": { chatgpt_plan_type: "plus" } };
+    NodeFS.writeFileSync(
+      authPath,
+      JSON.stringify({
+        "openai-codex": {
+          type: "oauth",
+          access: `e30.${Buffer.from(JSON.stringify(claims)).toString("base64url")}.sig`,
+          refresh: "refresh",
+          expires: Date.now() + 60_000,
+          accountId: "account-123",
+        },
+      }),
+    );
+
+    const status = (await makeTestSubscriptionAuthService(authPath))
+      .statuses()
+      .find((entry) => entry.provider === "openai-codex");
+
+    expect(status?.plan).toBe("Plus");
+  });
+});
+
+it("reads plan usage through the active account and picks up a shared limit", async () => {
+  const { authPath } = fixture();
+  const service = await makeTestSubscriptionAuthService(authPath);
+  const first = await service.startLogin("opencode-go", { authMode: "api-key" });
+  await service.completeLogin(first.loginId, "first-key");
+  const second = await service.startLogin("opencode-go", { authMode: "api-key", addAccount: true });
+  await service.completeLogin(second.loginId, "second-key");
+  const firstAccess = await service.getPlanAccess("opencode-go");
+  expect(firstAccess?.accessToken).toBe("first-key");
+  const other = await makeTestSubscriptionAuthService(authPath);
+  other.recordRequestFailure("opencode-go", "Rate limit reached. Try again in 2h.");
+  const secondAccess = await service.getPlanAccess("opencode-go");
+  expect(secondAccess?.accessToken).toBe("second-key");
+  expect(secondAccess?.accountId).not.toBe(firstAccess?.accountId);
+  expect(NodeFS.statSync(`${authPath}.accounts`).mode & 0o777).toBe(0o600);
+});
+
+it("keeps the provider available while another linked account can serve requests", async () => {
+  const { authPath } = fixture();
+  const service = await makeTestSubscriptionAuthService(authPath);
+  const first = await service.startLogin("openai-codex", { authMode: "api-key" });
+  await service.completeLogin(first.loginId, "first-key");
+
+  const second = await service.startLogin("openai-codex", {
+    authMode: "api-key",
+    addAccount: true,
+  });
+
+  await service.completeLogin(second.loginId, "second-key");
+  service.recordRequestFailure("openai-codex", "Rate limit reached.");
+  service.recordProviderInstanceFailure("codex", "Rate limit reached.");
+  expect(service.providerInstanceRequestHealth("codex")).toBeUndefined();
+  expect(await service.getAccessToken("openai-codex")).toBe("second-key");
+  service.recordRequestFailure("openai-codex", "Rate limit reached.");
+  expect(service.providerInstanceRequestHealth("codex")?.health).toBe("failed-first-request");
+  expect(await service.getAccessToken("openai-codex")).toBe("first-key");
+});

@@ -1,3 +1,6 @@
+import { startSubscriptionLogin } from "./loginStart.ts";
+import { SubscriptionAccountState } from "./accountState.ts";
+import * as DateTime from "effect/DateTime";
 import { decodePendingLogins } from "./persistedSchemas.ts";
 import * as Predicate from "effect/Predicate";
 import * as NodeFS from "node:fs";
@@ -16,14 +19,12 @@ import {
   type SubscriptionAuthData,
   type SubscriptionCredentialStore,
 } from "./credentialStore.ts";
-import { completeAnthropicLogin, startAnthropicLogin } from "./providers/anthropic.ts";
-import { pollCodexDeviceLogin, startCodexDeviceLogin } from "./providers/openaiCodex.ts";
-import { pollKimiDeviceLogin, startKimiDeviceLogin } from "./providers/kimi.ts";
-import { pollXAIDeviceLogin, startXAIDeviceLogin } from "./providers/xai.ts";
+import { completeAnthropicLogin } from "./providers/anthropic.ts";
+import { pollCodexDeviceLogin } from "./providers/openaiCodex.ts";
+import { pollKimiDeviceLogin } from "./providers/kimi.ts";
+import { pollXAIDeviceLogin } from "./providers/xai.ts";
 import type { ApiKeyCredential, OAuthCredential, OAuthCredentials } from "./types.ts";
 import {
-  decodeBaseUrl,
-  OPENCODE_GO_AUTH_URL,
   SUBSCRIPTION_PROVIDER_IDS,
   type SubscriptionProviderId,
   type StartedLogin,
@@ -34,14 +35,19 @@ import {
   type BoundLogin,
   defaultInstanceByProvider,
   credentialKey,
+  accountScope,
+  accountIdForKey,
+  DEFAULT_ACCOUNT_ID,
+  isDefaultScope,
   credentialAt,
   PENDING_LOGIN_CAP,
 } from "./serviceTypes.ts";
 import { SubscriptionHealthService } from "./healthService.ts";
 import { SubscriptionCredentialAccess } from "./credentialAccess.ts";
-import { providerStatuses } from "./providerStatuses.ts";
+import { providerStatuses, linkedAccountStatuses } from "./providerStatuses.ts";
 
 export class SubscriptionAuthService {
+  private readonly accounts: SubscriptionAccountState;
   private readonly clock: Clock.Clock;
   private readonly credentialAccess: SubscriptionCredentialAccess;
   private readonly healthService: SubscriptionHealthService;
@@ -79,10 +85,17 @@ export class SubscriptionAuthService {
       options.checkHealthOnConnect ?? false,
       () => this.reload(),
     );
+    this.accounts = new SubscriptionAccountState(store, this.healthService, clock, () =>
+      this.reload(),
+    );
     this.pendingPath = `${this.authPath}.pending`;
 
-    this.credentialAccess = new SubscriptionCredentialAccess(store, this.healthService, clock, () =>
-      this.reload(),
+    this.credentialAccess = new SubscriptionCredentialAccess(
+      store,
+      this.healthService,
+      this.accounts,
+      clock,
+      () => this.reload(),
     );
     this.reloadLocal();
   }
@@ -138,6 +151,7 @@ export class SubscriptionAuthService {
 
   private reloadLocal(): void {
     this.reloadHealth();
+    this.accounts.reloadAccountOrder();
 
     this.pendingLogins.clear();
 
@@ -177,7 +191,34 @@ export class SubscriptionAuthService {
     now = this.clock.currentTimeMillisUnsafe(),
     instanceId?: ProviderInstanceId,
   ): ProviderStatus[] {
-    return providerStatuses(this.store.current(), this.health, dependentBots, now, instanceId);
+    this.accounts.refreshAccountState();
+
+    return providerStatuses(
+      this.store.current(),
+      this.health,
+      dependentBots,
+      now,
+      instanceId,
+      (provider) =>
+        isDefaultScope(provider, instanceId)
+          ? this.accounts.activeAccountKey(provider, now)
+          : credentialKey(provider, instanceId),
+    );
+  }
+
+  linkedAccountIds(provider: SubscriptionProviderId): string[] {
+    return this.accounts.linkedAccountIds(provider);
+  }
+  setAccountOrder(
+    provider: SubscriptionProviderId,
+    accountIds: ReadonlyArray<string>,
+  ): Promise<void> {
+    return this.accounts.setAccountOrder(provider, accountIds);
+  }
+  linkedAccountStatuses(now = this.clock.currentTimeMillisUnsafe()): ProviderStatus[] {
+    this.accounts.refreshAccountState();
+
+    return linkedAccountStatuses(this.store.current(), this.health, this.accounts, now);
   }
 
   accountStatus(
@@ -194,16 +235,27 @@ export class SubscriptionAuthService {
     )!;
   }
 
-  recordRequestSuccess(provider: SubscriptionProviderId, at?: string): void {
-    return this.healthService.recordRequestSuccess(provider, at);
+  recordRequestSuccess(
+    provider: SubscriptionProviderId,
+    at = DateTime.formatIso(DateTime.makeUnsafe(this.clock.currentTimeMillisUnsafe())),
+    threadId?: string,
+  ): void {
+    this.healthService.recordHealthSuccess(
+      this.accounts.outcomeKey(provider, undefined, threadId),
+      at,
+    );
   }
 
   recordAccountRequestSuccess(
     provider: SubscriptionProviderId,
     instanceId: string,
     at: string,
+    threadId?: string,
   ): void {
-    return this.healthService.recordAccountRequestSuccess(provider, instanceId, at);
+    this.healthService.recordHealthSuccess(
+      this.accounts.outcomeKey(provider, instanceId, threadId),
+      at,
+    );
   }
 
   recordProviderInstanceSuccess(instanceId: string, at?: string): void {
@@ -213,10 +265,16 @@ export class SubscriptionAuthService {
   recordRequestFailure(
     provider: SubscriptionProviderId,
     message: string,
-    at?: string,
+    at = DateTime.formatIso(DateTime.makeUnsafe(this.clock.currentTimeMillisUnsafe())),
     failureKind: "request" | "revoked" = "request",
+    threadId?: string,
   ): void {
-    return this.healthService.recordRequestFailure(provider, message, at, failureKind);
+    this.healthService.recordAccountFailure(
+      this.accounts.outcomeKey(provider, undefined, threadId),
+      message,
+      at,
+      failureKind,
+    );
   }
 
   recordAccountRequestFailure(
@@ -224,8 +282,14 @@ export class SubscriptionAuthService {
     instanceId: string,
     message: string,
     at: string,
+    threadId?: string,
   ): void {
-    return this.healthService.recordAccountRequestFailure(provider, instanceId, message, at);
+    this.healthService.recordAccountFailure(
+      this.accounts.outcomeKey(provider, instanceId, threadId),
+      message,
+      at,
+      "request",
+    );
   }
 
   recordProviderInstanceFailure(
@@ -292,7 +356,7 @@ export class SubscriptionAuthService {
   }
 
   providerInstanceRequestHealth(instanceId: string): RequestHealthStatus | undefined {
-    return this.healthService.providerInstanceRequestHealth(instanceId);
+    return this.accounts.providerInstanceRequestHealth(instanceId);
   }
 
   mcpRequestHealth(serverId: string): RequestHealthStatus | undefined {
@@ -300,7 +364,14 @@ export class SubscriptionAuthService {
   }
 
   async testHealth(provider: SubscriptionProviderId, instanceId?: string): Promise<void> {
-    return this.healthService.testHealth(provider, instanceId);
+    const scope = isDefaultScope(provider, instanceId)
+      ? accountScope(
+          accountIdForKey(provider, this.accounts.liveKey(provider, instanceId)) ??
+            DEFAULT_ACCOUNT_ID,
+        )
+      : instanceId;
+
+    return this.healthService.testHealth(provider, scope);
   }
 
   /**
@@ -308,6 +379,8 @@ export class SubscriptionAuthService {
    * client that finished the login disconnects; `awaitHealthCheck` observes it.
    */
   private startHealthCheck(provider: SubscriptionProviderId, instanceId?: string): LoginPollStatus {
+    this.accounts.rememberAccountOrder(provider);
+
     return this.healthService.startHealthCheck(provider, instanceId);
   }
 
@@ -317,11 +390,11 @@ export class SubscriptionAuthService {
   }
 
   isConnected(provider: SubscriptionProviderId, instanceId?: string): boolean {
-    return credentialAt(this.data, credentialKey(provider, instanceId)) !== undefined;
+    return credentialAt(this.data, this.accounts.liveKey(provider, instanceId)) !== undefined;
   }
 
   hasOpenAICodexAccount(): boolean {
-    const credential = this.data["openai-codex"];
+    const credential = credentialAt(this.data, this.accounts.liveKey("openai-codex"));
 
     return (
       credential?.type === "oauth" &&
@@ -330,124 +403,38 @@ export class SubscriptionAuthService {
     );
   }
 
-  async startLogin(
+  startLogin(
     provider: SubscriptionProviderId,
     options: Omit<SubscriptionAuthStartInput, "provider"> = {},
   ): Promise<StartedLogin> {
-    await this.reloadAsync();
-    const authMode = options.authMode ?? (provider === "opencode-go" ? "api-key" : "oauth");
+    return startSubscriptionLogin(
+      {
+        reloadAsync: () => this.reloadAsync(),
+        loginScope: (provider, options) => this.loginScope(provider, options),
+        pendingLogins: this.pendingLogins,
+        savePending: () => this.savePending(),
+      },
+      provider,
+      options,
+    );
+  }
 
-    if (options.baseUrl !== undefined && authMode !== "api-key") {
-      throw new Error("Custom base URLs require API-key authentication. Select API key first.");
+  private loginScope(
+    provider: SubscriptionProviderId,
+    options: Omit<SubscriptionAuthStartInput, "provider">,
+  ): string {
+    if (options.accountId) return accountScope(options.accountId);
+
+    if (!isDefaultScope(provider, options.instanceId)) return options.instanceId!;
+    const linked = this.linkedAccountIds(provider);
+
+    if (options.addAccount && linked.length > 0) {
+      return accountScope(`acct-${NodeCrypto.randomBytes(6).toString("hex")}`);
     }
 
-    if (options.baseUrl !== undefined && provider === "xai") {
-      throw new Error(
-        "The Grok bridge does not support custom base URLs. Use the default endpoint.",
-      );
-    }
+    const active = accountIdForKey(provider, this.accounts.activeAccountKey(provider));
 
-    if (authMode === "oauth" && provider === "opencode-go") {
-      throw new Error("OpenCode Go requires an API key. Select API key first.");
-    }
-
-    const baseUrl =
-      options.baseUrl === undefined
-        ? undefined
-        : decodeBaseUrl(options.baseUrl).replace(/\/+$/, "");
-
-    const loginId = NodeCrypto.randomUUID();
-    const binding = options.instanceId ? { instanceId: options.instanceId } : {};
-    let started: StartedLogin;
-
-    if (authMode === "api-key") {
-      this.pendingLogins.set(loginId, {
-        provider,
-        authMode,
-        ...binding,
-        ...(baseUrl ? { baseUrl } : {}),
-      });
-      started = {
-        loginId,
-        provider,
-        url: provider === "opencode-go" ? OPENCODE_GO_AUTH_URL : "",
-        instructions: "Paste the provider API key.",
-        completion: "paste",
-      };
-    } else
-      switch (provider) {
-        case "anthropic": {
-          const { url, verifier } = await startAnthropicLogin();
-          this.pendingLogins.set(loginId, { provider, verifier, ...binding });
-          started = { loginId, provider, url, completion: "paste" };
-          break;
-        }
-
-        case "openai-codex": {
-          const pending = await startCodexDeviceLogin();
-          this.pendingLogins.set(loginId, { provider, pending, ...binding });
-          started = {
-            loginId,
-            provider,
-            url: pending.url,
-            userCode: pending.userCode,
-            instructions: pending.instructions,
-            completion: "poll",
-          };
-          break;
-        }
-
-        case "xai": {
-          const pending = await startXAIDeviceLogin();
-          this.pendingLogins.set(loginId, { provider, pending, ...binding });
-          started = {
-            loginId,
-            provider,
-            url: pending.url,
-            userCode: pending.userCode,
-            instructions: pending.instructions,
-            completion: "poll",
-          };
-          break;
-        }
-
-        case "kimi-for-coding": {
-          const pending = await startKimiDeviceLogin();
-          this.pendingLogins.set(loginId, { provider, pending, ...binding });
-          started = {
-            loginId,
-            provider,
-            url: pending.url,
-            userCode: pending.userCode,
-            instructions: pending.instructions,
-            completion: "poll",
-          };
-          break;
-        }
-
-        case "opencode-go": {
-          this.pendingLogins.set(loginId, { provider, ...binding });
-          started = {
-            loginId,
-            provider,
-            url: OPENCODE_GO_AUTH_URL,
-            instructions: "Subscribe to OpenCode Go, copy the API key, then paste it here.",
-            completion: "paste",
-          };
-          break;
-        }
-      }
-
-    // Drop the oldest abandoned login rather than growing without bound.
-    if (this.pendingLogins.size > PENDING_LOGIN_CAP) {
-      const oldest = this.pendingLogins.keys().next().value;
-
-      if (oldest !== undefined) this.pendingLogins.delete(oldest);
-    }
-
-    this.savePending();
-
-    return started;
+    return accountScope(active ?? DEFAULT_ACCOUNT_ID);
   }
 
   /** One upstream poll for a started login. Persists credentials on success. */
@@ -641,6 +628,10 @@ export class SubscriptionAuthService {
     delete this.health[key];
     this.clearImageHealth(provider, instanceId);
     this.saveHealth();
+
+    if (this.accounts.lastServedKey.get(provider) === key)
+      this.accounts.lastServedKey.delete(provider);
+    this.accounts.rememberAccountOrder(provider);
   }
 
   private clearImageHealth(provider: SubscriptionProviderId, instanceId?: string): void {
@@ -729,8 +720,9 @@ export class SubscriptionAuthService {
   async getAccessToken(
     provider: SubscriptionProviderId,
     instanceId?: string,
+    threadId?: string,
   ): Promise<string | undefined> {
-    return this.credentialAccess.getAccessToken(provider, instanceId);
+    return this.credentialAccess.getAccessToken(provider, instanceId, threadId);
   }
 
   async getPlanAccessToken(
@@ -753,35 +745,40 @@ export class SubscriptionAuthService {
   getApiKeyCredential(
     provider: SubscriptionProviderId,
     instanceId?: string,
+    threadId?: string,
   ): ApiKeyCredential | undefined {
-    return this.credentialAccess.getApiKeyCredential(provider, instanceId);
+    return this.credentialAccess.getApiKeyCredential(provider, instanceId, threadId);
   }
 
   getOAuthCredential(
     provider: SubscriptionProviderId,
     instanceId?: string,
+    threadId?: string,
   ): OAuthCredential | undefined {
-    return this.credentialAccess.getOAuthCredential(provider, instanceId);
+    return this.credentialAccess.getOAuthCredential(provider, instanceId, threadId);
   }
 
   async getOpenAICodexAccess(
     instanceId?: string,
+    threadId?: string,
   ): Promise<{ readonly accessToken: string; readonly accountId: string } | undefined> {
-    return this.credentialAccess.getOpenAICodexAccess(instanceId);
+    return this.credentialAccess.getOpenAICodexAccess(instanceId, threadId);
   }
 
   async getKimiForCodingAccess(
     instanceId?: string,
+    threadId?: string,
   ): Promise<
     | { readonly accessToken: string; readonly deviceId?: string; readonly baseUrl?: string }
     | undefined
   > {
-    return this.credentialAccess.getKimiForCodingAccess(instanceId);
+    return this.credentialAccess.getKimiForCodingAccess(instanceId, threadId);
   }
 }
 
 export {
   anthropicApiBaseUrl,
+  accountScope,
   SUBSCRIPTION_PROVIDER_IDS,
   isSubscriptionProviderId,
   type SubscriptionProviderId,
@@ -791,3 +788,5 @@ export {
   type ProviderStatus,
   type RequestHealthStatus,
 } from "./serviceTypes.ts";
+
+export { isAccountLimitMessage, limitRetryAt } from "./accountLimits.ts";

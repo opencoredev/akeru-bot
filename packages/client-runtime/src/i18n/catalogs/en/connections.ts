@@ -493,4 +493,21 @@ export const connectionsCatalog = {
     "Connect to an environment to see its archived chats.",
   "Check the connection to this environment, then reopen this page.":
     "Check the connection to this environment, then reopen this page.",
+  "Connect {provider} to chat with {bot}": "Connect {provider} to chat with {bot}",
+  "Reconnect {provider} to keep chatting with {bot}":
+    "Reconnect {provider} to keep chatting with {bot}",
+  "Checking your {provider} account…": "Checking your {provider} account…",
+  "{provider} account": "{provider} account",
+  "In use": "In use",
+  "Main account": "Main account",
+  "Backup {number}": "Backup {number}",
+  "Checking sign-in": "Checking sign-in",
+  "Usage limit reached, back at {time}": "Usage limit reached, back at {time}",
+  "Signed out": "Signed out",
+  "Can't reach {provider}": "Can't reach {provider}",
+  "Sign in again": "Sign in again",
+  "Sign in with {provider}": "Sign in with {provider}",
+  "Move {account} up": "Move {account} up",
+  "Move {account} down": "Move {account} down",
+  "Add separate account": "Add separate account",
 } as const;

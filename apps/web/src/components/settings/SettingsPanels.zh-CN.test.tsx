@@ -153,12 +153,12 @@ describe("settings panels in Simplified Chinese", () => {
     );
   });
 
-  it("translates the provider detail page and its instances", () => {
+  it("translates the provider detail page without instance configuration", () => {
     environment.id = ENVIRONMENT_ID;
     expectTranslated(
       renderInChinese(<ProviderDetailPage entry={PROVIDER_CATALOG[0]!} />),
-      [">配置<", "添加账户", "刷新 ChatGPT 状态", ">刷新<"],
-      [">Configuration<", "Add account", ">Refresh<", "Refresh ChatGPT status"],
+      [">配置<", "添加单独账户", "刷新 ChatGPT 状态", ">刷新<"],
+      [">Configuration<", "Add separate account", ">Refresh<", "Refresh ChatGPT status"],
     );
   });
 

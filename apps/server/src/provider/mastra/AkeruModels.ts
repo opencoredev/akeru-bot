@@ -66,7 +66,7 @@ export const MASTRA_MODEL_PREFIX = {
 } as const;
 
 export function mastraModelId(provider: ProviderDriverKind, model: string): string {
-  const trimmed = provider === "grok" && model.trim() === "grok-build" ? "grok-4.6" : model.trim();
+  const trimmed = provider === "grok" && model.trim() === "grok-build" ? "grok-4.7" : model.trim();
   const prefix = Object.entries(MASTRA_MODEL_PREFIX).find(([driver]) => driver === provider)?.[1];
 
   if (!prefix) return trimmed.includes("/") ? trimmed : `${provider}/${trimmed}`;
@@ -110,8 +110,8 @@ export function openCodeGoInlineConnection(environment: NodeJS.ProcessEnv | unde
 export function resolveAkeruMastraModel(
   modelId: string,
   authStorage: AuthStorage,
-  getKimiAccess?: (instanceId?: string) => Promise<AkeruKimiAccess | undefined>,
-  getOpenCodeGoApiKey?: (instanceId?: string) => Promise<string | undefined>,
+  getKimiAccess?: (instanceId?: string, threadId?: string) => Promise<AkeruKimiAccess | undefined>,
+  getOpenCodeGoApiKey?: (instanceId?: string, threadId?: string) => Promise<string | undefined>,
   modelOptions?: AkeruMastraState["modelOptions"],
   getSubscriptionApiKey?: SubscriptionAuthService["getApiKeyCredential"],
   connection?: {
@@ -122,6 +122,8 @@ export function resolveAkeruMastraModel(
   },
   getSubscriptionOAuth?: SubscriptionAuthService["getOAuthCredential"],
   getSubscriptionAccessToken?: SubscriptionAuthService["getAccessToken"],
+  /** The thread this request serves, so its outcome is recorded on the account it used. */
+  threadId?: string,
 ) {
   const trimmed = modelId.trim();
 
@@ -133,20 +135,22 @@ export function resolveAkeruMastraModel(
   const instanceId = connection?.instanceId;
 
   const savedApiKey = (provider: Parameters<NonNullable<typeof getSubscriptionApiKey>>[0]) =>
-    instanceId ? getSubscriptionApiKey?.(provider, instanceId) : getSubscriptionApiKey?.(provider);
+    getSubscriptionApiKey?.(provider, instanceId, threadId);
 
+  // Saved credentials always resolve through the subscription service, which
+  // picks the linked account to use and moves past one that hit a limit.
   // SAFETY: The scoped view inherits AuthStorage methods and state, and overrides only credential lookup.
   const scopedAuthStorage =
-    instanceId && getSubscriptionOAuth && getSubscriptionAccessToken
+    getSubscriptionOAuth && getSubscriptionAccessToken
       ? Object.assign(Object.create(authStorage) as AuthStorage, {
           reload: () => {},
           get: (provider: string) =>
             isSubscriptionProviderId(provider)
-              ? getSubscriptionOAuth(provider, instanceId)
+              ? getSubscriptionOAuth(provider, instanceId, threadId)
               : undefined,
           getApiKey: (provider: string) =>
             isSubscriptionProviderId(provider)
-              ? getSubscriptionAccessToken(provider, instanceId)
+              ? getSubscriptionAccessToken(provider, instanceId, threadId)
               : undefined,
         })
       : authStorage;
@@ -263,7 +267,7 @@ export function resolveAkeruMastraModel(
     if (!getKimiAccess) throw new Error("Kimi For Coding subscription access is unavailable.");
 
     return akeruKimiProvider(trimmed.slice("kimi-for-coding/".length), () =>
-      getKimiAccess(instanceId),
+      getKimiAccess(instanceId, threadId),
     );
   }
 
@@ -274,7 +278,7 @@ export function resolveAkeruMastraModel(
     const resolveApiKey = instanceApiKey
       ? async () => instanceApiKey
       : useSavedCredential && getOpenCodeGoApiKey
-        ? () => getOpenCodeGoApiKey(instanceId)
+        ? () => getOpenCodeGoApiKey(instanceId, threadId)
         : undefined;
 
     if (!resolveApiKey) throw new Error("OpenCode Go subscription access is unavailable.");

@@ -137,6 +137,7 @@ export function recordProviderAccessHealth(
 ): void {
   const provider = subscriptionProviderForDriver(event.provider);
   const providerInstanceId = event.providerInstanceId;
+  const threadId = String(event.threadId);
 
   if (event.type === "turn.completed") {
     if (event.payload.state === "failed") {
@@ -149,8 +150,16 @@ export function recordProviderAccessHealth(
             providerInstanceId,
             message,
             event.createdAt,
+            threadId,
           );
-        else subscriptionAuth.recordRequestFailure(provider, message, event.createdAt);
+        else
+          subscriptionAuth.recordRequestFailure(
+            provider,
+            message,
+            event.createdAt,
+            "request",
+            threadId,
+          );
       }
 
       if (providerInstanceId) {
@@ -168,8 +177,9 @@ export function recordProviderAccessHealth(
             provider,
             providerInstanceId,
             event.createdAt,
+            threadId,
           );
-        else subscriptionAuth.recordRequestSuccess(provider, event.createdAt);
+        else subscriptionAuth.recordRequestSuccess(provider, event.createdAt, threadId);
       }
 
       if (providerInstanceId) {
@@ -189,8 +199,16 @@ export function recordProviderAccessHealth(
         providerInstanceId,
         event.payload.message,
         event.createdAt,
+        threadId,
       );
-    else subscriptionAuth.recordRequestFailure(provider, event.payload.message, event.createdAt);
+    else
+      subscriptionAuth.recordRequestFailure(
+        provider,
+        event.payload.message,
+        event.createdAt,
+        "request",
+        threadId,
+      );
   }
 
   if (providerInstanceId) {

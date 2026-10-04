@@ -1,3 +1,4 @@
+import { SubscriptionAccountState } from "./accountState.ts";
 import * as Predicate from "effect/Predicate";
 import * as NodeCrypto from "node:crypto";
 import * as Effect from "effect/Effect";
@@ -9,6 +10,10 @@ import {
   type SubscriptionProviderId,
   oauthFailureKind,
   credentialKey,
+  accountScope,
+  accountIdForKey,
+  DEFAULT_ACCOUNT_ID,
+  isDefaultScope,
   credentialAt,
   refreshedCredential,
   runRefresh,
@@ -16,6 +21,7 @@ import {
 import { SubscriptionHealthService } from "./healthService.ts";
 
 export class SubscriptionCredentialAccess {
+  private readonly accounts: SubscriptionAccountState;
   private readonly clock: Clock.Clock;
   private readonly reload: () => Effect.Effect<void>;
   private readonly store: SubscriptionCredentialStore;
@@ -23,9 +29,11 @@ export class SubscriptionCredentialAccess {
   constructor(
     store: SubscriptionCredentialStore,
     healthService: SubscriptionHealthService,
+    accounts: SubscriptionAccountState,
     clock: Clock.Clock,
     reload: () => Effect.Effect<void>,
   ) {
+    this.accounts = accounts;
     this.clock = clock;
     this.reload = reload;
     this.store = store;
@@ -51,8 +59,9 @@ export class SubscriptionCredentialAccess {
   async getAccessToken(
     provider: SubscriptionProviderId,
     instanceId?: string,
+    threadId?: string,
   ): Promise<string | undefined> {
-    const key = credentialKey(provider, instanceId);
+    const key = this.accounts.servingKey(provider, instanceId, threadId);
     const credential = credentialAt(this.data, key);
 
     if (!credential) return undefined;
@@ -67,7 +76,7 @@ export class SubscriptionCredentialAccess {
 
     if (inFlight) return inFlight;
 
-    const refresh = this.refreshCredential(provider, credential, instanceId).finally(() => {
+    const refresh = this.refreshCredential(provider, credential, key).finally(() => {
       this.refreshInFlight.delete(key);
     });
 
@@ -94,8 +103,11 @@ export class SubscriptionCredentialAccess {
   async getPlanAccess(
     provider: SubscriptionProviderId,
   ): Promise<{ readonly accessToken: string | null; readonly accountId: string } | undefined> {
-    const key = credentialKey(provider);
     await this.reloadAsync();
+
+    const key = this.accounts.liveKey(provider);
+
+    const scope = accountScope(accountIdForKey(provider, key) ?? DEFAULT_ACCOUNT_ID);
     const credential = credentialAt(this.data, key);
 
     if (
@@ -115,7 +127,7 @@ export class SubscriptionCredentialAccess {
       });
     }
 
-    const accessToken = await this.getPlanAccessToken(provider).catch(() => undefined);
+    const accessToken = await this.getPlanAccessToken(provider, scope).catch(() => undefined);
     await this.reloadAsync();
     const current = credentialAt(this.data, key);
 
@@ -135,8 +147,12 @@ export class SubscriptionCredentialAccess {
   getApiKeyCredential(
     provider: SubscriptionProviderId,
     instanceId?: string,
+    threadId?: string,
   ): ApiKeyCredential | undefined {
-    const credential = credentialAt(this.data, credentialKey(provider, instanceId));
+    const credential = credentialAt(
+      this.data,
+      this.accounts.servingKey(provider, instanceId, threadId),
+    );
 
     return credential?.type === "api-key" ? credential : undefined;
   }
@@ -144,18 +160,24 @@ export class SubscriptionCredentialAccess {
   getOAuthCredential(
     provider: SubscriptionProviderId,
     instanceId?: string,
+    threadId?: string,
   ): OAuthCredential | undefined {
-    const credential = credentialAt(this.data, credentialKey(provider, instanceId));
+    const credential = credentialAt(
+      this.data,
+      this.accounts.servingKey(provider, instanceId, threadId),
+    );
 
     return credential?.type === "oauth" ? credential : undefined;
   }
 
   async getOpenAICodexAccess(
     instanceId?: string,
+    threadId?: string,
   ): Promise<{ readonly accessToken: string; readonly accountId: string } | undefined> {
     await this.reloadAsync();
-    const accessToken = await this.getAccessToken("openai-codex", instanceId);
-    const credential = credentialAt(this.data, credentialKey("openai-codex", instanceId));
+    const scope = this.pinnedScope("openai-codex", instanceId, threadId);
+    const accessToken = await this.getAccessToken("openai-codex", scope);
+    const credential = credentialAt(this.data, credentialKey("openai-codex", scope));
     const accountId = credential?.type === "oauth" ? credential.accountId : undefined;
 
     return accessToken && Predicate.isString(accountId) && accountId.length > 0
@@ -165,13 +187,15 @@ export class SubscriptionCredentialAccess {
 
   async getKimiForCodingAccess(
     instanceId?: string,
+    threadId?: string,
   ): Promise<
     | { readonly accessToken: string; readonly deviceId?: string; readonly baseUrl?: string }
     | undefined
   > {
     await this.reloadAsync();
-    const accessToken = await this.getAccessToken("kimi-for-coding", instanceId);
-    const credential = credentialAt(this.data, credentialKey("kimi-for-coding", instanceId));
+    const scope = this.pinnedScope("kimi-for-coding", instanceId, threadId);
+    const accessToken = await this.getAccessToken("kimi-for-coding", scope);
+    const credential = credentialAt(this.data, credentialKey("kimi-for-coding", scope));
 
     if (credential?.type === "api-key" && accessToken) {
       return { accessToken, ...(credential.baseUrl ? { baseUrl: credential.baseUrl } : {}) };
@@ -182,13 +206,23 @@ export class SubscriptionCredentialAccess {
     return accessToken && isKimiCodingDeviceId(deviceId) ? { accessToken, deviceId } : undefined;
   }
 
+  /** One account for a read that touches the credential twice, so both reads agree. */
+  private pinnedScope(
+    provider: SubscriptionProviderId,
+    instanceId?: string,
+    threadId?: string,
+  ): string | undefined {
+    if (!isDefaultScope(provider, instanceId)) return instanceId;
+    const key = this.accounts.servingKey(provider, instanceId, threadId);
+
+    return accountScope(accountIdForKey(provider, key) ?? DEFAULT_ACCOUNT_ID);
+  }
+
   private async refreshCredential(
     provider: SubscriptionProviderId,
     credential: OAuthCredential,
-    instanceId?: string,
+    key: string,
   ): Promise<string | undefined> {
-    const key = credentialKey(provider, instanceId);
-
     try {
       const refreshed = await this.runRefresh(provider, credential);
       await this.reloadAsync();
@@ -219,11 +253,10 @@ export class SubscriptionCredentialAccess {
     } catch (cause) {
       // Refresh failed — the user must re-connect. Keep the stored credential
       // so status still shows which account was linked.
-      this.healthService.recordOAuthFailure(
-        provider,
+      this.healthService.recordOAuthFailureForKey(
+        key,
         cause instanceof Error ? cause.message : "The provider rejected the token refresh.",
         oauthFailureKind(cause),
-        instanceId,
       );
 
       return undefined;

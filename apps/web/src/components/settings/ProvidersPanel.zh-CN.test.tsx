@@ -41,6 +41,7 @@ describe("provider account rows in Simplified Chinese", () => {
       expect(html).not.toContain(label);
     }
 
-    expect(html).toContain("person@example.com");
+    expect(html).not.toContain("person@example.com");
+    expect(html).toContain("ChatGPT 账户");
   });
 });

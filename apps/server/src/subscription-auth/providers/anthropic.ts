@@ -27,6 +27,7 @@ import {
   withOAuthTimeout,
 } from "../oauthHttp.ts";
 import { generatePKCE } from "../pkce.ts";
+import { ClaudeProfile, claudePlanLabel } from "../plan.ts";
 import type { OAuthCredentials } from "../types.ts";
 
 const decode = (s: string) => atob(s);
@@ -44,6 +45,10 @@ const SCOPES = "org:create_api_key user:profile user:inference";
 const REFRESH_SKEW_MS = 5 * 60 * 1000;
 
 const REQUEST_TIMEOUT = "15 seconds";
+
+const PROFILE_URL = "https://api.anthropic.com/api/oauth/profile";
+
+const PROFILE_TIMEOUT = "5 seconds";
 
 const TokenResponse = Schema.Struct({
   access_token: Schema.NonEmptyString,
@@ -90,13 +95,33 @@ const requestTokens = Effect.fn("anthropic.requestTokens")(function* (
   );
 
   const now = yield* Clock.currentTimeMillis;
+  const plan = yield* readPlan(tokens.access_token);
 
   return {
+    ...(plan ? { plan } : {}),
     refresh: tokens.refresh_token,
     access: tokens.access_token,
     expires: now + tokens.expires_in * 1000 - REFRESH_SKEW_MS,
   } satisfies OAuthCredentials;
 });
+
+const readPlan = (accessToken: string) =>
+  sendOAuthRequest(
+    "Anthropic profile",
+    HttpClientRequest.get(PROFILE_URL).pipe(
+      HttpClientRequest.setHeaders({
+        Authorization: `Bearer ${accessToken}`,
+        "anthropic-beta": "oauth-2025-04-20",
+      }),
+    ),
+  ).pipe(
+    Effect.flatMap(ensureOk("Anthropic profile")),
+    Effect.flatMap(responseJson),
+    Effect.flatMap(decodeOAuthBody(ClaudeProfile, "Anthropic profile: invalid response")),
+    Effect.map(claudePlanLabel),
+    withOAuthTimeout("Anthropic profile", PROFILE_TIMEOUT),
+    Effect.orElseSucceed(() => undefined),
+  );
 
 /**
  * Complete an Anthropic login: parse the pasted authorization input

@@ -5,6 +5,7 @@ import type {
   SubscriptionProviderStatus,
 } from "@akeru/contracts";
 import { PROVIDER_DISPLAY_NAMES, ProviderDriverKind } from "@akeru/contracts";
+import { formatModelSlug } from "@akeru/shared/model";
 import {
   filterProvidersBySubscriptionConnection,
   withRefreshableSubscriptionLogin,
@@ -90,7 +91,7 @@ export function resolveModelSendBlock(
 
   const modelName =
     provider?.models.find((candidate) => candidate.slug === selection.model)?.name ??
-    selection.model;
+    formatModelSlug(selection.model);
 
   return presentProviderUnavailability(
     {

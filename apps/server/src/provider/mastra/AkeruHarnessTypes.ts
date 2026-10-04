@@ -57,8 +57,14 @@ export type AkeruControllerSession = Pick<
 
 export interface AkeruMastraHarnessOptions {
   readonly authStorage: AuthStorage;
-  readonly getKimiAccess?: (instanceId?: string) => Promise<AkeruKimiAccess | undefined>;
-  readonly getOpenCodeGoApiKey?: (instanceId?: string) => Promise<string | undefined>;
+  readonly getKimiAccess?: (
+    instanceId?: string,
+    threadId?: string,
+  ) => Promise<AkeruKimiAccess | undefined>;
+  readonly getOpenCodeGoApiKey?: (
+    instanceId?: string,
+    threadId?: string,
+  ) => Promise<string | undefined>;
   readonly getSubscriptionApiKey?: SubscriptionAuthService["getApiKeyCredential"];
   readonly getSubscriptionOAuth?: SubscriptionAuthService["getOAuthCredential"];
   readonly getSubscriptionAccessToken?: SubscriptionAuthService["getAccessToken"];

@@ -12,10 +12,12 @@ Model lists update on their own. The environment server checks models.dev for ne
 about once an hour, and open clients pick them up within a few minutes, with no reload or app
 update. Older models move to the picker's legacy section when a newer one in the same line ships.
 
-Use **Add account** on a provider's page to connect a second account of the same provider, such as a
-work and a personal subscription. Give it a name, then sign in from its card. An account configured with its own credentials uses those
-credentials rather than the shared connection. A custom configuration directory alone does not
-connect an account to Akeru's runtime.
+A provider can have more than one account. Backup accounts take over when one hits a usage limit;
+see [Backup accounts](#backup-accounts). To keep a second subscription apart instead, such as a work
+and a personal one that different bots use, choose **Add separate account** on the provider's page.
+Give it a name, then sign in from its card. A separate account configured with its own credentials
+uses those credentials rather than the shared connection. A custom configuration directory alone
+does not connect an account to Akeru's runtime.
 
 ## Custom API endpoints
 
@@ -46,6 +48,32 @@ gateway.
 
 The environment sends requests to the URL you configure. Point it only at an endpoint you trust, and
 prefer HTTPS for anything outside your machine.
+
+## Backup accounts
+
+Once you are signed in to a provider, its page lists your accounts under **Accounts**. Choose **Add
+account** there, then sign in or use an API key. Each new account goes to the bottom of the list.
+
+Each account is named by its plan, such as **ChatGPT Pro** or **Claude Max 20x**, so the list never
+shows your email address. API keys show as **API key**. Grok and Kimi For Coding don't report a plan,
+so their accounts show as **Grok account** and **Kimi For Coding account**.
+
+The list is in the order bots use it. The first account is the **Main account** and the rest are
+**Backup 1**, **Backup 2**, and so on. Bots use the main account, marked **In use**. When it reaches
+a usage limit, the account shows **Usage limit reached, back at** the time it resets, and bots move
+to the next account. The request that hit the limit still fails, and the bot's next request uses
+the backup. Once the limit resets, bots go back to the main account. A backup waiting its turn
+shows **Ready**.
+
+If an account stops working, it says why and offers the fix next to it. **Signed out** and **Login
+expired** come with **Sign in again**, and **Key rejected** comes with **Replace key**. **Can't reach**
+the provider comes with **Try again**.
+
+Use the arrows to change the order. The actions menu on each account has **Sign in again** (or
+**Replace key**) and **Remove**. On mobile, use **Move up**, **Move down**, and **Disconnect**.
+
+Backup accounts serve bots on the provider's main connection. A separate account added with **Add
+separate account** keeps its own sign-in and does not take part in the backup order.
 
 ## Subscription login health
 

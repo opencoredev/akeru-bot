@@ -37,7 +37,7 @@ describe("AkeruMastraHarness", () => {
         getCredential,
       ),
     ).toMatchObject({ modelId: "gpt-5.6", provider: "openai.responses" });
-    expect(getCredential).toHaveBeenCalledWith("openai-codex");
+    expect(getCredential).toHaveBeenCalledWith("openai-codex", undefined, undefined);
   });
 
   it("uses the selected instance key without reading the provider-wide credential", () => {
@@ -95,7 +95,7 @@ describe("AkeruMastraHarness", () => {
         },
       ),
     ).toMatchObject({ modelId: "grok-code-fast-1", provider: "xai.chat" });
-    expect(getCredential).toHaveBeenCalledWith("xai", "grok_work");
+    expect(getCredential).toHaveBeenCalledWith("xai", "grok_work", undefined);
   });
 
   it("does not leak provider-wide credentials into an isolated instance", () => {
@@ -338,7 +338,7 @@ describe("AkeruMastraHarness", () => {
       { provider: "anthropic.messages", modelId: "claude-sonnet-4-5" },
     );
     assert.equal(mastraModelId(ProviderDriverKind.make("grok"), "grok-4"), "xai/grok-4");
-    assert.equal(mastraModelId(ProviderDriverKind.make("grok"), "grok-build"), "xai/grok-4.6");
+    assert.equal(mastraModelId(ProviderDriverKind.make("grok"), "grok-build"), "xai/grok-4.7");
     assert.deepInclude(
       resolveAkeruMastraModel(
         "xai/grok-4",

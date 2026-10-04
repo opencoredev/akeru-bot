@@ -42,7 +42,7 @@ it.effect.each(["codex", "plan", "kimi"])(
           "revoked",
         );
         expect(reader.statuses().find((status) => status.provider === "openai-codex")?.health).toBe(
-          "detected",
+          "revoked",
         );
         yield* Effect.promise(async () => {
           await Match.value(access).pipe(

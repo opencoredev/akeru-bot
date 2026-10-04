@@ -1,16 +1,20 @@
 import {
   stockProviderAccountName,
+  defaultInstanceIdForDriver,
   ProviderDriverKind,
   ProviderInstanceId,
   type BotEngine,
   type ModelSelection,
   type ServerProvider,
   type ServerProviderUnavailability,
+  type SubscriptionProviderId,
   type UnifiedSettings,
 } from "@akeru/contracts";
 
 import { createTranslator } from "@akeru/client-runtime/i18n";
+import { SUBSCRIPTION_PROVIDER_BY_DRIVER } from "@akeru/client-runtime/provider-auth";
 import { driverSupportsDelegation } from "@akeru/shared/delegationProviders";
+import { formatModelSlug } from "@akeru/shared/model";
 import type { ProviderAvailabilityTranslate } from "@akeru/client-runtime/provider-availability";
 
 import { resolveAppModelSelectionForInstance } from "../../modelSelection";
@@ -172,7 +176,8 @@ export function botEngineUnavailability(
   const entry = instanceEntries.find((candidate) => candidate.instanceId === selection.instanceId);
 
   const modelName =
-    entry?.models.find((candidate) => candidate.slug === selection.model)?.name ?? selection.model;
+    entry?.models.find((candidate) => candidate.slug === selection.model)?.name ??
+    formatModelSlug(selection.model);
 
   const unavailability = providerInstanceUnavailability(entry, {
     model: selection.model,
@@ -184,6 +189,32 @@ export function botEngineUnavailability(
   return unavailability
     ? { ...unavailability, provider: botProviderCatalogEntry(selection.instanceId, entry) }
     : null;
+}
+
+const CONNECTABLE_REASONS: ReadonlySet<string> = new Set([
+  "missing-provider",
+  "disabled",
+  "missing-login",
+  "expired-login",
+]);
+
+/**
+ * The subscription to connect when signing in is what stands between a bot and
+ * its next reply. Only default instances qualify: they run on the account the
+ * user connects in Settings, while custom instances bring their own credentials.
+ */
+export function botEngineSubscriptionToConnect(
+  selection: ModelSelection | null,
+  instanceEntries: ReadonlyArray<ProviderInstanceEntry>,
+  reason: string | null | undefined,
+): SubscriptionProviderId | null {
+  if (!selection || !reason || !CONNECTABLE_REASONS.has(reason)) return null;
+  const entry = instanceEntries.find((candidate) => candidate.instanceId === selection.instanceId);
+  const driver = entry?.driverKind ?? ProviderDriverKind.make(selection.instanceId);
+
+  if (selection.instanceId !== defaultInstanceIdForDriver(driver)) return null;
+
+  return SUBSCRIPTION_PROVIDER_BY_DRIVER.get(driver) ?? null;
 }
 
 /**
@@ -210,7 +241,9 @@ export function botEngineFailureContext(
     unavailability: unavailability ?? null,
     providerName: instanceId ? botProviderName(instanceId, entry) : null,
     provider: instanceId ? botProviderCatalogEntry(instanceId, entry) : null,
-    modelName: entry?.models.find((candidate) => candidate.slug === model)?.name ?? model ?? null,
+    modelName:
+      entry?.models.find((candidate) => candidate.slug === model)?.name ??
+      (model ? formatModelSlug(model) : null),
   };
 }
 

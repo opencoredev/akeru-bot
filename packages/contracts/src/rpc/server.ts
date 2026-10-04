@@ -109,6 +109,7 @@ import {
   McpServerAuthenticateInput,
   McpServerAuthenticationError,
   McpServerAuthenticationProgress,
+  SubscriptionAuthAccountOrderInput,
   SubscriptionAuthCompleteInput,
   SubscriptionAuthError,
   SubscriptionAuthHealthTestInput,
@@ -320,6 +321,15 @@ export const WsSubscriptionAuthHealthTestRpc = Rpc.make(WS_METHODS.subscriptionA
   success: SubscriptionAuthStatuses,
   error: Schema.Union([SubscriptionAuthError, EnvironmentAuthorizationError]),
 });
+
+export const WsSubscriptionAuthSetAccountOrderRpc = Rpc.make(
+  WS_METHODS.subscriptionAuthSetAccountOrder,
+  {
+    payload: SubscriptionAuthAccountOrderInput,
+    success: SubscriptionAuthStatuses,
+    error: Schema.Union([SubscriptionAuthError, EnvironmentAuthorizationError]),
+  },
+);
 
 export const WsImageProviderListRpc = Rpc.make(WS_METHODS.imageProviderList, {
   payload: Schema.Struct({}),

@@ -116,6 +116,10 @@ vi.mock("../../state/entities", () => ({
 
 vi.mock("../../state/query", () => ({ useEnvironmentQuery: () => ({ data: { inbox: [] } }) }));
 
+vi.mock("../settings/ProvidersPanel", () => ({
+  useSubscriptionStatuses: () => ({ statusByProvider: new Map() }),
+}));
+
 vi.mock("../../state/server", () => ({
   primaryServerProvidersAtom: mocks.providersAtom,
   serverEnvironment: { subscriptionAuth: () => null, routineThreadRuns: () => null },

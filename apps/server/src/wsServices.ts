@@ -466,6 +466,7 @@ export const createWsServices = (
           },
         ),
         access,
+        linkedAccounts: subscriptionAuth.linkedAccountStatuses(),
         inbox: botInbox.list(),
       };
     });

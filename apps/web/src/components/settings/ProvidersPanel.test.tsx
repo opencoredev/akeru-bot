@@ -70,7 +70,7 @@ describe("subscription providers", () => {
 
     expect(markup).toContain("Check key");
     expect(markup).toContain("Connected account");
-    expect(markup).toContain("dev@example.com");
+    expect(markup).not.toContain("dev@example.com");
     expect(markup).not.toContain("Check OAuth");
     expect(markup).toContain("Saved · https://proxy.example/v1");
     expect(markup).toContain("Replace key");

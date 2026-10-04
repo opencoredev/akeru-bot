@@ -42,7 +42,9 @@ import {
   isBotConversationWorking,
   visibleBotChatMessages,
 } from "./botConversationPresentation";
-import { botEngineFailureContext } from "./botEngineSelection";
+import { botEngineFailureContext, botEngineSubscriptionToConnect } from "./botEngineSelection";
+import { ProviderConnectCard, providerConnectStep } from "../chat/ProviderConnectCard";
+import { useSubscriptionStatuses } from "../settings/ProvidersPanel";
 import { BotTurnFailureRow } from "./BotTurnFailureRow";
 import { useBotEngineAvailability } from "./useBotEngineAvailability";
 import { BotPromptComposer } from "./BotPromptComposer";
@@ -133,6 +135,19 @@ export function BotThreadLanding({
     runtime.failure?.unavailability,
     runtime.failure?.providerInstanceId,
   );
+
+  const { statusByProvider: subscriptionStatuses } = useSubscriptionStatuses(environmentId);
+
+  const subscriptionToConnect = botEngineSubscriptionToConnect(
+    stickyEngine,
+    instanceEntries,
+    sendBlocked ? engineUnavailability?.reason : runtime.failure?.unavailability,
+  );
+
+  // Signing in fixes this chat, so the connect card replaces the failure copy.
+  const connectNeeded =
+    subscriptionToConnect !== null &&
+    providerConnectStep(subscriptionStatuses.get(subscriptionToConnect)) !== null;
 
   const openBotSettings = () => void navigate({ to: "/bots/$botId/settings", params: { botId } });
   const approvalState = useRosterPendingApproval(runtime.linkedThreadRef);
@@ -530,9 +545,19 @@ export function BotThreadLanding({
             onOpenDetails={() => openSettings("advanced", "errors", environmentId)}
           />
           <ThreadRuntimeWarningBanner warning={runtimeWarning} />
+          {connectNeeded && subscriptionToConnect ? (
+            <ProviderConnectCard
+              id={engineNoticeId}
+              environmentId={environmentId}
+              provider={subscriptionToConnect}
+              botName={bot.name}
+              className="mt-2"
+            />
+          ) : null}
           <ThreadErrorBanner
             threadKey={`${runtime.linkedThreadRef?.environmentId ?? environmentId ?? "unknown"}:${runtime.linkedThreadRef?.threadId ?? bot.id}`}
             error={
+              connectNeeded ||
               inboxItems.some((item) => item.lastFailure === runtime.error) ||
               (sendBlocked && runtime.failure?.unavailability === engineUnavailability?.reason)
                 ? null
@@ -610,7 +635,7 @@ export function BotThreadLanding({
               return sent;
             }}
           />
-          {sendBlocked && engineUnavailability ? (
+          {connectNeeded ? null : sendBlocked && engineUnavailability ? (
             <ProviderUnavailableLine
               provider={engineUnavailability.provider}
               id={engineNoticeId}

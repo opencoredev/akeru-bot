@@ -9,7 +9,7 @@ import { ProviderAccessDetails } from "./ProviderAccessDetails";
 import { accountConnectionState } from "./providerStatus";
 import { SignInCodeCopy } from "./SignInCodeCopy";
 import { SettingsRow } from "./settingsLayout";
-import type { SubscriptionProviderDefinition } from "./subscriptionProviders";
+import { linkedAccountTitle, type SubscriptionProviderDefinition } from "./subscriptionProviders";
 import type { ActiveLogin } from "./useSubscriptionAccounts";
 
 export type Translate = ReturnType<typeof useI18n>["t"];
@@ -33,7 +33,7 @@ function disconnectDescription(
     : t("{names} use this account.", { names });
 }
 
-function BusyIcon({ busy, idle }: { readonly busy: boolean; readonly idle?: ReactNode }) {
+export function BusyIcon({ busy, idle }: { readonly busy: boolean; readonly idle?: ReactNode }) {
   if (busy) return <LoaderIcon className="size-3.5 animate-spin" />;
 
   return idle ?? null;
@@ -79,8 +79,9 @@ export function ProviderAccountRows({
         <SettingsRow
           title={t("Connected account")}
           description={
-            status.accountLabel ??
-            (usesKey ? t("API key saved on this environment") : t("Account identity unavailable"))
+            usesKey
+              ? t("API key saved on this environment")
+              : linkedAccountTitle(definition, status, t)
           }
         />
       ) : null}

@@ -27,6 +27,7 @@ import {
   type SubscriptionAuthRequestError,
   withOAuthTimeout,
 } from "../oauthHttp.ts";
+import { codexPlanLabel } from "../plan.ts";
 import type { OAuthCredentials } from "../types.ts";
 
 const CLIENT_ID = "app_EMoamEEZ73f0CkXaXp7hrann";
@@ -88,6 +89,28 @@ function accountIdFromJwt(token: string | undefined): string | undefined {
   );
 }
 
+/** The ChatGPT tier from a token's `chatgpt_plan_type` claim; works on id and access tokens. */
+export function codexPlanFromToken(token: string | undefined): string | undefined {
+  const payload = token?.split(".");
+
+  if (payload?.length !== 3) return undefined;
+
+  return decodeJwtClaims(Buffer.from(payload[1] ?? "", "base64url").toString("utf8")).pipe(
+    Option.map((claims) => {
+      const auth = claims[JWT_CLAIM_PATH];
+
+      return codexPlanLabel(
+        Predicate.isObjectKeyword(auth) &&
+          "chatgpt_plan_type" in auth &&
+          Predicate.isString(auth.chatgpt_plan_type)
+          ? auth.chatgpt_plan_type
+          : undefined,
+      );
+    }),
+    Option.getOrUndefined,
+  );
+}
+
 const TokenResponse = Schema.Struct({
   id_token: Schema.optional(Schema.String),
   access_token: Schema.NonEmptyString,
@@ -125,8 +148,10 @@ const credentialsFromTokenResponse = Effect.fn("codex.credentialsFromTokenRespon
   }
 
   const now = yield* Clock.currentTimeMillis;
+  const plan = codexPlanFromToken(tokens.id_token) ?? codexPlanFromToken(tokens.access_token);
 
   return {
+    ...(plan ? { plan } : {}),
     access: tokens.access_token,
     refresh: tokens.refresh_token,
     expires: now + (tokens.expires_in ?? DEFAULT_TOKEN_EXPIRES_IN_SECONDS) * 1000,

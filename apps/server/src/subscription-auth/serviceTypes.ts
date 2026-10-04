@@ -68,6 +68,9 @@ export interface ProviderStatus {
   instanceId?: ProviderInstanceId;
   connected: boolean;
   accountLabel?: string;
+  accountId?: string;
+  active?: boolean;
+  plan?: string;
   authMode?: "oauth" | "api-key";
   baseUrl?: string;
   /** ms epoch when the current access token expires; refreshed on demand. */
@@ -239,10 +242,34 @@ export const defaultInstanceByProvider: Record<SubscriptionProviderId, string> =
 };
 
 /** The default instance keeps the bare provider key; other instances get their own account. */
-export function credentialKey(provider: SubscriptionProviderId, instanceId?: string): string {
-  return !instanceId || instanceId === defaultInstanceByProvider[provider]
-    ? provider
-    : `instance:${provider}:${instanceId}`;
+export function credentialKey(provider: SubscriptionProviderId, scope?: string): string {
+  if (scope?.startsWith(ACCOUNT_SCOPE_PREFIX)) {
+    const accountId = scope.slice(ACCOUNT_SCOPE_PREFIX.length);
+
+    return accountId === DEFAULT_ACCOUNT_ID ? provider : `account:${provider}:${accountId}`;
+  }
+
+  return isDefaultScope(provider, scope) ? provider : `instance:${provider}:${scope}`;
+}
+
+/** The scope bots on the built-in provider use; it follows the linked-account order. */
+export function isDefaultScope(provider: SubscriptionProviderId, scope?: string): boolean {
+  return !scope || scope === defaultInstanceByProvider[provider];
+}
+
+const ACCOUNT_SCOPE_PREFIX = "account:";
+
+export const DEFAULT_ACCOUNT_ID = "default";
+
+export function accountScope(accountId: string): string {
+  return `${ACCOUNT_SCOPE_PREFIX}${accountId}`;
+}
+
+export function accountIdForKey(provider: SubscriptionProviderId, key: string): string | undefined {
+  if (key === provider) return DEFAULT_ACCOUNT_ID;
+  const prefix = `account:${provider}:`;
+
+  return key.startsWith(prefix) ? key.slice(prefix.length) : undefined;
 }
 
 export function credentialAt(
@@ -261,6 +288,7 @@ export function refreshedCredential(
 ): OAuthCredential {
   return {
     ...refreshed,
+    ...(refreshed.plan === undefined && previous.plan !== undefined ? { plan: previous.plan } : {}),
     type: "oauth",
     ...(refreshed.connectionId === undefined && previous.connectionId !== undefined
       ? { connectionId: previous.connectionId }

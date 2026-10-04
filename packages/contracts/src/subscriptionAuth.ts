@@ -48,12 +48,28 @@ export const SubscriptionBaseUrl = TrimmedNonEmptyString.check(
   ),
 );
 
+/**
+ * One signed-in account for a provider. `default` is the account the first
+ * sign-in created; added accounts get their own ids.
+ */
+export const SubscriptionAccountId = TrimmedNonEmptyString.check(
+  Schema.isPattern(/^(default|acct-[a-z0-9]{6,32})$/),
+);
+
+export type SubscriptionAccountId = typeof SubscriptionAccountId.Type;
+
 export const SubscriptionProviderStatus = Schema.Struct({
   provider: SubscriptionProviderId,
   instanceId: Schema.optional(ProviderInstanceId),
+  /** Set on entries of `linkedAccounts`. */
+  accountId: Schema.optional(SubscriptionAccountId),
+  /** True on the linked account that new requests use right now. */
+  active: Schema.optional(Schema.Boolean),
   connected: Schema.Boolean,
   /** Account identifier supplied by the provider, when available. Never a token. */
   accountLabel: Schema.optional(TrimmedNonEmptyString),
+  /** Subscription tier, such as "Pro" or "Max 20x", when the provider reports one. */
+  plan: Schema.optional(TrimmedNonEmptyString),
   authMode: Schema.optional(SubscriptionAuthMode),
   baseUrl: Schema.optional(SubscriptionBaseUrl),
   /** ms epoch when the current access token expires. Absent when disconnected. */
@@ -196,6 +212,13 @@ export const SubscriptionAuthStatuses = Schema.Struct({
   accounts: Schema.Array(SubscriptionProviderStatus).pipe(
     Schema.withDecodingDefault(Effect.succeed([])),
   ),
+  /**
+   * Every signed-in account per provider, in the order requests try them.
+   * When one hits a usage limit or is signed out, requests move to the next.
+   */
+  linkedAccounts: Schema.Array(SubscriptionProviderStatus).pipe(
+    Schema.withDecodingDefault(Effect.succeed([])),
+  ),
   access: Schema.Array(ProviderAccessStatus).pipe(Schema.withDecodingDefault(Effect.succeed([]))),
   inbox: Schema.Array(BotInboxItem).pipe(Schema.withDecodingDefault(Effect.succeed([]))),
 });
@@ -205,6 +228,7 @@ export type SubscriptionAuthStatuses = typeof SubscriptionAuthStatuses.Type;
 export const SubscriptionAuthHealthTestInput = Schema.Struct({
   provider: SubscriptionProviderId,
   instanceId: Schema.optional(ProviderInstanceId),
+  accountId: Schema.optional(SubscriptionAccountId),
 });
 
 export type SubscriptionAuthHealthTestInput = typeof SubscriptionAuthHealthTestInput.Type;
@@ -212,6 +236,10 @@ export type SubscriptionAuthHealthTestInput = typeof SubscriptionAuthHealthTestI
 export const SubscriptionAuthStartInput = Schema.Struct({
   provider: SubscriptionProviderId,
   instanceId: Schema.optional(ProviderInstanceId),
+  /** Sign in to this linked account again. */
+  accountId: Schema.optional(SubscriptionAccountId),
+  /** Sign in to another account and add it to the end of the order. */
+  addAccount: Schema.optional(Schema.Boolean),
   authMode: Schema.optional(SubscriptionAuthMode),
   /** Custom endpoints apply to API-key authentication only. */
   baseUrl: Schema.optional(SubscriptionBaseUrl),
@@ -264,9 +292,17 @@ export type SubscriptionAuthLoginProgress = typeof SubscriptionAuthLoginProgress
 export const SubscriptionAuthLogoutInput = Schema.Struct({
   provider: SubscriptionProviderId,
   instanceId: Schema.optional(ProviderInstanceId),
+  accountId: Schema.optional(SubscriptionAccountId),
 });
 
 export type SubscriptionAuthLogoutInput = typeof SubscriptionAuthLogoutInput.Type;
+
+export const SubscriptionAuthAccountOrderInput = Schema.Struct({
+  provider: SubscriptionProviderId,
+  accountIds: Schema.Array(SubscriptionAccountId),
+});
+
+export type SubscriptionAuthAccountOrderInput = typeof SubscriptionAuthAccountOrderInput.Type;
 
 export class SubscriptionAuthError extends Schema.TaggedErrorClass<SubscriptionAuthError>()(
   "SubscriptionAuthError",

@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import type {
   EnvironmentId,
   ProviderInstanceId,
+  SubscriptionAccountId,
   SubscriptionAuthLoginProgress,
   SubscriptionAuthStartResult,
   SubscriptionProviderId,
@@ -14,8 +15,10 @@ import {
   type AtomCommandResult,
 } from "@akeru/client-runtime/state/runtime";
 import {
+  anyProviderHealthChecking,
   apiKeyStartInput,
   apiKeyValidationError,
+  HEALTH_CHECK_REFRESH_MS,
   providerSupportsBaseUrl,
 } from "@akeru/client-runtime/provider-auth";
 import { useI18n } from "../../i18n";
@@ -55,7 +58,30 @@ export function useSubscriptionStatuses(environmentId: EnvironmentId | null) {
     [statusQuery.data],
   );
 
+  // The server checks health right after a login stores credentials and does
+  // not push the result, so refresh until it lands instead of sticking on
+  // "Checking access".
+  const { refresh } = statusQuery;
+
+  useEffect(() => {
+    const data = statusQuery.data;
+
+    if (!data || !anyProviderHealthChecking([...data.providers, ...data.linkedAccounts])) return;
+    const timer = setTimeout(refresh, HEALTH_CHECK_REFRESH_MS);
+
+    return () => clearTimeout(timer);
+  }, [refresh, statusQuery.data]);
+
   return { statusQuery, statusByProvider };
+}
+
+/**
+ * Which of a provider's linked accounts an action targets. Without one, the
+ * action uses the account bots are on now. `addAccount` signs in a new one.
+ */
+export interface SubscriptionAccountTarget {
+  readonly accountId?: SubscriptionAccountId;
+  readonly addAccount?: true;
 }
 
 /** Sign-in, API key, check, and disconnect flows for subscription accounts. */
@@ -90,6 +116,10 @@ export function useSubscriptionAccounts(
     reportFailure: false,
   });
 
+  const orderAuth = useAtomCommand(serverEnvironment.setSubscriptionAccountOrder, {
+    reportFailure: false,
+  });
+
   const [activeLogin, setActiveLogin] = useState<ActiveLogin | null>(null);
   const [busyProvider, setBusyProvider] = useState<SubscriptionProviderId | null>(null);
   const [pastedCode, setPastedCode] = useState("");
@@ -97,6 +127,8 @@ export function useSubscriptionAccounts(
   const [error, setError] = useState<string | null>(null);
   const [keyProvider, setKeyProvider] = useState<SubscriptionProviderDefinition | null>(null);
   const [baseUrl, setBaseUrl] = useState("");
+  const [target, setTarget] = useState<SubscriptionAccountTarget>({});
+  const [busyAccount, setBusyAccount] = useState<SubscriptionAccountId | null>(null);
 
   const settleLogin = useCallback(
     (progress: SubscriptionAuthLoginProgress) => {
@@ -158,16 +190,27 @@ export function useSubscriptionAccounts(
     };
   }, [activeLogin, environmentId, pollAuth, settleLogin]);
 
-  const openApiKey = (definition: SubscriptionProviderDefinition) => {
+  const openApiKey = (
+    definition: SubscriptionProviderDefinition,
+    account: SubscriptionAccountTarget = {},
+  ) => {
     setError(null);
+    setTarget(account);
     setPastedCode("");
     setBaseUrl(
       providerSupportsBaseUrl(definition.id)
-        ? ((instanceId
-            ? statusQuery.data?.accounts.find(
-                (entry) => entry.provider === definition.id && entry.instanceId === instanceId,
-              )
-            : statusByProvider.get(definition.id)
+        ? ((account.addAccount
+            ? undefined
+            : account.accountId
+              ? statusQuery.data?.linkedAccounts.find(
+                  (entry) =>
+                    entry.provider === definition.id && entry.accountId === account.accountId,
+                )
+              : instanceId
+                ? statusQuery.data?.accounts.find(
+                    (entry) => entry.provider === definition.id && entry.instanceId === instanceId,
+                  )
+                : statusByProvider.get(definition.id)
           )?.baseUrl ?? "")
         : "",
     );
@@ -194,6 +237,7 @@ export function useSubscriptionAccounts(
       input: {
         ...apiKeyStartInput(keyProvider.id, baseUrl),
         ...(instanceId ? { instanceId } : {}),
+        ...target,
       },
     });
 
@@ -229,11 +273,14 @@ export function useSubscriptionAccounts(
     }
   };
 
-  const connect = async (definition: SubscriptionProviderDefinition) => {
+  const connect = async (
+    definition: SubscriptionProviderDefinition,
+    account: SubscriptionAccountTarget = {},
+  ) => {
     if (environmentId === null) return;
 
     if (definition.id === "opencode-go") {
-      openApiKey(definition);
+      openApiKey(definition, account);
 
       return;
     }
@@ -241,11 +288,14 @@ export function useSubscriptionAccounts(
     setError(null);
     setPastedCode("");
     setBusyProvider(definition.id);
+    setBusyAccount(account.accountId ?? null);
 
     const result = await startAuth({
       environmentId,
-      input: { provider: definition.id, ...(instanceId ? { instanceId } : {}) },
+      input: { provider: definition.id, ...(instanceId ? { instanceId } : {}), ...account },
     });
+
+    setBusyAccount(null);
 
     if (isAtomCommandInterrupted(result)) return;
 
@@ -296,40 +346,55 @@ export function useSubscriptionAccounts(
     if (Predicate.isTagged(result, "Failure")) setError(commandError(result, t));
   };
 
-  const disconnect = async (provider: SubscriptionProviderId) => {
+  const disconnect = async (
+    provider: SubscriptionProviderId,
+    accountId?: SubscriptionAccountId,
+  ) => {
     if (environmentId === null) return;
     setError(null);
     setBusyProvider(provider);
+    setBusyAccount(accountId ?? null);
 
     const result = await logoutAuth({
       environmentId,
-      input: { provider, ...(instanceId ? { instanceId } : {}) },
+      input: { provider, ...(accountId ? { accountId } : instanceId ? { instanceId } : {}) },
     });
 
     setBusyProvider(null);
+    setBusyAccount(null);
 
     if (Predicate.isTagged(result, "Success")) statusQuery.refresh();
     else if (Predicate.isTagged(result, "Failure")) setError(commandError(result, t));
   };
 
-  const testHealth = async (provider: SubscriptionProviderId) => {
+  const testHealth = async (
+    provider: SubscriptionProviderId,
+    accountId?: SubscriptionAccountId,
+  ) => {
     if (environmentId === null) return;
     setError(null);
     setBusyProvider(provider);
+    setBusyAccount(accountId ?? null);
 
     const result = await testAuth({
       environmentId,
-      input: { provider, ...(instanceId ? { instanceId } : {}) },
+      input: { provider, ...(accountId ? { accountId } : instanceId ? { instanceId } : {}) },
     });
 
     setBusyProvider(null);
+    setBusyAccount(null);
 
     if (Predicate.isTagged(result, "Success")) {
       statusQuery.refresh();
 
-      const status = (instanceId ? result.value.accounts : result.value.providers).find(
-        (entry) => entry.provider === provider && (!instanceId || entry.instanceId === instanceId),
-      );
+      const status = accountId
+        ? result.value.linkedAccounts.find(
+            (entry) => entry.provider === provider && entry.accountId === accountId,
+          )
+        : (instanceId ? result.value.accounts : result.value.providers).find(
+            (entry) =>
+              entry.provider === provider && (!instanceId || entry.instanceId === instanceId),
+          );
 
       if (status?.oauthCheck?.status === "failed" || status?.healthTest?.status === "failed") {
         setError(
@@ -340,11 +405,33 @@ export function useSubscriptionAccounts(
     } else if (Predicate.isTagged(result, "Failure")) setError(commandError(result, t));
   };
 
+  const setAccountOrder = async (
+    provider: SubscriptionProviderId,
+    accountIds: ReadonlyArray<SubscriptionAccountId>,
+  ) => {
+    if (environmentId === null) return;
+    setError(null);
+    setBusyProvider(provider);
+
+    const result = await orderAuth({
+      environmentId,
+      input: { provider, accountIds: [...accountIds] },
+    });
+
+    setBusyProvider(null);
+
+    if (Predicate.isTagged(result, "Success")) statusQuery.refresh();
+    else if (Predicate.isTagged(result, "Failure")) setError(commandError(result, t));
+  };
+
   return {
     statusQuery,
     statusByProvider,
     activeLogin,
     busyProvider,
+    busyAccount,
+    keyTarget: target,
+    setAccountOrder,
     pastedCode,
     setPastedCode,
     completing,
