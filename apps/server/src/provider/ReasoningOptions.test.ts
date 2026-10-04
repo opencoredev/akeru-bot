@@ -319,6 +319,21 @@ describe("reasoning capability and state boundaries", () => {
       }).optionDescriptors?.find((option) => option.id === "effort"),
     ).toBeUndefined();
   });
+  it("keeps the legacy Codex Fast toggle as the fast service tier", () => {
+    expect(
+      nativeModelOptions(driver("codex"), selection("gpt-5", [{ id: "fastMode", value: true }])),
+    ).toEqual({ serviceTier: "fast" });
+    expect(
+      nativeModelOptions(
+        driver("codex"),
+        selection("gpt-5", [
+          { id: "serviceTier", value: "priority" },
+          { id: "fastMode", value: true },
+        ]),
+      ),
+    ).toEqual({ serviceTier: "priority" });
+  });
+
   it("runs saved Claude workflow efforts at provider default instead of rejecting them", () => {
     const caps = claudeHarnessCapabilities("claude-opus-5-5", undefined);
 

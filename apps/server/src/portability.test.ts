@@ -115,6 +115,34 @@ describe("portability archive", () => {
     ).toEqual(expect.objectContaining({ botSandboxBrowserSharing: "separate" }));
   });
 
+  it("imports older archives whose bots still carry the retired token hard stop", () => {
+    const snapshot = makeSnapshot();
+    const archive = createPortabilityArchive(snapshot, makeSettings(), NOW);
+
+    const legacy = resignArchive(
+      archive,
+      archive.records.map((record) =>
+        record.type === "bot"
+          ? { ...record, data: { ...record.data, usageCap: { unit: "tokens", limit: 50_000 } } }
+          : record,
+      ),
+    );
+
+    const parsed = parsePortabilityArchive(JSON.stringify(legacy));
+
+    const commands = commandsForPortabilityImport(
+      parsed,
+      makeSnapshot(),
+      makeSettings(),
+      AVAILABLE_PROVIDER_IDS,
+    );
+
+    expect(JSON.stringify(commands)).not.toContain("usageCap");
+    expect(
+      archive.records.some((record) => record.type === "bot" && "usageCap" in record.data),
+    ).toBe(false);
+  });
+
   it("removes credentials, local state, Git state, and event internals", () => {
     const text = serializePortabilityArchive(
       createPortabilityArchive(makeSnapshot(), makeSettings(), NOW),

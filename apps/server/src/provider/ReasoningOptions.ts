@@ -10,6 +10,7 @@ import {
   getModelSelectionBooleanOptionValue,
 } from "@akeru/shared/model";
 import * as Schema from "effect/Schema";
+import { getCodexServiceTierOptionValue } from "../codexModelOptions.ts";
 import { openCodeGoProtocol } from "./AkeruOpenCodeGoProvider.ts";
 import { getClaudeModelCapabilities } from "./Layers/claude/ClaudeModels.ts";
 import { type CatalogModel } from "./modelCatalogData.ts";
@@ -81,8 +82,7 @@ export function nativeModelOptions(
       ? getModelSelectionBooleanOptionValue(selection, "thinking")
       : undefined;
 
-  const serviceTier =
-    driver === "codex" ? getModelSelectionStringOptionValue(selection, "serviceTier") : undefined;
+  const serviceTier = driver === "codex" ? getCodexServiceTierOptionValue(selection) : undefined;
 
   const anthropic =
     driver === "claudeAgent" ||
