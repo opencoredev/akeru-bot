@@ -366,6 +366,7 @@ export function BotThreadLanding({
       runtime.sending ||
       runtime.latestTurn?.state === "running" ||
       runtime.pendingUserInputs.length > 0 ||
+      pendingApproval !== null ||
       sendBlocked ||
       !runtime.botReady,
     send: (text: string) => runtime.send(text, []),

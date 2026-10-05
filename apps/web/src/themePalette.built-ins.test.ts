@@ -91,7 +91,6 @@ describe("built-in palettes", () => {
       focus: "#73716e",
       update: "#1f1e1d",
       messageAction: "#1f1e1d",
-      terminalCursor: "#1f1e1d",
       messageSurface: "#ededec",
       codeBackground: "#f4f4f3",
       sidebar: "#f3f2f1",
@@ -107,6 +106,13 @@ describe("built-in palettes", () => {
       codeBackground: "#111111",
       sidebar: "#111111",
     });
+
+    // The terminal stays dark in both appearances, so its cursor must stand out from it.
+    for (const colors of [AKERU_PAPER_THEME.colors, AKERU_PAPER_THEME.variants!.dark!]) {
+      expect(
+        contrastRatio(colors.terminalCursor, colors.terminalBackground),
+      ).toBeGreaterThanOrEqual(4.5);
+    }
   });
 
   effectIt.effect("keeps Akeru Paper dark surfaces flat and opaque", () =>

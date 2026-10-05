@@ -216,6 +216,35 @@ function BarChart({ spec, max }: { readonly spec: ChartSpec; readonly max: numbe
   );
 }
 
+/** The chart's numbers as a table for screen readers; the drawing itself is hidden from them. */
+function ChartDataTable({ spec }: { readonly spec: ChartSpec }) {
+  return (
+    <table className="sr-only">
+      {spec.title ? <caption>{spec.title}</caption> : null}
+      <thead>
+        <tr>
+          <th scope="col" />
+          {spec.series.map((series) => (
+            <th key={series.name} scope="col">
+              {series.name}
+            </th>
+          ))}
+        </tr>
+      </thead>
+      <tbody>
+        {spec.x.map((label, index) => (
+          <tr key={label}>
+            <th scope="row">{label}</th>
+            {spec.series.map((series) => (
+              <td key={series.name}>{formatChartValue(series.values[index] ?? 0, spec.unit)}</td>
+            ))}
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+}
+
 export function GenerativeChart({ spec }: { readonly spec: ChartSpec }) {
   const peak = Math.max(0, ...spec.series.flatMap((series) => series.values));
   const max = niceMax(peak);
@@ -227,11 +256,14 @@ export function GenerativeChart({ spec }: { readonly spec: ChartSpec }) {
       subtitle={spec.subtitle}
       aside={<ChartLegend spec={spec} />}
     >
-      {spec.type === "bar" ? (
-        <BarChart spec={spec} max={max} />
-      ) : (
-        <LineChart spec={spec} max={max} />
-      )}
+      <div aria-hidden="true">
+        {spec.type === "bar" ? (
+          <BarChart spec={spec} max={max} />
+        ) : (
+          <LineChart spec={spec} max={max} />
+        )}
+      </div>
+      <ChartDataTable spec={spec} />
     </GenerativeFrame>
   );
 }

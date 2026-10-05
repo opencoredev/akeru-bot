@@ -86,6 +86,15 @@ describe("answeredUserInputForMessage", () => {
     expect(answered?.map(({ answers }) => answers)).toEqual([["Designers"], ["Something custom"]]);
   });
 
+  it("shows the plain message rather than guess when a typed answer spans lines", () => {
+    const asked = deriveAskedUserInputs([requested]);
+
+    // "Designers\nand PMs" answers the first question; the extra line cannot be placed.
+    expect(
+      answeredUserInputForMessage({ id: messageId, text: "Designers\nand PMs\nChannels" }, asked),
+    ).toBeNull();
+  });
+
   it("falls back to text when lines do not line up or the message is ordinary", () => {
     const asked = deriveAskedUserInputs([requested]);
 

@@ -37,6 +37,15 @@ export function useThreadPendingUserInput(input: {
     Record<string, PendingUserInputDraftAnswer>
   >({});
 
+  // Picks build on the latest draft, not the one from the last render, so two clicks
+  // handled before React re-renders both count.
+  const answersRef = useRef(pendingUserInputAnswers);
+
+  const setAnswers = useCallback((next: Record<string, PendingUserInputDraftAnswer>) => {
+    answersRef.current = next;
+    setPendingUserInputAnswers(next);
+  }, []);
+
   const [pendingUserInputStep, setPendingUserInputStep] = useState(0);
 
   const submitPendingUserInput = useCallback(
@@ -84,11 +93,11 @@ export function useThreadPendingUserInput(input: {
       if (!question || !prompt.trim()) return false;
 
       const nextAnswers = {
-        ...pendingUserInputAnswers,
+        ...answersRef.current,
         [question.id]: { customAnswer: prompt.trim() },
       };
 
-      setPendingUserInputAnswers(nextAnswers);
+      setAnswers(nextAnswers);
       const nextStep = pendingUserInputStepAfterAnswer(questions, nextAnswers, step);
 
       if (nextStep !== null) {
@@ -101,7 +110,7 @@ export function useThreadPendingUserInput(input: {
 
       return answers ? submitPendingUserInput(pendingUserInput.requestId, answers) : true;
     },
-    [pendingUserInputAnswers, pendingUserInputStep, respondingRequestIds, submitPendingUserInput],
+    [pendingUserInputStep, respondingRequestIds, setAnswers, submitPendingUserInput],
   );
 
   /** Answers the question on screen with text typed into the card's own-answer row. */
@@ -115,7 +124,7 @@ export function useThreadPendingUserInput(input: {
   );
 
   useEffect(() => {
-    setPendingUserInputAnswers({});
+    setAnswers({});
     setPendingUserInputStep(0);
     const pendingIds = new Set(pendingUserInputs.map((pending) => pending.requestId));
 
@@ -134,18 +143,18 @@ export function useThreadPendingUserInput(input: {
 
       const selection = applyPendingUserInputOptionSelection(
         pending.questions,
-        pendingUserInputAnswers,
+        answersRef.current,
         questionId,
         optionLabel,
       );
 
       if (!selection) return;
-      setPendingUserInputAnswers(selection.draftAnswers);
+      setAnswers(selection.draftAnswers);
       setPendingUserInputStep(selection.nextStep);
 
       if (selection.answers) void submitPendingUserInput(pending.requestId, selection.answers);
     },
-    [pendingUserInputAnswers, pendingUserInputs, submitPendingUserInput],
+    [pendingUserInputs, setAnswers, submitPendingUserInput],
   );
 
   const submitPendingUserInputAnswers = useCallback(async () => {
@@ -153,11 +162,11 @@ export function useThreadPendingUserInput(input: {
 
     if (!pending) return;
 
-    const answers = buildPendingUserInputAnswers(pending.questions, pendingUserInputAnswers);
+    const answers = buildPendingUserInputAnswers(pending.questions, answersRef.current);
 
     if (!answers) return;
     await submitPendingUserInput(pending.requestId, answers);
-  }, [pendingUserInputAnswers, pendingUserInputs, submitPendingUserInput]);
+  }, [pendingUserInputs, submitPendingUserInput]);
 
   return {
     pendingUserInputAnswers,

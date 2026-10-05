@@ -121,6 +121,7 @@ function PendingUserInputCard({
   // Back slides the previous question in from the left; every other move comes from the right.
   const [shown, setShown] = useState({ step, direction: "forward" });
   const ownAnswerRef = useRef<HTMLInputElement>(null);
+  const cardRef = useRef<HTMLElement>(null);
 
   if (shown.step !== step) setShown({ step, direction: step < shown.step ? "back" : "forward" });
 
@@ -147,13 +148,18 @@ function PendingUserInputCard({
         return;
       }
 
+      // A key pressed on some other control on the page belongs to that control.
+      const target = event.target instanceof Node ? event.target : null;
+
+      if (isInteractiveTarget(event.target) && !cardRef.current?.contains(target)) return;
+
       const action = pendingUserInputKeyAction(event.key, question.options.length);
       const option = action?.kind === "pick" ? question.options[action.optionIndex] : undefined;
 
       if (option) {
         event.preventDefault();
         onSelectOption(question.id, option.label);
-      } else if (action?.kind === "type" && !isInteractiveTarget(event.target)) {
+      } else if (action?.kind === "type") {
         // Focus moves before the character lands, so it starts the typed answer.
         ownAnswerRef.current?.focus();
       }
@@ -227,6 +233,7 @@ function PendingUserInputCard({
 
   return (
     <section
+      ref={cardRef}
       aria-label={question.question}
       className="chat-generative w-full max-w-2xl"
       data-generative="question"

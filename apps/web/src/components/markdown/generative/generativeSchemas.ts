@@ -2,24 +2,42 @@ import { Option, Schema } from "effect";
 
 // Bots emit these as JSON inside fenced blocks such as ```akeru-chart. The
 // model only fills data slots; every color, size, and font comes from the theme.
+// Each spec only accepts what its renderer can draw faithfully and cheaply; anything
+// else fails to decode and the reply shows the block as plain code instead.
 
 const Tone = Schema.Literals(["neutral", "good", "warn", "bad"]);
 
 export type GenerativeTone = typeof Tone.Type;
 
+/** Charts plot from a zero baseline, so values below zero have nowhere to go. */
+const ChartValue = Schema.Finite.check(Schema.makeFilter((value) => value >= 0));
+
 const ChartSeries = Schema.Struct({
   name: Schema.String,
-  values: Schema.Array(Schema.Finite),
+  values: Schema.Array(ChartValue),
 });
+
+/** The series palette has four steps. */
+const MAX_CHART_SERIES = 4;
+
+const MAX_CHART_POINTS = 60;
 
 export const ChartSpec = Schema.Struct({
   type: Schema.Literals(["line", "area", "bar"]),
   title: Schema.optionalKey(Schema.String),
   subtitle: Schema.optionalKey(Schema.String),
   unit: Schema.optionalKey(Schema.String),
-  x: Schema.Array(Schema.String),
-  series: Schema.Array(ChartSeries),
-});
+  x: Schema.Array(Schema.String).check(Schema.isLengthBetween(1, MAX_CHART_POINTS)),
+  series: Schema.Array(ChartSeries).check(Schema.isLengthBetween(1, MAX_CHART_SERIES)),
+}).check(
+  // A missing point would otherwise draw as zero, and labels and names key the drawing.
+  Schema.makeFilter(
+    (spec) =>
+      spec.series.every((series) => series.values.length === spec.x.length) &&
+      new Set(spec.x).size === spec.x.length &&
+      new Set(spec.series.map((series) => series.name)).size === spec.series.length,
+  ),
+);
 
 export type ChartSpec = typeof ChartSpec.Type;
 
@@ -33,7 +51,7 @@ const StatTile = Schema.Struct({
 
 export const StatsSpec = Schema.Struct({
   title: Schema.optionalKey(Schema.String),
-  stats: Schema.Array(StatTile),
+  stats: Schema.Array(StatTile).check(Schema.isLengthBetween(1, 6)),
 });
 
 export type StatsSpec = typeof StatsSpec.Type;
@@ -46,7 +64,7 @@ const TaskItem = Schema.Struct({
 
 export const TasksSpec = Schema.Struct({
   title: Schema.String,
-  items: Schema.Array(TaskItem),
+  items: Schema.Array(TaskItem).check(Schema.isLengthBetween(1, 30)),
 });
 
 export type TasksSpec = typeof TasksSpec.Type;
@@ -65,10 +83,11 @@ const FlowEdge = Schema.Struct({
   highlight: Schema.optionalKey(Schema.Boolean),
 });
 
+/** Layout walks the graph recursively, so the node count also bounds its depth. */
 export const FlowSpec = Schema.Struct({
   title: Schema.optionalKey(Schema.String),
-  nodes: Schema.Array(FlowNode),
-  edges: Schema.Array(FlowEdge),
+  nodes: Schema.Array(FlowNode).check(Schema.isLengthBetween(1, 24)),
+  edges: Schema.Array(FlowEdge).check(Schema.isMaxLength(48)),
 });
 
 export type FlowSpec = typeof FlowSpec.Type;
@@ -82,7 +101,14 @@ const ChoiceOption = Schema.Struct({
 
 export const ChoicesSpec = Schema.Struct({
   question: Schema.String,
-  options: Schema.Array(ChoiceOption),
+  options: Schema.Array(ChoiceOption)
+    .check(Schema.isLengthBetween(1, 6))
+    // A choice is identified by its label.
+    .check(
+      Schema.makeFilter(
+        (options) => new Set(options.map((option) => option.label)).size === options.length,
+      ),
+    ),
 });
 
 export type ChoicesSpec = typeof ChoicesSpec.Type;
@@ -96,7 +122,7 @@ const TimelineEvent = Schema.Struct({
 
 export const TimelineSpec = Schema.Struct({
   title: Schema.optionalKey(Schema.String),
-  events: Schema.Array(TimelineEvent),
+  events: Schema.Array(TimelineEvent).check(Schema.isLengthBetween(1, 30)),
 });
 
 export type TimelineSpec = typeof TimelineSpec.Type;

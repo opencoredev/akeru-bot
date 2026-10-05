@@ -18,6 +18,37 @@ describe("generative blocks", () => {
     expect(decodeGenerativeBlock("chart", '{"type":"pie","x":[],"series":[]}')).toBeNull();
   });
 
+  it("rejects charts the renderer would misdraw", () => {
+    const series = (values: number[]) => ({ name: "s", values });
+
+    const chart = (spec: { type: string; x: string[]; series: ReturnType<typeof series>[] }) =>
+      decodeGenerativeBlock("chart", JSON.stringify(spec));
+
+    expect(chart({ type: "bar", x: ["Mon", "Tue"], series: [series([-4, 6])] })).toBeNull();
+    expect(chart({ type: "line", x: ["Mon", "Tue"], series: [series([5])] })).toBeNull();
+
+    expect(
+      chart({ type: "line", x: ["Mon"], series: [1, 2, 3, 4, 5].map((n) => series([n])) }),
+    ).toBeNull();
+
+    expect(chart({ type: "line", x: ["Mon"], series: [series([0])] })?.kind).toBe("chart");
+  });
+
+  it("bounds flows and rejects choices that share a label", () => {
+    const nodes = Array.from({ length: 25 }, (_, index) => ({ id: `n${index}`, label: "N" }));
+
+    expect(decodeGenerativeBlock("flow", JSON.stringify({ nodes, edges: [] }))).toBeNull();
+
+    const option = { label: "Same", reply: "one" };
+
+    expect(
+      decodeGenerativeBlock(
+        "choices",
+        JSON.stringify({ question: "Q", options: [option, { ...option, reply: "two" }] }),
+      ),
+    ).toBeNull();
+  });
+
   it("ranks flow nodes left to right and survives cycles", () => {
     const flow = decodeGenerativeBlock(
       "flow",

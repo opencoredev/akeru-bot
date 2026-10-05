@@ -1,32 +1,24 @@
 import { use, useState } from "react";
-import { useComposerDraftStore } from "../../../composerDraftStore";
 import { useI18n } from "../../../i18n";
 import { Badge } from "../../ui/badge";
-import { ChatMarkdownRendererContext } from "../MarkdownRendererContext";
 import { ChatReplyContext } from "./chatReplyContext";
 import type { ChoicesSpec } from "./generativeSchemas";
 import { GenerativeFrame } from "./GenerativeFrame";
 
 /**
- * Option cards. In bot and group chats a click sends the option's reply right away;
- * elsewhere it drafts the reply in the composer.
+ * Option cards. In bot and group chats a click sends the option's reply right away.
+ * Where there is no chat to reply into, such as a delegated bot's read-only work view,
+ * the options are shown but cannot be picked.
  */
 export function GenerativeChoices({ spec }: { readonly spec: ChoicesSpec }) {
   const { t } = useI18n();
-  const { threadRef } = use(ChatMarkdownRendererContext);
   const reply = use(ChatReplyContext);
   const [selected, setSelected] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
   const answered = reply !== null && selected !== null && !sending;
 
   const choose = async (option: ChoicesSpec["options"][number]) => {
-    if (!reply) {
-      setSelected(option.label);
-
-      if (threadRef) useComposerDraftStore.getState().setPrompt(threadRef, option.reply);
-
-      return;
-    }
+    if (!reply) return;
 
     setSelected(option.label);
     setSending(true);
@@ -36,7 +28,7 @@ export function GenerativeChoices({ spec }: { readonly spec: ChoicesSpec }) {
     if (!sent) setSelected(null);
   };
 
-  const locked = reply !== null && (reply.disabled || sending || answered);
+  const locked = reply === null || reply.disabled || sending || answered;
 
   return (
     <GenerativeFrame kind="choices" title={spec.question}>

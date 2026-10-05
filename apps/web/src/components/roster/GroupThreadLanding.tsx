@@ -314,6 +314,7 @@ export function GroupThreadLanding({ groupId }: { readonly groupId: string }) {
       runtime.sending ||
       runtime.latestTurn?.state === "running" ||
       runtime.pendingUserInputs.length > 0 ||
+      pendingApproval !== null ||
       !runtime.groupReady ||
       !runtime.providerAvailable,
     send: (text: string) => runtime.send(text, []),

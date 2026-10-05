@@ -58,8 +58,9 @@ export const AKERU_PAPER_THEME: ThemeDefinition = {
     sidebarBorder: "oklch(0.915 0.002 85)",
     terminalBackground: "oklch(0.249565 0.003571 48.579)",
     terminalForeground: "oklch(0.950015 0.011492 84.579)",
-    terminalCursor: "oklch(0.235 0.003 70)",
-    terminalSelection: "oklch(0.9 0.003 85)",
+    // The light theme keeps a dark terminal, so the cursor and selection follow its text.
+    terminalCursor: "oklch(0.950015 0.011492 84.579)",
+    terminalSelection: "oklch(0.4 0.006 70)",
     terminalScrollbar: "oklch(0.459577 0.01156 72.528)",
     terminalScrollbarHover: "oklch(0.551879 0.013009 71.789)",
   },
