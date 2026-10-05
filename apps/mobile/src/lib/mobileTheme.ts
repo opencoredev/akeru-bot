@@ -242,6 +242,21 @@ function readableMessageAccent(accent: string, surface: string): string {
   return `#${readable.map((channel) => channel.toString(16).padStart(2, "0")).join("")}`;
 }
 
+/**
+ * The theme's action color marks skills in a sent message, unless it reads as the message text
+ * itself (a monochrome theme). Then skills keep the default skill color, as on web.
+ */
+function skillAccent(accent: string, text: string, appearance: MobileThemeAppearance): string {
+  const accentChannels = rgbChannels(accent);
+  const textChannels = rgbChannels(text);
+
+  if (accentChannels && textChannels && contrastRatio(accentChannels, textChannels) < 1.5) {
+    return DEFAULT_MOBILE_THEME_VARIABLES[appearance]["--color-user-bubble-skill-foreground"];
+  }
+
+  return accent;
+}
+
 export function themeColorWithAlpha(color: string, alpha: number): string {
   const hex = /^#([\da-f]{2})([\da-f]{2})([\da-f]{2})$/i.exec(color);
 
@@ -324,7 +339,7 @@ export function createMobileThemeVariables(
     "--color-user-bubble-foreground": c.messageForeground,
     "--color-user-bubble-foreground-muted": withAlpha(c.messageForeground, 0.78),
     "--color-user-bubble-skill-foreground": readableMessageAccent(
-      c.messageAction,
+      skillAccent(c.messageAction, c.messageForeground, appearance),
       c.messageSurface,
     ),
     "--color-backdrop": withAlpha("#000000", appearance === "dark" ? 0.48 : 0.22),

@@ -11,12 +11,13 @@ import { shouldFocusBotPromptForKey } from "./botPromptComposer.logic";
  */
 export function useBotComposerKeyboard(input: {
   readonly readOnly: boolean;
+  readonly typeToFocus: boolean;
   readonly keybindings: ResolvedKeybindingsConfig;
   readonly promptInputRef: RefObject<HTMLTextAreaElement | null>;
   readonly persistDraft: (next: string) => void;
   readonly stashCurrentPrompt: () => Promise<void>;
 }) {
-  const { keybindings, promptInputRef, readOnly, stashCurrentPrompt } = input;
+  const { keybindings, promptInputRef, readOnly, stashCurrentPrompt, typeToFocus } = input;
   const persistDraftRef = useRef(input.persistDraft);
   persistDraftRef.current = input.persistDraft;
 
@@ -48,6 +49,7 @@ export function useBotComposerKeyboard(input: {
         ) !== null;
 
       if (
+        !typeToFocus ||
         !shouldFocusBotPromptForKey({
           altKey: event.altKey,
           ctrlKey: event.ctrlKey,
@@ -69,5 +71,5 @@ export function useBotComposerKeyboard(input: {
     window.addEventListener("keydown", onKeyDown, true);
 
     return () => window.removeEventListener("keydown", onKeyDown, true);
-  }, [keybindings, promptInputRef, readOnly, stashCurrentPrompt]);
+  }, [keybindings, promptInputRef, readOnly, stashCurrentPrompt, typeToFocus]);
 }

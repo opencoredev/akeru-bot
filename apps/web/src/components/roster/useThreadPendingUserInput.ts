@@ -3,10 +3,10 @@ import type { ApprovalRequestId, ScopedThreadRef } from "@akeru/contracts";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import {
-  applyPendingUserInputSingleSelect,
+  applyPendingUserInputOptionSelection,
   buildPendingUserInputAnswers,
   type PendingUserInputDraftAnswer,
-  togglePendingUserInputOptionSelection,
+  pendingUserInputStepAfterAnswer,
 } from "../../pendingUserInput";
 import type { PendingUserInput } from "../../session-logic";
 import { threadEnvironment } from "../../state/threads";
@@ -14,9 +14,10 @@ import { useAtomCommand } from "../../state/use-atom-command";
 import { type BotThreadFailure, commandFailure } from "./threadRuntimeWarning.logic";
 
 /**
- * Answers the oldest open question in a bot or group chat. Draft answers and the question
- * index reset whenever a different question comes up, and a request id stays marked as
- * responding from the moment its answer is sent until the question leaves the thread.
+ * Answers the oldest open question in a bot or group chat, one question (step) at a time.
+ * Draft answers and the step reset whenever a different prompt comes up, and a request id
+ * stays marked as responding from the moment its answer is sent until the prompt leaves
+ * the thread.
  */
 export function useThreadPendingUserInput(input: {
   readonly linkedThreadRef: ScopedThreadRef | null;
@@ -31,13 +32,12 @@ export function useThreadPendingUserInput(input: {
 
   const [respondingRequestIds, setRespondingRequestIds] = useState<ApprovalRequestId[]>([]);
   const respondingRequestIdsRef = useRef(new Set<ApprovalRequestId>());
-  const singleSelectInFlightRef = useRef<string | null>(null);
 
   const [pendingUserInputAnswers, setPendingUserInputAnswers] = useState<
     Record<string, PendingUserInputDraftAnswer>
   >({});
 
-  const [pendingUserInputQuestionIndex, setPendingUserInputQuestionIndex] = useState(0);
+  const [pendingUserInputStep, setPendingUserInputStep] = useState(0);
 
   const submitPendingUserInput = useCallback(
     async (
@@ -69,13 +69,17 @@ export function useThreadPendingUserInput(input: {
   );
 
   /**
-   * Takes a typed prompt as the custom answer to the current question. Resolves true when
-   * it moved on to the next question or sent the answers.
+   * Takes a typed prompt as the custom answer to the current step, then moves on like a
+   * pick would, sending from the last step once every question is answered. Resolves true
+   * when the text was used.
    */
   const answerPendingUserInputWithPrompt = useCallback(
     async (pendingUserInput: PendingUserInput, prompt: string): Promise<boolean> => {
       if (respondingRequestIds.includes(pendingUserInput.requestId)) return false;
-      const question = pendingUserInput.questions[pendingUserInputQuestionIndex];
+
+      const { questions } = pendingUserInput;
+      const step = Math.min(pendingUserInputStep, questions.length - 1);
+      const question = questions[step];
 
       if (!question || !prompt.trim()) return false;
 
@@ -85,31 +89,34 @@ export function useThreadPendingUserInput(input: {
       };
 
       setPendingUserInputAnswers(nextAnswers);
+      const nextStep = pendingUserInputStepAfterAnswer(questions, nextAnswers, step);
 
-      if (pendingUserInputQuestionIndex < pendingUserInput.questions.length - 1) {
-        setPendingUserInputQuestionIndex((index) => index + 1);
+      if (nextStep !== null) {
+        setPendingUserInputStep(nextStep);
 
         return true;
       }
 
-      const answers = buildPendingUserInputAnswers(pendingUserInput.questions, nextAnswers);
+      const answers = buildPendingUserInputAnswers(questions, nextAnswers);
 
-      if (!answers) return false;
-
-      return submitPendingUserInput(pendingUserInput.requestId, answers);
+      return answers ? submitPendingUserInput(pendingUserInput.requestId, answers) : true;
     },
-    [
-      pendingUserInputAnswers,
-      pendingUserInputQuestionIndex,
-      respondingRequestIds,
-      submitPendingUserInput,
-    ],
+    [pendingUserInputAnswers, pendingUserInputStep, respondingRequestIds, submitPendingUserInput],
+  );
+
+  /** Answers the question on screen with text typed into the card's own-answer row. */
+  const answerPendingUserInputWithText = useCallback(
+    (text: string) => {
+      const pending = pendingUserInputs[0];
+
+      return pending ? answerPendingUserInputWithPrompt(pending, text) : Promise.resolve(false);
+    },
+    [answerPendingUserInputWithPrompt, pendingUserInputs],
   );
 
   useEffect(() => {
     setPendingUserInputAnswers({});
-    setPendingUserInputQuestionIndex(0);
-    singleSelectInFlightRef.current = null;
+    setPendingUserInputStep(0);
     const pendingIds = new Set(pendingUserInputs.map((pending) => pending.requestId));
 
     for (const requestId of respondingRequestIdsRef.current) {
@@ -122,87 +129,44 @@ export function useThreadPendingUserInput(input: {
   const selectPendingUserInputOption = useCallback(
     (questionId: string, optionLabel: string) => {
       const pending = pendingUserInputs[0];
-      const question = pending?.questions.find((entry) => entry.id === questionId);
 
-      if (!pending || !question) return;
+      if (!pending || respondingRequestIdsRef.current.has(pending.requestId)) return;
 
-      if (!question.multiSelect) {
-        const selectionKey = `${pending.requestId}:${questionId}`;
+      const selection = applyPendingUserInputOptionSelection(
+        pending.questions,
+        pendingUserInputAnswers,
+        questionId,
+        optionLabel,
+      );
 
-        if (singleSelectInFlightRef.current === selectionKey) return;
+      if (!selection) return;
+      setPendingUserInputAnswers(selection.draftAnswers);
+      setPendingUserInputStep(selection.nextStep);
 
-        const selection = applyPendingUserInputSingleSelect(
-          pending.questions,
-          pendingUserInputAnswers,
-          pendingUserInputQuestionIndex,
-          questionId,
-          optionLabel,
-        );
-
-        if (!selection) return;
-        singleSelectInFlightRef.current = selectionKey;
-        setPendingUserInputAnswers(selection.draftAnswers);
-
-        if (!selection.answers) {
-          setPendingUserInputQuestionIndex(selection.questionIndex);
-
-          return;
-        }
-
-        void submitPendingUserInput(pending.requestId, selection.answers).then((submitted) => {
-          if (!submitted) singleSelectInFlightRef.current = null;
-        });
-
-        return;
-      }
-
-      setPendingUserInputAnswers((current) => ({
-        ...current,
-        [questionId]: togglePendingUserInputOptionSelection(
-          question,
-          current[questionId],
-          optionLabel,
-        ),
-      }));
+      if (selection.answers) void submitPendingUserInput(pending.requestId, selection.answers);
     },
-    [
-      pendingUserInputAnswers,
-      pendingUserInputQuestionIndex,
-      pendingUserInputs,
-      submitPendingUserInput,
-    ],
+    [pendingUserInputAnswers, pendingUserInputs, submitPendingUserInput],
   );
 
-  const advancePendingUserInput = useCallback(async () => {
+  const submitPendingUserInputAnswers = useCallback(async () => {
     const pending = pendingUserInputs[0];
 
-    if (!pending || !linkedThreadRef || respondingRequestIds.includes(pending.requestId)) return;
-
-    if (pendingUserInputQuestionIndex < pending.questions.length - 1) {
-      setPendingUserInputQuestionIndex((index) => index + 1);
-
-      return;
-    }
+    if (!pending) return;
 
     const answers = buildPendingUserInputAnswers(pending.questions, pendingUserInputAnswers);
 
     if (!answers) return;
     await submitPendingUserInput(pending.requestId, answers);
-  }, [
-    linkedThreadRef,
-    pendingUserInputAnswers,
-    pendingUserInputQuestionIndex,
-    pendingUserInputs,
-    respondingRequestIds,
-    submitPendingUserInput,
-  ]);
+  }, [pendingUserInputAnswers, pendingUserInputs, submitPendingUserInput]);
 
   return {
     pendingUserInputAnswers,
-    pendingUserInputQuestionIndex,
+    pendingUserInputStep,
+    setPendingUserInputStep,
     respondingRequestIds,
     answerPendingUserInputWithPrompt,
+    answerPendingUserInputWithText,
     selectPendingUserInputOption,
-    advancePendingUserInput,
+    submitPendingUserInputAnswers,
   };
 }

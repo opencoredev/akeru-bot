@@ -1,4 +1,5 @@
 import type { EnvironmentId, OrchestrationMessage, ServerProviderSkill } from "@akeru/contracts";
+import type { AnsweredUserInputQuestion } from "@akeru/client-runtime/user-input-answers";
 import { SmilePlusIcon } from "lucide-react";
 import { memo } from "react";
 
@@ -16,6 +17,7 @@ import {
 import { MessageReactions } from "../chat/MessageReactions";
 import { PluginSearchResultCard } from "../chat/PluginSearchResultCard";
 import { SentMessageText } from "../chat/SentMessageText";
+import { UserInputAnswerCard } from "../chat/UserInputAnswerCard";
 import { Button } from "../ui/button";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { BotAvatarView } from "./BotAvatarView";
@@ -251,6 +253,7 @@ export const UserMessageRow = memo(function UserMessageRow({
   skills,
   environmentId,
   currentPersonId,
+  answered = null,
   onReply,
   onReactionChange,
 }: {
@@ -265,6 +268,8 @@ export const UserMessageRow = memo(function UserMessageRow({
   readonly skills: ReadonlyArray<ServerProviderSkill> | undefined;
   readonly environmentId: EnvironmentId | null;
   readonly currentPersonId: string | null | undefined;
+  /** Set when this message answers a bot's questions; it then reads back as an answer card. */
+  readonly answered?: ReadonlyArray<AnsweredUserInputQuestion> | null;
   readonly onReply: MessageReplyHandler;
   /** Null while the chat has no linked thread to react in. */
   readonly onReactionChange: MessageReactionHandler | null;
@@ -298,28 +303,32 @@ export const UserMessageRow = memo(function UserMessageRow({
         ) : null}
       </div>
       <div className="flex max-w-39/50 flex-col items-end">
-        <div className="w-full rounded-2xl bg-foreground/10 px-3.5 py-2 text-sm leading-6">
-          {showChannelOrigin && message.channelOrigin ? (
-            <div className="mb-1 text-xs font-medium text-muted-foreground">
-              {channelOriginLabel(message.channelOrigin, message.authorDisplayName)}
-            </div>
-          ) : null}
-          {message.text ? (
-            <SentMessageText
-              text={message.text}
-              skills={skills}
-              replySourceMessageId={replySourceMessageId}
-            />
-          ) : null}
-          {message.attachments?.length ? (
-            <div className={message.text ? "mt-2" : undefined}>
-              <BotMessageAttachments
-                attachments={message.attachments}
-                environmentId={environmentId ?? NO_ENVIRONMENT}
+        {answered ? (
+          <UserInputAnswerCard answered={answered} />
+        ) : (
+          <div className="w-full rounded-2xl bg-foreground/10 px-3.5 py-2 text-sm leading-6">
+            {showChannelOrigin && message.channelOrigin ? (
+              <div className="mb-1 text-xs font-medium text-muted-foreground">
+                {channelOriginLabel(message.channelOrigin, message.authorDisplayName)}
+              </div>
+            ) : null}
+            {message.text ? (
+              <SentMessageText
+                text={message.text}
+                skills={skills}
+                replySourceMessageId={replySourceMessageId}
               />
-            </div>
-          ) : null}
-        </div>
+            ) : null}
+            {message.attachments?.length ? (
+              <div className={message.text ? "mt-2" : undefined}>
+                <BotMessageAttachments
+                  attachments={message.attachments}
+                  environmentId={environmentId ?? NO_ENVIRONMENT}
+                />
+              </div>
+            ) : null}
+          </div>
+        )}
         <MessageReactions
           align="end"
           reactions={message.reactions ?? []}

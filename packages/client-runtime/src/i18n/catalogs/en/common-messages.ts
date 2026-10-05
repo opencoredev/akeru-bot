@@ -122,6 +122,12 @@ export const commonMessagesCatalog = {
   "Usage unavailable for {name}": "Usage unavailable for {name}",
   "Use the computer?": "Use the computer?",
   "Write a custom answer…": "Write a custom answer…",
+  "{step} of {total}": "{step} of {total}",
+  "Pick any that apply.": "Pick any that apply.",
+  Recommended: "Recommended",
+  "Type your own answer": "Type your own answer",
+  Answered: "Answered",
+  "Answered {count} questions": "Answered {count} questions",
   "{action} {name}": "{action} {name}",
   "{label}, elapsed time updating": "{label}, elapsed time updating",
   "An optional role, such as research, marketing, or admin.":
@@ -230,7 +236,6 @@ export const commonMessagesCatalog = {
   "Click, type, paste, and scroll on the picture. Control lasts up to one minute, then the computer stops.":
     "Click, type, paste, and scroll on the picture. Control lasts up to one minute, then the computer stops.",
   "{name}'s computer": "{name}'s computer",
-  "Open {name}'s computer": "Open {name}'s computer",
   "API key saved · {baseUrl}": "API key saved · {baseUrl}",
   "Plus, Pro, Business, Enterprise, or Edu": "Plus, Pro, Business, Enterprise, or Edu",
   "Rendering diagram…": "Rendering diagram…",

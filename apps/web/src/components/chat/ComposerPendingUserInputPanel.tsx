@@ -1,284 +1,300 @@
-import { type ApprovalRequestId } from "@akeru/contracts";
-import { memo, useCallback, useEffect, useRef, useState } from "react";
-import { type PendingUserInput } from "../../session-logic";
-import {
-  derivePendingUserInputProgress,
-  type PendingUserInputDraftAnswer,
-} from "../../pendingUserInput";
-import { CheckIcon } from "lucide-react";
-import { Button } from "../ui/button";
+import { type ApprovalRequestId, type UserInputQuestion } from "@akeru/contracts";
+import { ChevronLeftIcon } from "lucide-react";
+import { memo, useEffect, useRef, useState, type RefObject } from "react";
 import { useI18n } from "~/i18n";
-import { cn } from "~/lib/utils";
+import {
+  buildPendingUserInputAnswers,
+  type PendingUserInputDraftAnswer,
+  pendingUserInputKeyAction,
+  resolvePendingUserInputAnswer,
+} from "../../pendingUserInput";
+import { type PendingUserInput } from "../../session-logic";
+import { Button } from "../ui/button";
+import { Card } from "../ui/card";
+import { ChoiceButton, OwnAnswerRow } from "./PendingUserInputChoices";
 
 interface PendingUserInputPanelProps {
   pendingUserInputs: PendingUserInput[];
   respondingRequestIds: ApprovalRequestId[];
   answers: Record<string, PendingUserInputDraftAnswer>;
-  questionIndex: number;
-  onToggleOption: (questionId: string, optionLabel: string) => void;
-  onSelectSingleOption?: (questionId: string, optionLabel: string) => void;
-  onAdvance?: () => void;
-  className?: string;
+  /** The question on screen. Typed replies answer this one too. */
+  step: number;
+  onStepChange: (step: number) => void;
+  onSelectOption: (questionId: string, optionLabel: string) => void;
+  /** Answers the question on screen with text typed into the card's own-answer row. */
+  onAnswerWithText: (text: string) => void;
+  onSubmit?: () => void;
+  /** `docked` drops the card chrome when a host surface already frames the panel. */
+  surface?: "card" | "docked";
 }
 
+/**
+ * The bot's open question as one card that shows a single question at a time. A single-choice
+ * pick moves to the next question and the last one sends; multi-select steps wait for Next.
+ * Number keys pick options on the question on screen, other typing goes to the own-answer row,
+ * and Enter moves on.
+ */
 export const ComposerPendingUserInputPanel = memo(function ComposerPendingUserInputPanel({
   pendingUserInputs,
   respondingRequestIds,
   answers,
-  questionIndex,
-  onToggleOption,
-  onSelectSingleOption,
-  onAdvance,
-  className,
+  step,
+  onStepChange,
+  onSelectOption,
+  onAnswerWithText,
+  onSubmit,
+  surface = "card",
 }: PendingUserInputPanelProps) {
-  if (pendingUserInputs.length === 0) return null;
   const activePrompt = pendingUserInputs[0];
 
   if (!activePrompt) return null;
 
   return (
-    <ComposerPendingUserInputCard
+    <PendingUserInputCard
       key={activePrompt.requestId}
       prompt={activePrompt}
       isResponding={respondingRequestIds.includes(activePrompt.requestId)}
       answers={answers}
-      questionIndex={questionIndex}
-      onToggleOption={onToggleOption}
-      {...(className ? { className } : {})}
-      {...(onSelectSingleOption ? { onSelectSingleOption } : {})}
-      {...(onAdvance ? { onAdvance } : {})}
+      step={step}
+      onStepChange={onStepChange}
+      onSelectOption={onSelectOption}
+      onAnswerWithText={onAnswerWithText}
+      surface={surface}
+      {...(onSubmit ? { onSubmit } : {})}
     />
   );
 });
 
-const ComposerPendingUserInputCard = memo(function ComposerPendingUserInputCard({
+function isTypingTarget(target: EventTarget | null) {
+  if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement) return true;
+
+  return (
+    target instanceof HTMLElement &&
+    target.closest('[contenteditable]:not([contenteditable="false"])') !== null
+  );
+}
+
+/** Enter on a focused link, button, or field belongs to that control, not to the card. */
+function isInteractiveTarget(target: EventTarget | null) {
+  return (
+    target instanceof Element &&
+    target.closest(
+      'a[href], button, input, select, textarea, summary, [role="button"], [role="link"], [role="menuitem"], [role="option"], [role="tab"]',
+    ) !== null
+  );
+}
+
+function PendingUserInputCard({
   prompt,
   isResponding,
   answers,
-  questionIndex,
-  onToggleOption,
-  onSelectSingleOption,
-  onAdvance,
-  className,
+  step: requestedStep,
+  onStepChange,
+  onSelectOption,
+  onAnswerWithText,
+  onSubmit,
+  surface,
 }: {
   prompt: PendingUserInput;
   isResponding: boolean;
   answers: Record<string, PendingUserInputDraftAnswer>;
-  questionIndex: number;
-  onToggleOption: (questionId: string, optionLabel: string) => void;
-  onSelectSingleOption?: (questionId: string, optionLabel: string) => void;
-  onAdvance?: () => void;
-  className?: string;
+  step: number;
+  onStepChange: (step: number) => void;
+  onSelectOption: (questionId: string, optionLabel: string) => void;
+  onAnswerWithText: (text: string) => void;
+  onSubmit?: () => void;
+  surface: "card" | "docked";
 }) {
   const { t } = useI18n();
-  const progress = derivePendingUserInputProgress(prompt.questions, answers, questionIndex);
-  const activeQuestion = progress.activeQuestion;
-  const autoAdvanceTimerRef = useRef<number | null>(null);
+  const { questions } = prompt;
+  const step = Math.min(Math.max(requestedStep, 0), questions.length - 1);
+  const question = questions[step];
+  const isLastStep = step === questions.length - 1;
+  const complete = buildPendingUserInputAnswers(questions, answers) !== null;
 
-  const [optimisticSingleSelect, setOptimisticSingleSelect] = useState<{
-    questionId: string;
-    optionLabel: string;
-  } | null>(null);
+  const stepAnswered = question
+    ? resolvePendingUserInputAnswer(question, answers[question.id])
+    : null;
 
-  useEffect(
-    () => () => {
-      if (autoAdvanceTimerRef.current !== null) {
-        window.clearTimeout(autoAdvanceTimerRef.current);
-      }
-    },
-    [],
-  );
+  const sendsOnClick = questions.length === 1 && question?.multiSelect === false;
 
-  useEffect(() => {
-    if (!activeQuestion || activeQuestion.multiSelect || !optimisticSingleSelect) {
-      return;
-    }
+  // Back slides the previous question in from the left; every other move comes from the right.
+  const [shown, setShown] = useState({ step, direction: "forward" });
+  const ownAnswerRef = useRef<HTMLInputElement>(null);
 
-    if (optimisticSingleSelect.questionId !== activeQuestion.id) {
-      setOptimisticSingleSelect(null);
+  if (shown.step !== step) setShown({ step, direction: step < shown.step ? "back" : "forward" });
 
-      return;
-    }
-
-    if (
-      progress.customAnswer.trim().length === 0 &&
-      progress.selectedOptionLabels.includes(optimisticSingleSelect.optionLabel)
-    ) {
-      setOptimisticSingleSelect(null);
-    }
-  }, [
-    activeQuestion,
-    optimisticSingleSelect,
-    progress.customAnswer,
-    progress.selectedOptionLabels,
-  ]);
-
-  const handleOptionSelection = useCallback(
-    (questionId: string, optionLabel: string) => {
-      if (activeQuestion?.multiSelect) {
-        onToggleOption(questionId, optionLabel);
-
-        return;
-      }
-
-      setOptimisticSingleSelect({ questionId, optionLabel });
-
-      if (onSelectSingleOption) {
-        onSelectSingleOption(questionId, optionLabel);
-
-        return;
-      }
-
-      onToggleOption(questionId, optionLabel);
-
-      if (onAdvance) {
-        if (autoAdvanceTimerRef.current !== null) {
-          window.clearTimeout(autoAdvanceTimerRef.current);
-        }
-
-        autoAdvanceTimerRef.current = window.setTimeout(() => {
-          autoAdvanceTimerRef.current = null;
-          onAdvance();
-        }, 200);
-      }
-    },
-    [activeQuestion, onAdvance, onSelectSingleOption, onToggleOption],
-  );
+  const primary = sendsOnClick
+    ? null
+    : isLastStep
+      ? { label: t("Submit"), enabled: complete && onSubmit !== undefined, run: () => onSubmit?.() }
+      : { label: t("Next"), enabled: stepAnswered !== null, run: () => onStepChange(step + 1) };
 
   useEffect(() => {
-    if (!activeQuestion || isResponding) return;
+    if (!question || isResponding) return;
 
     const handler = (event: globalThis.KeyboardEvent) => {
-      if (event.metaKey || event.ctrlKey || event.altKey) return;
-      const target = event.target;
+      if (event.metaKey || event.ctrlKey || event.altKey || isTypingTarget(event.target)) return;
 
-      if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement) {
+      if (event.key === "Enter") {
+        if (event.defaultPrevented || isInteractiveTarget(event.target) || !primary?.enabled) {
+          return;
+        }
+
+        event.preventDefault();
+        primary.run();
+
         return;
       }
 
-      if (
-        target instanceof HTMLElement &&
-        target.closest('[contenteditable]:not([contenteditable="false"])')
-      ) {
-        return;
+      const action = pendingUserInputKeyAction(event.key, question.options.length);
+      const option = action?.kind === "pick" ? question.options[action.optionIndex] : undefined;
+
+      if (option) {
+        event.preventDefault();
+        onSelectOption(question.id, option.label);
+      } else if (action?.kind === "type" && !isInteractiveTarget(event.target)) {
+        // Focus moves before the character lands, so it starts the typed answer.
+        ownAnswerRef.current?.focus();
       }
-
-      const normalizedKey = event.key.toLocaleLowerCase();
-
-      const optionIndex = /^[1-9]$/.test(normalizedKey)
-        ? Number.parseInt(normalizedKey, 10) - 1
-        : /^[a-i]$/.test(normalizedKey)
-          ? normalizedKey.charCodeAt(0) - 97
-          : -1;
-
-      if (optionIndex < 0) return;
-
-      if (optionIndex >= activeQuestion.options.length) return;
-      const option = activeQuestion.options[optionIndex];
-
-      if (!option) return;
-      event.preventDefault();
-      handleOptionSelection(activeQuestion.id, option.label);
     };
 
     document.addEventListener("keydown", handler);
 
     return () => document.removeEventListener("keydown", handler);
-  }, [activeQuestion, handleOptionSelection, isResponding]);
+  }, [question, isResponding, onSelectOption, primary]);
 
-  if (!activeQuestion) {
-    return null;
-  }
+  if (!question) return null;
 
-  const customAnswerActive = progress.customAnswer.trim().length > 0;
+  const body = (
+    <div className="flex flex-col gap-3.5 px-4 pt-3.5 pb-3.5">
+      {questions.length > 1 ? (
+        <div className="flex items-center gap-3">
+          <div className="flex flex-1 gap-1" aria-hidden="true">
+            {questions.map((entry, index) => (
+              <span
+                key={entry.id}
+                className="gen-step h-1 flex-1 rounded-full"
+                data-state={
+                  index === step
+                    ? "current"
+                    : resolvePendingUserInputAnswer(entry, answers[entry.id])
+                      ? "done"
+                      : "todo"
+                }
+              />
+            ))}
+          </div>
+          <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
+            {t("{step} of {total}", { step: String(step + 1), total: String(questions.length) })}
+          </span>
+        </div>
+      ) : null}
+      <div
+        key={question.id}
+        className={shown.direction === "back" ? "motion-page-back" : "motion-page-forward"}
+      >
+        <PendingQuestion
+          question={question}
+          draft={answers[question.id]}
+          disabled={isResponding}
+          onSelectOption={onSelectOption}
+          onAnswerWithText={onAnswerWithText}
+          ownAnswerRef={ownAnswerRef}
+        />
+      </div>
+      <div className="flex items-center gap-3">
+        {step > 0 ? (
+          <Button
+            size="sm"
+            variant="ghost"
+            disabled={isResponding}
+            onClick={() => onStepChange(step - 1)}
+          >
+            <ChevronLeftIcon />
+            {t("Back")}
+          </Button>
+        ) : null}
+        <span className="flex-1" />
+        {primary ? (
+          <Button size="sm" disabled={isResponding || !primary.enabled} onClick={primary.run}>
+            {primary.label}
+          </Button>
+        ) : null}
+      </div>
+    </div>
+  );
 
   return (
     <section
-      aria-label={activeQuestion.question}
-      className={cn(
-        "w-full max-w-2xl rounded-2xl border border-border bg-foreground/5 p-3",
-        className,
-      )}
+      aria-label={question.question}
+      className="chat-generative w-full max-w-2xl"
+      data-generative="question"
       data-testid="pending-user-input-card"
     >
-      <div className="flex items-start gap-3">
-        <p className="min-w-0 flex-1 text-15px font-medium leading-6 text-foreground">
-          {activeQuestion.question}
-        </p>
-        {prompt.questions.length > 1 ? (
-          <span className="mt-1 shrink-0 text-11px text-muted-foreground tabular-nums">
-            {questionIndex + 1}/{prompt.questions.length}
-          </span>
-        ) : null}
-      </div>
-      {activeQuestion.multiSelect ? (
-        <p className="mt-1 text-xs text-muted-foreground">{t("Select one or more.")}</p>
-      ) : null}
-      <div className="mt-3 overflow-hidden rounded-xl border border-border/80 bg-background/25 divide-y divide-border/70">
-        {activeQuestion.options.map((option, index) => {
-          const isOptimisticallySelected =
-            optimisticSingleSelect?.questionId === activeQuestion.id &&
-            optimisticSingleSelect.optionLabel === option.label;
-
-          const isSelected =
-            isOptimisticallySelected ||
-            (!customAnswerActive && progress.selectedOptionLabels.includes(option.label));
-
-          const shortcutKey = index < 9 ? String.fromCharCode(65 + index) : null;
-
-          const className = cn(
-            "group flex min-h-12 w-full items-center gap-3 px-3 py-2.5 text-left outline-none transition-colors duration-150 focus-visible:relative focus-visible:z-10 focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-primary/35",
-            isSelected
-              ? "bg-muted/70 text-foreground"
-              : "bg-transparent text-foreground/90 hover:bg-muted/35",
-            isResponding && "opacity-50 cursor-not-allowed",
-            !isResponding && "cursor-pointer",
-          );
-
-          const content = (
-            <>
-              {shortcutKey !== null ? (
-                <kbd className="flex size-6 shrink-0 items-center justify-center rounded-md border border-border bg-muted/70 text-11px font-medium text-muted-foreground">
-                  {shortcutKey}
-                </kbd>
-              ) : null}
-              <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-                <span className="text-sm font-medium">{option.label}</span>
-                {option.description && option.description !== option.label ? (
-                  <span className="text-secondary-label text-11px">{option.description}</span>
-                ) : null}
-              </div>
-              {isSelected ? <CheckIcon className="size-3.5 shrink-0 text-primary" /> : null}
-            </>
-          );
-
-          return (
-            <button
-              key={`${activeQuestion.id}:${option.label}`}
-              type="button"
-              aria-pressed={isSelected}
-              disabled={isResponding}
-              onClick={() => {
-                handleOptionSelection(activeQuestion.id, option.label);
-              }}
-              className={className}
-            >
-              {content}
-            </button>
-          );
-        })}
-      </div>
-      {activeQuestion.multiSelect && onAdvance ? (
-        <div className="mt-3 flex justify-end">
-          <Button
-            size="xs"
-            disabled={isResponding || progress.selectedOptionLabels.length === 0}
-            onClick={onAdvance}
-          >
-            {questionIndex < prompt.questions.length - 1 ? t("Continue") : t("Submit")}
-          </Button>
-        </div>
-      ) : null}
+      {surface === "card" ? <Card>{body}</Card> : body}
     </section>
   );
-});
+}
+
+function PendingQuestion({
+  question,
+  draft,
+  disabled,
+  onSelectOption,
+  onAnswerWithText,
+  ownAnswerRef,
+}: {
+  question: UserInputQuestion;
+  draft: PendingUserInputDraftAnswer | undefined;
+  disabled: boolean;
+  onSelectOption: (questionId: string, optionLabel: string) => void;
+  onAnswerWithText: (text: string) => void;
+  ownAnswerRef: RefObject<HTMLInputElement | null>;
+}) {
+  const { t } = useI18n();
+  const customAnswer = draft?.customAnswer?.trim() ?? "";
+  const resolved = resolvePendingUserInputAnswer(question, draft);
+  const selectedLabels = customAnswer ? [] : [resolved ?? []].flat();
+
+  return (
+    <div className="flex flex-col gap-2.5">
+      <div className="flex flex-col gap-0.5">
+        {question.header && question.header !== question.question ? (
+          <span className="text-xs font-medium text-muted-foreground">{question.header}</span>
+        ) : null}
+        <span className="text-sm font-semibold text-foreground">{question.question}</span>
+        {question.multiSelect ? (
+          <span className="text-xs text-muted-foreground">{t("Pick any that apply.")}</span>
+        ) : null}
+      </div>
+      <div
+        className="gen-choices flex flex-col gap-2"
+        data-answered={!question.multiSelect && resolved !== null}
+      >
+        {question.options.map((option, index) => (
+          <ChoiceButton
+            key={option.label}
+            kind={question.multiSelect ? "checkbox" : "radio"}
+            pressed={selectedLabels.includes(option.label)}
+            disabled={disabled}
+            shortcut={index < 9 ? String(index + 1) : null}
+            onClick={() => onSelectOption(question.id, option.label)}
+          >
+            <span className="text-sm font-medium text-foreground">{option.label}</span>
+            {option.description && option.description !== option.label ? (
+              <span className="text-xs text-muted-foreground">{option.description}</span>
+            ) : null}
+          </ChoiceButton>
+        ))}
+        <OwnAnswerRow
+          kind={question.multiSelect ? "checkbox" : "radio"}
+          answer={customAnswer}
+          disabled={disabled}
+          inputRef={ownAnswerRef}
+          onAnswer={onAnswerWithText}
+        />
+      </div>
+    </div>
+  );
+}

@@ -1,11 +1,9 @@
-import { type ApprovalRequestId, type ScopedThreadRef } from "@akeru/contracts";
+import { type ApprovalRequestId } from "@akeru/contracts";
 
 import { useI18n } from "../../i18n";
 import type { PendingUserInputDraftAnswer } from "../../pendingUserInput";
 import type { PendingUserInput } from "../../session-logic";
 import { ComposerPendingUserInputPanel } from "../chat/ComposerPendingUserInputPanel";
-import { OpenComputerAction } from "../computer/OpenComputerAction";
-import type { Bot } from "./types";
 import { cn } from "../../lib/utils";
 import {
   BOT_COMPOSER_DOCKED_PANEL_CLASS_NAME,
@@ -16,23 +14,20 @@ export function BotUserInputPrompt({
   pendingUserInputs,
   respondingRequestIds,
   answers,
-  questionIndex,
-  onToggleOption,
-  onSelectSingleOption,
-  onAdvance,
-  threadRef = null,
-  askingBot = null,
+  step,
+  onStepChange,
+  onSelectOption,
+  onAnswerWithText,
+  onSubmit,
 }: {
   readonly pendingUserInputs: PendingUserInput[];
   readonly respondingRequestIds: ApprovalRequestId[];
   readonly answers: Record<string, PendingUserInputDraftAnswer>;
-  readonly questionIndex: number;
-  readonly onToggleOption: (questionId: string, optionLabel: string) => void;
-  readonly onSelectSingleOption: (questionId: string, optionLabel: string) => void;
-  readonly onAdvance: () => void;
-  /** The chat's thread and the bot asking, so the prompt can open that bot's computer. */
-  readonly threadRef?: ScopedThreadRef | null;
-  readonly askingBot?: Pick<Bot, "name" | "sandbox" | "engine"> | null;
+  readonly step: number;
+  readonly onStepChange: (step: number) => void;
+  readonly onSelectOption: (questionId: string, optionLabel: string) => void;
+  readonly onAnswerWithText: (text: string) => void;
+  readonly onSubmit: () => void;
 }) {
   const { t } = useI18n();
   // Once an answer is on its way the question has been dealt with: the composer's working
@@ -48,20 +43,16 @@ export function BotUserInputPrompt({
       data-testid="bot-user-input-prompt"
     >
       <ComposerPendingUserInputPanel
-        className="!max-w-none !rounded-none !border-0 !bg-transparent !p-0"
+        surface="docked"
         pendingUserInputs={pendingUserInputs}
         respondingRequestIds={respondingRequestIds}
         answers={answers}
-        questionIndex={questionIndex}
-        onToggleOption={onToggleOption}
-        onSelectSingleOption={onSelectSingleOption}
-        onAdvance={onAdvance}
+        step={step}
+        onStepChange={onStepChange}
+        onSelectOption={onSelectOption}
+        onAnswerWithText={onAnswerWithText}
+        onSubmit={onSubmit}
       />
-      {askingBot ? (
-        <div className="px-3 pb-2">
-          <OpenComputerAction threadRef={threadRef} bot={askingBot} />
-        </div>
-      ) : null}
     </section>
   );
 }

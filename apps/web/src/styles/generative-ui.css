@@ -1,0 +1,255 @@
+/* Generative chat blocks (```akeru-chart and friends). Series colors derive
+   from theme roles on the block itself, so every app theme restyles them
+   without per-theme values. */
+
+.chat-generative {
+  /* Series step down from the theme accent toward the card, so they work on neutral and tinted themes alike. */
+  --gen-series-1: var(--primary);
+  --gen-series-2: color-mix(in srgb, var(--primary) 62%, var(--card));
+  --gen-series-3: color-mix(in srgb, var(--primary) 38%, var(--card));
+  --gen-series-4: color-mix(in srgb, var(--primary) 20%, var(--card));
+  --gen-grid: color-mix(in srgb, var(--foreground) 7%, transparent);
+  --gen-edge: color-mix(in srgb, var(--foreground) 22%, transparent);
+  --gen-good: var(--success);
+  --gen-warn: var(--warning);
+  --gen-bad: var(--error);
+  --gen-neutral: var(--muted-foreground);
+}
+
+.chat-markdown .chat-generative {
+  margin: 0.85rem 0;
+}
+
+.chat-generative [data-series="0"] {
+  --gen-series: var(--gen-series-1);
+}
+
+.chat-generative [data-series="1"] {
+  --gen-series: var(--gen-series-2);
+}
+
+.chat-generative [data-series="2"] {
+  --gen-series: var(--gen-series-3);
+}
+
+.chat-generative [data-series="3"] {
+  --gen-series: var(--gen-series-4);
+}
+
+.chat-generative [data-tone="good"] {
+  --gen-tone: var(--gen-good);
+}
+
+.chat-generative [data-tone="warn"] {
+  --gen-tone: var(--gen-warn);
+}
+
+.chat-generative [data-tone="bad"] {
+  --gen-tone: var(--gen-bad);
+}
+
+.chat-generative [data-tone="neutral"] {
+  --gen-tone: var(--gen-neutral);
+}
+
+.gen-swatch {
+  background: var(--gen-series);
+}
+
+.gen-tone-text {
+  color: var(--gen-tone);
+}
+
+.gen-tone-dot {
+  background: var(--gen-tone);
+}
+
+.gen-tone-soft {
+  color: var(--gen-tone);
+  background: color-mix(in srgb, var(--gen-tone) 11%, transparent);
+}
+
+.gen-line {
+  fill: none;
+  stroke: var(--gen-series);
+  stroke-width: 2;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+  vector-effect: non-scaling-stroke;
+}
+
+/* Lighter series also change dash pattern, since neutral themes separate them by lightness alone. */
+.chat-generative [data-series="1"] > .gen-line {
+  stroke-dasharray: 6 4;
+}
+
+.chat-generative [data-series="2"] > .gen-line {
+  stroke-dasharray: 2 4;
+}
+
+.chat-generative [data-series="3"] > .gen-line {
+  stroke-dasharray: 8 3 2 3;
+}
+
+.gen-area {
+  fill: var(--gen-series);
+  opacity: 0.12;
+}
+
+.gen-gridline {
+  stroke: var(--gen-grid);
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+}
+
+.gen-bar {
+  background: var(--gen-series);
+  border-radius: 3px 3px 1px 1px;
+}
+
+.gen-crosshair {
+  background: var(--gen-edge);
+}
+
+.gen-edge {
+  fill: none;
+  stroke: var(--gen-edge);
+  stroke-width: 1.25;
+}
+
+[data-highlight="true"] > .gen-edge {
+  stroke: var(--primary);
+  stroke-width: 1.75;
+}
+
+.gen-edge-head {
+  fill: var(--gen-edge);
+}
+
+[data-highlight="true"] > .gen-edge-head {
+  fill: var(--primary);
+}
+
+.gen-flow-node[data-highlight="true"] {
+  border-color: color-mix(in srgb, var(--primary) 45%, var(--border));
+  background: color-mix(in srgb, var(--primary) 6%, var(--card));
+}
+
+.gen-progress-track {
+  background: color-mix(in srgb, var(--foreground) 8%, transparent);
+}
+
+.gen-progress-fill {
+  background: var(--primary);
+}
+
+.gen-rail {
+  background: color-mix(in srgb, var(--foreground) 10%, transparent);
+}
+
+.gen-choice[aria-pressed="true"],
+.gen-choice[data-selected="true"] {
+  border-color: color-mix(in srgb, var(--primary) 55%, var(--border));
+  background: color-mix(in srgb, var(--primary) 7%, var(--card));
+}
+
+/* While the bot can't take a reply, the options step back so they don't look clickable. */
+.gen-choices[data-unavailable="true"] .gen-choice {
+  opacity: 0.55;
+}
+
+/* Once a choice is picked, the others step back, except the row being typed in. */
+.gen-choices[data-answered="true"]
+  .gen-choice:not([aria-pressed="true"], [data-selected="true"], :focus-within) {
+  opacity: 0.55;
+}
+
+/* Small filled check that heads an answered card. */
+.gen-answer-badge {
+  display: inline-grid;
+  place-items: center;
+  width: 0.875rem;
+  height: 0.875rem;
+  border-radius: 999px;
+  background: var(--primary);
+  color: var(--primary-foreground);
+}
+
+/* Selection mark on a choice row: a radio for single-choice questions, a checkbox for multi-select. */
+.gen-mark {
+  display: inline-grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 1rem;
+  height: 1rem;
+  /* Half-strength ink keeps the empty mark above 3:1 contrast in both modes. */
+  border: 1.5px solid color-mix(in srgb, var(--foreground) 50%, transparent);
+  background: var(--background);
+  color: var(--primary-foreground);
+  transition:
+    background-color 150ms ease-out,
+    border-color 150ms ease-out;
+}
+
+.gen-mark[data-kind="radio"] {
+  border-radius: 999px;
+}
+
+.gen-mark[data-kind="checkbox"] {
+  border-radius: 0.3rem;
+}
+
+.gen-choice:enabled:hover .gen-mark:not([data-checked]) {
+  border-color: color-mix(in srgb, var(--foreground) 72%, transparent);
+}
+
+.gen-mark[data-checked="true"] {
+  border-color: var(--primary);
+  background: var(--primary);
+}
+
+.gen-mark-tick,
+.gen-mark-dot {
+  opacity: 0;
+  transform: scale(0.5);
+  transition:
+    opacity 150ms ease-out,
+    transform 150ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.gen-mark-tick {
+  width: 0.7rem;
+  height: 0.7rem;
+}
+
+.gen-mark-dot {
+  width: 0.375rem;
+  height: 0.375rem;
+  border-radius: 999px;
+  background: currentColor;
+}
+
+.gen-mark[data-checked="true"] > .gen-mark-tick,
+.gen-mark[data-checked="true"] > .gen-mark-dot {
+  opacity: 1;
+  transform: scale(1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .gen-mark-tick,
+  .gen-mark-dot {
+    transform: none;
+  }
+}
+
+.gen-step {
+  background: color-mix(in srgb, var(--foreground) 10%, transparent);
+}
+
+.gen-step[data-state="done"] {
+  background: color-mix(in srgb, var(--primary) 45%, transparent);
+}
+
+.gen-step[data-state="current"] {
+  background: var(--primary);
+}

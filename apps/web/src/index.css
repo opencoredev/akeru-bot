@@ -313,6 +313,8 @@
 
 @import "./styles/markdown.css";
 
+@import "./styles/generative-ui.css";
+
 /* Prompt-stash save acknowledgement: the new count fades up from just below
    its resting position, once, then stops. One-shot and event-driven (React
    remounts the element by key on each stash) — no continuous animation. */

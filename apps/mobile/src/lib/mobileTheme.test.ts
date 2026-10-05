@@ -122,12 +122,12 @@ describe("mobile themes", () => {
       getMobileThemeVariables(DEFAULT_MOBILE_THEME_ID, "light")[
         "--color-user-bubble-skill-foreground"
       ],
-    ).toBe("#a21caf");
+    ).toBe("#1d4ed8");
     expect(
       getMobileThemeVariables(DEFAULT_MOBILE_THEME_ID, "dark")[
         "--color-user-bubble-skill-foreground"
       ],
-    ).toBe("#f0abfc");
+    ).toBe("#93c5fd");
   });
 
   it("applies palette overrides on top of the selected built-in theme", () => {

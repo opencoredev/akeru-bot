@@ -5,11 +5,8 @@ live, take control to click and type for the bot, then hand control back.
 
 ## Open the computer
 
-Open the computer from either place. Both show the same screen.
-
-- In a bot chat, open the bot panel and select **Open computer**.
-- When a bot asks you a question, select **Open _bot name_'s computer** under the question. This
-  helps when the bot needs you to sign in, solve a check, or confirm something on a page.
+In a bot chat, open the bot panel and select **Open computer**. This helps when the bot needs you to
+sign in, solve a check, or confirm something on a page.
 
 The computer window shows who is in control: the bot, you, someone else, or no one.
 

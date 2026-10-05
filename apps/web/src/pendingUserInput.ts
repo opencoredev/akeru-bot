@@ -6,20 +6,6 @@ export interface PendingUserInputDraftAnswer {
   customAnswer?: string;
 }
 
-export interface PendingUserInputProgress {
-  questionIndex: number;
-  activeQuestion: UserInputQuestion | null;
-  activeDraft: PendingUserInputDraftAnswer | undefined;
-  selectedOptionLabels: string[];
-  customAnswer: string;
-  resolvedAnswer: string | string[] | null;
-  usingCustomAnswer: boolean;
-  answeredQuestionCount: number;
-  isLastQuestion: boolean;
-  isComplete: boolean;
-  canAdvance: boolean;
-}
-
 function normalizeDraftAnswer(value: string | undefined): string | null {
   if (!Predicate.isString(value)) {
     return null;
@@ -109,24 +95,45 @@ export function togglePendingUserInputOptionSelection(
   };
 }
 
-export interface PendingUserInputSingleSelectResult {
+export interface PendingUserInputSelectionResult {
   draftAnswers: Record<string, PendingUserInputDraftAnswer>;
-  questionIndex: number;
+  /** Set when the click settles the last step, so the prompt can be sent right away. */
   answers: Record<string, string | string[]> | null;
+  /** The step to show after this click. */
+  nextStep: number;
 }
 
-export function applyPendingUserInputSingleSelect(
+/**
+ * Where the card goes once a step is answered: the next step, or from the last step back to
+ * the first one still open. Returns null when every question is answered on the last step.
+ */
+export function pendingUserInputStepAfterAnswer(
   questions: ReadonlyArray<UserInputQuestion>,
   draftAnswers: Record<string, PendingUserInputDraftAnswer>,
-  questionIndex: number,
+  step: number,
+): number | null {
+  if (step < questions.length - 1) return step + 1;
+
+  if (buildPendingUserInputAnswers(questions, draftAnswers)) return null;
+
+  return findFirstUnansweredPendingUserInputQuestionIndex(questions, draftAnswers);
+}
+
+/**
+ * Applies an option click on the current step. A single-choice pick moves to the next step,
+ * and on the last step sends once every question has an answer. Multi-select picks toggle and
+ * wait for Next.
+ */
+export function applyPendingUserInputOptionSelection(
+  questions: ReadonlyArray<UserInputQuestion>,
+  draftAnswers: Record<string, PendingUserInputDraftAnswer>,
   questionId: string,
   optionLabel: string,
-): PendingUserInputSingleSelectResult | null {
-  const question = questions[questionIndex];
+): PendingUserInputSelectionResult | null {
+  const step = questions.findIndex((entry) => entry.id === questionId);
+  const question = questions[step];
 
-  if (!question || question.id !== questionId || question.multiSelect) return null;
-
-  if (!question.options.some((option) => option.label === optionLabel)) return null;
+  if (!question || !question.options.some((option) => option.label === optionLabel)) return null;
 
   const nextDraftAnswers = {
     ...draftAnswers,
@@ -137,15 +144,15 @@ export function applyPendingUserInputSingleSelect(
     ),
   };
 
-  const nextQuestionIndex = Math.min(questionIndex + 1, Math.max(questions.length - 1, 0));
+  if (question.multiSelect)
+    return { draftAnswers: nextDraftAnswers, answers: null, nextStep: step };
+
+  const nextStep = pendingUserInputStepAfterAnswer(questions, nextDraftAnswers, step);
 
   return {
     draftAnswers: nextDraftAnswers,
-    questionIndex: nextQuestionIndex,
-    answers:
-      questionIndex === questions.length - 1
-        ? buildPendingUserInputAnswers(questions, nextDraftAnswers)
-        : null,
+    answers: nextStep === null ? buildPendingUserInputAnswers(questions, nextDraftAnswers) : null,
+    nextStep: nextStep ?? step,
   };
 }
 
@@ -188,38 +195,25 @@ export function findFirstUnansweredPendingUserInputQuestionIndex(
   return unansweredIndex === -1 ? Math.max(questions.length - 1, 0) : unansweredIndex;
 }
 
-export function derivePendingUserInputProgress(
-  questions: ReadonlyArray<UserInputQuestion>,
-  draftAnswers: Record<string, PendingUserInputDraftAnswer>,
-  questionIndex: number,
-): PendingUserInputProgress {
-  const normalizedQuestionIndex =
-    questions.length === 0 ? 0 : Math.max(0, Math.min(questionIndex, questions.length - 1));
+export type PendingUserInputKeyAction =
+  | { readonly kind: "pick"; readonly optionIndex: number }
+  | { readonly kind: "type" }
+  | null;
 
-  const activeQuestion = questions[normalizedQuestionIndex] ?? null;
-  const activeDraft = activeQuestion ? draftAnswers[activeQuestion.id] : undefined;
+/**
+ * What a plain key press does while a question is on screen. A number picks that option; any
+ * other printable character starts a typed answer, so a sentence typed outside a field never
+ * turns into picks. Whitespace and named keys do nothing here.
+ */
+export function pendingUserInputKeyAction(
+  key: string,
+  optionCount: number,
+): PendingUserInputKeyAction {
+  if (/^[1-9]$/.test(key)) {
+    const optionIndex = Number.parseInt(key, 10) - 1;
 
-  const resolvedAnswer = activeQuestion
-    ? resolvePendingUserInputAnswer(activeQuestion, activeDraft)
-    : null;
+    return optionIndex < optionCount ? { kind: "pick", optionIndex } : { kind: "type" };
+  }
 
-  const customAnswer = activeDraft?.customAnswer ?? "";
-  const answeredQuestionCount = countAnsweredPendingUserInputQuestions(questions, draftAnswers);
-
-  const isLastQuestion =
-    questions.length === 0 ? true : normalizedQuestionIndex >= questions.length - 1;
-
-  return {
-    questionIndex: normalizedQuestionIndex,
-    activeQuestion,
-    activeDraft,
-    selectedOptionLabels: normalizeSelectedOptionLabels(activeDraft?.selectedOptionLabels),
-    customAnswer,
-    resolvedAnswer,
-    usingCustomAnswer: customAnswer.trim().length > 0,
-    answeredQuestionCount,
-    isLastQuestion,
-    isComplete: buildPendingUserInputAnswers(questions, draftAnswers) !== null,
-    canAdvance: Boolean(resolvedAnswer),
-  };
+  return key.length === 1 && key.trim() ? { kind: "type" } : null;
 }

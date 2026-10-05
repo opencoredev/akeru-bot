@@ -292,3 +292,27 @@ describe("flattenMarkdownPreview", () => {
     );
   });
 });
+
+describe("flattenMarkdownPreview with generative blocks", () => {
+  it("names the block instead of showing its JSON", () => {
+    const markdown = [
+      "Here is the path.",
+      "",
+      "```akeru-flow",
+      '{ "title": "Remote client → session", "nodes": [{ "id": "a", "label": "Client" }], "edges": [] }',
+      "```",
+    ].join("\n");
+
+    expect(flattenMarkdownPreview(markdown)).toBe(
+      "Here is the path. Diagram: Remote client → session",
+    );
+  });
+
+  it("falls back to the kind when the block does not decode", () => {
+    expect(flattenMarkdownPreview('```akeru-chart\n{ "type": \n```')).toBe("Chart");
+  });
+
+  it("keeps ordinary code blocks", () => {
+    expect(flattenMarkdownPreview("```ts\nconst a = 1;\n```")).toBe("const a = 1;");
+  });
+});
