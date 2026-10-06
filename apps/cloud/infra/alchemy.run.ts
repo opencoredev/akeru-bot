@@ -20,10 +20,13 @@ const resourceName = (stage: string) =>
 // URL below, link URLs, and Clerk's authorized party all depend on it.
 const LOCAL_DEV_PORT = 1337;
 
-// Production serves on this custom domain, which must match DEFAULT_AKERU_CLOUD_URL in
+// Production serves on this hostname, which must match DEFAULT_AKERU_CLOUD_URL in
 // @akeru/contracts. The contracts are not imported here because they load a different Effect
-// version. The akeru-bot.com zone must be on this Cloudflare account for the domain to attach.
+// version. akeru-bot.com's DNS stays on Vercel: the hostname is a Cloudflare for SaaS custom
+// hostname on the SaaS zone below, and Vercel DNS has a CNAME to that zone's fallback origin.
 const PRODUCTION_HOSTNAME = "cloud.akeru-bot.com";
+
+const SAAS_ZONE = "leodev.cv";
 
 const defaultPublicUrl = (stage: string) =>
   Match.value(stage).pipe(
@@ -61,7 +64,9 @@ export const cloudResources = (stage: string) => {
       runWorkerFirst: ["/v1/*", "/api/*"],
     },
     crons: ["0 4 * * *"],
-    ...(stage === "production" ? { domain: PRODUCTION_HOSTNAME } : {}),
+    ...(stage === "production"
+      ? { routes: [{ pattern: `${PRODUCTION_HOSTNAME}/*`, zoneName: SAAS_ZONE }] }
+      : {}),
     dev: { port: LOCAL_DEV_PORT, strictPort: true },
     env: {
       DB: database,
