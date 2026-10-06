@@ -1,5 +1,20 @@
 ## @akeru/desktop@0.0.41
 
+## 0.3.0
+
+### Patch Changes
+
+- [#343](https://github.com/opencoredev/akeru-bot/pull/343) [`66ba44d`](https://github.com/opencoredev/akeru-bot/commit/66ba44dfcde1fbb3e63cf27f2afb73001baa26c5) Thanks [@leoisadev1](https://github.com/leoisadev1)! - Remove temporary files left behind when desktop settings or saved connections fail to save.
+
+- [#343](https://github.com/opencoredev/akeru-bot/pull/343) [`66ba44d`](https://github.com/opencoredev/akeru-bot/commit/66ba44dfcde1fbb3e63cf27f2afb73001baa26c5) Thanks [@leoisadev1](https://github.com/leoisadev1)! - Validate browser automation results before using them so malformed debugger replies produce an operation error.
+
+- Updated dependencies []:
+  - @akeru/contracts@0.3.0
+  - @akeru/client-runtime@0.0.5
+  - @akeru/shared@0.0.5
+  - @akeru/ssh@0.0.5
+  - @akeru/tailscale@0.0.5
+
 ## 0.2.1
 
 ### Patch Changes
