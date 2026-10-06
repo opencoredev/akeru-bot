@@ -1,3 +1,8 @@
+import * as Predicate from "effect/Predicate";
+import {
+  isAtomCommandInterrupted,
+  squashAtomCommandFailure,
+} from "@akeru/client-runtime/state/runtime";
 import * as Match from "effect/Match";
 import { useNavigation, type StaticScreenProps } from "@react-navigation/native";
 import {
@@ -81,7 +86,17 @@ export function SettingsAkeruCloudRouteScreen({
 
   const run = (action: () => ReturnType<typeof startLink>) => () => {
     setPending(true);
-    void action().finally(() => setPending(false));
+    void action()
+      .then((result) => {
+        if (Predicate.isTagged(result, "Failure") && !isAtomCommandInterrupted(result)) {
+          const error = squashAtomCommandFailure(result);
+          Alert.alert(
+            CLOUD_COPY.title,
+            error instanceof Error ? error.message : "The command failed.",
+          );
+        }
+      })
+      .finally(() => setPending(false));
   };
 
   const confirmDisconnect = () =>
