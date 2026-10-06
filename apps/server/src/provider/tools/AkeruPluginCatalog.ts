@@ -34,22 +34,24 @@ declare global {
   }
 }
 
-export function loadNodeCatalogModules(): CatalogManifestModules<unknown> {
+export function loadNodeCatalogModules(
+  moduleUrl = import.meta.url,
+): CatalogManifestModules<unknown> {
   // The server bundle lives at `apps/server/dist`, while source files live
   // one directory deeper under `apps/server/src/provider`. Resolve the
   // repository catalog from the bundled location, with the packaged desktop
   // resource as a fallback.
-  const sourceTree = import.meta.url.includes("/src/provider/");
+  const sourceTree = moduleUrl.includes("/src/provider/");
 
   const candidates = sourceTree
     ? [
-        new URL("../../../../../plugins/entries/", import.meta.url),
-        new URL("../../../../plugins/entries/", import.meta.url),
+        new URL("../../../../../plugins/entries/", moduleUrl),
+        new URL("../../../../plugins/entries/", moduleUrl),
       ]
     : [
-        new URL("../../../plugins/entries/", import.meta.url),
-        new URL("../../../../plugins/entries/", import.meta.url),
-        new URL("../../../apps/desktop/prod-resources/plugins/entries/", import.meta.url),
+        new URL("../../../plugins/entries/", moduleUrl),
+        new URL("../../../../plugins/entries/", moduleUrl),
+        new URL("../../../apps/desktop/prod-resources/plugins/entries/", moduleUrl),
       ];
 
   const entriesUrl = candidates.find((candidate) => {
