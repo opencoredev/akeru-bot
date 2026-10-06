@@ -2,6 +2,7 @@ import { testRpcClient } from "../test-support/services.ts";
 import {
   EnvironmentId,
   ORCHESTRATION_WS_METHODS,
+  ThreadId,
   type OrchestrationShellSnapshot,
   type OrchestrationShellStreamItem,
 } from "@akeru/contracts";
@@ -24,6 +25,7 @@ import * as Persistence from "../platform/persistence.ts";
 import * as RpcSession from "../rpc/session.ts";
 import type { WsRpcProtocolClient } from "../rpc/protocol.ts";
 import { makeEnvironmentShellState, ShellSnapshotLoader } from "./shell.ts";
+import { stubThread } from "./shellReducer.test-support.ts";
 
 const TARGET = new PrimaryConnectionTarget({
   environmentId: EnvironmentId.make("environment-1"),
@@ -393,6 +395,138 @@ describe("environment shell synchronization", () => {
 
       expect(yield* Ref.get(capturedAfterSequences)).toEqual([10, 40, 40, 20]);
       expect(yield* Ref.get(loaderCalls)).toBe(2);
+    }),
+  );
+
+  it.effect("publishes a burst of shell events delivered together as one state change", () =>
+    Effect.gen(function* () {
+      type ShellInput =
+        | OrchestrationShellStreamItem
+        | readonly [OrchestrationShellStreamItem, ...OrchestrationShellStreamItem[]];
+
+      const events = yield* Queue.unbounded<ShellInput>();
+      const observed = yield* Queue.unbounded<Option.Option<OrchestrationShellSnapshot>>();
+
+      const client = testRpcClient({
+        [ORCHESTRATION_WS_METHODS.subscribeShell]: () =>
+          Stream.fromQueue(events).pipe(
+            Stream.map((input) => (Array.isArray(input) ? input : [input])),
+            Stream.flattenArray,
+          ),
+      });
+
+      const supervisorState = yield* SubscriptionRef.make(AVAILABLE_CONNECTION_STATE);
+
+      const activeSession = yield* SubscriptionRef.make<Option.Option<RpcSession.RpcSession>>(
+        Option.some(session(client)),
+      );
+
+      const supervisor = EnvironmentSupervisor.EnvironmentSupervisor.of({
+        target: TARGET,
+        state: supervisorState,
+        session: activeSession,
+        prepared: yield* SubscriptionRef.make(Option.some(PREPARED)),
+        connect: Effect.void,
+        disconnect: Effect.void,
+        retryNow: Effect.void,
+        retryIfDesired: Effect.void,
+      } satisfies EnvironmentSupervisor.EnvironmentSupervisor["Service"]);
+
+      const cache = Persistence.EnvironmentCacheStore.of({
+        loadShell: () => Effect.succeed(Option.none()),
+        saveShell: () => Effect.void,
+        loadThread: () => Effect.succeed(Option.none()),
+        saveThread: () => Effect.void,
+        removeThread: () => Effect.void,
+        loadServerConfig: () => Effect.succeed(Option.none()),
+        saveServerConfig: () => Effect.void,
+        clear: () => Effect.void,
+      });
+
+      const snapshotLoader = ShellSnapshotLoader.of({
+        load: () => Effect.succeed(Option.none()),
+      });
+
+      const shellState = yield* makeEnvironmentShellState().pipe(
+        Effect.provideService(EnvironmentSupervisor.EnvironmentSupervisor, supervisor),
+        Effect.provideService(Persistence.EnvironmentCacheStore, cache),
+        Effect.provideService(ShellSnapshotLoader, snapshotLoader),
+      );
+
+      yield* SubscriptionRef.changes(shellState).pipe(
+        Stream.map((state) => state.snapshot),
+        Stream.runForEach((snapshot) => Queue.offer(observed, snapshot)),
+        Effect.forkScoped,
+      );
+
+      yield* Queue.offer(events, {
+        kind: "snapshot",
+        snapshot: LIVE_SHELL_SNAPSHOT,
+      });
+      yield* Queue.offer(events, { kind: "synchronized" });
+      yield* SubscriptionRef.changes(shellState).pipe(
+        Stream.filter((state) => state.status === "live"),
+        Stream.runHead,
+      );
+
+      // Drain observations through the live snapshot so the burst count starts clean.
+      yield* Queue.take(observed).pipe(
+        Effect.repeat({
+          until: (snapshot) =>
+            Option.isSome(snapshot) && snapshot.value.snapshotSequence === LIVE_SHELL_SNAPSHOT.snapshotSequence,
+        }),
+      );
+
+      const firstThread = {
+        ...stubThread,
+        id: ThreadId.make("thread-burst-1"),
+        title: "First",
+        updatedAt: "2026-06-06T00:00:01.000Z",
+      };
+      const secondThread = {
+        ...stubThread,
+        id: ThreadId.make("thread-burst-1"),
+        title: "Second",
+        updatedAt: "2026-06-06T00:00:02.000Z",
+      };
+      const thirdThread = {
+        ...stubThread,
+        id: ThreadId.make("thread-burst-1"),
+        title: "Third",
+        updatedAt: "2026-06-06T00:00:03.000Z",
+      };
+
+      yield* Queue.offer(events, [
+        {
+          kind: "thread-upserted" as const,
+          sequence: LIVE_SHELL_SNAPSHOT.snapshotSequence + 1,
+          thread: firstThread,
+        },
+        {
+          kind: "thread-upserted" as const,
+          sequence: LIVE_SHELL_SNAPSHOT.snapshotSequence + 2,
+          thread: secondThread,
+        },
+        {
+          kind: "thread-upserted" as const,
+          sequence: LIVE_SHELL_SNAPSHOT.snapshotSequence + 3,
+          thread: thirdThread,
+        },
+      ]);
+
+      const published = yield* Queue.take(observed).pipe(
+        Effect.repeat({
+          until: (snapshot) =>
+            Option.isSome(snapshot) &&
+            snapshot.value.threads[0]?.title === "Third" &&
+            snapshot.value.snapshotSequence === LIVE_SHELL_SNAPSHOT.snapshotSequence + 3,
+        }),
+      );
+
+      expect(Option.getOrThrow(published).threads[0]?.title).toBe("Third");
+
+      // No intermediate titles were published from the same transport chunk.
+      expect(yield* Queue.size(observed)).toBe(0);
     }),
   );
 });

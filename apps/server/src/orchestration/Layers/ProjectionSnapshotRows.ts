@@ -77,6 +77,9 @@ export const decodeThread = Schema.decodeUnknownEffect(OrchestrationThread);
 // payload_json set before the projector can enforce that invariant.
 export const THREAD_DETAIL_ACTIVITY_LIMIT = 500;
 
+/** Unwindowed thread-detail reads keep the newest projector-sized message window. */
+export const THREAD_DETAIL_MESSAGE_LIMIT = 2_000;
+
 // Snapshot payloads are decoded and projected in small sequential batches so
 // one client read does not retain the raw payloads for the full activity window.
 export const THREAD_DETAIL_ACTIVITY_PAYLOAD_BATCH_SIZE = 25;

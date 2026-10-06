@@ -29,6 +29,14 @@ function isToolUpdated(event: OrchestrationEvent): boolean {
   );
 }
 
+function isStreamingMessageDelta(event: OrchestrationEvent): boolean {
+  return event.type === "thread.message-sent" && event.payload.streaming === true;
+}
+
+function shouldHoldForCoalesce(event: OrchestrationEvent): boolean {
+  return isToolUpdated(event) || isStreamingMessageDelta(event);
+}
+
 function asTrimmedString<Value>(value: Value): string | null {
   if (!Predicate.isString(value)) {
     return null;
@@ -110,6 +118,60 @@ export function coalesceLiveToolUpdatedEvents(
   return survivors;
 }
 
+/**
+ * Merge streaming `thread.message-sent` deltas for the same message id by
+ * concatenating append-style text chunks. Keeps the latest sequence / event
+ * identity so resume cursors stay correct while cutting token-stream wire
+ * chatter inside a coalesce window.
+ */
+export function coalesceLiveStreamingMessageEvents(
+  events: ReadonlyArray<OrchestrationEvent>,
+): ReadonlyArray<OrchestrationEvent> {
+  const survivors: Array<OrchestrationEvent> = [];
+  const pendingIndexByMessageId = new Map<string, number>();
+
+  for (const event of events) {
+    if (!isStreamingMessageDelta(event) || event.type !== "thread.message-sent") {
+      survivors.push(event);
+      continue;
+    }
+
+    const messageId = String(event.payload.messageId);
+    const existingIndex = pendingIndexByMessageId.get(messageId);
+
+    if (existingIndex === undefined) {
+      pendingIndexByMessageId.set(messageId, survivors.length);
+      survivors.push(event);
+      continue;
+    }
+
+    const existing = survivors[existingIndex];
+
+    if (existing === undefined || existing.type !== "thread.message-sent") {
+      pendingIndexByMessageId.set(messageId, survivors.length);
+      survivors.push(event);
+      continue;
+    }
+
+    survivors[existingIndex] = {
+      ...event,
+      payload: {
+        ...event.payload,
+        text: `${existing.payload.text}${event.payload.text}`,
+        createdAt: existing.payload.createdAt,
+      },
+    };
+  }
+
+  return survivors;
+}
+
+function coalesceLiveEvents(
+  events: ReadonlyArray<OrchestrationEvent>,
+): ReadonlyArray<OrchestrationEvent> {
+  return coalesceLiveStreamingMessageEvents(coalesceLiveToolUpdatedEvents(events));
+}
+
 export const threadLiveEventCoalescer = Effect.fn("makeThreadLiveEventCoalescer")(
   function* (options?: {
     readonly coalesceWindow?: Duration.Input;
@@ -150,7 +212,7 @@ export const threadLiveEventCoalescer = Effect.fn("makeThreadLiveEventCoalescer"
 
       const items = yield* budget.replace(
         pendingUpdates,
-        coalesceLiveToolUpdatedEvents(pendingUpdates.map((item) => item.value)).map((event) => ({
+        coalesceLiveEvents(pendingUpdates.map((item) => item.value)).map((event) => ({
           kind: "event" as const,
           event,
         })),
@@ -199,7 +261,7 @@ export const threadLiveEventCoalescer = Effect.fn("makeThreadLiveEventCoalescer"
                 );
               }
 
-              if (input.kind === "event" && isToolUpdated(input.event)) {
+              if (input.kind === "event" && shouldHoldForCoalesce(input.event)) {
                 if (pendingUpdates.length === 1) {
                   const generation = ++windowGeneration;
                   windowFiber = yield* Effect.forkIn(flushWindow(generation), coalescerScope);
@@ -216,8 +278,8 @@ export const threadLiveEventCoalescer = Effect.fn("makeThreadLiveEventCoalescer"
 
               yield* cancelWindow();
               windowGeneration += 1;
-              // A non-update event closes the run immediately. The coalescer keeps
-              // that boundary after the final update from the run.
+              // A non-hold event closes the run immediately. The coalescer keeps
+              // that boundary after the final held update from the run.
               yield* flushPending();
 
               if (input.kind === "synchronized") {
