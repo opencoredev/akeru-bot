@@ -62,7 +62,8 @@ export function layoutFlow(spec: FlowSpec) {
     (columns[rank.get(node.id) ?? 0] ??= []).push(node);
   }
 
-  const tallest = Math.max(...columns.map((column) => column?.length ?? 0));
+  // Ranks can skip a column (a cycle never reaches rank 0), so read holes as empty columns.
+  const tallest = Math.max(...Array.from(columns, (column) => column?.length ?? 0));
   const height = tallest * NODE_HEIGHT + (tallest - 1) * ROW_GAP;
   const placed = new Map<string, PlacedNode>();
 

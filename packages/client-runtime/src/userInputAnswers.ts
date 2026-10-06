@@ -112,7 +112,11 @@ function answersFromResolved(
   return paired;
 }
 
-/** Walks the answer lines in question order. A multi-select question takes every line that names one of its options. */
+/**
+ * Reads one answer line per question. Several multi-select picks or a typed answer that spans
+ * lines cannot be told apart in plain text, so any other line count returns null and the message
+ * stays plain until the provider's confirmed answers arrive.
+ */
 function answersFromText(
   questions: ReadonlyArray<UserInputQuestion>,
   text: string,
@@ -122,27 +126,7 @@ function answersFromText(
     .map((line) => line.trim())
     .filter(Boolean);
 
-  const paired: AnsweredUserInputQuestion[] = [];
-  let cursor = 0;
+  if (lines.length !== questions.length) return null;
 
-  for (const question of questions) {
-    const first = lines[cursor];
-
-    if (first === undefined) return null;
-    const answers = [first];
-    cursor += 1;
-
-    const labels = new Set(question.options.map((option) => option.label));
-
-    if (question.multiSelect && labels.has(first)) {
-      while (cursor < lines.length && labels.has(lines[cursor] ?? "")) {
-        answers.push(lines[cursor] ?? "");
-        cursor += 1;
-      }
-    }
-
-    paired.push({ question, answers });
-  }
-
-  return cursor === lines.length ? paired : null;
+  return questions.map((question, index) => ({ question, answers: [lines[index] ?? ""] }));
 }

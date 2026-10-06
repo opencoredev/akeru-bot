@@ -47,18 +47,37 @@ const requested = activity("user-input.requested", { requestId: "req-1", questio
 const messageId = "user-input:thread-1:req-1";
 
 describe("answeredUserInputForMessage", () => {
-  it("pairs answer lines with their questions, grouping multi-select picks", () => {
+  it("pairs one answer line per question", () => {
     const asked = deriveAskedUserInputs([requested]);
 
     const answered = answeredUserInputForMessage(
-      { id: messageId, text: "New developers\nChat blocks\nChannels" },
+      { id: messageId, text: "New developers\nChannels" },
       asked,
     );
 
     expect(answered?.map(({ question, answers }) => [question.id, answers])).toEqual([
       ["audience", ["New developers"]],
-      ["features", ["Chat blocks", "Channels"]],
+      ["features", ["Channels"]],
     ]);
+  });
+
+  it("waits for confirmed answers when lines could belong to more than one question", () => {
+    const asked = deriveAskedUserInputs([requested]);
+
+    // Two multi-select picks, or a typed first answer whose second line is an option label.
+    expect(
+      answeredUserInputForMessage(
+        { id: messageId, text: "New developers\nChat blocks\nChannels" },
+        asked,
+      ),
+    ).toBeNull();
+
+    expect(
+      answeredUserInputForMessage(
+        { id: messageId, text: "Designers\nChat blocks\nChannels" },
+        asked,
+      ),
+    ).toBeNull();
   });
 
   it("prefers the answers the provider confirmed", () => {

@@ -70,8 +70,14 @@ describe("generative blocks", () => {
 
     if (flow?.kind !== "flow") return;
 
-    const { placed } = layoutFlow(flow.spec);
+    const layout = layoutFlow(flow.spec);
 
-    expect(placed.size).toBe(3);
+    expect(layout.placed.size).toBe(3);
+    // A cycle never reaches rank 0; the empty column must not turn the layout into NaN.
+    expect(Number.isFinite(layout.height)).toBe(true);
+
+    for (const node of layout.placed.values()) {
+      expect(Number.isFinite(node.x) && Number.isFinite(node.y)).toBe(true);
+    }
   });
 });
