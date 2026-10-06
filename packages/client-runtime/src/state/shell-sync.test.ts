@@ -483,12 +483,14 @@ describe("environment shell synchronization", () => {
         title: "First",
         updatedAt: "2026-06-06T00:00:01.000Z",
       };
+
       const secondThread = {
         ...stubThread,
         id: ThreadId.make("thread-burst-1"),
         title: "Second",
         updatedAt: "2026-06-06T00:00:02.000Z",
       };
+
       const thirdThread = {
         ...stubThread,
         id: ThreadId.make("thread-burst-1"),

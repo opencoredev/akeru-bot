@@ -148,6 +148,7 @@ describe("ThreadLiveEventCoalescer", () => {
 
   it("concatenates streaming message deltas for the same message id", () => {
     const messageId = MessageId.make("message-stream");
+
     const events = [
       makeMessage(1, "Hello", { messageId, streaming: true, createdAt: "2026-01-01T00:00:01.000Z" }),
       makeMessage(2, ", ", {
