@@ -185,8 +185,8 @@ export const makeEnvironmentShellState = Effect.fn("EnvironmentShellState.make")
         continue;
       }
 
-      const base =
-        unpublishedSnapshot ?? Option.getOrNull((yield* SubscriptionRef.get(state)).snapshot);
+      const storedSnapshot = Option.getOrNull((yield* SubscriptionRef.get(state)).snapshot);
+      const base: OrchestrationShellSnapshot | null = unpublishedSnapshot ?? storedSnapshot;
 
       if (base === null) {
         continue;

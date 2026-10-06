@@ -90,6 +90,12 @@ export interface ProjectionThreadDetailQuery {
    * the activity query. Omit this option to preserve the full detail response.
    */
   readonly activityKinds?: ReadonlyArray<string>;
+  /**
+   * Prepend the oldest user message when it falls outside the recent
+   * message window. Title regeneration uses this so the original request
+   * stays visible without loading every historic row.
+   */
+  readonly pinOldestUserMessage?: boolean;
 }
 
 export interface ProjectionTurnStartMessage {

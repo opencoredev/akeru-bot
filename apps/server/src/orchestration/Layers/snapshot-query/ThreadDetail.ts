@@ -47,7 +47,7 @@ export function createThreadDetail({
   listPinnedThreadActivityRowsByThread,
   getActiveThreadRowById,
   listThreadMessageRowsByThread,
-  listRecentThreadMessageRowsByThread,
+  getOldestUserMessageRowByThread,
   listThreadMessageRowsByThreadWindow,
   listThreadProposedPlanRowsByThread,
   listCheckpointRowsByThread,
@@ -72,7 +72,7 @@ export function createThreadDetail({
   | "listPinnedThreadActivityRowsByThread"
   | "getActiveThreadRowById"
   | "listThreadMessageRowsByThread"
-  | "listRecentThreadMessageRowsByThread"
+  | "getOldestUserMessageRowByThread"
   | "listThreadMessageRowsByThreadWindow"
   | "listThreadProposedPlanRowsByThread"
   | "listCheckpointRowsByThread"
@@ -169,7 +169,6 @@ export function createThreadDetail({
     threadId: ThreadId,
     bounds: ThreadDetailBounds | undefined,
     activityRead: ThreadDetailActivityRead = { mode: "raw" },
-    messages: "all" | "recent" = "all",
   ) =>
     Effect.gen(function* () {
       const activitiesEffect =
@@ -241,9 +240,7 @@ export function createThreadDetail({
           ),
         ),
         (bounds === undefined
-          ? (messages === "recent"
-              ? listRecentThreadMessageRowsByThread
-              : listThreadMessageRowsByThread)({ threadId })
+          ? listThreadMessageRowsByThread({ threadId })
           : listThreadMessageRowsByThreadWindow({ threadId, ...bounds })
         ).pipe(
           Effect.mapError(
@@ -292,6 +289,28 @@ export function createThreadDetail({
         return Option.none<OrchestrationThread>();
       }
 
+      const shouldPinOldestUser =
+        bounds === undefined &&
+        activityRead.mode === "raw" &&
+        activityRead.query?.pinOldestUserMessage === true;
+
+      const pinnedOldestUserRow = shouldPinOldestUser
+        ? yield* getOldestUserMessageRowByThread({ threadId }).pipe(
+            Effect.mapError(
+              toPersistenceSqlOrDecodeError(
+                "ProjectionSnapshotQuery.getThreadDetailById:getOldestUserMessage:query",
+                "ProjectionSnapshotQuery.getThreadDetailById:getOldestUserMessage:decodeRow",
+              ),
+            ),
+          )
+        : Option.none();
+
+      const resolvedMessageRows =
+        Option.isSome(pinnedOldestUserRow) &&
+        !messageRows.some((row) => row.messageId === pinnedOldestUserRow.value.messageId)
+          ? [pinnedOldestUserRow.value, ...messageRows]
+          : messageRows;
+
       const thread = {
         id: threadRow.value.threadId,
         projectId: threadRow.value.projectId,
@@ -322,7 +341,7 @@ export function createThreadDetail({
         pinOrderKey: threadRow.value.pinOrderKey ?? null,
         titleRegeneration: mapTitleRegeneration(threadRow.value),
         deletedAt: null,
-        messages: messageRows.map(mapThreadMessageRow),
+        messages: resolvedMessageRows.map(mapThreadMessageRow),
         proposedPlans: proposedPlanRows.map(mapProposedPlanRow),
         activities,
         checkpoints: checkpointRows.map((row) => ({
@@ -378,12 +397,9 @@ export function createThreadDetail({
       .withTransaction(
         Effect.gen(function* () {
           if (window?.turnLimit === undefined) {
-            const thread = yield* getThreadDetailByIdBounded(
-              threadId,
-              undefined,
-              { mode: "client" },
-              "recent",
-            );
+            const thread = yield* getThreadDetailByIdBounded(threadId, undefined, {
+              mode: "client",
+            });
 
             if (Option.isNone(thread)) {
               return Option.none<OrchestrationThreadDetailSnapshot>();

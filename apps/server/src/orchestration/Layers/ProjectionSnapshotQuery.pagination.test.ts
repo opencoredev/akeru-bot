@@ -669,15 +669,27 @@ projectionSnapshotLayer("ProjectionSnapshotQuery windowed thread detail", (it) =
 
       const threadId = ThreadId.make("thread-cap");
       const serverDetail = yield* snapshotQuery.getThreadDetailById(threadId);
+
+      const pinnedDetail = yield* snapshotQuery.getThreadDetailById(threadId, {
+        pinOldestUserMessage: true,
+      });
+
       const clientSnapshot = yield* snapshotQuery.getThreadDetailSnapshot(threadId);
 
       assert.equal(serverDetail._tag, "Some");
+      assert.equal(pinnedDetail._tag, "Some");
       assert.equal(clientSnapshot._tag, "Some");
 
-      if (Predicate.isTagged(serverDetail, "Some") && Predicate.isTagged(clientSnapshot, "Some")) {
-        assert.equal(serverDetail.value.messages.length, overflow);
-        assert.equal(serverDetail.value.messages[0]?.id, "msg-0001");
-        assert.equal(serverDetail.value.messages[0]?.text, "original request");
+      if (
+        Predicate.isTagged(serverDetail, "Some") &&
+        Predicate.isTagged(pinnedDetail, "Some") &&
+        Predicate.isTagged(clientSnapshot, "Some")
+      ) {
+        assert.equal(serverDetail.value.messages.length, THREAD_DETAIL_MESSAGE_LIMIT);
+        assert.equal(serverDetail.value.messages[0]?.id, "msg-0003");
+        assert.equal(pinnedDetail.value.messages[0]?.id, "msg-0001");
+        assert.equal(pinnedDetail.value.messages[0]?.text, "original request");
+        assert.equal(pinnedDetail.value.messages.length, THREAD_DETAIL_MESSAGE_LIMIT + 1);
         assert.equal(clientSnapshot.value.thread.messages.length, THREAD_DETAIL_MESSAGE_LIMIT);
         assert.equal(clientSnapshot.value.thread.messages[0]?.id, "msg-0003");
         assert.equal(clientSnapshot.value.page, undefined);

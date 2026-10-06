@@ -400,19 +400,14 @@ describe("environment shell synchronization", () => {
 
   it.effect("publishes a burst of shell events delivered together as one state change", () =>
     Effect.gen(function* () {
-      type ShellInput =
-        | OrchestrationShellStreamItem
-        | readonly [OrchestrationShellStreamItem, ...OrchestrationShellStreamItem[]];
+      type ShellBatch = readonly [OrchestrationShellStreamItem, ...OrchestrationShellStreamItem[]];
 
-      const events = yield* Queue.unbounded<ShellInput>();
+      const events = yield* Queue.unbounded<ShellBatch>();
       const observed = yield* Queue.unbounded<Option.Option<OrchestrationShellSnapshot>>();
 
       const client = testRpcClient({
         [ORCHESTRATION_WS_METHODS.subscribeShell]: () =>
-          Stream.fromQueue(events).pipe(
-            Stream.map((input) => (Array.isArray(input) ? input : [input])),
-            Stream.flattenArray,
-          ),
+          Stream.fromQueue(events).pipe(Stream.flattenArray),
       });
 
       const supervisorState = yield* SubscriptionRef.make(AVAILABLE_CONNECTION_STATE);
@@ -459,11 +454,13 @@ describe("environment shell synchronization", () => {
         Effect.forkScoped,
       );
 
-      yield* Queue.offer(events, {
-        kind: "snapshot",
-        snapshot: LIVE_SHELL_SNAPSHOT,
-      });
-      yield* Queue.offer(events, { kind: "synchronized" });
+      yield* Queue.offer(events, [
+        {
+          kind: "snapshot",
+          snapshot: LIVE_SHELL_SNAPSHOT,
+        },
+      ]);
+      yield* Queue.offer(events, [{ kind: "synchronized" }]);
       yield* SubscriptionRef.changes(shellState).pipe(
         Stream.filter((state) => state.status === "live"),
         Stream.runHead,
