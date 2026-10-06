@@ -23,6 +23,7 @@
 - [Mobile appearance](./user/mobile-appearance.md)
 - [App language](./user/language.md)
 - [Remote access](./user/remote-access.md)
+- [Akeru Cloud](./user/akeru-cloud.md)
 - [Keeping app and server in sync](./user/updating.md)
 - [Background service](./user/background-service.md)
 
@@ -50,12 +51,14 @@ policy in [CONTRIBUTING.md](../CONTRIBUTING.md); agent rules in [AGENTS.md](../A
 - [External channels](./internals/channels.md)
 - [Plugin lifecycle verification](./internals/plugin-lifecycle-verification.md)
 - [Remote environments](./internals/remote.md)
+- [Akeru Cloud: environment side](./internals/cloud-environment.md)
 - [Server updates](./internals/server-updates.md)
 - [Resource telemetry](./internals/resource-telemetry.md)
 - [Observability instrumentation](./internals/observability.md)
 - [Font preview renderer](./internals/font-preview-renderer.md)
 - [Usage analytics](./internals/usage-analytics.md)
 - [Environment auth](./internals/environment-auth.md)
+- [Akeru Cloud](./internals/cloud.md)
 - [CI gates](./internals/ci.md)
 - [Engineering work artifacts](./internals/work-artifacts.md)
 

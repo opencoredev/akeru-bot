@@ -2,7 +2,7 @@
 
 Akeru Bot is an independent fork of [T3 Code](https://t3.codes). It is a desktop app for named teammate bots, with web and mobile clients that connect to the same environment server.
 
-Akeru Bot is local-first software. It has no hosted account and does not provide model access. Users connect an existing ChatGPT, Claude, Grok, or Kimi For Coding subscription. Five provider drivers ship built in: Codex, Claude, Grok, Kimi For Coding, and OpenCode.
+Akeru Bot is local-first software. An optional Akeru Cloud account adds hosted services such as Slack setup, and the app works fully without it. Akeru Bot does not provide model access. Users connect an existing ChatGPT, Claude, Grok, or Kimi For Coding subscription. Five provider drivers ship built in: Codex, Claude, Grok, Kimi For Coding, and OpenCode.
 
 Conversations, bot profiles, settings, secrets, and logs live under `~/.akeru`. Worktree state lives under `.akeru`. Akeru Bot never shares T3 Code's `~/.t3` database or desktop profile.
 
