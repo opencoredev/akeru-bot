@@ -1,4 +1,9 @@
 export const WS_METHODS = {
+  cloudGetStatus: "cloud.getStatus",
+  cloudLinkStart: "cloud.link.start",
+  cloudLinkCancel: "cloud.link.cancel",
+  cloudUnlink: "cloud.unlink",
+  subscribeCloudStatus: "subscribeCloudStatus",
   // Project registry methods
   projectsList: "projects.list",
   projectsListEntries: "projects.listEntries",

@@ -1,3 +1,5 @@
+import * as Schema from "effect/Schema";
+import { ServerSettingsRpcPatch } from "./settings.ts";
 import { describe, expect, it } from "vite-plus/test";
 import { ProviderInstanceId } from "./providerInstance.ts";
 import {
@@ -7,6 +9,8 @@ import {
   decodeServerSettingsPatch,
   encodeServerSettings,
 } from "./settings.test-support.ts";
+
+const decodeServerSettingsRpcPatch = Schema.decodeUnknownSync(ServerSettingsRpcPatch);
 
 describe("ServerSettings voice", () => {
   it("defaults to enabled ChatGPT voice calls with Alloy", () => {
@@ -211,5 +215,28 @@ describe("ServerSettingsPatch string normalization", () => {
     expect(encoded.addProjectBaseDirectory).toBe("~/Development");
     expect(encoded.providers?.codex?.binaryPath).toBe("/opt/homebrew/bin/codex");
     expect(encoded.providers?.codex?.launchArgs).toBe("--strict-config");
+  });
+});
+
+describe("ServerSettings Akeru Cloud URL", () => {
+  it("defaults to the hosted cloud and accepts HTTPS or loopback HTTP origins", () => {
+    expect(decodeServerSettings({}).akeruCloudUrl).toBe(
+      "https://akeru-cloud.leoisadev.workers.dev",
+    );
+    expect(decodeServerSettingsPatch({ akeruCloudUrl: "http://127.0.0.1:8787" })).toEqual({
+      akeruCloudUrl: "http://127.0.0.1:8787",
+    });
+    expect(() =>
+      decodeServerSettingsPatch({ akeruCloudUrl: "http://cloud.example.test" }),
+    ).toThrow();
+    expect(() =>
+      decodeServerSettingsPatch({ akeruCloudUrl: "https://cloud.example.test/path" }),
+    ).toThrow();
+  });
+
+  it("cannot be changed by clients over RPC", () => {
+    expect(decodeServerSettingsRpcPatch({ akeruCloudUrl: "https://cloud.example.test" })).toEqual(
+      {},
+    );
   });
 });

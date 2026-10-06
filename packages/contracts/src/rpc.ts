@@ -122,7 +122,28 @@ import {
   WsOrchestrationSubscribeThreadRpc,
 } from "./rpc/orchestration.ts";
 
+import {
+  WsCloudGetStatusRpc,
+  WsCloudLinkStartRpc,
+  WsCloudLinkCancelRpc,
+  WsCloudUnlinkRpc,
+  WsSubscribeCloudStatusRpc,
+} from "./rpc/cloud.ts";
+
+export {
+  WsCloudGetStatusRpc,
+  WsCloudLinkStartRpc,
+  WsCloudLinkCancelRpc,
+  WsCloudUnlinkRpc,
+  WsSubscribeCloudStatusRpc,
+} from "./rpc/cloud.ts";
+
 export const WsRpcGroup = RpcGroup.make(
+  WsCloudGetStatusRpc,
+  WsCloudLinkStartRpc,
+  WsCloudLinkCancelRpc,
+  WsCloudUnlinkRpc,
+  WsSubscribeCloudStatusRpc,
   WsServerProbeRpc,
   WsServerGetConfigRpc,
   WsServerRefreshProvidersRpc,

@@ -93,6 +93,8 @@ export {
   providerInstanceConfigEnabledFlag,
 } from "./settings/providers.ts";
 
+export { AkeruCloudUrl } from "./cloud.ts";
+
 export {
   defaultEnabledForDriver,
   resolveProviderInstanceEnabled,
