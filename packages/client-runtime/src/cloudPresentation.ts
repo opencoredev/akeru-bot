@@ -14,6 +14,10 @@ export const CLOUD_COPY = {
   account: "Account",
   connection: "Connection",
   hostedServices: "Hosted services",
+  forget: "Forget this link",
+  forgetConfirmTitle: "Forget this link locally?",
+  forgetConfirmBody:
+    "This removes credentials from this environment and stops reconnecting. Akeru Cloud may still list this environment until you revoke it there.",
   disconnect: "Disconnect",
   disconnectConfirmTitle: "Disconnect Akeru Cloud?",
   disconnectConfirmBody:

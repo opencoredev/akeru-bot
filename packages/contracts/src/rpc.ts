@@ -127,6 +127,7 @@ import {
   WsCloudLinkStartRpc,
   WsCloudLinkCancelRpc,
   WsCloudUnlinkRpc,
+  WsCloudForgetRpc,
   WsSubscribeCloudStatusRpc,
 } from "./rpc/cloud.ts";
 
@@ -135,6 +136,7 @@ export {
   WsCloudLinkStartRpc,
   WsCloudLinkCancelRpc,
   WsCloudUnlinkRpc,
+  WsCloudForgetRpc,
   WsSubscribeCloudStatusRpc,
 } from "./rpc/cloud.ts";
 
@@ -143,6 +145,7 @@ export const WsRpcGroup = RpcGroup.make(
   WsCloudLinkStartRpc,
   WsCloudLinkCancelRpc,
   WsCloudUnlinkRpc,
+  WsCloudForgetRpc,
   WsSubscribeCloudStatusRpc,
   WsServerProbeRpc,
   WsServerGetConfigRpc,

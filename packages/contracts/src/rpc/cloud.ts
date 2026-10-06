@@ -28,6 +28,12 @@ export const WsCloudUnlinkRpc = Rpc.make(WS_METHODS.cloudUnlink, {
   error: Schema.Union([CloudLinkError, EnvironmentAuthorizationError]),
 });
 
+export const WsCloudForgetRpc = Rpc.make(WS_METHODS.cloudForget, {
+  payload: Schema.Struct({}),
+  success: CloudLinkStatus,
+  error: Schema.Union([CloudLinkError, EnvironmentAuthorizationError]),
+});
+
 export const WsSubscribeCloudStatusRpc = Rpc.make(WS_METHODS.subscribeCloudStatus, {
   payload: Schema.Struct({}),
   success: CloudLinkStatus,

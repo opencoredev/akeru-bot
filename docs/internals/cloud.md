@@ -38,7 +38,7 @@ Browser sign-in uses Clerk. The SPA sends the Clerk session token as a bearer to
 
 1. The environment calls `/v1/link/start` with its name and version. The cloud returns a device code (32 random bytes), a user code such as `KQ7M-3XHD`, a verification URL `<cloud>/link?code=KQ7M-3XHD`, a ten-minute expiry, and a three-second poll interval.
 2. The user opens the URL, signs in, and approves or denies.
-3. The environment polls. After approval the cloud creates the environment row and returns its id and token. Domain-separated hashes of the secret device code determine the id and token, so retries return the same result until the ten-minute expiry. The stored device-code hash cannot recover the token. The code stays available after an insert failure or lost response; revoked links return `denied`. Anonymous starts are capped at 1,000 outstanding codes in one conditional insert.
+3. Approval generates an independent random environment id and token. D1 stores the token hash for authentication and an AES-GCM encrypted handoff using a domain-separated key derived from the Worker's Clerk secret. The environment polls to create the environment row and receive its credential. Lost responses can be retried for 30 seconds after the first successful poll, bounded by the code's ten-minute expiry. An authenticated socket hello confirms receipt and clears the ciphertext immediately. Later polls clear the ciphertext and return `expired`; starts and maintenance also clear expired handoffs. Revoked links return `denied`. Starts allow five outstanding codes and ten attempts per minute per `CF-Connecting-IP`, stored as a hash, with a 10,000-code global safety ceiling.
 4. The environment stores the token in its secret store and connects to `/v1/environments/connect`. The Worker hashes the token, checks it in D1, and hands the upgrade to that environment's hub. Unknown tokens get `401`. A revoked environment or disabled account gets `410`. The environment forgets its token on either.
 
 The Node socket transport reads the refused upgrade response directly through `unexpected-response`. It reports `401` or `410` to the connection service without sending a second request. Plain authenticated `GET` requests remain available for diagnostics and return `426` for a valid token.
@@ -85,7 +85,7 @@ The callback checks the environment and account in D1, then checks that the hub 
 
 ## What the cloud stores
 
-Stored: Clerk user id and email, environment names and versions, SHA-256 hashes of environment tokens, device codes, and OAuth state, route metadata (label, provider, Slack app id, workspace id and name), timestamps, and daily delivered and dropped counts per route.
+Stored: bounded encrypted link-token handoffs, Clerk user id and email, environment names and versions, SHA-256 hashes of environment tokens, device codes, and OAuth state, route metadata (label, provider, Slack app id, workspace id and name), timestamps, and daily delivered and dropped counts per route.
 
 Never stored in plaintext: message content, request bodies, Slack tokens, per-bot client secrets, environment tokens, or raw codes. OAuth completion ciphertext may temporarily hold a manager token or install code until delivery or expiry. Its decryption key is derived from the raw callback state and is never stored. Missed-event records in hub storage hold only a count, provider, and first timestamp.
 
@@ -173,3 +173,7 @@ To pause hosted channels, set the `KILL_SWITCH` variable (or the value in `~/.co
 ## Tests
 
 `vp test run` in `apps/cloud`, or `vp test run apps/cloud` from the repository root, covers the link flow, the connect endpoint's status codes, CSRF rules, route cap, Slack URL verification and relayed retries, the inbound body cap, byte-exact inbound forwarding and offline counting, OAuth state handling, the hub's socket protocol, and the admin gate. D1 is replaced by in-memory SQLite with the real migrations. The hub test replaces `cloudflare:workers` with the stub in `apps/cloud/test` through `vi.mock`, so no config alias is needed. `scripts/stageEnv.test.ts` covers how the deploy wrapper layers configuration files.
+
+Heartbeats reuse a successful account and revocation check for at most 60 seconds. Route and OAuth commands check D1 freshly. Each socket allows a burst of 30 messages, replenishing one message per second; excess messages close the socket before database access.
+
+The owner-only `cloud.forget` RPC removes local credentials and stops reconnecting without contacting the cloud. It does not revoke the remote environment. Settings exposes it separately from confirmed Disconnect.

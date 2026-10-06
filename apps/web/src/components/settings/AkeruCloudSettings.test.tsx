@@ -20,7 +20,12 @@ vi.mock("../../state/query", () => ({
 vi.mock("../../state/server", () => ({ serverEnvironment: { cloudStatus: () => null } }));
 
 vi.mock("./useCloudLinkCommands", () => ({
-  useCloudLinkCommands: () => ({ connect: vi.fn(), cancel: vi.fn(), disconnect: vi.fn() }),
+  useCloudLinkCommands: () => ({
+    connect: vi.fn(),
+    cancel: vi.fn(),
+    disconnect: vi.fn(),
+    forget: vi.fn(),
+  }),
 }));
 
 vi.mock("@tanstack/react-router", async (importOriginal) => ({
@@ -71,6 +76,8 @@ describe("Akeru Cloud settings", () => {
     expect(markup).toContain("leo@example.test");
     expect(markup).toContain("Offline");
     expect(markup).toContain("Disconnect");
+    expect(markup).toContain("Forget this link");
+    expect(markup).toContain("until you revoke it there");
   });
 
   it("offers relinking after revocation and displays status query failures", () => {

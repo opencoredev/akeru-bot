@@ -80,6 +80,21 @@ const render = () =>
   });
 
 describe("mobile cloud action errors", () => {
+  it("offers explicit local forgetting with a cloud revocation warning", async () => {
+    state.alert.mockClear();
+    state.command.mockClear();
+    state.linked = true;
+    state.linking = false;
+    state.command.mockResolvedValue({ _tag: "Success", value: { status: "unlinked" } });
+    const action = findAction(render(), "Forget this link");
+    expect(action).toBeDefined();
+    action?.();
+    expect(state.command).not.toHaveBeenCalled();
+    expect(state.alert.mock.calls[0]?.[1]).toContain("until you revoke it there");
+    state.alert.mock.calls[0]?.[2][1].onPress();
+    await state.command.mock.results[0]?.value;
+    expect(state.command).toHaveBeenCalledWith({ environmentId: "env_1", input: {} });
+  });
   it.each([false, true])("reports failed cloud actions (linked=%s)", async (linked) => {
     state.alert.mockClear();
     state.command.mockClear();

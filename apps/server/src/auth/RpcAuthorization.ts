@@ -41,6 +41,7 @@ export const RPC_REQUIRED_SCOPES = {
   // Linking attaches this environment to an outside account, so only admin sessions may change it.
   [WS_METHODS.cloudLinkStart]: AuthAccessWriteScope,
   [WS_METHODS.cloudLinkCancel]: AuthAccessWriteScope,
+  [WS_METHODS.cloudForget]: AuthAccessWriteScope,
   [WS_METHODS.cloudUnlink]: AuthAccessWriteScope,
   [WS_METHODS.composioGetStatus]: AuthOrchestrationReadScope,
   [WS_METHODS.composioConfigure]: AuthOrchestrationOperateScope,

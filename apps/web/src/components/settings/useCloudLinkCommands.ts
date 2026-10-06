@@ -15,6 +15,7 @@ import { toastManager } from "../ui/toast";
 export function useCloudLinkCommands(environmentId: EnvironmentId | null) {
   const startLink = useAtomCommand(serverEnvironment.startCloudLink, { reportFailure: false });
   const cancelLink = useAtomCommand(serverEnvironment.cancelCloudLink, { reportFailure: false });
+  const forget = useAtomCommand(serverEnvironment.forgetCloud, { reportFailure: false });
   const unlink = useAtomCommand(serverEnvironment.unlinkCloud, { reportFailure: false });
 
   const report = (title: string, result: Awaited<ReturnType<typeof startLink>>) => {
@@ -28,6 +29,19 @@ export function useCloudLinkCommands(environmentId: EnvironmentId | null) {
   };
 
   return {
+    forget: async () => {
+      if (environmentId === null) return false;
+
+      const confirmed = await ensureLocalApi().dialogs.confirm(
+        `${CLOUD_COPY.forgetConfirmTitle}\n\n${CLOUD_COPY.forgetConfirmBody}`,
+        { variant: "destructive" },
+      );
+
+      if (!confirmed) return false;
+      report("Could not forget Akeru Cloud", await forget({ environmentId, input: {} }));
+
+      return true;
+    },
     connect: async () => {
       if (environmentId === null) return;
       report("Could not connect Akeru Cloud", await startLink({ environmentId, input: {} }));
@@ -36,7 +50,7 @@ export function useCloudLinkCommands(environmentId: EnvironmentId | null) {
       if (environmentId === null) return;
       report("Could not cancel", await cancelLink({ environmentId, input: {} }));
     },
-    /** Asks first, then forgets the link. Returns false when the user backs out. */
+    /** Asks first, then revokes the cloud link. Returns false when the user backs out. */
     disconnect: async () => {
       if (environmentId === null) return false;
 

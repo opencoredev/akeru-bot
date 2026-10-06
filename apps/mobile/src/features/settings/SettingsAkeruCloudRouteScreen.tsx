@@ -85,6 +85,7 @@ export function SettingsAkeruCloudRouteScreen({
   const view = cloudViewModel(status.data);
   const startLink = useAtomCommand(serverEnvironment.startCloudLink);
   const cancelLink = useAtomCommand(serverEnvironment.cancelCloudLink);
+  const forget = useAtomCommand(serverEnvironment.forgetCloud);
   const unlink = useAtomCommand(serverEnvironment.unlinkCloud);
   const [pending, setPending] = useState(false);
 
@@ -112,6 +113,16 @@ export function SettingsAkeruCloudRouteScreen({
       </View>
     );
   }
+
+  const confirmForget = () =>
+    Alert.alert(CLOUD_COPY.forgetConfirmTitle, CLOUD_COPY.forgetConfirmBody, [
+      { text: CLOUD_COPY.cancel, style: "cancel" },
+      {
+        text: CLOUD_COPY.forget,
+        style: "destructive",
+        onPress: run(() => forget({ environmentId, input: {} })),
+      },
+    ]);
 
   const confirmDisconnect = () =>
     Alert.alert(CLOUD_COPY.disconnectConfirmTitle, CLOUD_COPY.disconnectConfirmBody, [
@@ -223,6 +234,13 @@ export function SettingsAkeruCloudRouteScreen({
                 </View>
               ))}
             </SettingsSection>
+            <Text className="text-sm text-foreground-muted">{CLOUD_COPY.forgetConfirmBody}</Text>
+            <ActionButton
+              label={CLOUD_COPY.forget}
+              tone="destructive"
+              disabled={pending}
+              onPress={confirmForget}
+            />
             <ActionButton
               label={CLOUD_COPY.disconnect}
               tone="destructive"

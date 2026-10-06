@@ -14,6 +14,7 @@ import * as Fiber from "effect/Fiber";
 import * as Queue from "effect/Queue";
 import * as TestClock from "effect/testing/TestClock";
 import * as HostedChannelRelay from "./HostedChannelRelay.ts";
+import { createWsCloudHandlers } from "../wsCloudHandlers.ts";
 import * as CloudAccount from "./CloudAccount.ts";
 import {
   TOKEN,
@@ -405,6 +406,28 @@ describe("CloudConnection", () => {
 });
 
 describe("CloudConnection handshake and unlink", () => {
+  it.effect("forgets an unreachable cloud through the explicit RPC and stops reconnecting", () =>
+    Effect.gen(function* () {
+      const cloud = yield* buildCloud({ linked: true });
+      const socket = yield* Queue.take(cloud.sockets);
+
+      const handlers = createWsCloudHandlers({
+        cloudAccount: cloud.account,
+        cloudConnection: cloud.connection,
+        observeRpcEffect: (_method, effect) => effect,
+        observeRpcStream: (_method, stream) => stream,
+      });
+
+      expect(handlers["cloud.forget"]).toBeDefined();
+      expect(yield* handlers["cloud.forget"]()).toEqual({ status: "unlinked" });
+      expect(cloud.secrets.size).toBe(0);
+      yield* TestClock.adjust("5 minutes");
+      expect(socket.closed).toBe(true);
+      expect(yield* Queue.size(cloud.sockets)).toBe(0);
+      expect(yield* Queue.size(socket.sent)).toBe(0);
+    }),
+  );
+
   for (const status of [401, 410]) {
     it.effect(`forgets the token when the cloud refuses the upgrade with ${status}`, () =>
       Effect.gen(function* () {

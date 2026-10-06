@@ -39,6 +39,6 @@ Slack events that arrive while the environment is offline are not delivered late
 
 Select **Disconnect** under **Settings > Akeru Cloud** and confirm, or run **Disconnect Akeru Cloud** from the command palette. After Akeru Cloud confirms revocation, the environment forgets its credential and closes the connection.
 
-If the cloud cannot confirm disconnection, Akeru keeps the link and shows an error. Reconnect and try again, or revoke the environment from your account page on Akeru Cloud.
+If the cloud cannot confirm disconnection, Akeru keeps the link and shows an error. Reconnect and try again, or choose **Forget this link** in Settings to remove local credentials and stop reconnecting. Akeru Cloud may still list the environment until you revoke it from your cloud account page.
 
 If you revoke an environment from the account page first, the environment forgets its credential and shows **This environment was disconnected from Akeru Cloud.** Select **Connect again** to link it again.

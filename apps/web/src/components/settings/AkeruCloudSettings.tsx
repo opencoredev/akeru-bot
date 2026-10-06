@@ -115,6 +115,19 @@ function AkeruCloudSettingsForEnvironment({
               }
             />
             <SettingsRow
+              title={CLOUD_COPY.forget}
+              description={CLOUD_COPY.forgetConfirmBody}
+              control={
+                <Button
+                  variant="destructive-outline"
+                  disabled={pending}
+                  onClick={run(commands.forget)}
+                >
+                  {CLOUD_COPY.forget}
+                </Button>
+              }
+            />
+            <SettingsRow
               title={CLOUD_COPY.connection}
               control={
                 <span className="flex items-center gap-2 text-sm text-muted-foreground">

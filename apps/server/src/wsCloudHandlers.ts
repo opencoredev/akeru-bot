@@ -20,6 +20,8 @@ export const createWsCloudHandlers = ({
     observeRpcEffect(WS_METHODS.cloudLinkCancel, cloudAccount.cancelLink, {
       "rpc.aggregate": "cloud",
     }),
+  [WS_METHODS.cloudForget]: () =>
+    observeRpcEffect(WS_METHODS.cloudForget, cloudAccount.unlink, { "rpc.aggregate": "cloud" }),
   [WS_METHODS.cloudUnlink]: () =>
     observeRpcEffect(WS_METHODS.cloudUnlink, cloudConnection.unlink, { "rpc.aggregate": "cloud" }),
   [WS_METHODS.subscribeCloudStatus]: () =>

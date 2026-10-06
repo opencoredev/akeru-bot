@@ -500,6 +500,10 @@ export function createServerEnvironmentAtoms<R, E>(
       label: "environment-data:server:cloud-link-cancel",
       tag: WS_METHODS.cloudLinkCancel,
     }),
+    forgetCloud: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:server:cloud-forget",
+      tag: WS_METHODS.cloudForget,
+    }),
     unlinkCloud: createEnvironmentRpcCommand(runtime, {
       label: "environment-data:server:cloud-unlink",
       tag: WS_METHODS.cloudUnlink,
