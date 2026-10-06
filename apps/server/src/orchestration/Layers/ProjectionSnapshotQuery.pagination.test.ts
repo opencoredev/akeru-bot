@@ -706,6 +706,7 @@ projectionSnapshotLayer("ProjectionSnapshotQuery windowed thread detail", (it) =
 
       if (list === undefined) {
         assert.fail("listThreadChannelConversationIds must be implemented");
+
         return;
       }
 
@@ -766,6 +767,7 @@ projectionSnapshotLayer("ProjectionSnapshotQuery windowed thread detail", (it) =
 
       const threadId = ThreadId.make("thread-cap");
       const serverDetail = yield* snapshotQuery.getThreadDetailById(threadId);
+
       const conversationIds = yield* list({
         threadId,
         provider: "slack",
