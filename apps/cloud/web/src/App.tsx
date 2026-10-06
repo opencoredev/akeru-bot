@@ -8,6 +8,7 @@ export function App() {
   const { isLoaded, isSignedIn, getToken } = useAuth();
   const path = window.location.pathname;
   // A first Google sign-in becomes a sign-up, so both flows must return to the page that asked.
+  // Sign-up stays inline: Clerk's hosted sign-up page would finish on the bare akeru-bot.com.
   const returnUrl = `${window.location.origin}${path}${window.location.search}`;
 
   if (!isLoaded) return null;
@@ -35,7 +36,12 @@ export function App() {
               ? "Sign in to link Akeru Bot to your account."
               : "Optional hosted services for Akeru Bot, such as Slack bots that work without your own tunnel."}
           </p>
-          <SignIn routing="hash" forceRedirectUrl={returnUrl} signUpForceRedirectUrl={returnUrl} />
+          <SignIn
+            routing="hash"
+            withSignUp
+            forceRedirectUrl={returnUrl}
+            signUpForceRedirectUrl={returnUrl}
+          />
         </main>
       )}
     </div>
