@@ -225,3 +225,22 @@ export function visibleBotChatMessages(
     return latestAssistantIndexByResponse.get(message.turnId ?? precedingUserId) === index;
   });
 }
+
+/**
+ * The assistant row that carries a turn's shared details (step meter, plugin
+ * results). Attachment posts stay visible beside the final answer, so callers
+ * look the turn up here instead of putting the same details on every row.
+ */
+export function lastAssistantMessageIdByTurn(
+  messages: ReadonlyArray<OrchestrationMessage>,
+): ReadonlyMap<NonNullable<OrchestrationMessage["turnId"]>, OrchestrationMessage["id"]> {
+  const ids = new Map<NonNullable<OrchestrationMessage["turnId"]>, OrchestrationMessage["id"]>();
+
+  for (const message of messages) {
+    if (message.role === "assistant" && message.turnId !== null) {
+      ids.set(message.turnId, message.id);
+    }
+  }
+
+  return ids;
+}

@@ -61,7 +61,9 @@ export function imageConsentDetail(toolInput: RuntimeEventArgs): string | undefi
   if (!decoded.ok) return undefined;
 
   const { request } = decoded;
-  const provider = request.allowProvider ?? request.provider;
+  // An explicit provider pins the route (imageRoutePlan honors it over the
+  // consent hint), so the card must name the pin when both fields disagree.
+  const provider = request.provider ?? request.allowProvider;
 
   if (!provider) return undefined;
 
