@@ -570,6 +570,13 @@ describe("CloudConnection", () => {
       expect(createMessage).toMatchObject({ kind: "channel.route.create", label: "Ada" });
       expect(removeMessage).toMatchObject({ kind: "channel.route.delete", routeId: ROUTE });
 
+      if (
+        createMessage.kind !== "channel.route.create" ||
+        removeMessage.kind !== "channel.route.delete"
+      ) {
+        throw new Error("Expected cloud route requests.");
+      }
+
       yield* receive(socket, {
         kind: "result",
         requestId: String(removeMessage.requestId),
@@ -645,6 +652,11 @@ describe("CloudConnection handshake and unlink", () => {
       const unlink = yield* cloud.connection.unlink.pipe(Effect.forkChild);
       const message = yield* nextSent(socket);
       expect(message).toMatchObject({ kind: "environment.unlink" });
+
+      if (message.kind !== "environment.unlink") {
+        throw new Error("Expected an environment unlink request.");
+      }
+
       expect(cloud.secrets.size).toBe(1);
       yield* receive(socket, {
         kind: "result",
