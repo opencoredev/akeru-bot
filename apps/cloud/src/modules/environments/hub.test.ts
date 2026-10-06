@@ -58,7 +58,10 @@ function stubUpgrade() {
   );
 }
 
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => {
+  vi.unstubAllGlobals();
+  vi.restoreAllMocks();
+});
 
 function makeHub() {
   const { db, query } = makeD1();
@@ -138,6 +141,53 @@ const inbound = {
   bodyBase64: "e30=",
   receivedAt: "2026-09-29T12:00:00.000Z",
 };
+
+describe("heartbeat database budget", () => {
+  it("clears encrypted link delivery when the environment confirms receipt with hello", async () => {
+    const { query, connect, send } = makeHub();
+    query(`INSERT INTO link_codes (device_code_hash, user_code, environment_name, server_version,
+      expires_at, created_at, environment_id, token_ciphertext)
+      VALUES ('hash', 'CODE', 'Mac', '1', '2026-09-29T12:10:00Z', '2026-09-29T12:00:00Z', 'env_1', 'cipher')`);
+    await send(connect(), hello);
+    expect(query("SELECT token_ciphertext FROM link_codes")).toEqual([{ token_ciphertext: null }]);
+  });
+  it("caches ping authorization for sixty seconds but checks privileged commands freshly", async () => {
+    const { hub, connect, send, env, query } = makeHub();
+    let now = 100_000;
+    vi.spyOn(Date, "now").mockImplementation(() => now);
+    const socket = connect();
+    await send(socket, hello);
+    const prepare = vi.spyOn(env.DB, "prepare");
+
+    for (let i = 0; i < 5; i++) await send(socket, { kind: "ping" });
+    expect(prepare).not.toHaveBeenCalled();
+    now += 60_000;
+    await send(socket, { kind: "ping" });
+    expect(prepare.mock.calls.filter(([sql]) => sql.includes("SELECT 1"))).toHaveLength(1);
+    query("UPDATE users SET disabled = 1");
+    await send(socket, {
+      kind: "channel.route.create",
+      requestId: "blocked",
+      provider: "slack",
+      label: "Bot",
+    });
+    expect(socket.closed?.code).toBe(4001);
+    expect(hub).toBeDefined();
+  });
+
+  it("closes a message flood before additional database work", async () => {
+    const { connect, send, env } = makeHub();
+    vi.spyOn(Date, "now").mockReturnValue(100_000);
+    const socket = connect();
+    await send(socket, hello);
+
+    for (let i = 0; i < 29; i++) await send(socket, { kind: "ping" });
+    const prepare = vi.spyOn(env.DB, "prepare");
+    await send(socket, hello);
+    expect(socket.closed?.code).toBe(1008);
+    expect(prepare).not.toHaveBeenCalled();
+  });
+});
 
 describe("EnvironmentHub", () => {
   it("welcomes an environment and records its version", async () => {

@@ -1,6 +1,8 @@
 import type { CloudWorkerEnv } from "./env.ts";
 
 export interface CloudConfig {
+  /** Secret used only for the bounded encrypted credential handoff. */
+  readonly linkDeliverySecret: string;
   /** Origin the cloud is reachable at, without a trailing slash. */
   readonly publicUrl: string;
   readonly clerkPublishableKey: string;
@@ -18,9 +20,11 @@ export function readConfig(
     | "SLACK_MANAGER_CLIENT_ID"
     | "SLACK_MANAGER_CLIENT_SECRET"
     | "KILL_SWITCH"
-  >,
+  > &
+    Partial<Pick<CloudWorkerEnv, "CLERK_SECRET_KEY">>,
 ): CloudConfig {
   return {
+    linkDeliverySecret: env.CLERK_SECRET_KEY ?? "",
     publicUrl: env.CLOUD_PUBLIC_URL.replace(/\/+$/, ""),
     clerkPublishableKey: env.CLERK_PUBLISHABLE_KEY,
     slackManager:

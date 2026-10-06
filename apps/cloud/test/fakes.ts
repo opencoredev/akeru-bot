@@ -114,6 +114,7 @@ export class FakeHub implements EnvironmentHubRpc {
 }
 
 export const testConfig: CloudConfig = {
+  linkDeliverySecret: "test-worker-secret",
   publicUrl: "https://cloud.akeru.test",
   clerkPublishableKey: "pk_test_123",
   slackManager: { clientId: "manager-client", clientSecret: "manager-secret" },

@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from "vite-plus/test";
 import { authHeader, makeDeps } from "../../../test/fakes.ts";
 import { createApp } from "../../app.ts";
 import { sha256Hex } from "../../lib/crypto.ts";
-import { LINK_CODE_TTL_MS } from "./index.ts";
+import { LINK_CODE_TTL_MS, LINK_DELIVERY_GRACE_MS } from "./index.ts";
 
 const app = createApp();
 
@@ -49,6 +49,57 @@ async function poll(harness: ReturnType<typeof makeDeps>, deviceCode: string) {
 }
 
 describe("device link", () => {
+  it("uses an independent token and expires the encrypted delivery after first-poll grace", async () => {
+    const harness = makeDeps();
+    const started = await startLink(harness);
+    await app.fetch(
+      post("/api/link/approve", { userCode: started.userCode }, authHeader("user_1")),
+      harness.deps,
+    );
+    const approved = await poll(harness, started.deviceCode);
+    expect(approved.status).toBe("approved");
+    expect(approved.environmentToken).not.toBe(
+      await sha256Hex(`environment-token:${started.deviceCode}`),
+    );
+    expect(JSON.stringify(harness.query("SELECT * FROM link_codes"))).not.toContain(
+      approved.environmentToken,
+    );
+    harness.advance(LINK_DELIVERY_GRACE_MS);
+    expect(await poll(harness, started.deviceCode)).toEqual({ status: "expired" });
+    expect(harness.query("SELECT token_ciphertext FROM link_codes")).toEqual([
+      { token_ciphertext: null },
+    ]);
+    expect(harness.query("SELECT * FROM environments")).toHaveLength(1);
+  });
+
+  it("isolates outstanding admission and start rates by caller", async () => {
+    const harness = makeDeps();
+
+    const start = (ip: string) =>
+      app.fetch(
+        post(
+          "/v1/link/start",
+          { environmentName: "Mac", serverVersion: "1" },
+          { "CF-Connecting-IP": ip },
+        ),
+        harness.deps,
+      );
+
+    for (let i = 0; i < 5; i++) expect((await start("192.0.2.1")).status).toBe(200);
+    expect((await start("192.0.2.1")).status).toBe(429);
+    expect((await start("192.0.2.2")).status).toBe(200);
+
+    for (let i = 0; i < 5; i++) {
+      harness.query("DELETE FROM link_codes");
+      expect((await start("192.0.2.1")).status).toBe(200);
+    }
+
+    harness.query("DELETE FROM link_codes");
+    expect((await start("192.0.2.1")).status).toBe(429);
+    expect((await start("192.0.2.2")).status).toBe(200);
+    harness.advance(60_000);
+    expect((await start("192.0.2.1")).status).toBe(200);
+  });
   it("starts a flow and stores only the device code hash", async () => {
     const harness = makeDeps();
     const started = await startLink(harness);
@@ -140,7 +191,7 @@ describe("device link", () => {
 
   it("caps anonymous outstanding codes and frees capacity after expiry", async () => {
     const harness = makeDeps();
-    harness.query(`WITH RECURSIVE codes(n) AS (SELECT 1 UNION ALL SELECT n+1 FROM codes WHERE n < 1000)
+    harness.query(`WITH RECURSIVE codes(n) AS (SELECT 1 UNION ALL SELECT n+1 FROM codes WHERE n < 10000)
       INSERT INTO link_codes (device_code_hash, user_code, environment_name, server_version, expires_at, created_at)
       SELECT 'hash-' || n, 'code-' || n, 'Mac', '1', '2026-09-29T12:10:00.000Z', '2026-09-29T12:00:00.000Z' FROM codes`);
 
@@ -150,7 +201,7 @@ describe("device link", () => {
     );
 
     expect(response.status).toBe(429);
-    expect(harness.query("SELECT * FROM link_codes")).toHaveLength(1000);
+    expect(harness.query("SELECT * FROM link_codes")).toHaveLength(10000);
     harness.advance(LINK_CODE_TTL_MS);
     expect(await startLink(harness)).toHaveProperty("deviceCode");
     expect(harness.query("SELECT * FROM link_codes")).toHaveLength(1);

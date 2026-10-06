@@ -112,6 +112,26 @@ export class EnvironmentHubRuntime implements EnvironmentHubRpc {
   }
   #buckets = new Map<string, { tokens: number; updatedAt: number }>();
   #lastSeenWrite = 0;
+  #messageBuckets = new WeakMap<HubSocket, { tokens: number; updatedAt: number }>();
+  #heartbeatChecks = new WeakMap<HubSocket, number>();
+
+  #admitMessage(socket: HubSocket) {
+    const now = Date.now();
+    const bucket = this.#messageBuckets.get(socket) ?? { tokens: 30, updatedAt: now };
+    bucket.tokens = Math.min(30, bucket.tokens + (now - bucket.updatedAt) / 1000);
+    bucket.updatedAt = now;
+    this.#messageBuckets.set(socket, bucket);
+
+    if (bucket.tokens < 1) {
+      socket.close(1008, "Message rate exceeded");
+
+      return false;
+    }
+
+    bucket.tokens -= 1;
+
+    return true;
+  }
 
   #services() {
     return {
@@ -174,6 +194,8 @@ export class EnvironmentHubRuntime implements EnvironmentHubRpc {
 
   async webSocketMessage(socket: HubSocket, data: string | ArrayBuffer): Promise<void> {
     if (socket.readyState !== WebSocket.OPEN || !Predicate.isString(data)) return;
+
+    if (!this.#admitMessage(socket)) return;
     let parsed: unknown;
 
     try {
@@ -205,11 +227,24 @@ export class EnvironmentHubRuntime implements EnvironmentHubRpc {
     const services = this.#services();
 
     if (message.kind !== "hello") {
-      const active = await services.db
-        .prepare(`SELECT 1 FROM environments e JOIN users u ON u.clerk_user_id = e.user_id
+      if (!owner.welcomed) {
+        socket.close(4002, "Send hello first");
+
+        return;
+      }
+
+      const checkedAt = this.#heartbeatChecks.get(socket);
+
+      const cachedPing =
+        message.kind === "ping" && checkedAt !== undefined && Date.now() - checkedAt < 60_000;
+
+      const active =
+        cachedPing ||
+        (await services.db
+          .prepare(`SELECT 1 FROM environments e JOIN users u ON u.clerk_user_id = e.user_id
         WHERE e.id = ? AND e.user_id = ? AND e.revoked_at IS NULL AND u.disabled = 0`)
-        .bind(owner.environmentId, owner.userId)
-        .first();
+          .bind(owner.environmentId, owner.userId)
+          .first());
 
       if (!active) {
         this.#send(socket, { kind: "revoked" });
@@ -218,11 +253,7 @@ export class EnvironmentHubRuntime implements EnvironmentHubRpc {
         return;
       }
 
-      if (!owner.welcomed) {
-        socket.close(4002, "Send hello first");
-
-        return;
-      }
+      if (!cachedPing) this.#heartbeatChecks.set(socket, Date.now());
     }
 
     switch (message.kind) {
@@ -253,6 +284,11 @@ export class EnvironmentHubRuntime implements EnvironmentHubRpc {
               owner.environmentId,
             )
             .run();
+          // An authenticated hello proves the environment received and persisted its token.
+          await services.db
+            .prepare("UPDATE link_codes SET token_ciphertext = NULL WHERE environment_id = ?")
+            .bind(owner.environmentId)
+            .run();
           this.#lastSeenWrite = Date.now();
           this.#send(socket, {
             kind: "welcome",
@@ -262,6 +298,7 @@ export class EnvironmentHubRuntime implements EnvironmentHubRpc {
             capabilities: [...CLOUD_CAPABILITIES],
           });
           socket.serializeAttachment({ ...owner, welcomed: true });
+          this.#heartbeatChecks.set(socket, Date.now());
           await this.#flushMissed(socket);
         });
       }
