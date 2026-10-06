@@ -216,6 +216,10 @@ export function visibleBotChatMessages(
 
     if (message.role !== "assistant" || message.streaming) return false;
 
+    // Attachment posts are artifacts, not intermediate text: a finished image
+    // stays visible even when another reply in the same turn follows it.
+    if ((message.attachments?.length ?? 0) > 0) return true;
+
     if (working && index > lastUserIndex) return false;
 
     return latestAssistantIndexByResponse.get(message.turnId ?? precedingUserId) === index;
