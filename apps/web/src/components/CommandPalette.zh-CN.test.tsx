@@ -1,3 +1,4 @@
+import { EnvironmentId, type CloudLinkStatus } from "@akeru/contracts";
 import { catalogRegistry } from "@akeru/client-runtime/i18n";
 import type { ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
@@ -5,6 +6,21 @@ import { describe, expect, it, vi } from "vite-plus/test";
 
 import { LanguageProvider } from "../i18n";
 import type { CommandPaletteGroup } from "./CommandPalette.logic";
+
+const cloud = vi.hoisted(() => ({ status: "unlinked" as CloudLinkStatus["status"] }));
+
+vi.mock("../state/environments", async (original) => ({
+  ...(await original<typeof import("../state/environments")>()),
+  usePrimaryEnvironmentId: () => EnvironmentId.make("env-test"),
+}));
+
+vi.mock("../state/query", () => ({
+  useEnvironmentQuery: () => ({ data: { status: cloud.status } }),
+}));
+
+vi.mock("./settings/useCloudLinkCommands", () => ({
+  useCloudLinkCommands: () => ({ connect: vi.fn(), cancel: vi.fn(), disconnect: vi.fn() }),
+}));
 
 vi.mock("@effect/atom-react", () => ({ useAtomValue: () => [] }));
 
@@ -54,7 +70,9 @@ import { CommandPalette } from "./CommandPalette";
 const zhCNCatalog = await catalogRegistry["zh-CN"]!();
 
 describe("command palette in Simplified Chinese", () => {
-  it("translates action titles and chrome", () => {
+  it.each(["unlinked", "linked"] as const)("translates action titles and chrome (%s)", (status) => {
+    cloud.status = status;
+
     const html = renderToStaticMarkup(
       <LanguageProvider testCatalog={{ locale: "zh-CN", catalog: zhCNCatalog }}>
         <CommandPalette>{null}</CommandPalette>
@@ -71,10 +89,13 @@ describe("command palette in Simplified Chinese", () => {
       zhCNCatalog["Send feedback"],
       zhCNCatalog["Open settings"],
       zhCNCatalog["Actions"],
+      status === "unlinked" ? "连接 Akeru Cloud" : "断开 Akeru Cloud",
     ]) {
       expect(html).toContain(text);
     }
 
     expect(html).not.toContain("Open plugins");
+    expect(html).not.toContain("Connect Akeru Cloud");
+    expect(html).not.toContain("Disconnect Akeru Cloud");
   });
 });

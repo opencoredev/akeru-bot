@@ -160,8 +160,8 @@ function OpenCommandPaletteDialog(props: { readonly setOpen: (open: boolean) => 
       ? [
           {
             value: "action:cloud-connect",
-            searchTerms: ["akeru cloud", "connect", "link", "hosted"],
-            title: "Connect Akeru Cloud",
+            searchTerms: [t("Connect Akeru Cloud"), "akeru cloud", "connect", "link", "hosted"],
+            title: t("Connect Akeru Cloud"),
             icon: <CloudIcon className={ITEM_ICON_CLASS} />,
             run: async () => {
               openSettings("akeru-cloud");
@@ -174,8 +174,8 @@ function OpenCommandPaletteDialog(props: { readonly setOpen: (open: boolean) => 
       ? [
           {
             value: "action:cloud-disconnect",
-            searchTerms: ["akeru cloud", "disconnect", "unlink"],
-            title: "Disconnect Akeru Cloud",
+            searchTerms: [t("Disconnect Akeru Cloud"), "akeru cloud", "disconnect", "unlink"],
+            title: t("Disconnect Akeru Cloud"),
             icon: <CloudIcon className={ITEM_ICON_CLASS} />,
             run: async () => {
               await cloudCommands.disconnect();
