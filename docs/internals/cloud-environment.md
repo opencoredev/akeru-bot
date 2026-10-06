@@ -12,7 +12,7 @@ The server code lives in `apps/server/src/cloud/`:
 | `CloudConnection`    | The outbound socket, reconnects, heartbeat, requests, and message routing. |
 | `HostedChannelRelay` | Routing `channel.inbound` requests to a channel runtime webhook.           |
 
-All three are built in `server.ts` as `CloudLayerLive`. While unlinked they hold state only and open no connections, so an environment that never links pays nothing.
+All three are built in `serverLayers.ts` as `CloudLayerLive`. While unlinked they hold state only and open no connections, so an environment that never links pays nothing.
 
 ## Link state and the credential
 
@@ -22,7 +22,7 @@ All three are built in `server.ts` as `CloudLayerLive`. While unlinked they hold
 
 `link`, `cancelLink`, `unlink`, and approval share one mutex. Approval saves the token and publishes `linked` as one uninterruptible step under it. A cancel that holds the mutex first stops the poller before anything is saved; a cancel that arrives during approval waits and returns `linked`. Either way the stored token and the status agree.
 
-The environment token, environment id, account email, and the origin of the cloud that issued the token are stored together as one JSON entry named `akeru-cloud-link` in `ServerSecretStore`. The token must never reach status, settings, orchestration events, logs, analytics, diagnostics, URLs, or client state. It goes only into the socket's `Authorization: Bearer` header. `revoked` is held in memory, so after a restart a revoked environment reads as `unlinked`.
+The environment token, environment id, account email, and the origin of the cloud that issued the token are stored together as one JSON entry named `akeru-cloud-link` in `ServerSecretStore`. The token must never reach status, settings, orchestration events, logs, analytics, diagnostics, URLs, or client state. It goes only into the socket's `Authorization: Bearer` header. Normally revocation removes the entry. If removal fails, the server overwrites it with a token-free revocation record, which restores `revoked` on restart. If both writes fail, the cloud still rejects the credential; the storage error is logged.
 
 ### The cloud origin
 
@@ -53,7 +53,7 @@ Inbound frames are decoded with `CloudServerMessage`. Undecodable frames are dro
 
 The Node socket transport reads a refused upgrade’s HTTP status directly and passes it to `onClose`. `401` (unknown token) and `410` (revoked environment or disabled account) from the stored origin are treated like `revoked`. Other statuses and connection failures reconnect with backoff.
 
-`CloudConnection.unlink` backs the `cloud.unlink` RPC. It sends `environment.unlink`, waits up to 5 seconds for the result, then forgets the token whether or not the cloud answered. Offline, the environment still unlinks locally and the account page can revoke it later.
+`CloudConnection.unlink` backs the `cloud.unlink` RPC. It sends `environment.unlink` and waits up to 5 seconds for confirmation before forgetting the token. An offline, timed-out, or rejected request leaves the link intact and returns an error asking the user to reconnect and retry.
 
 The socket factory is the `CloudSocketFactoryRef` reference. Production uses the runtime's `WebSocket`, which accepts `{ headers }` in both Node and Bun. Tests inject a fake.
 
@@ -68,11 +68,13 @@ A new feature adds message kinds to `cloud.ts`, advertises a capability in `CLOU
 
 ## Hosted channel relay
 
+This is a relay foundation with no hosted bots yet. `attach` has no production caller, and the environment advertises no hosted-channel capability.
+
 `HostedChannelRelay` registers for `channel.inbound` and `channel.missed`. A channel runtime entry attaches with `attach(routeId, { webhook })` and leaves with `detach(routeId)`. For each forwarded request the relay builds a standard `Request` and calls the entry's `webhook`, the same function WhatsApp serves over HTTP. The URL uses a placeholder origin and the route path. The body is decoded from `bodyBase64` to the exact bytes the provider sent. Hop-by-hop headers are dropped, and signature headers and the body pass through untouched so the adapter can verify them.
 
 The forwarded path must stay below the route. The relay drops a request whose path has a `.` or `..` segment (plain or percent-encoded), an encoded `/` or `\` inside a segment, a `#`, a `\`, or a leading `//`, and checks that the built pathname still starts with the route prefix.
 
-The cloud relays Slack retries. The Chat SDK Slack adapter drops a retry whose `event_id` it already dispatched, so the relay does not dedupe. There is no reply path over the socket, so the webhook's `Response` is logged when it is not OK and otherwise discarded.
+The cloud relays Slack retries. A future hosted Slack consumer must deduplicate handled events; the foundation relay does not deduplicate. There is no reply path over the socket, so the webhook's `Response` is logged when it is not OK and otherwise discarded.
 
 `channel.missed` is logged and summed per route in memory, readable through `missed(routeId)` until the route detaches or the server restarts. Nothing shows it in a client yet.
 

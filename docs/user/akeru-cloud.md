@@ -1,6 +1,6 @@
 # Akeru Cloud
 
-Akeru Cloud is an optional hosted service. You can link your environment to an account from Settings on web, desktop, or mobile. The cloud provides a relay for hosted services such as Slack; bot channel setup is a separate feature. The app works fully without an account.
+Akeru Cloud is an optional hosted service. You can link your environment to an account from Settings on web, desktop, or mobile. This release provides the connection and relay foundation. Hosted bots and Slack setup are not available yet. The app works fully without an account.
 
 Your chats, bot profiles, provider keys, and files stay on the machine that runs your environment. Akeru Cloud never runs your bots and never gets model access.
 
@@ -10,7 +10,7 @@ When you connect, the environment sends Akeru Cloud its name and app version. Ak
 
 While connected, the environment keeps one outbound connection open to Akeru Cloud. Nothing on your machine has to accept incoming connections.
 
-For hosted channels, Akeru Cloud receives each event the channel provider sends, such as a Slack message, and passes it to your environment in transit. It does not store message content or channel secrets. Your environment checks each event's signature itself.
+For hosted channels, Akeru Cloud receives each event the channel provider sends, such as a Slack message, and passes it to your environment in transit. It does not store message content or plaintext channel secrets. Approval results can be held encrypted briefly while delivery is retried; they expire within ten minutes. Your environment checks each event's signature itself.
 
 The credential that identifies your environment to Akeru Cloud stays in the environment's secret store. Clients never receive it.
 
@@ -37,8 +37,8 @@ Slack events that arrive while the environment is offline are not delivered late
 
 ## Disconnect
 
-Select **Disconnect** under **Settings > Akeru Cloud** and confirm, or run **Disconnect Akeru Cloud** from the command palette. The environment forgets its Akeru Cloud credential and closes the connection. Hosted Slack stops reaching your bots until you connect again.
+Select **Disconnect** under **Settings > Akeru Cloud** and confirm, or run **Disconnect Akeru Cloud** from the command palette. After Akeru Cloud confirms revocation, the environment forgets its credential and closes the connection.
 
-When the environment is connected, disconnecting also removes it from your Akeru Cloud account. If it is offline, it still forgets its credential, and you can remove it from your account page on Akeru Cloud.
+If the cloud cannot confirm disconnection, Akeru keeps the link and shows an error. Reconnect and try again, or revoke the environment from your account page on Akeru Cloud.
 
 If you revoke an environment from the account page first, the environment forgets its credential and shows **This environment was disconnected from Akeru Cloud.** Select **Connect again** to link it again.

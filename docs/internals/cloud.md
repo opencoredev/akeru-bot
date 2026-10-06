@@ -2,7 +2,7 @@
 
 > For maintainers.
 
-Akeru Cloud is an optional hosted service in `apps/cloud`. Akeru Bot works without it. A user who wants hosted features links an environment to a cloud account once; the environment then keeps one outbound WebSocket to the cloud, and every hosted feature runs over that socket. The first feature is hosted Slack: the cloud gives each bot a public Slack URL and relays Slack's requests to the user's environment, so the user needs no tunnel.
+Akeru Cloud is an optional hosted service in `apps/cloud`. Akeru Bot works without it. A user who wants hosted features links an environment to a cloud account once; the environment then keeps one outbound WebSocket to the cloud, and every hosted feature runs over that socket. This release ships account linking and the relay foundation, with no hosted bots yet. The Worker has Slack relay routes, but no production environment consumer attaches to them.
 
 The wire contract lives in `packages/contracts/src/cloud.ts`. The environment side and the cloud both build against it.
 
@@ -38,14 +38,14 @@ Browser sign-in uses Clerk. The SPA sends the Clerk session token as a bearer to
 
 1. The environment calls `/v1/link/start` with its name and version. The cloud returns a device code (32 random bytes), a user code such as `KQ7M-3XHD`, a verification URL `<cloud>/link?code=KQ7M-3XHD`, a ten-minute expiry, and a three-second poll interval.
 2. The user opens the URL, signs in, and approves or denies.
-3. The environment polls. After approval the first poll deletes the link code, creates the environment row, and returns the environment id and a new environment token. Later polls with the same device code get `expired`.
+3. The environment polls. After approval the cloud creates the environment row and returns its id and token. Domain-separated hashes of the secret device code determine the id and token, so retries return the same result until the ten-minute expiry. The stored device-code hash cannot recover the token. The code stays available after an insert failure or lost response; revoked links return `denied`. Anonymous starts are capped at 1,000 outstanding codes in one conditional insert.
 4. The environment stores the token in its secret store and connects to `/v1/environments/connect`. The Worker hashes the token, checks it in D1, and hands the upgrade to that environment's hub. Unknown tokens get `401`. A revoked environment or disabled account gets `410`. The environment forgets its token on either.
 
-The Worker checks the token before the `Upgrade` header. The WebSocket API does not expose the status of a refused upgrade, so after a handshake fails the environment sends a plain `GET` with the same bearer token and reads the status: `401`, `410`, or `426` for a token that is still good.
+The Node socket transport reads the refused upgrade response directly through `unexpected-response`. It reports `401` or `410` to the connection service without sending a second request. Plain authenticated `GET` requests remain available for diagnostics and return `426` for a valid token.
 
 Revoking from the SPA marks the environment revoked, disables its routes, deletes its pending OAuth flows, and calls the hub's `revoke()`, which sends `revoked` and closes the socket. The environment can unlink itself over the socket with `environment.unlink`, which does the same revoke.
 
-An approved code can only be claimed before it expires. The expiry check is part of the `DELETE` that claims the code.
+An approved code can only create an environment before it expires. The expiry and account checks are part of the conditional insert. Repeated polls never create a second environment.
 
 ## Socket protocol
 
@@ -54,12 +54,14 @@ The environment sends `CloudEnvironmentMessage` and receives `CloudServerMessage
 - `hello` gets `welcome` with the account email and the cloud's capabilities (`["hosted-channels"]`). The hub also records the environment's name and version, then sends one `channel.missed` per route that received events while the environment was offline. If the account row is gone, the hub sends `revoked` instead and closes with 4001.
 - `ping` gets `pong`. `last_seen_at` is written at most once a minute.
 - `channel.route.create`, `channel.route.update`, `channel.route.delete`, and `oauth.begin` each get a `result` with the same `requestId`. Invalid messages that carry a `requestId` get an `invalid-request` result.
-- `environment.unlink` revokes the environment exactly as the account page does, answers `result` with `{ "type": "empty" }`, and closes the socket with code 4001. An environment that is already revoked gets `not-found`.
+- `environment.unlink` revokes the environment exactly as the account page does, answers `result` with `{ "type": "empty" }`, and closes the socket with code 4001. Already-revoked account-page requests can be retried safely; socket requests on a revoked link are refused.
 - A newer connection for the same environment closes the older one with code 4000.
 
 ## Hosted channels
 
-A channel route is a public inbound URL owned by one environment: `<cloud>/v1/channels/slack/rt_…`. An account can have up to 25 routes. Route ids are public and are not secrets; the environment verifies each provider's request signature itself.
+This release ships the relay foundation, with no hosted bots yet. `HostedChannelRelay.attach` has no production caller and the environment advertises no hosted-channel capability. A future channel runtime must attach a consumer and handle provider signatures and deduplication before hosted bot setup is available.
+
+A channel route is a public inbound URL owned by one environment: `<cloud>/v1/channels/slack/rt_…`. An account can have up to 25 active routes; disabled routes do not count. Route ids are public and are not secrets; the environment verifies each provider's request signature itself.
 
 When a request arrives at a route URL, the Worker:
 
@@ -70,7 +72,7 @@ When a request arrives at a route URL, the Worker:
 5. Sends `channel.inbound` to the hub with the method, the path below the route URL, the exact body bytes as `bodyBase64`, and only the headers the provider allows (Slack: `content-type` and `x-slack-*`). Base64 keeps bytes that are not valid UTF-8 intact, so signatures verify over what the provider sent.
 6. Returns `200` at once, including when the environment is offline. Offline events are counted in `daily_usage.dropped` and in hub storage, and reported as `channel.missed` on the next `hello`. Each route may burst 30 events and then 30 per second; past that the Worker returns `429`.
 
-Provider retries are relayed like first deliveries. The cloud cannot tell a duplicate from an event the environment never handled, such as one it answered with `429`. Deduplication happens in the environment: the Chat SDK Slack adapter records each dispatched `event_id` in the chat state for 24 hours and drops a delivery that carries `x-slack-retry-num` when its `event_id` is already recorded. The Slack runtime uses in-memory chat state, so a retry that arrives after the environment restarts is handled again; the Chat SDK's per-message dedupe, also in memory, is the only other guard.
+Provider retries are relayed like first deliveries. The cloud cannot tell a duplicate from an event the environment never handled. The future environment consumer must deduplicate handled events; no hosted Slack consumer ships in this foundation.
 
 ### OAuth
 
@@ -79,13 +81,13 @@ Provider retries are relayed like first deliveries. The cloud cannot tell a dupl
 - `slack.manager` is Akeru's own Slack app. The cloud owns its client secret, so it returns an `authorizeUrl` asking for the user scope `app_configurations:write`. On callback the cloud exchanges the code at `oauth.v2.access` and sends the user token to the environment in `oauth.completed`. The environment uses it to create one Slack app per bot through the Manifest API.
 - `slack.install` installs one of those per-bot apps. The environment owns that app's client secret, so the cloud returns only the state and redirect URI and, on callback, relays the code in `oauth.completed`.
 
-The callback checks that the environment is online before exchanging anything. When the environment is offline the user sees an error page and starts again.
+The callback checks the environment and account in D1, then checks that the hub has a welcomed socket before exchanging anything. Offline callbacks keep their state and can be retried until expiry. A short D1 lease serializes callbacks. Completion results are stored as AES-GCM ciphertext keyed by a domain-separated hash of the secret callback state, which is not stored. A retry after failed delivery decrypts that result instead of exchanging the provider code again. Successful delivery deletes the flow; expiry maintenance removes undelivered results.
 
 ## What the cloud stores
 
 Stored: Clerk user id and email, environment names and versions, SHA-256 hashes of environment tokens, device codes, and OAuth state, route metadata (label, provider, Slack app id, workspace id and name), timestamps, and daily delivered and dropped counts per route.
 
-Never stored: message content, request bodies, Slack tokens or client secrets of per-bot apps, the manager app's user tokens, raw environment tokens, or raw codes. Missed-event records in hub storage hold only a count, provider, and first timestamp.
+Never stored in plaintext: message content, request bodies, Slack tokens, per-bot client secrets, environment tokens, or raw codes. OAuth completion ciphertext may temporarily hold a manager token or install code until delivery or expiry. Its decryption key is derived from the raw callback state and is never stored. Missed-event records in hub storage hold only a count, provider, and first timestamp.
 
 Server-side PostHog events are keyed by Clerk user id: `signed_up`, `environment_linked`, `environment_revoked`, `hosted_channel_route_created`, and `hosted_channel_route_deleted`. They carry no content, tokens, or the environment's anonymous usage id. Without `POSTHOG_KEY` nothing is sent.
 
