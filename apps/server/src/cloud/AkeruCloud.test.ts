@@ -71,9 +71,7 @@ describe("CloudAccount", () => {
 
       const socket = yield* Queue.take(cloud.sockets);
       expect(socket.token).toBe(TOKEN);
-      expect(socket.url).toBe(
-        `wss://akeru-cloud.leoisadev.workers.dev${CLOUD_ENVIRONMENT_SOCKET_PATH}`,
-      );
+      expect(socket.url).toBe(`wss://cloud.akeru-bot.com${CLOUD_ENVIRONMENT_SOCKET_PATH}`);
       expect(socket.url).not.toContain(TOKEN);
     }),
   );
@@ -189,9 +187,7 @@ describe("CloudConnection linked origin", () => {
     Effect.gen(function* () {
       const cloud = yield* buildCloud({ linked: true, cloudUrlFallback: STAGING_AKERU_CLOUD_URL });
       const socket = yield* Queue.take(cloud.sockets);
-      expect(socket.url).toBe(
-        `wss://akeru-cloud.leoisadev.workers.dev${CLOUD_ENVIRONMENT_SOCKET_PATH}`,
-      );
+      expect(socket.url).toBe(`wss://cloud.akeru-bot.com${CLOUD_ENVIRONMENT_SOCKET_PATH}`);
 
       const connected = yield* awaitStatus(
         cloud.account,
@@ -208,7 +204,7 @@ describe("CloudConnection linked origin", () => {
     Effect.gen(function* () {
       const cloud = yield* buildCloud({ linked: true, cloudUrlFallback: STAGING_AKERU_CLOUD_URL });
       const socket = yield* Queue.take(cloud.sockets);
-      expect(socket.url).toContain("akeru-cloud.leoisadev");
+      expect(socket.url).toContain("cloud.akeru-bot.com");
       const revoked = yield* awaitStatus(cloud.account, (next) => next.status === "revoked");
       socket.handlers.onClose(401);
       yield* Fiber.join(revoked);

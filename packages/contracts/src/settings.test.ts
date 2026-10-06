@@ -220,9 +220,7 @@ describe("ServerSettingsPatch string normalization", () => {
 
 describe("ServerSettings Akeru Cloud URL", () => {
   it("defaults to the hosted cloud and accepts HTTPS or loopback HTTP origins", () => {
-    expect(decodeServerSettings({}).akeruCloudUrl).toBe(
-      "https://akeru-cloud.leoisadev.workers.dev",
-    );
+    expect(decodeServerSettings({}).akeruCloudUrl).toBe("https://cloud.akeru-bot.com");
     expect(decodeServerSettingsPatch({ akeruCloudUrl: "http://127.0.0.1:8787" })).toEqual({
       akeruCloudUrl: "http://127.0.0.1:8787",
     });

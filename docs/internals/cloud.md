@@ -107,11 +107,11 @@ The stack has three stages. Each is its own Worker, D1 database, and hub namespa
 
 | Stage        | Resources               | URL                                                 | Deployed by                     | State                       |
 | ------------ | ----------------------- | --------------------------------------------------- | ------------------------------- | --------------------------- |
-| `production` | `akeru-cloud`           | `https://akeru-cloud.leoisadev.workers.dev`         | CI, on every push to `main`     | Cloudflare state store      |
+| `production` | `akeru-cloud`           | `https://cloud.akeru-bot.com`                       | CI, on every push to `main`     | Cloudflare state store      |
 | `staging`    | `akeru-cloud-staging`   | `https://akeru-cloud-staging.leoisadev.workers.dev` | any checkout on the dev machine | Cloudflare state store      |
 | `local`      | workerd on this machine | `http://localhost:1337`                             | `alchemy dev`, nothing deployed | `apps/cloud/infra/.alchemy` |
 
-The production URL is the contracts default, `DEFAULT_AKERU_CLOUD_URL`; staging is `STAGING_AKERU_CLOUD_URL`. Names are pinned, so a checkout without state can take over existing resources with `alchemy deploy --stage <stage> --adopt`. The account's workers.dev subdomain is `leoisadev`; Alchemy looks it up through the API, and `CLOUDFLARE_WORKERS_SUBDOMAIN` skips that lookup.
+The production URL is the contracts default, `DEFAULT_AKERU_CLOUD_URL`, served as a Worker custom domain; the `akeru-bot.com` zone must be on the Cloudflare account for production to deploy. Staging is `STAGING_AKERU_CLOUD_URL`, and its Clerk instance allows only the maintainer's account (Clerk allowlist), so nobody else can sign in or link an environment to it. Names are pinned, so a checkout without state can take over existing resources with `alchemy deploy --stage <stage> --adopt`. The account's workers.dev subdomain is `leoisadev`; Alchemy looks it up through the API, and `CLOUDFLARE_WORKERS_SUBDOMAIN` skips that lookup.
 
 The hub is a SQLite-backed Durable Object. Alchemy declares every new Durable Object class with `new_sqlite_classes`, so the stack runs on the Workers Free plan.
 

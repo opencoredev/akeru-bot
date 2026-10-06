@@ -3,6 +3,7 @@ import * as Cloudflare from "alchemy/Cloudflare";
 import * as State from "alchemy/State";
 import * as Config from "effect/Config";
 import * as Effect from "effect/Effect";
+import * as Match from "effect/Match";
 import * as Redacted from "effect/Redacted";
 import * as Schema from "effect/Schema";
 
@@ -19,12 +20,17 @@ const resourceName = (stage: string) =>
 // URL below, link URLs, and Clerk's authorized party all depend on it.
 const LOCAL_DEV_PORT = 1337;
 
-// Production resolves to DEFAULT_AKERU_CLOUD_URL in @akeru/contracts. The
-// contracts are not imported here because they load a different Effect version.
+// Production serves on this custom domain, which must match DEFAULT_AKERU_CLOUD_URL in
+// @akeru/contracts. The contracts are not imported here because they load a different Effect
+// version. The akeru-bot.com zone must be on this Cloudflare account for the domain to attach.
+const PRODUCTION_HOSTNAME = "cloud.akeru-bot.com";
+
 const defaultPublicUrl = (stage: string) =>
-  stage === "local"
-    ? `http://localhost:${LOCAL_DEV_PORT}`
-    : `https://${resourceName(stage)}.leoisadev.workers.dev`;
+  Match.value(stage).pipe(
+    Match.when("local", () => `http://localhost:${LOCAL_DEV_PORT}`),
+    Match.when("production", () => `https://${PRODUCTION_HOSTNAME}`),
+    Match.orElse(() => `https://${resourceName(stage)}.leoisadev.workers.dev`),
+  );
 
 // CI passes unset GitHub variables as empty strings, so empty means "use the default".
 const stringOr = (name: string, fallback: string) =>
@@ -55,6 +61,7 @@ export const cloudResources = (stage: string) => {
       runWorkerFirst: ["/v1/*", "/api/*"],
     },
     crons: ["0 4 * * *"],
+    ...(stage === "production" ? { domain: PRODUCTION_HOSTNAME } : {}),
     dev: { port: LOCAL_DEV_PORT, strictPort: true },
     env: {
       DB: database,

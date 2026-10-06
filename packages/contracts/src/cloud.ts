@@ -12,7 +12,7 @@ import { IsoDateTime, NonNegativeInt, PositiveInt, TrimmedNonEmptyString } from 
 
 export const CLOUD_PROTOCOL_VERSION = 1;
 
-export const DEFAULT_AKERU_CLOUD_URL = "https://akeru-cloud.leoisadev.workers.dev";
+export const DEFAULT_AKERU_CLOUD_URL = "https://cloud.akeru-bot.com";
 
 /** The developer cloud. Servers running from source in dev use it unless told otherwise. */
 export const STAGING_AKERU_CLOUD_URL = "https://akeru-cloud-staging.leoisadev.workers.dev";
