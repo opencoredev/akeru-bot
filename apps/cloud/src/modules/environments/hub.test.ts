@@ -143,6 +143,29 @@ const inbound = {
 };
 
 describe("heartbeat database budget", () => {
+  it("preserves heartbeat and last-seen budgets when reconstructed between pings", async () => {
+    const { ctx, env, connect, send } = makeHub();
+    let now = 100_000;
+    vi.spyOn(Date, "now").mockImplementation(() => now);
+    const socket = connect();
+    await send(socket, hello);
+    const prepare = vi.spyOn(env.DB, "prepare");
+
+    for (let i = 0; i < 2; i++) {
+      now += 20_000;
+      const awakened = new EnvironmentHubRuntime(ctx, env);
+      await awakened.webSocketMessage(socket, JSON.stringify({ kind: "ping" }));
+    }
+
+    expect(prepare).not.toHaveBeenCalled();
+    now += 20_000;
+    const awakened = new EnvironmentHubRuntime(ctx, env);
+    await awakened.webSocketMessage(socket, JSON.stringify({ kind: "ping" }));
+    expect(prepare.mock.calls.filter(([sql]) => sql.includes("SELECT 1"))).toHaveLength(1);
+    expect(prepare.mock.calls.filter(([sql]) => sql.includes("UPDATE environments"))).toHaveLength(
+      1,
+    );
+  });
   it("clears encrypted link delivery when the environment confirms receipt with hello", async () => {
     const { query, connect, send } = makeHub();
     query(`INSERT INTO link_codes (device_code_hash, user_code, environment_name, server_version,

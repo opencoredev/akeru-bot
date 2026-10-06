@@ -66,7 +66,15 @@ describe("environment socket", () => {
     expect(harness.hub("env_1").revoked).toBe(true);
     expect(harness.query("SELECT disabled FROM channel_routes")).toEqual([{ disabled: 1 }]);
     expect(harness.captured).toContainEqual({ event: "environment_revoked", userId: "user_1" });
+    const disabledAt = harness.deps.now().toISOString();
+    expect(harness.query("SELECT disabled_at FROM channel_routes")).toEqual([
+      { disabled_at: disabledAt },
+    ]);
+    harness.advance(86_400_000);
     expect((await revoke("user_1")).status).toBe(200);
+    expect(harness.query("SELECT disabled_at FROM channel_routes")).toEqual([
+      { disabled_at: disabledAt },
+    ]);
   });
   it("rolls back partial revocation and retries cleanup atomically", async () => {
     const harness = makeDeps();

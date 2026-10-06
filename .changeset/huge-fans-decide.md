@@ -2,4 +2,4 @@
 "akeru-bot": minor
 ---
 
-Add optional Akeru Cloud account linking from Settings on web, desktop, and mobile. Show mobile connection and disconnection failures so users can retry. Offer an explicit local Forget action when Akeru Cloud is unreachable.
+Add optional Akeru Cloud account linking from Settings on web, desktop, and mobile. Show mobile connection and disconnection failures so users can retry. Offer an explicit local Forget action when Akeru Cloud is unreachable. Keep approved links retryable until their code expires.

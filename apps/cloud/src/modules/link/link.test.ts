@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from "vite-plus/test";
 import { authHeader, makeDeps } from "../../../test/fakes.ts";
 import { createApp } from "../../app.ts";
 import { sha256Hex } from "../../lib/crypto.ts";
-import { LINK_CODE_TTL_MS, LINK_DELIVERY_GRACE_MS } from "./index.ts";
+import { LINK_CODE_TTL_MS } from "./index.ts";
 
 const app = createApp();
 
@@ -49,7 +49,40 @@ async function poll(harness: ReturnType<typeof makeDeps>, deviceCode: string) {
 }
 
 describe("device link", () => {
-  it("uses an independent token and expires the encrypted delivery after first-poll grace", async () => {
+  it("rejects excessive starts before issuing any cleanup query", async () => {
+    const harness = makeDeps();
+
+    for (let i = 0; i < 5; i++) await startLink(harness);
+
+    const prepare = vi.spyOn(harness.deps.db, "prepare");
+
+    const response = await app.fetch(
+      post("/v1/link/start", { environmentName: "Mac", serverVersion: "1" }),
+      harness.deps,
+    );
+
+    expect(response.status).toBe(429);
+    expect(prepare.mock.calls).toHaveLength(1);
+    expect(prepare.mock.calls[0]?.[0]).toContain("INSERT INTO link_starts");
+    vi.restoreAllMocks();
+  });
+
+  it("allows a sixth environment after five codes from the same caller are approved", async () => {
+    const harness = makeDeps();
+
+    for (let i = 0; i < 5; i++) {
+      const started = await startLink(harness);
+      await app.fetch(
+        post("/api/link/approve", { userCode: started.userCode }, authHeader("user_1")),
+        harness.deps,
+      );
+      expect(await poll(harness, started.deviceCode)).toMatchObject({ status: "approved" });
+    }
+
+    expect(await startLink(harness)).toHaveProperty("deviceCode");
+    expect(harness.query("SELECT * FROM environments")).toHaveLength(5);
+  });
+  it("uses an independent token and retries encrypted delivery until code expiry", async () => {
     const harness = makeDeps();
     const started = await startLink(harness);
     await app.fetch(
@@ -64,7 +97,9 @@ describe("device link", () => {
     expect(JSON.stringify(harness.query("SELECT * FROM link_codes"))).not.toContain(
       approved.environmentToken,
     );
-    harness.advance(LINK_DELIVERY_GRACE_MS);
+    harness.advance(60_000);
+    expect(await poll(harness, started.deviceCode)).toEqual(approved);
+    harness.advance(LINK_CODE_TTL_MS - 60_000);
     expect(await poll(harness, started.deviceCode)).toEqual({ status: "expired" });
     expect(harness.query("SELECT token_ciphertext FROM link_codes")).toEqual([
       { token_ciphertext: null },

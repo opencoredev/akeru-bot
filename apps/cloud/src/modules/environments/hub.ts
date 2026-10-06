@@ -56,7 +56,11 @@ interface MissedEvents {
  * environment's single socket through the hibernation API, relays channel
  * events to it, and answers its requests.
  */
-export type HubSocketAttachment = EnvironmentOwner & { readonly welcomed?: boolean };
+export type HubSocketAttachment = EnvironmentOwner & {
+  readonly welcomed?: boolean;
+  readonly heartbeatCheckedAt?: number;
+  readonly lastSeenWrittenAt?: number;
+};
 
 export interface HubSocket {
   readonly readyState: number;
@@ -95,6 +99,8 @@ const EnvironmentOwnerSchema = Schema.Struct({
   environmentId: Schema.String,
   userId: Schema.String,
   welcomed: Schema.optionalKey(Schema.Boolean),
+  heartbeatCheckedAt: Schema.optionalKey(Schema.Number),
+  lastSeenWrittenAt: Schema.optionalKey(Schema.Number),
 });
 
 const RequestIdentity = Schema.Struct({
@@ -111,9 +117,7 @@ export class EnvironmentHubRuntime implements EnvironmentHubRpc {
     this.#env = env;
   }
   #buckets = new Map<string, { tokens: number; updatedAt: number }>();
-  #lastSeenWrite = 0;
   #messageBuckets = new WeakMap<HubSocket, { tokens: number; updatedAt: number }>();
-  #heartbeatChecks = new WeakMap<HubSocket, number>();
 
   #admitMessage(socket: HubSocket) {
     const now = Date.now();
@@ -233,7 +237,7 @@ export class EnvironmentHubRuntime implements EnvironmentHubRpc {
         return;
       }
 
-      const checkedAt = this.#heartbeatChecks.get(socket);
+      const checkedAt = owner.heartbeatCheckedAt;
 
       const cachedPing =
         message.kind === "ping" && checkedAt !== undefined && Date.now() - checkedAt < 60_000;
@@ -253,7 +257,11 @@ export class EnvironmentHubRuntime implements EnvironmentHubRpc {
         return;
       }
 
-      if (!cachedPing) this.#heartbeatChecks.set(socket, Date.now());
+      if (!cachedPing)
+        socket.serializeAttachment({
+          ...socket.deserializeAttachment(),
+          heartbeatCheckedAt: Date.now(),
+        });
     }
 
     switch (message.kind) {
@@ -289,7 +297,6 @@ export class EnvironmentHubRuntime implements EnvironmentHubRpc {
             .prepare("UPDATE link_codes SET token_ciphertext = NULL WHERE environment_id = ?")
             .bind(owner.environmentId)
             .run();
-          this.#lastSeenWrite = Date.now();
           this.#send(socket, {
             kind: "welcome",
             v: CLOUD_PROTOCOL_VERSION,
@@ -297,15 +304,19 @@ export class EnvironmentHubRuntime implements EnvironmentHubRpc {
             account: { email: account.email },
             capabilities: [...CLOUD_CAPABILITIES],
           });
-          socket.serializeAttachment({ ...owner, welcomed: true });
-          this.#heartbeatChecks.set(socket, Date.now());
+          socket.serializeAttachment({
+            ...socket.deserializeAttachment(),
+            welcomed: true,
+            heartbeatCheckedAt: Date.now(),
+            lastSeenWrittenAt: Date.now(),
+          });
           await this.#flushMissed(socket);
         });
       }
 
       case "ping":
         this.#send(socket, { kind: "pong" });
-        await this.#touchLastSeen();
+        await this.#touchLastSeen(socket);
 
         return;
       case "channel.route.create":
@@ -400,14 +411,18 @@ export class EnvironmentHubRuntime implements EnvironmentHubRpc {
     );
   }
 
-  async #touchLastSeen() {
-    if (Date.now() - this.#lastSeenWrite < LAST_SEEN_WRITE_INTERVAL_MS) return;
-    this.#lastSeenWrite = Date.now();
-    const owner = decodeOrNull(EnvironmentOwnerSchema, this.#socket()?.deserializeAttachment());
+  async #touchLastSeen(socket: HubSocket) {
+    const owner = decodeOwner(socket.deserializeAttachment());
+    const now = Date.now();
 
-    if (!owner) return;
+    if (
+      owner.lastSeenWrittenAt !== undefined &&
+      now - owner.lastSeenWrittenAt < LAST_SEEN_WRITE_INTERVAL_MS
+    )
+      return;
+    socket.serializeAttachment({ ...owner, lastSeenWrittenAt: now });
     await this.#env.DB.prepare("UPDATE environments SET last_seen_at = ? WHERE id = ?")
-      .bind(new Date().toISOString(), owner.environmentId)
+      .bind(new Date(now).toISOString(), owner.environmentId)
       .run();
   }
 

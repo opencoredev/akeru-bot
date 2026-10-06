@@ -1,6 +1,8 @@
 import { requireUser } from "../../auth.ts";
 import type { CloudHono } from "../../deps.ts";
 
+const ACCOUNT_ROUTE_LIMIT = 100;
+
 interface EnvironmentRow {
   readonly id: string;
   readonly name: string;
@@ -37,9 +39,9 @@ export function registerAccount(app: CloudHono) {
         .all<EnvironmentRow>(),
       c.env.db
         .prepare(
-          "SELECT route_id, provider, environment_id, label, external_workspace_name, created_at, last_event_at, disabled FROM channel_routes WHERE user_id = ? ORDER BY created_at DESC",
+          "SELECT route_id, provider, environment_id, label, external_workspace_name, created_at, last_event_at, disabled FROM channel_routes WHERE user_id = ? ORDER BY disabled ASC, created_at DESC, route_id DESC LIMIT ?",
         )
-        .bind(user.userId)
+        .bind(user.userId, ACCOUNT_ROUTE_LIMIT)
         .all<RouteRow>(),
     ]);
 

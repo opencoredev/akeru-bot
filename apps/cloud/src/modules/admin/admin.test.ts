@@ -1,7 +1,14 @@
+import * as Schema from "effect/Schema";
 import { describe, expect, it } from "vite-plus/test";
 
 import { authHeader, makeDeps, seedEnvironment } from "../../../test/fakes.ts";
 import { createApp } from "../../app.ts";
+
+const decodeAccountRoutes = Schema.decodeUnknownSync(
+  Schema.Struct({
+    routes: Schema.Array(Schema.Struct({ routeId: Schema.String, disabled: Schema.Boolean })),
+  }),
+);
 
 const app = createApp();
 
@@ -9,6 +16,18 @@ const request = (path: string, headers: Record<string, string> = {}) =>
   new Request(`https://cloud.akeru.test${path}`, { headers });
 
 describe("browser API", () => {
+  it("caps account routes while prioritizing active routes over disabled history", async () => {
+    const harness = makeDeps();
+    seedEnvironment(harness.query, { routeId: "rt_active" });
+    harness.query(`WITH RECURSIVE rows(n) AS (SELECT 1 UNION ALL SELECT n+1 FROM rows WHERE n < 120)
+      INSERT INTO channel_routes (route_id, provider, environment_id, user_id, label, created_at, disabled)
+      SELECT 'rt_old_' || n, 'slack', 'env_1', 'user_1', 'Old bot', '2026-09-28T00:00:00.000Z', 1 FROM rows`);
+    const response = await app.fetch(request("/api/me", authHeader("user_1")), harness.deps);
+
+    const body = decodeAccountRoutes(await response.json());
+    expect(body.routes).toHaveLength(100);
+    expect(body.routes[0]).toMatchObject({ routeId: "rt_active", disabled: false });
+  });
   it("gates the admin overview on the admin role", async () => {
     const harness = makeDeps();
     seedEnvironment(harness.query, { routeId: "rt_ada" });

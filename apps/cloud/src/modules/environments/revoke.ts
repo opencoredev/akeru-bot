@@ -18,9 +18,9 @@ export async function revokeEnvironment(
       )
       .bind(now.toISOString(), environmentId, userId),
     db
-      .prepare(`UPDATE channel_routes SET disabled = 1 WHERE environment_id = ?
+      .prepare(`UPDATE channel_routes SET disabled = 1, disabled_at = COALESCE(disabled_at, ?) WHERE environment_id = ?
       AND EXISTS (SELECT 1 FROM environments WHERE id = ? AND user_id = ?)`)
-      .bind(environmentId, environmentId, userId),
+      .bind(now.toISOString(), environmentId, environmentId, userId),
     db
       .prepare(`DELETE FROM oauth_flows WHERE environment_id = ?
       AND EXISTS (SELECT 1 FROM environments WHERE id = ? AND user_id = ?)`)

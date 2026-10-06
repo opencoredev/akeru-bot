@@ -27,8 +27,6 @@ export const LINK_POLL_INTERVAL_SECONDS = 3;
 
 export const MAX_OUTSTANDING_LINK_CODES = 10000;
 
-export const LINK_DELIVERY_GRACE_MS = 30_000;
-
 export const MAX_CALLER_OUTSTANDING = 5;
 
 export const MAX_CALLER_STARTS = 10;
@@ -45,7 +43,6 @@ interface LinkCodeRow {
   readonly environment_id: string | null;
   readonly token_hash: string | null;
   readonly token_ciphertext: string | null;
-  readonly delivery_expires_at: string | null;
 }
 
 const invalid = { error: "invalid-request" } as const;
@@ -54,7 +51,7 @@ const invalid = { error: "invalid-request" } as const;
  * Device link. The environment starts a flow and polls with its device code;
  * the user approves the short user code in the browser. Only the hash of the
  * device code is stored. The independent token is hashed for authentication
- * and encrypted for a bounded delivery grace period.
+ * and encrypted for a delivery period bounded by the code expiry.
  */
 export function registerLink(app: CloudHono) {
   app.post(CLOUD_LINK_START_PATH, async (c) => {
@@ -62,27 +59,34 @@ export function registerLink(app: CloudHono) {
 
     if (!body) return c.json(invalid, 400);
     const now = c.env.now();
+    const caller = await sha256Hex(c.req.header("CF-Connecting-IP") ?? "local");
+    const windowStart = new Date(now.getTime() - 60_000).toISOString();
+
+    const admission = await c.env.db
+      .prepare(`INSERT INTO link_starts (caller_hash, created_at)
+      SELECT ?, ? WHERE (SELECT COUNT(*) FROM link_starts WHERE caller_hash = ? AND created_at > ?) < ?
+      AND (SELECT COUNT(*) FROM link_codes WHERE caller_hash = ? AND expires_at > ? AND approved_user_id IS NULL AND denied = 0) < ?
+      AND (SELECT COUNT(*) FROM link_codes WHERE expires_at > ?) < ?`)
+      .bind(
+        caller,
+        now.toISOString(),
+        caller,
+        windowStart,
+        MAX_CALLER_STARTS,
+        caller,
+        now.toISOString(),
+        MAX_CALLER_OUTSTANDING,
+        now.toISOString(),
+        MAX_OUTSTANDING_LINK_CODES,
+      )
+      .run();
+
+    if (admission.meta.changes !== 1) return c.json({ error: "limit-reached" }, 429);
     await c.env.db
       .prepare("DELETE FROM link_codes WHERE expires_at <= ?")
       .bind(now.toISOString())
       .run();
-
-    await c.env.db
-      .prepare("UPDATE link_codes SET token_ciphertext = NULL WHERE delivery_expires_at <= ?")
-      .bind(now.toISOString())
-      .run();
-    const caller = await sha256Hex(c.req.header("CF-Connecting-IP") ?? "local");
-    const windowStart = new Date(now.getTime() - 60_000).toISOString();
     await c.env.db.prepare("DELETE FROM link_starts WHERE created_at <= ?").bind(windowStart).run();
-
-    const admission = await c.env.db
-      .prepare(`INSERT INTO link_starts (caller_hash, created_at)
-      SELECT ?, ? WHERE (SELECT COUNT(*) FROM link_starts WHERE caller_hash = ?) < ?
-      AND (SELECT COUNT(*) FROM link_codes WHERE caller_hash = ?) < ?`)
-      .bind(caller, now.toISOString(), caller, MAX_CALLER_STARTS, caller, MAX_CALLER_OUTSTANDING)
-      .run();
-
-    if (admission.meta.changes !== 1) return c.json({ error: "limit-reached" }, 429);
     const deviceCode = randomToken();
     const deviceCodeHash = await sha256Hex(deviceCode);
     const expiresAt = new Date(now.getTime() + LINK_CODE_TTL_MS).toISOString();
@@ -95,7 +99,7 @@ export function registerLink(app: CloudHono) {
         .prepare(
           `INSERT INTO link_codes (device_code_hash, user_code, environment_name, server_version, expires_at, created_at, caller_hash)
            SELECT ?, ?, ?, ?, ?, ?, ? WHERE (SELECT COUNT(*) FROM link_codes) < ?
-           AND (SELECT COUNT(*) FROM link_codes WHERE caller_hash = ?) < ?
+           AND (SELECT COUNT(*) FROM link_codes WHERE caller_hash = ? AND expires_at > ? AND approved_user_id IS NULL AND denied = 0) < ?
            ON CONFLICT(user_code) DO NOTHING`,
         )
         .bind(
@@ -108,6 +112,7 @@ export function registerLink(app: CloudHono) {
           caller,
           MAX_OUTSTANDING_LINK_CODES,
           caller,
+          now.toISOString(),
           MAX_CALLER_OUTSTANDING,
         )
         .run();
@@ -150,7 +155,14 @@ export function registerLink(app: CloudHono) {
       return respond({ status: row.expires_at <= now ? "expired" : "pending" });
     }
 
-    if (row.expires_at <= now) return respond({ status: "expired" });
+    if (row.expires_at <= now) {
+      await c.env.db
+        .prepare("UPDATE link_codes SET token_ciphertext = NULL WHERE device_code_hash = ?")
+        .bind(deviceCodeHash)
+        .run();
+
+      return respond({ status: "expired" });
+    }
 
     const account = await c.env.db
       .prepare("SELECT email FROM users WHERE clerk_user_id = ? AND disabled = 0")
@@ -161,15 +173,6 @@ export function registerLink(app: CloudHono) {
 
     if (!row.token_ciphertext || !row.environment_id || !row.token_hash)
       return respond({ status: "expired" });
-
-    if (row.delivery_expires_at && row.delivery_expires_at <= now) {
-      await c.env.db
-        .prepare("UPDATE link_codes SET token_ciphertext = NULL WHERE device_code_hash = ?")
-        .bind(deviceCodeHash)
-        .run();
-
-      return respond({ status: "expired" });
-    }
 
     const environmentId = row.environment_id;
 
@@ -196,12 +199,6 @@ export function registerLink(app: CloudHono) {
 
     if (inserted.meta.changes === 1)
       c.env.analytics.capture("environment_linked", row.approved_user_id);
-
-    await c.env.db
-      .prepare(`UPDATE link_codes SET delivery_expires_at = COALESCE(delivery_expires_at, ?)
-      WHERE device_code_hash = ?`)
-      .bind(new Date(c.env.now().getTime() + LINK_DELIVERY_GRACE_MS).toISOString(), deviceCodeHash)
-      .run();
 
     return respond({
       status: "approved",
