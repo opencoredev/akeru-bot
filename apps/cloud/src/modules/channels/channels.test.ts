@@ -1,7 +1,7 @@
 import * as NodeBuffer from "node:buffer";
 
 import type { CloudServerMessage } from "@akeru/contracts";
-import { describe, expect, it } from "vite-plus/test";
+import { describe, expect, it, vi } from "vite-plus/test";
 
 import { makeDeps, seedEnvironment, testConfig } from "../../../test/fakes.ts";
 import { createApp } from "../../app.ts";
@@ -290,6 +290,10 @@ describe("oauth callback", () => {
     const response = await app.fetch(callback("code=c&state=install-state"), harness.deps);
     expect(response.status).toBe(503);
     expect(await response.text()).toContain("offline");
+    harness.hub("env_1").online = true;
+    expect((await app.fetch(callback("code=c&state=install-state"), harness.deps)).status).toBe(
+      200,
+    );
   });
 
   it("exchanges the Slack manager code and hands the token over without storing it", async () => {
@@ -352,6 +356,67 @@ describe("oauth callback", () => {
     for (const table of tables) {
       expect(JSON.stringify(harness.query(`SELECT * FROM ${table}`))).not.toContain("xoxe");
     }
+  });
+
+  it("retries delivery without exchanging the single-use manager code again", async () => {
+    const harness = makeDeps();
+    seedEnvironment(harness.query);
+    await seedFlow(harness, "slack.manager", "manager-state");
+
+    const exchange = vi.fn(async () =>
+      Response.json({
+        ok: true,
+        authed_user: { id: "U1", access_token: "xoxe-secret" },
+        team: { id: "T1", name: "Acme" },
+      }),
+    );
+
+    harness.deps = { ...harness.deps, fetch: exchange };
+    const hub = harness.hub("env_1");
+    const deliver = vi.spyOn(hub, "deliver").mockResolvedValueOnce(false);
+    expect((await app.fetch(callback("code=once&state=manager-state"), harness.deps)).status).toBe(
+      503,
+    );
+    const stored = JSON.stringify(harness.query("SELECT * FROM oauth_flows"));
+    expect(stored).not.toContain("xoxe-secret");
+    expect(stored).not.toContain("manager-state");
+    expect((await app.fetch(callback("code=once&state=manager-state"), harness.deps)).status).toBe(
+      200,
+    );
+    expect(exchange).toHaveBeenCalledTimes(1);
+    expect(deliver).toHaveBeenCalledTimes(2);
+    expect(hub.sent).toContainEqual(
+      expect.objectContaining({
+        kind: "oauth.completed",
+        result: expect.objectContaining({ accessToken: "xoxe-secret" }),
+      }),
+    );
+    expect(harness.query("SELECT * FROM oauth_flows")).toEqual([]);
+  });
+
+  it("serializes concurrent callbacks while the manager exchange is in flight", async () => {
+    const harness = makeDeps();
+    seedEnvironment(harness.query);
+    await seedFlow(harness, "slack.manager", "manager-state");
+    const started = Promise.withResolvers<void>();
+    const release = Promise.withResolvers<void>();
+    harness.deps = {
+      ...harness.deps,
+      fetch: async () => {
+        started.resolve();
+        await release.promise;
+
+        return Response.json({ ok: false, error: "access_denied" });
+      },
+    };
+    const first = app.fetch(callback("code=once&state=manager-state"), harness.deps);
+    await started.promise;
+    expect((await app.fetch(callback("code=once&state=manager-state"), harness.deps)).status).toBe(
+      409,
+    );
+    release.resolve();
+    expect((await first).status).toBe(200);
+    expect(harness.hub("env_1").sent).toHaveLength(1);
   });
 
   it("passes a provider error through as a failed result", async () => {

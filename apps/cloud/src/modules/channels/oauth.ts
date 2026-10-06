@@ -4,6 +4,7 @@ import { oauthCallbackUrl, type CloudConfig } from "../../config.ts";
 import type { CloudDeps, CloudHono } from "../../deps.ts";
 import { randomId, randomToken, sha256Hex } from "../../lib/crypto.ts";
 import { resultPage } from "../../lib/page.ts";
+import { openOAuthResult, sealOAuthResult } from "./oauthResult.ts";
 import { oauthPurposes } from "./providers.ts";
 import type { EnvironmentOwner, RequestOutcome } from "./routes.ts";
 
@@ -35,6 +36,8 @@ interface OAuthFlowRow {
   readonly environment_id: string;
   readonly route_id: string | null;
   readonly expires_at: string;
+  readonly completion_ciphertext: string | null;
+  readonly processing_until: string | null;
 }
 
 export async function beginOAuth(
@@ -100,37 +103,75 @@ export function registerOAuthCallback(app: CloudHono) {
 
     if (!state) return resultPage(400, "Link incomplete", "Start again from Akeru Bot.");
 
-    // Deleting the flow makes the state single-use.
+    const stateHash = await sha256Hex(state);
+
     const flow = await c.env.db
-      .prepare("DELETE FROM oauth_flows WHERE state_hash = ? RETURNING *")
-      .bind(await sha256Hex(state))
+      .prepare("SELECT * FROM oauth_flows WHERE state_hash = ?")
+      .bind(stateHash)
       .first<OAuthFlowRow>();
 
     if (!flow || flow.expires_at <= c.env.now().toISOString()) {
       return resultPage(400, "Link expired", "Start again from Akeru Bot.");
     }
 
+    const active = await c.env.db
+      .prepare(`SELECT 1 FROM environments e JOIN users u ON u.clerk_user_id = e.user_id
+      WHERE e.id = ? AND e.revoked_at IS NULL AND u.disabled = 0`)
+      .bind(flow.environment_id)
+      .first();
+
+    if (!active) return resultPage(410, "Link revoked", "Start again from Akeru Bot.");
     const hub = c.env.hubs.get(flow.environment_id);
 
     if (!(await hub.isOnline())) return resultPage(503, "Akeru Bot is offline", OFFLINE_MESSAGE);
 
-    const code = c.req.query("code");
-    const providerError = c.req.query("error");
+    // Serialize callbacks with a short lease, including delivery of a cached result.
+    const claimed = await c.env.db
+      .prepare(`UPDATE oauth_flows SET processing_until = ?
+      WHERE state_hash = ? AND expires_at > ? AND (processing_until IS NULL OR processing_until <= ?)
+      RETURNING *`)
+      .bind(
+        new Date(c.env.now().getTime() + 60_000).toISOString(),
+        stateHash,
+        c.env.now().toISOString(),
+        c.env.now().toISOString(),
+      )
+      .first<OAuthFlowRow>();
 
-    const result: CloudOAuthResult =
-      providerError || !code
-        ? { purpose: flow.purpose, error: (providerError ?? "missing_code").slice(0, 128) }
-        : await oauthPurposes[flow.purpose].complete({
-            deps: c.env,
-            code,
-            redirectUri: oauthCallbackUrl(c.env.config),
-            routeId: flow.route_id,
-          });
+    if (!claimed) return resultPage(409, "Link in progress", "Try this page again shortly.");
+    let result: CloudOAuthResult;
 
-    const message: CloudServerMessage = { kind: "oauth.completed", flowId: flow.flow_id, result };
+    try {
+      const code = c.req.query("code");
+      const providerError = c.req.query("error");
+      result = claimed.completion_ciphertext
+        ? await openOAuthResult(state, claimed.completion_ciphertext)
+        : providerError || !code
+          ? { purpose: flow.purpose, error: (providerError ?? "missing_code").slice(0, 128) }
+          : await oauthPurposes[flow.purpose].complete({
+              deps: c.env,
+              code,
+              redirectUri: oauthCallbackUrl(c.env.config),
+              routeId: flow.route_id,
+            });
 
-    if (!(await hub.deliver(message))) {
-      return resultPage(503, "Akeru Bot is offline", OFFLINE_MESSAGE);
+      if (!claimed.completion_ciphertext) {
+        await c.env.db
+          .prepare("UPDATE oauth_flows SET completion_ciphertext = ? WHERE state_hash = ?")
+          .bind(await sealOAuthResult(state, result), stateHash)
+          .run();
+      }
+
+      const message: CloudServerMessage = { kind: "oauth.completed", flowId: flow.flow_id, result };
+
+      if (!(await hub.deliver(message)))
+        return resultPage(503, "Akeru Bot is offline", OFFLINE_MESSAGE);
+      await c.env.db.prepare("DELETE FROM oauth_flows WHERE state_hash = ?").bind(stateHash).run();
+    } finally {
+      await c.env.db
+        .prepare("UPDATE oauth_flows SET processing_until = NULL WHERE state_hash = ?")
+        .bind(stateHash)
+        .run();
     }
 
     if ("error" in result) {

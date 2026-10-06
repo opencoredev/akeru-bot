@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vite-plus/test";
+import { describe, expect, it, vi } from "vite-plus/test";
 
 import { authHeader, makeDeps, seedEnvironment } from "../../../test/fakes.ts";
 import { createApp } from "../../app.ts";
@@ -31,7 +31,7 @@ describe("environment socket", () => {
     expect((await app.fetch(connect("good-token"), harness.deps)).status).toBe(410);
   });
 
-  it("reports the token's status to a plain GET, which the environment uses after a failed handshake", async () => {
+  it("reports authorization status to plain GET diagnostics", async () => {
     const harness = makeDeps();
     seedEnvironment(harness.query, { tokenHash: await sha256Hex("good-token") });
 
@@ -66,6 +66,32 @@ describe("environment socket", () => {
     expect(harness.hub("env_1").revoked).toBe(true);
     expect(harness.query("SELECT disabled FROM channel_routes")).toEqual([{ disabled: 1 }]);
     expect(harness.captured).toContainEqual({ event: "environment_revoked", userId: "user_1" });
-    expect((await revoke("user_1")).status).toBe(404);
+    expect((await revoke("user_1")).status).toBe(200);
+  });
+  it("rolls back partial revocation and retries cleanup atomically", async () => {
+    const harness = makeDeps();
+    seedEnvironment(harness.query, { routeId: "rt_ada" });
+    harness.query(
+      "CREATE TRIGGER fail_cleanup BEFORE UPDATE ON channel_routes BEGIN SELECT RAISE(FAIL, 'temporary failure'); END",
+    );
+
+    const revoke = () =>
+      app.fetch(
+        new Request("https://cloud.akeru.test/api/environments/env_1/revoke", {
+          method: "POST",
+          headers: authHeader("user_1"),
+        }),
+        harness.deps,
+      );
+
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    expect((await revoke()).status).toBe(500);
+    expect(harness.query("SELECT revoked_at FROM environments")).toEqual([{ revoked_at: null }]);
+    harness.query("DROP TRIGGER fail_cleanup");
+    expect((await revoke()).status).toBe(200);
+    expect(harness.hub("env_1").revoked).toBe(true);
+    expect(harness.query("SELECT disabled FROM channel_routes")).toEqual([{ disabled: 1 }]);
+    expect((await revoke()).status).toBe(200);
+    vi.restoreAllMocks();
   });
 });

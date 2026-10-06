@@ -4,7 +4,12 @@ import { CloudServerMessage } from "@akeru/contracts";
 import * as Schema from "effect/Schema";
 import { makeD1, seedEnvironment } from "../../../test/fakes.ts";
 import { ROUTES_PER_USER } from "../channels/routes.ts";
-import { EnvironmentHubRuntime, type HubState, type HubEnv } from "./hub.ts";
+import {
+  EnvironmentHubRuntime,
+  type HubState,
+  type HubEnv,
+  type HubSocketAttachment,
+} from "./hub.ts";
 
 // Tests run in Node, where `cloudflare:workers` does not exist.
 vi.mock("cloudflare:workers", () => import("../../../test/cloudflareWorkers.ts"));
@@ -15,7 +20,7 @@ class FakeSocket {
   readyState: number = WebSocket.OPEN;
   sent: CloudServerMessage[] = [];
   closed: { code: number; reason: string } | null = null;
-  #attachment = { environmentId: "env_1", userId: "user_1" };
+  #attachment: HubSocketAttachment = { environmentId: "env_1", userId: "user_1", welcomed: true };
   send(data: string) {
     this.sent.push(decodeMessage(data));
   }
@@ -23,7 +28,7 @@ class FakeSocket {
     this.closed = { code, reason };
     this.readyState = WebSocket.CLOSED;
   }
-  serializeAttachment(value: { environmentId: string; userId: string }) {
+  serializeAttachment(value: HubSocketAttachment) {
     this.#attachment = value;
   }
   deserializeAttachment() {
@@ -242,6 +247,65 @@ describe("EnvironmentHub", () => {
     ]);
   });
 
+  it("rejects route and OAuth requests after an account is disabled", async () => {
+    const { connect, send, query } = makeHub();
+    const socket = connect();
+    await send(socket, hello);
+    socket.sent.length = 0;
+    query("UPDATE users SET disabled = 1");
+    await send(socket, {
+      kind: "channel.route.create",
+      requestId: "r",
+      provider: "slack",
+      label: "Ada",
+    });
+    await send(socket, { kind: "oauth.begin", requestId: "o", purpose: "slack.manager" });
+    expect(socket.sent).toEqual([{ kind: "revoked" }]);
+    expect(query("SELECT * FROM channel_routes")).toEqual([]);
+    expect(query("SELECT * FROM oauth_flows")).toEqual([]);
+    expect(socket.closed?.code).toBe(4001);
+  });
+
+  it("does not count unwelcomed sockets as online or deliver inbound events", async () => {
+    const { hub, connect, send } = makeHub();
+    const socket = connect();
+    socket.serializeAttachment({ environmentId: "env_1", userId: "user_1" });
+    expect(await hub.isOnline()).toBe(false);
+    expect(await hub.relayInbound("rt_ada", "slack", inbound)).toBe("offline");
+    expect(socket.sent).toEqual([]);
+    await send(socket, hello);
+    expect(await hub.isOnline()).toBe(true);
+    expect(socket.sent).toContainEqual(
+      expect.objectContaining({ kind: "channel.missed", count: 1 }),
+    );
+  });
+
+  it("counts only active routes toward the per-user quota", async () => {
+    const { connect, send, query } = makeHub();
+    const socket = connect();
+
+    for (let index = 0; index < ROUTES_PER_USER; index += 1) {
+      await send(socket, {
+        kind: "channel.route.create",
+        requestId: `r${index}`,
+        provider: "slack",
+        label: "Old",
+      });
+    }
+
+    query("UPDATE channel_routes SET disabled = 1");
+    await send(socket, {
+      kind: "channel.route.create",
+      requestId: "new",
+      provider: "slack",
+      label: "New",
+    });
+    expect(socket.sent.at(-1)).toMatchObject({ requestId: "new", ok: true });
+    expect(query("SELECT COUNT(*) AS count FROM channel_routes WHERE disabled = 0")).toEqual([
+      { count: 1 },
+    ]);
+  });
+
   it("creates routes up to the per-user cap", async () => {
     const { connect, send, query } = makeHub();
     const socket = connect();
@@ -416,19 +480,11 @@ describe("EnvironmentHub", () => {
     expect([...storage]).toEqual([["revoked", true]]);
   });
 
-  it("answers not-found when unlinking an already revoked environment", async () => {
+  it("rejects requests when unlinking an already revoked environment", async () => {
     const { connect, send, query } = makeHub();
     query("UPDATE environments SET revoked_at = '2026-09-01T00:00:00.000Z'");
     const socket = connect();
     await send(socket, { kind: "environment.unlink", requestId: "u1" });
-    expect(socket.sent).toEqual([
-      {
-        kind: "result",
-        requestId: "u1",
-        ok: false,
-        code: "not-found",
-        message: "This environment is not linked.",
-      },
-    ]);
+    expect(socket.sent).toEqual([{ kind: "revoked" }]);
   });
 });

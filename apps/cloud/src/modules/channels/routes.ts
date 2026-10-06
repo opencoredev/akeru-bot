@@ -63,7 +63,7 @@ export async function createRoute(
     .prepare(
       `INSERT INTO channel_routes (route_id, provider, environment_id, user_id, label, created_at)
        SELECT ?, ?, ?, ?, ?, ?
-       WHERE (SELECT COUNT(*) FROM channel_routes WHERE user_id = ?) < ?`,
+       WHERE (SELECT COUNT(*) FROM channel_routes WHERE user_id = ? AND disabled = 0) < ?`,
     )
     .bind(
       routeId,

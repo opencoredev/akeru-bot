@@ -8,9 +8,8 @@ import { revokeEnvironment } from "./revoke.ts";
 
 export function registerEnvironments(app: CloudHono) {
   // The environment's single outbound socket. The token is checked here, then
-  // the upgrade is handed to that environment's hub. The token is checked before
-  // the upgrade header, so an environment whose handshake failed can learn the
-  // status (401, 410, or 426 for a good token) with a plain GET.
+  // the upgrade is handed to that environment's hub. Authentication errors are
+  // returned directly on rejected upgrades; a plain GET supports diagnostics.
   app.get(CLOUD_ENVIRONMENT_SOCKET_PATH, async (c) => {
     const token = /^Bearer (.+)$/.exec(c.req.header("authorization") ?? "")?.[1];
 

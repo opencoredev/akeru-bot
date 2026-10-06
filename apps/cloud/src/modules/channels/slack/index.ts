@@ -70,6 +70,7 @@ export const slackOAuthPurposes = {
       try {
         const response = await deps.fetch("https://slack.com/api/oauth.v2.access", {
           method: "POST",
+          signal: AbortSignal.timeout(30_000),
           body: new URLSearchParams({
             client_id: manager.clientId,
             client_secret: manager.clientSecret,

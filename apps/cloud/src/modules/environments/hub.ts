@@ -56,12 +56,14 @@ interface MissedEvents {
  * environment's single socket through the hibernation API, relays channel
  * events to it, and answers its requests.
  */
+export type HubSocketAttachment = EnvironmentOwner & { readonly welcomed?: boolean };
+
 export interface HubSocket {
   readonly readyState: number;
   send(data: string): void;
   close(code: number, reason: string): void;
-  serializeAttachment(owner: EnvironmentOwner): void;
-  deserializeAttachment(): EnvironmentOwner;
+  serializeAttachment(owner: HubSocketAttachment): void;
+  deserializeAttachment(): HubSocketAttachment;
 }
 
 export interface HubState {
@@ -92,6 +94,7 @@ export type HubEnv = { readonly DB: CloudDatabase } & Pick<
 const EnvironmentOwnerSchema = Schema.Struct({
   environmentId: Schema.String,
   userId: Schema.String,
+  welcomed: Schema.optionalKey(Schema.Boolean),
 });
 
 const RequestIdentity = Schema.Struct({
@@ -124,7 +127,13 @@ export class EnvironmentHubRuntime implements EnvironmentHubRpc {
   }
 
   #socket(): HubSocket | undefined {
-    return this.#ctx.getWebSockets().findLast((socket) => socket.readyState === WebSocket.OPEN);
+    return this.#ctx
+      .getWebSockets()
+      .findLast(
+        (socket) =>
+          socket.readyState === WebSocket.OPEN &&
+          decodeOwner(socket.deserializeAttachment()).welcomed === true,
+      );
   }
 
   #send(socket: HubSocket, message: CloudServerMessage) {
@@ -195,6 +204,27 @@ export class EnvironmentHubRuntime implements EnvironmentHubRpc {
 
     const services = this.#services();
 
+    if (message.kind !== "hello") {
+      const active = await services.db
+        .prepare(`SELECT 1 FROM environments e JOIN users u ON u.clerk_user_id = e.user_id
+        WHERE e.id = ? AND e.user_id = ? AND e.revoked_at IS NULL AND u.disabled = 0`)
+        .bind(owner.environmentId, owner.userId)
+        .first();
+
+      if (!active) {
+        this.#send(socket, { kind: "revoked" });
+        socket.close(4001, "Revoked");
+
+        return;
+      }
+
+      if (!owner.welcomed) {
+        socket.close(4002, "Send hello first");
+
+        return;
+      }
+    }
+
     switch (message.kind) {
       case "hello": {
         return this.#ctx.blockConcurrencyWhile(async () => {
@@ -231,6 +261,7 @@ export class EnvironmentHubRuntime implements EnvironmentHubRpc {
             account: { email: account.email },
             capabilities: [...CLOUD_CAPABILITIES],
           });
+          socket.serializeAttachment({ ...owner, welcomed: true });
           await this.#flushMissed(socket);
         });
       }

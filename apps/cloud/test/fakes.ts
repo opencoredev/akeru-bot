@@ -42,9 +42,17 @@ export function makeD1() {
     batch: async (statements: CloudStatement[]) => {
       const results = [];
 
-      for (const item of statements) results.push(await item.run());
+      sqlite.exec("BEGIN");
 
-      return results;
+      try {
+        for (const item of statements) results.push(await item.run());
+        sqlite.exec("COMMIT");
+
+        return results;
+      } catch (error) {
+        sqlite.exec("ROLLBACK");
+        throw error;
+      }
     },
   } satisfies CloudDatabase;
 
