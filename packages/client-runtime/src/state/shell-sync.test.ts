@@ -473,7 +473,8 @@ describe("environment shell synchronization", () => {
       yield* Queue.take(observed).pipe(
         Effect.repeat({
           until: (snapshot) =>
-            Option.isSome(snapshot) && snapshot.value.snapshotSequence === LIVE_SHELL_SNAPSHOT.snapshotSequence,
+            Option.isSome(snapshot) &&
+            snapshot.value.snapshotSequence === LIVE_SHELL_SNAPSHOT.snapshotSequence,
         }),
       );
 

@@ -270,9 +270,47 @@ export function createThreadRows({ sql }: Pick<ProjectionSnapshotDependencies, "
       `,
   });
 
-  // Unwindowed detail (pre-pagination clients / missing turnLimit) still must
-  // not hydrate unbounded history. Keep the newest projector-sized window.
+  // Historic server ops (title regen, provider context, routines, channels)
+  // need the first user message. Do not cap this path.
   const listThreadMessageRowsByThread = SqlSchema.findAll({
+    Request: ThreadIdLookupInput,
+    Result: ProjectionThreadMessageDbRowSchema,
+    execute: ({ threadId }) =>
+      sql`
+        SELECT
+          projection_thread_messages.message_id AS "messageId",
+          projection_thread_messages.thread_id AS "threadId",
+          projection_thread_messages.turn_id AS "turnId",
+          responding_bot_id AS "respondingBotId",
+          author_person_id AS "authorPersonId",
+          author_display_name AS "authorDisplayName",
+          projection_thread_messages.channel_origin_json AS "channelOrigin",
+          COALESCE(
+            projection_thread_messages.channel_delivery,
+            CASE channel_deliveries.status
+              WHEN 'requested' THEN 'pending'
+              WHEN 'sent' THEN 'sent'
+            END
+          ) AS "channelDelivery",
+          role,
+          text,
+          attachments_json AS "attachments",
+          reactions_json AS "reactions",
+          is_streaming AS "isStreaming",
+          created_at AS "createdAt",
+          projection_thread_messages.updated_at AS "updatedAt"
+        FROM projection_thread_messages
+        LEFT JOIN channel_deliveries
+          ON channel_deliveries.message_id = projection_thread_messages.message_id
+        WHERE projection_thread_messages.thread_id = ${threadId}
+        ORDER BY created_at ASC, projection_thread_messages.message_id ASC
+      `,
+  });
+
+  // Client snapshots without turnLimit have no older-page cursor. Bound them
+  // to the newest projector-sized window so a missing turnLimit cannot ship
+  // unbounded history.
+  const listRecentThreadMessageRowsByThread = SqlSchema.findAll({
     Request: ThreadIdLookupInput,
     Result: ProjectionThreadMessageDbRowSchema,
     execute: ({ threadId }) =>
@@ -570,6 +608,7 @@ export function createThreadRows({ sql }: Pick<ProjectionSnapshotDependencies, "
     getThreadCheckpointContextThreadRow,
     getActiveThreadRowById,
     listThreadMessageRowsByThread,
+    listRecentThreadMessageRowsByThread,
     listThreadProposedPlanRowsByThread,
     getThreadRuntimeContextRow,
     getTurnStartMessageRow,

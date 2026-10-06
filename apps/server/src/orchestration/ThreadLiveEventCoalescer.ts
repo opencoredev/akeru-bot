@@ -153,7 +153,18 @@ export function coalesceLiveStreamingMessageEvents(
       continue;
     }
 
-    survivors[existingIndex] = {
+    // Move the merged event to this latest chunk's position so the survivor
+    // array stays in ascending sequence order. Leaving it in place (A@3, B@2)
+    // would make the client cursor skip B after applying A.
+    survivors.splice(existingIndex, 1);
+
+    for (const [messageKey, index] of pendingIndexByMessageId) {
+      if (index > existingIndex) {
+        pendingIndexByMessageId.set(messageKey, index - 1);
+      }
+    }
+
+    const merged: OrchestrationEvent = {
       ...event,
       payload: {
         ...event.payload,
@@ -161,6 +172,9 @@ export function coalesceLiveStreamingMessageEvents(
         createdAt: existing.payload.createdAt,
       },
     };
+
+    pendingIndexByMessageId.set(messageId, survivors.length);
+    survivors.push(merged);
   }
 
   return survivors;

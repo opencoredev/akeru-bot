@@ -47,6 +47,7 @@ export function createThreadDetail({
   listPinnedThreadActivityRowsByThread,
   getActiveThreadRowById,
   listThreadMessageRowsByThread,
+  listRecentThreadMessageRowsByThread,
   listThreadMessageRowsByThreadWindow,
   listThreadProposedPlanRowsByThread,
   listCheckpointRowsByThread,
@@ -71,6 +72,7 @@ export function createThreadDetail({
   | "listPinnedThreadActivityRowsByThread"
   | "getActiveThreadRowById"
   | "listThreadMessageRowsByThread"
+  | "listRecentThreadMessageRowsByThread"
   | "listThreadMessageRowsByThreadWindow"
   | "listThreadProposedPlanRowsByThread"
   | "listCheckpointRowsByThread"
@@ -167,6 +169,7 @@ export function createThreadDetail({
     threadId: ThreadId,
     bounds: ThreadDetailBounds | undefined,
     activityRead: ThreadDetailActivityRead = { mode: "raw" },
+    messages: "all" | "recent" = "all",
   ) =>
     Effect.gen(function* () {
       const activitiesEffect =
@@ -238,7 +241,9 @@ export function createThreadDetail({
           ),
         ),
         (bounds === undefined
-          ? listThreadMessageRowsByThread({ threadId })
+          ? (messages === "recent"
+              ? listRecentThreadMessageRowsByThread
+              : listThreadMessageRowsByThread)({ threadId })
           : listThreadMessageRowsByThreadWindow({ threadId, ...bounds })
         ).pipe(
           Effect.mapError(
@@ -373,9 +378,12 @@ export function createThreadDetail({
       .withTransaction(
         Effect.gen(function* () {
           if (window?.turnLimit === undefined) {
-            const thread = yield* getThreadDetailByIdBounded(threadId, undefined, {
-              mode: "client",
-            });
+            const thread = yield* getThreadDetailByIdBounded(
+              threadId,
+              undefined,
+              { mode: "client" },
+              "recent",
+            );
 
             if (Option.isNone(thread)) {
               return Option.none<OrchestrationThreadDetailSnapshot>();

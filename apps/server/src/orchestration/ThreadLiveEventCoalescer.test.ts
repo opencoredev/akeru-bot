@@ -150,7 +150,11 @@ describe("ThreadLiveEventCoalescer", () => {
     const messageId = MessageId.make("message-stream");
 
     const events = [
-      makeMessage(1, "Hello", { messageId, streaming: true, createdAt: "2026-01-01T00:00:01.000Z" }),
+      makeMessage(1, "Hello", {
+        messageId,
+        streaming: true,
+        createdAt: "2026-01-01T00:00:01.000Z",
+      }),
       makeMessage(2, ", ", {
         messageId,
         streaming: true,
@@ -184,11 +188,28 @@ describe("ThreadLiveEventCoalescer", () => {
     ];
 
     const coalesced = coalesceLiveStreamingMessageEvents(events);
-    expect(coalesced.map((event) => event.sequence)).toEqual([3, 2]);
+    expect(coalesced.map((event) => event.sequence)).toEqual([2, 3]);
     assert(coalesced[0]?.type === "thread.message-sent");
-    expect(coalesced[0].payload.text).toBe("Aa");
+    expect(coalesced[0].payload.text).toBe("B");
     assert(coalesced[1]?.type === "thread.message-sent");
-    expect(coalesced[1].payload.text).toBe("B");
+    expect(coalesced[1].payload.text).toBe("Aa");
+  });
+
+  it("keeps interleaved streaming survivors in ascending sequence order", () => {
+    const events = [
+      makeMessage(1, "Hel", { messageId: MessageId.make("msg-a"), streaming: true }),
+      makeMessage(2, "Bee", { messageId: MessageId.make("msg-b"), streaming: true }),
+      makeMessage(3, "lo", { messageId: MessageId.make("msg-a"), streaming: true }),
+    ];
+
+    const coalesced = coalesceLiveStreamingMessageEvents(events);
+    expect(coalesced.map((event) => event.sequence)).toEqual([2, 3]);
+    assert(coalesced[0]?.type === "thread.message-sent");
+    expect(coalesced[0].payload.messageId).toBe("msg-b");
+    expect(coalesced[0].payload.text).toBe("Bee");
+    assert(coalesced[1]?.type === "thread.message-sent");
+    expect(coalesced[1].payload.messageId).toBe("msg-a");
+    expect(coalesced[1].payload.text).toBe("Hello");
   });
 
   it.effect("flushes pending tool updates as soon as an unrelated event arrives", () =>
