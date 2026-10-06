@@ -1,0 +1,17 @@
+{
+  "extends": "../../../tsconfig.base.json",
+  "compilerOptions": {
+    "lib": ["ES2024", "WebWorker"],
+    "types": ["@cloudflare/workers-types", "node"],
+    "plugins": [
+      {
+        "name": "@effect/language-service",
+        "allowedDuplicatedPackages": ["effect"],
+        "diagnosticSeverity": {
+          "globalConsole": "off"
+        }
+      }
+    ]
+  },
+  "include": ["alchemy.run.ts", "vite.config.ts", "scripts/**/*.ts"]
+}

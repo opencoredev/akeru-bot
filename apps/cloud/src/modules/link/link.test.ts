@@ -1,0 +1,213 @@
+import { describe, expect, it } from "vite-plus/test";
+
+import { authHeader, makeDeps } from "../../../test/fakes.ts";
+import { createApp } from "../../app.ts";
+import { sha256Hex } from "../../lib/crypto.ts";
+import { LINK_CODE_TTL_MS } from "./index.ts";
+
+const app = createApp();
+
+const BASE = "https://cloud.akeru.test";
+
+function post(
+  path: string,
+  body: Parameters<typeof JSON.stringify>[0],
+  headers: Record<string, string> = {},
+) {
+  return new Request(`${BASE}${path}`, {
+    method: "POST",
+    headers: { "content-type": "application/json", ...headers },
+    body: JSON.stringify(body),
+  });
+}
+
+async function startLink(harness: ReturnType<typeof makeDeps>) {
+  const response = await app.fetch(
+    post("/v1/link/start", { environmentName: "Studio Mac", serverVersion: "1.2.3" }),
+    harness.deps,
+  );
+
+  expect(response.status).toBe(200);
+
+  return (await response.json()) as {
+    deviceCode: string;
+    userCode: string;
+    verificationUrl: string;
+    expiresAt: string;
+    pollIntervalSeconds: number;
+  };
+}
+
+async function poll(harness: ReturnType<typeof makeDeps>, deviceCode: string) {
+  const response = await app.fetch(post("/v1/link/poll", { deviceCode }), harness.deps);
+
+  return (await response.json()) as {
+    status: string;
+    environmentToken?: string;
+    environmentId?: string;
+  };
+}
+
+describe("device link", () => {
+  it("starts a flow and stores only the device code hash", async () => {
+    const harness = makeDeps();
+    const started = await startLink(harness);
+    expect(started.userCode).toMatch(/^[A-Z2-9]{4}-[A-Z2-9]{4}$/);
+    expect(started.verificationUrl).toBe(`${BASE}/link?code=${started.userCode}`);
+    expect(started.pollIntervalSeconds).toBe(3);
+    expect(Date.parse(started.expiresAt) - Date.parse("2026-09-29T12:00:00.000Z")).toBe(
+      LINK_CODE_TTL_MS,
+    );
+    const rows = harness.query<{ device_code_hash: string }>("SELECT * FROM link_codes");
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!.device_code_hash).toBe(await sha256Hex(started.deviceCode));
+    expect(JSON.stringify(rows)).not.toContain(started.deviceCode);
+  });
+
+  it("rejects malformed start requests", async () => {
+    const harness = makeDeps();
+    const response = await app.fetch(post("/v1/link/start", { environmentName: "" }), harness.deps);
+    expect(response.status).toBe(400);
+  });
+
+  it("issues a single-use environment token after browser approval", async () => {
+    const harness = makeDeps();
+    const started = await startLink(harness);
+    expect(await poll(harness, started.deviceCode)).toEqual({ status: "pending" });
+
+    const preview = await app.fetch(
+      new Request(`${BASE}/api/link?code=${started.userCode.toLowerCase().replace("-", "")}`, {
+        headers: authHeader("user_1"),
+      }),
+      harness.deps,
+    );
+
+    expect(await preview.json()).toMatchObject({ environmentName: "Studio Mac" });
+
+    const approve = await app.fetch(
+      post("/api/link/approve", { userCode: started.userCode }, authHeader("user_1")),
+      harness.deps,
+    );
+
+    expect(approve.status).toBe(200);
+
+    const approved = await poll(harness, started.deviceCode);
+    expect(approved).toMatchObject({
+      status: "approved",
+      account: { email: "user_1@example.com" },
+    });
+    const token = approved.environmentToken as string;
+
+    const environments = harness.query<{ id: string; token_hash: string; user_id: string }>(
+      "SELECT * FROM environments",
+    );
+
+    expect(environments).toEqual([
+      expect.objectContaining({
+        id: approved.environmentId,
+        user_id: "user_1",
+        token_hash: await sha256Hex(token),
+      }),
+    ]);
+    expect(JSON.stringify(environments)).not.toContain(token);
+    expect(harness.captured).toContainEqual({ event: "environment_linked", userId: "user_1" });
+
+    // The code is consumed: a second poll cannot mint another token.
+    expect(await poll(harness, started.deviceCode)).toEqual({ status: "expired" });
+    expect(harness.query("SELECT * FROM environments")).toHaveLength(1);
+  });
+
+  it("expires unapproved codes and refuses late approval", async () => {
+    const harness = makeDeps();
+    const started = await startLink(harness);
+    harness.advance(LINK_CODE_TTL_MS);
+    expect(await poll(harness, started.deviceCode)).toEqual({ status: "expired" });
+
+    const approve = await app.fetch(
+      post("/api/link/approve", { userCode: started.userCode }, authHeader("user_1")),
+      harness.deps,
+    );
+
+    expect(approve.status).toBe(404);
+  });
+
+  it("refuses to claim an approved code after it expires", async () => {
+    const harness = makeDeps();
+    const started = await startLink(harness);
+    await app.fetch(
+      post("/api/link/approve", { userCode: started.userCode }, authHeader("user_1")),
+      harness.deps,
+    );
+    harness.advance(LINK_CODE_TTL_MS);
+    expect(await poll(harness, started.deviceCode)).toEqual({ status: "expired" });
+    expect(harness.query("SELECT * FROM environments")).toHaveLength(0);
+  });
+
+  it("reports denial", async () => {
+    const harness = makeDeps();
+    const started = await startLink(harness);
+    await app.fetch(
+      post("/api/link/deny", { userCode: started.userCode }, authHeader("user_1")),
+      harness.deps,
+    );
+    expect(await poll(harness, started.deviceCode)).toEqual({ status: "denied" });
+  });
+
+  it("requires a signed-in browser to approve", async () => {
+    const harness = makeDeps();
+    const started = await startLink(harness);
+
+    const response = await app.fetch(
+      post("/api/link/approve", { userCode: started.userCode }),
+      harness.deps,
+    );
+
+    expect(response.status).toBe(401);
+    expect(await poll(harness, started.deviceCode)).toEqual({ status: "pending" });
+  });
+
+  it("rejects a cookie-only approval even when the session cookie is valid", async () => {
+    // An authenticator that honors cookies, as Clerk's fallback would, shows the
+    // guard itself refuses state changes without a bearer token.
+    const harness = makeDeps({
+      auth: {
+        authenticate: async (request) =>
+          request.headers.get("cookie") === "__session=valid"
+            ? { userId: "user_1", email: "user_1@example.com", isAdmin: false }
+            : null,
+      },
+    });
+
+    const started = await startLink(harness);
+
+    const response = await app.fetch(
+      post("/api/link/approve", { userCode: started.userCode }, { cookie: "__session=valid" }),
+      harness.deps,
+    );
+
+    expect(response.status).toBe(401);
+    expect(await poll(harness, started.deviceCode)).toEqual({ status: "pending" });
+  });
+
+  it("rejects a text/plain approval", async () => {
+    const harness = makeDeps();
+    const started = await startLink(harness);
+
+    const response = await app.fetch(
+      new Request(`${BASE}/api/link/approve`, {
+        method: "POST",
+        headers: { "content-type": "text/plain", ...authHeader("user_1") },
+        body: JSON.stringify({ userCode: started.userCode }),
+      }),
+      harness.deps,
+    );
+
+    expect(response.status).toBe(400);
+    expect(await poll(harness, started.deviceCode)).toEqual({ status: "pending" });
+  });
+
+  it("treats unknown device codes as expired", async () => {
+    const harness = makeDeps();
+    expect(await poll(harness, "not-a-real-device-code")).toEqual({ status: "expired" });
+  });
+});

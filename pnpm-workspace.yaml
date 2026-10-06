@@ -1,5 +1,6 @@
 packages:
   - apps/*
+  - apps/cloud/infra
   - infra/*
   - oxlint-plugin-akeru
   - oxlint-plugin-anti-slop
@@ -100,6 +101,18 @@ overrides:
   "@pierre/diffs>@shikijs/transformers": ^4.2.0
   "@types/node": "catalog:"
   effect: "catalog:"
+  # Alchemy 2.0.0-beta.79 needs Effect >=4.0.0-rc.115, and rc.118 removed the
+  # effect/unstable/* paths it imports. Only the deploy tooling in
+  # apps/cloud/infra loads this version; the Worker bundles the catalog one.
+  "@akeru/cloud-infra>effect": 4.0.0-rc.115
+  "@akeru/cloud-infra>@effect/platform-node": 4.0.0-rc.115
+  "@effect/platform-node@4.0.0-rc.115>@effect/platform-node-shared": 4.0.0-rc.115
+  "alchemy@2.0.0-beta.79>@effect/platform-bun": 4.0.0-rc.115
+  "alchemy@2.0.0-beta.79>@effect/sql-d1": 4.0.0-rc.115
+  "alchemy@2.0.0-beta.79>@effect/sql-pg": 4.0.0-rc.115
+  "alchemy@2.0.0-beta.79>@effect/sql-sqlite-do": 4.0.0-rc.115
+  "alchemy@2.0.0-beta.79>@effect/vitest": 4.0.0-rc.115
+
   expo-modules-jsi: 56.0.10
   "expo-sharing>@expo/config-plugins": 56.0.9
   "expo-sharing>@expo/config-types": 56.0.6

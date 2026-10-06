@@ -1,0 +1,80 @@
+# Deploys the Akeru Cloud Worker. Pushes to main deploy production. Staging normally deploys
+# from the maintainer's dev machine (`vp run cloud:deploy:staging`); dispatch can deploy either stage.
+
+name: Cloud deploy
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - apps/cloud/**
+      - packages/contracts/**
+      - .github/workflows/cloud-deploy.yml
+  workflow_dispatch:
+    inputs:
+      stage:
+        description: Alchemy stage to deploy
+        required: true
+        type: choice
+        default: production
+        options: [production, staging]
+
+concurrency:
+  group: cloud-deploy-${{ inputs.stage || 'production' }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    name: Deploy ${{ inputs.stage || 'production' }}
+    runs-on: tenki-standard-medium-4c-8g
+    timeout-minutes: 20
+    # Worker secrets are GitHub environment secrets, so each stage has its own Clerk and Slack values.
+    environment: cloud-${{ inputs.stage || 'production' }}
+    env:
+      STAGE: ${{ inputs.stage || 'production' }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Vite+
+        uses: voidzero-dev/setup-vp@v1
+        with:
+          node-version-file: package.json
+          cache: true
+          run-install: false
+
+      - name: Install from the committed lockfile
+        run: vp install --frozen-lockfile
+
+      - name: Test
+        run: vp test run apps/cloud
+
+      - name: Test cloud contracts
+        run: vp test run packages/contracts/src/cloud.test.ts
+
+      - name: Typecheck
+        run: vp run --filter @akeru/cloud --filter @akeru/cloud-infra typecheck
+
+      - name: Build web app
+        working-directory: apps/cloud
+        run: vp run build:web
+
+      - name: Deploy
+        working-directory: apps/cloud/infra
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          ALCHEMY_STATE: cloudflare
+          CLERK_SECRET_KEY: ${{ secrets.CLERK_SECRET_KEY }}
+          CLERK_PUBLISHABLE_KEY: ${{ secrets.CLERK_PUBLISHABLE_KEY }}
+          SLACK_MANAGER_CLIENT_ID: ${{ secrets.SLACK_MANAGER_CLIENT_ID }}
+          SLACK_MANAGER_CLIENT_SECRET: ${{ secrets.SLACK_MANAGER_CLIENT_SECRET }}
+          POSTHOG_KEY: ${{ secrets.POSTHOG_KEY }}
+          POSTHOG_HOST: ${{ vars.POSTHOG_HOST }}
+          CLOUD_PUBLIC_URL: ${{ vars.CLOUD_PUBLIC_URL }}
+          KILL_SWITCH: ${{ vars.KILL_SWITCH }}
+        # --yes lets the first run create or upgrade the Cloudflare state store without a prompt.
+        run: vp exec alchemy deploy --stage "$STAGE" --yes

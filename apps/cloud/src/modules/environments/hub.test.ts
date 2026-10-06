@@ -1,0 +1,334 @@
+import { describe, expect, it, vi } from "vite-plus/test";
+
+import { CloudServerMessage } from "@akeru/contracts";
+import * as Schema from "effect/Schema";
+import { makeD1, seedEnvironment } from "../../../test/fakes.ts";
+import { ROUTES_PER_USER } from "../channels/routes.ts";
+import { EnvironmentHubRuntime, type HubState, type HubEnv } from "./hub.ts";
+
+// Tests run in Node, where `cloudflare:workers` does not exist.
+vi.mock("cloudflare:workers", () => import("../../../test/cloudflareWorkers.ts"));
+
+const decodeMessage = Schema.decodeUnknownSync(Schema.fromJsonString(CloudServerMessage));
+
+class FakeSocket {
+  readyState: number = WebSocket.OPEN;
+  sent: CloudServerMessage[] = [];
+  closed: { code: number; reason: string } | null = null;
+  #attachment = { environmentId: "env_1", userId: "user_1" };
+  send(data: string) {
+    this.sent.push(decodeMessage(data));
+  }
+  close(code: number, reason: string) {
+    this.closed = { code, reason };
+    this.readyState = WebSocket.CLOSED;
+  }
+  serializeAttachment(value: { environmentId: string; userId: string }) {
+    this.#attachment = value;
+  }
+  deserializeAttachment() {
+    return this.#attachment;
+  }
+}
+
+function makeHub() {
+  const { db, query } = makeD1();
+  seedEnvironment(query);
+  const sockets: FakeSocket[] = [];
+  const storage = new Map<string, unknown>();
+
+  const ctx = {
+    getWebSockets: () => sockets,
+    waitUntil: () => {},
+    acceptWebSocket: () => {},
+    storage: {
+      get: async <T>(key: string) => {
+        // SAFETY: the runtime reads the same typed values it wrote at each storage key.
+        return storage.get(key) as T | undefined;
+      },
+      put: async (key: string, value: { provider: string; count: number; since: string }) =>
+        void storage.set(key, value),
+      delete: async (keys: string[]) =>
+        keys.reduce((count, key) => count + Number(storage.delete(key)), 0),
+      deleteAll: async () => storage.clear(),
+      list: async <T>({ prefix }: { prefix: string }) => {
+        // SAFETY: the runtime owns the typed missed-event values under this prefix.
+        return new Map([...storage].filter(([key]) => key.startsWith(prefix))) as Map<string, T>;
+      },
+    },
+  } satisfies HubState;
+
+  const env = {
+    DB: db,
+    CLOUD_PUBLIC_URL: "https://cloud.akeru.test",
+    CLERK_PUBLISHABLE_KEY: "pk_test",
+    SLACK_MANAGER_CLIENT_ID: "manager-client",
+    SLACK_MANAGER_CLIENT_SECRET: "manager-secret",
+    POSTHOG_KEY: "",
+    POSTHOG_HOST: "https://us.i.posthog.com",
+    KILL_SWITCH: "",
+  } satisfies HubEnv;
+
+  const hub = new EnvironmentHubRuntime(ctx, env);
+
+  const connect = () => {
+    const socket = new FakeSocket();
+    sockets.push(socket);
+
+    return socket;
+  };
+
+  const send = (socket: FakeSocket, message: Parameters<typeof JSON.stringify>[0]) =>
+    hub.webSocketMessage(socket, JSON.stringify(message));
+
+  return { hub, query, connect, send, storage };
+}
+
+const hello = {
+  kind: "hello",
+  v: 1,
+  serverVersion: "1.3.0",
+  environmentName: "Studio Mac",
+  capabilities: ["hosted-channels"],
+};
+
+const inbound = {
+  method: "POST" as const,
+  path: "/",
+  headers: {},
+  bodyBase64: "e30=",
+  receivedAt: "2026-09-29T12:00:00.000Z",
+};
+
+describe("EnvironmentHub", () => {
+  it("welcomes an environment and records its version", async () => {
+    const { connect, send, query } = makeHub();
+    const socket = connect();
+    await send(socket, hello);
+    expect(socket.sent).toEqual([
+      {
+        kind: "welcome",
+        v: 1,
+        environmentId: "env_1",
+        account: { email: "user_1@example.com" },
+        capabilities: ["hosted-channels"],
+      },
+    ]);
+    expect(query("SELECT server_version FROM environments")).toEqual([{ server_version: "1.3.0" }]);
+  });
+
+  it("revokes an environment whose account no longer exists", async () => {
+    const { connect, send, query } = makeHub();
+    // D1 enforces the foreign key; switch it off to simulate a deleted account.
+    query("PRAGMA foreign_keys = OFF");
+    query("DELETE FROM users");
+    const socket = connect();
+    await send(socket, hello);
+    expect(socket.sent).toEqual([{ kind: "revoked" }]);
+    expect(socket.closed).toEqual({ code: 4001, reason: "Revoked" });
+  });
+
+  it("answers ping and rejects malformed requests", async () => {
+    const { connect, send } = makeHub();
+    const socket = connect();
+    await send(socket, { kind: "ping" });
+    await send(socket, {
+      kind: "channel.route.create",
+      requestId: "r1",
+      provider: "carrier-pigeon",
+    });
+    expect(socket.sent).toEqual([
+      { kind: "pong" },
+      {
+        kind: "result",
+        requestId: "r1",
+        ok: false,
+        code: "invalid-request",
+        message: "Unrecognized request.",
+      },
+    ]);
+  });
+
+  it("creates routes up to the per-user cap", async () => {
+    const { connect, send, query } = makeHub();
+    const socket = connect();
+
+    for (let index = 0; index <= ROUTES_PER_USER; index += 1) {
+      await send(socket, {
+        kind: "channel.route.create",
+        requestId: `r${index}`,
+        provider: "slack",
+        label: `Bot ${index}`,
+      });
+    }
+
+    const first = socket.sent[0] as { ok: boolean; value: { route: Record<string, string> } };
+    expect(first.ok).toBe(true);
+    expect(first.value.route.routeId).toMatch(/^rt_[a-z0-9]{20}$/);
+    expect(first.value.route.inboundUrl).toBe(
+      `https://cloud.akeru.test/v1/channels/slack/${first.value.route.routeId}`,
+    );
+    expect(first.value.route.oauthRedirectUrl).toBe("https://cloud.akeru.test/v1/oauth/callback");
+    expect(socket.sent.at(-1)).toMatchObject({ ok: false, code: "limit-reached" });
+    expect(query("SELECT COUNT(*) AS count FROM channel_routes")).toEqual([
+      { count: ROUTES_PER_USER },
+    ]);
+  });
+
+  it("updates and deletes only its own routes", async () => {
+    const { connect, send, query } = makeHub();
+    seedEnvironment(query, { userId: "user_2", environmentId: "env_2", routeId: "rt_other" });
+    const socket = connect();
+    await send(socket, {
+      kind: "channel.route.create",
+      requestId: "c",
+      provider: "slack",
+      label: "Ada",
+    });
+
+    const routeId = (socket.sent[0] as { value: { route: { routeId: string } } }).value.route
+      .routeId;
+
+    await send(socket, {
+      kind: "channel.route.update",
+      requestId: "u",
+      routeId,
+      externalAppId: "A123",
+      externalWorkspaceName: "Acme",
+    });
+    await send(socket, { kind: "channel.route.delete", requestId: "d", routeId: "rt_other" });
+    expect(socket.sent[1]).toMatchObject({ requestId: "u", ok: true });
+    expect(socket.sent[2]).toMatchObject({ requestId: "d", ok: false, code: "not-found" });
+    expect(
+      query(
+        "SELECT external_app_id, external_workspace_name, label FROM channel_routes WHERE route_id = ?",
+        routeId,
+      ),
+    ).toEqual([{ external_app_id: "A123", external_workspace_name: "Acme", label: "Ada" }]);
+    await send(socket, { kind: "channel.route.delete", requestId: "d2", routeId });
+    expect(socket.sent[3]).toEqual({
+      kind: "result",
+      requestId: "d2",
+      ok: true,
+      value: { type: "empty" },
+    });
+  });
+
+  it("begins Slack OAuth with a hashed single-use state", async () => {
+    const { connect, send, query } = makeHub();
+    const socket = connect();
+    await send(socket, { kind: "oauth.begin", requestId: "o", purpose: "slack.manager" });
+
+    const result = socket.sent[0] as {
+      ok: boolean;
+      value: { state: string; redirectUri: string; authorizeUrl: string };
+    };
+
+    expect(result.ok).toBe(true);
+    const authorize = new URL(result.value.authorizeUrl);
+    expect(authorize.origin + authorize.pathname).toBe("https://slack.com/oauth/v2/authorize");
+    expect(authorize.searchParams.get("user_scope")).toBe("app_configurations:write");
+    expect(authorize.searchParams.get("client_id")).toBe("manager-client");
+    expect(authorize.searchParams.get("state")).toBe(result.value.state);
+    expect(result.value.redirectUri).toBe("https://cloud.akeru.test/v1/oauth/callback");
+    const flows = query("SELECT * FROM oauth_flows");
+    expect(flows).toHaveLength(1);
+    expect(JSON.stringify(flows)).not.toContain(result.value.state);
+
+    await send(socket, { kind: "oauth.begin", requestId: "i", purpose: "slack.install" });
+    expect(socket.sent[1]).toMatchObject({ requestId: "i", ok: false, code: "invalid-request" });
+  });
+
+  it("remembers events missed while offline and reports them on the next hello", async () => {
+    const { hub, connect, send } = makeHub();
+    expect(await hub.relayInbound("rt_ada", "slack", inbound)).toBe("offline");
+    expect(
+      await hub.relayInbound("rt_ada", "slack", {
+        ...inbound,
+        receivedAt: "2026-09-29T12:05:00.000Z",
+      }),
+    ).toBe("offline");
+    const socket = connect();
+    await send(socket, hello);
+    expect(socket.sent[1]).toEqual({
+      kind: "channel.missed",
+      routeId: "rt_ada",
+      provider: "slack",
+      count: 2,
+      since: "2026-09-29T12:00:00.000Z",
+    });
+    await send(socket, hello);
+    expect(socket.sent.filter((message) => message.kind === "channel.missed")).toHaveLength(1);
+  });
+
+  it("relays to the newest open socket and rate limits bursts per route", async () => {
+    const { hub, connect } = makeHub();
+    const old = connect();
+    old.readyState = WebSocket.CLOSING;
+    const current = connect();
+    let delivered = 0;
+    let limited = 0;
+
+    for (let index = 0; index < 40; index += 1) {
+      const outcome = await hub.relayInbound("rt_ada", "slack", inbound);
+
+      if (outcome === "delivered") delivered += 1;
+
+      if (outcome === "rate-limited") limited += 1;
+    }
+
+    expect(delivered).toBeGreaterThanOrEqual(30);
+    expect(limited).toBeGreaterThan(0);
+    expect(old.sent).toEqual([]);
+    expect(current.sent).toHaveLength(delivered);
+    expect(await hub.relayInbound("rt_other", "slack", inbound)).toBe("delivered");
+  });
+
+  it("tells the environment it was revoked and closes the socket", async () => {
+    const { hub, connect } = makeHub();
+    const socket = connect();
+    await hub.revoke();
+    expect(socket.sent).toEqual([{ kind: "revoked" }]);
+    expect(socket.closed).toEqual({ code: 4001, reason: "Revoked" });
+    expect(await hub.isOnline()).toBe(false);
+  });
+
+  it("unlinks from the environment side, answers, then closes the socket", async () => {
+    const { connect, send, query, storage } = makeHub();
+    query(
+      "INSERT INTO channel_routes (route_id, provider, environment_id, user_id, label, created_at) VALUES ('rt_ada', 'slack', 'env_1', 'user_1', 'Ada', '2026-09-01T00:00:00.000Z')",
+    );
+    query(
+      "INSERT INTO oauth_flows (flow_id, state_hash, purpose, environment_id, expires_at) VALUES ('fl_1', 'h', 'slack.manager', 'env_1', '2026-09-30T00:00:00.000Z')",
+    );
+    storage.set("missed:rt_ada", { provider: "slack", count: 1, since: "2026-09-29T00:00:00Z" });
+    const socket = connect();
+    await send(socket, { kind: "environment.unlink", requestId: "u1" });
+    expect(socket.sent).toEqual([
+      { kind: "result", requestId: "u1", ok: true, value: { type: "empty" } },
+    ]);
+    expect(socket.closed).toEqual({ code: 4001, reason: "Unlinked" });
+    expect(query("SELECT revoked_at IS NOT NULL AS revoked FROM environments")).toEqual([
+      { revoked: 1 },
+    ]);
+    expect(query("SELECT disabled FROM channel_routes")).toEqual([{ disabled: 1 }]);
+    expect(query("SELECT * FROM oauth_flows")).toEqual([]);
+    expect(storage.size).toBe(0);
+  });
+
+  it("answers not-found when unlinking an already revoked environment", async () => {
+    const { connect, send, query } = makeHub();
+    query("UPDATE environments SET revoked_at = '2026-09-01T00:00:00.000Z'");
+    const socket = connect();
+    await send(socket, { kind: "environment.unlink", requestId: "u1" });
+    expect(socket.sent).toEqual([
+      {
+        kind: "result",
+        requestId: "u1",
+        ok: false,
+        code: "not-found",
+        message: "This environment is not linked.",
+      },
+    ]);
+  });
+});
