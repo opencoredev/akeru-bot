@@ -1,3 +1,4 @@
+import type { MobileRootParams } from "./navigationParams";
 import {
   createPathConfigForStaticNavigation,
   getPathFromState,
@@ -292,12 +293,12 @@ export const RootStack = createNativeStackNavigator({
   },
 });
 
-type RootStackType = typeof RootStack;
-
 const navigationPathConfig = {
   screens: createPathConfigForStaticNavigation(RootStack) ?? {},
 };
 
-declare module "@react-navigation/native" {
-  interface RootNavigator extends RootStackType {}
+declare global {
+  namespace ReactNavigation {
+    interface RootParamList extends MobileRootParams {}
+  }
 }
