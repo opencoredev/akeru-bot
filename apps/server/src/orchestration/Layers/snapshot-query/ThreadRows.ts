@@ -10,6 +10,7 @@ import {
   EventReplayStatsInput,
   EventReplayStatsRowSchema,
   ProjectionThreadSearchRequest,
+  ThreadChannelConversationLookupInput,
   ProjectionThreadSearchRow,
   WorkspaceRootLookupInput,
   ProjectionProjectLookupRowSchema,
@@ -328,6 +329,22 @@ export function createThreadRows({ sql }: Pick<ProjectionSnapshotDependencies, "
       `,
   });
 
+  const listThreadChannelConversationIdRows = SqlSchema.findAll({
+    Request: ThreadChannelConversationLookupInput,
+    Result: Schema.Struct({
+      externalThreadId: Schema.String,
+    }),
+    execute: ({ threadId, provider }) =>
+      sql`
+        SELECT DISTINCT
+          json_extract(channel_origin_json, '$.externalThreadId') AS "externalThreadId"
+        FROM projection_thread_messages
+        WHERE thread_id = ${threadId}
+          AND json_extract(channel_origin_json, '$.provider') = ${provider}
+          AND json_extract(channel_origin_json, '$.externalThreadId') IS NOT NULL
+      `,
+  });
+
   const getOldestUserMessageRowByThread = SqlSchema.findOneOption({
     Request: ThreadIdLookupInput,
     Result: ProjectionThreadMessageDbRowSchema,
@@ -608,6 +625,7 @@ export function createThreadRows({ sql }: Pick<ProjectionSnapshotDependencies, "
     getThreadCheckpointContextThreadRow,
     getActiveThreadRowById,
     listThreadMessageRowsByThread,
+    listThreadChannelConversationIdRows,
     getOldestUserMessageRowByThread,
     listThreadProposedPlanRowsByThread,
     getThreadRuntimeContextRow,

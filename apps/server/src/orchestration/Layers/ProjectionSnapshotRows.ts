@@ -8,6 +8,7 @@ import {
   ChannelBinding,
   ChannelDeliveryState,
   ChannelMessageOrigin,
+  ChannelProvider,
   ChatAttachment,
   CheckpointRef,
   GroupMembership,
@@ -232,6 +233,11 @@ export const ProjectIdLookupInput = Schema.Struct({
 
 export const ThreadIdLookupInput = Schema.Struct({
   threadId: ThreadId,
+});
+
+export const ThreadChannelConversationLookupInput = Schema.Struct({
+  threadId: ThreadId,
+  provider: ChannelProvider,
 });
 
 export const ThreadActivityKindsLookupInput = Schema.Struct({

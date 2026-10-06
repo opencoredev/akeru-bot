@@ -420,6 +420,32 @@ describe("channel runtime", () => {
     }),
   );
 
+  it.effect("restores Slack subscriptions whose origin sits outside the recent message window", () =>
+    Effect.gen(function* () {
+      const slackThreadId = ThreadId.make("thread-slack-old-origin");
+
+      const harness = makeHarness({
+        startTransport: null,
+        commandModelOmitsMessages: true,
+        readThreadMessageLimit: 2,
+        threads: [
+          makeThread(slackThreadId, BOT_ID, [
+            makeMessage(MessageId.make("slack-origin"), "user", "Mention", {
+              provider: "slack",
+              externalThreadId: "slack:C1:old",
+            }),
+            makeMessage(MessageId.make("later-1"), "assistant", "later 1"),
+            makeMessage(MessageId.make("later-2"), "assistant", "later 2"),
+          ]),
+        ],
+      });
+
+      yield* connectChannel(harness.dependencies, slackConnect(BOT_ID));
+
+      expect(externalAdapters.slackSubscriptions).toContain("slack:C1:old");
+    }),
+  );
+
   it.effect("routes normalized Discord direct messages and mention-thread continuation", () =>
     Effect.gen(function* () {
       let directMessage:

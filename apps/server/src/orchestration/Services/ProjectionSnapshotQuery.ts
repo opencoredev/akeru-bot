@@ -9,6 +9,7 @@
 import type {
   AkeruDelegationRecord,
   BotId,
+  ChannelProvider,
   CheckpointRef,
   GroupId,
   MessageId,
@@ -312,6 +313,16 @@ export interface ProjectionSnapshotQueryShape {
     threadId: ThreadId,
     query?: ProjectionThreadDetailQuery,
   ) => Effect.Effect<Option.Option<OrchestrationThread>, ProjectionRepositoryError>;
+
+  /**
+   * Distinct Slack/Discord conversation IDs stored on a thread's messages.
+   * Channel reconnect uses this instead of a capped detail snapshot so older
+   * subscribed conversations stay visible.
+   */
+  readonly listThreadChannelConversationIds?: (input: {
+    readonly threadId: ThreadId;
+    readonly provider: ChannelProvider;
+  }) => Effect.Effect<ReadonlyArray<string>, ProjectionRepositoryError>;
 
   /**
    * Read a single active thread detail together with the projection snapshot
