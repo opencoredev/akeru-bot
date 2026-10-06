@@ -14,7 +14,7 @@ import type {
   SubscriptionAuthStartResult,
 } from "@akeru/contracts";
 import { ArrowRightIcon, CheckIcon, ExternalLinkIcon, LoaderIcon } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { useI18n } from "../../i18n";
 import { useEnvironmentQuery } from "../../state/query";
@@ -91,6 +91,16 @@ export function SubscriptionStep({
 
   const selected = SUBSCRIPTION_PROVIDERS.find((item) => item.id === draft.providerId)!;
   const connected = captureMode || statusByProvider.get(draft.providerId)?.connected === true;
+  const autoContinuedRef = useRef(false);
+
+  useEffect(() => {
+    if (captureMode || !connected || busy || keyMode || activeLogin || autoContinuedRef.current) {
+      return;
+    }
+
+    autoContinuedRef.current = true;
+    onContinue();
+  }, [activeLogin, busy, captureMode, connected, keyMode, onContinue]);
 
   const settle = useCallback(
     (progress: SubscriptionAuthLoginProgress) => {

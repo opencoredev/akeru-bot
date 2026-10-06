@@ -405,7 +405,6 @@ describe("onboarding API-key connections", () => {
         />,
       ),
     ).toContain("text-success-indicator-foreground");
-    await click("Continue");
     expect(mocks.next).toHaveBeenCalledOnce();
     expect(mocks.start).not.toHaveBeenCalled();
   });

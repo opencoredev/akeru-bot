@@ -151,6 +151,9 @@ export const connectionsCatalog = {
   "Finish connecting {provider}": "Finish connecting {provider}",
   "Connect your provider": "Connect your provider",
   "Connect {provider}": "Connect {provider}",
+  "Setting up {name}": "Setting up {name}",
+  "Could not open {name}'s chat. Open it from the roster or reload to retry.":
+    "Could not open {name}'s chat. Open it from the roster or reload to retry.",
   "This provider is not ready. Go back and reconnect it.":
     "This provider is not ready. Go back and reconnect it.",
   "You can connect a subscription and create a bot later.":

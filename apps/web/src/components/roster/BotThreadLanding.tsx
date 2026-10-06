@@ -8,6 +8,7 @@ import { Fragment, useCallback, useEffect, useId, useMemo, useState } from "reac
 
 import { selectOpenBotInboxItems } from "../../botInbox";
 import { canManageChannels, connectedChannelBinding } from "../../channelAccess";
+import { isElectron } from "../../env";
 import { useI18n } from "../../i18n";
 import { usePrimaryEnvironmentId } from "../../state/environments";
 import { useThreadActivities } from "../../state/entities";
@@ -49,6 +50,12 @@ import { useSubscriptionStatuses } from "../settings/ProvidersPanel";
 import { BotTurnFailureRow } from "./BotTurnFailureRow";
 import { useBotEngineAvailability } from "./useBotEngineAvailability";
 import { BotPromptComposer } from "./BotPromptComposer";
+import {
+  clearDesktopOnboardingFirstChat,
+  desktopOnboardingPromptChipItems,
+  readDesktopOnboardingFirstChatBotId,
+  shouldShowDesktopOnboardingPromptChips,
+} from "../onboarding/desktopOnboarding.logic";
 import { useAnsweredUserInputs } from "./useAnsweredUserInputs";
 import { useBotPromptMentionScope } from "./BotPromptMentions";
 import { buildBotStepMeters } from "@akeru/client-runtime/bot-step-usage";
@@ -104,6 +111,15 @@ export function BotThreadLanding({
   const rosterLoadState = useRosterLoadState();
   const bot = routedBot.status === "available" ? routedBot.bot : undefined;
   const [replyTarget, setReplyTarget] = useState<MessageReplyTarget | null>(null);
+
+  const [firstChatBotId, setFirstChatBotId] = useState(() =>
+    readDesktopOnboardingFirstChatBotId(window.localStorage),
+  );
+
+  const dismissFirstChatChips = useCallback(() => {
+    clearDesktopOnboardingFirstChat(window.localStorage);
+    setFirstChatBotId(null);
+  }, []);
 
   const {
     instanceEntries,
@@ -646,10 +662,32 @@ export function BotThreadLanding({
               replyPreview={replyTarget}
               onCancelReply={() => setReplyTarget(null)}
               sendBlockedDescriptionId={sendBlocked ? engineNoticeId : undefined}
+              autoFocus={shouldShowDesktopOnboardingPromptChips({
+                desktop: isElectron,
+                botId: bot.id,
+                firstChatBotId,
+                hasMessages: runtime.hasMessages,
+                composerEmpty: true,
+              })}
+              promptSuggestions={
+                shouldShowDesktopOnboardingPromptChips({
+                  desktop: isElectron,
+                  botId: bot.id,
+                  firstChatBotId,
+                  hasMessages: runtime.hasMessages,
+                  composerEmpty: true,
+                })
+                  ? desktopOnboardingPromptChipItems(t)
+                  : undefined
+              }
+              onPromptSuggestionType={dismissFirstChatChips}
               onSubmit={async (prompt, files) => {
                 const sent = await runtime.send(buildReplyPrompt(replyTarget, prompt), files);
 
-                if (sent) setReplyTarget(null);
+                if (sent) {
+                  dismissFirstChatChips();
+                  setReplyTarget(null);
+                }
 
                 return sent;
               }}

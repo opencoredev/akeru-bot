@@ -1,10 +1,8 @@
-import { recordLookup } from "../recordLookup";
 import { Predicate, Schema } from "effect";
 import type { SubscriptionProviderId } from "@akeru/contracts";
 
 import type { BotAvatar, BotBlobShape } from "../roster/types";
 import { BLOB_SHAPES, isBotAvatarColor } from "../roster/roster.logic";
-import { normalizeDesktopOnboardingGoal } from "./goalPlan.logic";
 
 export const DESKTOP_ONBOARDING_STORAGE_KEY = "akeru:desktop-onboarding:v1";
 
@@ -18,9 +16,8 @@ export function markDesktopOnboardingCompleted(
 }
 
 /**
- * The bot whose chat setup is handing off to. It is written with completion,
- * the moment the first message goes out, so a reload mid-handoff neither
- * reopens setup (and resends) nor loses the chat the user was being taken to.
+ * The bot whose chat setup is handing off to. Written when create succeeds so a
+ * reload neither reopens Connect nor loses the chat the user was being taken to.
  */
 export const DESKTOP_ONBOARDING_HANDOFF_STORAGE_KEY = "akeru:desktop-onboarding-handoff:v2";
 
@@ -72,7 +69,7 @@ export function readDesktopOnboardingHandoff(
   return null;
 }
 
-/** Migrates a v1 bot ID only after this environment's loaded roster confirms ownership. */
+/** Migrates a v1 handoff only after this environment's loaded roster confirms ownership. */
 export function readDesktopOnboardingHandoffForEnvironment(
   storage: Pick<Storage, "getItem" | "removeItem" | "setItem">,
   environmentId: string,
@@ -97,34 +94,20 @@ export function readDesktopOnboardingHandoffForEnvironment(
   return handoff;
 }
 
-export type DesktopOnboardingStep = "subscription" | "goal" | "identity" | "message";
+export type DesktopOnboardingStep = "subscription";
 
 export interface DesktopOnboardingStepDefinition {
   readonly id: DesktopOnboardingStep;
-  /** Rail label. Short enough to sit in a four-up stepper. */
   readonly label: string;
 }
 
-/** Source of truth for step order: drives the rail, the counter, and stepNumber. */
 export const DESKTOP_ONBOARDING_STEPS: readonly DesktopOnboardingStepDefinition[] = [
   { id: "subscription", label: "Connect" },
-  { id: "goal", label: "Goal" },
-  { id: "identity", label: "Identity" },
-  { id: "message", label: "First message" },
 ];
-
-/**
- * Generous enough for a few sentences about work we cannot anticipate, short
- * enough that the answer still reads as a goal rather than a brief.
- */
-export const DESKTOP_ONBOARDING_GOAL_MAX_LENGTH = 600;
 
 export interface DesktopOnboardingDraft {
   readonly step: DesktopOnboardingStep;
   readonly providerId: SubscriptionProviderId;
-  /** What the user wants done, in their words. Empty until they answer. */
-  readonly goal: string;
-  readonly goalPhase: "ask" | "plan";
   readonly name: string;
   readonly avatar: Extract<BotAvatar, { kind: "blob" }>;
   readonly botId: string | null;
@@ -133,8 +116,6 @@ export interface DesktopOnboardingDraft {
 export const DEFAULT_DESKTOP_ONBOARDING_DRAFT: DesktopOnboardingDraft = {
   step: "subscription",
   providerId: "openai-codex",
-  goal: "",
-  goalPhase: "ask",
   name: "",
   avatar: { kind: "blob", shape: "squircle", color: "#2E8EFF" },
   botId: null,
@@ -156,55 +137,13 @@ const providerIds: readonly SubscriptionProviderId[] = [
   "opencode-go",
 ];
 
-/**
- * Goals recovered from drafts saved while setup asked the user to pick a
- * category. Phrased the way someone would answer the question that replaced
- * the picker, because the answer is shown back to them and drafts their first
- * message. Ids are historical: never reuse one for different work.
- */
-const legacyUseCaseGoals = {
-  build: "Building a software feature",
-  fix: "Fixing a software bug",
-  understand: "Understanding a codebase",
-  automate: "Automating a task I repeat",
-  inbox: "Triaging my inbox and drafting replies I approve",
-  documents: "Processing incoming documents and filing them where they belong",
-  monitoring: "Watching a system and telling me when something changes",
-  research: "Looking up the same facts and keeping one list current",
-  routine: "Taking over a routine that eats my week",
-} satisfies Readonly<Record<string, string>>;
-
 function isProviderId(value: unknown): value is SubscriptionProviderId {
   return Predicate.isString(value) && providerIds.some((candidate) => candidate === value);
-}
-
-function isStep(value: unknown): value is DesktopOnboardingStep {
-  return DESKTOP_ONBOARDING_STEPS.some((step) => step.id === value);
-}
-
-/**
- * Goal of a saved draft, whichever generation of setup wrote it. A stored
- * category still names work the user chose, so it outranks any custom text
- * left behind by a choice they moved away from.
- */
-function storedGoal(parsed: StoredDraft): string {
-  if (Predicate.isString(parsed.goal) && parsed.goal.trim().length > 0) return parsed.goal;
-  const custom = Predicate.isString(parsed.customUseCase) ? parsed.customUseCase : "";
-  const useCaseId = Predicate.isString(parsed.useCaseId) ? parsed.useCaseId : null;
-
-  if (useCaseId !== null && useCaseId !== "custom")
-    return recordLookup(legacyUseCaseGoals, useCaseId) ?? custom;
-
-  return custom;
 }
 
 const StoredDraft = Schema.Struct({
   step: Schema.optionalKey(Schema.Unknown),
   providerId: Schema.optionalKey(Schema.Unknown),
-  goal: Schema.optionalKey(Schema.Unknown),
-  goalPhase: Schema.optionalKey(Schema.Unknown),
-  customUseCase: Schema.optionalKey(Schema.Unknown),
-  useCaseId: Schema.optionalKey(Schema.Unknown),
   name: Schema.optionalKey(Schema.Unknown),
   avatar: Schema.optionalKey(
     Schema.Struct({
@@ -226,14 +165,9 @@ export function parseDesktopOnboardingDraft(value: string | null): DesktopOnboar
   try {
     const parsed = decodeStoredDraft(JSON.parse(value));
     const avatar = parsed.avatar;
-    const step = parsed.step === "use-case" ? "goal" : parsed.step;
-    const legacy = parsed.step === "use-case" || "useCaseId" in parsed || "customUseCase" in parsed;
-    const goal = legacy ? normalizeDesktopOnboardingGoal(storedGoal(parsed)) : storedGoal(parsed);
 
     if (
-      !isStep(step) ||
       !isProviderId(parsed.providerId) ||
-      goal.length > DESKTOP_ONBOARDING_GOAL_MAX_LENGTH ||
       !Predicate.isString(parsed.name) ||
       parsed.name.length > 80 ||
       !avatar ||
@@ -246,15 +180,8 @@ export function parseDesktopOnboardingDraft(value: string | null): DesktopOnboar
     }
 
     return {
-      step,
+      step: "subscription",
       providerId: parsed.providerId,
-      goal,
-      goalPhase:
-        parsed.goalPhase === "ask" || parsed.goalPhase === "plan"
-          ? parsed.goalPhase
-          : step === "goal"
-            ? "ask"
-            : "plan",
       name: parsed.name,
       avatar: { kind: "blob", shape: avatar.shape, color: avatar.color },
       botId: parsed.botId,

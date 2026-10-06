@@ -140,6 +140,9 @@ export const connectionsCatalog = {
   "Finish connecting {provider}": "完成连接 {provider}",
   "Connect your provider": "连接你的提供商",
   "Connect {provider}": "连接 {provider}",
+  "Setting up {name}": "正在设置 {name}",
+  "Could not open {name}'s chat. Open it from the roster or reload to retry.":
+    "无法打开 {name} 的聊天。请从名册打开，或重新加载后再试。",
   "This provider is not ready. Go back and reconnect it.": "此提供商尚未就绪。请返回并重新连接。",
   "You can connect a subscription and create a bot later.": "你可以稍后再连接订阅并创建机器人。",
   "Opening your workspace": "正在打开你的工作区",
