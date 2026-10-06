@@ -37,10 +37,8 @@ declare global {
 export function loadNodeCatalogModules(
   moduleUrl = import.meta.url,
 ): CatalogManifestModules<unknown> {
-  // The server bundle lives at `apps/server/dist`, while source files live
-  // one directory deeper under `apps/server/src/provider`. Resolve the
-  // repository catalog from the bundled location, with the packaged desktop
-  // resource as a fallback.
+  // Released bundles carry the catalog beside the entry point. Source and
+  // older desktop layouts retain their repository/resource fallbacks.
   const sourceTree = moduleUrl.includes("/src/provider/");
 
   const candidates = sourceTree
@@ -49,6 +47,7 @@ export function loadNodeCatalogModules(
         new URL("../../../../plugins/entries/", moduleUrl),
       ]
     : [
+        new URL("./plugins/entries/", moduleUrl),
         new URL("../../../plugins/entries/", moduleUrl),
         new URL("../../../../plugins/entries/", moduleUrl),
         new URL("../../../apps/desktop/prod-resources/plugins/entries/", moduleUrl),

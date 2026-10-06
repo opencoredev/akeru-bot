@@ -16,6 +16,7 @@ function fixture(modulePath: string, entriesPath: string) {
     NodePath.join(root, entriesPath, "exa"),
     { recursive: true },
   );
+
   return NodeURL.pathToFileURL(NodePath.join(root, modulePath)).href;
 }
 

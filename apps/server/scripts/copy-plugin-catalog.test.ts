@@ -2,6 +2,7 @@ import * as NodeChildProcess from "node:child_process";
 import * as NodeFS from "node:fs";
 import * as NodeOS from "node:os";
 import * as NodePath from "node:path";
+import * as NodeURL from "node:url";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 import packageJson from "../package.json" with { type: "json" };
 
@@ -28,16 +29,18 @@ describe("bundled plugin assets", () => {
     NodeFS.writeFileSync(NodePath.join(dist, "bin.mjs"), "bundle");
     NodeChildProcess.execFileSync(
       process.execPath,
-      [new URL("./copy-plugin-catalog.ts", import.meta.url).pathname, source, dist],
+      [NodeURL.fileURLToPath(new URL("./copy-plugin-catalog.ts", import.meta.url)), source, dist],
       { cwd: root },
     );
     const copied = NodePath.join(dist, "plugins/entries");
     expect(NodeFS.readdirSync(copied)).toEqual(["exa"]);
+
     for (const name of ["plugin.json", "logo.svg", "logo-dark.svg"]) {
       expect(NodeFS.readFileSync(NodePath.join(copied, "exa", name))).toEqual(
         NodeFS.readFileSync(NodePath.join(source, "exa", name)),
       );
     }
+
     expect(NodeFS.readFileSync(NodePath.join(dist, "bin.mjs"), "utf8")).toBe("bundle");
   });
 
