@@ -203,6 +203,94 @@ afterEach(async () => {
   vi.unstubAllGlobals();
 });
 
+describe("new Slack assignment", () => {
+  async function completeSlackSetup() {
+    await act(() => root.render(<ChannelSetupDialog {...props} provider="slack" />));
+    await click("Continue");
+    await fill("Slack Bot token", "xoxb-new");
+    await fill("Slack App-level token", "xapp-new");
+    await click("Continue");
+    await fill("Connection name", "New Slack");
+  }
+
+  for (const status of ["connected", "disconnected"]) {
+    it(`refuses a new connection when the bot is ${status} but assigned`, async () => {
+      mocks.snapshot!.bots = [
+        {
+          id: "test-bot",
+          channelBindings: [{ provider: "slack", status, connectionId: "existing-slack" }],
+        },
+      ];
+      await completeSlackSetup();
+      await click("Connect");
+
+      expect(mocks.toast).toHaveBeenCalledWith({
+        type: "error",
+        title: "Unassign the channel already connected to this bot first",
+      });
+      expect(mocks.save).not.toHaveBeenCalled();
+      expect(mocks.attach).not.toHaveBeenCalled();
+      expect(mocks.detach).not.toHaveBeenCalled();
+      expect(onSaved).not.toHaveBeenCalled();
+      expect(onOpenChange).not.toHaveBeenCalled();
+    });
+  }
+
+  it("refuses to replace a live legacy Slack binding", async () => {
+    mocks.snapshot!.bots = [
+      {
+        id: "test-bot",
+        channelBindings: [{ provider: "slack", status: "connected", connectionId: undefined }],
+      },
+    ];
+    await completeSlackSetup();
+    await click("Connect");
+    expect(mocks.toast).toHaveBeenCalledWith({
+      type: "error",
+      title: "Unassign the channel already connected to this bot first",
+    });
+    expect(mocks.save).not.toHaveBeenCalled();
+    expect(mocks.attach).not.toHaveBeenCalled();
+  });
+
+  it("allows a new Slack connection after detach and leaves another provider alone", async () => {
+    mocks.snapshot!.bots = [
+      {
+        id: "test-bot",
+        channelBindings: [
+          { provider: "slack", status: "disconnected", connectionId: undefined },
+          { provider: "telegram", status: "connected", connectionId: "telegram-line" },
+        ],
+      },
+    ];
+    await completeSlackSetup();
+    await click("Connect");
+    expect(mocks.save).toHaveBeenCalledTimes(1);
+    expect(mocks.attach).toHaveBeenCalledTimes(1);
+    expect(mocks.detach).not.toHaveBeenCalled();
+    expect(onOpenChange).toHaveBeenCalledWith(false);
+  });
+
+  it("retries the same Slack connection after a failed attach persists its binding", async () => {
+    mocks.attach.mockResolvedValueOnce({ _tag: "Failure" });
+    await completeSlackSetup();
+    await click("Connect");
+    const connectionId = mocks.save.mock.calls[0]![0].input.connectionId;
+    mocks.snapshot!.bots = [
+      {
+        id: "test-bot",
+        channelBindings: [{ provider: "slack", status: "failed", connectionId }],
+      },
+    ];
+    await act(() => root.render(<ChannelSetupDialog {...props} provider="slack" />));
+    await click("Connect");
+    expect(mocks.toast).not.toHaveBeenCalled();
+    expect(mocks.save).toHaveBeenCalledTimes(1);
+    expect(mocks.attach).toHaveBeenCalledTimes(2);
+    expect(onOpenChange).toHaveBeenCalledWith(false);
+  });
+});
+
 describe("ChannelSetupDialog recovery", () => {
   it("retries the saved profile without saving another connection or blaming credentials", async () => {
     mocks.attach.mockResolvedValueOnce({ _tag: "Failure" });
