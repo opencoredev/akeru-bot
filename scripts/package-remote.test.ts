@@ -54,6 +54,11 @@ describe("package-remote", () => {
     NodeFS.mkdirSync(dist, { recursive: true });
     NodeFS.writeFileSync(NodePath.join(dist, "bin.mjs"), "");
     NodeFS.writeFileSync(NodePath.join(dist, "service-launcher.mjs"), "");
+    NodeFS.cpSync(
+      new URL("../plugins/entries/exa/", import.meta.url),
+      NodePath.join(dist, "plugins/entries/exa"),
+      { recursive: true },
+    );
     const fakeNode = NodePath.join(root, "fake-node");
     NodeFS.writeFileSync(fakeNode, '#!/bin/sh\nprintf \'%s|%s\\n\' "$T3CODE_HOME" "$1"\n', {
       mode: 0o755,
@@ -94,6 +99,14 @@ describe("package-remote", () => {
       "node_modules/akeru-bot/dist/service-launcher.mjs",
     ]) {
       expect(NodeFS.existsSync(NodePath.join(installed, file)), file).toBe(true);
+    }
+
+    for (const name of ["plugin.json", "logo.svg", "logo-dark.svg"]) {
+      expect(
+        NodeFS.readFileSync(
+          NodePath.join(installed, "node_modules/akeru-bot/dist/plugins/entries/exa", name),
+        ),
+      ).toEqual(NodeFS.readFileSync(NodePath.join(dist, "plugins/entries/exa", name)));
     }
 
     expect(NodeFS.readFileSync(NodePath.join(installed, "VERSION"), "utf8")).toBe("1.2.3\n");
