@@ -31,6 +31,7 @@ import { ThreadErrorBanner } from "../chat/ThreadErrorBanner";
 import { useOptionalVoiceCall } from "../voice/VoiceCall";
 import { threadSilentRun } from "@akeru/client-runtime/silent-run";
 import { botActivityUpdate, BotActivityStatus } from "./BotActivityStatus";
+import { ChatReplyContext } from "../markdown/generative/chatReplyContext";
 import { deriveBotActivity } from "./botActivityStatus.logic";
 import { BotApprovalPrompt } from "./BotApprovalPrompt";
 import { MemoryApprovalPrompt } from "./MemoryApprovalPrompt";
@@ -47,6 +48,7 @@ import {
   visibleBotChatMessages,
 } from "./botConversationPresentation";
 import { BotPromptComposer } from "./BotPromptComposer";
+import { useAnsweredUserInputs } from "./useAnsweredUserInputs";
 import {
   AssistantMessageRow,
   type MessageReplyHandler,
@@ -238,6 +240,8 @@ export function GroupThreadLanding({ groupId }: { readonly groupId: string }) {
     [runtime.messages, working],
   );
 
+  const answeredUserInputs = useAnsweredUserInputs(activities, messages);
+
   const today = useLocalDay();
   const todayLabel = t("Today");
 
@@ -305,264 +309,293 @@ export function GroupThreadLanding({ groupId }: { readonly groupId: string }) {
   const activeBotById = (id: string) =>
     bots.find((candidate) => candidate.id === id && candidate.archivedAt === null) ?? null;
 
+  const chatReply = {
+    disabled:
+      runtime.sending ||
+      runtime.latestTurn?.state === "running" ||
+      runtime.pendingUserInputs.length > 0 ||
+      pendingApproval !== null ||
+      !runtime.groupReady ||
+      !runtime.providerAvailable,
+    send: (text: string) => runtime.send(text, []),
+  };
+
   return (
-    <SidebarInset
-      tone="foreground"
-      aria-label={t("{name} group chat", { name: group.name })}
-      className="h-dvh min-h-0 overflow-hidden"
-      data-testid="group-thread-landing"
-    >
-      <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-        <WorkspacePageHeader className="border-b border-border" detailsPanelOpen={detailsPanelOpen}>
-          <div className="flex min-w-0 items-center gap-2">
-            <GroupMemberStack group={group} bots={bots} />
-            <span className="truncate text-sm font-medium">{group.name}</span>
-          </div>
-          <div data-chat-header-actions className="ml-auto flex items-center">
-            <ChatActionsMenu threadRef={runtime.linkedThreadRef} />
-          </div>
-        </WorkspacePageHeader>
-        <BotConversationScrollArea
-          followKey={messages.findLast((message) => message.role === "user")?.id}
-        >
-          {timeline.length === 0 ? (
-            <div className="flex flex-1 flex-col items-center justify-center gap-3 py-12">
-              <div className="flex -space-x-3">
-                {members.slice(0, 3).map((bot) => (
-                  <BotAvatarView
-                    key={bot.id}
-                    avatar={bot.avatar}
-                    name={bot.name}
-                    className="size-14 ring-4 ring-background"
-                  />
-                ))}
-              </div>
-              <h1 className="text-lg font-medium">
-                {boss ? t("Message {name}", { name: group.name }) : t("Group boss unavailable")}
-              </h1>
+    <ChatReplyContext value={chatReply}>
+      <SidebarInset
+        tone="foreground"
+        aria-label={t("{name} group chat", { name: group.name })}
+        className="h-dvh min-h-0 overflow-hidden"
+        data-testid="group-thread-landing"
+      >
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+          <WorkspacePageHeader
+            className="border-b border-border"
+            detailsPanelOpen={detailsPanelOpen}
+          >
+            <div className="flex min-w-0 items-center gap-2">
+              <GroupMemberStack group={group} bots={bots} />
+              <span className="truncate text-sm font-medium">{group.name}</span>
             </div>
-          ) : (
-            timeline.map((item) => {
-              if (Predicate.isTagged(item, "Delegation")) {
-                return (
-                  <DelegationCard
-                    key={item.key}
-                    variant="group"
-                    delegation={item.delegation}
-                    delegations={delegations}
-                    childBot={activeBotById(item.delegation.childBotId)}
-                    parentBot={activeBotById(item.delegation.parentBotId)}
-                  />
+            <div data-chat-header-actions className="ml-auto flex items-center">
+              <ChatActionsMenu threadRef={runtime.linkedThreadRef} />
+            </div>
+          </WorkspacePageHeader>
+          <BotConversationScrollArea
+            followKey={messages.findLast((message) => message.role === "user")?.id}
+          >
+            {timeline.length === 0 ? (
+              <div className="flex flex-1 flex-col items-center justify-center gap-3 py-12">
+                <div className="flex -space-x-3">
+                  {members.slice(0, 3).map((bot) => (
+                    <BotAvatarView
+                      key={bot.id}
+                      avatar={bot.avatar}
+                      name={bot.name}
+                      className="size-14 ring-4 ring-background"
+                    />
+                  ))}
+                </div>
+                <h1 className="text-lg font-medium">
+                  {boss ? t("Message {name}", { name: group.name }) : t("Group boss unavailable")}
+                </h1>
+              </div>
+            ) : (
+              timeline.map((item) => {
+                if (Predicate.isTagged(item, "Delegation")) {
+                  return (
+                    <DelegationCard
+                      key={item.key}
+                      variant="group"
+                      delegation={item.delegation}
+                      delegations={delegations}
+                      childBot={activeBotById(item.delegation.childBotId)}
+                      parentBot={activeBotById(item.delegation.parentBotId)}
+                    />
+                  );
+                }
+
+                if (!Predicate.isTagged(item, "Message")) return null;
+                const { message, separator, startsGroup } = item.message.entry;
+
+                if (message.role === "assistant") {
+                  const respondingBot = message.respondingBotId
+                    ? members.find((bot) => bot.id === message.respondingBotId)
+                    : boss;
+
+                  return (
+                    <Fragment key={message.id}>
+                      {separator ? <ConversationSeparator label={separator} /> : null}
+                      <AssistantMessageRow
+                        message={message}
+                        arrived={arrivedMessageIds.has(message.id)}
+                        author={respondingBot ?? null}
+                        testId="group-provider-message"
+                        startsGroup={startsGroup}
+                        cwd={runtime.defaultProject?.workspaceRoot}
+                        threadRef={runtime.linkedThreadRef ?? undefined}
+                        stepMeter={
+                          message.turnId === null ? undefined : stepMeters.get(message.turnId)
+                        }
+                        pluginResults={undefined}
+                        currentPersonId={currentPersonId}
+                        playback={replyPlayback}
+                        playbackKey={playbackKey}
+                        channelApproval={null}
+                        onReply={replyTo}
+                        onReactionChange={updateReaction}
+                      />
+                    </Fragment>
+                  );
+                }
+
+                const current = isCurrentGroupPerson(
+                  message.authorPersonId,
+                  currentPersonId,
+                  peopleIdentity.host?.id,
                 );
-              }
-
-              if (!Predicate.isTagged(item, "Message")) return null;
-              const { message, separator, startsGroup } = item.message.entry;
-
-              if (message.role === "assistant") {
-                const respondingBot = message.respondingBotId
-                  ? members.find((bot) => bot.id === message.respondingBotId)
-                  : boss;
 
                 return (
                   <Fragment key={message.id}>
                     {separator ? <ConversationSeparator label={separator} /> : null}
-                    <AssistantMessageRow
+                    <UserMessageRow
                       message={message}
+                      replySourceMessageId={findReplySourceMessageId(
+                        messages,
+                        item.index,
+                        message.text,
+                      )}
                       arrived={arrivedMessageIds.has(message.id)}
-                      author={respondingBot ?? null}
-                      testId="group-provider-message"
+                      testId="group-user-message"
                       startsGroup={startsGroup}
-                      cwd={runtime.defaultProject?.workspaceRoot}
-                      threadRef={runtime.linkedThreadRef ?? undefined}
-                      stepMeter={
-                        message.turnId === null ? undefined : stepMeters.get(message.turnId)
-                      }
-                      pluginResults={undefined}
+                      replyLabel={current ? "you" : "participant"}
+                      showChannelOrigin={false}
+                      skills={bossCatalog?.skills}
+                      environmentId={environmentId}
                       currentPersonId={currentPersonId}
-                      playback={replyPlayback}
-                      playbackKey={playbackKey}
-                      channelApproval={null}
+                      answered={answeredUserInputs.get(message.id) ?? null}
                       onReply={replyTo}
                       onReactionChange={updateReaction}
                     />
                   </Fragment>
                 );
-              }
-
-              const current = isCurrentGroupPerson(
-                message.authorPersonId,
-                currentPersonId,
-                peopleIdentity.host?.id,
-              );
-
-              return (
-                <Fragment key={message.id}>
-                  {separator ? <ConversationSeparator label={separator} /> : null}
-                  <UserMessageRow
-                    message={message}
-                    replySourceMessageId={findReplySourceMessageId(
-                      messages,
-                      item.index,
-                      message.text,
-                    )}
-                    arrived={arrivedMessageIds.has(message.id)}
-                    testId="group-user-message"
-                    startsGroup={startsGroup}
-                    replyLabel={current ? "you" : "participant"}
-                    showChannelOrigin={false}
-                    skills={bossCatalog?.skills}
-                    environmentId={environmentId}
-                    currentPersonId={currentPersonId}
-                    onReply={replyTo}
-                    onReactionChange={updateReaction}
-                  />
-                </Fragment>
-              );
-            })
-          )}
-          {!working && runtime.turnFailure && messages.at(-1)?.role === "user" ? (
-            <BotTurnFailureRow
-              botName={activeBot?.name ?? group.name}
-              title={presentThreadError(runtime.turnFailure.message, failureContext, t).title}
+              })
+            )}
+            {!working && runtime.turnFailure && messages.at(-1)?.role === "user" ? (
+              <BotTurnFailureRow
+                botName={activeBot?.name ?? group.name}
+                title={presentThreadError(runtime.turnFailure.message, failureContext, t).title}
+              />
+            ) : null}
+            {waitingOnChildren && !working ? (
+              <p className="ml-10 text-xs text-muted-foreground" aria-live="polite">
+                {t("Waiting on delegated work")}
+              </p>
+            ) : null}
+          </BotConversationScrollArea>
+          <BotInboxAlertStack
+            items={inboxItems}
+            onOpenDetails={() => openSettings("advanced", "errors", environmentId)}
+          />
+          <ThreadRuntimeWarningBanner warning={runtimeWarning} />
+          {connectNeeded && connect ? (
+            <ProviderConnectCard
+              id={noProviderNoticeId}
+              environmentId={environmentId}
+              provider={connect.provider}
+              botName={connect.botName}
+              className="mt-2"
             />
           ) : null}
-          {waitingOnChildren && !working ? (
-            <p className="ml-10 text-xs text-muted-foreground" aria-live="polite">
-              {t("Waiting on delegated work")}
-            </p>
+          <ThreadErrorBanner
+            threadKey={`${runtime.linkedThreadRef?.environmentId ?? environmentId ?? "unknown"}:${runtime.linkedThreadRef?.threadId ?? group.id}`}
+            error={
+              connectNeeded || inboxItems.some((item) => item.lastFailure === runtime.error)
+                ? null
+                : runtime.error
+            }
+            context={failureContext}
+            environmentId={environmentId}
+            {...(runtime.canResume ? { onResume: () => void runtime.resume() } : {})}
+            resuming={runtime.resuming}
+          />
+          {boss === null ? (
+            <div className="px-4 py-2 text-sm text-muted-foreground" role="status">
+              {t("Choose an active group boss in the group sidebar.")}
+            </div>
           ) : null}
-        </BotConversationScrollArea>
-        <BotInboxAlertStack
-          items={inboxItems}
-          onOpenDetails={() => openSettings("advanced", "errors", environmentId)}
-        />
-        <ThreadRuntimeWarningBanner warning={runtimeWarning} />
-        {connectNeeded && connect ? (
-          <ProviderConnectCard
-            id={noProviderNoticeId}
-            environmentId={environmentId}
-            provider={connect.provider}
-            botName={connect.botName}
-            className="mt-2"
-          />
-        ) : null}
-        <ThreadErrorBanner
-          threadKey={`${runtime.linkedThreadRef?.environmentId ?? environmentId ?? "unknown"}:${runtime.linkedThreadRef?.threadId ?? group.id}`}
-          error={
-            connectNeeded || inboxItems.some((item) => item.lastFailure === runtime.error)
-              ? null
-              : runtime.error
-          }
-          context={failureContext}
-          environmentId={environmentId}
-          {...(runtime.canResume ? { onResume: () => void runtime.resume() } : {})}
-          resuming={runtime.resuming}
-        />
-        {boss === null ? (
-          <div className="px-4 py-2 text-sm text-muted-foreground" role="status">
-            {t("Choose an active group boss in the group sidebar.")}
-          </div>
-        ) : null}
-        <BotPromptComposer
-          mentionScope={mentionScope}
-          commandCatalog={composerCatalog}
-          onAddressedBotChange={setAddressedBotId}
-          botName={group.name}
-          draftKey={`group:${group.id}`}
-          busy={working && pendingApproval === null}
-          activitySlot={
-            working && activeBot && !waitingForUserInput && pendingApproval === null ? (
-              <BotActivityStatus
-                name={activeBot.name}
-                activity={botActivity}
-                update={workingUpdate}
-                silentRun={silentRun}
-              />
-            ) : null
-          }
-          pendingActionSlot={
-            pendingApproval ? (
-              <BotApprovalPrompt
-                approval={pendingApproval}
-                pendingCount={approvalState.pendingCount}
-                responding={approvalState.responding}
-                error={approvalState.responseError}
-                onRespond={async (decision) => {
-                  const answered = await approvalState.respond(pendingApproval.requestId, decision);
+          <BotPromptComposer
+            typeToFocus={!waitingForUserInput}
+            mentionScope={mentionScope}
+            commandCatalog={composerCatalog}
+            onAddressedBotChange={setAddressedBotId}
+            botName={group.name}
+            draftKey={`group:${group.id}`}
+            busy={working && pendingApproval === null}
+            activitySlot={
+              working && activeBot && !waitingForUserInput && pendingApproval === null ? (
+                <BotActivityStatus
+                  name={activeBot.name}
+                  activity={botActivity}
+                  update={workingUpdate}
+                  silentRun={silentRun}
+                />
+              ) : null
+            }
+            pendingActionSlot={
+              pendingApproval ? (
+                <BotApprovalPrompt
+                  approval={pendingApproval}
+                  pendingCount={approvalState.pendingCount}
+                  responding={approvalState.responding}
+                  error={approvalState.responseError}
+                  onRespond={async (decision) => {
+                    const answered = await approvalState.respond(
+                      pendingApproval.requestId,
+                      decision,
+                    );
 
-                  if (answered && decision === "acceptAlways" && boss) {
-                    await enableAutoReview(boss.id);
-                  }
+                    if (answered && decision === "acceptAlways" && boss) {
+                      await enableAutoReview(boss.id);
+                    }
 
-                  return answered;
-                }}
-              />
-            ) : waitingForUserInput ? (
-              <BotUserInputPrompt
-                pendingUserInputs={runtime.pendingUserInputs}
-                respondingRequestIds={runtime.respondingRequestIds}
-                answers={runtime.pendingUserInputAnswers}
-                questionIndex={runtime.pendingUserInputQuestionIndex}
-                onToggleOption={runtime.selectPendingUserInputOption}
-                onSelectSingleOption={runtime.selectPendingUserInputOption}
-                onAdvance={runtime.advancePendingUserInput}
-                threadRef={runtime.linkedThreadRef}
-                askingBot={activeBot ?? null}
-              />
-            ) : memoryApprovals.length > 0 && runtime.linkedThreadRef ? (
-              <MemoryApprovalPrompt
-                threadRef={runtime.linkedThreadRef}
-                approvals={memoryApprovals}
-                currentBotId={activeBot?.id ?? null}
-              />
-            ) : null
-          }
-          quietSurface={pendingApproval !== null || pendingUserInput !== null}
-          {...(waitingForUserInput ? { placeholder: t("Write a custom answer…") } : {})}
-          disabled={
-            pendingApproval !== null ||
-            runtime.respondingRequestIds.length > 0 ||
-            !runtime.groupReady ||
-            !runtime.bootstrapped ||
-            runtime.defaultProject === null ||
-            (!waitingForUserInput && !runtime.providerAvailable)
-          }
-          mentionBots={members.map((bot) => ({
-            id: bot.id,
-            name: bot.name,
-            title: bot.title,
-            canTakeWork: botEngineTakesDelegatedWork(bot.engine, respondingEngine.instanceEntries),
-          }))}
-          replyPreview={replyTarget}
-          onCancelReply={() => setReplyTarget(null)}
-          sendBlockedDescriptionId={
-            runtime.providerAvailable || waitingForUserInput ? undefined : noProviderNoticeId
-          }
-          onSubmit={async (prompt, files, respondingBotId) => {
-            const sent = await runtime.send(
-              buildReplyPrompt(replyTarget, prompt),
-              files,
-              respondingBotId,
-            );
+                    return answered;
+                  }}
+                />
+              ) : waitingForUserInput ? (
+                <BotUserInputPrompt
+                  pendingUserInputs={runtime.pendingUserInputs}
+                  respondingRequestIds={runtime.respondingRequestIds}
+                  answers={runtime.pendingUserInputAnswers}
+                  step={runtime.pendingUserInputStep}
+                  onStepChange={runtime.setPendingUserInputStep}
+                  onSelectOption={runtime.selectPendingUserInputOption}
+                  onAnswerWithText={(text) => {
+                    void runtime.answerPendingUserInputWithText(text);
+                  }}
+                  onSubmit={() => {
+                    void runtime.submitPendingUserInputAnswers();
+                  }}
+                />
+              ) : memoryApprovals.length > 0 && runtime.linkedThreadRef ? (
+                <MemoryApprovalPrompt
+                  threadRef={runtime.linkedThreadRef}
+                  approvals={memoryApprovals}
+                  currentBotId={activeBot?.id ?? null}
+                />
+              ) : null
+            }
+            quietSurface={pendingApproval !== null || pendingUserInput !== null}
+            {...(waitingForUserInput ? { placeholder: t("Write a custom answer…") } : {})}
+            disabled={
+              pendingApproval !== null ||
+              runtime.respondingRequestIds.length > 0 ||
+              !runtime.groupReady ||
+              !runtime.bootstrapped ||
+              runtime.defaultProject === null ||
+              (!waitingForUserInput && !runtime.providerAvailable)
+            }
+            mentionBots={members.map((bot) => ({
+              id: bot.id,
+              name: bot.name,
+              title: bot.title,
+              canTakeWork: botEngineTakesDelegatedWork(
+                bot.engine,
+                respondingEngine.instanceEntries,
+              ),
+            }))}
+            replyPreview={replyTarget}
+            onCancelReply={() => setReplyTarget(null)}
+            sendBlockedDescriptionId={
+              runtime.providerAvailable || waitingForUserInput ? undefined : noProviderNoticeId
+            }
+            onSubmit={async (prompt, files, respondingBotId) => {
+              const sent = await runtime.send(
+                buildReplyPrompt(replyTarget, prompt),
+                files,
+                respondingBotId,
+              );
 
-            if (sent) setReplyTarget(null);
+              if (sent) setReplyTarget(null);
 
-            return sent;
-          }}
-        />
-        {!runtime.providerAvailable && !connectNeeded ? (
-          <ProviderUnavailableLine
-            id={noProviderNoticeId}
-            presentation={{
-              title: t("No provider is ready for this group"),
-              description: t("Connect a provider in Settings > Providers so this group can reply."),
-              action: "providers",
+              return sent;
             }}
-            environmentId={environmentId}
           />
-        ) : null}
-      </div>
-    </SidebarInset>
+          {!runtime.providerAvailable && !connectNeeded ? (
+            <ProviderUnavailableLine
+              id={noProviderNoticeId}
+              presentation={{
+                title: t("No provider is ready for this group"),
+                description: t(
+                  "Connect a provider in Settings > Providers so this group can reply.",
+                ),
+                action: "providers",
+              }}
+              environmentId={environmentId}
+            />
+          ) : null}
+        </div>
+      </SidebarInset>
+    </ChatReplyContext>
   );
 }

@@ -1,6 +1,10 @@
 import { fromMarkdown } from "mdast-util-from-markdown";
 import { gfmFromMarkdown } from "mdast-util-gfm";
 import { gfm } from "micromark-extension-gfm";
+import {
+  generativeBlockSummary,
+  generativeKindForLanguage,
+} from "../markdown/generative/generativeSchemas";
 
 export interface RosterLastMessage {
   text: string;
@@ -260,9 +264,15 @@ function collectPreviewText(node: MarkdownNode, parts: string[]): void {
   switch (node.type) {
     case "text":
     case "inlineCode":
-    case "code":
       parts.push(node.value);
       break;
+    case "code": {
+      // Generative blocks carry JSON; preview them by name instead.
+      const kind = generativeKindForLanguage(node.lang ?? "");
+      parts.push(kind ? ` ${generativeBlockSummary(kind, node.value)} ` : node.value);
+      break;
+    }
+
     case "html":
       parts.push(visibleHtmlText(node.value));
       break;

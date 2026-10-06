@@ -96,7 +96,8 @@ function parseQuestionArray(value: ReadonlyArray<Schema.Unknown["Type"]>): UserI
   return parsed;
 }
 
-const parseQuestions = flow(
+/** Reads a `user-input.requested` payload's questions, dropping malformed ones. */
+export const parseQuestions = flow(
   decodeQuestionsArray,
   Option.match({ onNone: () => [], onSome: parseQuestionArray }),
 );

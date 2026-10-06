@@ -229,11 +229,13 @@ export function useBotThreadRuntime(botId: string, effectiveModelSelection: Mode
 
   const {
     pendingUserInputAnswers,
-    pendingUserInputQuestionIndex,
+    pendingUserInputStep,
+    setPendingUserInputStep,
     respondingRequestIds,
     answerPendingUserInputWithPrompt,
+    answerPendingUserInputWithText,
     selectPendingUserInputOption,
-    advancePendingUserInput,
+    submitPendingUserInputAnswers,
   } = useThreadPendingUserInput({ linkedThreadRef, pendingUserInputs, onFailure: setError });
 
   const [resuming, setResuming] = useState(false);
@@ -653,12 +655,14 @@ export function useBotThreadRuntime(botId: string, effectiveModelSelection: Mode
     messages,
     pendingUserInputs,
     pendingUserInputAnswers,
-    pendingUserInputQuestionIndex,
+    pendingUserInputStep,
+    setPendingUserInputStep,
     respondingRequestIds,
     resume,
     resuming,
+    answerPendingUserInputWithText,
     selectPendingUserInputOption,
-    advancePendingUserInput,
+    submitPendingUserInputAnswers,
     canStartNewChat,
     send,
     sendVoiceMessage,

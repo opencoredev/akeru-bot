@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vite-plus/test";
 
 import {
-  applyPendingUserInputSingleSelect,
+  pendingUserInputKeyAction,
+  applyPendingUserInputOptionSelection,
   buildPendingUserInputAnswers,
   countAnsweredPendingUserInputQuestions,
-  derivePendingUserInputProgress,
   findFirstUnansweredPendingUserInputQuestionIndex,
   resolvePendingUserInputAnswer,
   setPendingUserInputCustomAnswer,
@@ -105,13 +105,14 @@ describe("togglePendingUserInputOptionSelection", () => {
   });
 });
 
-describe("applyPendingUserInputSingleSelect", () => {
-  it("builds the final answer from the clicked option without waiting for state", () => {
+describe("applyPendingUserInputOptionSelection", () => {
+  const second = { ...singleSelectQuestion, id: "second" };
+
+  it("sends a lone single-select question on click", () => {
     expect(
-      applyPendingUserInputSingleSelect(
+      applyPendingUserInputOptionSelection(
         [singleSelectQuestion],
         {},
-        0,
         "scope",
         "Orchestration-first",
       ),
@@ -119,22 +120,65 @@ describe("applyPendingUserInputSingleSelect", () => {
       draftAnswers: {
         scope: { customAnswer: "", selectedOptionLabels: ["Orchestration-first"] },
       },
-      questionIndex: 0,
       answers: { scope: "Orchestration-first" },
+      nextStep: 0,
     });
   });
 
-  it("advances a multi-question prompt without submitting it early", () => {
-    const second = { ...singleSelectQuestion, id: "second" };
+  it("moves to the next step instead of sending, even once every answer is in", () => {
+    const draftAnswers = { second: { selectedOptionLabels: ["Orchestration-first"] } };
+
     expect(
-      applyPendingUserInputSingleSelect(
+      applyPendingUserInputOptionSelection(
         [singleSelectQuestion, second],
-        {},
-        0,
+        draftAnswers,
         "scope",
         "Orchestration-first",
       ),
-    ).toMatchObject({ questionIndex: 1, answers: null });
+    ).toMatchObject({ answers: null, nextStep: 1 });
+  });
+
+  it("sends from the last step once every question is answered", () => {
+    const draftAnswers = { scope: { selectedOptionLabels: ["Orchestration-first"] } };
+
+    expect(
+      applyPendingUserInputOptionSelection(
+        [singleSelectQuestion, second],
+        draftAnswers,
+        "second",
+        "Orchestration-first",
+      ),
+    ).toMatchObject({
+      answers: { scope: "Orchestration-first", second: "Orchestration-first" },
+    });
+  });
+
+  it("returns to the first open step when the last one is answered early", () => {
+    expect(
+      applyPendingUserInputOptionSelection(
+        [singleSelectQuestion, second],
+        {},
+        "second",
+        "Orchestration-first",
+      ),
+    ).toMatchObject({ answers: null, nextStep: 0 });
+  });
+
+  it("keeps a multi-select step open while picks toggle", () => {
+    expect(
+      applyPendingUserInputOptionSelection(
+        [singleSelectQuestion, multiSelectQuestion],
+        {},
+        "areas",
+        multiSelectQuestion.options[0].label,
+      ),
+    ).toMatchObject({ answers: null, nextStep: 1 });
+  });
+
+  it("ignores options the question does not offer", () => {
+    expect(
+      applyPendingUserInputOptionSelection([singleSelectQuestion], {}, "scope", "Nope"),
+    ).toBeNull();
   });
 });
 
@@ -238,47 +282,20 @@ describe("pending user input question progress", () => {
       }),
     ).toBe(1);
   });
+});
 
-  it("derives the active question and advancement state", () => {
-    expect(
-      derivePendingUserInputProgress(
-        questions,
-        {
-          scope: {
-            selectedOptionLabels: ["Orchestration-first"],
-          },
-        },
-        0,
-      ),
-    ).toMatchObject({
-      questionIndex: 0,
-      activeQuestion: questions[0],
-      selectedOptionLabels: ["Orchestration-first"],
-      customAnswer: "",
-      resolvedAnswer: "Orchestration-first",
-      answeredQuestionCount: 1,
-      isLastQuestion: false,
-      isComplete: false,
-      canAdvance: true,
-    });
+describe("pendingUserInputKeyAction", () => {
+  it("picks an option by number and starts a typed answer for other characters", () => {
+    expect(pendingUserInputKeyAction("2", 3)).toEqual({ kind: "pick", optionIndex: 1 });
+    expect(pendingUserInputKeyAction("a", 3)).toEqual({ kind: "type" });
+    expect(pendingUserInputKeyAction("H", 3)).toEqual({ kind: "type" });
+    // A number past the last option is part of a typed answer, not a pick.
+    expect(pendingUserInputKeyAction("7", 3)).toEqual({ kind: "type" });
   });
 
-  it("treats multi-select questions as answered when they have selected options", () => {
-    expect(
-      derivePendingUserInputProgress(
-        [multiSelectQuestion],
-        {
-          areas: {
-            selectedOptionLabels: ["Server", "Web"],
-          },
-        },
-        0,
-      ),
-    ).toMatchObject({
-      selectedOptionLabels: ["Server", "Web"],
-      resolvedAnswer: ["Server", "Web"],
-      canAdvance: true,
-      isComplete: true,
-    });
+  it("ignores whitespace and named keys", () => {
+    expect(pendingUserInputKeyAction(" ", 3)).toBeNull();
+    expect(pendingUserInputKeyAction("Tab", 3)).toBeNull();
+    expect(pendingUserInputKeyAction("ArrowDown", 3)).toBeNull();
   });
 });

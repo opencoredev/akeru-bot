@@ -77,7 +77,7 @@ describe("built-in palettes", () => {
     }
   });
 
-  it("keeps the Akeru Paper palette tied to the landing design", () => {
+  it("keeps the Akeru Paper palette neutral and tied to the landing design", () => {
     expect(BUILT_IN_THEME_IDS).toContain(AKERU_PAPER_THEME.id);
     expect(BUILT_IN_THEMES.map((theme) => theme.id)).toEqual(BUILT_IN_THEME_IDS);
     expect(Object.keys(AKERU_PAPER_THEME.colors).sort()).toEqual([...THEME_COLOR_ROLES].sort());
@@ -87,26 +87,32 @@ describe("built-in palettes", () => {
     expectThemeColors(AKERU_PAPER_THEME.colors, {
       canvas: "#fafaf9",
       text: "#1f1e1d",
-      accent: "#8b6fc9",
-      focus: "#8b6fc9",
-      update: "#8b6fc9",
-      messageAction: "#8b6fc9",
-      terminalCursor: "#8b6fc9",
-      messageSurface: "#f0eaf8",
+      accent: "#1f1e1d",
+      focus: "#73716e",
+      update: "#1f1e1d",
+      messageAction: "#1f1e1d",
+      messageSurface: "#ededec",
       codeBackground: "#f4f4f3",
       sidebar: "#f3f2f1",
     });
     expectThemeColors(AKERU_PAPER_THEME.variants!.dark!, {
       canvas: "#050505",
-      text: "#f4f4f5",
-      accent: "#8b6fc9",
-      focus: "#8b6fc9",
-      update: "#8b6fc9",
-      messageAction: "#8b6fc9",
-      messageSurface: "#3f3f46",
+      text: "#f4f4f4",
+      accent: "#f4f4f4",
+      focus: "#868686",
+      update: "#f4f4f4",
+      messageAction: "#f4f4f4",
+      messageSurface: "#404040",
       codeBackground: "#111111",
       sidebar: "#111111",
     });
+
+    // The terminal stays dark in both appearances, so its cursor must stand out from it.
+    for (const colors of [AKERU_PAPER_THEME.colors, AKERU_PAPER_THEME.variants!.dark!]) {
+      expect(
+        contrastRatio(colors.terminalCursor, colors.terminalBackground),
+      ).toBeGreaterThanOrEqual(4.5);
+    }
   });
 
   effectIt.effect("keeps Akeru Paper dark surfaces flat and opaque", () =>

@@ -39,10 +39,11 @@ describe("BotUserInputPrompt", () => {
         pendingUserInputs={[prompt]}
         respondingRequestIds={[]}
         answers={{}}
-        questionIndex={0}
-        onToggleOption={vi.fn()}
-        onSelectSingleOption={vi.fn()}
-        onAdvance={vi.fn()}
+        step={0}
+        onStepChange={vi.fn()}
+        onSelectOption={vi.fn()}
+        onAnswerWithText={vi.fn()}
+        onSubmit={vi.fn()}
       />,
     );
 
@@ -51,31 +52,38 @@ describe("BotUserInputPrompt", () => {
     expect(markup).toContain("Review risky commands");
   });
 
-  it("uses one callback for single-select answers", () => {
-    const onToggleOption = vi.fn();
-    const onSelectSingleOption = vi.fn();
+  it("hands the panel its select, step, and submit callbacks without chrome", () => {
+    const onSelectOption = vi.fn();
+    const onStepChange = vi.fn();
+    const onSubmit = vi.fn();
+    const onAnswerWithText = vi.fn();
 
     const element = BotUserInputPrompt({
       pendingUserInputs: [prompt],
       respondingRequestIds: [],
       answers: {},
-      questionIndex: 0,
-      onToggleOption,
-      onSelectSingleOption,
-      onAdvance: vi.fn(),
+      step: 0,
+      onStepChange,
+      onSelectOption,
+      onAnswerWithText,
+      onSubmit,
     });
 
     if (!element) throw new TypeError("Expected an unanswered prompt.");
 
-    const panel = (
-      element.props.children as ReactElement<{
-        onSelectSingleOption?: (questionId: string, optionLabel: string) => void;
-      }>[]
-    )[0];
+    const panel = element.props.children as ReactElement<{
+      onSelectOption?: (questionId: string, optionLabel: string) => void;
+      onAnswerWithText?: (text: string) => void;
+      onStepChange?: (step: number) => void;
+      onSubmit?: () => void;
+      surface?: string;
+    }>;
 
-    if (!panel) throw new TypeError("Expected a question panel.");
-
-    expect(panel.props.onSelectSingleOption).toBe(onSelectSingleOption);
+    expect(panel.props.onSelectOption).toBe(onSelectOption);
+    expect(panel.props.onAnswerWithText).toBe(onAnswerWithText);
+    expect(panel.props.onStepChange).toBe(onStepChange);
+    expect(panel.props.onSubmit).toBe(onSubmit);
+    expect(panel.props.surface).toBe("docked");
   });
 
   it("clears itself once the answer is on its way", () => {
@@ -84,10 +92,11 @@ describe("BotUserInputPrompt", () => {
         pendingUserInputs: [prompt],
         respondingRequestIds: [prompt.requestId],
         answers: {},
-        questionIndex: 0,
-        onToggleOption: vi.fn(),
-        onSelectSingleOption: vi.fn(),
-        onAdvance: vi.fn(),
+        step: 0,
+        onStepChange: vi.fn(),
+        onSelectOption: vi.fn(),
+        onAnswerWithText: vi.fn(),
+        onSubmit: vi.fn(),
       }),
     ).toBeNull();
     expect(
@@ -95,10 +104,11 @@ describe("BotUserInputPrompt", () => {
         pendingUserInputs: [],
         respondingRequestIds: [],
         answers: {},
-        questionIndex: 0,
-        onToggleOption: vi.fn(),
-        onSelectSingleOption: vi.fn(),
-        onAdvance: vi.fn(),
+        step: 0,
+        onStepChange: vi.fn(),
+        onSelectOption: vi.fn(),
+        onAnswerWithText: vi.fn(),
+        onSubmit: vi.fn(),
       }),
     ).toBeNull();
   });

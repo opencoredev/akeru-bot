@@ -163,11 +163,13 @@ export function useGroupThreadRuntime(groupId: string) {
 
   const {
     pendingUserInputAnswers,
-    pendingUserInputQuestionIndex,
+    pendingUserInputStep,
+    setPendingUserInputStep,
     respondingRequestIds,
     answerPendingUserInputWithPrompt,
+    answerPendingUserInputWithText,
     selectPendingUserInputOption,
-    advancePendingUserInput,
+    submitPendingUserInputAnswers,
   } = useThreadPendingUserInput({ linkedThreadRef, pendingUserInputs, onFailure: setError });
 
   const [resuming, setResuming] = useState(false);
@@ -442,13 +444,15 @@ export function useGroupThreadRuntime(groupId: string) {
     messages,
     pendingUserInputs,
     pendingUserInputAnswers,
-    pendingUserInputQuestionIndex,
+    pendingUserInputStep,
+    setPendingUserInputStep,
     respondingRequestIds,
     respondingBotId: rememberedThread?.respondingBotId ?? group?.bossBotId ?? null,
     resume,
     resuming,
+    answerPendingUserInputWithText,
     selectPendingUserInputOption,
-    advancePendingUserInput,
+    submitPendingUserInputAnswers,
     send,
     sending,
   };

@@ -203,9 +203,9 @@ vi.mock("./useBotThreadRuntime", () => ({
     respondingRequestIds: [],
     pendingUserInputs: mocks.pendingUserInputs,
     pendingUserInputAnswers: {},
-    pendingUserInputQuestionIndex: 0,
     selectPendingUserInputOption: vi.fn(),
-    advancePendingUserInput: vi.fn(),
+    answerPendingUserInputWithText: vi.fn(),
+    submitPendingUserInputAnswers: vi.fn(),
     messages: mocks.messages,
     error: null,
     defaultProject: null,
@@ -237,9 +237,9 @@ vi.mock("./useGroupThreadRuntime", () => ({
     latestTurn: mocks.latestTurn,
     pendingUserInputs: mocks.groupPendingUserInputs,
     pendingUserInputAnswers: {},
-    pendingUserInputQuestionIndex: 0,
     selectPendingUserInputOption: vi.fn(),
-    advancePendingUserInput: vi.fn(),
+    answerPendingUserInputWithText: vi.fn(),
+    submitPendingUserInputAnswers: vi.fn(),
     send: vi.fn(),
   }),
 }));
@@ -623,7 +623,8 @@ describe("thread landing delegations", () => {
     ) as ReactElement<Parameters<typeof BotUserInputPrompt>[0]> | null;
 
     expect(prompt?.props.pendingUserInputs).toEqual(mocks.groupPendingUserInputs);
-    expect(prompt?.props.onSelectSingleOption).toBe(prompt?.props.onToggleOption);
+    expect(prompt?.props.onSelectOption).toBeTypeOf("function");
+    expect(prompt?.props.onAnswerWithText).toBeTypeOf("function");
   });
 
   it("keeps the active turn's intermediate answer out of the group transcript", () => {

@@ -209,6 +209,31 @@ as a plain code block without the tinted lines or counts, and checklists do not 
 summary. Settings chips open the matching mobile screen, or the main Settings screen when mobile
 has no matching screen.
 
+A reply can also include a chart, a row of stats, a task list, a timeline, a flow diagram, or a set
+of choices. These blocks use your theme's colors in light and dark mode. Selecting a choice sends its
+reply to the bot; when the bot cannot take a message yet, the choices stay visible but disabled. If a
+block arrives malformed, the reply shows it as a plain code block. On mobile, these blocks appear as
+plain code blocks.
+
+## Answer a bot's questions
+
+When a bot needs something from you before it continues, its questions appear in a card in the chat,
+one question at a time. In a group chat, the card sits just above the message box. A bar at the top shows how many there are and which one you are on.
+
+- A round mark means you pick one answer. Selecting it moves to the next question, and on the last
+  question it sends your answers.
+- A square mark means you can pick several. Select each one that applies, then select **Next**, or
+  **Submit** on the last question.
+- To answer in your own words, type in **Type your own answer** at the bottom of the card and press
+  Enter. A reply typed in the message box answers the question on screen the same way.
+- **Back** returns to an earlier question with your answers kept.
+
+With a keyboard, number keys pick the options in order and Enter moves on. Typing anything else
+starts your own answer.
+
+After you send, the chat shows a summary of each question with what you picked. An answer you typed
+yourself is marked with a pencil.
+
 ## When a bot goes quiet
 
 A provider that stops sending output does not stall the chat silently. See

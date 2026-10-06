@@ -87,6 +87,7 @@ export function BotPromptComposer({
   draftKey,
   disabled,
   readOnly = false,
+  typeToFocus = true,
   mentionBots = EMPTY_MENTION_BOTS,
   mentionScope = null,
   commandCatalog,
@@ -105,6 +106,8 @@ export function BotPromptComposer({
   draftKey?: string;
   disabled: boolean;
   readOnly?: boolean;
+  /** Off while something else on the page owns printable keys, like an open question's letter shortcuts. */
+  typeToFocus?: boolean;
   mentionBots?: ReadonlyArray<MentionBot>;
   /** Enables `@browser` and `@chat:` mentions for this chat's environment. */
   mentionScope?: BotPromptMentionScope | null;
@@ -274,6 +277,7 @@ export function BotPromptComposer({
   const showBusyMeter = busy && !canSubmit;
   useBotComposerKeyboard({
     readOnly,
+    typeToFocus,
     keybindings,
     promptInputRef,
     persistDraft,

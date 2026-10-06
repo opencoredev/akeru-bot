@@ -136,7 +136,7 @@ export const DEFAULT_DESKTOP_ONBOARDING_DRAFT: DesktopOnboardingDraft = {
   goal: "",
   goalPhase: "ask",
   name: "",
-  avatar: { kind: "blob", shape: "squircle", color: "#8B6FC9" },
+  avatar: { kind: "blob", shape: "squircle", color: "#2E8EFF" },
   botId: null,
 };
 

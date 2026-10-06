@@ -63,6 +63,12 @@ import {
   orderedListGutter,
 } from "./markdown/MarkdownLists";
 import { ChatMarkdownRendererContext } from "./markdown/MarkdownRendererContext";
+import { GenerativeBlock } from "./markdown/generative/GenerativeBlock";
+import { GenerativeBlockPending } from "./markdown/generative/GenerativeFrame";
+import {
+  decodeGenerativeBlock,
+  generativeKindForLanguage,
+} from "./markdown/generative/generativeSchemas";
 import { MarkdownDetails, MarkdownTable } from "./markdown/MarkdownTable";
 import {
   CHAT_MARKDOWN_REHYPE_PLUGINS_WITH_RAW_HTML,
@@ -403,6 +409,16 @@ const CHAT_MARKDOWN_COMPONENTS: Components = {
 
     if (language.toLowerCase() === "mermaid") {
       return <MarkdownMermaidDiagram code={codeBlock.code} theme={resolvedTheme} />;
+    }
+
+    const generativeKind = generativeKindForLanguage(language);
+
+    if (generativeKind) {
+      const block = decodeGenerativeBlock(generativeKind, codeBlock.code);
+
+      if (block) return <GenerativeBlock block={block} />;
+
+      if (isStreaming) return <GenerativeBlockPending />;
     }
 
     const fenceTitle = extractFenceTitle(extractPreCodeMeta(node));

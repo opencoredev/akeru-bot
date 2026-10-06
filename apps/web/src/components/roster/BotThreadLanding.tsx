@@ -25,6 +25,7 @@ import { deriveBotActivity } from "./botActivityStatus.logic";
 import { BotApprovalPrompt } from "./BotApprovalPrompt";
 import { MemoryApprovalPrompt } from "./MemoryApprovalPrompt";
 import { BotInboxAlertStack } from "./BotInboxAlertStack";
+import { ChatReplyContext } from "../markdown/generative/chatReplyContext";
 import { BotAvatarView } from "./BotAvatarView";
 import { BotConversationScrollArea } from "./BotConversationScrollArea";
 import { useBotDetailsOpen } from "./detailsPanelOpen";
@@ -48,12 +49,12 @@ import { useSubscriptionStatuses } from "../settings/ProvidersPanel";
 import { BotTurnFailureRow } from "./BotTurnFailureRow";
 import { useBotEngineAvailability } from "./useBotEngineAvailability";
 import { BotPromptComposer } from "./BotPromptComposer";
+import { useAnsweredUserInputs } from "./useAnsweredUserInputs";
 import { useBotPromptMentionScope } from "./BotPromptMentions";
 import { buildBotStepMeters } from "@akeru/client-runtime/bot-step-usage";
 import { ThreadErrorBanner } from "../chat/ThreadErrorBanner";
 import { ProviderUnavailableLine } from "../chat/ProviderUnavailableNotice";
 import { ComposerPendingUserInputPanel } from "../chat/ComposerPendingUserInputPanel";
-import { OpenComputerAction } from "../computer/OpenComputerAction";
 import { PluginSearchResultCard } from "../chat/PluginSearchResultCard";
 import {
   buildReplyPrompt,
@@ -239,6 +240,8 @@ export function BotThreadLanding({
     [runtime.messages, working],
   );
 
+  const answeredUserInputs = useAnsweredUserInputs(activities, messages);
+
   const today = useLocalDay();
   const todayLabel = t("Today");
 
@@ -358,302 +361,319 @@ export function BotThreadLanding({
     };
   };
 
+  const chatReply = {
+    disabled:
+      runtime.sending ||
+      runtime.latestTurn?.state === "running" ||
+      runtime.pendingUserInputs.length > 0 ||
+      pendingApproval !== null ||
+      sendBlocked ||
+      !runtime.botReady,
+    send: (text: string) => runtime.send(text, []),
+  };
+
   return (
-    <SidebarInset
-      tone="foreground"
-      aria-label={t("{name} chat", { name: bot.name })}
-      className="h-dvh min-h-0 overflow-hidden"
-      data-testid="bot-thread-landing"
-    >
-      <div className="flex min-h-0 min-w-0 flex-1">
-        <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-          <WorkspacePageHeader
-            className="border-b border-border"
-            detailsPanelOpen={detailsPanelOpen}
-          >
-            <div className="flex min-w-0 items-center gap-2">
-              <BotAvatarView avatar={bot.avatar} name={bot.name} className="size-6" />
-              <span className="truncate text-sm font-medium">{bot.name}</span>
-            </div>
-            <div data-chat-header-actions className="ml-auto flex items-center">
-              <BotVoiceCallButton
-                bot={bot}
-                disabled={runtime.sending || runtime.latestTurn?.state === "running"}
-              />
-              {available ? (
-                <ChatActionsMenu threadRef={runtime.linkedThreadRef} newChat={newChat} />
+    <ChatReplyContext value={chatReply}>
+      <SidebarInset
+        tone="foreground"
+        aria-label={t("{name} chat", { name: bot.name })}
+        className="h-dvh min-h-0 overflow-hidden"
+        data-testid="bot-thread-landing"
+      >
+        <div className="flex min-h-0 min-w-0 flex-1">
+          <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+            <WorkspacePageHeader
+              className="border-b border-border"
+              detailsPanelOpen={detailsPanelOpen}
+            >
+              <div className="flex min-w-0 items-center gap-2">
+                <BotAvatarView avatar={bot.avatar} name={bot.name} className="size-6" />
+                <span className="truncate text-sm font-medium">{bot.name}</span>
+              </div>
+              <div data-chat-header-actions className="ml-auto flex items-center">
+                <BotVoiceCallButton
+                  bot={bot}
+                  disabled={runtime.sending || runtime.latestTurn?.state === "running"}
+                />
+                {available ? (
+                  <ChatActionsMenu threadRef={runtime.linkedThreadRef} newChat={newChat} />
+                ) : null}
+              </div>
+            </WorkspacePageHeader>
+            <BotConversationScrollArea
+              followKey={messages.findLast((message) => message.role === "user")?.id}
+            >
+              {olderRoutineNotes.nextCursor ? (
+                <button
+                  type="button"
+                  className="mx-auto my-3 block rounded-md px-3 py-1.5 text-xs text-muted-foreground hover:bg-accent hover:text-foreground"
+                  disabled={olderRoutineNotes.isPending}
+                  onClick={olderRoutineNotes.load}
+                >
+                  {olderRoutineNotes.isPending
+                    ? t("Loading older routine notes…")
+                    : olderRoutineNotes.error
+                      ? t("Retry older routine notes")
+                      : t("Load older routine notes")}
+                </button>
               ) : null}
-            </div>
-          </WorkspacePageHeader>
-          <BotConversationScrollArea
-            followKey={messages.findLast((message) => message.role === "user")?.id}
-          >
-            {olderRoutineNotes.nextCursor ? (
-              <button
-                type="button"
-                className="mx-auto my-3 block rounded-md px-3 py-1.5 text-xs text-muted-foreground hover:bg-accent hover:text-foreground"
-                disabled={olderRoutineNotes.isPending}
-                onClick={olderRoutineNotes.load}
-              >
-                {olderRoutineNotes.isPending
-                  ? t("Loading older routine notes…")
-                  : olderRoutineNotes.error
-                    ? t("Retry older routine notes")
-                    : t("Load older routine notes")}
-              </button>
-            ) : null}
-            {timelineItems.length === 0 ? (
-              <div className="flex flex-1 flex-col items-center justify-center gap-3 py-12">
-                <BotAvatarView avatar={bot.avatar} name={bot.name} className="size-14" />
-                <h1 className="text-lg font-medium">{t("Message {name}", { name: bot.name })}</h1>
-              </div>
-            ) : (
-              timelineItems.map((item, timelineIndex) => (
-                <Fragment key={item.key}>
-                  {Predicate.isTagged(item, "Receipt") ? (
-                    <RoutineReceiptRow
-                      receipt={item.receipt}
-                      {...(onOpenRoutines ? { onOpenRoutines } : {})}
-                    />
-                  ) : Predicate.isTagged(item, "Delegation") ? (
-                    <DelegationCard
-                      delegation={item.delegation}
-                      delegations={delegations}
-                      childBot={activeBot(item.delegation.childBotId)}
-                      parentBot={activeBot(item.delegation.parentBotId)}
-                    />
-                  ) : (
-                    (() => {
-                      const { message, separator, startsGroup } = item.message.entry;
-
-                      const startsAfterReceipt = Predicate.isTagged(
-                        timelineItems[timelineIndex - 1] ?? {},
-                        "Receipt",
-                      );
-
-                      const messageIndex = item.index;
-
-                      return (
-                        <>
-                          {separator ? <ConversationSeparator label={separator} /> : null}
-                          {message.role === "assistant" ? (
-                            <AssistantMessageRow
-                              message={message}
-                              arrived={arrivedMessageIds.has(message.id)}
-                              author={bot}
-                              testId="bot-provider-message"
-                              startsGroup={startsGroup || startsAfterReceipt}
-                              cwd={runtime.defaultProject?.workspaceRoot}
-                              threadRef={runtime.linkedThreadRef ?? undefined}
-                              stepMeter={
-                                message.turnId === null ? undefined : stepMeters.get(message.turnId)
-                              }
-                              pluginResults={
-                                message.turnId === null
-                                  ? undefined
-                                  : pluginResultsByTurn.get(message.turnId)
-                              }
-                              currentPersonId={currentPersonId}
-                              playback={replyPlayback}
-                              playbackKey={playbackKey}
-                              channelApproval={channelApprovalFor(messageIndex)}
-                              onReply={replyTo}
-                              onReactionChange={reactionHandler}
-                            />
-                          ) : (
-                            <UserMessageRow
-                              message={message}
-                              replySourceMessageId={findReplySourceMessageId(
-                                messages,
-                                messageIndex,
-                                message.text,
-                              )}
-                              arrived={arrivedMessageIds.has(message.id)}
-                              testId="bot-user-message"
-                              startsGroup={startsGroup || startsAfterReceipt}
-                              replyLabel="you"
-                              showChannelOrigin
-                              skills={engineCatalog?.skills}
-                              environmentId={environmentId}
-                              currentPersonId={currentPersonId}
-                              onReply={replyTo}
-                              onReactionChange={reactionHandler}
-                            />
-                          )}
-                        </>
-                      );
-                    })()
-                  )}
-                </Fragment>
-              ))
-            )}
-            {pendingPluginResults.map(([turnId, results]) => (
-              <div className="flex items-start gap-3" key={`${turnId}:plugins`}>
-                <BotAvatarView
-                  avatar={bot.avatar}
-                  name={bot.name}
-                  className="mt-0.5 size-7 shrink-0"
-                />
-                <div className="min-w-0 flex-1 space-y-3">
-                  <div className="text-sm font-medium">{bot.name}</div>
-                  {results.map(({ id, result }) => (
-                    <PluginSearchResultCard key={id} result={result} />
-                  ))}
+              {timelineItems.length === 0 ? (
+                <div className="flex flex-1 flex-col items-center justify-center gap-3 py-12">
+                  <BotAvatarView avatar={bot.avatar} name={bot.name} className="size-14" />
+                  <h1 className="text-lg font-medium">{t("Message {name}", { name: bot.name })}</h1>
                 </div>
-              </div>
-            ))}
-            {runtime.pendingUserInputs.length > 0 ? (
-              <div className="flex items-start gap-3">
-                <BotAvatarView
-                  avatar={bot.avatar}
-                  name={bot.name}
-                  className="mt-0.5 size-7 shrink-0"
-                />
-                <div className="min-w-0 flex-1">
-                  <div className="mb-2 text-sm font-medium">{bot.name}</div>
-                  <ComposerPendingUserInputPanel
-                    pendingUserInputs={runtime.pendingUserInputs}
-                    respondingRequestIds={runtime.respondingRequestIds}
-                    answers={runtime.pendingUserInputAnswers}
-                    questionIndex={runtime.pendingUserInputQuestionIndex}
-                    onToggleOption={runtime.selectPendingUserInputOption}
-                    onSelectSingleOption={runtime.selectPendingUserInputOption}
-                    onAdvance={() => {
-                      void runtime.advancePendingUserInput();
-                    }}
+              ) : (
+                timelineItems.map((item, timelineIndex) => (
+                  <Fragment key={item.key}>
+                    {Predicate.isTagged(item, "Receipt") ? (
+                      <RoutineReceiptRow
+                        receipt={item.receipt}
+                        {...(onOpenRoutines ? { onOpenRoutines } : {})}
+                      />
+                    ) : Predicate.isTagged(item, "Delegation") ? (
+                      <DelegationCard
+                        delegation={item.delegation}
+                        delegations={delegations}
+                        childBot={activeBot(item.delegation.childBotId)}
+                        parentBot={activeBot(item.delegation.parentBotId)}
+                      />
+                    ) : (
+                      (() => {
+                        const { message, separator, startsGroup } = item.message.entry;
+
+                        const startsAfterReceipt = Predicate.isTagged(
+                          timelineItems[timelineIndex - 1] ?? {},
+                          "Receipt",
+                        );
+
+                        const messageIndex = item.index;
+
+                        return (
+                          <>
+                            {separator ? <ConversationSeparator label={separator} /> : null}
+                            {message.role === "assistant" ? (
+                              <AssistantMessageRow
+                                message={message}
+                                arrived={arrivedMessageIds.has(message.id)}
+                                author={bot}
+                                testId="bot-provider-message"
+                                startsGroup={startsGroup || startsAfterReceipt}
+                                cwd={runtime.defaultProject?.workspaceRoot}
+                                threadRef={runtime.linkedThreadRef ?? undefined}
+                                stepMeter={
+                                  message.turnId === null
+                                    ? undefined
+                                    : stepMeters.get(message.turnId)
+                                }
+                                pluginResults={
+                                  message.turnId === null
+                                    ? undefined
+                                    : pluginResultsByTurn.get(message.turnId)
+                                }
+                                currentPersonId={currentPersonId}
+                                playback={replyPlayback}
+                                playbackKey={playbackKey}
+                                channelApproval={channelApprovalFor(messageIndex)}
+                                onReply={replyTo}
+                                onReactionChange={reactionHandler}
+                              />
+                            ) : (
+                              <UserMessageRow
+                                message={message}
+                                replySourceMessageId={findReplySourceMessageId(
+                                  messages,
+                                  messageIndex,
+                                  message.text,
+                                )}
+                                arrived={arrivedMessageIds.has(message.id)}
+                                testId="bot-user-message"
+                                startsGroup={startsGroup || startsAfterReceipt}
+                                replyLabel="you"
+                                showChannelOrigin
+                                skills={engineCatalog?.skills}
+                                environmentId={environmentId}
+                                currentPersonId={currentPersonId}
+                                answered={answeredUserInputs.get(message.id) ?? null}
+                                onReply={replyTo}
+                                onReactionChange={reactionHandler}
+                              />
+                            )}
+                          </>
+                        );
+                      })()
+                    )}
+                  </Fragment>
+                ))
+              )}
+              {pendingPluginResults.map(([turnId, results]) => (
+                <div className="flex items-start gap-3" key={`${turnId}:plugins`}>
+                  <BotAvatarView
+                    avatar={bot.avatar}
+                    name={bot.name}
+                    className="mt-0.5 size-7 shrink-0"
                   />
-                  <div className="mt-2">
-                    <OpenComputerAction threadRef={runtime.linkedThreadRef} bot={bot} />
+                  <div className="min-w-0 flex-1 space-y-3">
+                    <div className="text-sm font-medium">{bot.name}</div>
+                    {results.map(({ id, result }) => (
+                      <PluginSearchResultCard key={id} result={result} />
+                    ))}
                   </div>
                 </div>
-              </div>
-            ) : null}
-            {!working && runtime.turnFailure && messages.at(-1)?.role === "user" ? (
-              <BotTurnFailureRow
+              ))}
+              {runtime.pendingUserInputs.length > 0 ? (
+                <div className="flex items-start gap-3">
+                  <BotAvatarView
+                    avatar={bot.avatar}
+                    name={bot.name}
+                    className="mt-0.5 size-7 shrink-0"
+                  />
+                  <div className="min-w-0 flex-1">
+                    <div className="mb-2 text-sm font-medium">{bot.name}</div>
+                    <ComposerPendingUserInputPanel
+                      pendingUserInputs={runtime.pendingUserInputs}
+                      respondingRequestIds={runtime.respondingRequestIds}
+                      answers={runtime.pendingUserInputAnswers}
+                      step={runtime.pendingUserInputStep}
+                      onStepChange={runtime.setPendingUserInputStep}
+                      onSelectOption={runtime.selectPendingUserInputOption}
+                      onAnswerWithText={(text) => {
+                        void runtime.answerPendingUserInputWithText(text);
+                      }}
+                      onSubmit={() => {
+                        void runtime.submitPendingUserInputAnswers();
+                      }}
+                    />
+                  </div>
+                </div>
+              ) : null}
+              {!working && runtime.turnFailure && messages.at(-1)?.role === "user" ? (
+                <BotTurnFailureRow
+                  botName={bot.name}
+                  title={presentThreadError(runtime.turnFailure.message, failureContext, t).title}
+                />
+              ) : null}
+              {waitingOnChildren && !working ? (
+                <p className="ml-10 text-xs text-muted-foreground" aria-live="polite">
+                  {t("Waiting on delegated work")}
+                </p>
+              ) : null}
+            </BotConversationScrollArea>
+            <BotInboxAlertStack
+              items={inboxItems}
+              onOpenDetails={() => openSettings("advanced", "errors", environmentId)}
+            />
+            <ThreadRuntimeWarningBanner warning={runtimeWarning} />
+            {connectNeeded && subscriptionToConnect ? (
+              <ProviderConnectCard
+                id={engineNoticeId}
+                environmentId={environmentId}
+                provider={subscriptionToConnect}
                 botName={bot.name}
-                title={presentThreadError(runtime.turnFailure.message, failureContext, t).title}
+                className="mt-2"
               />
             ) : null}
-            {waitingOnChildren && !working ? (
-              <p className="ml-10 text-xs text-muted-foreground" aria-live="polite">
-                {t("Waiting on delegated work")}
-              </p>
-            ) : null}
-          </BotConversationScrollArea>
-          <BotInboxAlertStack
-            items={inboxItems}
-            onOpenDetails={() => openSettings("advanced", "errors", environmentId)}
-          />
-          <ThreadRuntimeWarningBanner warning={runtimeWarning} />
-          {connectNeeded && subscriptionToConnect ? (
-            <ProviderConnectCard
-              id={engineNoticeId}
-              environmentId={environmentId}
-              provider={subscriptionToConnect}
-              botName={bot.name}
-              className="mt-2"
-            />
-          ) : null}
-          <ThreadErrorBanner
-            threadKey={`${runtime.linkedThreadRef?.environmentId ?? environmentId ?? "unknown"}:${runtime.linkedThreadRef?.threadId ?? bot.id}`}
-            error={
-              connectNeeded ||
-              inboxItems.some((item) => item.lastFailure === runtime.error) ||
-              (sendBlocked && runtime.failure?.unavailability === engineUnavailability?.reason)
-                ? null
-                : runtime.error
-            }
-            context={failureContext}
-            environmentId={environmentId}
-            onOpenUsage={openBotSettings}
-            {...(runtime.canResume ? { onResume: () => void runtime.resume() } : {})}
-            resuming={runtime.resuming}
-          />
-          <BotPromptComposer
-            mentionScope={mentionScope}
-            commandCatalog={engineCatalog}
-            botName={bot.name}
-            draftKey={bot.id}
-            busy={working && pendingApproval === null}
-            activitySlot={
-              working && !waitingForUserInput && pendingApproval === null ? (
-                <BotActivityStatus
-                  name={bot.name}
-                  activity={botActivity}
-                  update={workingUpdate}
-                  silentRun={silentRun}
-                />
-              ) : null
-            }
-            pendingActionSlot={
-              pendingApproval ? (
-                <BotApprovalPrompt
-                  approval={pendingApproval}
-                  pendingCount={approvalState.pendingCount}
-                  responding={approvalState.responding}
-                  error={approvalState.responseError}
-                  onRespond={async (decision) => {
-                    const answered = await approvalState.respond(
-                      pendingApproval.requestId,
-                      decision,
-                    );
-
-                    if (answered && decision === "acceptAlways" && bot) {
-                      await enableAutoReview(bot.id);
-                    }
-
-                    return answered;
-                  }}
-                />
-              ) : memoryApprovals.length > 0 && runtime.linkedThreadRef ? (
-                <MemoryApprovalPrompt
-                  threadRef={runtime.linkedThreadRef}
-                  approvals={memoryApprovals}
-                  currentBotId={bot.id}
-                />
-              ) : null
-            }
-            quietSurface={pendingApproval !== null}
-            disabled={
-              pendingApproval !== null ||
-              runtime.respondingRequestIds.length > 0 ||
-              voiceCall.activeCall?.botId === bot.id ||
-              voiceCall.startingBotId === bot.id ||
-              sendBlocked ||
-              !runtime.botReady ||
-              !runtime.bootstrapped ||
-              runtime.defaultProject === null
-            }
-            replyPreview={replyTarget}
-            onCancelReply={() => setReplyTarget(null)}
-            sendBlockedDescriptionId={sendBlocked ? engineNoticeId : undefined}
-            onSubmit={async (prompt, files) => {
-              const sent = await runtime.send(buildReplyPrompt(replyTarget, prompt), files);
-
-              if (sent) setReplyTarget(null);
-
-              return sent;
-            }}
-          />
-          {connectNeeded ? null : sendBlocked && engineUnavailability ? (
-            <ProviderUnavailableLine
-              provider={engineUnavailability.provider}
-              id={engineNoticeId}
-              presentation={engineUnavailability}
+            <ThreadErrorBanner
+              threadKey={`${runtime.linkedThreadRef?.environmentId ?? environmentId ?? "unknown"}:${runtime.linkedThreadRef?.threadId ?? bot.id}`}
+              error={
+                connectNeeded ||
+                inboxItems.some((item) => item.lastFailure === runtime.error) ||
+                (sendBlocked && runtime.failure?.unavailability === engineUnavailability?.reason)
+                  ? null
+                  : runtime.error
+              }
+              context={failureContext}
               environmentId={environmentId}
               onOpenUsage={openBotSettings}
+              {...(runtime.canResume ? { onResume: () => void runtime.resume() } : {})}
+              resuming={runtime.resuming}
             />
-          ) : sendBlocked ? null : !runtime.botReady ? (
-            <p className="px-4 pb-3 text-center text-xs text-muted-foreground">
-              {t("Connecting bot…")}
-            </p>
-          ) : runtime.bootstrapped && runtime.defaultProject === null ? (
-            <p className="px-4 pb-3 text-center text-xs text-muted-foreground">
-              {t("Your workspace is still loading. Try again in a moment.")}
-            </p>
-          ) : null}
+            <BotPromptComposer
+              typeToFocus={!waitingForUserInput}
+              mentionScope={mentionScope}
+              commandCatalog={engineCatalog}
+              botName={bot.name}
+              draftKey={bot.id}
+              busy={working && pendingApproval === null}
+              activitySlot={
+                working && !waitingForUserInput && pendingApproval === null ? (
+                  <BotActivityStatus
+                    name={bot.name}
+                    activity={botActivity}
+                    update={workingUpdate}
+                    silentRun={silentRun}
+                  />
+                ) : null
+              }
+              pendingActionSlot={
+                pendingApproval ? (
+                  <BotApprovalPrompt
+                    approval={pendingApproval}
+                    pendingCount={approvalState.pendingCount}
+                    responding={approvalState.responding}
+                    error={approvalState.responseError}
+                    onRespond={async (decision) => {
+                      const answered = await approvalState.respond(
+                        pendingApproval.requestId,
+                        decision,
+                      );
+
+                      if (answered && decision === "acceptAlways" && bot) {
+                        await enableAutoReview(bot.id);
+                      }
+
+                      return answered;
+                    }}
+                  />
+                ) : memoryApprovals.length > 0 && runtime.linkedThreadRef ? (
+                  <MemoryApprovalPrompt
+                    threadRef={runtime.linkedThreadRef}
+                    approvals={memoryApprovals}
+                    currentBotId={bot.id}
+                  />
+                ) : null
+              }
+              quietSurface={pendingApproval !== null}
+              disabled={
+                pendingApproval !== null ||
+                runtime.respondingRequestIds.length > 0 ||
+                voiceCall.activeCall?.botId === bot.id ||
+                voiceCall.startingBotId === bot.id ||
+                sendBlocked ||
+                !runtime.botReady ||
+                !runtime.bootstrapped ||
+                runtime.defaultProject === null
+              }
+              replyPreview={replyTarget}
+              onCancelReply={() => setReplyTarget(null)}
+              sendBlockedDescriptionId={sendBlocked ? engineNoticeId : undefined}
+              onSubmit={async (prompt, files) => {
+                const sent = await runtime.send(buildReplyPrompt(replyTarget, prompt), files);
+
+                if (sent) setReplyTarget(null);
+
+                return sent;
+              }}
+            />
+            {connectNeeded ? null : sendBlocked && engineUnavailability ? (
+              <ProviderUnavailableLine
+                provider={engineUnavailability.provider}
+                id={engineNoticeId}
+                presentation={engineUnavailability}
+                environmentId={environmentId}
+                onOpenUsage={openBotSettings}
+              />
+            ) : sendBlocked ? null : !runtime.botReady ? (
+              <p className="px-4 pb-3 text-center text-xs text-muted-foreground">
+                {t("Connecting bot…")}
+              </p>
+            ) : runtime.bootstrapped && runtime.defaultProject === null ? (
+              <p className="px-4 pb-3 text-center text-xs text-muted-foreground">
+                {t("Your workspace is still loading. Try again in a moment.")}
+              </p>
+            ) : null}
+          </div>
         </div>
-      </div>
-    </SidebarInset>
+      </SidebarInset>
+    </ChatReplyContext>
   );
 }
