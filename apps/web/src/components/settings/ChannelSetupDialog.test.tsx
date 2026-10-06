@@ -25,7 +25,9 @@ const mocks = vi.hoisted(() => ({
       }) => Promise<{ _tag: "Success" | "Failure"; cause?: Cause.Cause<unknown> }>
     >(),
   detach: vi.fn<
-    (value: { input: { botId: string; provider: string } }) => Promise<{
+    (value: {
+      input: { botId: string; provider: string; expectedConnectionId?: string };
+    }) => Promise<{
       _tag: "Success" | "Failure";
     }>
   >(),
@@ -236,6 +238,27 @@ describe("new Slack assignment", () => {
     });
   }
 
+  it("shows unassign-first copy when a stale empty snapshot misses the server assignment", async () => {
+    mocks.snapshot!.bots = [{ id: "test-bot", channelBindings: [] }];
+    mocks.attach.mockResolvedValueOnce({
+      _tag: "Failure",
+      cause: Cause.fail(
+        new OrchestrationDispatchCommandError({
+          message: "Unassign the channel already connected to this bot first",
+          channelFailureCategory: "credentials",
+        }),
+      ),
+    });
+    await completeSlackSetup();
+    await click("Connect");
+    expect(container.textContent).toContain(
+      "Unassign the channel already connected to this bot first",
+    );
+    expect(container.textContent).not.toContain("Slack rejected");
+    expect(mocks.detach).not.toHaveBeenCalled();
+    expect(onOpenChange).not.toHaveBeenCalled();
+  });
+
   it("refuses to replace a live legacy Slack binding", async () => {
     mocks.snapshot!.bots = [
       {
@@ -425,7 +448,9 @@ describe("ChannelSetupDialog credential update", () => {
       token: "new-token",
     });
     expect(mocks.detach).toHaveBeenCalledWith(
-      expect.objectContaining({ input: { botId: "test-bot", provider: "telegram" } }),
+      expect.objectContaining({
+        input: { botId: "test-bot", provider: "telegram", expectedConnectionId: oldConnection },
+      }),
     );
     expect(mocks.attach.mock.calls.map(([value]) => value.input)).toEqual([
       {
@@ -452,6 +477,10 @@ describe("ChannelSetupDialog credential update", () => {
       oldConnection,
     ]);
     expect(mocks.attach.mock.calls[1]![0].input.projectId).toBe(botProject);
+    expect(mocks.detach.mock.calls.map(([value]) => value.input.expectedConnectionId)).toEqual([
+      oldConnection,
+      newConnection,
+    ]);
     expect(mocks.deleteConnection.mock.calls.map(([value]) => value.input.connectionId)).toEqual([
       newConnection,
     ]);
@@ -461,6 +490,25 @@ describe("ChannelSetupDialog credential update", () => {
     expect(onSaved).not.toHaveBeenCalled();
     expect(onOpenChange).not.toHaveBeenCalled();
     expect(mocks.disconnect).not.toHaveBeenCalled();
+  });
+
+  it("does not restore or delete credentials when the conditional rollback detach fails", async () => {
+    mocks.attach.mockResolvedValueOnce({ _tag: "Failure" });
+    mocks.detach
+      .mockResolvedValueOnce({ _tag: "Success" })
+      .mockResolvedValueOnce({ _tag: "Failure" });
+    await enterNewToken();
+    await click("Save and reconnect");
+    const newConnection = mocks.save.mock.calls[0]![0].input.connectionId;
+    expect(mocks.attach.mock.calls.map(([value]) => value.input.connectionId)).toEqual([
+      newConnection,
+    ]);
+    expect(mocks.detach.mock.calls[1]![0].input.expectedConnectionId).toBe(newConnection);
+    expect(mocks.deleteConnection).not.toHaveBeenCalled();
+    expect(onSaved).toHaveBeenCalledWith(newConnection);
+    expect(container.textContent).toContain(
+      "Could not connect with the new credentials or restore the old connection.",
+    );
   });
 
   it("keeps a restored channel disconnected when it was disconnected before", async () => {
@@ -611,7 +659,7 @@ describe("ChannelSetupDialog credential update", () => {
     mocks.attach.mockResolvedValue({ _tag: "Success" });
     await click("Reconnect");
 
-    expect(mocks.detach).toHaveBeenCalledTimes(1);
+    expect(mocks.detach).toHaveBeenCalledTimes(2);
     expect(mocks.save.mock.calls.map(([value]) => value.input.connectionId)).toEqual([
       kept,
       kept,

@@ -290,6 +290,7 @@ export const ChannelDetachCommand = Schema.Struct({
   commandId: CommandId,
   botId: BotId,
   provider: ChannelProvider,
+  expectedConnectionId: Schema.optional(ChannelConnectionId),
 });
 
 export const ChannelReconnectCommand = Schema.Struct({

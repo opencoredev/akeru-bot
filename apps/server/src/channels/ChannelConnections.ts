@@ -48,6 +48,17 @@ export const connectChannel = (ctx: ChannelRuntimeContext, input: ChannelConnect
     input.provider,
   )(
     Effect.gen(function* () {
+      if (input.provider === "slack") {
+        const model = yield* ctx.deps.readModel;
+
+        const binding = model.bots
+          .find((bot) => bot.id === input.botId)
+          ?.channelBindings.find((binding) => binding.provider === "slack");
+
+        if (binding?.connectionId)
+          return yield* failWith("Unassign the channel already connected to this bot first");
+      }
+
       yield* assertChannelIdentityAvailable(ctx, input.botId, storedSecretFromInput(input));
 
       return yield* startAndCommitChannel(ctx, input, { secret: storedSecretFromInput(input) });
@@ -233,6 +244,16 @@ export const attachChannelConnection = (
         );
 
         if (!bot) return yield* failWith(`Bot '${botId}' is unavailable.`);
+        const binding = bot.channelBindings.find((binding) => binding.provider === provider);
+
+        if (
+          binding &&
+          (binding.connectionId
+            ? binding.connectionId !== connectionId
+            : binding.status !== "disconnected")
+        ) {
+          return yield* failWith("Unassign the channel already connected to this bot first");
+        }
 
         const project = model.projects.find(
           (candidate) => candidate.id === projectId && candidate.deletedAt === null,
@@ -311,6 +332,7 @@ export const detachChannelConnection = (
   ctx: ChannelRuntimeContext,
   botId: BotId,
   provider: ChannelProvider,
+  expectedConnectionId?: ChannelConnectionId,
 ) =>
   withChannelOperation(
     ctx,
@@ -319,6 +341,16 @@ export const detachChannelConnection = (
     Effect.gen(function* () {
       const deps = ctx.deps;
       const currentBinding = yield* currentBindingFor(ctx, botId, provider);
+
+      if (expectedConnectionId && currentBinding.connectionId !== expectedConnectionId) {
+        // A rejected attach can leave the bot unassigned. Rollback may proceed without a write.
+        if (!currentBinding.connectionId && currentBinding.status === "disconnected") {
+          return (yield* deps.readModel).snapshotSequence;
+        }
+
+        return yield* failWith("Unassign the channel already connected to this bot first");
+      }
+
       const name = secretName(botId, provider);
 
       const previousSecret = currentBinding.connectionId

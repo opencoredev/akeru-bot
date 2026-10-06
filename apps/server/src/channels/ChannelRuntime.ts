@@ -89,7 +89,8 @@ const makeChannelRuntime = (deps: ChannelRuntimeDependencies) =>
       changeProject: (botId, provider, projectId) =>
         changeChannelProject(ctx, botId, provider, projectId),
       disconnect: (botId, provider) => disconnectChannel(ctx, botId, provider),
-      detach: (botId, provider) => detachChannelConnection(ctx, botId, provider),
+      detach: (botId, provider, expectedConnectionId) =>
+        detachChannelConnection(ctx, botId, provider, expectedConnectionId),
       reconnect: (botId, provider) => reconnectChannel(ctx, botId, provider),
       restoreConnectedChannels: restoreConnectedChannels(ctx),
       dispatchInbound: (input) => dispatchInboundChannelMessage(ctx, input),

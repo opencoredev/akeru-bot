@@ -1,3 +1,4 @@
+import { makeMemorySecretStore } from "./channelSecretStore.ts";
 import { photon, externalAdapters } from "./channelAdapters.ts";
 
 export { photon, externalAdapters } from "./channelAdapters.ts";
@@ -27,7 +28,6 @@ import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Deferred from "effect/Deferred";
 import * as Queue from "effect/Queue";
-import * as Option from "effect/Option";
 import * as Stream from "effect/Stream";
 import * as Scope from "effect/Scope";
 import * as Exit from "effect/Exit";
@@ -35,7 +35,6 @@ import * as Cause from "effect/Cause";
 import * as FiberSet from "effect/FiberSet";
 import { HttpClient, HttpClientResponse } from "effect/unstable/http";
 import { afterEach, expect, vi } from "vite-plus/test";
-import type { ServerSecretStore } from "../../auth/ServerSecretStore.ts";
 import { createEmptyReadModel } from "../../orchestration/projector.ts";
 import type { OrchestrationEngineShape } from "../../orchestration/Services/OrchestrationEngine.ts";
 import { memoryChannelDeliveryStore } from "../ChannelDeliveryStore.ts";
@@ -179,7 +178,8 @@ const detachChannelConnection = (
   dependencies: ChannelRuntimeDependencies,
   botId: BotId,
   provider: Provider,
-) => runWith(dependencies, (runtime) => runtime.detach(botId, provider));
+  expectedConnectionId?: ChannelConnectionId,
+) => runWith(dependencies, (runtime) => runtime.detach(botId, provider, expectedConnectionId));
 
 const reconnectChannel = (
   dependencies: ChannelRuntimeDependencies,
@@ -423,26 +423,6 @@ function makeThread(
     checkpoints: [],
     session: null,
   };
-}
-
-function makeMemorySecretStore() {
-  const values = new Map<string, Uint8Array>();
-
-  const store: ServerSecretStore["Service"] = {
-    get: (name) => Effect.succeed(Option.fromUndefinedOr(values.get(name))),
-    set: (name, value) => Effect.sync(() => void values.set(name, value)),
-    create: (name, value) => Effect.sync(() => void values.set(name, value)),
-    getOrCreateRandom: (name, bytes) =>
-      Effect.sync(() => {
-        const value = values.get(name) ?? new Uint8Array(bytes);
-        values.set(name, value);
-
-        return value;
-      }),
-    remove: (name) => Effect.sync(() => void values.delete(name)),
-  };
-
-  return { store, values };
 }
 
 /** Answers Slack's apps.connections.open app-token probe with `ok`. */
