@@ -93,7 +93,7 @@ const make = Effect.gen(function* () {
     input,
   ) =>
     Effect.gen(function* () {
-      const thread = Option.getOrUndefined(yield* snapshots.getThreadDetailById(threadId));
+      const thread = Option.getOrUndefined(yield* snapshots.getThreadShellById(threadId));
 
       if (!thread || thread.archivedAt !== null) {
         return yield* fail("The current chat is unavailable.");
@@ -176,7 +176,7 @@ const make = Effect.gen(function* () {
 
   const listForThread: RoutineDraftDispatcherShape["listForThread"] = (threadId) =>
     Effect.gen(function* () {
-      const thread = Option.getOrUndefined(yield* snapshots.getThreadDetailById(threadId));
+      const thread = Option.getOrUndefined(yield* snapshots.getThreadShellById(threadId));
 
       if (!thread || thread.archivedAt !== null) {
         return yield* fail("The current chat is unavailable.");
@@ -207,7 +207,7 @@ const make = Effect.gen(function* () {
 
   const deleteForThread: RoutineDraftDispatcherShape["deleteForThread"] = (threadId, routineIds) =>
     Effect.gen(function* () {
-      const thread = Option.getOrUndefined(yield* snapshots.getThreadDetailById(threadId));
+      const thread = Option.getOrUndefined(yield* snapshots.getThreadShellById(threadId));
 
       if (!thread || thread.archivedAt !== null) {
         return yield* fail("The current chat is unavailable.");

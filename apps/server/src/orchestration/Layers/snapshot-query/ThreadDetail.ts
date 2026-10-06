@@ -47,6 +47,7 @@ export function createThreadDetail({
   listPinnedThreadActivityRowsByThread,
   getActiveThreadRowById,
   listThreadMessageRowsByThread,
+  getOldestUserMessageRowByThread,
   listThreadMessageRowsByThreadWindow,
   listThreadProposedPlanRowsByThread,
   listCheckpointRowsByThread,
@@ -71,6 +72,7 @@ export function createThreadDetail({
   | "listPinnedThreadActivityRowsByThread"
   | "getActiveThreadRowById"
   | "listThreadMessageRowsByThread"
+  | "getOldestUserMessageRowByThread"
   | "listThreadMessageRowsByThreadWindow"
   | "listThreadProposedPlanRowsByThread"
   | "listCheckpointRowsByThread"
@@ -287,6 +289,28 @@ export function createThreadDetail({
         return Option.none<OrchestrationThread>();
       }
 
+      const shouldPinOldestUser =
+        bounds === undefined &&
+        activityRead.mode === "raw" &&
+        activityRead.query?.pinOldestUserMessage === true;
+
+      const pinnedOldestUserRow = shouldPinOldestUser
+        ? yield* getOldestUserMessageRowByThread({ threadId }).pipe(
+            Effect.mapError(
+              toPersistenceSqlOrDecodeError(
+                "ProjectionSnapshotQuery.getThreadDetailById:getOldestUserMessage:query",
+                "ProjectionSnapshotQuery.getThreadDetailById:getOldestUserMessage:decodeRow",
+              ),
+            ),
+          )
+        : Option.none();
+
+      const resolvedMessageRows =
+        Option.isSome(pinnedOldestUserRow) &&
+        !messageRows.some((row) => row.messageId === pinnedOldestUserRow.value.messageId)
+          ? [pinnedOldestUserRow.value, ...messageRows]
+          : messageRows;
+
       const thread = {
         id: threadRow.value.threadId,
         projectId: threadRow.value.projectId,
@@ -317,7 +341,7 @@ export function createThreadDetail({
         pinOrderKey: threadRow.value.pinOrderKey ?? null,
         titleRegeneration: mapTitleRegeneration(threadRow.value),
         deletedAt: null,
-        messages: messageRows.map(mapThreadMessageRow),
+        messages: resolvedMessageRows.map(mapThreadMessageRow),
         proposedPlans: proposedPlanRows.map(mapProposedPlanRow),
         activities,
         checkpoints: checkpointRows.map((row) => ({
