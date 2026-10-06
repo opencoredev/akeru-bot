@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vite-plus/test";
+import { describe, expect, it, vi } from "vite-plus/test";
 
 import { authHeader, makeDeps } from "../../../test/fakes.ts";
 import { createApp } from "../../app.ts";
@@ -70,7 +70,7 @@ describe("device link", () => {
     expect(response.status).toBe(400);
   });
 
-  it("issues a single-use environment token after browser approval", async () => {
+  it("replays the same environment token after browser approval", async () => {
     const harness = makeDeps();
     const started = await startLink(harness);
     expect(await poll(harness, started.deviceCode)).toEqual({ status: "pending" });
@@ -112,9 +112,60 @@ describe("device link", () => {
     expect(JSON.stringify(environments)).not.toContain(token);
     expect(harness.captured).toContainEqual({ event: "environment_linked", userId: "user_1" });
 
-    // The code is consumed: a second poll cannot mint another token.
-    expect(await poll(harness, started.deviceCode)).toEqual({ status: "expired" });
+    // A lost response can be retried without minting another environment.
+    expect(await poll(harness, started.deviceCode)).toEqual(approved);
     expect(harness.query("SELECT * FROM environments")).toHaveLength(1);
+  });
+
+  it("retries an approved poll after an environment insert fails", async () => {
+    const harness = makeDeps();
+    const started = await startLink(harness);
+    await app.fetch(
+      post("/api/link/approve", { userCode: started.userCode }, authHeader("user_1")),
+      harness.deps,
+    );
+    harness.query(
+      "CREATE TRIGGER fail_environment BEFORE INSERT ON environments BEGIN SELECT RAISE(FAIL, 'temporary failure'); END",
+    );
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    expect(
+      (await app.fetch(post("/v1/link/poll", { deviceCode: started.deviceCode }), harness.deps))
+        .status,
+    ).toBe(500);
+    harness.query("DROP TRIGGER fail_environment");
+    expect(await poll(harness, started.deviceCode)).toMatchObject({ status: "approved" });
+    expect(harness.query("SELECT * FROM environments")).toHaveLength(1);
+    vi.restoreAllMocks();
+  });
+
+  it("caps anonymous outstanding codes and frees capacity after expiry", async () => {
+    const harness = makeDeps();
+    harness.query(`WITH RECURSIVE codes(n) AS (SELECT 1 UNION ALL SELECT n+1 FROM codes WHERE n < 1000)
+      INSERT INTO link_codes (device_code_hash, user_code, environment_name, server_version, expires_at, created_at)
+      SELECT 'hash-' || n, 'code-' || n, 'Mac', '1', '2026-09-29T12:10:00.000Z', '2026-09-29T12:00:00.000Z' FROM codes`);
+
+    const response = await app.fetch(
+      post("/v1/link/start", { environmentName: "Mac", serverVersion: "1" }),
+      harness.deps,
+    );
+
+    expect(response.status).toBe(429);
+    expect(harness.query("SELECT * FROM link_codes")).toHaveLength(1000);
+    harness.advance(LINK_CODE_TTL_MS);
+    expect(await startLink(harness)).toHaveProperty("deviceCode");
+    expect(harness.query("SELECT * FROM link_codes")).toHaveLength(1);
+  });
+
+  it("does not return a revoked token on repeated approval polls", async () => {
+    const harness = makeDeps();
+    const started = await startLink(harness);
+    await app.fetch(
+      post("/api/link/approve", { userCode: started.userCode }, authHeader("user_1")),
+      harness.deps,
+    );
+    expect(await poll(harness, started.deviceCode)).toMatchObject({ status: "approved" });
+    harness.query("UPDATE environments SET revoked_at = '2026-09-29T12:00:00.000Z'");
+    expect(await poll(harness, started.deviceCode)).toEqual({ status: "denied" });
   });
 
   it("expires unapproved codes and refuses late approval", async () => {

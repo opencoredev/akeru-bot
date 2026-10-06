@@ -11,18 +11,14 @@ import * as Schema from "effect/Schema";
 
 import { requireUser } from "../../auth.ts";
 import type { CloudHono } from "../../deps.ts";
-import {
-  createUserCode,
-  normalizeUserCode,
-  randomId,
-  randomToken,
-  sha256Hex,
-} from "../../lib/crypto.ts";
+import { createUserCode, normalizeUserCode, randomToken, sha256Hex } from "../../lib/crypto.ts";
 import { decodeJsonBody } from "../../lib/schema.ts";
 
 export const LINK_CODE_TTL_MS = 10 * 60_000;
 
 export const LINK_POLL_INTERVAL_SECONDS = 3;
+
+export const MAX_OUTSTANDING_LINK_CODES = 1000;
 
 const UserCodeBody = Schema.Struct({ userCode: Schema.String.check(Schema.isMaxLength(32)) });
 
@@ -48,6 +44,17 @@ export function registerLink(app: CloudHono) {
 
     if (!body) return c.json(invalid, 400);
     const now = c.env.now();
+    await c.env.db
+      .prepare("DELETE FROM link_codes WHERE expires_at <= ?")
+      .bind(now.toISOString())
+      .run();
+
+    const outstanding = await c.env.db
+      .prepare("SELECT COUNT(*) AS count FROM link_codes")
+      .first<{ count: number }>();
+
+    if ((outstanding?.count ?? 0) >= MAX_OUTSTANDING_LINK_CODES)
+      return c.json({ error: "limit-reached" }, 429);
     const deviceCode = randomToken();
     const deviceCodeHash = await sha256Hex(deviceCode);
     const expiresAt = new Date(now.getTime() + LINK_CODE_TTL_MS).toISOString();
@@ -59,7 +66,8 @@ export function registerLink(app: CloudHono) {
       const inserted = await c.env.db
         .prepare(
           `INSERT INTO link_codes (device_code_hash, user_code, environment_name, server_version, expires_at, created_at)
-           VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(user_code) DO NOTHING`,
+           SELECT ?, ?, ?, ?, ?, ? WHERE (SELECT COUNT(*) FROM link_codes) < ?
+           ON CONFLICT(user_code) DO NOTHING`,
         )
         .bind(
           deviceCodeHash,
@@ -68,6 +76,7 @@ export function registerLink(app: CloudHono) {
           body.serverVersion,
           expiresAt,
           now.toISOString(),
+          MAX_OUTSTANDING_LINK_CODES,
         )
         .run();
 
@@ -84,7 +93,7 @@ export function registerLink(app: CloudHono) {
       return c.json(response);
     }
 
-    return c.json({ error: "internal" }, 500);
+    return c.json({ error: "limit-reached" }, 429);
   });
 
   app.post(CLOUD_LINK_POLL_PATH, async (c) => {
@@ -109,42 +118,38 @@ export function registerLink(app: CloudHono) {
       return respond({ status: row.expires_at <= now ? "expired" : "pending" });
     }
 
-    // Claim the approved code. The delete makes it single-use even when two polls
-    // race, and checks expiry in the same statement so a late poll cannot claim it.
-    const claimed = await c.env.db
-      .prepare(
-        `DELETE FROM link_codes
-         WHERE device_code_hash = ? AND approved_user_id IS NOT NULL AND expires_at > ?
-         RETURNING approved_user_id`,
-      )
-      .bind(deviceCodeHash, now)
-      .first<{ approved_user_id: string }>();
-
-    if (!claimed) return respond({ status: "expired" });
+    if (row.expires_at <= now) return respond({ status: "expired" });
 
     const account = await c.env.db
       .prepare("SELECT email FROM users WHERE clerk_user_id = ? AND disabled = 0")
-      .bind(claimed.approved_user_id)
+      .bind(row.approved_user_id)
       .first<{ email: string }>();
 
     if (!account) return respond({ status: "denied" });
-    const environmentId = randomId("env");
-    const environmentToken = randomToken();
-    await c.env.db
-      .prepare(
-        `INSERT INTO environments (id, user_id, name, server_version, token_hash, created_at)
-         VALUES (?, ?, ?, ?, ?, ?)`,
-      )
-      .bind(
-        environmentId,
-        claimed.approved_user_id,
-        row.environment_name,
-        row.server_version,
-        await sha256Hex(environmentToken),
-        now,
-      )
+
+    // Domain-separated hashes of the secret device code make the exchange repeatable
+    // without storing either secret or deriving the token from its stored device hash.
+    const environmentId = `env_${(await sha256Hex(`environment-id:${body.deviceCode}`)).slice(0, 40)}`;
+    const environmentToken = await sha256Hex(`environment-token:${body.deviceCode}`);
+
+    const inserted = await c.env.db
+      .prepare(`INSERT INTO environments (id, user_id, name, server_version, token_hash, created_at)
+        SELECT ?, l.approved_user_id, l.environment_name, l.server_version, ?, ?
+        FROM link_codes l JOIN users u ON u.clerk_user_id = l.approved_user_id
+        WHERE l.device_code_hash = ? AND l.expires_at > ? AND l.denied = 0 AND u.disabled = 0
+        ON CONFLICT(id) DO NOTHING`)
+      .bind(environmentId, await sha256Hex(environmentToken), now, deviceCodeHash, now)
       .run();
-    c.env.analytics.capture("environment_linked", claimed.approved_user_id);
+
+    const linked = await c.env.db
+      .prepare("SELECT 1 FROM environments WHERE id = ? AND revoked_at IS NULL")
+      .bind(environmentId)
+      .first();
+
+    if (!linked) return respond({ status: "denied" });
+
+    if (inserted.meta.changes === 1)
+      c.env.analytics.capture("environment_linked", row.approved_user_id);
 
     return respond({
       status: "approved",
