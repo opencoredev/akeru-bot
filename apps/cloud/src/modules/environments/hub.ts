@@ -43,6 +43,8 @@ const LAST_SEEN_WRITE_INTERVAL_MS = 60_000;
 
 const MISSED_PREFIX = "missed:";
 
+const REVOKED_KEY = "revoked";
+
 interface MissedEvents {
   readonly provider: CloudHostedChannelProvider;
   readonly count: number;
@@ -63,12 +65,13 @@ export interface HubSocket {
 }
 
 export interface HubState {
+  blockConcurrencyWhile<T>(callback: () => Promise<T>): Promise<T>;
   getWebSockets(): HubSocket[];
   acceptWebSocket(socket: WebSocket): void;
   waitUntil(promise: Promise<unknown>): void;
   readonly storage: {
     get<T>(key: string): Promise<T | undefined>;
-    put(key: string, value: MissedEvents): Promise<void>;
+    put(key: string, value: MissedEvents | boolean): Promise<void>;
     delete(keys: string[]): Promise<number>;
     deleteAll(): Promise<void>;
     list<T>(options: { prefix: string }): Promise<Map<string, T>>;
@@ -128,7 +131,11 @@ export class EnvironmentHubRuntime implements EnvironmentHubRpc {
     socket.send(JSON.stringify(message));
   }
 
-  async fetch(request: Request): Promise<Response> {
+  fetch(request: Request): Promise<Response> {
+    return this.#ctx.blockConcurrencyWhile(() => this.#acceptUpgrade(request));
+  }
+
+  async #acceptUpgrade(request: Request): Promise<Response> {
     if (request.headers.get("upgrade")?.toLowerCase() !== "websocket") {
       return new Response("Expected a WebSocket upgrade", { status: 426 });
     }
@@ -137,6 +144,10 @@ export class EnvironmentHubRuntime implements EnvironmentHubRpc {
     const userId = request.headers.get(USER_ID_HEADER);
 
     if (!environmentId || !userId) return new Response("Bad Request", { status: 400 });
+
+    if (await this.#ctx.storage.get<boolean>(REVOKED_KEY)) {
+      return new Response("Gone", { status: 410 });
+    }
 
     // One socket per environment: a new connection replaces the old one.
     for (const previous of this.#ctx.getWebSockets()) {
@@ -153,7 +164,7 @@ export class EnvironmentHubRuntime implements EnvironmentHubRpc {
   }
 
   async webSocketMessage(socket: HubSocket, data: string | ArrayBuffer): Promise<void> {
-    if (!Predicate.isString(data)) return;
+    if (socket.readyState !== WebSocket.OPEN || !Predicate.isString(data)) return;
     let parsed: unknown;
 
     try {
@@ -186,42 +197,42 @@ export class EnvironmentHubRuntime implements EnvironmentHubRpc {
 
     switch (message.kind) {
       case "hello": {
-        const account = await services.db
-          .prepare("SELECT email FROM users WHERE clerk_user_id = ?")
-          .bind(owner.userId)
-          .first<{ email: string }>();
+        return this.#ctx.blockConcurrencyWhile(async () => {
+          const account = await services.db
+            .prepare(`SELECT u.email FROM environments e JOIN users u ON u.clerk_user_id = e.user_id
+            WHERE e.id = ? AND e.user_id = ? AND e.revoked_at IS NULL AND u.disabled = 0`)
+            .bind(owner.environmentId, owner.userId)
+            .first<{ email: string }>();
 
-        // The connect endpoint joined the user, so a missing row means the account
-        // was deleted since. `welcome` needs an email, and the link is dead anyway.
-        if (!account) {
-          this.#send(socket, { kind: "revoked" });
-          socket.close(4001, "Revoked");
+          // Recheck the link because D1 may have changed after the Worker authorized the upgrade.
+          if (!account || (await this.#ctx.storage.get<boolean>(REVOKED_KEY))) {
+            this.#send(socket, { kind: "revoked" });
+            socket.close(4001, "Revoked");
 
-          return;
-        }
+            return;
+          }
 
-        await services.db
-          .prepare(
-            "UPDATE environments SET name = ?, server_version = ?, last_seen_at = ? WHERE id = ?",
-          )
-          .bind(
-            message.environmentName,
-            message.serverVersion,
-            services.now().toISOString(),
-            owner.environmentId,
-          )
-          .run();
-        this.#lastSeenWrite = Date.now();
-        this.#send(socket, {
-          kind: "welcome",
-          v: CLOUD_PROTOCOL_VERSION,
-          environmentId: CloudEnvironmentId.make(owner.environmentId),
-          account: { email: account.email },
-          capabilities: [...CLOUD_CAPABILITIES],
+          await services.db
+            .prepare(
+              "UPDATE environments SET name = ?, server_version = ?, last_seen_at = ? WHERE id = ?",
+            )
+            .bind(
+              message.environmentName,
+              message.serverVersion,
+              services.now().toISOString(),
+              owner.environmentId,
+            )
+            .run();
+          this.#lastSeenWrite = Date.now();
+          this.#send(socket, {
+            kind: "welcome",
+            v: CLOUD_PROTOCOL_VERSION,
+            environmentId: CloudEnvironmentId.make(owner.environmentId),
+            account: { email: account.email },
+            capabilities: [...CLOUD_CAPABILITIES],
+          });
+          await this.#flushMissed(socket);
         });
-        await this.#flushMissed(socket);
-
-        return;
       }
 
       case "ping":
@@ -255,7 +266,11 @@ export class EnvironmentHubRuntime implements EnvironmentHubRpc {
   }
 
   /** Unlinks from the environment side: the same revoke as the account page, then close. */
-  async #unlink(socket: HubSocket, owner: EnvironmentOwner, requestId: string) {
+  #unlink(socket: HubSocket, owner: EnvironmentOwner, requestId: string) {
+    return this.#ctx.blockConcurrencyWhile(() => this.#unlinkLocked(socket, owner, requestId));
+  }
+
+  async #unlinkLocked(socket: HubSocket, owner: EnvironmentOwner, requestId: string) {
     const services = this.#services();
 
     const revoked = await revokeEnvironment(
@@ -288,7 +303,7 @@ export class EnvironmentHubRuntime implements EnvironmentHubRpc {
       }
     }
 
-    await this.#ctx.storage.deleteAll();
+    await this.#markRevoked();
   }
 
   async webSocketClose(socket: HubSocket, code: number, reason: string): Promise<void> {
@@ -399,7 +414,20 @@ export class EnvironmentHubRuntime implements EnvironmentHubRpc {
     return this.#socket() !== undefined;
   }
 
-  async revoke(): Promise<void> {
+  revoke(): Promise<void> {
+    return this.#ctx.blockConcurrencyWhile(() => this.#revokeLocked());
+  }
+
+  async #markRevoked() {
+    await this.#ctx.storage.put(REVOKED_KEY, true);
+    const missed = await this.#ctx.storage.list<MissedEvents>({ prefix: MISSED_PREFIX });
+
+    if (missed.size > 0) await this.#ctx.storage.delete([...missed.keys()]);
+  }
+
+  async #revokeLocked(): Promise<void> {
+    await this.#markRevoked();
+
     for (const socket of this.#ctx.getWebSockets()) {
       try {
         this.#send(socket, { kind: "revoked" });
@@ -408,8 +436,6 @@ export class EnvironmentHubRuntime implements EnvironmentHubRpc {
         // Already closed.
       }
     }
-
-    await this.#ctx.storage.deleteAll();
   }
 }
 

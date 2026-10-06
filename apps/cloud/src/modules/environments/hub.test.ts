@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vite-plus/test";
+import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
 import { CloudServerMessage } from "@akeru/contracts";
 import * as Schema from "effect/Schema";
@@ -31,13 +31,45 @@ class FakeSocket {
   }
 }
 
+// Node cannot construct an upgrade response; preserve its status for assertions.
+function stubUpgrade() {
+  const NodeResponse = Response;
+  vi.stubGlobal(
+    "Response",
+    class extends NodeResponse {
+      constructor(body: BodyInit | null, init: ResponseInit) {
+        super(body, init.status === 101 ? { status: 200 } : init);
+
+        if (init.status === 101) Object.defineProperty(this, "status", { value: 101 });
+      }
+    },
+  );
+  vi.stubGlobal(
+    "WebSocketPair",
+    class {
+      0 = new FakeSocket();
+      1 = new FakeSocket();
+    },
+  );
+}
+
+afterEach(() => vi.unstubAllGlobals());
+
 function makeHub() {
   const { db, query } = makeD1();
   seedEnvironment(query);
   const sockets: FakeSocket[] = [];
   const storage = new Map<string, unknown>();
 
+  let gate: Promise<unknown> = Promise.resolve();
+
   const ctx = {
+    blockConcurrencyWhile: <T>(callback: () => Promise<T>): Promise<T> => {
+      const result = gate.then(callback);
+      gate = result.catch(() => undefined);
+
+      return result;
+    },
     getWebSockets: () => sockets,
     waitUntil: () => {},
     acceptWebSocket: () => {},
@@ -46,8 +78,10 @@ function makeHub() {
         // SAFETY: the runtime reads the same typed values it wrote at each storage key.
         return storage.get(key) as T | undefined;
       },
-      put: async (key: string, value: { provider: string; count: number; since: string }) =>
-        void storage.set(key, value),
+      put: async (
+        key: string,
+        value: { provider: string; count: number; since: string } | boolean,
+      ) => void storage.set(key, value),
       delete: async (keys: string[]) =>
         keys.reduce((count, key) => count + Number(storage.delete(key)), 0),
       deleteAll: async () => storage.clear(),
@@ -81,7 +115,7 @@ function makeHub() {
   const send = (socket: FakeSocket, message: Parameters<typeof JSON.stringify>[0]) =>
     hub.webSocketMessage(socket, JSON.stringify(message));
 
-  return { hub, query, connect, send, storage };
+  return { hub, query, connect, send, storage, ctx, env };
 }
 
 const hello = {
@@ -126,6 +160,65 @@ describe("EnvironmentHub", () => {
     await send(socket, hello);
     expect(socket.sent).toEqual([{ kind: "revoked" }]);
     expect(socket.closed).toEqual({ code: 4001, reason: "Revoked" });
+  });
+
+  it.each(["environment", "account"])("refuses hello after %s revocation", async (target) => {
+    const { connect, send, query } = makeHub();
+    const socket = connect();
+
+    if (target === "environment") query("UPDATE environments SET revoked_at = '2026-10-05'");
+    else query("UPDATE users SET disabled = 1");
+    await send(socket, hello);
+    expect(socket.sent).toEqual([{ kind: "revoked" }]);
+    expect(socket.closed).toEqual({ code: 4001, reason: "Revoked" });
+  });
+
+  it("rejects a delayed upgrade even after the revoked hub restarts", async () => {
+    stubUpgrade();
+    const { hub, ctx, env } = makeHub();
+    await hub.revoke();
+    const restarted = new EnvironmentHubRuntime(ctx, env);
+
+    const response = await restarted.fetch(
+      new Request("https://cloud.test/connect", {
+        headers: {
+          upgrade: "websocket",
+          "x-akeru-environment-id": "env_1",
+          "x-akeru-user-id": "user_1",
+        },
+      }),
+    );
+
+    expect(response.status).toBe(410);
+  });
+
+  it("serializes a racing upgrade behind the durable revocation write", async () => {
+    stubUpgrade();
+    const { hub, ctx } = makeHub();
+    const writing = Promise.withResolvers<void>();
+    const release = Promise.withResolvers<void>();
+    const put = ctx.storage.put;
+    vi.spyOn(ctx.storage, "put").mockImplementation(async (key, value) => {
+      writing.resolve();
+      await release.promise;
+      await put(key, value);
+    });
+    const revoking = hub.revoke();
+    await writing.promise;
+
+    const upgrading = hub.fetch(
+      new Request("https://cloud.test/connect", {
+        headers: {
+          upgrade: "websocket",
+          "x-akeru-environment-id": "env_1",
+          "x-akeru-user-id": "user_1",
+        },
+      }),
+    );
+
+    release.resolve();
+    await revoking;
+    expect((await upgrading).status).toBe(410);
   });
 
   it("answers ping and rejects malformed requests", async () => {
@@ -285,9 +378,16 @@ describe("EnvironmentHub", () => {
   });
 
   it("tells the environment it was revoked and closes the socket", async () => {
-    const { hub, connect } = makeHub();
+    const { hub, connect, send, query } = makeHub();
     const socket = connect();
     await hub.revoke();
+    await send(socket, {
+      kind: "channel.route.create",
+      requestId: "late",
+      provider: "slack",
+      label: "Late",
+    });
+    expect(query("SELECT * FROM channel_routes")).toEqual([]);
     expect(socket.sent).toEqual([{ kind: "revoked" }]);
     expect(socket.closed).toEqual({ code: 4001, reason: "Revoked" });
     expect(await hub.isOnline()).toBe(false);
@@ -313,7 +413,7 @@ describe("EnvironmentHub", () => {
     ]);
     expect(query("SELECT disabled FROM channel_routes")).toEqual([{ disabled: 1 }]);
     expect(query("SELECT * FROM oauth_flows")).toEqual([]);
-    expect(storage.size).toBe(0);
+    expect([...storage]).toEqual([["revoked", true]]);
   });
 
   it("answers not-found when unlinking an already revoked environment", async () => {
