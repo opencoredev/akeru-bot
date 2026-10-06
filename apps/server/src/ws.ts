@@ -12,6 +12,7 @@ import * as VoiceCallManager from "./voiceCall/VoiceCallManager.ts";
 import * as SessionStore from "./auth/SessionStore.ts";
 import { failEnvironmentAuthInvalid, failEnvironmentInternal } from "./auth/http.ts";
 
+import { createWsCloudHandlers } from "./wsCloudHandlers.ts";
 import { createWsConnection } from "./wsConnection.ts";
 import { createWsOrchestrationHandlers } from "./wsOrchestrationHandlers.ts";
 import { createWsOrchestrationSubscriptions } from "./wsOrchestrationSubscriptions.ts";
@@ -52,6 +53,7 @@ const createWsRpcLayer = (
         ...createWsOrchestrationHandlers(connection),
         ...createWsOrchestrationSubscriptions(connection),
         ...createWsServerHandlers(connection),
+        ...createWsCloudHandlers(connection),
         ...createWsAuthHandlers(connection),
         ...createWsPortabilityHandlers(connection),
         ...createWsBotServicesHandlers(connection),

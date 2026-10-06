@@ -1,3 +1,5 @@
+import * as CloudAccount from "./cloud/CloudAccount.ts";
+import * as CloudConnection from "./cloud/CloudConnection.ts";
 import { ProviderInstanceRegistryMutator } from "./provider/Services/ProviderInstanceRegistryMutator.ts";
 import { HostProcessEnvironment } from "@akeru/shared/hostProcess";
 
@@ -690,6 +692,17 @@ export const buildAppUnderTest = (options?: {
           markHttpListening: Effect.void,
           enqueueCommand: (effect) => effect,
           ...options?.layers?.serverRuntimeStartup,
+        }),
+      ),
+      Layer.provide(
+        Layer.mock(CloudAccount.CloudAccount)({
+          getStatus: Effect.succeed({ status: "unlinked" }),
+          streamStatus: Stream.make({ status: "unlinked" }),
+        }),
+      ),
+      Layer.provide(
+        Layer.mock(CloudConnection.CloudConnection)({
+          unlink: Effect.succeed({ status: "unlinked" }),
         }),
       ),
       Layer.provide(
