@@ -25,7 +25,7 @@ import { useAtomCommand } from "../../state/use-atom-command";
 import { SettingsSection } from "./components/SettingsSection";
 
 export type SettingsAkeruCloudParams = {
-  readonly environmentId: EnvironmentId;
+  readonly environmentId?: EnvironmentId;
 };
 
 const TONE_DOT: Readonly<Record<CloudConnectionTone, string>> = {
@@ -73,11 +73,15 @@ function ActionButton(props: {
 
 export function SettingsAkeruCloudRouteScreen({
   route,
-}: StaticScreenProps<SettingsAkeruCloudParams>) {
+}: StaticScreenProps<SettingsAkeruCloudParams | undefined>) {
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
-  const environmentId = route.params.environmentId;
-  const status = useEnvironmentQuery(serverEnvironment.cloudStatus({ environmentId, input: {} }));
+  const environmentId = route.params?.environmentId;
+
+  const status = useEnvironmentQuery(
+    environmentId ? serverEnvironment.cloudStatus({ environmentId, input: {} }) : null,
+  );
+
   const view = cloudViewModel(status.data);
   const startLink = useAtomCommand(serverEnvironment.startCloudLink);
   const cancelLink = useAtomCommand(serverEnvironment.cancelCloudLink);
@@ -98,6 +102,16 @@ export function SettingsAkeruCloudRouteScreen({
       })
       .finally(() => setPending(false));
   };
+
+  if (!environmentId) {
+    return (
+      <View className="flex-1 bg-sheet p-5">
+        <Text className="text-sm text-foreground-muted">
+          Open Akeru Cloud from Settings for the environment you want to connect.
+        </Text>
+      </View>
+    );
+  }
 
   const confirmDisconnect = () =>
     Alert.alert(CLOUD_COPY.disconnectConfirmTitle, CLOUD_COPY.disconnectConfirmBody, [
@@ -163,7 +177,16 @@ export function SettingsAkeruCloudRouteScreen({
               </Text>
               <ActionButton
                 label={CLOUD_COPY.openVerification}
-                onPress={() => void Linking.openURL(view.verificationUrl).catch(() => undefined)}
+                onPress={() =>
+                  void Linking.openURL(view.verificationUrl).catch((error) =>
+                    Alert.alert(
+                      CLOUD_COPY.title,
+                      error instanceof Error
+                        ? error.message
+                        : "The verification page could not be opened.",
+                    ),
+                  )
+                }
               />
               <ActionButton
                 label={CLOUD_COPY.cancel}

@@ -50,6 +50,8 @@ const decodeStoredLink = Schema.decodeUnknownOption(Schema.fromJsonString(Stored
 
 const encodeStoredLink = Schema.encodeSync(Schema.fromJsonString(StoredCloudLink));
 
+const REVOKED_RECORD = '{"status":"revoked"}';
+
 const textEncoder = new TextEncoder();
 
 const textDecoder = new TextDecoder();
@@ -130,20 +132,24 @@ export const make = Effect.gen(function* () {
   const pollHandle = yield* FiberHandle.make<void, never>();
   const mutex = yield* Semaphore.make(1);
 
-  const stored = yield* secretStore.get(CLOUD_LINK_SECRET).pipe(
-    Effect.map(Option.flatMap((bytes) => decodeStoredLink(textDecoder.decode(bytes)))),
+  const storedRaw = yield* secretStore.get(CLOUD_LINK_SECRET).pipe(
+    Effect.map(Option.map((bytes) => textDecoder.decode(bytes))),
     Effect.catch((error) =>
       Effect.logWarning("Could not read the Akeru Cloud link", { reason: error._tag }).pipe(
-        Effect.as(Option.none<CloudCredentials>()),
+        Effect.as(Option.none<string>()),
       ),
     ),
   );
 
+  const stored = Option.flatMap(storedRaw, decodeStoredLink);
+  const initiallyRevoked = Option.exists(storedRaw, (value) => value === REVOKED_RECORD);
   const initialCredentials = Option.getOrNull(stored);
   const credentialsRef = yield* SubscriptionRef.make<CloudCredentials | null>(initialCredentials);
 
   const statusRef = yield* SubscriptionRef.make<CloudLinkStatus>(
-    initialCredentials ? linkedStatus(initialCredentials, "connecting") : { status: "unlinked" },
+    initialCredentials
+      ? linkedStatus(initialCredentials, "connecting")
+      : { status: initiallyRevoked ? "revoked" : "unlinked" },
   );
 
   const unreachable = (message: string) => new CloudLinkError({ reason: "unreachable", message });
@@ -357,10 +363,14 @@ export const make = Effect.gen(function* () {
       Effect.gen(function* () {
         yield* FiberHandle.clear(pollHandle);
         yield* forget.pipe(
-          Effect.catch((error) =>
-            Effect.logError("Could not remove a revoked Akeru Cloud link", {
-              reason: error.reason,
-            }),
+          Effect.catch(() =>
+            secretStore.set(CLOUD_LINK_SECRET, textEncoder.encode(REVOKED_RECORD)).pipe(
+              Effect.catch((error) =>
+                Effect.logError("Could not persist Akeru Cloud revocation", {
+                  reason: error._tag,
+                }),
+              ),
+            ),
           ),
         );
         yield* SubscriptionRef.set(credentialsRef, null);

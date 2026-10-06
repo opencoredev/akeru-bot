@@ -164,7 +164,7 @@ function OpenCommandPaletteDialog(props: { readonly setOpen: (open: boolean) => 
             title: t("Connect Akeru Cloud"),
             icon: <CloudIcon className={ITEM_ICON_CLASS} />,
             run: async () => {
-              openSettings("akeru-cloud");
+              openSettings("akeru-cloud", null, primaryEnvironmentId);
               await cloudCommands.connect();
             },
           },

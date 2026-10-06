@@ -9,7 +9,7 @@ import {
   CloudErrorCode,
   CloudServerMessage,
   type CloudCapability,
-  type CloudLinkError,
+  CloudLinkError,
   type CloudLinkStatus,
   type CloudRequestResult,
 } from "@akeru/contracts";
@@ -134,8 +134,7 @@ export interface CloudConnectionShape {
   ) => Effect.Effect<void, never, Scope.Scope>;
   /**
    * Asks the cloud to revoke this environment, then forgets the token locally.
-   * The cloud step is best effort: offline, the environment still unlinks, and
-   * the account page can revoke it later.
+   * A failed cloud request keeps the credential so the user can retry.
    */
   readonly unlink: Effect.Effect<CloudLinkStatus, CloudLinkError>;
 }
@@ -414,14 +413,14 @@ export const make = Effect.gen(function* () {
 
   const unlink = request({ kind: "environment.unlink" }).pipe(
     Effect.timeout(UNLINK_TIMEOUT),
-    Effect.catchTags({
-      CloudRequestError: (error) =>
-        Effect.logWarning("Akeru Cloud did not confirm the unlink; forgetting the token anyway", {
-          reason: error.reason,
+    Effect.mapError(
+      () =>
+        new CloudLinkError({
+          reason: "unreachable",
+          message:
+            "Akeru Cloud must confirm disconnection before the link can be removed. Reconnect and try again.",
         }),
-      TimeoutError: () =>
-        Effect.logWarning("Akeru Cloud unlink timed out; forgetting the token anyway"),
-    }),
+    ),
     Effect.andThen(account.unlink),
   );
 

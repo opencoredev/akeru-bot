@@ -7,6 +7,8 @@ const state = vi.hoisted(() => ({
   alert: vi.fn(),
   command: vi.fn(),
   linked: false,
+  linking: false,
+  openURL: vi.fn(),
 }));
 
 vi.mock("react", async (original) => ({
@@ -16,7 +18,7 @@ vi.mock("react", async (original) => ({
 
 vi.mock("react-native", () => ({
   Alert: { alert: state.alert },
-  Linking: {},
+  Linking: { openURL: state.openURL },
   Platform: { OS: "ios" },
   Pressable: "Pressable",
   ScrollView: "ScrollView",
@@ -41,14 +43,21 @@ vi.mock("../../state/use-atom-command", () => ({ useAtomCommand: () => state.com
 
 vi.mock("../../state/query", () => ({
   useEnvironmentQuery: () => ({
-    data: state.linked
+    data: state.linking
       ? {
-          status: "linked",
-          account: { email: "leo@test.com" },
-          connection: "connected",
-          environmentId: "env_1",
+          status: "linking",
+          userCode: "ABCD-EFGH",
+          verificationUrl: "https://cloud.test/link",
+          expiresAt: "2026-10-05",
         }
-      : { status: "unlinked" },
+      : state.linked
+        ? {
+            status: "linked",
+            account: { email: "leo@test.com" },
+            connection: "connected",
+            environmentId: "env_1",
+          }
+        : { status: "unlinked" },
   }),
 }));
 
@@ -75,6 +84,7 @@ describe("mobile cloud action errors", () => {
     state.alert.mockClear();
     state.command.mockClear();
     state.linked = linked;
+    state.linking = false;
     state.command.mockResolvedValue({
       _tag: "Failure",
       cause: Cause.fail(new Error("Cloud unreachable")),
@@ -100,5 +110,19 @@ describe("mobile cloud action errors", () => {
     findAction(render(), "Connect Akeru Cloud")?.();
     await state.command.mock.results[0]?.value;
     expect(state.alert).not.toHaveBeenCalled();
+  });
+  it("shows guidance when an app link has no environment parameters", () => {
+    const screen = SettingsAkeruCloudRouteScreen({ route: { params: undefined } });
+    expect(JSON.stringify(screen)).toContain("Open Akeru Cloud from Settings for the environment");
+  });
+
+  it("reports verification page opening failures", async () => {
+    state.alert.mockClear();
+    state.linking = true;
+    state.openURL.mockRejectedValueOnce(new Error("No browser available"));
+    findAction(render(), "Open Akeru Cloud")?.();
+    await state.openURL.mock.results.at(-1)?.value.catch(() => undefined);
+    expect(state.alert).toHaveBeenCalledWith("Akeru Cloud", "No browser available");
+    state.linking = false;
   });
 });
