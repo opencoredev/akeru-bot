@@ -54,6 +54,10 @@ const PrivacySettingsPanel = lazy(async () => ({
   default: (await import("./PrivacySettings")).PrivacySettingsPanel,
 }));
 
+const AkeruCloudSettingsPanel = lazy(async () => ({
+  default: (await import("./AkeruCloudSettings")).AkeruCloudSettingsPanel,
+}));
+
 const ConnectionsSettings = lazy(async () => ({
   default: (await import("./ConnectionsSettings")).ConnectionsSettings,
 }));
@@ -79,6 +83,7 @@ const SECTION_PANELS: Readonly<Record<SettingsSection, ComponentType>> = {
   appearance: AppearanceSettingsPanel,
   keybindings: KeybindingsSettingsPanel,
   connections: ConnectionsSettings,
+  "akeru-cloud": AkeruCloudSettingsPanel,
   privacy: PrivacySettingsPanel,
   archived: ArchivedChatsSettingsPanel,
   advanced: AdvancedSettingsPage,
@@ -128,6 +133,7 @@ export const SETTINGS_NAV_GROUPS: ReadonlyArray<{
       { section: "general", label: "General", icon: Settings02Icon },
       { section: "appearance", label: "Appearance", icon: PaintBrush01Icon },
       { section: "keybindings", label: "Keyboard", icon: KeyboardIcon },
+      { section: "akeru-cloud", label: "Akeru Cloud", icon: GlobeIcon },
       { section: "connections", label: "Connections", icon: Link02Icon },
       { section: "privacy", label: "Privacy & data", icon: SecurityCheckIcon },
       { section: "archived", label: "Archived", icon: Archive02Icon },

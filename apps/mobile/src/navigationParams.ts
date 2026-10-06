@@ -1,5 +1,6 @@
 import type { NavigatorScreenParams } from "@react-navigation/native";
 import type { ReactNode } from "react";
+import type { SettingsAkeruCloudRouteScreen } from "./features/settings/SettingsAkeruCloudRouteScreen";
 import type { ArchivedThreadsRouteScreen } from "./features/archive/ArchivedThreadsRouteScreen";
 import type { ConnectionsNewRouteScreen } from "./features/connection/ConnectionsNewRouteScreen";
 import type { SettingsAppearanceRouteScreen } from "./features/settings/SettingsAppearanceRouteScreen";
@@ -25,6 +26,7 @@ type ScreenParams<T> = T extends (props: { route: { params: infer Params } }) =>
   : undefined;
 
 export type SettingsContentParams = {
+  SettingsAkeruCloud: ScreenParams<typeof SettingsAkeruCloudRouteScreen>;
   Settings: ScreenParams<typeof SettingsRouteScreen>;
   SettingsEnvironments: ScreenParams<typeof SettingsEnvironmentsRouteScreen>;
   SettingsEnvironmentNew: ScreenParams<typeof ConnectionsNewRouteScreen>;

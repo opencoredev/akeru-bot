@@ -420,6 +420,10 @@ export function createServerEnvironmentAtoms<R, E>(
       tag: WS_METHODS.composioSearchToolkits,
       staleTimeMs: 30_000,
     }),
+    cloudStatus: createEnvironmentRpcSubscriptionAtomFamily(runtime, {
+      label: "environment-data:server:cloud-status",
+      tag: WS_METHODS.subscribeCloudStatus,
+    }),
     voiceCall: createEnvironmentRpcQueryAtomFamily(runtime, {
       label: "environment-data:server:voice-call",
       tag: WS_METHODS.voiceCallGet,
@@ -486,6 +490,19 @@ export function createServerEnvironmentAtoms<R, E>(
       tag: WS_METHODS.serverUpdateSettings,
       scheduler: configScheduler,
       concurrency: configConcurrency,
+    }),
+    startCloudLink: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:server:cloud-link-start",
+      tag: WS_METHODS.cloudLinkStart,
+      concurrency: { mode: "singleFlight", key: ({ environmentId }) => environmentId },
+    }),
+    cancelCloudLink: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:server:cloud-link-cancel",
+      tag: WS_METHODS.cloudLinkCancel,
+    }),
+    unlinkCloud: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:server:cloud-unlink",
+      tag: WS_METHODS.cloudUnlink,
     }),
     configureComposio: createEnvironmentRpcCommand(runtime, {
       label: "environment-data:server:composio-configure",

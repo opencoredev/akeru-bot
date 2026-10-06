@@ -1,5 +1,9 @@
 "use client";
 
+import { CloudIcon } from "lucide-react";
+import { useCloudLinkCommands } from "./settings/useCloudLinkCommands";
+import { useEnvironmentQuery } from "../state/query";
+import { serverEnvironment } from "../state/server";
 import { Predicate } from "effect";
 
 import {
@@ -141,7 +145,44 @@ function OpenCommandPaletteDialog(props: { readonly setOpen: (open: boolean) => 
   const appearanceTitle =
     nextAppearance === "dark" ? t("Switch to dark mode") : t("Switch to light mode");
 
+  const primaryEnvironmentId = usePrimaryEnvironmentId();
+
+  const cloudStatus = useEnvironmentQuery(
+    primaryEnvironmentId === null
+      ? null
+      : serverEnvironment.cloudStatus({ environmentId: primaryEnvironmentId, input: {} }),
+  ).data;
+
+  const cloudCommands = useCloudLinkCommands(primaryEnvironmentId);
+
   const actionItems: CommandPaletteActionItem[] = [
+    ...(cloudStatus?.status === "unlinked" || cloudStatus?.status === "revoked"
+      ? [
+          {
+            value: "action:cloud-connect",
+            searchTerms: ["akeru cloud", "connect", "link", "hosted"],
+            title: "Connect Akeru Cloud",
+            icon: <CloudIcon className={ITEM_ICON_CLASS} />,
+            run: async () => {
+              openSettings("akeru-cloud");
+              await cloudCommands.connect();
+            },
+          },
+        ]
+      : []),
+    ...(cloudStatus?.status === "linked"
+      ? [
+          {
+            value: "action:cloud-disconnect",
+            searchTerms: ["akeru cloud", "disconnect", "unlink"],
+            title: "Disconnect Akeru Cloud",
+            icon: <CloudIcon className={ITEM_ICON_CLASS} />,
+            run: async () => {
+              await cloudCommands.disconnect();
+            },
+          },
+        ]
+      : []),
     {
       value: "action:toggle-appearance",
       searchTerms: [appearanceTitle, "theme", "appearance", "dark", "light", "mode", "toggle"],
