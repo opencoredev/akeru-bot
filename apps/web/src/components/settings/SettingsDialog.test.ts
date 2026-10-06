@@ -47,8 +47,9 @@ describe("settings dialog navigation", () => {
   it("keeps the nav small and free of coding-agent leftovers", () => {
     const sections = SETTINGS_NAV_ITEMS.map((item) => item.section);
     // Ten pages plus Image generation, which the roadmap added under Bots, and
-    // Archived chats, the only way back to a chat once it is archived.
-    expect(sections.length).toBeLessThanOrEqual(12);
+    // Archived chats, the only way back to a chat once it is archived, and
+    // Akeru Cloud, the deliberate page for optional account linking.
+    expect(sections.length).toBeLessThanOrEqual(13);
     expect(new Set(sections).size).toBe(sections.length);
     expect(sections).not.toContain("source-control");
     expect(sections).not.toContain("diagnostics");

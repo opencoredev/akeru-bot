@@ -1,3 +1,4 @@
+import { SettingsAkeruCloudRouteScreen } from "./features/settings/SettingsAkeruCloudRouteScreen";
 import {
   createNativeStackNavigator,
   createNativeStackScreen,
@@ -29,6 +30,7 @@ function SettingsNavigationLayout({
   const titles = new Map(
     Object.entries({
       Settings: t("Settings"),
+      SettingsAkeruCloud: t("Akeru Cloud"),
       SettingsEnvironments: t("Environments"),
       SettingsEnvironmentNew: t("Add Environment"),
       SettingsArchive: t("Archived chats"),
@@ -62,6 +64,11 @@ const SettingsContentStack = createNativeStackNavigator({
     unstable_navigationItemStyle: undefined,
   },
   screens: {
+    SettingsAkeruCloud: createNativeStackScreen({
+      screen: SettingsAkeruCloudRouteScreen,
+      linking: "akeru-cloud",
+      options: { title: "Akeru Cloud" },
+    }),
     Settings: createNativeStackScreen({
       screen: SettingsRouteScreen,
       linking: "",

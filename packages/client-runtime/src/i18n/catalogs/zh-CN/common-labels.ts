@@ -501,6 +501,8 @@ export const commonLabelsCatalog = {
   "Not installed": "未安装",
   Main: "主导航",
   "Switch to dark mode": "切换到深色模式",
+  "Connect Akeru Cloud": "连接 Akeru Cloud",
+  "Disconnect Akeru Cloud": "断开 Akeru Cloud",
   "Switch to light mode": "切换到浅色模式",
   Publishes: "发布",
   "Changes permissions": "更改权限",

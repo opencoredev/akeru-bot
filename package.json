@@ -50,7 +50,9 @@
     "release:verify": "node scripts/verify-release-candidate.ts",
     "release:verify-assets": "node scripts/verify-release-assets.ts",
     "clean": "rm -rf node_modules apps/*/node_modules packages/*/node_modules apps/*/dist apps/*/dist-electron packages/*/dist .vite-plus apps/*/.vite-plus packages/*/.vite-plus",
-    "sync:repos": "node scripts/sync-reference-repos.ts"
+    "sync:repos": "node scripts/sync-reference-repos.ts",
+    "cloud:deploy:staging": "vp run --filter @akeru/cloud deploy:staging",
+    "cloud:dev": "vp run --filter @akeru/cloud dev"
   },
   "devDependencies": {
     "@babel/plugin-transform-react-jsx": "7.28.6",

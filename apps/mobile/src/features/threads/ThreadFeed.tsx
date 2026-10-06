@@ -247,7 +247,15 @@ export const ThreadFeed = memo(function ThreadFeed(props: ThreadFeedProps) {
         if (destination === null) return;
         void Haptics.selectionAsync();
 
-        if (destination.kind === "health") {
+        if (destination.kind === "cloud") {
+          navigation.navigate("SettingsSheet", {
+            screen: "SettingsContent",
+            params: {
+              screen: "SettingsAkeruCloud",
+              params: { environmentId: props.environmentId },
+            },
+          });
+        } else if (destination.kind === "health") {
           navigation.navigate("SettingsSheet", {
             screen: "SettingsContent",
             params: {

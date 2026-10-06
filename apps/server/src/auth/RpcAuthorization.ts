@@ -36,6 +36,13 @@ export const RPC_REQUIRED_SCOPES = {
   [WS_METHODS.serverRemoveKeybinding]: AuthOrchestrationOperateScope,
   [WS_METHODS.serverGetSettings]: AuthOrchestrationReadScope,
   [WS_METHODS.serverUpdateSettings]: AuthOrchestrationOperateScope,
+  [WS_METHODS.cloudGetStatus]: AuthOrchestrationReadScope,
+  [WS_METHODS.subscribeCloudStatus]: AuthOrchestrationReadScope,
+  // Linking attaches this environment to an outside account, so only admin sessions may change it.
+  [WS_METHODS.cloudLinkStart]: AuthAccessWriteScope,
+  [WS_METHODS.cloudLinkCancel]: AuthAccessWriteScope,
+  [WS_METHODS.cloudForget]: AuthAccessWriteScope,
+  [WS_METHODS.cloudUnlink]: AuthAccessWriteScope,
   [WS_METHODS.composioGetStatus]: AuthOrchestrationReadScope,
   [WS_METHODS.composioConfigure]: AuthOrchestrationOperateScope,
   [WS_METHODS.composioRemove]: AuthOrchestrationOperateScope,

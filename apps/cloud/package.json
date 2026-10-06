@@ -1,0 +1,30 @@
+{
+  "name": "@akeru/cloud",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build:web": "vp build web",
+    "deploy": "vp build web && vp run --filter @akeru/cloud-infra deploy",
+    "deploy:staging": "vp build web && vp run --filter @akeru/cloud-infra deploy:staging",
+    "dev": "vp build web && vp run --filter @akeru/cloud-infra dev",
+    "test": "vp test run",
+    "typecheck": "tsgo --noEmit && tsgo --noEmit -p web/tsconfig.json"
+  },
+  "dependencies": {
+    "@akeru/contracts": "workspace:*",
+    "@clerk/backend": "^3.20.0",
+    "@clerk/react": "^6.17.0",
+    "effect": "catalog:",
+    "hono": "^4.13.0",
+    "react": "19.2.6",
+    "react-dom": "19.2.6"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20260601.1",
+    "@types/node": "catalog:",
+    "@types/react": "~19.2.14",
+    "@types/react-dom": "~19.2.3",
+    "@vitejs/plugin-react": "^6.0.0",
+    "vite-plus": "catalog:"
+  }
+}

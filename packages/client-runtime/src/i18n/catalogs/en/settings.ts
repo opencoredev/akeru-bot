@@ -1,4 +1,5 @@
 export const settingsCatalog = {
+  "Akeru Cloud": "Akeru Cloud",
   "API token": "API token",
   "Akeru Bot runs locally. Provider prompts and enabled online features still send data to their listed services.":
     "Akeru Bot runs locally. Provider prompts and enabled online features still send data to their listed services.",

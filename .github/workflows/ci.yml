@@ -137,6 +137,9 @@ jobs:
           test -f apps/desktop/dist-electron/preload.cjs
           grep -nE "desktopBridge|getLocalEnvironmentBootstrap|PICK_FOLDER_CHANNEL|wsUrl" apps/desktop/dist-electron/preload.cjs
 
+      - name: Test Akeru Cloud
+        run: vp test run apps/cloud packages/contracts/src/cloud.test.ts
+
       - name: Build marketing site
         run: vp run build:marketing
 

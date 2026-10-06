@@ -1,4 +1,5 @@
 export const settingsCatalog = {
+  "Akeru Cloud": "Akeru Cloud",
   "API token": "API 令牌",
   "Akeru Bot runs locally. Provider prompts and enabled online features still send data to their listed services.":
     "Akeru Bot 在本地运行。提供商提示词和已启用的在线功能仍会将数据发送到其列出的服务。",

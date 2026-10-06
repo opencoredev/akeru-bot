@@ -1,0 +1,22 @@
+{
+  "name": "@akeru/cloud-infra",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "deploy": "ALCHEMY_STATE=cloudflare node scripts/alchemy.ts deploy --stage production",
+    "deploy:staging": "ALCHEMY_STATE=cloudflare node scripts/alchemy.ts deploy --stage staging",
+    "dev": "ALCHEMY_STATE=local node scripts/alchemy.ts dev --stage local",
+    "test": "vp test run",
+    "typecheck": "tsgo --noEmit"
+  },
+  "dependencies": {
+    "@effect/platform-node": "4.0.0-rc.115",
+    "alchemy": "2.0.0-beta.79",
+    "effect": "4.0.0-rc.115"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20260601.1",
+    "@types/node": "catalog:",
+    "vite-plus": "catalog:"
+  }
+}

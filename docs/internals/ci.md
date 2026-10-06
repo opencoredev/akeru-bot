@@ -12,7 +12,9 @@ Issue-label, PR-vouch, and PR-size jobs also use Tenki Linux runners through Git
   lockfile once, checks lint and formatting, runs workspace type checks,
   validates the plugin directory and contribution policy, builds the desktop pipeline, checks the
   preload output, builds the marketing site, tests shipped packages and the resource monitor, and
-  checks release-only configuration. Relay and mobile-production packages are excluded. The same
+  checks release-only configuration. Workspace packages such as `@akeru/cloud` join the lint,
+  type check, and test steps through their `typecheck` and `test` scripts. Relay and
+  mobile-production packages are excluded. The same
   job runs the complete server suite. It excludes
   `orchestrationEngine.integration.test.ts` until the executor stack
   restores its test adapter and stops the fixture from calling OpenAI with a test credential.
@@ -27,6 +29,10 @@ merge. Changesets consumes those files in the version pull request and keeps the
 package versions synchronized. Only the repository-owned Changesets branch and bot-authored pull
 request can bypass the marker check or change those stable versions. Updates to that branch dispatch
 CI against the exact pull request head SHA; empty-only changesets do not dispatch a version branch.
+
+[`.github/workflows/cloud-deploy.yml`](../../.github/workflows/cloud-deploy.yml) deploys Akeru
+Cloud. Pushes to `main` that change `apps/cloud` or `packages/contracts` deploy production; staging normally deploys from the maintainer’s machine, and manual dispatch can deploy either stage. One deploy per stage runs at a time. See
+[Akeru Cloud](./cloud.md#deploy) for secrets and setup.
 
 [`.github/workflows/installer-tests.yml`](../../.github/workflows/installer-tests.yml) runs focused
 Windows PowerShell 5.1 tests when the Windows installer changes. It checks checksum rejection,

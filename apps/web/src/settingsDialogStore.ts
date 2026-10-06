@@ -17,6 +17,7 @@ export const SETTINGS_SECTIONS = [
   "appearance",
   "keybindings",
   "connections",
+  "akeru-cloud",
   "privacy",
   "archived",
   "advanced",

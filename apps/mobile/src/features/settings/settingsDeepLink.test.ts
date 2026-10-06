@@ -53,3 +53,9 @@ describe("mobile Settings chat links", () => {
     expect(resolveMobileSettingsDestination(href)).toBeNull();
   });
 });
+
+it("opens Akeru Cloud in the environment that owns the chat", () => {
+  expect(resolveMobileSettingsDestination("grokbot://app/v1/settings?id=akeru-cloud")).toEqual({
+    kind: "cloud",
+  });
+});
