@@ -8,6 +8,7 @@ import { motion, useReducedMotion } from "motion/react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
+import { APP_BASE_NAME } from "../../branding";
 import { useI18n } from "../../i18n";
 import { randomUUID } from "../../lib/utils";
 import { botEnvironment } from "../../state/bots";
@@ -212,7 +213,10 @@ export function OnboardingSurface({
 
     if (providerReadiness.status === "loading") return;
 
-    if (providerReadiness.status !== "ready") {
+    // Capture mode already fakes a connected provider. Allow create with no
+    // engine (same as Create bot from the empty roster) so silent-create
+    // screenshots can leave Connect without a live subscription.
+    if (providerReadiness.status !== "ready" && !captureMode) {
       createRequestedRef.current = false;
       setCreateError(t("This provider is not ready. Go back and reconnect it."));
 
@@ -233,6 +237,11 @@ export function OnboardingSurface({
     const avatar = draft.name.trim() ? draft.avatar : randomBotAvatar();
     const nextDraft = { ...draft, name, avatar };
     updateDraft(nextDraft);
+
+    if (captureMode) {
+      // Hold the creating UI long enough for screenshot capture.
+      await new Promise((resolve) => window.setTimeout(resolve, 1200));
+    }
 
     const projectInput = desktopOnboardingDefaultProjectCreateInput({
       bootstrapped,
@@ -261,6 +270,7 @@ export function OnboardingSurface({
     }
 
     const botId = BotId.make(`bot-${randomUUID()}`);
+    const engine = providerReadiness.status === "ready" ? providerReadiness.engine : null;
 
     const result = await createBot({
       environmentId,
@@ -271,7 +281,7 @@ export function OnboardingSurface({
         label: null,
         description: null,
         avatar,
-        engine: providerReadiness.engine,
+        engine,
         sandbox: null,
         runtimeMode: DEFAULT_BOT_RUNTIME_MODE,
         groupId: null,
@@ -297,6 +307,7 @@ export function OnboardingSurface({
     finishToChat(botId, name);
   }, [
     bootstrapped,
+    captureMode,
     createBot,
     createProject,
     draft,
@@ -348,9 +359,20 @@ export function OnboardingSurface({
       }}
     >
       <div className="relative z-10 mx-auto flex min-h-0 w-full max-w-xl flex-1 flex-col px-6 pb-6 pt-6 lg:px-10 lg:pb-10 lg:pt-8">
-        <span className="text-sm font-semibold tracking-title">Akeru Bot</span>
         <div className="flex min-h-0 flex-1 overflow-y-auto overscroll-contain py-5 pe-1 lg:py-6">
-          <div className="my-auto w-full py-4">
+          <div className="my-auto w-full space-y-6 py-4">
+            <div className="flex items-center gap-2.5">
+              <img
+                src="/apple-touch-icon.png"
+                alt=""
+                width={28}
+                height={28}
+                className="size-7 rounded-lg"
+              />
+              <span className="text-sm font-semibold tracking-title text-foreground">
+                {APP_BASE_NAME}
+              </span>
+            </div>
             {creating ? (
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
                 <LoaderIcon className="size-4 animate-spin motion-reduce:animate-none" />
