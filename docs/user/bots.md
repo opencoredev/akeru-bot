@@ -4,29 +4,23 @@ Open a bot, then use the panel beside the conversation to edit it.
 
 ## Initial setup
 
-Setup connects a subscription, then asks one question: what you want help with. Answer it in your
-own words, in a sentence or two. Select one of the examples to fill in an answer you can rewrite.
+On desktop, setup asks you to connect a provider. Once that account is ready, Akeru creates a
+named teammate for you and opens its chat. You can rename the bot later.
 
-From that answer your bot proposes where it will start, as a short numbered plan, along with the one
-detail it will come back to you for later. Select **Edit** to reword your answer and get a new plan,
-or **Looks right** to move on to naming your bot.
-
-The last step drafts your first message from that plan. Edit it if you like, then send it. Once your
-bot has started on it, the chat opens with your message already in it, and setup fades away.
-If the bot is archived before the chat opens, Akeru clears the pending opening and tells you to
-create or select another bot.
+For device-code sign-in, Akeru shows the code first. Copy it, then open the provider's sign-in page
+yourself when you are ready. Setup does not open that page for you.
 
 Setup does not ask where the work should go, how often it should run, or which actions it may
 take on its own. Your bot raises those when it reaches the point of needing them.
 
 ## Skip initial setup
 
-Select **Skip setup** on any setup step, then confirm **Skip setup** in the dialog.
-Select **Cancel** to stay in setup. Skipping keeps any connected subscriptions and bots you already
-created. Setup will not open again after a restart.
+Select **Skip setup** on the connect screen, then confirm **Skip for now** in the dialog.
+Select **Cancel** to stay in setup. Skipping keeps any connected subscriptions. Setup will not
+ask again.
 
-You can connect a subscription in Settings and use **Create** to add a bot later. When the roster is
-empty, the main view shows **Create bot**.
+When the roster is empty, the main view invites you to **Create a teammate**. You can connect a
+provider in Settings first, or create the bot and connect later.
 
 ## Profile
 

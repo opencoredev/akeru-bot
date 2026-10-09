@@ -15,13 +15,12 @@ import {
   DEFAULT_DESKTOP_ONBOARDING_DRAFT,
   DESKTOP_ONBOARDING_COMPLETED_STORAGE_KEY,
   type DesktopOnboardingDraft,
+  markDesktopOnboardingHandoffStarted,
   readDesktopOnboardingDraft,
   readDesktopOnboardingHandoffForEnvironment,
-  writeDesktopOnboardingDraft,
-} from "./desktopOnboardingDraft";
-import {
   recoverMissingDesktopOnboardingBot,
   shouldShowDesktopOnboarding,
+  writeDesktopOnboardingDraft,
 } from "./desktopOnboarding.logic";
 import { type DesktopOnboardingSurfaceProps, OnboardingSurface } from "./DesktopOnboardingSurface";
 
@@ -101,10 +100,10 @@ export function DesktopOnboarding({
 
   const show = shouldStart && initialDraftRef.current !== null;
 
-  // A reload between sending the first message and opening its chat lands
+  // A reload between creating the bot and opening its chat lands
   // here with setup already complete. Finish the trip to that chat once.
   useEffect(() => {
-    if (!environmentId || !rosterLoaded) return;
+    if (show || !environmentId || !rosterLoaded) return;
 
     const handoff = readDesktopOnboardingHandoffForEnvironment(
       window.localStorage,
@@ -145,7 +144,16 @@ export function DesktopOnboarding({
           title: "Could not reopen your new chat. Reload to try again.",
         }),
     );
-  }, [environmentId, navigate, rosterLoaded, serverBots]);
+  }, [environmentId, navigate, rosterLoaded, serverBots, show]);
+
+  useEffect(() => {
+    if (!environmentId || !rosterLoaded) return;
+    const botId = initialDraftRef.current?.botId;
+
+    if (!botId || !serverBots.some((bot) => bot.id === botId && !bot.archivedAt)) return;
+    markDesktopOnboardingHandoffStarted(window.localStorage, environmentId, botId);
+    setFinished(true);
+  }, [environmentId, rosterLoaded, serverBots]);
 
   useEffect(() => {
     if (!rosterLoaded || serverBots.length === 0 || initialDraftRef.current !== null) return;
