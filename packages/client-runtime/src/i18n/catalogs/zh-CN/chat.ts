@@ -58,16 +58,6 @@ export const chatCatalog = {
   "Implement in a new chat": "在新聊天中实现",
   "Preparing worktree": "正在准备工作树",
   "Send message": "发送消息",
-  "Ship a feature": "交付一个功能",
-  "Walk this codebase and ship a small, complete improvement.":
-    "浏览这个代码库，交付一个小而完整的改进。",
-  "Research a topic for me and keep one page of findings current":
-    "帮我研究一个主题，并把一页发现保持为最新",
-  "Take the admin off my desk: inbox, invoices, and filing":
-    "把行政工作从我桌上拿走：收件箱、发票和归档",
-  "Plan my week": "规划我的一周",
-  "Plan my week and keep me on top of what I said I would do":
-    "规划我的一周，并盯住我说过要做的事",
   "Sending…": "正在发送…",
   "New chat": "新聊天",
   "Untitled chat": "未命名聊天",

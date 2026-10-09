@@ -58,16 +58,6 @@ export const chatCatalog = {
   "Implement in a new chat": "Implement in a new chat",
   "Preparing worktree": "Preparing worktree",
   "Send message": "Send message",
-  "Ship a feature": "Ship a feature",
-  "Walk this codebase and ship a small, complete improvement.":
-    "Walk this codebase and ship a small, complete improvement.",
-  "Research a topic for me and keep one page of findings current":
-    "Research a topic for me and keep one page of findings current",
-  "Take the admin off my desk: inbox, invoices, and filing":
-    "Take the admin off my desk: inbox, invoices, and filing",
-  "Plan my week": "Plan my week",
-  "Plan my week and keep me on top of what I said I would do":
-    "Plan my week and keep me on top of what I said I would do",
   "Sending…": "Sending…",
   "New chat": "New chat",
   "Untitled chat": "Untitled chat",

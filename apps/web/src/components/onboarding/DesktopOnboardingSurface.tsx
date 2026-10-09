@@ -39,7 +39,6 @@ import {
   type DesktopOnboardingDraft,
   desktopOnboardingDefaultProjectCreateInput,
   markDesktopOnboardingCompleted,
-  markDesktopOnboardingFirstChat,
   markDesktopOnboardingHandoffStarted,
   pickDesktopOnboardingTeammateName,
   resolveDesktopOnboardingCreationReadiness,
@@ -179,7 +178,6 @@ export function OnboardingSurface({
 
   const finishToChat = useCallback(
     (botId: string, botName: string) => {
-      markDesktopOnboardingFirstChat(window.localStorage, botId);
       markDesktopOnboardingHandoffStarted(window.localStorage, environmentId, botId);
       useRosterStore.getState().selectBot(botId);
       setRevealing(true);
@@ -358,23 +356,25 @@ export function OnboardingSurface({
         ease: revealing ? SMOOTH_OUT : LEAVE,
       }}
     >
-      <div className="relative z-10 mx-auto flex min-h-0 w-full max-w-xl flex-1 flex-col px-6 pb-6 pt-6 lg:px-10 lg:pb-10 lg:pt-8">
+      <div className="relative z-10 mx-auto flex min-h-0 w-full max-w-xl flex-1 flex-col px-6 pb-6 pt-8 lg:px-10 lg:pb-10 lg:pt-10">
+        <div className="flex shrink-0 justify-center">
+          <div className="flex items-center gap-2">
+            <img
+              src="/apple-touch-icon.png"
+              alt=""
+              width={24}
+              height={24}
+              className="size-6 rounded-md"
+            />
+            <span className="text-sm font-semibold tracking-title text-foreground">
+              {APP_BASE_NAME}
+            </span>
+          </div>
+        </div>
         <div className="flex min-h-0 flex-1 overflow-y-auto overscroll-contain py-5 pe-1 lg:py-6">
-          <div className="my-auto w-full space-y-6 py-4">
-            <div className="flex items-center gap-2.5">
-              <img
-                src="/apple-touch-icon.png"
-                alt=""
-                width={28}
-                height={28}
-                className="size-7 rounded-lg"
-              />
-              <span className="text-sm font-semibold tracking-title text-foreground">
-                {APP_BASE_NAME}
-              </span>
-            </div>
+          <div className="my-auto w-full py-4">
             {creating ? (
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
                 <LoaderIcon className="size-4 animate-spin motion-reduce:animate-none" />
                 {draft.name.trim()
                   ? t("Setting up {name}", { name: draft.name.trim() })
@@ -416,9 +416,11 @@ export function OnboardingSurface({
       <AlertDialog open={skipConfirmOpen} onOpenChange={setSkipConfirmOpen}>
         <AlertDialogPopup portalContainer={surfaceRef}>
           <AlertDialogHeader>
-            <AlertDialogTitle>{t("Skip setup?")}</AlertDialogTitle>
+            <AlertDialogTitle>{t("Skip for now?")}</AlertDialogTitle>
             <AlertDialogDescription>
-              {t("You can connect a subscription and create a bot later.")}
+              {t(
+                "You can connect a provider and create a teammate whenever you are ready. Setup will not ask again.",
+              )}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

@@ -15,7 +15,6 @@ import {
   DEFAULT_DESKTOP_ONBOARDING_DRAFT,
   DESKTOP_ONBOARDING_COMPLETED_STORAGE_KEY,
   type DesktopOnboardingDraft,
-  markDesktopOnboardingFirstChat,
   markDesktopOnboardingHandoffStarted,
   readDesktopOnboardingDraft,
   readDesktopOnboardingHandoffForEnvironment,
@@ -152,7 +151,6 @@ export function DesktopOnboarding({
     const botId = initialDraftRef.current?.botId;
 
     if (!botId || !serverBots.some((bot) => bot.id === botId && !bot.archivedAt)) return;
-    markDesktopOnboardingFirstChat(window.localStorage, botId);
     markDesktopOnboardingHandoffStarted(window.localStorage, environmentId, botId);
     setFinished(true);
   }, [environmentId, rosterLoaded, serverBots]);

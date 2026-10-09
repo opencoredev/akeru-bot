@@ -253,8 +253,9 @@ export function SubscriptionStep({
     }
 
     setBusy(false);
+    // Do not auto-open the provider page. Show the code first; the user opens
+    // sign-in when they are ready.
     setActiveLogin({ flow: result.value, error: null });
-    window.open(result.value.url, "_blank", "noopener,noreferrer");
   };
 
   const complete = async () => {
@@ -328,7 +329,9 @@ export function SubscriptionStep({
           {t("Finish connecting {provider}", { provider: selected.label })}
         </h1>
         <p className="text-sm leading-6 text-muted-foreground">
-          {activeLogin.flow.instructions ?? t("Finish signing in on the provider page.")}
+          {activeLogin.flow.userCode
+            ? t("Copy the code, then open sign-in when you are ready.")
+            : (activeLogin.flow.instructions ?? t("Finish signing in on the provider page."))}
         </p>
         {activeLogin.flow.userCode ? (
           <SignInCodeCopy

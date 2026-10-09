@@ -144,7 +144,9 @@ export const connectionsCatalog = {
   "Could not open {name}'s chat. Open it from the roster or reload to retry.":
     "无法打开 {name} 的聊天。请从名册打开，或重新加载后再试。",
   "This provider is not ready. Go back and reconnect it.": "此提供商尚未就绪。请返回并重新连接。",
-  "You can connect a subscription and create a bot later.": "你可以稍后再连接订阅并创建机器人。",
+  "Copy the code, then open sign-in when you are ready.": "先复制代码，准备好后再打开登录。",
+  "You can connect a provider and create a teammate whenever you are ready. Setup will not ask again.":
+    "你可以随时连接提供商并创建队友。设置不会再询问。",
   "Opening your workspace": "正在打开你的工作区",
   "Connect an environment first": "请先连接一个环境",
   "Connect an environment to create one.": "连接一个环境即可创建。",

@@ -64,7 +64,7 @@ export const commonMessagesCatalog = {
   "Say hello to {name}": "Say hello to {name}",
   "Waking up {name}": "Waking up {name}",
   "Step {number} of {total}": "Step {number} of {total}",
-  "Skip setup?": "Skip setup?",
+  "Skip for now?": "Skip for now?",
   "Waking {name} up": "Waking {name} up",
   "I'll start by…": "I'll start by…",
   "What do you want help with?": "What do you want help with?",

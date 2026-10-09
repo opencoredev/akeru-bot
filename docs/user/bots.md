@@ -7,20 +7,20 @@ Open a bot, then use the panel beside the conversation to edit it.
 On desktop, setup asks you to connect a provider. Once that account is ready, Akeru creates a
 named teammate for you and opens its chat. You can rename the bot later.
 
-The empty chat may offer a few optional prompts. Selecting one fills the composer. Nothing is
-sent until you send it.
+For device-code sign-in, Akeru shows the code first. Copy it, then open the provider's sign-in page
+yourself when you are ready. Setup does not open that page for you.
 
 Setup does not ask where the work should go, how often it should run, or which actions it may
 take on its own. Your bot raises those when it reaches the point of needing them.
 
 ## Skip initial setup
 
-Select **Skip setup** on the connect screen, then confirm **Skip setup** in the dialog.
+Select **Skip setup** on the connect screen, then confirm **Skip for now** in the dialog.
 Select **Cancel** to stay in setup. Skipping keeps any connected subscriptions. Setup will not
-open again after a restart.
+ask again.
 
-You can connect a subscription in Settings and use **Create** to add a bot later. When the roster is
-empty, the main view shows **Create bot**.
+When the roster is empty, the main view invites you to **Create a teammate**. You can connect a
+provider in Settings first, or create the bot and connect later.
 
 ## Profile
 

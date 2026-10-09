@@ -3,7 +3,6 @@ import {
   type DesktopOnboardingDraft,
   type DesktopOnboardingStep,
 } from "./desktopOnboardingDraft";
-import type { OnboardingTranslate } from "./onboardingTranslate";
 
 export { englishOnboardingTranslate, type OnboardingTranslate } from "./onboardingTranslate";
 
@@ -35,16 +34,9 @@ export {
 } from "./desktopOnboardingEngine";
 
 export {
-  DESKTOP_ONBOARDING_FIRST_CHAT_STORAGE_KEY,
-  DESKTOP_ONBOARDING_PROMPT_CHIPS,
   DESKTOP_ONBOARDING_TEAMMATE_NAMES,
-  type DesktopOnboardingPromptChip,
-  clearDesktopOnboardingFirstChat,
   desktopOnboardingDefaultProjectCreateInput,
-  markDesktopOnboardingFirstChat,
   pickDesktopOnboardingTeammateName,
-  readDesktopOnboardingFirstChatBotId,
-  shouldShowDesktopOnboardingPromptChips,
   workspaceTitleFromCwd,
 } from "./desktopOnboardingTeammate";
 
@@ -113,33 +105,4 @@ export function desktopOnboardingProgress(step: DesktopOnboardingStep): DesktopO
     fraction: total <= 1 ? 1 : (number - 1) / (total - 1),
     label: `Step ${number} of ${total}`,
   };
-}
-
-export function desktopOnboardingPromptChipItems(t: OnboardingTranslate): ReadonlyArray<{
-  readonly id: "code" | "research" | "admin" | "planning";
-  readonly label: string;
-  readonly prompt: string;
-}> {
-  return [
-    {
-      id: "code",
-      label: t("Ship a feature"),
-      prompt: t("Walk this codebase and ship a small, complete improvement."),
-    },
-    {
-      id: "research",
-      label: t("Research"),
-      prompt: t("Research a topic for me and keep one page of findings current"),
-    },
-    {
-      id: "admin",
-      label: t("Admin"),
-      prompt: t("Take the admin off my desk: inbox, invoices, and filing"),
-    },
-    {
-      id: "planning",
-      label: t("Plan my week"),
-      prompt: t("Plan my week and keep me on top of what I said I would do"),
-    },
-  ];
 }

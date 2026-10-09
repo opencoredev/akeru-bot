@@ -156,8 +156,10 @@ export const connectionsCatalog = {
     "Could not open {name}'s chat. Open it from the roster or reload to retry.",
   "This provider is not ready. Go back and reconnect it.":
     "This provider is not ready. Go back and reconnect it.",
-  "You can connect a subscription and create a bot later.":
-    "You can connect a subscription and create a bot later.",
+  "Copy the code, then open sign-in when you are ready.":
+    "Copy the code, then open sign-in when you are ready.",
+  "You can connect a provider and create a teammate whenever you are ready. Setup will not ask again.":
+    "You can connect a provider and create a teammate whenever you are ready. Setup will not ask again.",
   "Opening your workspace": "Opening your workspace",
   "Connect an environment first": "Connect an environment first",
   "Connect an environment to create one.": "Connect an environment to create one.",

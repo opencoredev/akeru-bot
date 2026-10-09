@@ -28,7 +28,6 @@ import {
 } from "./botConversationPresentation";
 import type { MessageReplyTarget } from "../chat/MessageControls";
 import { Menu, MenuItem, MenuPopup, MenuTrigger } from "../ui/menu";
-import { Button } from "../ui/button";
 import { toastManager } from "../ui/toast";
 import { useI18n } from "../../i18n";
 import { BotComposerModelControl } from "./BotComposerModelControl";
@@ -102,9 +101,6 @@ export function BotPromptComposer({
   sendBlockedDescriptionId,
   onAddressedBotChange,
   onSubmit,
-  promptSuggestions,
-  onPromptSuggestionType,
-  autoFocus = false,
 }: {
   botName: string;
   draftKey?: string;
@@ -135,15 +131,6 @@ export function BotPromptComposer({
   /** Reports the bot the draft's mention addresses, or null when it addresses none. */
   onAddressedBotChange?: (botId: string | null) => void;
   onSubmit: (prompt: string, files: readonly File[], respondingBotId?: string) => Promise<boolean>;
-  /** Optional first-chat chips. Click fills the composer and never sends. */
-  promptSuggestions?: ReadonlyArray<{
-    readonly id: string;
-    readonly label: string;
-    readonly prompt: string;
-  }>;
-  /** Fired when the user types into a composer that was showing suggestions. */
-  onPromptSuggestionType?: () => void;
-  autoFocus?: boolean;
 }) {
   const { t } = useI18n();
   const prefersReducedMotion = useReducedMotion();
@@ -410,31 +397,6 @@ export function BotPromptComposer({
             </motion.div>
           ) : null}
         </AnimatePresence>
-        {promptSuggestions &&
-        promptSuggestions.length > 0 &&
-        draft.trim().length === 0 &&
-        attachments.length === 0 ? (
-          <div
-            className="mb-2 flex flex-wrap gap-1.5 px-1"
-            data-testid="desktop-onboarding-prompt-chips"
-          >
-            {promptSuggestions.map((suggestion) => (
-              <Button
-                key={suggestion.id}
-                type="button"
-                size="pill-dense"
-                variant="outline"
-                disabled={disabled || readOnly}
-                onClick={() => {
-                  persistDraft(suggestion.prompt);
-                  promptInputRef.current?.focus();
-                }}
-              >
-                {suggestion.label}
-              </Button>
-            ))}
-          </div>
-        ) : null}
         <div className="relative">
           {mentionTrigger ? (
             <BotPromptMentionMenu
@@ -514,7 +476,6 @@ export function BotPromptComposer({
               placeholder={placeholder ?? t("Message {name}", { name: botName })}
               rows={1}
               value={draft}
-              autoFocus={autoFocus}
               readOnly={readOnly}
               tabIndex={readOnly ? -1 : undefined}
               aria-autocomplete={mentionsEnabled ? "list" : undefined}
@@ -528,8 +489,6 @@ export function BotPromptComposer({
                 const { selectionStart, value } = event.currentTarget;
                 persistDraft(value);
                 setCaret(selectionStart);
-
-                if (value.trim().length > 0) onPromptSuggestionType?.();
 
                 if (botPromptMentionTrigger(value, selectionStart) === null) {
                   setDismissedMentionStart(null);
