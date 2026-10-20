@@ -1,0 +1,113 @@
+---
+// Cross-promo bar for the gradients.sh launch. Closing it is remembered per visitor.
+
+// gradients.sh, tagged so its analytics show which site sent the visitor.
+const LAUNCH_POST_URL = "https://gradients.sh/?utm_source=akeru-bot.com&utm_medium=banner&utm_campaign=gradients-launch";
+---
+
+<script is:inline>
+  // Runs before paint so visitors who closed the banner never see it flash.
+  try {
+    if (localStorage.getItem("akeru-banner-dismissed:gradients-sh") === "true")
+      document.documentElement.classList.add("launch-banner-dismissed");
+  } catch {}
+</script>
+<div class="launch-banner">
+  <a href={LAUNCH_POST_URL} target="_blank" rel="noopener" data-launch-banner-link>
+    <span class="wide">Hey, Leo here 👋 </span>I just launched <b>gradients.sh</b><span class="wide"
+      >, animated gradient backgrounds for React</span
+    >. Come check it out →
+  </a>
+  <button type="button" aria-label="Close announcement" data-launch-banner-close>
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+      <path d="M18 6 6 18M6 6l12 12"></path>
+    </svg>
+  </button>
+</div>
+
+<script is:inline>
+  (() => {
+    const promo = { project: "gradients-sh", placement: "banner" };
+
+    document.querySelector("[data-launch-banner-link]")?.addEventListener("click", () => {
+      window.posthog?.capture?.("cross_promo_clicked", promo);
+    });
+
+    document.querySelector("[data-launch-banner-close]")?.addEventListener("click", () => {
+      document.documentElement.classList.add("launch-banner-dismissed");
+      window.posthog?.capture?.("cross_promo_dismissed", promo);
+
+      try {
+        localStorage.setItem("akeru-banner-dismissed:gradients-sh", "true");
+      } catch {}
+    });
+  })();
+</script>
+
+<style>
+  .launch-banner {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 40px;
+    padding: 0 40px 0 12px;
+    border-bottom: 1px solid var(--color-border);
+    background: var(--color-muted);
+    font-size: 14px;
+  }
+
+  :global(html.launch-banner-dismissed) .launch-banner {
+    display: none;
+  }
+
+  .launch-banner a {
+    overflow: hidden;
+    color: var(--color-muted-foreground);
+    text-decoration: none;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    transition: color var(--duration-quick) var(--ease-smooth-out);
+  }
+
+  .launch-banner a:hover {
+    color: var(--color-foreground);
+  }
+
+  .launch-banner b {
+    color: var(--color-foreground);
+    font-weight: 600;
+    text-decoration: underline;
+    text-underline-offset: 4px;
+  }
+
+  .launch-banner button {
+    position: absolute;
+    right: 6px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border: 0;
+    border-radius: var(--radius-sm);
+    background: none;
+    color: var(--color-muted-foreground);
+    cursor: pointer;
+  }
+
+  .launch-banner button:hover {
+    background: var(--color-secondary);
+    color: var(--color-foreground);
+  }
+
+  @media (max-width: 640px) {
+    .launch-banner {
+      font-size: 12px;
+    }
+
+    .launch-banner .wide {
+      display: none;
+    }
+  }
+</style>
