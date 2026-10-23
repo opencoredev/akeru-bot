@@ -71,6 +71,7 @@ const makeDependencies = Effect.fn("makeDependencies")(function* (now: string) {
       snapshots.getThreadDetailById(threadId).pipe(Effect.map(Option.getOrNull)),
     nowIso: Effect.succeed(now),
     randomUuid: Effect.sync(() => NodeCrypto.randomUUID()),
+    writeAttachmentIfMissing: () => Effect.die("These inbound messages share no files."),
     deliveryStore: memoryChannelDeliveryStore(),
     secretStore: {
       get: () => Effect.die("Inbound dispatch must not read secrets."),
@@ -145,6 +146,7 @@ describe("channel inbound persistence across restart", () => {
           const dbPath = path.join(root, "state.sqlite");
 
           const input = {
+            attachments: { files: [], notes: [] },
             botId: BOT_ID,
             projectId: TARGET_PROJECT_ID,
             provider,
