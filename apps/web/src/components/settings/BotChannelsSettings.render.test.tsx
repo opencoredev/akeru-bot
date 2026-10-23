@@ -248,7 +248,7 @@ describe("channel project selection", () => {
 
     expect(fixtures.command).toHaveBeenNthCalledWith(1, {
       environmentId: "environment-1",
-      input: { botId: "bot-uuid", provider: "imessage" },
+      input: { botId: "bot-uuid", provider: "imessage", expectedConnectionId: "profile-1" },
     });
     expect(fixtures.command).toHaveBeenNthCalledWith(2, {
       environmentId: "environment-1",
@@ -282,7 +282,7 @@ describe("channel project selection", () => {
     expect(fixtures.command).toHaveBeenCalledTimes(1);
     expect(fixtures.command).toHaveBeenCalledWith({
       environmentId: "environment-1",
-      input: { botId: "bot-uuid", provider: "imessage" },
+      input: { botId: "bot-uuid", provider: "imessage", expectedConnectionId: "profile-1" },
     });
   });
 

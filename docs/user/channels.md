@@ -14,6 +14,8 @@ Open **Settings > Channels** with an environment administrator connection.
 
 Select **Connect later** to save a connection without assigning a bot. You can assign it from the saved connection card.
 
+A bot can have one connection per messaging service. Unassign its existing connection before adding or assigning another, even if the existing connection is disconnected.
+
 If the connection saves but cannot connect, the form names the connection and says why, for example "Telegram rejected the bot token." The saved card keeps the bot and project you chose, so you can fix the problem and click **Reconnect** without choosing them again. Settings remembers the service tab you last opened.
 
 Choose the project that should receive this channel's turns when you connect the bot. Akeru suggests the project the bot used most recently, but you can pick any project. It keeps replies in that project, so messages cannot silently move between workspaces. **Connect** stays unavailable until a project is selected. If the environment has no projects yet, the form asks you to add one first.

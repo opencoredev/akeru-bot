@@ -7,6 +7,7 @@ import {
   channelFailureCategoryOf,
   connectedChannelBinding,
   isChannelIdentityConflict,
+  isChannelAssignmentConflict,
   resolveChannelSettingsAccess,
 } from "../../channelAccess";
 import { bindingFor, selfHostedIMessageConnectInput, whatsAppConnectInput } from "./BotChannelRows";
@@ -253,6 +254,21 @@ describe("isChannelIdentityConflict", () => {
       ),
     ).toBe(false);
     expect(isChannelIdentityConflict({})).toBe(false);
+  });
+});
+
+describe("isChannelAssignmentConflict", () => {
+  const message = "Unassign the channel already connected to this bot first";
+  it("matches only the server's exact assignment conflict message", () => {
+    expect(isChannelAssignmentConflict({ cause: Cause.fail(new Error(message)) })).toBe(true);
+    expect(isChannelAssignmentConflict({ cause: Cause.fail(message) })).toBe(true);
+    expect(isChannelAssignmentConflict({ cause: Cause.fail(new Error(`${message}.`)) })).toBe(
+      false,
+    );
+    expect(
+      isChannelAssignmentConflict({ cause: Cause.fail(new Error(`Request failed: ${message}`)) }),
+    ).toBe(false);
+    expect(isChannelAssignmentConflict({})).toBe(false);
   });
 });
 
