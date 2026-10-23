@@ -9,6 +9,7 @@
 import type {
   AkeruDelegationRecord,
   BotId,
+  ChannelProvider,
   CheckpointRef,
   GroupId,
   MessageId,
@@ -90,6 +91,12 @@ export interface ProjectionThreadDetailQuery {
    * the activity query. Omit this option to preserve the full detail response.
    */
   readonly activityKinds?: ReadonlyArray<string>;
+  /**
+   * Prepend the oldest user message when it falls outside the recent
+   * message window. Title regeneration uses this so the original request
+   * stays visible without loading every historic row.
+   */
+  readonly pinOldestUserMessage?: boolean;
 }
 
 export interface ProjectionTurnStartMessage {
@@ -306,6 +313,16 @@ export interface ProjectionSnapshotQueryShape {
     threadId: ThreadId,
     query?: ProjectionThreadDetailQuery,
   ) => Effect.Effect<Option.Option<OrchestrationThread>, ProjectionRepositoryError>;
+
+  /**
+   * Distinct Slack/Discord conversation IDs stored on a thread's messages.
+   * Channel reconnect uses this instead of a capped detail snapshot so older
+   * subscribed conversations stay visible.
+   */
+  readonly listThreadChannelConversationIds?: (input: {
+    readonly threadId: ThreadId;
+    readonly provider: ChannelProvider;
+  }) => Effect.Effect<ReadonlyArray<string>, ProjectionRepositoryError>;
 
   /**
    * Read a single active thread detail together with the projection snapshot
