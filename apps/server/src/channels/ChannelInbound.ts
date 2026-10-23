@@ -10,7 +10,7 @@ import {
   type ChannelProvider,
   type OrchestrationReadModel,
 } from "@akeru/contracts";
-import { type Message, type Thread } from "chat";
+import { isLinkNode, type Message, text, type Thread, toPlainText, walkAst } from "chat";
 import * as Effect from "effect/Effect";
 import { failWith } from "./ChannelErrors.ts";
 import {
@@ -64,16 +64,51 @@ export const deterministicChannelId = (
     )
     .digest("hex")}`;
 
+const withoutTrailingSlash = (value: string) => value.replace(/\/$/, "");
+
+/**
+ * Slack's adapter flattens `message.text` to plain text that keeps only a link's label, so a link
+ * labelled `example.com/projects/…` would reach the bot without its target. Discord's history
+ * reads (`parseDiscordMessage`, behind `recentMessages`) flatten the same way. Telegram, WhatsApp,
+ * iMessage, and Discord's live gateway messages, forwarded content included, keep raw markdown,
+ * which already carries the target.
+ */
+export function plainTextWithLinks(message: Message): string {
+  if (message.text !== toPlainText(message.formatted)) return message.text;
+  let addedTarget = false;
+
+  const ast = walkAst(structuredClone(message.formatted), (node) => {
+    if (!isLinkNode(node)) return node;
+    const label = toPlainText({ type: "root", children: node.children }).trim();
+
+    if (!label) {
+      addedTarget = true;
+
+      return text(node.url);
+    }
+
+    const targets = [node.url, node.url.replace(/^(?:https?:\/\/|mailto:)/, "")];
+
+    if (targets.some((target) => withoutTrailingSlash(target) === withoutTrailingSlash(label)))
+      return text(label);
+    addedTarget = true;
+
+    return text(`${label} (${node.url})`);
+  });
+
+  return addedTarget ? toPlainText(ast) : message.text;
+}
+
 export const normalizedInboundMessage = (
   thread: Pick<Thread, "id" | "recentMessages" | "refresh">,
   message: Message,
-  text = message.text,
+  messageText = plainTextWithLinks(message),
 ): InboundChannelMessage => ({
   externalThreadId: thread.id,
   externalMessageId: message.id,
   externalSenderId: message.author.userId,
   externalSenderName: message.author.fullName || message.author.userName,
-  text,
+  text: messageText,
 });
 
 export async function mentionWithContext(
@@ -93,15 +128,16 @@ export async function mentionWithContext(
     .slice(-CHANNEL_MENTION_CONTEXT_LIMIT)
     .map(
       (candidate) =>
-        `${candidate.author.fullName || candidate.author.userName || candidate.author.userId}: ${candidate.text}`,
+        `${candidate.author.fullName || candidate.author.userName || candidate.author.userId}: ${plainTextWithLinks(candidate)}`,
     );
 
   const boundedContext = context.join("\n").slice(-CHANNEL_MENTION_CONTEXT_CHARACTER_LIMIT);
+  const messageText = plainTextWithLinks(message);
 
   return normalizedInboundMessage(
     thread,
     message,
-    boundedContext.length === 0 ? message.text : `${boundedContext}\n${message.text}`,
+    boundedContext.length === 0 ? messageText : `${boundedContext}\n${messageText}`,
   );
 }
 
