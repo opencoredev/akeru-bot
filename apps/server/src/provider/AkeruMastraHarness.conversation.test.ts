@@ -4,6 +4,7 @@ import * as NodeFS from "node:fs";
 import * as NodeOS from "node:os";
 import * as NodePath from "node:path";
 import { AuthStorage } from "@mastra/code-sdk/auth/storage";
+import type { MastraDBMessage } from "@mastra/core/agent-controller";
 import { MessageList } from "@mastra/core/agent";
 import { Memory } from "@mastra/memory";
 import { ObservationalMemory } from "@mastra/memory/processors";
@@ -209,5 +210,99 @@ describe("AkeruMastraHarness", () => {
       expect.objectContaining({ id: "user-current" }),
       expect.objectContaining({ id: "assistant-current" }),
     ]);
+  });
+
+  it("bounds image tool invocation args before persisting them", async () => {
+    const persistMessages = vi.fn(async (_messages: ReadonlyArray<MastraDBMessage>) => undefined);
+
+    const engine = partialSdkFixture<ObservationalMemory>({
+      getThreadContext: vi.fn(() => ({ threadId: "thread-images", resourceId: "thread-images" })),
+      loadUnobservedMessages: vi.fn(async () => []),
+      getOrCreateRecord: vi.fn(async () => ({ activeObservations: "" })),
+      buildContextSystemMessages: vi.fn(async () => []),
+    });
+
+    const processor = new AkeruPassiveObservationalMemoryProcessor(
+      engine,
+      partialSdkFixture<Memory>({
+        persistMessages,
+      }),
+    );
+
+    const messageList = new MessageList({
+      threadId: "thread-images",
+      resourceId: "thread-images",
+    });
+
+    messageList.add(
+      {
+        id: "assistant-image",
+        role: "assistant" as const,
+        createdAt: DateTime.toDate(DateTime.makeUnsafe("2026-08-31T20:00:00.000Z")),
+        content: {
+          format: 2,
+          parts: [
+            {
+              type: "tool-invocation" as const,
+              toolInvocation: {
+                state: "result" as const,
+                toolCallId: "image-call-1",
+                toolName: "GenerateImage",
+                args: {
+                  operation: "edit",
+                  prompt: "Private launch poster prompt",
+                  inputImages: ["chat-image-1"],
+                  allowProvider: "grok",
+                },
+                result: { status: "completed", provider: "grok" },
+              },
+            },
+            {
+              type: "tool-invocation" as const,
+              toolInvocation: {
+                state: "result" as const,
+                toolCallId: "shell-call-1",
+                toolName: "Shell",
+                args: { command: "pwd" },
+                result: "/home/ubuntu",
+              },
+            },
+          ],
+        },
+        threadId: "thread-images",
+        resourceId: "thread-images",
+      },
+      "response",
+    );
+
+    await processor.processOutputResult({ messageList } as never);
+
+    expect(persistMessages).toHaveBeenCalledOnce();
+    const [persisted] = persistMessages.mock.calls[0]![0];
+
+    const imagePart = persisted?.content.parts[0];
+    assert.equal(imagePart?.type, "tool-invocation");
+
+    if (imagePart?.type === "tool-invocation") {
+      assert.deepEqual(imagePart.toolInvocation.args, {
+        operation: "edit",
+        allowProvider: "grok",
+      });
+      assert.deepEqual(imagePart.toolInvocation.result, {
+        status: "completed",
+        provider: "grok",
+      });
+      assert.equal(imagePart.toolInvocation.toolCallId, "image-call-1");
+    }
+
+    const shellPart = persisted?.content.parts[1];
+    assert.equal(shellPart?.type, "tool-invocation");
+
+    if (shellPart?.type === "tool-invocation") {
+      assert.deepEqual(shellPart.toolInvocation.args, { command: "pwd" });
+    }
+
+    assert.equal(JSON.stringify(persisted).includes("Private launch poster"), false);
+    assert.equal(JSON.stringify(persisted).includes("chat-image-1"), false);
   });
 });
