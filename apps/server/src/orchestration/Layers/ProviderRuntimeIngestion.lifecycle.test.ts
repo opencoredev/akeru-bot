@@ -66,6 +66,7 @@ describe("ProviderRuntimeIngestion", () => {
       );
 
       const inbound = channel.inbound({
+        attachments: [],
         externalThreadId: `${provider}:race`,
         externalMessageId: "race-request",
         text: "Question",
@@ -140,6 +141,7 @@ describe("ProviderRuntimeIngestion", () => {
       );
 
       const message = {
+        attachments: [],
         externalThreadId: `${provider}:owner`,
         externalMessageId: "request-1",
         text: "Question",
