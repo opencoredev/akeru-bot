@@ -116,7 +116,9 @@ export const rosterCatalog = {
   "Choose a custom avatar color. Current color {color}": "选择自定义头像颜色。当前颜色 {color}",
   "Avatar source": "头像来源",
   "Avatar preview": "头像预览",
-  "Create your first bot": "创建你的第一个机器人",
+  "Create a teammate": "创建一个队友",
+  "Name a bot when you are ready to chat. Connect a provider in Settings first if you want it to answer right away.":
+    "准备好聊天时再命名一个机器人。如果希望它马上能回答，请先在设置中连接提供商。",
   "No plugins enabled": "未启用插件",
   "Plugins, {status}": "插件，{status}",
   "Plugins · {status}": "插件 · {status}",

@@ -16,10 +16,8 @@ import { NewBotDialog } from "./NewBotDialog";
 import type { BotAvatar } from "./types";
 
 /**
- * What a brand-new workspace sees. The old copy named the missing thing and
- * stopped there, leaving the only way forward in a menu on the other side of
- * the window. This says what a bot is for and creates one from here, using the
- * same command the roster's own New bot entry runs.
+ * Empty roster after skip or a cleared workspace. Sells creating a teammate
+ * without framing it as a failed setup wizard.
  */
 export function BotZeroState() {
   const { t } = useI18n();
@@ -75,10 +73,10 @@ export function BotZeroState() {
           <div className="mx-auto mb-5 flex size-11 items-center justify-center rounded-xl border border-border bg-muted/40 text-muted-foreground">
             <BotIcon className="size-5" />
           </div>
-          <EmptyTitle>{t("Create your first bot")}</EmptyTitle>
+          <EmptyTitle>{t("Create a teammate")}</EmptyTitle>
           <EmptyDescription className="mt-2 leading-relaxed">
             {t(
-              "A bot is a teammate you chat with. It keeps its own instructions, memory, tools, and schedule, so you can give it a job once and come back to it.",
+              "Name a bot when you are ready to chat. Connect a provider in Settings first if you want it to answer right away.",
             )}
           </EmptyDescription>
           <div className="mt-6 flex flex-col items-center gap-2">
