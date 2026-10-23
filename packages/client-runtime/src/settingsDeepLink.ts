@@ -19,6 +19,7 @@ export const SETTINGS_DEEP_LINK_IDS = [
   "privacy",
   "archived-chats",
   "connections",
+  "akeru-cloud",
   "bot-inbox",
   "diagnostics",
 ] as const;

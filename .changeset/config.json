@@ -2,15 +2,21 @@
   "$schema": "https://unpkg.com/@changesets/config@3.1.1/schema.json",
   "changelog": [
     "@changesets/changelog-github",
-    { "repo": "opencoredev/akeru-bot", "disableThanks": true }
+    {
+      "repo": "opencoredev/akeru-bot",
+      "disableThanks": true
+    }
   ],
   "commit": false,
   "fixed": [["akeru-bot", "@akeru/contracts", "@akeru/desktop", "@akeru/web"]],
   "linked": [],
   "access": "restricted",
   "baseBranch": "main",
-  "ignore": ["@akeru/marketing", "@akeru/mobile"],
+  "ignore": ["@akeru/marketing", "@akeru/mobile", "@akeru/cloud", "@akeru/cloud-infra"],
   "updateInternalDependencies": "patch",
   "bumpVersionsWithWorkspaceProtocolOnly": true,
-  "privatePackages": { "version": true, "tag": false }
+  "privatePackages": {
+    "version": true,
+    "tag": false
+  }
 }

@@ -9,6 +9,7 @@ export type SettingsPath =
   | "/settings/appearance"
   | "/settings/keybindings"
   | "/settings/image-generation"
+  | "/settings/akeru-cloud"
   | "/settings/connections"
   | "/settings/privacy"
   | "/settings/archived"
@@ -32,6 +33,12 @@ export interface SettingsSearchItem {
  * here once instead of separately in the panel and the index.
  */
 export const SETTINGS_SEARCH_ITEMS = [
+  {
+    id: "akeru-cloud",
+    title: "Akeru Cloud",
+    to: "/settings/akeru-cloud",
+    keywords: ["account", "hosted", "link", "slack"],
+  },
   {
     id: "language",
     title: "Language",

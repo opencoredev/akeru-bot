@@ -46,3 +46,7 @@ transfer**. Mobile exposes the sharing controls for the connected environment.
 
 Turning a control off stops new transfers for that feature. Provider requests still leave the
 environment when you run a connected online model.
+
+## Akeru Cloud
+
+Akeru Cloud is optional. A linked environment shares its name, app version, and the email of the account that approved it. Hosted channel events pass through the cloud to your environment without storing their message content or channel secrets. Chats, files, provider keys, and model access stay on your environment. See [Akeru Cloud](akeru-cloud.md).

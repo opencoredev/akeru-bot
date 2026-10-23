@@ -1,3 +1,6 @@
+import * as CloudAccount from "./cloud/CloudAccount.ts";
+import * as CloudConnection from "./cloud/CloudConnection.ts";
+import * as HostedChannelRelay from "./cloud/HostedChannelRelay.ts";
 import * as Layer from "effect/Layer";
 import * as BackgroundPolicy from "./background/BackgroundPolicy.ts";
 import { ChannelRuntime } from "./channels/ChannelRuntime.ts";
@@ -285,7 +288,17 @@ export const RuntimeCoreWithRoutinesLive = Layer.mergeAll(
   ImageGenerationRuntime.layer.pipe(Layer.provide(RuntimeCoreDependenciesLive)),
 );
 
+const CloudLayerLive = HostedChannelRelay.layer.pipe(
+  Layer.provideMerge(CloudConnection.layer),
+  Layer.provideMerge(CloudAccount.layer),
+  Layer.provide(CloudAccount.cloudUrlFallbackLayer),
+  Layer.provide(ServerSettingsLayerLive),
+  Layer.provide(ServerSecretStore.layer),
+  Layer.provide(ServerEnvironmentLayerLive),
+);
+
 export const RuntimeDependenciesLive = RuntimeCoreWithRoutinesLive.pipe(
+  Layer.provideMerge(CloudLayerLive),
   // Misc.
   Layer.provideMerge(BackgroundLayerLive),
   Layer.provideMerge(ResourceDiagnosticsLayerLive),

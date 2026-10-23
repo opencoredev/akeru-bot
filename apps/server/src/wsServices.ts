@@ -1,3 +1,5 @@
+import * as CloudConnection from "./cloud/CloudConnection.ts";
+import * as CloudAccount from "./cloud/CloudAccount.ts";
 import { subscriptionProviderMutation } from "./subscription-auth/providerMutation.ts";
 import { ProviderInstanceRegistryMutator } from "./provider/Services/ProviderInstanceRegistryMutator.ts";
 import { computerRegistry } from "./provider/computerRegistry.ts";
@@ -329,6 +331,8 @@ export const createWsServices = (
 
     const serverEnvironment = yield* ServerEnvironment.ServerEnvironment;
 
+    const cloudAccount = yield* CloudAccount.CloudAccount;
+    const cloudConnection = yield* CloudConnection.CloudConnection;
     const backgroundPolicy = yield* BackgroundPolicy.BackgroundPolicy;
 
     const rpcClientIds = yield* Ref.make(new Set<RpcClientId>());
@@ -723,6 +727,8 @@ export const createWsServices = (
       workspaceFileSystem,
       serverEnvironment,
       backgroundPolicy,
+      cloudAccount,
+      cloudConnection,
       rpcClientIds,
       serverAuth,
       secretStore,

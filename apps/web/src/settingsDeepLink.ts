@@ -37,6 +37,7 @@ const destinations: Readonly<
   privacy: { section: "privacy", label: "Privacy & data" },
   "archived-chats": { section: "archived", label: "Archived chats" },
   connections: { section: "connections", label: "Connections" },
+  "akeru-cloud": { section: "akeru-cloud", label: "Akeru Cloud" },
   "bot-inbox": { section: "advanced", label: "Advanced > Bot inbox", targetId: "errors" },
   diagnostics: { section: "diagnostics", label: "Diagnostics" },
 };

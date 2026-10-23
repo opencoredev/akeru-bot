@@ -2,7 +2,7 @@
 
 exports[`discovered interface message coverage > covers static calls and finite label sources without translating identifiers 1`] = `
 {
-  "directMessageCount": 1786,
+  "directMessageCount": 1789,
   "expressions": {
     "apps/mobile/src/components/DictationControls.tsx": [
       "announcements[status]);",
@@ -243,6 +243,7 @@ exports[`discovered interface message coverage > covers static calls and finite 
       "General",
       "Appearance",
       "Keyboard",
+      "Akeru Cloud",
       "Connections",
       "Privacy & data",
       "Archived",
@@ -255,6 +256,7 @@ exports[`discovered interface message coverage > covers static calls and finite 
       "Image generation",
     ],
     "settingsSearch: item.title (SETTINGS_SEARCH_ITEMS)": [
+      "Akeru Cloud",
       "Language",
       "Color scheme",
       "Themes",

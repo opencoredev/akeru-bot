@@ -1,3 +1,4 @@
+import { AkeruCloudUrl, DEFAULT_AKERU_CLOUD_URL } from "../cloud.ts";
 import { providerInstanceConfigEnabledFlag } from "./providers.ts";
 import type { ProviderDriverKind } from "../providerInstance.ts";
 import * as Effect from "effect/Effect";
@@ -149,6 +150,9 @@ export const ServerSettings = Schema.Struct({
   enableProviderUpdateChecks: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
   analyticsEnabled: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
   productFeedbackEnabled: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
+  akeruCloudUrl: AkeruCloudUrl.pipe(
+    Schema.withDecodingDefault(Effect.succeed(DEFAULT_AKERU_CLOUD_URL)),
+  ),
   productFeedbackEndpoint: ProductFeedbackEndpoint.pipe(
     Schema.withDecodingDefault(Effect.succeed(DEFAULT_PRODUCT_FEEDBACK_ENDPOINT)),
   ),
@@ -309,6 +313,7 @@ const ServerSettingsPatchFields = {
   localExecutionMode: Schema.optionalKey(LocalExecutionMode),
   productFeedbackEnabled: Schema.optionalKey(Schema.Boolean),
   productFeedbackEndpoint: Schema.optionalKey(ProductFeedbackEndpoint),
+  akeruCloudUrl: Schema.optionalKey(AkeruCloudUrl),
   botSandboxBrowserSharing: Schema.optionalKey(BotSandboxBrowserSharing),
   enableAgentBrowserAccess: Schema.optionalKey(Schema.Boolean),
   browserProvider: Schema.optionalKey(
@@ -385,7 +390,7 @@ export const ServerSettingsPatch = Schema.Struct(ServerSettingsPatchFields);
 export type ServerSettingsPatch = typeof ServerSettingsPatch.Type;
 
 export const ServerSettingsRpcPatch = Schema.Struct(
-  Struct.omit(ServerSettingsPatchFields, ["channelConnections"]),
+  Struct.omit(ServerSettingsPatchFields, ["channelConnections", "akeruCloudUrl"]),
 );
 
 export type ServerSettingsRpcPatch = typeof ServerSettingsRpcPatch.Type;
