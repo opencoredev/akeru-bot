@@ -1,6 +1,10 @@
 ---
 import { GITHUB_REPOSITORY_URL, T3_CODE_WEBSITE_URL, docsUrl } from "../lib/site";
 import { RELEASES_URL } from "../lib/releases";
+import { otherOpenCoreSites } from "../lib/opencore-sites";
+
+// Plain followed links on purpose: they share authority between our sites.
+const openCoreSites = otherOpenCoreSites("https://www.akeru-bot.com");
 
 const year = new Date().getFullYear();
 ---
@@ -43,6 +47,16 @@ const year = new Date().getFullYear();
             </div>
           </div>
         </div>
+        <nav class="footer-family" aria-labelledby="footer-family-title">
+          <span class="footer-col-title" id="footer-family-title">MORE FROM OPENCORE</span>
+          <ul class="footer-family-list">
+            {openCoreSites.map((site) => (
+              <li>
+                <a href={site.url}><span>{site.name}</span> {site.description}</a>
+              </li>
+            ))}
+          </ul>
+        </nav>
         <div class="footer-bottom">
           <div class="footer-attribution">
             <span>&copy; {year} Akeru. MIT licensed.</span>
@@ -132,6 +146,41 @@ const year = new Date().getFullYear();
     color: var(--color-muted-foreground);
   }
 
+  .footer-family {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    border-top: 1px solid var(--color-border);
+    padding: 28px 0 44px;
+  }
+
+  .footer-family-list {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    gap: 14px 32px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .footer-family-list li {
+    font-size: 14px;
+    line-height: 18px;
+  }
+
+  .footer-family-list a {
+    color: var(--color-muted-foreground);
+    transition: color 0.15s ease;
+  }
+
+  .footer-family-list a span {
+    color: var(--color-foreground);
+  }
+
+  .footer-family-list a:hover {
+    color: var(--color-foreground);
+  }
+
   .footer-bottom {
     display: flex;
     align-items: center;
@@ -177,6 +226,10 @@ const year = new Date().getFullYear();
 
     .footer-top {
       gap: 36px;
+      padding-bottom: 32px;
+    }
+
+    .footer-family {
       padding-bottom: 32px;
     }
 
