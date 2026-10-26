@@ -501,6 +501,8 @@ export const commonLabelsCatalog = {
   "Not installed": "Not installed",
   Main: "Main",
   "Switch to dark mode": "Switch to dark mode",
+  "Connect Akeru Cloud": "Connect Akeru Cloud",
+  "Disconnect Akeru Cloud": "Disconnect Akeru Cloud",
   "Switch to light mode": "Switch to light mode",
   Publishes: "Publishes",
   "Changes permissions": "Changes permissions",

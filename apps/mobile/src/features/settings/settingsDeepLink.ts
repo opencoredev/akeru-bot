@@ -19,6 +19,7 @@ export type MobileSettingsDestination =
       readonly kind: "screen";
       readonly screen: "SettingsAppearance" | "SettingsEnvironments" | "SettingsArchive";
     }
+  | { readonly kind: "cloud" }
   | { readonly kind: "home" };
 
 const HOME: MobileSettingsDestination = { kind: "home" };
@@ -26,6 +27,7 @@ const HOME: MobileSettingsDestination = { kind: "home" };
 // Keyed by every shared id so a new Settings section needs an explicit mobile decision.
 const destinations: Readonly<Record<SettingsDeepLinkId, MobileSettingsDestination>> = {
   general: HOME,
+  "akeru-cloud": { kind: "cloud" },
   "local-execution": { kind: "health", target: "local-execution" },
   appearance: { kind: "screen", screen: "SettingsAppearance" },
   keybindings: HOME,

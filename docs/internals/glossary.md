@@ -153,6 +153,18 @@ The provenance record on a thread or message that came from an external channel:
 
 The per-reply delivery state (`pending`, `sent`, `failed`, `unknown`) mirrored from the durable delivery store onto each channel-originated assistant message. `unknown` means provider acceptance could not be proven; Akeru never reposts it automatically.
 
+### Akeru Cloud
+
+Optional hosted services used by a linked environment. The environment keeps one outbound socket; cloud features share it. See [cloud architecture](cloud.md) and [environment linking](cloud-environment.md).
+
+#### Cloud link
+
+The account approval and stored environment credential that allow an environment to connect to Akeru Cloud. Clients receive link status and approval codes, never the credential.
+
+#### EnvironmentHub
+
+A Cloudflare Durable Object for one linked environment. It holds the hibernating socket and relays hosted channel traffic without storing message content.
+
 ### Dictation
 
 Hold-to-talk capture on the active client that transcribes into the current composer draft. The

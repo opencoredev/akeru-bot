@@ -445,6 +445,50 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
     }).pipe(Effect.provide(NodeHttpServer.layerTest)),
   );
 
+  it.effect("exposes cloud status but restricts cloud link changes to owners", () =>
+    Effect.gen(function* () {
+      yield* buildAppUnderTest();
+
+      const { body: tokenBody } = yield* exchangeAccessToken(defaultDesktopBootstrapToken, {
+        scope: "orchestration:read orchestration:operate terminal:operate review:write",
+      });
+
+      const ticketResponse = yield* HttpClient.post("/api/auth/websocket-ticket", {
+        headers: { authorization: `Bearer ${tokenBody.access_token ?? ""}` },
+      });
+
+      const ticketBody = (yield* ticketResponse.json) as { readonly ticket: string };
+      const standardWsUrl = `${yield* getWsServerUrl("/ws", { authenticated: false })}?wsTicket=${encodeURIComponent(ticketBody.ticket)}`;
+      yield* Effect.scoped(
+        withWsRpcClient(standardWsUrl, (client) =>
+          Effect.gen(function* () {
+            assert.deepEqual(yield* client[WS_METHODS.cloudGetStatus]({}), { status: "unlinked" });
+
+            for (const method of [
+              WS_METHODS.cloudLinkStart,
+              WS_METHODS.cloudLinkCancel,
+              WS_METHODS.cloudUnlink,
+            ]) {
+              const denied = yield* Effect.flip(client[method]({}));
+              assert.isTrue(Predicate.isTagged(denied, "EnvironmentAuthorizationError"));
+
+              if (Predicate.isTagged(denied, "EnvironmentAuthorizationError"))
+                assert.equal(denied.requiredScope, "access:write");
+            }
+          }),
+        ),
+      );
+
+      const ownerStatus = yield* Effect.scoped(
+        withWsRpcClient(yield* getWsServerUrl("/ws"), (client) =>
+          client[WS_METHODS.cloudUnlink]({}),
+        ),
+      );
+
+      assert.deepEqual(ownerStatus, { status: "unlinked" });
+    }).pipe(Effect.provide(NodeHttpServer.layerTest)),
+  );
+
   it.effect("allows reusing the desktop bootstrap credential", () =>
     Effect.gen(function* () {
       // The desktop-bootstrap grant is delivered over trusted IPC at

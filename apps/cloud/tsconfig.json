@@ -1,0 +1,22 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "lib": ["ES2024", "WebWorker"],
+    "types": ["@cloudflare/workers-types", "node"],
+    "plugins": [
+      {
+        "name": "@effect/language-service",
+        // The Worker is plain async code, not an Effect program.
+        "diagnosticSeverity": {
+          "globalDate": "off",
+          "globalConsole": "off",
+          "globalRandom": "off",
+          "globalFetch": "off",
+          "cryptoRandomUUID": "off",
+          "preferSchemaOverJson": "off"
+        }
+      }
+    ]
+  },
+  "include": ["vite.config.ts", "src/**/*.ts", "test/**/*.ts"]
+}

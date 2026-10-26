@@ -243,6 +243,10 @@
     "./usage": {
       "types": "./src/usage.ts",
       "default": "./src/usage.ts"
+    },
+    "./cloud-presentation": {
+      "types": "./src/cloudPresentation.ts",
+      "import": "./src/cloudPresentation.ts"
     }
   },
   "scripts": {

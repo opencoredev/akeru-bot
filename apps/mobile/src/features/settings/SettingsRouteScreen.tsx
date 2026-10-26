@@ -1,3 +1,9 @@
+import {
+  CLOUD_COPY,
+  cloudSummaryLabel,
+  cloudViewModel,
+} from "@akeru/client-runtime/cloud-presentation";
+import { useEnvironmentQuery } from "../../state/query";
 import { Match, Predicate } from "effect";
 import { useMobileI18n } from "../../lib/i18n";
 import { useAtomValue } from "@effect/atom-react";
@@ -127,6 +133,9 @@ function LocalSettingsRouteScreen({
             value={`${environmentCount}`}
             target="SettingsEnvironments"
           />
+          {settingsEnvironmentId === null ? null : (
+            <AkeruCloudSettingsRow environmentId={settingsEnvironmentId} />
+          )}
         </SettingsSection>
 
         <ProviderSettingsSection environmentId={settingsEnvironmentId} />
@@ -154,6 +163,25 @@ function LocalSettingsRouteScreen({
         <AppSettingsSection />
       </ScrollView>
     </View>
+  );
+}
+
+function AkeruCloudSettingsRow({ environmentId }: { readonly environmentId: EnvironmentId }) {
+  const navigation = useNavigation();
+  const status = useEnvironmentQuery(serverEnvironment.cloudStatus({ environmentId, input: {} }));
+
+  return (
+    <SettingsRow
+      icon="cloud"
+      label={CLOUD_COPY.title}
+      value={cloudSummaryLabel(cloudViewModel(status.data))}
+      onPress={() =>
+        navigation.navigate("SettingsSheet", {
+          screen: "SettingsContent",
+          params: { screen: "SettingsAkeruCloud", params: { environmentId } },
+        })
+      }
+    />
   );
 }
 
