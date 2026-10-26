@@ -4,7 +4,6 @@ import SiteHeader from "../components/SiteHeader.astro";
 import SiteFooter from "../components/SiteFooter.astro";
 import "../styles/site.css";
 import PostHog from "../components/PostHog.astro";
-import LaunchBanner from "../components/LaunchBanner.astro";
 
 type StructuredDataValue = string | number | boolean | null | undefined | StructuredDataValue[] | { [key: string]: StructuredDataValue };
 
@@ -114,7 +113,6 @@ const structuredData = [
     <PostHog />
   </head>
   <body>
-    <LaunchBanner />
     <div class:list={["page", pageClass]}>
       <SiteHeader />
 
