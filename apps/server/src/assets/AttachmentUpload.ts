@@ -1,5 +1,3 @@
-import * as NodeCrypto from "node:crypto";
-
 import {
   ATTACHMENT_UPLOAD_URL_TTL_MS,
   type AttachmentCreateUploadUrlInput,
@@ -9,7 +7,6 @@ import * as Clock from "effect/Clock";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Option from "effect/Option";
-import * as Path from "effect/Path";
 import * as Schema from "effect/Schema";
 
 import {
@@ -19,6 +16,7 @@ import {
   PENDING_ATTACHMENT_THREAD_SEGMENT,
   resolveAttachmentPathById,
   sweepStalePendingAttachments,
+  writeFileAtomically,
 } from "../attachmentStore.ts";
 import { resolveAttachmentRelativePath } from "../attachmentPaths.ts";
 import {
@@ -174,34 +172,17 @@ export const storeAttachmentUpload = Effect.fn("AttachmentUpload.store")(functio
     relativePath,
   });
 
-  const partPath = resolveAttachmentRelativePath({
-    attachmentsDir: config.attachmentsDir,
-    relativePath: `${relativePath}.${NodeCrypto.randomUUID()}.part`,
-  });
-
-  if (!finalPath || !partPath) {
+  if (!finalPath) {
     return { ok: false, status: 500, detail: "Failed to resolve attachment path." };
   }
 
-  const fileSystem = yield* FileSystem.FileSystem;
-  const path = yield* Path.Path;
-
-  return yield* Effect.gen(function* () {
-    yield* fileSystem.makeDirectory(path.dirname(finalPath), { recursive: true });
-    yield* fileSystem.writeFile(partPath, bytes);
-    yield* fileSystem.rename(partPath, finalPath);
-
-    return { ok: true } satisfies StoreAttachmentUploadResult;
-  }).pipe(
+  return yield* writeFileAtomically(finalPath, bytes).pipe(
+    Effect.as({ ok: true } satisfies StoreAttachmentUploadResult),
     Effect.catch((cause) =>
-      fileSystem.remove(partPath, { force: true }).pipe(
-        Effect.orElseSucceed(() => undefined),
-        Effect.andThen(
-          Effect.logError("Failed to persist attachment upload.", {
-            attachmentId: claims.attachmentId,
-            cause,
-          }),
-        ),
+      Effect.logError("Failed to persist attachment upload.", {
+        attachmentId: claims.attachmentId,
+        cause,
+      }).pipe(
         Effect.as({
           ok: false,
           status: 500,

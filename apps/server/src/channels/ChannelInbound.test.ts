@@ -51,6 +51,7 @@ describe("channel runtime", () => {
       const harness = makeHarness({});
 
       yield* dispatchInboundChannelMessage(harness.dependencies, {
+        attachments: { files: [], notes: [] },
         botId: BOT_ID,
         projectId: SECOND_PROJECT_ID,
         provider: "telegram",
@@ -78,6 +79,7 @@ describe("channel runtime", () => {
       const harness = makeHarness({ threads: [makeThread(legacyThreadId, BOT_ID, [])] });
 
       yield* dispatchInboundChannelMessage(harness.dependencies, {
+        attachments: { files: [], notes: [] },
         botId: BOT_ID,
         projectId: SECOND_PROJECT_ID,
         provider: "telegram",
@@ -110,6 +112,7 @@ describe("channel runtime", () => {
       const harness = makeHarness({ threads: [makeThread(legacyThreadId, BOT_ID, [])] });
 
       yield* dispatchInboundChannelMessage(harness.dependencies, {
+        attachments: { files: [], notes: [] },
         botId: BOT_ID,
         projectId: PROJECT_ID,
         provider: "telegram",
@@ -132,6 +135,7 @@ describe("channel runtime", () => {
       const harness = makeHarness({});
 
       const input = {
+        attachments: { files: [], notes: [] },
         botId: BOT_ID,
         projectId: PROJECT_ID,
         provider: "telegram" as const,
@@ -155,6 +159,7 @@ describe("channel runtime", () => {
       const harness = makeHarness({});
 
       yield* dispatchInboundChannelMessage(harness.dependencies, {
+        attachments: { files: [], notes: [] },
         botId: BOT_ID,
         projectId: PROJECT_ID,
         provider: "telegram",
@@ -259,6 +264,7 @@ describe("channel runtime", () => {
 
       yield* Effect.promise(async () =>
         directMessage?.({
+          attachments: [],
           externalThreadId: "imessage:iMessage;-;+15551234567",
           externalMessageId: "direct-1",
           externalSenderId: "+15551234567",
@@ -446,6 +452,7 @@ describe("channel runtime", () => {
 
       yield* Effect.promise(async () =>
         directMessage?.({
+          attachments: [],
           externalThreadId: "discord:@me:dm-channel",
           externalMessageId: "discord-dm-1",
           externalSenderId: "D1",
@@ -454,6 +461,7 @@ describe("channel runtime", () => {
       );
       yield* Effect.promise(async () =>
         context?.onMention({
+          attachments: [],
           externalThreadId: "discord:guild-1:channel-1:thread-1",
           externalMessageId: "discord-mention-1",
           externalSenderId: "D2",
@@ -462,6 +470,7 @@ describe("channel runtime", () => {
       );
       yield* Effect.promise(async () =>
         context?.onSubscribedMessage({
+          attachments: [],
           externalThreadId: "discord:guild-1:channel-1:thread-1",
           externalMessageId: "discord-followup-1",
           externalSenderId: "D3",
@@ -485,6 +494,7 @@ describe("channel runtime", () => {
 
       yield* expectFailureMessage(
         dispatchInboundChannelMessage(harness.dependencies, {
+          attachments: { files: [], notes: [] },
           botId: BOT_ID,
           projectId: PROJECT_ID,
           provider: "telegram",
@@ -530,6 +540,7 @@ describe("channel runtime", () => {
         const commandsBefore = harness.commands.length;
         yield* Effect.promise(async () =>
           callbacks[0]!({
+            attachments: [],
             externalThreadId: "telegram:failed-shutdown",
             externalMessageId: "still-active",
             text: "Do not start a turn",

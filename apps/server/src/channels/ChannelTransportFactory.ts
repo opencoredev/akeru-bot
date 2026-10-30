@@ -74,6 +74,13 @@ export const fromTransportRuntime = (runtime: ChannelTransportRuntime): ChannelR
   };
 };
 
+/**
+ * One handler at a time per platform thread, with later messages waiting their turn. The SDK's
+ * default drops a message that arrives while the thread is busy, and a handler can be busy for
+ * a minute downloading shared files.
+ */
+export const CHANNEL_CHAT_CONCURRENCY = { strategy: "concurrent", maxConcurrent: 1 } as const;
+
 export const CHANNEL_GATEWAY_RENEWAL_INTERVAL = Duration.hours(1);
 
 export const shutdownChat = (chat: Chat) => fromPromise(() => chat.shutdown());
@@ -84,15 +91,13 @@ export const initializeChannelChat = (chat: Chat) =>
   );
 
 /**
- * Blank messages and anything a bot wrote, including this bot, never start a turn.
- *
  * Discord, Slack, WhatsApp and iMessage always give a person's message a real boolean, so an
  * `"unknown"` author there is treated as a bot. Telegram reports `"unknown"` for messages sent on
  * behalf of a chat (`sender_chat`: anonymous group admins and linked channel posts), which people
  * write, so only an explicit `true` counts as a bot on Telegram.
  */
 export const ignoredInbound = (provider: ChannelProvider, message: Message) =>
-  !message.text.trim() ||
+  (!message.text.trim() && message.attachments.length === 0) ||
   message.author.isMe === true ||
   (provider === "telegram" ? message.author.isBot === true : message.author.isBot !== false);
 
@@ -117,6 +122,7 @@ export const startTelegram = (botId: BotId, token: string, onDirectMessage: Inbo
       userName: installation.username ?? "Akeru Bot",
       adapters: { telegram: adapter as Adapter },
       state: createMemoryState(),
+      concurrency: CHANNEL_CHAT_CONCURRENCY,
     });
 
     chat.onDirectMessage(async (thread, message) => {
@@ -316,6 +322,7 @@ export const startIMessage = (
       userName: context.botName,
       adapters: { imessage: adapter },
       state: createMemoryState(),
+      concurrency: CHANNEL_CHAT_CONCURRENCY,
     });
 
     onDirectText(chat, "imessage", onDirectMessage);
@@ -362,6 +369,7 @@ export const startWhatsApp = (
       userName: context.botName,
       adapters: { whatsapp: adapter as Adapter },
       state: createMemoryState(),
+      concurrency: CHANNEL_CHAT_CONCURRENCY,
     });
 
     onDirectText(chat, "whatsapp", onDirectMessage);
@@ -470,6 +478,7 @@ export const startSlack = (
       userName: context.botName,
       adapters: { slack: adapter as Adapter },
       state,
+      concurrency: CHANNEL_CHAT_CONCURRENCY,
     });
 
     onDirectText(chat, "slack", onDirectMessage);
@@ -523,6 +532,7 @@ export const startDiscord = (
       userName: context.botName,
       adapters: { discord: adapter as Adapter },
       state: createMemoryState(),
+      concurrency: CHANNEL_CHAT_CONCURRENCY,
     });
 
     onDirectText(chat, "discord", onDirectMessage);
