@@ -14,7 +14,7 @@ import type {
   SubscriptionAuthStartResult,
 } from "@akeru/contracts";
 import { ArrowRightIcon, CheckIcon, ExternalLinkIcon, LoaderIcon } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { useI18n } from "../../i18n";
 import { useEnvironmentQuery } from "../../state/query";
@@ -91,6 +91,16 @@ export function SubscriptionStep({
 
   const selected = SUBSCRIPTION_PROVIDERS.find((item) => item.id === draft.providerId)!;
   const connected = captureMode || statusByProvider.get(draft.providerId)?.connected === true;
+  const autoContinuedRef = useRef(false);
+
+  useEffect(() => {
+    if (captureMode || !connected || busy || keyMode || activeLogin || autoContinuedRef.current) {
+      return;
+    }
+
+    autoContinuedRef.current = true;
+    onContinue();
+  }, [activeLogin, busy, captureMode, connected, keyMode, onContinue]);
 
   const settle = useCallback(
     (progress: SubscriptionAuthLoginProgress) => {
@@ -243,8 +253,9 @@ export function SubscriptionStep({
     }
 
     setBusy(false);
+    // Do not auto-open the provider page. Show the code first; the user opens
+    // sign-in when they are ready.
     setActiveLogin({ flow: result.value, error: null });
-    window.open(result.value.url, "_blank", "noopener,noreferrer");
   };
 
   const complete = async () => {
@@ -318,7 +329,9 @@ export function SubscriptionStep({
           {t("Finish connecting {provider}", { provider: selected.label })}
         </h1>
         <p className="text-sm leading-6 text-muted-foreground">
-          {activeLogin.flow.instructions ?? t("Finish signing in on the provider page.")}
+          {activeLogin.flow.userCode
+            ? t("Copy the code, then open sign-in when you are ready.")
+            : (activeLogin.flow.instructions ?? t("Finish signing in on the provider page."))}
         </p>
         {activeLogin.flow.userCode ? (
           <SignInCodeCopy
