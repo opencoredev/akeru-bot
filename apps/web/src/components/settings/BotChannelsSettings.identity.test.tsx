@@ -1,5 +1,9 @@
 import { Predicate } from "effect";
-import { AuthAccessWriteScope, type ChannelBinding } from "@akeru/contracts";
+import {
+  AuthAccessWriteScope,
+  OrchestrationDispatchCommandError,
+  type ChannelBinding,
+} from "@akeru/contracts";
 import * as Cause from "effect/Cause";
 import { cloneElement, type ReactElement, type ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
@@ -188,6 +192,30 @@ describe("channel identity conflicts", () => {
       title: "Could not assign channel",
       description: "Another bot already uses this account. Unassign it there, then connect again.",
     });
+  });
+});
+
+describe("channel assignment conflicts", () => {
+  it("shows the server's unassign-first response when the destination snapshot is stale", async () => {
+    fixtures.command.mockResolvedValueOnce({
+      _tag: "Failure",
+      cause: Cause.fail(
+        new OrchestrationDispatchCommandError({
+          message: "Unassign the channel already connected to this bot first",
+          channelFailureCategory: "credentials",
+        }),
+      ),
+    });
+    renderPage();
+    fixtures.selects[0]!.onValueChange?.("bot-uuid");
+    await fixtures.command.mock.results[0]!.value;
+    await Promise.resolve();
+    expect(fixtures.toast).toHaveBeenCalledWith({
+      type: "error",
+      title: "Could not assign channel",
+      description: "Unassign the channel already connected to this bot first",
+    });
+    expect(fixtures.command).toHaveBeenCalledTimes(1);
   });
 });
 

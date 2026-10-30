@@ -231,6 +231,7 @@ export interface ChannelRuntimeShape {
   readonly detach: (
     botId: BotId,
     provider: ChannelProvider,
+    expectedConnectionId?: ChannelConnectionId,
   ) => Effect.Effect<number, ChannelOperationError>;
   readonly reconnect: (
     botId: BotId,
