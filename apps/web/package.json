@@ -75,7 +75,7 @@
     "@vercel/config": "^0.3.0",
     "@vitejs/plugin-react": "^6.0.0",
     "babel-plugin-react-compiler": "1.0.0",
-    "compression": "^1.8.1",
+    "compression": "^1.8.2",
     "fake-indexeddb": "^6.2.5",
     "msw": "2.12.11",
     "react-grab": "^0.2.0",
