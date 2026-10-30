@@ -232,6 +232,8 @@ export function createRuntimeIngestionHarness() {
                   (snapshot) => snapshot.threads.find((thread) => thread.id === threadId) ?? null,
                 ),
               ),
+          listChannelConversationIds:
+            ChannelRuntime.listChannelConversationIdsFromQuery(snapshotQuery),
           nowIso: Effect.succeed("2026-01-01T00:00:00.000Z"),
           randomUuid: Effect.sync(() => `channel-test-${++nextChannelId}`),
           startTransport: (input, onMessage, context) =>

@@ -142,6 +142,10 @@ export interface ChannelRuntimeDependencies {
   readonly readThread: (
     threadId: ThreadId,
   ) => Effect.Effect<OrchestrationThread | null, ProjectionRepositoryError>;
+  readonly listChannelConversationIds: (
+    threadId: ThreadId,
+    provider: ChannelProvider,
+  ) => Effect.Effect<ReadonlyArray<string>, ProjectionRepositoryError>;
   readonly nowIso: Effect.Effect<string>;
   readonly randomUuid: Effect.Effect<string, PlatformError.PlatformError>;
   /** HTTP client for built-in credential probes. Defaults to the fetch-backed client. */

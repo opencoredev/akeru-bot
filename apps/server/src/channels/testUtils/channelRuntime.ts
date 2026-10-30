@@ -473,6 +473,7 @@ function makeHarness(input: {
   readonly failBotUpdate?: (updateIndex: number) => Error | undefined;
   readonly onBindings?: (bindings: ReadonlyArray<ChannelBinding>) => void;
   readonly commandModelOmitsMessages?: boolean;
+  readonly readThreadMessageLimit?: number;
 }) {
   let model = makeModel(input.bots ?? [makeBot(BOT_ID)]);
   let settings = DEFAULT_SERVER_SETTINGS;
@@ -544,7 +545,34 @@ function makeHarness(input: {
         : threads,
     })),
     readThread: (threadId) =>
-      Effect.sync(() => threads.find((thread) => thread.id === threadId) ?? null),
+      Effect.sync(() => {
+        const thread = threads.find((candidate) => candidate.id === threadId) ?? null;
+
+        if (thread === null || input.readThreadMessageLimit === undefined) {
+          return thread;
+        }
+
+        return {
+          ...thread,
+          messages: thread.messages.slice(-input.readThreadMessageLimit),
+        };
+      }),
+    listChannelConversationIds: (threadId, provider) =>
+      Effect.sync(() => {
+        const thread = threads.find((candidate) => candidate.id === threadId);
+
+        if (!thread) return [];
+
+        const ids = new Set<string>();
+
+        for (const message of thread.messages) {
+          if (message.channelOrigin?.provider === provider) {
+            ids.add(message.channelOrigin.externalThreadId);
+          }
+        }
+
+        return [...ids];
+      }),
     nowIso: Effect.succeed(NOW),
     randomUuid: Effect.sync(() => `uuid-${commands.length}`),
     // Accepts the Slack app-token probe, the only request the built-in transports send here.

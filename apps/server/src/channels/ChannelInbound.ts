@@ -122,23 +122,13 @@ export const subscribedExternalThreadIds = (
         : [],
     );
 
-    const threads = yield* Effect.forEach(candidateIds, ctx.deps.readThread, {
-      concurrency: "unbounded",
-    });
+    const conversationIds = yield* Effect.forEach(
+      candidateIds,
+      (threadId) => ctx.deps.listChannelConversationIds(threadId, provider),
+      { concurrency: "unbounded" },
+    );
 
-    const ids = new Set<string>();
-
-    for (const thread of threads) {
-      if (!thread) continue;
-
-      for (const message of thread.messages) {
-        if (message.channelOrigin?.provider === provider) {
-          ids.add(message.channelOrigin.externalThreadId);
-        }
-      }
-    }
-
-    return [...ids];
+    return [...new Set(conversationIds.flat())];
   });
 
 /**

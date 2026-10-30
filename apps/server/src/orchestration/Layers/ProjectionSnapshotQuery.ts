@@ -14,6 +14,7 @@ import {
   ProjectionSnapshotQuery,
   type ProjectionSnapshotQueryShape,
 } from "../Services/ProjectionSnapshotQuery.ts";
+import { toPersistenceSqlOrDecodeError } from "./ProjectionSnapshotRows.ts";
 import { createEnvironmentRows } from "./snapshot-query/EnvironmentRows.ts";
 import { createThreadRows } from "./snapshot-query/ThreadRows.ts";
 import { createThreadHistoryRows } from "./snapshot-query/ThreadHistoryRows.ts";
@@ -72,6 +73,8 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
     getThreadCheckpointContextThreadRow,
     getActiveThreadRowById,
     listThreadMessageRowsByThread,
+    listThreadChannelConversationIdRows,
+    getOldestUserMessageRowByThread,
     listThreadProposedPlanRowsByThread,
     getThreadRuntimeContextRow,
     getTurnStartMessageRow,
@@ -198,6 +201,7 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
     listPinnedThreadActivityRowsByThread,
     getActiveThreadRowById,
     listThreadMessageRowsByThread,
+    getOldestUserMessageRowByThread,
     listThreadMessageRowsByThreadWindow,
     listThreadProposedPlanRowsByThread,
     listCheckpointRowsByThread,
@@ -215,6 +219,18 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
     listPinnedThreadActivityRowsByThread,
     commandMessageRepository,
   });
+
+  const listThreadChannelConversationIds: ProjectionSnapshotQueryShape["listThreadChannelConversationIds"] =
+    (input) =>
+      listThreadChannelConversationIdRows(input).pipe(
+        Effect.map((rows) => rows.map((row) => row.externalThreadId)),
+        Effect.mapError(
+          toPersistenceSqlOrDecodeError(
+            "ProjectionSnapshotQuery.listThreadChannelConversationIds:query",
+            "ProjectionSnapshotQuery.listThreadChannelConversationIds:decodeRows",
+          ),
+        ),
+      );
 
   return {
     getThreadCommandContext,
@@ -244,6 +260,7 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
     hasTurnStartFailure,
     getThreadDetailById,
     getThreadDetailSnapshot,
+    listThreadChannelConversationIds,
   } satisfies ProjectionSnapshotQueryShape;
 });
 

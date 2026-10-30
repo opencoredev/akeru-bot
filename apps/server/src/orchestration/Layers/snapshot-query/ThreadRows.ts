@@ -10,6 +10,7 @@ import {
   EventReplayStatsInput,
   EventReplayStatsRowSchema,
   ProjectionThreadSearchRequest,
+  ThreadChannelConversationLookupInput,
   ProjectionThreadSearchRow,
   WorkspaceRootLookupInput,
   ProjectionProjectLookupRowSchema,
@@ -29,6 +30,7 @@ import {
   ProjectionCheckpointDbRowSchema,
   FullThreadDiffContextLookupInput,
   ProjectionFullThreadDiffContextRowSchema,
+  THREAD_DETAIL_MESSAGE_LIMIT,
 } from "../ProjectionSnapshotRows.ts";
 
 export function createThreadRows({ sql }: Pick<ProjectionSnapshotDependencies, "sql">) {
@@ -269,7 +271,81 @@ export function createThreadRows({ sql }: Pick<ProjectionSnapshotDependencies, "
       `,
   });
 
+  // Unwindowed detail stays inside the projector-sized window. Callers that
+  // need the original user request pin it separately (see
+  // getOldestUserMessageRowByThread) instead of hydrating every historic row.
   const listThreadMessageRowsByThread = SqlSchema.findAll({
+    Request: ThreadIdLookupInput,
+    Result: ProjectionThreadMessageDbRowSchema,
+    execute: ({ threadId }) =>
+      sql`
+        SELECT
+          "messageId",
+          "threadId",
+          "turnId",
+          "respondingBotId",
+          "authorPersonId",
+          "authorDisplayName",
+          "channelOrigin",
+          "channelDelivery",
+          role,
+          text,
+          "attachments",
+          "reactions",
+          "isStreaming",
+          "createdAt",
+          "updatedAt"
+        FROM (
+          SELECT
+            projection_thread_messages.message_id AS "messageId",
+            projection_thread_messages.thread_id AS "threadId",
+            projection_thread_messages.turn_id AS "turnId",
+            responding_bot_id AS "respondingBotId",
+            author_person_id AS "authorPersonId",
+            author_display_name AS "authorDisplayName",
+            projection_thread_messages.channel_origin_json AS "channelOrigin",
+            COALESCE(
+              projection_thread_messages.channel_delivery,
+              CASE channel_deliveries.status
+                WHEN 'requested' THEN 'pending'
+                WHEN 'sent' THEN 'sent'
+              END
+            ) AS "channelDelivery",
+            role,
+            text,
+            attachments_json AS "attachments",
+            reactions_json AS "reactions",
+            is_streaming AS "isStreaming",
+            created_at AS "createdAt",
+            projection_thread_messages.updated_at AS "updatedAt"
+          FROM projection_thread_messages
+          LEFT JOIN channel_deliveries
+            ON channel_deliveries.message_id = projection_thread_messages.message_id
+          WHERE projection_thread_messages.thread_id = ${threadId}
+          ORDER BY created_at DESC, projection_thread_messages.message_id DESC
+          LIMIT ${THREAD_DETAIL_MESSAGE_LIMIT}
+        ) AS recent_messages
+        ORDER BY "createdAt" ASC, "messageId" ASC
+      `,
+  });
+
+  const listThreadChannelConversationIdRows = SqlSchema.findAll({
+    Request: ThreadChannelConversationLookupInput,
+    Result: Schema.Struct({
+      externalThreadId: Schema.String,
+    }),
+    execute: ({ threadId, provider }) =>
+      sql`
+        SELECT DISTINCT
+          json_extract(channel_origin_json, '$.externalThreadId') AS "externalThreadId"
+        FROM projection_thread_messages
+        WHERE thread_id = ${threadId}
+          AND json_extract(channel_origin_json, '$.provider') = ${provider}
+          AND json_extract(channel_origin_json, '$.externalThreadId') IS NOT NULL
+      `,
+  });
+
+  const getOldestUserMessageRowByThread = SqlSchema.findOneOption({
     Request: ThreadIdLookupInput,
     Result: ProjectionThreadMessageDbRowSchema,
     execute: ({ threadId }) =>
@@ -300,7 +376,9 @@ export function createThreadRows({ sql }: Pick<ProjectionSnapshotDependencies, "
         LEFT JOIN channel_deliveries
           ON channel_deliveries.message_id = projection_thread_messages.message_id
         WHERE projection_thread_messages.thread_id = ${threadId}
+          AND role = 'user'
         ORDER BY created_at ASC, projection_thread_messages.message_id ASC
+        LIMIT 1
       `,
   });
 
@@ -547,6 +625,8 @@ export function createThreadRows({ sql }: Pick<ProjectionSnapshotDependencies, "
     getThreadCheckpointContextThreadRow,
     getActiveThreadRowById,
     listThreadMessageRowsByThread,
+    listThreadChannelConversationIdRows,
+    getOldestUserMessageRowByThread,
     listThreadProposedPlanRowsByThread,
     getThreadRuntimeContextRow,
     getTurnStartMessageRow,

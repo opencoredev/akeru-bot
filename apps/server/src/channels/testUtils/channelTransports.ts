@@ -395,6 +395,22 @@ const makeHarness = (input: {
       readModel: Effect.sync(() => model),
       readThread: (threadId) =>
         Effect.sync(() => threads.find((thread) => thread.id === threadId) ?? null),
+      listChannelConversationIds: (threadId, provider) =>
+        Effect.sync(() => {
+          const thread = threads.find((candidate) => candidate.id === threadId);
+
+          if (!thread) return [];
+
+          const ids = new Set<string>();
+
+          for (const message of thread.messages) {
+            if (message.channelOrigin?.provider === provider) {
+              ids.add(message.channelOrigin.externalThreadId);
+            }
+          }
+
+          return [...ids];
+        }),
       nowIso: Effect.succeed(NOW),
       randomUuid: Effect.sync(() => `uuid-${sequence}`),
       httpClient: input.httpClient ?? slackProbeClient(true),

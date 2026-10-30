@@ -6,6 +6,7 @@ import * as SqlClient from "effect/unstable/sql/SqlClient";
 import { ORCHESTRATION_PROJECTOR_NAMES } from "./ProjectionPipeline.ts";
 import { ProjectionSnapshotQuery } from "../Services/ProjectionSnapshotQuery.ts";
 import { encodeThreadDetailPageCursor } from "../threadDetailCursor.ts";
+import { THREAD_DETAIL_MESSAGE_LIMIT } from "./ProjectionSnapshotRows.ts";
 import { projectionSnapshotLayer, asEventId } from "./test-support/ProjectionSnapshotHarness.ts";
 
 projectionSnapshotLayer("ProjectionSnapshotQuery windowed thread detail", (it) => {
@@ -605,6 +606,185 @@ projectionSnapshotLayer("ProjectionSnapshotQuery windowed thread detail", (it) =
         assert.equal(snapshot.value.page?.hasMore, false);
         assert.equal(snapshot.value.page?.beforeCursor, null);
       }
+    }),
+  );
+
+  it.effect("caps unpaginated client snapshots without hiding first-message server reads", () =>
+    Effect.gen(function* () {
+      const sql = yield* SqlClient.SqlClient;
+      const snapshotQuery = yield* ProjectionSnapshotQuery;
+      const overflow = THREAD_DETAIL_MESSAGE_LIMIT + 2;
+
+      yield* sql`DELETE FROM projection_projects`;
+      yield* sql`DELETE FROM projection_threads`;
+      yield* sql`DELETE FROM projection_turns`;
+      yield* sql`DELETE FROM projection_thread_messages`;
+      yield* sql`DELETE FROM projection_thread_activities`;
+      yield* sql`DELETE FROM projection_state`;
+
+      yield* sql`
+        INSERT INTO projection_projects (
+          project_id, title, workspace_root, scripts_json, created_at, updated_at, deleted_at
+        )
+        VALUES ('project-cap', 'Capped', '/tmp/project-cap', '[]',
+          '2026-03-03T00:00:00.000Z', '2026-03-03T00:00:00.000Z', NULL)
+      `;
+      yield* sql`
+        INSERT INTO projection_threads (
+          thread_id, project_id, title, model_selection_json, runtime_mode, interaction_mode,
+          pending_approval_count, pending_user_input_count, has_actionable_proposed_plan,
+          created_at, updated_at, deleted_at
+        )
+        VALUES ('thread-cap', 'project-cap', 'Long thread',
+          '{"provider":"codex","model":"gpt-5-codex"}', 'full-access', 'default',
+          0, 0, 0, '2026-03-03T00:00:00.000Z', '2026-03-03T00:00:00.000Z', NULL)
+      `;
+      yield* sql`
+        WITH RECURSIVE message_rows(n) AS (
+          SELECT 1
+          UNION ALL
+          SELECT n + 1 FROM message_rows WHERE n < ${overflow}
+        )
+        INSERT INTO projection_thread_messages (
+          message_id, thread_id, turn_id, role, text, is_streaming, created_at, updated_at
+        )
+        SELECT
+          printf('msg-%04d', n),
+          'thread-cap',
+          NULL,
+          CASE WHEN n = 1 THEN 'user' ELSE 'assistant' END,
+          CASE WHEN n = 1 THEN 'original request' ELSE printf('later-%d', n) END,
+          0,
+          printf('2026-03-03T00:%02d:%02d.000Z', n / 60, n % 60),
+          printf('2026-03-03T00:%02d:%02d.000Z', n / 60, n % 60)
+        FROM message_rows
+      `;
+
+      for (const projector of Object.values(ORCHESTRATION_PROJECTOR_NAMES)) {
+        yield* sql`
+          INSERT INTO projection_state (projector, last_applied_sequence, updated_at)
+          VALUES (${projector}, 8, '2026-03-03T00:00:01.000Z')
+        `;
+      }
+
+      const threadId = ThreadId.make("thread-cap");
+      const serverDetail = yield* snapshotQuery.getThreadDetailById(threadId);
+
+      const pinnedDetail = yield* snapshotQuery.getThreadDetailById(threadId, {
+        pinOldestUserMessage: true,
+      });
+
+      const clientSnapshot = yield* snapshotQuery.getThreadDetailSnapshot(threadId);
+
+      assert.equal(serverDetail._tag, "Some");
+      assert.equal(pinnedDetail._tag, "Some");
+      assert.equal(clientSnapshot._tag, "Some");
+
+      if (
+        Predicate.isTagged(serverDetail, "Some") &&
+        Predicate.isTagged(pinnedDetail, "Some") &&
+        Predicate.isTagged(clientSnapshot, "Some")
+      ) {
+        assert.equal(serverDetail.value.messages.length, THREAD_DETAIL_MESSAGE_LIMIT);
+        assert.equal(serverDetail.value.messages[0]?.id, "msg-0003");
+        assert.equal(pinnedDetail.value.messages[0]?.id, "msg-0001");
+        assert.equal(pinnedDetail.value.messages[0]?.text, "original request");
+        assert.equal(pinnedDetail.value.messages.length, THREAD_DETAIL_MESSAGE_LIMIT + 1);
+        assert.equal(clientSnapshot.value.thread.messages.length, THREAD_DETAIL_MESSAGE_LIMIT);
+        assert.equal(clientSnapshot.value.thread.messages[0]?.id, "msg-0003");
+        assert.equal(clientSnapshot.value.page, undefined);
+      }
+    }),
+  );
+
+  it.effect("lists older channel conversation ids without loading capped detail history", () =>
+    Effect.gen(function* () {
+      const sql = yield* SqlClient.SqlClient;
+      const snapshotQuery = yield* ProjectionSnapshotQuery;
+      const overflow = THREAD_DETAIL_MESSAGE_LIMIT + 2;
+      const list = snapshotQuery.listThreadChannelConversationIds;
+
+      if (list === undefined) {
+        assert.fail("listThreadChannelConversationIds must be implemented");
+
+        return;
+      }
+
+      yield* sql`DELETE FROM projection_projects`;
+      yield* sql`DELETE FROM projection_threads`;
+      yield* sql`DELETE FROM projection_turns`;
+      yield* sql`DELETE FROM projection_thread_messages`;
+      yield* sql`DELETE FROM projection_thread_activities`;
+      yield* sql`DELETE FROM projection_state`;
+
+      yield* sql`
+        INSERT INTO projection_projects (
+          project_id, title, workspace_root, scripts_json, created_at, updated_at, deleted_at
+        )
+        VALUES ('project-cap', 'Capped', '/tmp/project-cap', '[]',
+          '2026-03-03T00:00:00.000Z', '2026-03-03T00:00:00.000Z', NULL)
+      `;
+      yield* sql`
+        INSERT INTO projection_threads (
+          thread_id, project_id, title, model_selection_json, runtime_mode, interaction_mode,
+          pending_approval_count, pending_user_input_count, has_actionable_proposed_plan,
+          created_at, updated_at, deleted_at
+        )
+        VALUES ('thread-cap', 'project-cap', 'Long thread',
+          '{"provider":"codex","model":"gpt-5-codex"}', 'full-access', 'default',
+          0, 0, 0, '2026-03-03T00:00:00.000Z', '2026-03-03T00:00:00.000Z', NULL)
+      `;
+      yield* sql`
+        WITH RECURSIVE message_rows(n) AS (
+          SELECT 1
+          UNION ALL
+          SELECT n + 1 FROM message_rows WHERE n < ${overflow}
+        )
+        INSERT INTO projection_thread_messages (
+          message_id, thread_id, turn_id, role, text, is_streaming, created_at, updated_at
+        )
+        SELECT
+          printf('msg-%04d', n),
+          'thread-cap',
+          NULL,
+          CASE WHEN n = 1 THEN 'user' ELSE 'assistant' END,
+          CASE WHEN n = 1 THEN 'original request' ELSE printf('later-%d', n) END,
+          0,
+          printf('2026-03-03T00:%02d:%02d.000Z', n / 60, n % 60),
+          printf('2026-03-03T00:%02d:%02d.000Z', n / 60, n % 60)
+        FROM message_rows
+      `;
+      yield* sql`
+        UPDATE projection_thread_messages
+        SET channel_origin_json = '{"provider":"slack","externalThreadId":"slack:C-old:1"}'
+        WHERE message_id = 'msg-0001'
+      `;
+      yield* sql`
+        UPDATE projection_thread_messages
+        SET channel_origin_json = '{"provider":"slack","externalThreadId":"slack:C-new:1"}'
+        WHERE message_id = ${`msg-${String(overflow).padStart(4, "0")}`}
+      `;
+
+      const threadId = ThreadId.make("thread-cap");
+      const serverDetail = yield* snapshotQuery.getThreadDetailById(threadId);
+
+      const conversationIds = yield* list({
+        threadId,
+        provider: "slack",
+      });
+
+      assert.equal(serverDetail._tag, "Some");
+
+      if (Predicate.isTagged(serverDetail, "Some")) {
+        assert.equal(
+          serverDetail.value.messages.some(
+            (message) => message.channelOrigin?.externalThreadId === "slack:C-old:1",
+          ),
+          false,
+        );
+      }
+
+      assert.deepEqual([...conversationIds].sort(), ["slack:C-new:1", "slack:C-old:1"]);
     }),
   );
 });
