@@ -20,7 +20,7 @@
     "@akeru/tailscale": "workspace:*",
     "@effect/platform-node": "catalog:",
     "effect": "catalog:",
-    "electron": "41.10.6",
+    "electron": "42.11.16",
     "electron-updater": "^6.6.2",
     "playwright-core": "1.60.0",
     "pngjs": "7.0.0",
