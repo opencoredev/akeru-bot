@@ -128,7 +128,7 @@ overrides:
   "builder-util-runtime@<9.7.0": 9.7.0
   "compression@<1.8.2": 1.8.2
   "deepmerge-ts@<8.0.0": 8.0.0
-  "e2b>undici8": npm:undici@8.12.2
+  "e2b@<=2.46.1>undici8": npm:undici@8.12.2
   "devalue@<5.9.3": 5.9.3
   "dompurify@<3.4.17": 3.4.17
   "fast-uri@<3.1.9": 3.1.9
