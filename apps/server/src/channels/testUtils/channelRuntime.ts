@@ -1,4 +1,5 @@
 import { photon, externalAdapters } from "./channelAdapters.ts";
+import { attachmentWriterFor, makeAttachmentsDir } from "./channelAttachments.ts";
 
 export { photon, externalAdapters } from "./channelAdapters.ts";
 
@@ -478,6 +479,7 @@ function makeHarness(input: {
   let settings = DEFAULT_SERVER_SETTINGS;
   const threads = [...(input.threads ?? [])];
   const commands: OrchestrationCommand[] = [];
+  const attachmentsDir = makeAttachmentsDir();
   const { store: memorySecretStore, values: secrets } = makeMemorySecretStore();
   const secretStore = input.secretStore ?? memorySecretStore;
   let sequence = model.snapshotSequence;
@@ -547,6 +549,7 @@ function makeHarness(input: {
       Effect.sync(() => threads.find((thread) => thread.id === threadId) ?? null),
     nowIso: Effect.succeed(NOW),
     randomUuid: Effect.sync(() => `uuid-${commands.length}`),
+    writeAttachmentIfMissing: attachmentWriterFor(attachmentsDir),
     // Accepts the Slack app-token probe, the only request the built-in transports send here.
     httpClient: slackProbeClient(true),
     ...(input.publicOrigin === null
@@ -576,6 +579,7 @@ function makeHarness(input: {
 
   return {
     commands,
+    attachmentsDir,
     dependencies,
     secrets,
     archive,
