@@ -359,6 +359,75 @@ describe("ImageGenerationRuntime", () => {
     }).pipe(Effect.provide(testLayer({ baseDir: tempBaseDir(), adapters })));
   });
 
+  it.effect("renders a finished image in a group chat", () => {
+    const adapters = { chatgpt: fakeAdapter("chatgpt"), grok: fakeAdapter("grok") };
+
+    return Effect.gen(function* () {
+      const runtime = yield* ImageGenerationRuntime;
+      const engine = yield* OrchestrationEngineService;
+      const config = yield* ServerConfig;
+      const boss = BotId.make("bot-boss-render");
+      const specialist = BotId.make("bot-specialist-render");
+      const groupId = GroupId.make("group-render");
+      const threadId = ThreadId.make("thread-group-render");
+      const personId = AuthSessionId.make("person-render");
+      yield* createProject;
+      yield* createBot(boss, "codex", null);
+      yield* createBot(specialist, "claudeAgent", "grok");
+      yield* engine.dispatch({
+        type: "group.create",
+        commandId: CommandId.make("cmd-group-render"),
+        groupId,
+        name: "Render",
+        bossBotId: boss,
+        specialistBotIds: [specialist],
+        creator: { kind: "person", personId, displayName: "Designer" },
+        createdAt,
+      });
+      yield* engine.dispatch({
+        type: "thread.create",
+        commandId: CommandId.make("cmd-group-thread-render"),
+        threadId,
+        projectId,
+        groupId,
+        title: "Group render",
+        modelSelection,
+        runtimeMode: "full-access",
+        interactionMode: "default",
+        branch: null,
+        worktreePath: null,
+        createdAt,
+      });
+      yield* sendUserMessage(threadId, "group-render", [], {
+        respondingBotId: specialist,
+        personId,
+      });
+
+      const result = yield* runtime.generate(threadId, { operation: "generate", prompt: PROMPT });
+      assert.equal(result.status, "completed");
+
+      // The projected row is what the chat view hands to BotMessageAttachments.
+      const [message] = yield* generatedMessages(threadId);
+      assert.isDefined(message);
+      assert.equal(message?.role, "assistant");
+      assert.equal(message?.respondingBotId, specialist);
+
+      const [attachment] = message?.attachments ?? [];
+      assert.equal(attachment?.type, "image");
+      assert.equal(attachment?.mimeType, "image/jpeg");
+      assert.equal(attachment?.name, "generated-image-1.jpg");
+
+      const path = resolveAttachmentPath({
+        attachmentsDir: config.attachmentsDir,
+        attachment: attachment!,
+      });
+
+      assert.isDefined(path);
+      assert.equal(NodeFS.existsSync(path!), true);
+      assert.equal(NodeFS.readFileSync(path!).byteLength > 0, true);
+    }).pipe(Effect.provide(testLayer({ baseDir: tempBaseDir(), adapters })));
+  });
+
   it.effect("keeps generated images after a restart", () => {
     const adapters = { chatgpt: fakeAdapter("chatgpt"), grok: fakeAdapter("grok") };
     const baseDir = tempBaseDir();
