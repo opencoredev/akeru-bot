@@ -108,7 +108,9 @@ Open a group and use its group sidebar to manage it:
 - **Delete group** asks for confirmation. Its bots stay in your roster.
 
 The boss answers every message by default. Type `@` and a bot's name, such as `@Mori`, to send that
-message to that bot instead. It answers with its own provider and model. If a message mentions
+message to that bot instead. It answers with its own provider and model. A bot without a model
+of its own answers as it does in its own chat: with your default model, or with a provider that is
+ready when the default's provider cannot run. If a message mentions
 several bots, the last mention wins. If two bots in the group share a name, Akeru cannot tell them
 apart, so it holds the message and asks you to rename one of them. Mentions of people, such as
 `@Leo`, stay plain text and the boss answers. On mobile, a reply shows the bot's avatar and name
