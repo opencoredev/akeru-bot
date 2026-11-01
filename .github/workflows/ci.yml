@@ -136,6 +136,16 @@ jobs:
         run: |
           test -f apps/desktop/dist-electron/preload.cjs
           grep -nE "desktopBridge|getLocalEnvironmentBootstrap|PICK_FOLDER_CHANNEL|wsUrl" apps/desktop/dist-electron/preload.cjs
+          # Electron runs a sandboxed preload inside a function with these parameters; a bundle
+          # that redeclares one of them (such as setImmediate) never loads.
+          node -e '
+            const fs = require("node:fs");
+            for (const name of ["preload.cjs", "preview-pip-preload.cjs"]) {
+              const source = fs.readFileSync(`apps/desktop/dist-electron/${name}`, "utf8");
+              new Function("exports", "require", "module", "__filename", "__dirname", "process", "Buffer", "global", "setImmediate", "clearImmediate", source);
+              console.log(`${name} parses as a sandboxed preload`);
+            }
+          '
 
       - name: Build marketing site
         run: vp run build:marketing
