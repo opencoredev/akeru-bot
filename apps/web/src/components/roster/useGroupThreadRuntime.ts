@@ -11,8 +11,7 @@ import { resolveAppModelSelectionState } from "../../modelSelection";
 import {
   applyProviderInstanceSettings,
   deriveProviderInstanceEntries,
-  isProviderInstancePickerSelectable,
-  NO_PROVIDER_MODEL_SELECTION,
+  sortProviderInstanceEntries,
 } from "../../providerInstances";
 import { environmentGroupsAtom } from "../../state/bots";
 import {
@@ -42,7 +41,7 @@ import { useRosterStore } from "./rosterStore";
 import { resolveBotFileAttachment } from "./botFileAttachment";
 import { readThreadTurnAttachments, threadTitle } from "./threadRuntimeAttachments";
 import { useThreadPendingUserInput } from "./useThreadPendingUserInput";
-import { groupModelSelection } from "./groupThreadModel.logic";
+import { groupModelSelection, groupModelSelectionReady } from "./groupThreadModel.logic";
 import {
   type BotThreadFailure,
   commandFailure,
@@ -63,7 +62,10 @@ export function useGroupThreadRuntime(groupId: string) {
   const providers = useAtomValue(primaryServerProvidersAtom);
 
   const providerEntries = useMemo(
-    () => applyProviderInstanceSettings(deriveProviderInstanceEntries(providers), settings),
+    () =>
+      sortProviderInstanceEntries(
+        applyProviderInstanceSettings(deriveProviderInstanceEntries(providers), settings),
+      ),
     [providers, settings],
   );
 
@@ -144,9 +146,14 @@ export function useGroupThreadRuntime(groupId: string) {
         project.id === rememberedThread.projectId,
     ) ?? defaultProject;
 
-  const appDefaultModelSelection = useMemo(
-    () => resolveAppModelSelectionState(settings, providers),
-    [providers, settings],
+  const modelContext = useMemo(
+    () => ({
+      instanceEntries: providerEntries,
+      settings,
+      providers,
+      defaultSelection: resolveAppModelSelectionState(settings, providers),
+    }),
+    [providerEntries, providers, settings],
   );
 
   const setRuntimeMode = useAtomCommand(threadEnvironment.setRuntimeMode, {
@@ -254,21 +261,9 @@ export function useGroupThreadRuntime(groupId: string) {
         return false;
       }
 
-      const modelSelection = groupModelSelection(
-        respondingBot.engine,
-        activeProject.defaultModelSelection,
-        appDefaultModelSelection,
-      );
+      const modelSelection = groupModelSelection(respondingBot.engine, modelContext);
 
-      if (
-        !modelSelection ||
-        modelSelection.instanceId === NO_PROVIDER_MODEL_SELECTION.instanceId ||
-        !providerEntries.some(
-          (entry) =>
-            entry.instanceId === modelSelection.instanceId &&
-            isProviderInstancePickerSelectable(entry),
-        )
-      ) {
+      if (!groupModelSelectionReady(modelSelection, providerEntries)) {
         setError(
           localFailure(
             "Mention a group member with a connected provider, or connect the boss's provider.",
@@ -377,13 +372,13 @@ export function useGroupThreadRuntime(groupId: string) {
     },
     [
       activeProject,
-      appDefaultModelSelection,
       bots,
       group,
       groupId,
       groupReady,
       linkedThreadRef,
       answerPendingUserInputWithPrompt,
+      modelContext,
       pendingUserInputs,
       providerEntries,
       rememberedThread?.runtimeMode,
@@ -398,19 +393,9 @@ export function useGroupThreadRuntime(groupId: string) {
     bots.some((bot) => {
       if (bot.archivedAt !== null || !groupContainsBot(group, bot.id)) return false;
 
-      const selection = groupModelSelection(
-        bot.engine,
-        activeProject?.defaultModelSelection,
-        appDefaultModelSelection,
-      );
-
-      return (
-        selection !== null &&
-        selection.instanceId !== NO_PROVIDER_MODEL_SELECTION.instanceId &&
-        providerEntries.some(
-          (entry) =>
-            entry.instanceId === selection.instanceId && isProviderInstancePickerSelectable(entry),
-        )
+      return groupModelSelectionReady(
+        groupModelSelection(bot.engine, modelContext),
+        providerEntries,
       );
     });
 

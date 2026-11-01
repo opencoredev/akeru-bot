@@ -68,8 +68,6 @@ vi.mock("../../hooks/useSettings", () => ({
   usePrimarySettings: () => DEFAULT_UNIFIED_SETTINGS,
 }));
 
-vi.mock("../../modelSelection", () => ({ resolveAppModelSelectionState: () => null }));
-
 vi.mock("../../state/entities", () => ({
   useProjects: () => mocks.projects,
   useThreadShells: () => mocks.threadShells,
@@ -197,7 +195,11 @@ describe("group runtime errors", () => {
       },
     ];
     mocks.bots = [
-      { id: "bot-1", engine: null, archivedAt: null } as Bot,
+      {
+        id: "bot-1",
+        engine: { provider: "claudeAgent", model: "claude-opus-5-5" },
+        archivedAt: null,
+      } as Bot,
       { id: "bot-2", engine: { provider: "codex", model: "gpt-5.6-sol" }, archivedAt: null } as Bot,
     ];
 
@@ -205,6 +207,43 @@ describe("group runtime errors", () => {
     const runtime = useGroupThreadRuntime("group-1");
 
     expect(runtime.providerAvailable).toBe(true);
+  });
+
+  it("runs an engine-less member on a connected provider when the project default is not", async () => {
+    mocks.serverGroups = [{ id: "group-1" }];
+    mocks.projects = [
+      {
+        id: "project-1",
+        environmentId: mocks.primaryEnvironmentId,
+        defaultModelSelection: { instanceId: "claudeAgent", model: "claude-opus-5-5" },
+      },
+    ];
+    mocks.groups = [
+      {
+        id: "group-1",
+        name: "Project team",
+        bossBotId: "bot-1",
+        members: [{ kind: "bot", botId: BotId.make("bot-1"), role: "boss" }],
+        createdAt: "2026-09-13T00:00:00.000Z",
+        updatedAt: "2026-09-13T00:00:00.000Z",
+      },
+    ];
+    mocks.bots = [
+      { id: "bot-1", engine: null, archivedAt: null, runtimeMode: "full-access" as const } as Bot,
+    ];
+
+    hooks.beginRender();
+    const runtime = useGroupThreadRuntime("group-1");
+
+    expect(runtime.providerAvailable).toBe(true);
+    await expect(runtime.send("Plan the launch", [])).resolves.toBe(true);
+    expect(mocks.startTurn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        input: expect.objectContaining({
+          modelSelection: expect.objectContaining({ instanceId: "codex", model: "gpt-5-codex" }),
+        }),
+      }),
+    );
   });
 
   it("does not count an archived member as an available group provider", () => {
@@ -222,7 +261,11 @@ describe("group runtime errors", () => {
       },
     ];
     mocks.bots = [
-      { id: "bot-1", engine: null, archivedAt: null } as Bot,
+      {
+        id: "bot-1",
+        engine: { provider: "claudeAgent", model: "claude-opus-5-5" },
+        archivedAt: null,
+      } as Bot,
       {
         id: "bot-2",
         engine: { provider: "codex", model: "gpt-5.6-sol" },
