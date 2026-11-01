@@ -227,6 +227,7 @@ describe("desktop startup evidence and cleanup", () => {
     "main window render process gone",
     "main window failed to load",
     "Failed to load URL",
+    "Unable to load preload script",
   ])("fails immediately on %s after readiness", async (failure) => {
     const result = launch();
     app.stdout.emit("data", ready);

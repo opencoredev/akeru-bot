@@ -8,7 +8,7 @@ import * as NodeURL from "node:url";
 const desktopDir = NodePath.resolve(NodePath.dirname(NodeURL.fileURLToPath(import.meta.url)), "..");
 
 const fatalPattern =
-  /Cannot find module|MODULE_NOT_FOUND|Refused to execute|Uncaught\b|fatal startup error|render-process-gone|main window render process gone|main window failed to load|renderer process crashed|Failed to load URL/i;
+  /Cannot find module|MODULE_NOT_FOUND|Refused to execute|Uncaught\b|fatal startup error|render-process-gone|main window render process gone|main window failed to load|renderer process crashed|Failed to load URL|Unable to load preload script/i;
 
 const readinessMarkers = ["backend ready", "main window created"];
 
