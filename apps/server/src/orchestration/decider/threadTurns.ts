@@ -154,32 +154,35 @@ export const decideThreadTurns = Effect.fn("decideThreadTurns")(function* ({
           });
         }
 
-        if (!senderIsMember) {
-          if (personMembers.length === 0 && command.senderCanManageGroups === true) {
-            personAssignedEvent = {
-              ...(yield* withEventBase({
-                aggregateKind: "group",
-                aggregateId: group.id,
-                occurredAt: command.createdAt,
-                commandId: command.commandId,
-              })),
-              type: "group.person-assigned",
-              payload: {
-                groupId: group.id,
-                person: {
-                  kind: "person",
-                  personId: command.senderPersonId,
-                  displayName: command.senderDisplayName ?? "Host",
-                },
-                updatedAt: command.createdAt,
+        if (!senderIsMember && command.senderCanManageGroups !== true) {
+          return yield* new OrchestrationCommandInvariantError({
+            commandType: command.type,
+            detail: `Person '${command.senderPersonId}' is not a member of group '${group.id}'.`,
+          });
+        }
+
+        // An administrator may send to any group: the desktop app signs in with a new session
+        // on each launch, so its person ID changes and stops matching an earlier membership.
+        // A group without people adopts the administrator as its member.
+        if (!senderIsMember && personMembers.length === 0) {
+          personAssignedEvent = {
+            ...(yield* withEventBase({
+              aggregateKind: "group",
+              aggregateId: group.id,
+              occurredAt: command.createdAt,
+              commandId: command.commandId,
+            })),
+            type: "group.person-assigned",
+            payload: {
+              groupId: group.id,
+              person: {
+                kind: "person",
+                personId: command.senderPersonId,
+                displayName: command.senderDisplayName ?? "Host",
               },
-            };
-          } else {
-            return yield* new OrchestrationCommandInvariantError({
-              commandType: command.type,
-              detail: `Person '${command.senderPersonId}' is not a member of group '${group.id}'.`,
-            });
-          }
+              updatedAt: command.createdAt,
+            },
+          };
         }
       } else if (command.respondingBotId !== undefined) {
         return yield* new OrchestrationCommandInvariantError({

@@ -486,6 +486,33 @@ it.layer(NodeServices.layer)("group membership decider", (it) => {
     }),
   );
 
+  it.effect("lets an administrator send after relaunching as a new session", () =>
+    Effect.gen(function* () {
+      const relaunchedId = AuthSessionId.make("person-relaunched-desktop");
+
+      const result = yield* decideOrchestrationCommand({
+        command: {
+          ...startTurnCommand(),
+          senderPersonId: relaunchedId,
+          senderDisplayName: "Akeru Bot Desktop",
+          senderCanManageGroups: true,
+        },
+        readModel: makeReadModel({
+          bots: [makeBot({ id: BOSS_ID }), makeBot({ id: SPECIALIST_ID })],
+          groups: [makeGroup()],
+          threads: [makeGroupThread()],
+        }),
+      });
+
+      const events = Array.isArray(result) ? result : [result];
+
+      expect(events.map((event) => event.type)).toEqual([
+        "thread.message-sent",
+        "thread.turn-start-requested",
+      ]);
+    }),
+  );
+
   it.effect("rejects an ordinary person from a legacy bot-only group", () =>
     Effect.gen(function* () {
       const error = yield* decideOrchestrationCommand({
