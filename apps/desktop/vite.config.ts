@@ -46,6 +46,10 @@ export default defineConfig({
       sourcemap: true,
       outExtensions: () => ({ js: ".cjs" }),
       entry: ["src/preload.ts"],
+      // Electron runs sandboxed preloads inside a function whose parameters include
+      // setImmediate; bundled effect declares a top-level `const setImmediate`, so
+      // give the bundle its own scope or the preload fails to load.
+      outputOptions: { intro: "(() => {", outro: "})();" },
       deps: {
         // Sandboxed preloads can require Electron only, so bundle the contract decoders.
         alwaysBundle: (id) =>
@@ -68,6 +72,10 @@ export default defineConfig({
       sourcemap: true,
       outExtensions: () => ({ js: ".cjs" }),
       entry: ["src/preview-pip-preload.ts"],
+      // Electron runs sandboxed preloads inside a function whose parameters include
+      // setImmediate; bundled effect declares a top-level `const setImmediate`, so
+      // give the bundle its own scope or the preload fails to load.
+      outputOptions: { intro: "(() => {", outro: "})();" },
       deps: {
         // Sandboxed preloads can require Electron only, so bundle the contract decoders.
         alwaysBundle: (id) =>
