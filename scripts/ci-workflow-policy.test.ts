@@ -11,6 +11,7 @@ type Step = {
   readonly run?: string;
   readonly uses?: string;
   readonly with?: Readonly<Record<string, string | boolean>>;
+  readonly env?: Readonly<Record<string, string>>;
 };
 
 type Job = {
@@ -96,6 +97,12 @@ describe("CI workflow budget", () => {
     for (const result of ["STATIC", "PACKAGES", "SERVER"]) {
       expect(gateCommand).toContain(`test "$${result}" = success`);
     }
+
+    expect(gate?.steps.find((step) => step.run?.includes("= success"))?.env).toEqual({
+      STATIC: "${{ needs.static.result }}",
+      PACKAGES: "${{ needs.packages.result }}",
+      SERVER: "${{ needs.server.result }}",
+    });
 
     const dispatchAuthorization = ci.jobs.static?.steps.find(
       (step) => step.name === "Authorize version-branch dispatch",
