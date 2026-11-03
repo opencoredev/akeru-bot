@@ -62,7 +62,7 @@ export const commonMessagesCatalog = {
   "Say hello to {name}": "向 {name} 打个招呼",
   "Waking up {name}": "正在唤醒 {name}",
   "Step {number} of {total}": "第 {number} 步，共 {total} 步",
-  "Skip setup?": "跳过设置？",
+  "Skip for now?": "先跳过？",
   "Waking {name} up": "正在唤醒 {name}",
   "I'll start by…": "我会先…",
   "What do you want help with?": "你需要什么帮助？",

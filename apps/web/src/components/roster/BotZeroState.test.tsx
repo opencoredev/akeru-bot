@@ -29,10 +29,10 @@ describe("BotZeroState", () => {
   it("explains what a bot is and offers to create one", () => {
     const markup = renderToStaticMarkup(<BotZeroState />);
 
-    expect(markup).toContain("Create your first bot");
-    expect(markup).toContain("A bot is a teammate you chat with.");
+    expect(markup).toContain("Create a teammate");
+    expect(markup).toContain("Name a bot when you are ready to chat.");
     expect(markup).toContain(">Create bot</button>");
-    expect(markup).not.toContain("Create a bot to start chatting");
+    expect(markup).not.toContain("Create your first bot");
   });
 
   it("says why it cannot create a bot without an environment", () => {

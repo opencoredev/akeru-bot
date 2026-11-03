@@ -13,8 +13,9 @@ Download the current installer from
 - Windows: Windows 10 or 11 x64 installer
 - Linux: x86_64 AppImage
 
-Open the app and follow setup to connect an account and create a bot. You can also connect an account
-later under **Settings > Providers**. The desktop app manages the local server.
+Open the app and follow setup to connect an account. Akeru then creates a teammate bot and opens
+its chat. You can also connect an account later under **Settings > Providers**. The desktop app
+manages the local server.
 
 ## Command-line server
 

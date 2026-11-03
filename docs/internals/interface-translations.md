@@ -21,7 +21,7 @@ Never pass these values through translation lookup:
 - Stored user or bot messages, instructions, bot names, or conversation titles.
 - Source code, filesystem paths, URLs, model names, connector names, or provider output.
 - Protocol identifiers, persisted enum values, error tags, and log messages.
-- Interface text that becomes user content, such as the onboarding bot brief, reply quotes inserted into the prompt, and feedback drafts. It is sent as a message, so it stays in the source language.
+- Interface text that becomes user content, such as reply quotes inserted into the prompt and feedback drafts. It is sent as a message, so it stays in the source language.
 
 Display translated explanatory error copy by matching a stable error code at the client boundary. Keep raw provider diagnostics intact and separate. Unknown codes need a generic English explanation, not a translation key. Adding translation infrastructure does not make existing raw error displays localized.
 

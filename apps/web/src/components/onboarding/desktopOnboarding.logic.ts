@@ -10,7 +10,6 @@ export {
   clearDesktopOnboardingHandoff,
   DEFAULT_DESKTOP_ONBOARDING_DRAFT,
   DESKTOP_ONBOARDING_COMPLETED_STORAGE_KEY,
-  DESKTOP_ONBOARDING_GOAL_MAX_LENGTH,
   DESKTOP_ONBOARDING_HANDOFF_STORAGE_KEY,
   DESKTOP_ONBOARDING_LEGACY_HANDOFF_STORAGE_KEY,
   DESKTOP_ONBOARDING_STEPS,
@@ -35,6 +34,13 @@ export {
 } from "./desktopOnboardingEngine";
 
 export {
+  DESKTOP_ONBOARDING_TEAMMATE_NAMES,
+  desktopOnboardingDefaultProjectCreateInput,
+  pickDesktopOnboardingTeammateName,
+  workspaceTitleFromCwd,
+} from "./desktopOnboardingTeammate";
+
+export {
   canStartDesktopOnboardingReveal,
   DESKTOP_ONBOARDING_CELEBRATION_PIECES,
   DESKTOP_ONBOARDING_DESTINATION_TIMEOUT_MS,
@@ -53,18 +59,6 @@ export {
   desktopOnboardingHandoffStatuses,
 } from "./desktopOnboardingHandoff";
 
-/**
- * Short label for the goal, shown live in the preview while the user is still
- * typing. Collapses newlines so a multi-line answer still reads on one line.
- */
-export function resolveDesktopOnboardingFocusLabel(goal: string): string | null {
-  const summary = goal.trim().replace(/\s+/g, " ");
-
-  if (summary.length === 0) return null;
-
-  return summary.length > 48 ? `${summary.slice(0, 47).trimEnd()}…` : summary;
-}
-
 export function shouldShowDesktopOnboarding(input: {
   readonly desktop: boolean;
   readonly rosterLoaded: boolean;
@@ -82,20 +76,9 @@ export function recoverMissingDesktopOnboardingBot(
   draft: DesktopOnboardingDraft,
   serverBotIds: readonly string[],
 ): DesktopOnboardingDraft {
-  if (draft.step !== "message" || draft.botId === null || serverBotIds.includes(draft.botId)) {
-    return draft;
-  }
+  if (draft.botId === null || serverBotIds.includes(draft.botId)) return draft;
 
-  return { ...draft, step: "identity", botId: null };
-}
-
-export function recoverDisappearedDesktopOnboardingBot(
-  draft: DesktopOnboardingDraft,
-  readyBotId: string | null,
-): DesktopOnboardingDraft {
-  if (draft.step !== "message" || draft.botId === null || draft.botId !== readyBotId) return draft;
-
-  return { ...draft, step: "identity", botId: null };
+  return { ...draft, botId: null };
 }
 
 export function stepNumber(step: DesktopOnboardingStep): number {

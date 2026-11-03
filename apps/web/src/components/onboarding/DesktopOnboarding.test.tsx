@@ -376,11 +376,8 @@ describe("onboarding API-key connections", () => {
     await render("anthropic");
     await click("Connect Claude");
     expect(mocks.start).toHaveBeenCalledWith({ environmentId, input: { provider: "anthropic" } });
-    expect(mocks.open).toHaveBeenCalledWith(
-      "https://claude.example/login",
-      "_blank",
-      "noopener,noreferrer",
-    );
+    // Device-code / OAuth flows show the code first; the user opens sign-in.
+    expect(mocks.open).not.toHaveBeenCalled();
     expect(mocks.form).toBeNull();
     await act(async () => mocks.input?.onChange({ currentTarget: { value: "oauth-code" } }));
     await click("Connect");
@@ -405,7 +402,6 @@ describe("onboarding API-key connections", () => {
         />,
       ),
     ).toContain("text-success-indicator-foreground");
-    await click("Continue");
     expect(mocks.next).toHaveBeenCalledOnce();
     expect(mocks.start).not.toHaveBeenCalled();
   });

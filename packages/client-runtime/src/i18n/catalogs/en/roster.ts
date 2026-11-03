@@ -121,7 +121,9 @@ export const rosterCatalog = {
     "Choose a custom avatar color. Current color {color}",
   "Avatar source": "Avatar source",
   "Avatar preview": "Avatar preview",
-  "Create your first bot": "Create your first bot",
+  "Create a teammate": "Create a teammate",
+  "Name a bot when you are ready to chat. Connect a provider in Settings first if you want it to answer right away.":
+    "Name a bot when you are ready to chat. Connect a provider in Settings first if you want it to answer right away.",
   "No plugins enabled": "No plugins enabled",
   "Plugins, {status}": "Plugins, {status}",
   "Plugins · {status}": "Plugins · {status}",

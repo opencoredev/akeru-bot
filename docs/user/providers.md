@@ -5,7 +5,7 @@ Akeru Bot connects to provider subscriptions and API keys from **Settings → Pr
 ChatGPT, Claude, Grok, Kimi For Coding, and OpenCode Go run through Akeru's built-in runtime.
 You do not need their command-line tools installed or signed in to create a bot, chat, or generate
 chat titles and branch names with ChatGPT, Claude, or Grok. After connecting an account in Akeru,
-choose its models in onboarding or the bot's settings. If the account is disconnected, reconnect
+choose its models in the bot's settings. If the account is disconnected, reconnect
 it in **Settings → Providers**.
 
 Model lists update on their own. The environment server checks models.dev for new provider models
