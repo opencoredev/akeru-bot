@@ -15,7 +15,12 @@ type Step = {
 
 type Job = {
   readonly if?: string;
+  readonly needs?: ReadonlyArray<string>;
   readonly "runs-on": string;
+  readonly strategy?: {
+    readonly "fail-fast"?: boolean;
+    readonly matrix?: Readonly<Record<string, ReadonlyArray<number | string>>>;
+  };
   readonly steps: ReadonlyArray<Step>;
 };
 
@@ -34,7 +39,7 @@ function workflow(path: string): Workflow {
 }
 
 describe("CI workflow budget", () => {
-  it("validates ready pull requests in one 4-vCPU job", () => {
+  it("validates ready pull requests in parallel 4-vCPU jobs behind one required check", () => {
     const ci = workflow(".github/workflows/ci.yml");
 
     const commands = Object.values(ci.jobs).flatMap((job) =>
@@ -63,16 +68,36 @@ describe("CI workflow budget", () => {
     expect(ci.on).not.toHaveProperty("merge_group");
     expect(ci.concurrency?.group).toBe("ci-${{ github.event.pull_request.number || github.ref }}");
     expect(ci.concurrency?.["cancel-in-progress"]).toBe(true);
-    expect(Object.keys(ci.jobs)).toEqual(["check"]);
-    expect(ci.jobs.check?.if).toBe(
-      "${{ github.event_name == 'workflow_dispatch' || github.event.pull_request.draft == false }}",
-    );
-    expect(ci.jobs.check?.["runs-on"]).toBe("tenki-standard-medium-4c-8g");
-    expect(ci.jobs.check?.steps.find((step) => step.name === "Checkout")?.with?.ref).toBe(
-      "${{ inputs.expected_sha || github.sha }}",
-    );
+    expect(Object.keys(ci.jobs)).toEqual(["static", "packages", "server", "check"]);
 
-    const dispatchAuthorization = ci.jobs.check?.steps.find(
+    const readyOnly =
+      "${{ github.event_name == 'workflow_dispatch' || github.event.pull_request.draft == false }}";
+
+    for (const name of ["static", "packages", "server"]) {
+      const job = ci.jobs[name];
+      expect(job?.if).toBe(readyOnly);
+      expect(job?.["runs-on"]).toBe("tenki-standard-medium-4c-8g");
+      expect(job?.steps.find((step) => step.name === "Checkout")?.with?.ref).toBe(
+        "${{ inputs.expected_sha || github.sha }}",
+      );
+    }
+
+    // The ruleset requires `Repository checks`, so that job must fail unless every job passed,
+    // and still report for ready pull requests when a job it needs failed.
+    const gate = ci.jobs.check;
+    expect(gate?.needs).toEqual(["static", "packages", "server"]);
+    expect(gate?.if).toBe(
+      "${{ always() && (github.event_name == 'workflow_dispatch' || github.event.pull_request.draft == false) }}",
+    );
+    expect(gate?.["runs-on"]).toBe("tenki-standard-medium-4c-8g");
+
+    const gateCommand = gate?.steps.map((step) => step.run ?? "").join("\n") ?? "";
+
+    for (const result of ["STATIC", "PACKAGES", "SERVER"]) {
+      expect(gateCommand).toContain(`test "$${result}" = success`);
+    }
+
+    const dispatchAuthorization = ci.jobs.static?.steps.find(
       (step) => step.name === "Authorize version-branch dispatch",
     );
 
@@ -84,11 +109,11 @@ describe("CI workflow budget", () => {
     expect(dispatchAuthorization?.run).toContain("github-actions[bot]");
     expect(dispatchAuthorization?.run).toContain('test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"');
 
-    const stableVersionGuard = ci.jobs.check?.steps.find(
+    const stableVersionGuard = ci.jobs.static?.steps.find(
       (step) => step.name === "Protect stable release versions",
     );
 
-    const changesetGuard = ci.jobs.check?.steps.find(
+    const changesetGuard = ci.jobs.static?.steps.find(
       (step) => step.name === "Require a changeset decision",
     );
 
@@ -132,16 +157,21 @@ describe("CI workflow budget", () => {
       expect(commands.some((candidate) => candidate.includes(command))).toBe(true);
     }
 
-    expect(ci.jobs.check).not.toHaveProperty("strategy");
+    expect(ci.jobs.static).not.toHaveProperty("strategy");
+
+    // Each shard runs its files serially (fileParallelism: false) on its own runner.
+    const server = ci.jobs.server;
+    expect(server?.strategy?.["fail-fast"]).toBe(false);
+    expect(server?.strategy?.matrix?.shard).toEqual([1, 2, 3, 4]);
 
     const serverCommand =
-      commands.find((command) => command.includes("vp run --filter akeru-bot test")) ?? "";
+      server?.steps.find((step) => step.run?.includes("vp run --filter akeru-bot test"))?.run ?? "";
 
     expect(serverCommand).toContain("vp run --filter akeru-bot test");
     expect(serverCommand).toContain(
       "--exclude integration/orchestrationEngine.integration.test.ts",
     );
-    expect(serverCommand).not.toContain("--shard");
+    expect(serverCommand).toContain("--shard=${{ matrix.shard }}/4");
   });
 
   it("coalesces version updates on a 4-vCPU runner", () => {
