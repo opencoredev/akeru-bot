@@ -4,18 +4,23 @@
 
 [`.github/workflows/ci.yml`](../../.github/workflows/ci.yml) runs on each ready pull request revision.
 Draft pull requests do not use a runner. A new revision cancels the older run for that pull request.
-Maintainers can also dispatch the workflow manually for diagnostics. The workflow uses one 4-vCPU
-`tenki-standard-medium-4c-8g` Linux runner.
+Maintainers can also dispatch the workflow manually for diagnostics. Every job uses a 4-vCPU
+`tenki-standard-medium-4c-8g` Linux runner, billed per second, and the jobs run in parallel.
 Issue-label, PR-vouch, and PR-size jobs also use Tenki Linux runners through GitHub Actions.
 
-- **Repository checks.** The job rejects external local dependencies, installs the committed
-  lockfile once, checks lint and formatting, runs workspace type checks,
-  validates the plugin directory and contribution policy, builds the desktop pipeline, checks the
-  preload output, builds the marketing site, tests shipped packages and the resource monitor, and
-  checks release-only configuration. Relay and mobile-production packages are excluded. The same
-  job runs the complete server suite. It excludes
+- **Static checks and builds.** The job rejects external local dependencies, installs the
+  committed lockfile, checks lint and formatting, runs workspace type checks, validates the plugin
+  directory and contribution policy, builds the desktop pipeline, checks the preload output, builds
+  the marketing site, tests the resource monitor, and checks release-only configuration. On a
+  dispatched run it also authorizes the version-branch revision.
+- **Package tests.** Tests the shipped desktop and shared packages. Relay and mobile-production
+  packages are excluded.
+- **Server tests (1/4 to 4/4).** Four Vitest shards split the complete server suite by file. Each
+  shard still runs its files one at a time (`fileParallelism: false`), because running server
+  files in parallel on one machine causes load-sensitive flakes. The suite excludes
   `orchestrationEngine.integration.test.ts` until the executor stack
   restores its test adapter and stops the fixture from calling OpenAI with a test credential.
+- **Repository checks.** Waits for the jobs above and passes only when all of them passed.
 
 The repository ruleset requires the `Repository checks` result before a pull request can
 merge. Direct pushes to `main` cannot bypass this gate. Release workflows start after the validated

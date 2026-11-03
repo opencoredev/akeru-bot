@@ -1,4 +1,6 @@
-# Tenki CI validates pull requests before they reach main.
+# Tenki CI validates pull requests before they reach main. Static checks,
+# package tests, and four server-test shards run in parallel; the
+# `Repository checks` job reports their combined result.
 
 name: CI
 
@@ -21,11 +23,11 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  check:
-    name: Repository checks
+  static:
+    name: Static checks and builds
     if: ${{ github.event_name == 'workflow_dispatch' || github.event.pull_request.draft == false }}
     runs-on: tenki-standard-medium-4c-8g
-    timeout-minutes: 45
+    timeout-minutes: 30
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -140,14 +142,6 @@ jobs:
       - name: Build marketing site
         run: vp run build:marketing
 
-      - name: Test shipped desktop and shared packages
-        run: vp run --parallel --concurrency-limit 4 --filter '!akeru-bot' --filter '!@akeru/monorepo' --filter '!@akeru/mobile' test
-
-      - name: Test isolated server suite
-        run: >-
-          vp run --filter akeru-bot test
-          --exclude integration/orchestrationEngine.integration.test.ts
-
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
         with:
@@ -161,3 +155,83 @@ jobs:
 
       - name: Exercise release-only configuration
         run: vp run release:smoke
+
+  packages:
+    name: Package tests
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.pull_request.draft == false }}
+    runs-on: tenki-standard-medium-4c-8g
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.expected_sha || github.sha }}
+
+      - name: Setup Vite+
+        uses: voidzero-dev/setup-vp@v1
+        with:
+          node-version-file: package.json
+          cache: true
+          run-install: false
+
+      - name: Install from the committed lockfile
+        run: vp install --frozen-lockfile
+
+      - name: Ensure Electron runtime is installed
+        run: vp run --filter @akeru/desktop ensure:electron
+
+      - name: Test shipped desktop and shared packages
+        run: vp run --parallel --concurrency-limit 4 --filter '!akeru-bot' --filter '!@akeru/monorepo' --filter '!@akeru/mobile' test
+
+  # The server suite runs its files one at a time (fileParallelism: false) to
+  # avoid load-sensitive flakes. Each shard keeps that, on its own runner.
+  server:
+    name: Server tests (${{ matrix.shard }}/4)
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.pull_request.draft == false }}
+    runs-on: tenki-standard-medium-4c-8g
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.expected_sha || github.sha }}
+
+      - name: Setup Vite+
+        uses: voidzero-dev/setup-vp@v1
+        with:
+          node-version-file: package.json
+          cache: true
+          run-install: false
+
+      - name: Install from the committed lockfile
+        run: vp install --frozen-lockfile
+
+      - name: Test isolated server suite
+        run: >-
+          vp run --filter akeru-bot test
+          --exclude integration/orchestrationEngine.integration.test.ts
+          --shard=${{ matrix.shard }}/4
+
+  # The repository ruleset requires this job. It passes only when every job
+  # above passed, so the required check name stays stable as jobs change.
+  check:
+    name: Repository checks
+    needs: [static, packages, server]
+    if: ${{ always() && (github.event_name == 'workflow_dispatch' || github.event.pull_request.draft == false) }}
+    runs-on: tenki-standard-medium-4c-8g
+    timeout-minutes: 5
+    steps:
+      - name: Require every job to pass
+        env:
+          STATIC: ${{ needs.static.result }}
+          PACKAGES: ${{ needs.packages.result }}
+          SERVER: ${{ needs.server.result }}
+        run: |
+          printf 'static=%s packages=%s server=%s\n' "$STATIC" "$PACKAGES" "$SERVER"
+          test "$STATIC" = success
+          test "$PACKAGES" = success
+          test "$SERVER" = success
