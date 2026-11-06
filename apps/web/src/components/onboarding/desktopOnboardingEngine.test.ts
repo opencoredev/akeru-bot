@@ -112,4 +112,33 @@ describe("desktop onboarding engine", () => {
     ).toBeNull();
     expect(resolveDesktopOnboardingEngine(providerId, [{ ...provider, models: [] }])).toBeNull();
   });
+
+  it("uses a ready Claude Code login when the Claude API key is not connected", () => {
+    const apiKey = {
+      instanceId: "claudeAgent",
+      driver: "claudeAgent",
+      enabled: true,
+      installed: true,
+      status: "warning",
+      models: [{ slug: "claude-opus-5-5", isDefault: true }],
+    };
+
+    const claudeCode = {
+      ...apiKey,
+      instanceId: "claudeCode",
+      driver: "claudeCode",
+      status: "ready",
+    };
+
+    expect(resolveDesktopOnboardingEngine("anthropic", [apiKey, claudeCode])).toEqual({
+      provider: "claudeCode",
+      model: "claude-opus-5-5",
+    });
+    expect(
+      resolveDesktopOnboardingEngine("anthropic", [{ ...apiKey, status: "ready" }, claudeCode]),
+    ).toEqual({ provider: "claudeAgent", model: "claude-opus-5-5" });
+    expect(
+      resolveDesktopOnboardingEngine("anthropic", [apiKey, { ...claudeCode, status: "error" }]),
+    ).toEqual({ provider: "claudeAgent", model: "claude-opus-5-5" });
+  });
 });

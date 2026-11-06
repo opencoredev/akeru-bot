@@ -28,6 +28,7 @@ import { SignInCodeCopy } from "../settings/SignInCodeCopy";
 import { SUBSCRIPTION_PROVIDERS } from "../settings/subscriptionProviders";
 import type { DesktopOnboardingDraft } from "./desktopOnboardingDraft";
 import { ONBOARDING_HEADING_CLASS } from "./onboardingStyles";
+import { OnboardingClaudeCodeStep, useClaudeCodeLoginReady } from "./OnboardingClaudeCodeStep";
 import type { OnboardingTranslate } from "./onboardingTranslate";
 
 function commandError(
@@ -82,6 +83,8 @@ export function SubscriptionStep({
   const [busy, setBusy] = useState(false);
   const [code, setCode] = useState("");
   const [keyMode, setKeyMode] = useState(false);
+  const [claudeCodeMode, setClaudeCodeMode] = useState(false);
+  const claudeCodeReady = useClaudeCodeLoginReady(environmentId);
   const [baseUrl, setBaseUrl] = useState("");
   const [error, setError] = useState<string | null>(null);
 
@@ -91,7 +94,13 @@ export function SubscriptionStep({
   );
 
   const selected = SUBSCRIPTION_PROVIDERS.find((item) => item.id === draft.providerId)!;
-  const connected = captureMode || statusByProvider.get(draft.providerId)?.connected === true;
+  // Claude also connects through the user's own Claude Code login.
+  const offersClaudeCode = draft.providerId === "anthropic" && !captureMode;
+
+  const connected =
+    captureMode ||
+    statusByProvider.get(draft.providerId)?.connected === true ||
+    (offersClaudeCode && claudeCodeReady);
 
   const settle = useCallback(
     (progress: SubscriptionAuthLoginProgress) => {
@@ -286,6 +295,16 @@ export function SubscriptionStep({
     }
   };
 
+  if (claudeCodeMode && offersClaudeCode) {
+    return (
+      <OnboardingClaudeCodeStep
+        environmentId={environmentId}
+        onBack={() => setClaudeCodeMode(false)}
+        onContinue={onContinue}
+      />
+    );
+  }
+
   if (keyMode) {
     return (
       <div className="space-y-4">
@@ -381,7 +400,8 @@ export function SubscriptionStep({
 
           const providerConnected = captureMode
             ? active
-            : statusByProvider.get(definition.id)?.connected === true;
+            : statusByProvider.get(definition.id)?.connected === true ||
+              (definition.id === "anthropic" && claudeCodeReady);
 
           return (
             <button
@@ -427,6 +447,16 @@ export function SubscriptionStep({
         <p role="alert" className="text-sm text-destructive">
           {error}
         </p>
+      ) : null}
+      {!connected && offersClaudeCode ? (
+        <Button
+          className="w-full"
+          variant="outline"
+          disabled={busy}
+          onClick={() => setClaudeCodeMode(true)}
+        >
+          {t("Use your Claude Code login")}
+        </Button>
       ) : null}
       {!connected && !providerRequiresApiKey(selected.id) ? (
         <Button className="w-full" variant="outline" disabled={busy} onClick={openKey}>

@@ -206,6 +206,10 @@ Reading an existing assistant message on the current client speaker. Identity, s
 
 A consumer AI account that a user connects through OAuth, such as ChatGPT, Claude, Grok, or Kimi For Coding. OpenCode Go uses an API key instead of OAuth. The environment server stores the credential and gives a run only the access token it needs. See [subscription authentication](./subscription-auth.md).
 
+### Claude Code login
+
+A Claude connection that runs the user's own installed Claude Code with the login from `claude auth login`, through the Claude Agent SDK. Akeru never holds that login. The driver kind is `claudeCode`; the connection shows on the Claude page beside the API key. See [providers.md](./providers.md#claude-code-login).
+
 ### Image provider
 
 The subscription that creates images for a bot, ChatGPT or Grok, chosen per bot or by the global default and independent of the bot's chat provider. Bots reach it through the `generate_image` tool, and each finished image is saved as an ordinary chat attachment. See [image-generation.md](./image-generation.md).
@@ -220,7 +224,7 @@ The live backend agent implementation and its event stream. Desktop turns cross 
 
 #### Provider
 
-The backend agent runtime that actually performs work. Six drivers ship built in: Codex, Claude, Grok, Kimi For Coding, OpenCode, and OpenCode Go. See [ProviderService.ts][14], [ProviderAdapter.ts][15], and [CodexAdapter.ts][17] as a representative adapter.
+The backend agent runtime that actually performs work. Seven drivers ship built in: Codex, Claude, Claude Code login, Grok, Kimi For Coding, OpenCode, and OpenCode Go. See [ProviderService.ts][14], [ProviderAdapter.ts][15], and [CodexAdapter.ts][17] as a representative adapter.
 
 #### Session
 

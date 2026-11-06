@@ -112,6 +112,39 @@ it.layer(NodeServices.layer)("server settings", (it) => {
     }).pipe(Effect.provide(makeServerSettingsLayer())),
   );
 
+  it.effect("replaces a saved selection on a driver without text generation", () =>
+    Effect.gen(function* () {
+      const serverConfig = yield* ServerConfig.ServerConfig;
+      const fileSystem = yield* FileSystem.FileSystem;
+      const serverSettings = yield* ServerSettingsModule.ServerSettingsService;
+      yield* fileSystem.writeFileString(
+        serverConfig.settingsPath,
+        '{"providerInstances":{"claude-login":{"driver":"claudeCode","enabled":true,"config":{}}},"textGenerationModelSelection":{"instanceId":"claude-login","model":"claude-sonnet-4-6"}}',
+      );
+
+      const settings = yield* serverSettings.getSettings;
+
+      assert.equal(settings.textGenerationModelSelection.instanceId, "codex");
+    }).pipe(Effect.provide(makeServerSettingsLayer())),
+  );
+
+  it.effect("moves an unsupported selection to an enabled named account", () =>
+    Effect.gen(function* () {
+      const serverConfig = yield* ServerConfig.ServerConfig;
+      const fileSystem = yield* FileSystem.FileSystem;
+      const serverSettings = yield* ServerSettingsModule.ServerSettingsService;
+      yield* fileSystem.writeFileString(
+        serverConfig.settingsPath,
+        '{"providers":{"codex":{"enabled":false},"claudeAgent":{"enabled":false}},"providerInstances":{"claude-login":{"driver":"claudeCode","enabled":true,"config":{}},"codex-work":{"driver":"codex","enabled":true,"config":{}}},"textGenerationModelSelection":{"instanceId":"claude-login","model":"claude-sonnet-4-6"}}',
+      );
+
+      const settings = yield* serverSettings.getSettings;
+
+      assert.equal(settings.textGenerationModelSelection.instanceId, "codex-work");
+      assert.notEqual(settings.textGenerationModelSelection.model, "claude-sonnet-4-6");
+    }).pipe(Effect.provide(makeServerSettingsLayer())),
+  );
+
   it.effect("skips providers without text generation when leaving Cursor", () =>
     Effect.gen(function* () {
       const serverConfig = yield* ServerConfig.ServerConfig;

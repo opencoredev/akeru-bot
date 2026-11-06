@@ -72,6 +72,10 @@
       "types": "./src/providerAuth.ts",
       "default": "./src/providerAuth.ts"
     },
+    "./claude-code-login": {
+      "types": "./src/claudeCodeLogin.ts",
+      "default": "./src/claudeCodeLogin.ts"
+    },
     "./provider-access": {
       "types": "./src/providerAccessGuide.ts",
       "default": "./src/providerAccessGuide.ts"

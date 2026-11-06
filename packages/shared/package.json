@@ -80,6 +80,10 @@
       "types": "./src/delegationProviders.ts",
       "import": "./src/delegationProviders.ts"
     },
+    "./textGenerationProviders": {
+      "types": "./src/textGenerationProviders.ts",
+      "import": "./src/textGenerationProviders.ts"
+    },
     "./delegationSummaryText": {
       "types": "./src/delegationSummaryText.ts",
       "import": "./src/delegationSummaryText.ts"

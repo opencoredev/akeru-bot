@@ -93,3 +93,81 @@ export function namedActionRiskClass<Input>(toolName: string, input: Input): Bot
     ? "read"
     : "write-workspace";
 }
+
+/** Claude Code tools that only read or plan. */
+const CLAUDE_CODE_READ_TOOL_NAMES: ReadonlySet<string> = new Set([
+  "Read",
+  "Glob",
+  "Grep",
+  "LS",
+  "NotebookRead",
+  "WebFetch",
+  "WebSearch",
+  "TodoWrite",
+  "BashOutput",
+  "ToolSearch",
+  "ListMcpResourcesTool",
+  "ReadMcpResourceTool",
+  "AskUserQuestion",
+  "ExitPlanMode",
+  "Task",
+  "Agent",
+]);
+
+/** Claude Code tools that change files in the bot's workspace. */
+const CLAUDE_CODE_WORKSPACE_TOOL_NAMES: ReadonlySet<string> = new Set([
+  "Edit",
+  "MultiEdit",
+  "Write",
+  "NotebookEdit",
+  "KillShell",
+  "KillBash",
+]);
+
+/** Akeru's own MCP server, as Claude Code names its tools. */
+const AKERU_MCP_TOOL_PREFIX = "mcp__akeru__";
+
+/**
+ * Akeru MCP tools that share a catalog tool's risk. Image generation sends the prompt to the
+ * image provider, so it is `write-outside` like `GenerateImage`, not a guess from its name.
+ */
+const AKERU_MCP_TOOL_RISK_CLASSES = new Map<string, BotActionRiskClass>([
+  ["memory", "write-workspace"],
+  ["generate_image", AKERU_TOOL_BASE_RISK_CLASSES.GenerateImage],
+]);
+
+/**
+ * The risk class of one Claude Code tool call. Claude Code runs on the user's
+ * own machine, so its shell is `environment-access`. A file tool that reaches
+ * outside the bot's workspace reads the user's computer (`environment-access`)
+ * or writes outside (`write-outside`); the caller resolves the path and passes
+ * `reach`. Tools from MCP servers other than Akeru's, and tools this list does
+ * not know, are `write-outside`.
+ */
+export function claudeCodeToolRiskClass<Input>(
+  toolName: string,
+  input: Input,
+  reach: "inside" | "outside" = "inside",
+): BotActionRiskClass {
+  if (criticalAkeruAction(toolName, input) !== null) return "write-outside";
+
+  if (CLAUDE_CODE_READ_TOOL_NAMES.has(toolName)) {
+    return reach === "outside" ? "environment-access" : "read";
+  }
+
+  if (CLAUDE_CODE_WORKSPACE_TOOL_NAMES.has(toolName)) {
+    return reach === "outside" ? "write-outside" : "write-workspace";
+  }
+
+  if (toolName === "Bash") return "environment-access";
+
+  if (toolName.startsWith(AKERU_MCP_TOOL_PREFIX)) {
+    const akeruToolName = toolName.slice(AKERU_MCP_TOOL_PREFIX.length);
+
+    return (
+      AKERU_MCP_TOOL_RISK_CLASSES.get(akeruToolName) ?? namedActionRiskClass(akeruToolName, input)
+    );
+  }
+
+  return "write-outside";
+}

@@ -81,6 +81,13 @@ export function providerUnavailabilityFromDetail(
         [/max usage|spending limit|budget exceeded/, "usage-cap"],
         [/rate limit|overloaded|too many requests/, "limit-reached"],
       ],
+      claudeCode: [
+        [/oauth token.*expired|token expired|session expired/, "expired-login"],
+        [/not installed|not logged in|please run.*login|not authenticated/, "missing-login"],
+        [/model.*not found|invalid model/, "unsupported-model"],
+        [/max usage|usage limit|spending limit/, "usage-cap"],
+        [/rate limit|overloaded|too many requests/, "limit-reached"],
+      ],
       grok: [
         [/expired|login expired|oauth.*invalid/, "expired-login"],
         [/unauthorized|authentication|api key/, "missing-login"],

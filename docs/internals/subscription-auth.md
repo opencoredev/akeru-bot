@@ -8,7 +8,7 @@ Supported account flows:
 - Grok subscription through xAI device authorization
 - Kimi For Coding through Moonshot device authorization
 
-Claude and OpenCode Go take an API key only (`providerRequiresApiKey` in `serviceTypes.ts` and `@akeru/client-runtime/provider-auth`). Akeru no longer offers Claude Pro or Max sign-in. Anthropic's [Agent SDK overview](https://code.claude.com/docs/en/agent-sdk/overview) says: "Unless previously approved, Anthropic does not allow third party developers to offer claude.ai login or rate limits for their products, including agents built on the Claude Agent SDK. Use the API key authentication methods described in the Quickstart instead." No request from Akeru claims to be a vendor CLI: there is no Claude Code user agent, no `claude-code` beta, and no Claude Code system prompt. See [the sign-in route table](./providers.md#subscription-sign-in-routes) for each remaining route and its evidence.
+Claude and OpenCode Go take an API key only (`providerRequiresApiKey` in `serviceTypes.ts` and `@akeru/client-runtime/provider-auth`). Claude can also run on the user's own Claude Code login, which is not a credential Akeru stores: see [Claude Code login](#claude-code-login). Akeru no longer offers Claude Pro or Max sign-in. Anthropic's [Agent SDK overview](https://code.claude.com/docs/en/agent-sdk/overview) says: "Unless previously approved, Anthropic does not allow third party developers to offer claude.ai login or rate limits for their products, including agents built on the Claude Agent SDK. Use the API key authentication methods described in the Quickstart instead." No request from Akeru claims to be a vendor CLI: there is no Claude Code user agent, no `claude-code` beta, and no Claude Code system prompt. See [the sign-in route table](./providers.md#subscription-sign-in-routes) for each remaining route and its evidence.
 
 The flow implementations are ported from Mastra Code under Apache-2.0. The Kimi flow follows `mastra-ai/mastra` pull request 22428.
 
@@ -23,6 +23,12 @@ Older versions stored Claude Pro or Max OAuth credentials under `anthropic`, `in
 - Deletion is one-way. After a rollback to a version that still offers Claude Pro or Max sign-in, the user has to sign in again.
 - A pending Claude paste-code login in `subscription-auth.json.pending` is dropped on load, like retired Cursor logins. `subscriptionAuth.start` with `authMode: "oauth"` for Claude fails with the same message; without `authMode` it starts an API-key login.
 - `CLAUDE_CODE_OAUTH_TOKEN` is no longer a Claude transport or a connection variable. The Mastra transport accepts `ANTHROPIC_API_KEY`, `ANTHROPIC_AUTH_TOKEN` (an API gateway bearer), or the saved Anthropic API key.
+
+## Claude Code login
+
+The `claudeCode` driver runs Claude through the installed Claude Code and the login the user made with `claude auth login`. `SubscriptionAuthService` stores nothing for it, and no RPC in this document touches it. The login lives in Claude Code's own config directory (the instance's `CLAUDE_CONFIG_DIR`, or Claude Code's default), and Claude Code reads it. Akeru checks the state only by starting Claude Code through the SDK with settings isolated and reading the account from its initialize reply, never by reading credential files.
+
+Akeru never sets `CLAUDE_CODE_OAUTH_TOKEN`. It starts Claude Code with an allowlisted environment and no settings files, so no saved or ambient token, Anthropic key, base URL, header, or cloud-provider switch, and no settings `env` or `apiKeyHelper`, can replace or reroute the login. See [Claude Code login](./providers.md#claude-code-login).
 
 ## Storage boundary
 

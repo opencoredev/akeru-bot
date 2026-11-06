@@ -87,6 +87,23 @@ export function createRevert({
       return;
     }
 
+    const rolledBackTurns = Math.max(0, currentTurnCount - event.payload.turnCount);
+
+    // Claude Code keeps every message in its running conversation, so its
+    // rollback always fails. Refuse before the files change, or they would no
+    // longer match the conversation the bot still remembers.
+    if (rolledBackTurns > 0 && sessionRuntime.value.provider === "claudeCode") {
+      yield* appendRevertFailureActivity({
+        threadId: event.payload.threadId,
+        turnCount: event.payload.turnCount,
+        detail:
+          "Claude Code cannot remove turns from a running conversation, so this chat cannot be reverted.",
+        createdAt: now,
+      }).pipe(Effect.catch(() => Effect.void));
+
+      return;
+    }
+
     const targetCheckpointRef =
       event.payload.turnCount === 0
         ? checkpointRefForThreadTurn(event.payload.threadId, 0)
@@ -125,8 +142,6 @@ export function createRevert({
     // Refresh the workspace entry index so the @-mention file picker
     // reflects the reverted filesystem state.
     yield* workspaceEntries.refresh(sessionRuntime.value.cwd);
-
-    const rolledBackTurns = Math.max(0, currentTurnCount - event.payload.turnCount);
 
     if (rolledBackTurns > 0) {
       yield* agentController.rollbackConversation({

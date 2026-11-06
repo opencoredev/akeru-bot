@@ -27,6 +27,7 @@ import { settingsInboxView } from "./botInbox.logic";
 import { SettingsSection } from "./components/SettingsSection";
 import { ImageGenerationSummary } from "./ImageGenerationSummary";
 import { ProviderConnections } from "./ProviderConnections";
+import { ClaudeCodeLoginStatus } from "./ClaudeCodeLoginStatus";
 import type { MobileSettingsHealthTarget } from "./settingsDeepLink";
 
 export type SettingsProviderHealthParams = {
@@ -336,10 +337,16 @@ export function SettingsProviderHealthRouteScreen({
       >
         {Match.value(route.params.target).pipe(
           Match.when("providers", () => (
-            <ProviderConnections
-              key={route.params.environmentId}
-              environmentId={route.params.environmentId}
-            />
+            <>
+              <ProviderConnections
+                key={route.params.environmentId}
+                environmentId={route.params.environmentId}
+              />
+              <ClaudeCodeLoginStatus
+                key={`claude-code-${route.params.environmentId}`}
+                environmentId={route.params.environmentId}
+              />
+            </>
           )),
           Match.when("image-generation", () => (
             <ImageGenerationSummary

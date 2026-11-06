@@ -3,6 +3,13 @@ import { NonNegativeInt, TrimmedNonEmptyString } from "../baseSchemas.ts";
 
 export const PROVIDER_SEND_TURN_MAX_INPUT_CHARS = 120_000;
 
+/**
+ * The longest command or path an approval card shows. A longer one is never
+ * shown cut short: the projection drops it, and Claude Code login sessions
+ * decline the call instead of asking about text the owner cannot read.
+ */
+export const PROVIDER_APPROVAL_ARGUMENT_MAX_CHARS = 8_000;
+
 export const PROVIDER_SEND_TURN_MAX_ATTACHMENTS = 8;
 
 export const PROVIDER_SEND_TURN_MAX_IMAGE_BYTES = 10 * 1024 * 1024;

@@ -129,10 +129,12 @@
           },
           {
             // SDK boundaries requiring native transport/process cancellation or synchronous
-            // snapshot dispatch ordering.
+            // snapshot dispatch ordering. ClaudeCodeProcess returns the live child process the
+            // Claude Agent SDK's spawnClaudeCodeProcess hook requires, synchronously.
             // Promise signatures alone do not justify avoiding Effect services.
             "include": [
               "**/apps/server/src/provider/AkeruPreviewSnapshotAttachment.ts",
+              "**/apps/server/src/provider/Layers/claude/ClaudeCodeProcess.ts",
               "**/apps/server/src/provider/AkeruWebFetch.ts",
               "**/apps/server/src/provider/CodexComputerUse.ts",
               "**/apps/server/src/provider/browser/LightpandaProcess.ts",

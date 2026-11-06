@@ -96,6 +96,49 @@ describe("runtimeEventToActivities approval details", () => {
     expect(runtimeEventToActivities(invalidFeedbackEvent)[0]?.payload).not.toHaveProperty("args");
   });
 
+  it("keeps the command, target, and reason an approval card needs, and nothing else", () => {
+    const command = `git push --force origin main && ${"echo step; ".repeat(1_000)}`;
+
+    const event = {
+      type: "request.opened",
+      eventId: EventId.make("evt-claude-code-owner-ask"),
+      provider: ProviderDriverKind.make("claudeCode"),
+      createdAt: "2026-10-31T00:00:00.000Z",
+      threadId: ThreadId.make("thread-1"),
+      requestId: RuntimeRequestId.make("approval-claude-code"),
+      payload: {
+        requestType: "command_execution_approval",
+        toolName: "Bash",
+        detail: "git push --force origin main",
+        args: {
+          command,
+          reason: "This bot's permission policy asks you first.",
+          description: "Push",
+          env: { TOKEN: "secret" },
+        },
+      },
+    } satisfies ProviderRuntimeEvent;
+
+    const [activity] = runtimeEventToActivities(event);
+    const args = (activity?.payload as Record<string, Schema.Json> | undefined)?.args;
+
+    // A command longer than the cap is dropped, never shown cut short.
+    expect(args).toEqual({ reason: "This bot's permission policy asks you first." });
+    expect(activity?.payload).toMatchObject({ toolName: "Bash" });
+
+    const shortCommand = "git push --force origin main";
+
+    const [shortActivity] = runtimeEventToActivities({
+      ...event,
+      payload: { ...event.payload, args: { ...event.payload.args, command: shortCommand } },
+    });
+
+    expect((shortActivity?.payload as Record<string, Schema.Json> | undefined)?.args).toEqual({
+      command: shortCommand,
+      reason: "This bot's permission policy asks you first.",
+    });
+  });
+
   it("preserves complete multiline command details", () => {
     const detail = `bun run release -- ${"long-argument ".repeat(20)}\nsecond line`;
 

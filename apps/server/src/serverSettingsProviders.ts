@@ -13,6 +13,7 @@ import {
 } from "@akeru/contracts";
 import * as Effect from "effect/Effect";
 import { isModelSelectionProviderEnabled } from "@akeru/shared/serverSettings";
+import { driverSupportsTextGeneration } from "@akeru/shared/textGenerationProviders";
 
 import * as Schema from "effect/Schema";
 
@@ -142,34 +143,39 @@ export function restoreUsedProviders(
 // Drivers kept in settings for compatibility that no longer have a runtime.
 export const RETIRED_PROVIDER_DRIVERS: ReadonlySet<string> = new Set(["cursor"]);
 
-// Live drivers whose instances expose no text generation.
-export const NO_TEXT_GENERATION_DRIVERS: ReadonlySet<string> = new Set([
-  "kimi",
-  "opencodeGo",
-  "customOpenai",
-]);
-
-export function isRetiredProviderInstance(settings: ServerSettings, instanceId: string): boolean {
-  const driver = settings.providerInstances[ProviderInstanceId.make(instanceId)]?.driver;
-
-  return RETIRED_PROVIDER_DRIVERS.has(driver ?? instanceId);
+function instanceDriver(settings: ServerSettings, instanceId: string): string {
+  return settings.providerInstances[ProviderInstanceId.make(instanceId)]?.driver ?? instanceId;
 }
 
+export function isRetiredProviderInstance(settings: ServerSettings, instanceId: string): boolean {
+  return RETIRED_PROVIDER_DRIVERS.has(instanceDriver(settings, instanceId));
+}
+
+/** Keeps the saved fallback model only when its instance is live, enabled, and writes text. */
 export function resolveTextGenerationProvider(settings: ServerSettings): ServerSettings {
   const selection = settings.textGenerationModelSelection;
 
   return !isRetiredProviderInstance(settings, selection.instanceId) &&
+    driverSupportsTextGeneration(instanceDriver(settings, selection.instanceId)) &&
     isModelSelectionProviderEnabled(settings, selection)
     ? settings
     : fallbackTextGenerationProvider(settings);
 }
 
+/**
+ * Points the fallback model at the first enabled instance that writes text:
+ * a built-in provider first, then a named account such as `codex-work`. With
+ * none, the selection stays and text generation rejects it with a typed error.
+ */
 export function fallbackTextGenerationProvider(settings: ServerSettings): ServerSettings {
+  const writesText = (driver: string) =>
+    !RETIRED_PROVIDER_DRIVERS.has(driver) && driverSupportsTextGeneration(driver);
+
   // Same precedence as isModelSelectionProviderEnabled: an explicit provider
   // instance wins over the legacy providers map, which decodes to defaults
   // (codex enabled) when the Providers UI has only written providerInstances.
-  const fallbackEntry = Object.entries(settings.providers).find(([driver, provider]) => {
-    if (RETIRED_PROVIDER_DRIVERS.has(driver) || NO_TEXT_GENERATION_DRIVERS.has(driver)) {
+  const builtIn = Object.entries(settings.providers).find(([driver, provider]) => {
+    if (!writesText(driver)) {
       return false;
     }
 
@@ -178,7 +184,17 @@ export function fallbackTextGenerationProvider(settings: ServerSettings): Server
     return instance === undefined ? provider.enabled : resolveProviderInstanceEnabled(instance);
   });
 
-  const fallback = fallbackEntry ? ProviderDriverKind.make(fallbackEntry[0]) : undefined;
+  const named = builtIn
+    ? undefined
+    : Object.entries(settings.providerInstances).find(
+        ([, instance]) => writesText(instance.driver) && resolveProviderInstanceEnabled(instance),
+      );
+
+  const fallback = builtIn
+    ? { instanceId: builtIn[0], driver: ProviderDriverKind.make(builtIn[0]) }
+    : named
+      ? { instanceId: named[0], driver: named[1].driver }
+      : undefined;
 
   if (!fallback) {
     return settings;
@@ -187,10 +203,10 @@ export function fallbackTextGenerationProvider(settings: ServerSettings): Server
   return {
     ...settings,
     textGenerationModelSelection: {
-      instanceId: ProviderInstanceId.make(fallback),
+      instanceId: ProviderInstanceId.make(fallback.instanceId),
       model:
-        DEFAULT_TEXT_GENERATION_MODEL_BY_PROVIDER[fallback] ??
-        DEFAULT_MODEL_BY_PROVIDER[fallback] ??
+        DEFAULT_TEXT_GENERATION_MODEL_BY_PROVIDER[fallback.driver] ??
+        DEFAULT_MODEL_BY_PROVIDER[fallback.driver] ??
         DEFAULT_TEXT_GENERATION_MODEL,
     } satisfies ModelSelection,
   };

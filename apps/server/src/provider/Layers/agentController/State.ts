@@ -140,8 +140,14 @@ export interface LegacyResourceIdentity {
   readonly personalityTone: BotPersonalityTone;
   readonly memoryAccessKey: string | undefined;
   privateBotMemory: boolean;
-  /** The mode native OpenCode built its permission rules from at session start. */
+  /**
+   * The mode the provider built its permission rules from at session start. A
+   * different mode starts a new session, since neither OpenCode nor Claude Code
+   * changes it on a live one.
+   */
   readonly runtimeMode: RuntimeMode;
+  /** The model and options the provider started with; a change starts a new session. */
+  readonly modelSelection: ModelSelection | undefined;
   /** Reads the bot's current permission policy, checked before every native OpenCode turn. */
   readonly readPermissionPolicy: () => Promise<BotPermissionPolicy>;
 }

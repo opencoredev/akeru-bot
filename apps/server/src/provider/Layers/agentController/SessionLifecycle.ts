@@ -1,6 +1,10 @@
 import { createSessionContext } from "./SessionContext.ts";
 import { botScopedToolSession, workspaceToolSession } from "./BotToolSession.ts";
 import { toolPermissionsFor } from "./ToolPermissions.ts";
+import {
+  clearBotToolPermissionSession,
+  setBotToolPermissionSession,
+} from "../../tools/BotToolPermissionSessions.ts";
 import type { SessionLifecycleDependencies } from "./SessionLifecycleDependencies.ts";
 import { ProviderDriverKind } from "@akeru/contracts";
 
@@ -15,6 +19,7 @@ import {
 import * as Deferred from "effect/Deferred";
 
 import * as Effect from "effect/Effect";
+import * as Equal from "effect/Equal";
 
 import * as Semaphore from "effect/Semaphore";
 
@@ -284,6 +289,18 @@ export function createSessionLifecycle(deps: SessionLifecycleDependencies) {
     }
 
     const existingLegacy = deps.legacyResourceIdentity.get(key);
+
+    // Providers that run their own tools, such as Claude Code, read the
+    // bot's policy through this session on every tool call.
+    const legacyPermissions = {
+      botId,
+      permissions: toolPermissionsFor(deps, {
+        bot,
+        botId,
+        parentBotId: parentDelegation?.parentBotId,
+      }),
+    };
+
     const settings = yield* deps.memorySettings();
     const nextMemoryAccess = delegatedAccess ? undefined : deps.memoryAccessFor(input.memoryAccess);
 
@@ -328,6 +345,16 @@ export function createSessionLifecycle(deps: SessionLifecycleDependencies) {
       }
     }
 
+    // Claude Code runs on this computer with its own tools, so a remote sandbox
+    // would be acquired but never used.
+    if (resolved.provider === "claudeCode" && isRemoteBotSandbox(access.sandbox)) {
+      return yield* new ProviderValidationError({
+        operation: "AgentController.startSession",
+        issue:
+          "Claude Agent bots can only use the Local sandbox for now, because Claude Code runs on this computer. Set this bot's sandbox to Local or choose another engine.",
+      });
+    }
+
     if (
       !existing &&
       resolved &&
@@ -337,13 +364,16 @@ export function createSessionLifecycle(deps: SessionLifecycleDependencies) {
       existingLegacy.providerInstanceId === resolved.providerInstanceId &&
       existingLegacy.botName === input.botName &&
       existingLegacy.personalityTone === personalityTone &&
-      existingLegacy.memoryAccessKey === deps.memoryAccessKey(nextMemoryAccess)
+      existingLegacy.memoryAccessKey === deps.memoryAccessKey(nextMemoryAccess) &&
+      existingLegacy.runtimeMode === input.runtimeMode &&
+      Equal.equals(existingLegacy.modelSelection, input.modelSelection)
     ) {
       const live = (yield* deps.legacyProviderBridge.listSessions()).find(
         (session) => session.threadId === threadId,
       );
 
       if (live) {
+        setBotToolPermissionSession(threadId, legacyPermissions);
         existingLegacy.memoryAccess = nextMemoryAccess;
         existingLegacy.entityMemoryAccess = input.memoryAccess;
         existingLegacy.privateBotMemory = settings.privateBotMemory;
@@ -443,6 +473,8 @@ export function createSessionLifecycle(deps: SessionLifecycleDependencies) {
         .filter(Boolean)
         .join("\n\n");
 
+      setBotToolPermissionSession(threadId, legacyPermissions);
+
       return yield* deps.legacyProviderBridge
         .startSession(threadId, {
           ...input,
@@ -464,18 +496,24 @@ export function createSessionLifecycle(deps: SessionLifecycleDependencies) {
                 memoryAccessKey: deps.memoryAccessKey(nextMemoryAccess),
                 privateBotMemory: settings.privateBotMemory,
                 runtimeMode: input.runtimeMode,
+                modelSelection: input.modelSelection,
                 readPermissionPolicy,
               });
 
               return session;
             }),
           ),
+          // A failed start leaves no live session for the stop path to clean up.
           Effect.tapError(() =>
-            deps
-              .runMastra("resources.release", () =>
-                deps.sessionResources.release(key, { destroy: true }),
-              )
-              .pipe(Effect.ignoreCause({ log: true })),
+            Effect.gen(function* () {
+              clearBotToolPermissionSession(threadId);
+              yield* deps.clearPreviewMcpSession(threadId);
+              yield* deps
+                .runMastra("resources.release", () =>
+                  deps.sessionResources.release(key, { destroy: true }),
+                )
+                .pipe(Effect.ignoreCause({ log: true }));
+            }),
           ),
         );
     }

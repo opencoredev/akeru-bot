@@ -35,6 +35,7 @@ import {
 import { AddProviderInstanceWizardSteps } from "./AddProviderInstanceWizardSteps";
 import { CustomApiKeyDraftField } from "./CustomApiKeyField";
 import { CustomApiPresetPicker } from "./CustomApiPresetPicker";
+import { ProviderConnectionPicker } from "./ProviderConnectionPicker";
 import {
   customApiKeyHint,
   OTHER_CUSTOM_API_PRESET,
@@ -52,6 +53,8 @@ interface AddProviderInstanceDialogProps {
   readonly providerLabel?: string;
   /** Provider whose page opened the dialog. The new account uses its driver. */
   readonly driverOption: DriverOption;
+  /** Every way the page's provider connects. With more than one, the user picks. */
+  readonly driverOptions?: ReadonlyArray<DriverOption>;
   readonly onOpenChange: (open: boolean) => void;
 }
 
@@ -60,13 +63,16 @@ export function AddProviderInstanceDialog({
   environmentId,
   environmentLabel,
   providerLabel,
-  driverOption,
+  driverOption: initialDriverOption,
+  driverOptions,
   onOpenChange,
 }: AddProviderInstanceDialogProps) {
   const settings = useEnvironmentSettings(environmentId);
   const updateSettings = useUpdateEnvironmentSettings(environmentId);
 
   const [wizardStep, setWizardStep] = useState(0);
+  const [driverOption, setDriverOption] = useState(initialDriverOption);
+  const choosesConnection = (driverOptions?.length ?? 0) > 1;
 
   const driver = driverOption.value;
 
@@ -84,7 +90,9 @@ export function AddProviderInstanceDialog({
     [settings.providerInstances],
   );
 
-  const accountLabel = providerLabel ?? driverOption.label;
+  // A chosen connection names the account, so "Claude Code login 2" reads as what it is.
+  const pageLabel = providerLabel ?? driverOption.label;
+  const accountLabel = choosesConnection ? driverOption.label : pageLabel;
 
   const usedNames = useMemo(
     () =>
@@ -196,12 +204,12 @@ export function AddProviderInstanceDialog({
         <div className="flex min-h-0 flex-col overflow-hidden">
           <DialogHeader>
             <DialogTitle>
-              {isCustomApi ? "Connect a service" : `Add ${accountLabel} account`}
+              {isCustomApi ? "Connect a service" : `Add ${pageLabel} account`}
             </DialogTitle>
             <DialogDescription>
               {isCustomApi
                 ? `Add another OpenAI-compatible service on ${environmentLabel}. Each one keeps its own address and key.`
-                : `Add another ${accountLabel} account on ${environmentLabel}. Each account keeps its own sign-in and settings.`}
+                : `Add another ${pageLabel} account on ${environmentLabel}. Each account keeps its own sign-in and settings.`}
             </DialogDescription>
             {wizardSteps.length > 1 ? (
               <AddProviderInstanceWizardSteps
@@ -226,6 +234,14 @@ export function AddProviderInstanceDialog({
                       onChange={chooseCustomApiPreset}
                     />
                   </div>
+                ) : null}
+
+                {choosesConnection && driverOptions && currentStepName === "Name" ? (
+                  <ProviderConnectionPicker
+                    options={driverOptions}
+                    value={driverOption.value}
+                    onChange={setDriverOption}
+                  />
                 ) : null}
 
                 <label className={cn("grid gap-2", currentStepName !== "Name" && "hidden")}>

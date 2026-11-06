@@ -20,6 +20,7 @@
  *
  * @module provider/builtInDrivers
  */
+import { ClaudeCodeDriver, type ClaudeCodeDriverEnv } from "./Drivers/ClaudeCodeDriver.ts";
 import { ClaudeDriver, type ClaudeDriverEnv } from "./Drivers/ClaudeDriver.ts";
 import { CodexDriver, type CodexDriverEnv } from "./Drivers/CodexDriver.ts";
 import { CustomOpenaiDriver, type CustomOpenaiDriverEnv } from "./Drivers/CustomOpenaiDriver.ts";
@@ -37,6 +38,7 @@ import type { AnyProviderDriver } from "./ProviderDriver.ts";
  */
 export type BuiltInDriversEnv =
   | ClaudeDriverEnv
+  | ClaudeCodeDriverEnv
   | CodexDriverEnv
   | GrokDriverEnv
   | KimiDriverEnv
@@ -52,6 +54,7 @@ export type BuiltInDriversEnv =
 export const BUILT_IN_DRIVERS: ReadonlyArray<AnyProviderDriver<BuiltInDriversEnv>> = [
   registeredProviderDriver(CodexDriver),
   registeredProviderDriver(ClaudeDriver),
+  registeredProviderDriver(ClaudeCodeDriver),
   registeredProviderDriver(GrokDriver),
   registeredProviderDriver(KimiDriver),
   registeredProviderDriver(OpenCodeDriver),

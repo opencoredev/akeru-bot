@@ -291,7 +291,13 @@ export function createProviderCommandMocks(
     const raw = String(selected.instanceId);
 
     const driverKind = ProviderDriverKind.make(
-      raw.startsWith("claude") ? "claudeAgent" : raw.startsWith("codex") ? "codex" : raw,
+      raw.startsWith("claudeCode")
+        ? "claudeCode"
+        : raw.startsWith("claude")
+          ? "claudeAgent"
+          : raw.startsWith("codex")
+            ? "codex"
+            : raw,
     );
 
     return Effect.succeed({
