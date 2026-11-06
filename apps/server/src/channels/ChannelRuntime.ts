@@ -13,7 +13,10 @@ import { ServerSecretStore } from "../auth/ServerSecretStore.ts";
 import * as ServerConfig from "../config.ts";
 import { ServerSettingsService } from "../serverSettings.ts";
 import { OrchestrationEngineService } from "../orchestration/Services/OrchestrationEngine.ts";
-import { ProjectionSnapshotQuery } from "../orchestration/Services/ProjectionSnapshotQuery.ts";
+import {
+  ProjectionSnapshotQuery,
+  type ProjectionSnapshotQueryShape,
+} from "../orchestration/Services/ProjectionSnapshotQuery.ts";
 import { ChannelDeliveryStore } from "./ChannelDeliveryStore.ts";
 import {
   type ChannelRuntimeDependencies,
@@ -54,6 +57,22 @@ import {
 } from "./ChannelConnections.ts";
 
 export { defaultProjectIdForBot } from "@akeru/shared/channelProject";
+
+export function listChannelConversationIdsFromQuery(
+  query: Pick<ProjectionSnapshotQueryShape, "listThreadChannelConversationIds">,
+): ChannelRuntimeDependencies["listChannelConversationIds"] {
+  return (threadId, provider) => {
+    const list = query.listThreadChannelConversationIds;
+
+    if (list === undefined) {
+      return Effect.die(
+        "ProjectionSnapshotQuery.listThreadChannelConversationIds is required for channel reconnect",
+      );
+    }
+
+    return list({ threadId, provider });
+  };
+}
 
 const makeChannelRuntime = (deps: ChannelRuntimeDependencies) =>
   Effect.gen(function* () {
@@ -190,6 +209,7 @@ export class ChannelRuntime extends Context.Service<ChannelRuntime, ChannelRunti
           projectionSnapshotQuery
             .getThreadDetailById(threadId, { activityKinds: [] })
             .pipe(Effect.map(Option.getOrNull)),
+        listChannelConversationIds: listChannelConversationIdsFromQuery(projectionSnapshotQuery),
         nowIso: DateTime.now.pipe(Effect.map(DateTime.formatIso)),
         randomUuid: crypto.randomUUIDv4,
       });

@@ -6,13 +6,13 @@ import { memo, useMemo, useRef } from "react";
 import { useClientSettings } from "../../hooks/useSettings";
 import { useI18n } from "../../i18n";
 import { cn } from "../../lib/utils";
-import { useLatestGroupThreadId, useThreadMessages } from "../../state/entities";
+import { useLatestGroupThreadId } from "../../state/entities";
 import { usePrimaryEnvironmentId } from "../../state/environments";
 import { Menu, MenuItem, MenuPopup, MenuTrigger } from "../ui/menu";
 import { SidebarGroup } from "../ui/sidebar";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { BotAvatarView } from "./BotAvatarView";
-import { visibleBotChatMessages } from "./botConversationPresentation";
+import { useBotConversationMessageProjection } from "./botConversationMessageProjection";
 import { useBotPresence } from "./botPresence";
 import { useBotRosterUnread, useChatUnread } from "../chat/useChatUnread";
 import { GroupMemberStack } from "./GroupMemberStack";
@@ -71,8 +71,10 @@ function useLatestBotMessage(
 } {
   const candidate = useBotThreadCandidate(botId);
   const { ref: threadRef, shell } = useBotChatTarget(botId, candidate);
-  const messages = useThreadMessages(threadRef);
-  const visibleMessages = useMemo(() => visibleBotChatMessages(messages), [messages]);
+  // Stable visible history: streaming deltas stay hidden, so the projection
+  // keeps the same message references while a turn runs instead of re-rendering
+  // every roster row on each token.
+  const { messages: visibleMessages } = useBotConversationMessageProjection(threadRef);
 
   const message = useMemo(
     () => resolveLatestRosterMessage(fallback, visibleMessages, threadRef?.threadId),

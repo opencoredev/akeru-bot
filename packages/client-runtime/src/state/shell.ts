@@ -141,54 +141,73 @@ export const makeEnvironmentShellState = Effect.fn("EnvironmentShellState.make")
       ),
     );
 
-  const applyItem = Effect.fn("EnvironmentShellState.applyItem")(function* (
-    item: OrchestrationShellStreamItem,
+  // Body of applyItems. Event items reduce into a local snapshot that is
+  // published once per batch: a burst of shell upserts delivered together
+  // costs one state change (and one roster/sidebar render) instead of one
+  // per event.
+  const applyItems = Effect.fn("EnvironmentShellState.applyItems")(function* (
+    items: ReadonlyArray<OrchestrationShellStreamItem>,
   ) {
-    if (item.kind === "synchronized") {
-      yield* Ref.set(awaitingCompletion, false);
-      yield* SubscriptionRef.update(state, (current) =>
-        Option.isSome(current.snapshot)
-          ? { ...current, status: "live" as const, error: Option.none() }
-          : current,
-      );
+    let unpublishedSnapshot: OrchestrationShellSnapshot | null = null;
+    let sawSnapshot = false;
 
-      return;
-    }
+    const publish = Effect.gen(function* () {
+      if (unpublishedSnapshot === null) {
+        return;
+      }
 
-    const current = yield* SubscriptionRef.get(state);
-
-    const nextSnapshot =
-      item.kind === "snapshot"
-        ? item.snapshot
-        : Option.match(current.snapshot, {
-            onNone: () => null,
-            onSome: (snapshot) =>
-              item.sequence > snapshot.snapshotSequence
-                ? applyShellStreamEvent(snapshot, item)
-                : snapshot,
-          });
-
-    if (nextSnapshot === null) {
-      return;
-    }
-
-    const waiting = yield* Ref.get(awaitingCompletion);
-    yield* SubscriptionRef.set(state, {
-      snapshot: Option.some(nextSnapshot),
-      status: waiting ? "synchronizing" : "live",
-      error: Option.none(),
+      const nextSnapshot = unpublishedSnapshot;
+      unpublishedSnapshot = null;
+      const waiting = yield* Ref.get(awaitingCompletion);
+      yield* SubscriptionRef.set(state, {
+        snapshot: Option.some(nextSnapshot),
+        status: waiting ? "synchronizing" : "live",
+        error: Option.none(),
+      });
+      yield* Queue.offer(persistence, nextSnapshot);
     });
 
-    if (item.kind === "snapshot") {
+    for (const item of items) {
+      if (item.kind === "synchronized") {
+        yield* publish;
+        yield* Ref.set(awaitingCompletion, false);
+        yield* SubscriptionRef.update(state, (current) =>
+          Option.isSome(current.snapshot)
+            ? { ...current, status: "live" as const, error: Option.none() }
+            : current,
+        );
+        continue;
+      }
+
+      if (item.kind === "snapshot") {
+        unpublishedSnapshot = item.snapshot;
+        sawSnapshot = true;
+        continue;
+      }
+
+      const storedSnapshot = Option.getOrNull((yield* SubscriptionRef.get(state)).snapshot);
+      const base: OrchestrationShellSnapshot | null = unpublishedSnapshot ?? storedSnapshot;
+
+      if (base === null) {
+        continue;
+      }
+
+      unpublishedSnapshot =
+        item.sequence > base.snapshotSequence ? applyShellStreamEvent(base, item) : base;
+    }
+
+    yield* publish;
+
+    if (sawSnapshot) {
       const session = yield* Ref.get(activeSubscriptionSession);
 
       if (session !== null) {
         yield* Ref.set(lastAuthoritativeSession, session);
       }
     }
-
-    yield* Queue.offer(persistence, nextSnapshot);
   });
+
+  const applyItem = (item: OrchestrationShellStreamItem) => applyItems([item]);
 
   const foregroundResubscriptions = Option.match(wakeups, {
     onNone: () => Stream.never,
@@ -269,7 +288,7 @@ export const makeEnvironmentShellState = Effect.fn("EnvironmentShellState.make")
         retryExpectedFailureAfter: "250 millis",
         resubscribe: foregroundResubscriptions,
       },
-    ).pipe(Stream.runForEach(applyItem)),
+    ).pipe(Stream.runForEachArray(applyItems)),
   );
   yield* SubscriptionRef.changes(supervisor.state).pipe(
     Stream.runForEach((connectionState) => {

@@ -97,7 +97,6 @@ const make = Effect.gen(function* () {
     clearInterruptedThreadTitleRegenerations,
     threadTitleRegenerationWorker,
   } = yield* createTitles({
-    resolveThreadDetail,
     resolveProject,
     serverSettingsService,
     textGeneration,

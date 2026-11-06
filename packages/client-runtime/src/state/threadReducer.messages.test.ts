@@ -461,4 +461,77 @@ describe("applyThreadDetailEvent", () => {
       }
     });
   });
+
+  describe("live cursor", () => {
+    const streamingDelta = (
+      sequence: number,
+      messageId: string,
+      text: string,
+    ): Parameters<typeof applyThreadDetailEvent>[1] =>
+      ({
+        ...baseEventFields,
+        sequence,
+        occurredAt: `2026-04-01T06:00:0${sequence}.000Z`,
+        aggregateKind: "thread",
+        aggregateId: baseThread.id,
+        type: "thread.message-sent",
+        payload: {
+          threadId: baseThread.id,
+          messageId: MessageId.make(messageId),
+          role: "assistant",
+          text,
+          turnId: TurnId.make("turn-live"),
+          streaming: true,
+          createdAt: "2026-04-01T06:00:00.000Z",
+          updatedAt: `2026-04-01T06:00:0${sequence}.000Z`,
+        },
+      }) as const;
+
+    const applyLiveEvents = (
+      events: ReadonlyArray<Parameters<typeof applyThreadDetailEvent>[1]>,
+    ) => {
+      let thread = baseThread;
+      let sequence = 0;
+
+      for (const event of events) {
+        if (event.sequence <= sequence) {
+          continue;
+        }
+
+        sequence = event.sequence;
+        const result = applyThreadDetailEvent(thread, event);
+
+        if (result.kind === "updated") {
+          thread = result.thread;
+        }
+      }
+
+      return { thread, sequence };
+    };
+
+    it("keeps interleaved streaming text when survivors arrive in sequence order", () => {
+      const applied = applyLiveEvents([
+        streamingDelta(2, "msg-b", "Bee"),
+        streamingDelta(3, "msg-a", "Hello"),
+      ]);
+
+      expect(applied.sequence).toBe(3);
+      expect(applied.thread.messages.map((message) => [message.id, message.text])).toEqual([
+        ["msg-b", "Bee"],
+        ["msg-a", "Hello"],
+      ]);
+    });
+
+    it("drops a later lower-sequence survivor after a higher-sequence merge", () => {
+      const applied = applyLiveEvents([
+        streamingDelta(3, "msg-a", "Hello"),
+        streamingDelta(2, "msg-b", "Bee"),
+      ]);
+
+      expect(applied.sequence).toBe(3);
+      expect(applied.thread.messages.map((message) => [message.id, message.text])).toEqual([
+        ["msg-a", "Hello"],
+      ]);
+    });
+  });
 });

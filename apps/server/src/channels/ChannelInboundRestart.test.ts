@@ -33,7 +33,11 @@ import { sqlitePersistenceLayer } from "../persistence/Layers/Sqlite.ts";
 import { OrchestrationCommandReceiptRepository } from "../persistence/Services/OrchestrationCommandReceipts.ts";
 import * as RepositoryIdentityResolver from "../project/RepositoryIdentityResolver.ts";
 import { memoryChannelDeliveryStore } from "./ChannelDeliveryStore.ts";
-import { ChannelRuntime, type ChannelRuntimeDependencies } from "./ChannelRuntime.ts";
+import {
+  ChannelRuntime,
+  listChannelConversationIdsFromQuery,
+  type ChannelRuntimeDependencies,
+} from "./ChannelRuntime.ts";
 
 const NOW = "2026-09-04T12:00:00.000Z";
 
@@ -69,6 +73,7 @@ const makeDependencies = Effect.fn("makeDependencies")(function* (now: string) {
     readModel: snapshots.getCommandReadModel(),
     readThread: (threadId) =>
       snapshots.getThreadDetailById(threadId).pipe(Effect.map(Option.getOrNull)),
+    listChannelConversationIds: listChannelConversationIdsFromQuery(snapshots),
     nowIso: Effect.succeed(now),
     randomUuid: Effect.sync(() => NodeCrypto.randomUUID()),
     deliveryStore: memoryChannelDeliveryStore(),

@@ -12,9 +12,10 @@ import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 import * as TestClock from "effect/testing/TestClock";
-import { describe, expect } from "vite-plus/test";
+import { assert, describe, expect } from "vite-plus/test";
 
 import {
+  coalesceLiveStreamingMessageEvents,
   coalesceLiveToolUpdatedEvents,
   threadLiveEventCoalescer,
 } from "./ThreadLiveEventCoalescer.ts";
@@ -68,13 +69,24 @@ function makeToolActivity(
   };
 }
 
-function makeMessage(sequence: number, text = "Still working"): OrchestrationEvent {
+function makeMessage(
+  sequence: number,
+  text = "Still working",
+  options: {
+    readonly messageId?: MessageId;
+    readonly streaming?: boolean;
+    readonly createdAt?: string;
+    readonly updatedAt?: string;
+  } = {},
+): OrchestrationEvent {
+  const createdAt = options.createdAt ?? "2026-01-01T00:00:02.000Z";
+
   return {
     sequence,
     eventId: EventId.make(`event-${sequence}`),
     aggregateKind: "thread",
     aggregateId: threadId,
-    occurredAt: "2026-01-01T00:00:02.000Z",
+    occurredAt: createdAt,
     commandId: null,
     causationEventId: null,
     correlationId: null,
@@ -82,13 +94,13 @@ function makeMessage(sequence: number, text = "Still working"): OrchestrationEve
     type: "thread.message-sent",
     payload: {
       threadId,
-      messageId: MessageId.make(`message-${sequence}`),
+      messageId: options.messageId ?? MessageId.make(`message-${sequence}`),
       role: "assistant",
       text,
       turnId,
-      streaming: false,
-      createdAt: "2026-01-01T00:00:02.000Z",
-      updatedAt: "2026-01-01T00:00:02.000Z",
+      streaming: options.streaming === true,
+      createdAt,
+      updatedAt: options.updatedAt ?? createdAt,
     },
   };
 }
@@ -134,6 +146,72 @@ describe("ThreadLiveEventCoalescer", () => {
     expect(coalesceLiveToolUpdatedEvents(events).map((event) => event.sequence)).toEqual([2, 3, 4]);
   });
 
+  it("concatenates streaming message deltas for the same message id", () => {
+    const messageId = MessageId.make("message-stream");
+
+    const events = [
+      makeMessage(1, "Hello", {
+        messageId,
+        streaming: true,
+        createdAt: "2026-01-01T00:00:01.000Z",
+      }),
+      makeMessage(2, ", ", {
+        messageId,
+        streaming: true,
+        createdAt: "2026-01-01T00:00:01.000Z",
+        updatedAt: "2026-01-01T00:00:02.000Z",
+      }),
+      makeMessage(3, "world", {
+        messageId,
+        streaming: true,
+        createdAt: "2026-01-01T00:00:01.000Z",
+        updatedAt: "2026-01-01T00:00:03.000Z",
+      }),
+      makeMessage(4, "Done.", { messageId, streaming: false }),
+    ];
+
+    const coalesced = coalesceLiveStreamingMessageEvents(events);
+    expect(coalesced).toHaveLength(2);
+    expect(coalesced[0]?.sequence).toBe(3);
+    assert(coalesced[0]?.type === "thread.message-sent");
+    expect(coalesced[0].payload.text).toBe("Hello, world");
+    expect(coalesced[0].payload.createdAt).toBe("2026-01-01T00:00:01.000Z");
+    expect(coalesced[0].payload.updatedAt).toBe("2026-01-01T00:00:03.000Z");
+    expect(coalesced[1]?.sequence).toBe(4);
+  });
+
+  it("keeps streaming deltas for different message ids distinct", () => {
+    const events = [
+      makeMessage(1, "A", { messageId: MessageId.make("msg-a"), streaming: true }),
+      makeMessage(2, "B", { messageId: MessageId.make("msg-b"), streaming: true }),
+      makeMessage(3, "a", { messageId: MessageId.make("msg-a"), streaming: true }),
+    ];
+
+    const coalesced = coalesceLiveStreamingMessageEvents(events);
+    expect(coalesced.map((event) => event.sequence)).toEqual([2, 3]);
+    assert(coalesced[0]?.type === "thread.message-sent");
+    expect(coalesced[0].payload.text).toBe("B");
+    assert(coalesced[1]?.type === "thread.message-sent");
+    expect(coalesced[1].payload.text).toBe("Aa");
+  });
+
+  it("keeps interleaved streaming survivors in ascending sequence order", () => {
+    const events = [
+      makeMessage(1, "Hel", { messageId: MessageId.make("msg-a"), streaming: true }),
+      makeMessage(2, "Bee", { messageId: MessageId.make("msg-b"), streaming: true }),
+      makeMessage(3, "lo", { messageId: MessageId.make("msg-a"), streaming: true }),
+    ];
+
+    const coalesced = coalesceLiveStreamingMessageEvents(events);
+    expect(coalesced.map((event) => event.sequence)).toEqual([2, 3]);
+    assert(coalesced[0]?.type === "thread.message-sent");
+    expect(coalesced[0].payload.messageId).toBe("msg-b");
+    expect(coalesced[0].payload.text).toBe("Bee");
+    assert(coalesced[1]?.type === "thread.message-sent");
+    expect(coalesced[1].payload.messageId).toBe("msg-a");
+    expect(coalesced[1].payload.text).toBe("Hello");
+  });
+
   it.effect("flushes pending tool updates as soon as an unrelated event arrives", () =>
     Effect.scoped(
       Effect.gen(function* () {
@@ -152,6 +230,35 @@ describe("ThreadLiveEventCoalescer", () => {
             item.kind === "event" ? item.event.sequence : item.kind,
           ),
         ).toEqual([11, 12]);
+      }),
+    ).pipe(Effect.provide(TestClock.layer())),
+  );
+
+  it.effect("coalesces streaming message deltas inside the hold window", () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const coalescer = yield* threadLiveEventCoalescer({ coalesceWindow: "50 millis" });
+        const messageId = MessageId.make("message-live");
+        yield* coalescer.offer({
+          kind: "event",
+          event: makeMessage(1, "Hel", { messageId, streaming: true }),
+        });
+        yield* coalescer.offer({
+          kind: "event",
+          event: makeMessage(2, "lo", {
+            messageId,
+            streaming: true,
+            updatedAt: "2026-01-01T00:00:03.000Z",
+          }),
+        });
+        yield* TestClock.adjust("50 millis");
+        const items = yield* coalescer.stream.pipe(Stream.take(1), Stream.runCollect);
+        expect(items).toHaveLength(1);
+        const item = items[0];
+        assert(item?.kind === "event");
+        assert(item.event.type === "thread.message-sent");
+        expect(item.event.sequence).toBe(2);
+        expect(item.event.payload.text).toBe("Hello");
       }),
     ).pipe(Effect.provide(TestClock.layer())),
   );

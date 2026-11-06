@@ -2,6 +2,7 @@ import * as Data from "effect/Data";
 import { CommandId, PLACEHOLDER_THREAD_TITLE, ThreadId } from "@akeru/contracts";
 import * as Cause from "effect/Cause";
 import * as Effect from "effect/Effect";
+import * as Option from "effect/Option";
 import { makeDrainableWorker } from "@akeru/shared/DrainableWorker";
 import { resolveThreadWorkspaceCwd } from "../../../checkpointing/Utils.ts";
 import { DEFAULT_THREAD_TITLE } from "../../threadTitles.ts";
@@ -17,7 +18,6 @@ const TitleRegeneration = Data.taggedEnum<
 >();
 
 export const createTitles = Effect.fn("makeprovider-command-Titles")(function* ({
-  resolveThreadDetail,
   resolveProject,
   serverSettingsService,
   textGeneration,
@@ -29,7 +29,6 @@ export const createTitles = Effect.fn("makeprovider-command-Titles")(function* (
   ReturnType<typeof createContext> &
     ReturnType<typeof createWorkspace> &
     Effect.Success<ReturnType<typeof createDependencies>>,
-  | "resolveThreadDetail"
   | "resolveProject"
   | "serverSettingsService"
   | "textGeneration"
@@ -46,7 +45,12 @@ export const createTitles = Effect.fn("makeprovider-command-Titles")(function* (
       return TitleRegeneration.Superseded();
     }
 
-    const thread = yield* resolveThreadDetail(event.payload.threadId);
+    const thread = Option.getOrUndefined(
+      yield* projectionSnapshotQuery.getThreadDetailById(event.payload.threadId, {
+        activityKinds: [],
+        pinOldestUserMessage: true,
+      }),
+    );
 
     if (!thread || thread.titleRegeneration?.requestId !== requestId) {
       return TitleRegeneration.Superseded();
