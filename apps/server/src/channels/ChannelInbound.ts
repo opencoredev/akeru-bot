@@ -10,10 +10,13 @@ import {
   type ChannelProvider,
   type OrchestrationReadModel,
 } from "@akeru/contracts";
-import { type Message, type Thread } from "chat";
+import { isLinkNode, type Message, text, type Thread, toPlainText, walkAst } from "chat";
 import * as Effect from "effect/Effect";
 import { failWith } from "./ChannelErrors.ts";
+import { inboundAttachments, saveDownloadedFiles } from "./ChannelInboundAttachments.ts";
 import {
+  type DownloadedChannelAttachments,
+  type InboundChannelAttachment,
   type InboundChannelMessage,
   type LiveProvider,
   type ChannelRuntimeContext,
@@ -64,45 +67,154 @@ export const deterministicChannelId = (
     )
     .digest("hex")}`;
 
+const withoutTrailingSlash = (value: string) => value.replace(/\/$/, "");
+
+/**
+ * Slack's adapter flattens `message.text` to plain text that keeps only a link's label, so a link
+ * labelled `example.com/projects/…` would reach the bot without its target. Discord's history
+ * reads (`parseDiscordMessage`, behind `recentMessages`) flatten the same way. Telegram, WhatsApp,
+ * iMessage, and Discord's live gateway messages, forwarded content included, keep raw markdown,
+ * which already carries the target.
+ */
+export function plainTextWithLinks(message: Message): string {
+  if (message.text !== toPlainText(message.formatted)) return message.text;
+  let addedTarget = false;
+
+  const ast = walkAst(structuredClone(message.formatted), (node) => {
+    if (!isLinkNode(node)) return node;
+    const label = toPlainText({ type: "root", children: node.children }).trim();
+
+    if (!label) {
+      addedTarget = true;
+
+      return text(node.url);
+    }
+
+    const targets = [node.url, node.url.replace(/^(?:https?:\/\/|mailto:)/, "")];
+
+    if (targets.some((target) => withoutTrailingSlash(target) === withoutTrailingSlash(label)))
+      return text(label);
+    addedTarget = true;
+
+    return text(`${label} (${node.url})`);
+  });
+
+  return addedTarget ? toPlainText(ast) : message.text;
+}
+
 export const normalizedInboundMessage = (
   thread: Pick<Thread, "id" | "recentMessages" | "refresh">,
   message: Message,
-  text = message.text,
+  messageText = plainTextWithLinks(message),
 ): InboundChannelMessage => ({
   externalThreadId: thread.id,
   externalMessageId: message.id,
   externalSenderId: message.author.userId,
   externalSenderName: message.author.fullName || message.author.userName,
-  text,
+  text: messageText,
+  attachments: inboundAttachments(message),
 });
+
+interface ContextLine {
+  readonly line: string;
+  readonly files: ReadonlyArray<{
+    readonly attachment: InboundChannelAttachment;
+    readonly markerStart: number;
+  }>;
+}
+
+const contextLine = (candidate: Message): ContextLine | null => {
+  const text = plainTextWithLinks(candidate);
+  const author = candidate.author;
+  let line = `${author.fullName || author.userName || author.userId}:`;
+  let hasBody = false;
+
+  const append = (part: string) => {
+    line += " ";
+    const start = line.length;
+    line += part;
+    hasBody = true;
+
+    return start;
+  };
+
+  if (text.trim()) append(text);
+
+  const files = inboundAttachments(candidate).map((attachment) => ({
+    attachment: { ...attachment, sharedInMentionContext: true } satisfies InboundChannelAttachment,
+    markerStart: append(`[shared ${attachment.name}]`),
+  }));
+
+  return hasBody ? { line, files } : null;
+};
+
+/** A context file is attached only while its `[shared name]` marker survives the character limit. */
+const boundedContext = (lines: ReadonlyArray<ContextLine>) => {
+  const kept: Array<{
+    readonly line: string;
+    readonly attachments: ReadonlyArray<InboundChannelAttachment>;
+  }> = [];
+
+  let remaining = CHANNEL_MENTION_CONTEXT_CHARACTER_LIMIT;
+
+  for (const { line, files } of lines.toReversed()) {
+    const room = remaining - (kept.length > 0 ? 1 : 0);
+
+    if (room <= 0) break;
+    const cut = Math.max(0, line.length - room);
+
+    kept.push({
+      line: line.slice(cut),
+      attachments: files.flatMap((file) => (file.markerStart >= cut ? [file.attachment] : [])),
+    });
+    remaining = room - (line.length - cut);
+
+    if (cut > 0) break;
+  }
+
+  return {
+    text: kept
+      .toReversed()
+      .map(({ line }) => line)
+      .join("\n"),
+    attachments: kept.flatMap(({ attachments }) => attachments),
+  };
+};
 
 export async function mentionWithContext(
   thread: Pick<Thread, "id" | "recentMessages" | "refresh">,
   message: Message,
 ): Promise<InboundChannelMessage> {
   await thread.refresh().catch(() => undefined);
+  const recent = thread.recentMessages;
+  const mentionIndex = recent.findIndex((candidate) => candidate.id === message.id);
 
-  const context = thread.recentMessages
-    .filter(
-      (candidate) =>
-        candidate.id !== message.id &&
-        candidate.author.isBot !== true &&
-        candidate.author.isMe !== true &&
-        candidate.text.trim(),
-    )
-    .slice(-CHANNEL_MENTION_CONTEXT_LIMIT)
-    .map(
-      (candidate) =>
-        `${candidate.author.fullName || candidate.author.userName || candidate.author.userId}: ${candidate.text}`,
-    );
+  // `recentMessages` is oldest first. Without the mention, only an earlier millisecond proves a
+  // message came first: Slack times messages in microseconds, so a later reply can share one.
+  const earlier =
+    mentionIndex >= 0
+      ? recent.slice(0, mentionIndex)
+      : recent.filter(
+          (candidate) =>
+            candidate.metadata.dateSent.getTime() < message.metadata.dateSent.getTime(),
+        );
 
-  const boundedContext = context.join("\n").slice(-CHANNEL_MENTION_CONTEXT_CHARACTER_LIMIT);
+  const context = boundedContext(
+    earlier
+      .filter((candidate) => candidate.author.isBot !== true && candidate.author.isMe !== true)
+      .flatMap((candidate) => contextLine(candidate) ?? [])
+      .slice(-CHANNEL_MENTION_CONTEXT_LIMIT),
+  );
 
-  return normalizedInboundMessage(
+  const messageText = plainTextWithLinks(message);
+
+  const normalized = normalizedInboundMessage(
     thread,
     message,
-    boundedContext.length === 0 ? message.text : `${boundedContext}\n${message.text}`,
+    context.text.length === 0 ? messageText : `${context.text}\n${messageText}`,
   );
+
+  return { ...normalized, attachments: [...normalized.attachments, ...context.attachments] };
 }
 
 export const subscribedExternalThreadIds = (
@@ -160,10 +272,11 @@ export function channelBindingsForRuntime(
   );
 }
 
-export interface InboundDispatchInput extends InboundChannelMessage {
+export interface InboundDispatchInput extends Omit<InboundChannelMessage, "attachments"> {
   readonly botId: BotId;
   readonly projectId: ProjectId;
   readonly provider: LiveProvider;
+  readonly attachments: DownloadedChannelAttachments;
 }
 
 export const dispatchInboundChannelMessage = (
@@ -288,6 +401,12 @@ export const dispatchInboundChannelMessage = (
           : yield* randomId(ctx, "channel-message"),
       );
 
+      const { attachments, notes } = yield* saveDownloadedFiles(ctx, {
+        threadId,
+        messageId,
+        files: input.attachments.files,
+      });
+
       yield* deps.engine.dispatch({
         type: "thread.turn.start",
         commandId,
@@ -295,8 +414,10 @@ export const dispatchInboundChannelMessage = (
         message: {
           messageId,
           role: "user",
-          text: input.text,
-          attachments: [],
+          text: [input.text, ...input.attachments.notes, ...notes]
+            .filter((part) => part.length > 0)
+            .join("\n"),
+          attachments,
           channelOrigin: {
             provider: input.provider,
             externalThreadId: input.externalThreadId,

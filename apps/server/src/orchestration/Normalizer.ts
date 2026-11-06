@@ -3,7 +3,6 @@ import * as Effect from "effect/Effect";
 import * as Fiber from "effect/Fiber";
 import * as FileSystem from "effect/FileSystem";
 import * as Option from "effect/Option";
-import * as Path from "effect/Path";
 import {
   type ClientOrchestrationCommand,
   type IsoDateTime,
@@ -19,6 +18,7 @@ import {
   PENDING_ATTACHMENT_THREAD_SEGMENT,
   parseThreadSegmentFromAttachmentId,
   resolveAttachmentPath,
+  writeAttachment,
 } from "../attachmentStore.ts";
 import { ServerConfig } from "../config.ts";
 import type { OrchestrationCommandReceiptRepositoryShape } from "../persistence/Services/OrchestrationCommandReceipts.ts";
@@ -84,7 +84,6 @@ export const normalizeDispatchCommand = (command: ClientOrchestrationCommand) =>
     const receivedAt = DateTime.formatIso(yield* DateTime.now);
     const canonicalCommand = canonicalizeClientCommandTimestamps(command, receivedAt);
     const fileSystem = yield* FileSystem.FileSystem;
-    const path = yield* Path.Path;
     const serverConfig = yield* ServerConfig;
     const workspacePaths = yield* WorkspacePaths.WorkspacePaths;
 
@@ -245,52 +244,32 @@ export const normalizeDispatchCommand = (command: ClientOrchestrationCommand) =>
             });
           }
 
-          const persistedAttachment =
-            attachment.type === "file"
-              ? {
-                  type: "file" as const,
-                  id: attachmentId,
-                  name: attachment.name,
-                  mimeType: attachment.mimeType,
-                  sizeBytes: bytes.byteLength,
-                }
-              : {
-                  type: "image" as const,
-                  id: attachmentId,
-                  name: attachment.name,
-                  mimeType: parsed.mimeType.toLowerCase(),
-                  sizeBytes: bytes.byteLength,
-                };
-
-          const attachmentPath = resolveAttachmentPath({
+          return yield* writeAttachment({
             attachmentsDir: serverConfig.attachmentsDir,
-            attachment: persistedAttachment,
-          });
-
-          if (!attachmentPath) {
-            return yield* new OrchestrationDispatchCommandError({
-              message: `Failed to resolve persisted path for '${attachment.name}'.`,
-            });
-          }
-
-          yield* fileSystem.makeDirectory(path.dirname(attachmentPath), { recursive: true }).pipe(
+            attachment:
+              attachment.type === "file"
+                ? {
+                    type: "file",
+                    id: attachmentId,
+                    name: attachment.name,
+                    mimeType: attachment.mimeType,
+                  }
+                : {
+                    type: "image",
+                    id: attachmentId,
+                    name: attachment.name,
+                    mimeType: parsed.mimeType.toLowerCase(),
+                  },
+            bytes,
+          }).pipe(
             Effect.mapError(
-              () =>
-                new OrchestrationDispatchCommandError({
-                  message: `Failed to create attachment directory for '${attachment.name}'.`,
-                }),
-            ),
-          );
-          yield* fileSystem.writeFile(attachmentPath, bytes).pipe(
-            Effect.mapError(
-              () =>
+              (cause) =>
                 new OrchestrationDispatchCommandError({
                   message: `Failed to persist attachment '${attachment.name}'.`,
+                  cause,
                 }),
             ),
           );
-
-          return persistedAttachment;
         }),
       { concurrency: 1 },
     ).pipe(Effect.tapError(() => removeClaimedAttachmentPaths(claimedAttachmentPaths)));

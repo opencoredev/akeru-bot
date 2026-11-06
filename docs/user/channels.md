@@ -83,6 +83,21 @@ A group message on Telegram, iMessage, or WhatsApp does not start Akeru work.
 
 For Slack and Discord, a direct mention starts a linked Akeru thread. Later replies in that platform thread continue the same Akeru thread without another mention. Akeru includes a small amount of recent platform-thread context with the first mention.
 
+## Links, images, and files
+
+The bot sees where each link points. A link shown with a shortened label, such as `example.com/projects/…`, reaches the bot as the label followed by the full address. A link whose label already is the address reaches the bot once.
+
+Images and files shared in a message reach the bot the same way as files attached in the Akeru composer, and they appear on the message in the Akeru conversation. A message with only an image or file, and no text, still reaches the bot. The same limits apply as in the composer:
+
+- Images: PNG, JPEG, GIF, and WebP.
+- Files: PDF, plain text, Markdown, CSV, JSON, XML, YAML, and TOML.
+- Each image or file can be up to 10 MB.
+- Up to 8 images and files per message. A file that Akeru cannot attach because of its type or size does not count toward the 8.
+
+When you mention the bot in a Slack or Discord thread, images and files shared in the recent messages that come with the mention also reach the bot. A screenshot posted just before "@bot what's wrong here?" reaches the bot with the question. The mention's own files come first, then files from the newest earlier message to the oldest.
+
+Akeru does not attach a file that breaks these limits, a file it cannot download, or an empty file. The bot still gets a short note that names the file and says why it was not attached, for example `[Shared file "report.zip" was not attached: unsupported type application/zip]`. Some services give Akeru no way to download a file; then the note includes the file's address when the service provides one. Files in the earlier messages that come with a mention get no note. The bot still sees each one's name in that earlier message.
+
 ## Delegation
 
 The connected bot remains the external conversation owner. It can send work to another Akeru bot or group. Delegated work follows the existing access, memory, usage, depth, concurrency, and approval limits.
@@ -115,7 +130,7 @@ Create a Slack app for one workspace.
 2. Create an app-level token with the `connections:write` scope.
 3. Install the app to the workspace and copy the bot token.
 4. Subscribe the app's bot events to `message.im` for direct messages, `app_mention` for channel mentions, and `message.channels` so replies inside a subscribed thread keep reaching the bot.
-5. Give the bot these scopes: `chat:write`, `reactions:write`, `app_mentions:read`, `channels:history`, `channels:read`, `im:history`, `im:read`, and `im:write`.
+5. Give the bot these scopes: `chat:write`, `reactions:write`, `app_mentions:read`, `channels:history`, `channels:read`, `files:read`, `im:history`, `im:read`, and `im:write`. Without `files:read`, the bot is told that shared images and files could not be downloaded.
 6. Save the bot token and app-level token in Akeru. Akeru checks the app-level token before it connects. If Slack rejects the token, Akeru reports an invalid token. If Slack cannot be reached, Akeru says so and leaves the token alone, so you can retry once the network is back.
 7. Select a bot and click **Connect**.
 

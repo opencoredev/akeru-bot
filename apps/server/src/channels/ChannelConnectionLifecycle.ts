@@ -22,6 +22,7 @@ import {
   type ChannelRuntimeEntry,
   type StartedTransport,
   type StartedChannel,
+  type DownloadedChannelAttachments,
   type InboundChannelMessage,
   type InboundCallback,
   type ChannelTransportContext,
@@ -48,6 +49,7 @@ import {
   clearPersistedChannelStatuses,
 } from "./ChannelDelivery.ts";
 import { replaceBinding, withChannelOperation } from "./ChannelOperations.ts";
+import { downloadInboundAttachments } from "./ChannelInboundAttachments.ts";
 
 export const startChannel = (
   ctx: ChannelRuntimeContext,
@@ -71,22 +73,33 @@ export const startChannel = (
     if (!project) return yield* failWith("The selected channel project is unavailable.", "project");
     let runtime: ChannelRuntimeEntry | undefined;
 
-    const dispatch = (message: InboundChannelMessage) =>
+    /** The runtime and model while this transport still owns a connected binding. */
+    const connectedRuntime = Effect.gen(function* () {
+      const current = runtime;
+
+      if (!current || ctx.runtimes.get(runtimeKey(bot.id, input.provider)) !== current) return null;
+      const currentModel = yield* deps.readModel;
+
+      const binding = currentModel.bots
+        .find((candidate) => candidate.id === bot.id)
+        ?.channelBindings.find((candidate) => candidate.provider === input.provider);
+
+      return binding?.status === "connected" ? { current, currentModel } : null;
+    });
+
+    const dispatchUnderProviderLock = (
+      message: InboundChannelMessage,
+      attachments: DownloadedChannelAttachments,
+    ) =>
       withChannelOperation(
         ctx,
         input.provider,
       )(
         Effect.gen(function* () {
-          const current = runtime;
+          const connected = yield* connectedRuntime;
 
-          if (!current || ctx.runtimes.get(runtimeKey(bot.id, input.provider)) !== current) return;
-          const currentModel = yield* deps.readModel;
-
-          const binding = currentModel.bots
-            .find((candidate) => candidate.id === bot.id)
-            ?.channelBindings.find((candidate) => candidate.provider === input.provider);
-
-          if (binding?.status !== "connected") return;
+          if (!connected) return;
+          const { current, currentModel } = connected;
           let duplicate = false;
 
           if (message.externalMessageId) {
@@ -105,6 +118,7 @@ export const startChannel = (
 
           yield* dispatchInboundChannelMessage(ctx, {
             ...message,
+            attachments,
             botId: bot.id,
             projectId: project.id,
             provider: input.provider,
@@ -127,7 +141,20 @@ export const startChannel = (
       );
 
     // SDK callbacks are the only place work crosses into Effect; each runs in the runtime scope.
-    const onInbound: InboundCallback = (message) => ctx.runSdkCallback(dispatch(message));
+    const onInbound: InboundCallback = (message) =>
+      ctx.runSdkCallback(
+        Effect.gen(function* () {
+          // Under the lock, so a message from a transport that is still connecting waits for it.
+          if (!(yield* withChannelOperation(ctx, input.provider)(connectedRuntime))) return;
+
+          const attachments = yield* downloadInboundAttachments(
+            ctx.inboundDownloadPermits,
+            message.attachments,
+          );
+
+          yield* dispatchUnderProviderLock(message, attachments);
+        }),
+      );
 
     const context: ChannelTransportContext = {
       botName: bot.name,

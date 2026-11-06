@@ -27,6 +27,7 @@ import type { ServerSecretStore } from "../../auth/ServerSecretStore.ts";
 import { createEmptyReadModel } from "../../orchestration/projector.ts";
 import type { OrchestrationEngineShape } from "../../orchestration/Services/OrchestrationEngine.ts";
 import { memoryChannelDeliveryStore } from "../ChannelDeliveryStore.ts";
+import { unusedAttachmentWriter } from "./channelAttachments.ts";
 import { ChannelRuntime, type ChannelRuntimeDependencies } from "../ChannelRuntime.ts";
 
 const adapters = vi.hoisted(() => ({
@@ -397,6 +398,7 @@ const makeHarness = (input: {
         Effect.sync(() => threads.find((thread) => thread.id === threadId) ?? null),
       nowIso: Effect.succeed(NOW),
       randomUuid: Effect.sync(() => `uuid-${sequence}`),
+      writeAttachmentIfMissing: unusedAttachmentWriter,
       httpClient: input.httpClient ?? slackProbeClient(true),
       ...(input.publicOrigin ? { publicOrigin: input.publicOrigin } : {}),
     };

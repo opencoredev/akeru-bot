@@ -42,6 +42,7 @@ describe("ProviderRuntimeIngestion", () => {
       });
 
       const message = {
+        attachments: [],
         externalThreadId: `${provider}:waiting`,
         externalMessageId: "request-waiting",
         text: "Deploy it",
@@ -150,6 +151,7 @@ describe("ProviderRuntimeIngestion", () => {
       const markWaiting = vi.spyOn(await harness.channels(), "markChannelTurnWaiting");
 
       const message = {
+        attachments: [],
         externalThreadId: "slack:session-ended",
         externalMessageId: "request-ended",
         text: "Deploy it",

@@ -100,6 +100,7 @@ describe("channel runtime", () => {
       expect(harness.readModel().bots[0]?.channelBindings[0]?.status).toBe("disconnected");
       yield* Effect.promise(async () =>
         callbacks[0]?.({
+          attachments: [],
           externalThreadId: "telegram:retired",
           externalMessageId: "late",
           text: "Late event",
@@ -110,6 +111,52 @@ describe("channel runtime", () => {
       ).toHaveLength(0);
       yield* stopChannelsForBot(BOT_ID);
       expect(stops).toBe(1);
+    }),
+  );
+
+  it.effect("keeps a message with a file that arrives while its transport connects", () =>
+    Effect.gen(function* () {
+      let downloads = 0;
+      let early: Promise<void> | undefined;
+
+      const harness = makeHarness({
+        startTransport: async (_input, onDirectMessage) => {
+          early = onDirectMessage({
+            attachments: [
+              {
+                name: "queued.png",
+                mimeType: "image/png",
+                sizeBytes: 4,
+                fetch: async () => {
+                  downloads += 1;
+
+                  return Uint8Array.from([0x89, 0x50, 0x4e, 0x47]);
+                },
+              },
+            ],
+            externalThreadId: "telegram:queued",
+            externalMessageId: "queued-before-connect",
+            text: "Sent while the bot was offline",
+          });
+
+          return {
+            externalIdentity: "@akeru",
+            runtime: { post: async () => undefined, shutdown: async () => undefined },
+          };
+        },
+      });
+
+      yield* connectChannel(harness.dependencies, telegramConnect(BOT_ID));
+      yield* Effect.promise(() => early ?? Promise.resolve());
+
+      expect(
+        harness.commands.flatMap((command) =>
+          command.type === "thread.turn.start"
+            ? [command.message.attachments.map((attachment) => attachment.name)]
+            : [],
+        ),
+      ).toEqual([["queued.png"]]);
+      expect(downloads).toBe(1);
     }),
   );
 
@@ -135,8 +182,20 @@ describe("channel runtime", () => {
 
       yield* connectChannel(harness.dependencies, telegramConnect(BOT_ID));
       yield* disconnectChannel(harness.dependencies, BOT_ID, "telegram");
+      let downloads = 0;
 
       const message = {
+        attachments: [
+          {
+            name: "shot.png",
+            mimeType: "image/png",
+            fetch: async () => {
+              downloads += 1;
+
+              return Uint8Array.from([0x89, 0x50, 0x4e, 0x47]);
+            },
+          },
+        ],
         externalThreadId: "telegram:retired",
         externalMessageId: "late",
         text: "Late event",
@@ -152,12 +211,14 @@ describe("channel runtime", () => {
       expect(
         harness.commands.filter((command) => command.type === "thread.turn.start"),
       ).toHaveLength(0);
+      expect(downloads).toBe(0);
       yield* Effect.promise(async () =>
         callbacks[1]?.({ ...message, externalMessageId: "current" }),
       );
       expect(
         harness.commands.filter((command) => command.type === "thread.turn.start"),
       ).toHaveLength(1);
+      expect(downloads).toBe(1);
     }),
   );
 
