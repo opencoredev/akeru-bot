@@ -154,4 +154,50 @@ describe("ProviderCommandReactor", () => {
       ),
     });
   });
+
+  it("restarts a Claude Agent session when its fast mode changes", async () => {
+    const claudeCode = ProviderInstanceId.make("claudeCode");
+
+    const harness = await createHarness({
+      threadModelSelection: { instanceId: claudeCode, model: "claude-opus-4-6" },
+    });
+
+    const now = "2026-01-01T00:00:00.000Z";
+
+    const turnStart = (index: number, fastMode: boolean) =>
+      harness.run(
+        harness.engine.dispatch({
+          type: "thread.turn.start",
+          commandId: CommandId.make(`cmd-turn-start-claude-code-fast-${index}`),
+          threadId: ThreadId.make("thread-1"),
+          message: {
+            messageId: asMessageId(`user-message-claude-code-fast-${index}`),
+            role: "user",
+            text: `claude code turn ${index}`,
+            attachments: [],
+          },
+          modelSelection: createModelSelection(claudeCode, "claude-opus-4-6", [
+            { id: "fastMode", value: fastMode },
+          ]),
+          interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
+          runtimeMode: "approval-required",
+          createdAt: now,
+        }),
+      );
+
+    await turnStart(1, false);
+    await harness.waitFor(() => harness.sendTurn.mock.calls.length === 1);
+
+    await turnStart(2, true);
+    await harness.waitFor(() => harness.sendTurn.mock.calls.length === 2);
+
+    expect(harness.startSession.mock.calls).toHaveLength(2);
+    expect(harness.startSession.mock.calls[1]?.[1]).toMatchObject({
+      provider: "claudeCode",
+      resumeCursor: { opaque: "resume-1" },
+      modelSelection: createModelSelection(claudeCode, "claude-opus-4-6", [
+        { id: "fastMode", value: true },
+      ]),
+    });
+  });
 });

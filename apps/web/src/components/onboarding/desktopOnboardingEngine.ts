@@ -10,6 +10,7 @@ interface DesktopOnboardingProvider {
   readonly driver: string;
   readonly enabled: boolean;
   readonly installed: boolean;
+  readonly status?: string | undefined;
   readonly availability?: "available" | "unavailable" | undefined;
   readonly models: ReadonlyArray<{
     readonly slug: string;
@@ -22,25 +23,42 @@ export type DesktopOnboardingCreationReadiness =
   | { readonly status: "unavailable" }
   | { readonly status: "ready"; readonly engine: BotEngine };
 
-const subscriptionDriver: Readonly<Partial<Record<SubscriptionProviderId, string>>> = {
-  "openai-codex": "codex",
-  anthropic: "claudeAgent",
-  xai: "grok",
-  "kimi-for-coding": "kimi",
-  "opencode-go": "opencodeGo",
+/**
+ * Drivers that run each account, first choice first. Claude also runs on the
+ * user's Claude Code login, which wins only when it is ready and the API key
+ * connection is not.
+ */
+const subscriptionDrivers: Readonly<Partial<Record<SubscriptionProviderId, readonly string[]>>> = {
+  "openai-codex": ["codex"],
+  anthropic: ["claudeAgent", "claudeCode"],
+  xai: ["grok"],
+  "kimi-for-coding": ["kimi"],
+  "opencode-go": ["opencodeGo"],
 };
 
 export function resolveDesktopOnboardingEngine(
   providerId: SubscriptionProviderId,
   providers: ReadonlyArray<DesktopOnboardingProvider>,
 ): BotEngine | null {
-  const provider = providers.find(
+  const drivers = subscriptionDrivers[providerId] ?? [];
+
+  const usable = providers.filter(
     (candidate) =>
-      candidate.driver === subscriptionDriver[providerId] &&
+      drivers.includes(candidate.driver) &&
       candidate.enabled &&
       candidate.installed &&
       candidate.availability !== "unavailable",
   );
+
+  const byPreference = (candidates: ReadonlyArray<DesktopOnboardingProvider>) =>
+    drivers.flatMap((driver) => candidates.filter((candidate) => candidate.driver === driver));
+
+  const firstChoice = usable.find((candidate) => candidate.driver === drivers[0]);
+
+  const provider =
+    drivers.length > 1
+      ? (byPreference(usable.filter((candidate) => candidate.status === "ready"))[0] ?? firstChoice)
+      : firstChoice;
 
   const model = provider?.models.find((candidate) => candidate.isDefault) ?? provider?.models[0];
 

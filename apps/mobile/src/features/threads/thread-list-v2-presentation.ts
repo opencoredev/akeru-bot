@@ -13,6 +13,7 @@ import { relativeTime } from "../../lib/time";
 const PROVIDER_BOT_NAMES = new Map(
   Object.entries({
     claude: "Claude",
+    claudeCode: "Claude",
     codex: "Codex",
     grok: "Grok",
     kimi: "Kimi",

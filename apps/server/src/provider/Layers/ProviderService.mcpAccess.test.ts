@@ -4,6 +4,7 @@ import * as Effect from "effect/Effect";
 import * as ProviderService from "../Services/ProviderService.ts";
 import { activateImageGenerationRuntime } from "../../image-generation/ImageGenerationRuntime.ts";
 import * as NodeServices from "@effect/platform-node/NodeServices";
+import * as McpMemoryToolSession from "../../mcp/McpMemoryToolSession.ts";
 import {
   asThreadId,
   codexInstanceId,
@@ -97,6 +98,27 @@ describe("agent browser access", () => {
       });
 
       assert.deepEqual(issued.capabilities, [["image", "preview"]]);
+    }).pipe(Effect.provide(NodeServices.layer)),
+  );
+});
+
+describe("agent browser access", () => {
+  it.effect("keeps the controller's memory access when it starts a legacy session", () =>
+    Effect.gen(function* () {
+      const threadId = asThreadId("thread-legacy-memory");
+      McpMemoryToolSession.setMcpMemoryToolSession(threadId, () =>
+        Promise.reject(new Error("unused memory handler")),
+      );
+
+      const issued = yield* startSessionWith(false, threadId).pipe(
+        Effect.ensuring(
+          Effect.sync(() => McpMemoryToolSession.clearMcpMemoryToolSession(threadId)),
+        ),
+      );
+
+      // With preview and images off, memory alone still reaches the provider.
+      assert.deepEqual(issued, [threadId]);
+      assert.deepEqual(issued.capabilities, [["memory"]]);
     }).pipe(Effect.provide(NodeServices.layer)),
   );
 });

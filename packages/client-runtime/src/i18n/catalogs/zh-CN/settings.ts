@@ -392,4 +392,42 @@ export const settingsCatalog = {
     "当其他人提及此机器人时，告诉他们这是谁的机器人",
   "This bot answers only linked accounts and people you add. After you connect, create a link code on the connection to link your account.":
     "此机器人只回复已关联的账号和你添加的人。连接后，请在该连接上创建关联码来关联你的账号。",
+  "Copy command": "复制命令",
+  "Couldn't copy the command. Select it and copy it manually.": "无法复制命令。请选中后手动复制。",
+  "This account's Claude Code folder is saved as a hidden value. In a terminal on this environment's machine, set CLAUDE_CONFIG_DIR to that folder, then run:":
+    "此账号的 Claude Code 文件夹保存为隐藏值。请在此环境所在机器的终端中，将 CLAUDE_CONFIG_DIR 设为该文件夹，然后运行：",
+  "This account's home folder is saved as a hidden value. In a terminal on this environment's machine, set {variable} to that folder, then run:":
+    "此账号的主文件夹保存为隐藏值。请在此环境所在机器的终端中，将 {variable} 设为该文件夹，然后运行：",
+  "Logged in as {account}.": "已登录为 {account}。",
+  Verify: "验证",
+  "Open the Claude Code install guide": "打开 Claude Code 安装指南",
+  "Then log in on the same machine:": "然后在同一台机器上登录：",
+  "Log in on this environment's machine:": "在此环境所在的机器上登录：",
+  "Logged out": "未登录",
+  "Checking Claude Code": "正在检查 Claude Code",
+  "Akeru is looking for Claude Code on this environment's machine.":
+    "Akeru 正在此环境所在的机器上查找 Claude Code。",
+  "Install Claude Code": "安装 Claude Code",
+  "Claude Code is not installed on this environment's machine. Install it, then log in.":
+    "此环境所在的机器上未安装 Claude Code。请先安装，然后登录。",
+  "Log in to Claude Code": "登录 Claude Code",
+  "Run this in a terminal on this environment's machine, then verify.":
+    "在此环境所在机器的终端中运行此命令，然后验证。",
+  "Claude Agent ready": "Claude Agent 已就绪",
+  "Bots on this connection use your own Claude Code login.":
+    "使用此连接的机器人会使用你自己的 Claude Code 登录。",
+  "Claude Code needs attention": "Claude Code 需要处理",
+  "Akeru could not use Claude Code. Fix the problem below, then verify.":
+    "Akeru 无法使用 Claude Code。请修复下面的问题，然后验证。",
+  "Claude Agent": "Claude Agent",
+  "Stop using Claude Agent": "停止使用 Claude Agent",
+  "Use your Claude Code login": "使用你的 Claude Code 登录",
+  "Run Claude bots on the Claude Code installed on this environment's machine, with the login you made there. No API key needed.":
+    "让 Claude 机器人通过此环境所在机器上安装的 Claude Code 运行，并使用你在那里完成的登录。无需 API 密钥。",
+  "Set up your Claude Code login to chat with {bot}": "设置你的 Claude Code 登录以与 {bot} 聊天",
+  "Akeru runs Claude Code on this machine with the login you made there. It never sees your Claude password or token.":
+    "Akeru 会在这台机器上使用你在那里完成的登录来运行 Claude Code。它永远看不到你的 Claude 密码或令牌。",
+  "How should this account connect?": "此账号应如何连接？",
+  "An Anthropic API key you add from its card": "在其卡片中添加的 Anthropic API 密钥",
+  "Claude Code on this machine, with its own login": "这台机器上的 Claude Code，使用它自己的登录",
 } as const;

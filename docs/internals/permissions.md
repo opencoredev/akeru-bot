@@ -139,6 +139,26 @@ approval bound to that call. Right before listing, the tool reads the policy aga
 owner's grant, so each answer covers one listing. `POLICY_NAMED_TOOL_NAMES` in
 `mastra/AkeruTools.ts` names the tools that use this path.
 
+Claude Code login sessions run Claude Code's own tools, so the native Claude adapter enforces the
+policy itself: a PreToolUse hook decides every call with `claudeCodeToolRiskClass`, an `ask` opens
+an owner-only Approve or Decline prompt bound to the call that shows the exact command or path and
+the reason, and `authorizeApprovedBotAction` re-reads the policy before the call runs. File tools
+are classified by their resolved path: outside the bot's workspace, a read is `environment-access`
+and a write is `write-outside`, and a path that cannot be resolved safely counts as outside. File
+tools and MCP tools that name Claude Code's own login and settings are refused, and a shell command
+that may reach them always asks the owner. See [Claude Code login](./providers.md#claude-code-login).
+
+The session binds to its chat's policy entry in `tools/BotToolPermissionSessions.ts` when it starts.
+A later start on the same chat updates the bound entry, but a stop only detaches it from the chat, so
+a stop that finishes after a restart cannot change what the new session enforces. A session that has
+no policy entry denies every tool call instead of falling back to the default policy.
+
+This protection is best-effort. On the user's own machine a bot with shell access can read anything
+the user can, and a string check cannot catch every way a shell builds a path. The classifier is
+cautious where it cannot be sure, but it is not an isolation boundary. A
+[sandbox workspace](./sandbox-workspaces.md) is: run bots that should not reach the user's files
+there.
+
 A delegated chat's principal is the parent bot acting for the owner. Delegation records do not
 record other people yet.
 

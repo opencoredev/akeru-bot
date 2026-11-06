@@ -39,6 +39,58 @@ describe("ComposerPendingApprovalPanel", () => {
     expect(markup).not.toContain("Command approval requested");
   });
 
+  it("shows a Claude Code owner approval's exact command and the policy reason", () => {
+    const command = "git push --force origin main && rm -rf build/";
+
+    const reason =
+      "This bot's permission policy asks you first because it can change things outside the bot's workspace. This approval applies only to this action.";
+
+    const markup = renderToStaticMarkup(
+      <ComposerPendingApprovalPanel
+        approval={{
+          requestId: ApprovalRequestId.make("approval-claude-code"),
+          requestKind: "command",
+          createdAt: "2026-10-31T00:00:00.000Z",
+          toolName: "Bash",
+          detail: `${command}\n\n${reason}`,
+          args: { command, reason },
+          options: [
+            { decision: "decline", label: "Decline" },
+            { decision: "accept", label: "Approve" },
+          ],
+        }}
+        pendingCount={1}
+      />,
+    );
+
+    expect(markup).toContain("git push --force origin main &amp;&amp; rm -rf build/");
+    expect(markup).toContain("permission policy asks you first");
+    expect(markup).not.toContain("Approve this action with Bash?");
+  });
+
+  it("shows an MCP tool's whole input even when it has a command argument", () => {
+    const input = { command: "deploy", target: "production", force: true };
+    const detail = `mcp__ops__run\n${JSON.stringify(input, null, 2)}`;
+
+    const markup = renderToStaticMarkup(
+      <ComposerPendingApprovalPanel
+        approval={{
+          requestId: ApprovalRequestId.make("approval-mcp-command"),
+          requestKind: "command",
+          createdAt: "2026-11-05T00:00:00.000Z",
+          toolName: "mcp__ops__run",
+          detail,
+          args: { command: "deploy" },
+        }}
+        pendingCount={1}
+      />,
+    );
+
+    expect(markup).toContain("&quot;target&quot;: &quot;production&quot;");
+    expect(markup).toContain("&quot;force&quot;: true");
+    expect(markup).toContain("mcp__ops__run");
+  });
+
   it("drops the expander when a short command has nothing more to show", () => {
     const markup = renderToStaticMarkup(
       <ComposerPendingApprovalPanel

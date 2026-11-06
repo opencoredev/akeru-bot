@@ -9,7 +9,6 @@ import {
 import {
   ApprovalRequestId,
   type EventId,
-  type ProviderApprovalDecision,
   type ProviderRuntimeEvent,
   type ProviderUserInputAnswers,
   type RuntimeMode,
@@ -21,6 +20,8 @@ import {
 } from "@akeru/shared/claudeCompaction";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
+import type * as FileSystem from "effect/FileSystem";
+import type * as Path from "effect/Path";
 import * as Ref from "effect/Ref";
 import { type ProviderAdapterRequestError } from "../../Errors.ts";
 import {
@@ -29,13 +30,20 @@ import {
   type PendingApproval,
   type PendingUserInput,
 } from "./ClaudeAdapterState.ts";
+import { type ClaudeCodeFileScope } from "../../claudeCode/ClaudeCodeToolPaths.ts";
+import { type BotToolPermissionBinding } from "../../tools/BotToolPermissionSessions.ts";
+import {
+  CLAUDE_APPROVAL_TOO_LONG_MESSAGE,
+  claudeApprovalTooLong,
+  createClaudeApprovalRequests,
+} from "./ClaudeApprovalRequests.ts";
+import { createClaudeSessionPolicy } from "./ClaudeSessionPolicy.ts";
+import { claudeToolPolicyDeniedMessage } from "./ClaudeToolPolicy.ts";
 import {
   asCanonicalTurnId,
   asRuntimeRequestId,
-  classifyRequestType,
   extractExitPlanModePlan,
   nativeProviderRefs,
-  summarizeToolRequest,
   toSessionPermissionUpdates,
 } from "./ClaudeProtocolValues.ts";
 import { finiteNonNegativeInteger } from "./ClaudeUsage.ts";
@@ -48,6 +56,15 @@ import { finiteNonNegativeInteger } from "./ClaudeUsage.ts";
  */
 export function createClaudeSessionPermissions(deps: {
   readonly runtimeMode: RuntimeMode | undefined;
+  /**
+   * Claude Code login sessions answer to the responding bot's permission policy,
+   * read through this session's own binding. Without one, no bot policy applies.
+   */
+  readonly botPermissions: BotToolPermissionBinding | undefined;
+  /** Where the bot's workspace and Claude Code's own files are, for the policy. */
+  readonly fileScope: ClaudeCodeFileScope;
+  readonly fileSystem: FileSystem.FileSystem;
+  readonly path: Path.Path;
   readonly contextRef: Ref.Ref<ClaudeSessionContext | undefined>;
   readonly pendingApprovals: Map<ApprovalRequestId, PendingApproval>;
   readonly pendingUserInputs: Map<ApprovalRequestId, PendingUserInput>;
@@ -71,7 +88,22 @@ export function createClaudeSessionPermissions(deps: {
     },
   ) => Effect.Effect<void, ProviderAdapterRequestError, never>;
 }) {
-  const { contextRef, pendingApprovals, pendingUserInputs, runFork, runPromise } = deps;
+  const { contextRef, pendingUserInputs, runFork, runPromise } = deps;
+
+  const { awaitToolApproval } = createClaudeApprovalRequests(deps);
+
+  const sessionPolicy = deps.botPermissions
+    ? createClaudeSessionPolicy({
+        botPermissions: deps.botPermissions,
+        contextRef,
+        runPromise,
+        randomUUIDv4: deps.randomUUIDv4,
+        awaitToolApproval,
+        fileScope: deps.fileScope,
+        fileSystem: deps.fileSystem,
+        path: deps.path,
+      })
+    : undefined;
 
   /**
    * Handle AskUserQuestion tool calls by emitting a `user-input.requested`
@@ -336,6 +368,19 @@ export function createClaudeSessionPermissions(deps: {
       } satisfies PermissionResult;
     }
 
+    const call = {
+      toolName,
+      toolInput,
+      toolUseID: callbackOptions.toolUseID,
+      signal: callbackOptions.signal,
+    };
+
+    if (sessionPolicy) {
+      const gate = yield* sessionPolicy.gateToolCall(context, call);
+
+      if (gate.kind === "settled") return gate.result;
+    }
+
     const runtimeMode = deps.runtimeMode ?? "full-access";
 
     if (runtimeMode === "full-access") {
@@ -345,109 +390,54 @@ export function createClaudeSessionPermissions(deps: {
       } satisfies PermissionResult;
     }
 
-    const requestId = ApprovalRequestId.make(yield* deps.randomUUIDv4);
-    const requestType = classifyRequestType(toolName);
-    const detail = summarizeToolRequest(toolName, readSdkRecord(toolInput) ?? {});
-    const decisionDeferred = yield* Deferred.make<ProviderApprovalDecision>();
-
-    const pendingApproval: PendingApproval = {
-      requestType,
-      detail,
-      decision: decisionDeferred,
-      ...(callbackOptions.suggestions ? { suggestions: callbackOptions.suggestions } : {}),
-    };
-
-    const requestedStamp = yield* deps.makeEventStamp();
-    yield* deps.offerRuntimeEvent({
-      type: "request.opened",
-      eventId: requestedStamp.eventId,
-      provider: PROVIDER,
-      createdAt: requestedStamp.createdAt,
-      threadId: context.session.threadId,
-      ...(context.turnState ? { turnId: asCanonicalTurnId(context.turnState.turnId) } : {}),
-      requestId: asRuntimeRequestId(requestId),
-      payload: {
-        requestType,
-        detail,
-      },
-      providerRefs: nativeProviderRefs(context, {
-        providerItemId: callbackOptions.toolUseID,
-      }),
-      raw: {
-        source: "claude.sdk.permission",
-        method: "canUseTool/request",
-        payload: {
-          toolName,
-          input: toolInput,
-        },
-      },
-    });
-
-    pendingApprovals.set(requestId, pendingApproval);
-
-    const onAbort = () => {
-      if (!pendingApprovals.has(requestId)) {
-        return;
-      }
-
-      pendingApprovals.delete(requestId);
-      runFork(Deferred.succeed(decisionDeferred, "cancel"));
-    };
-
-    callbackOptions.signal.addEventListener("abort", onAbort, {
-      once: true,
-    });
-
-    // Same late-listener race as handleAskUserQuestion: the signal may
-    // have aborted while the request event emissions were awaited.
-    if (callbackOptions.signal.aborted) {
-      onAbort();
-    }
-
-    const decision = yield* Deferred.await(decisionDeferred);
-    pendingApprovals.delete(requestId);
-
-    const resolvedStamp = yield* deps.makeEventStamp();
-    yield* deps.offerRuntimeEvent({
-      type: "request.resolved",
-      eventId: resolvedStamp.eventId,
-      provider: PROVIDER,
-      createdAt: resolvedStamp.createdAt,
-      threadId: context.session.threadId,
-      ...(context.turnState ? { turnId: asCanonicalTurnId(context.turnState.turnId) } : {}),
-      requestId: asRuntimeRequestId(requestId),
-      payload: {
-        requestType,
-        decision,
-      },
-      providerRefs: nativeProviderRefs(context, {
-        providerItemId: callbackOptions.toolUseID,
-      }),
-      raw: {
-        source: "claude.sdk.permission",
-        method: "canUseTool/decision",
-        payload: {
-          decision,
-        },
-      },
-    });
-
-    if (decision === "accept" || decision === "acceptForSession") {
+    if (claudeApprovalTooLong(toolName, toolInput)) {
       return {
-        behavior: "allow",
-        updatedInput: toolInput,
-        ...(decision === "acceptForSession"
-          ? {
-              updatedPermissions: toSessionPermissionUpdates(toolName, pendingApproval.suggestions),
-            }
-          : {}),
+        behavior: "deny",
+        message: CLAUDE_APPROVAL_TOO_LONG_MESSAGE,
       } satisfies PermissionResult;
     }
 
+    const decision = yield* awaitToolApproval(context, {
+      ...call,
+      suggestions: callbackOptions.suggestions,
+      rawMethod: "canUseTool",
+    });
+
+    if (decision !== "accept" && decision !== "acceptForSession") {
+      return {
+        behavior: "deny",
+        message:
+          decision === "cancel"
+            ? "User cancelled tool execution."
+            : "User declined tool execution.",
+      } satisfies PermissionResult;
+    }
+
+    // The approval may have waited a long time; the policy decides again now.
+    const current = sessionPolicy
+      ? yield* sessionPolicy.recheckBeforeRun(context, toolName, toolInput)
+      : undefined;
+
+    const verdict = current?.verdict;
+
+    if (current && verdict?.decision === "deny") {
+      return {
+        behavior: "deny",
+        message: claudeToolPolicyDeniedMessage(toolName, current),
+      } satisfies PermissionResult;
+    }
+
+    // A session-wide answer cannot cover calls the policy asks the owner about.
+    const remembersForSession = decision === "acceptForSession" && verdict?.decision !== "ask";
+
     return {
-      behavior: "deny",
-      message:
-        decision === "cancel" ? "User cancelled tool execution." : "User declined tool execution.",
+      behavior: "allow",
+      updatedInput: toolInput,
+      ...(remembersForSession
+        ? {
+            updatedPermissions: toSessionPermissionUpdates(toolName, callbackOptions.suggestions),
+          }
+        : {}),
     } satisfies PermissionResult;
   });
 
@@ -459,5 +449,5 @@ export function createClaudeSessionPermissions(deps: {
     callbackOptions,
   ) => runPromise(handleResumeDialog(request, callbackOptions));
 
-  return { canUseTool, onUserDialog };
+  return { canUseTool, onUserDialog, hooks: sessionPolicy?.hooks };
 }

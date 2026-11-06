@@ -32,6 +32,7 @@ import { AkeruSessionResources } from "../../AkeruSessionResources.ts";
 import { AgentControllerRuntimeError } from "../../Errors.ts";
 import { type AgentControllerShape } from "../../Services/AgentController.ts";
 import { LegacyProviderBridge } from "../../Services/LegacyProviderBridge.ts";
+import { clearBotToolPermissionSession } from "../../tools/BotToolPermissionSessions.ts";
 
 import {
   type ResolvedEngine,
@@ -98,7 +99,15 @@ export function createConversation(deps: {
     if (!active) {
       const legacySessions = yield* deps.legacyProviderBridge.listSessions();
 
-      if (legacySessions.some((session) => session.threadId === input.threadId)) {
+      // A legacy session can exit before its chat is deleted, as Claude Agent's
+      // does on interrupt. Its tracked resources are released all the same.
+      if (
+        legacySessions.some((session) => session.threadId === input.threadId) ||
+        deps.legacyResourceIdentity.has(key)
+      ) {
+        // Release only the resources of the session this stop found. A new session that starts
+        // on the thread while the provider is stopping owns its own resources and identity.
+        const stoppingIdentity = deps.legacyResourceIdentity.get(key);
         const pendingTurns = deps.legacyPending(key);
 
         for (const pending of pendingTurns) deps.restoreLegacyMemoryHandler(key, pending);
@@ -117,12 +126,21 @@ export function createConversation(deps: {
         yield* deps.legacyProviderBridge.stopSession(input).pipe(
           Effect.ensuring(
             Effect.gen(function* () {
+              // Each await can let a restart take the thread, so ownership is checked again.
+              const owned = () => deps.legacyResourceIdentity.get(key) === stoppingIdentity;
+
+              if (!owned()) return;
               yield* deps
                 .runMastra("resources.release", () =>
                   deps.sessionResources.release(key, { destroy: destroyResources }),
                 )
                 .pipe(Effect.ignoreCause({ log: true }));
+
+              if (!owned()) return;
               yield* deps.clearPreviewMcpSession(input.threadId);
+
+              if (!owned()) return;
+              clearBotToolPermissionSession(input.threadId);
               deps.legacyResourceIdentity.delete(key);
             }),
           ),

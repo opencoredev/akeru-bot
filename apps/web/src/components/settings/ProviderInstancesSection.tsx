@@ -2,6 +2,7 @@ import { recordLookup } from "../recordLookup";
 import { Predicate } from "effect";
 import { useAtomValue } from "@effect/atom-react";
 import { safeErrorLogAttributes } from "@akeru/client-runtime/errors";
+import { CLAUDE_CODE_DRIVER } from "@akeru/client-runtime/claude-code-login";
 import {
   isAtomCommandInterrupted,
   squashAtomCommandFailure,
@@ -39,6 +40,7 @@ import { Button } from "../ui/button";
 import { stackedThreadToast, toastManager } from "../ui/toast";
 import { AddProviderInstanceDialog } from "./AddProviderInstanceDialog";
 import { ProviderInstanceCard } from "./ProviderInstanceCard";
+import { ClaudeCodeLoginSetup } from "./ClaudeCodeLoginSetup";
 import { ProviderAccountSection } from "./ProvidersPanel";
 import type { SubscriptionProviderDefinition } from "./subscriptionProviders";
 import { getDriverOption } from "./providerDriverMeta";
@@ -166,6 +168,10 @@ export function ProviderInstancesSection({
   const rows = instanceRowsForDrivers(settings, drivers);
   // New accounts use the page's primary driver; pages without a known driver cannot add one.
   const addDriverOption = getDriverOption(drivers[0]);
+
+  // A page with more than one driver, such as Claude's API key and Claude Code
+  // login, lets the new account choose how it connects.
+  const addDriverOptions = drivers.flatMap((driver) => getDriverOption(driver) ?? []);
 
   const updateCandidateByInstanceId = useMemo(
     () =>
@@ -398,6 +404,14 @@ export function ProviderInstancesSection({
 
             const driverOption = getDriverOption(row.driver);
 
+            // A default slot without a built-in mirror, such as Claude Code login,
+            // exists only because the user added it, so it can be removed.
+            const builtInDefault =
+              row.isDefault &&
+              recordLookup(DEFAULT_UNIFIED_SETTINGS.providers, row.driver) !== undefined;
+
+            const isClaudeCodeLogin = row.driver === CLAUDE_CODE_DRIVER;
+
             return (
               <ProviderInstanceCard
                 key={row.instanceId}
@@ -410,9 +424,17 @@ export function ProviderInstancesSection({
                   setExpanded((existing) => ({ ...existing, [row.instanceId]: open }))
                 }
                 onUpdate={(next) => updateInstance(row, next)}
-                onDelete={row.isDefault ? undefined : () => deleteInstance(row.instanceId)}
+                onDelete={builtInDefault ? undefined : () => deleteInstance(row.instanceId)}
                 accountContent={
-                  account && !row.isDefault ? (
+                  isClaudeCodeLogin ? (
+                    row.isDefault ? undefined : (
+                      <ClaudeCodeLoginSetup
+                        environmentId={environmentId}
+                        instanceId={row.instanceId}
+                        provider={liveProvider}
+                      />
+                    )
+                  ) : account && !row.isDefault ? (
                     <ProviderAccountSection
                       environmentId={environmentId}
                       definition={account}
@@ -421,7 +443,7 @@ export function ProviderInstancesSection({
                   ) : undefined
                 }
                 headerAction={
-                  row.isDefault && row.isDirty ? (
+                  builtInDefault && row.isDirty ? (
                     <SettingResetButton
                       label={t("{provider} provider settings", {
                         provider: driverOption?.label ?? String(row.driver),
@@ -463,6 +485,7 @@ export function ProviderInstancesSection({
           environmentLabel={environment?.label ?? t("this environment")}
           providerLabel={providerLabel}
           driverOption={addDriverOption}
+          driverOptions={addDriverOptions}
           onOpenChange={setIsAddDialogOpen}
         />
       ) : null}

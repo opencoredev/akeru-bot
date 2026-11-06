@@ -457,100 +457,55 @@ describe("ClaudeAdapterLive", () => {
 });
 
 describe("ClaudeAdapterLive", () => {
-  it.effect(
-    "supports rollbackThread by trimming in-memory turns and preserving earlier turns",
-    () => {
-      const harness = makeHarness();
+  it.effect("refuses rollbackThread and keeps every turn the live query remembers", () => {
+    const harness = makeHarness();
 
-      return Effect.gen(function* () {
-        const adapter = yield* ClaudeAdapter;
+    return Effect.gen(function* () {
+      const adapter = yield* ClaudeAdapter;
 
-        const session = yield* adapter.startSession({
-          threadId: THREAD_ID,
-          provider: ProviderDriverKind.make("claudeAgent"),
-          runtimeMode: "full-access",
-        });
+      const session = yield* adapter.startSession({
+        threadId: THREAD_ID,
+        provider: ProviderDriverKind.make("claudeAgent"),
+        runtimeMode: "full-access",
+      });
 
-        const firstTurn = yield* adapter.sendTurn({
-          threadId: session.threadId,
-          input: "first",
-          attachments: [],
-        });
+      const turn = yield* adapter.sendTurn({
+        threadId: session.threadId,
+        input: "first",
+        attachments: [],
+      });
 
-        const firstCompletedFiber = yield* Stream.filter(
-          adapter.streamEvents,
-          (event) => event.type === "turn.completed",
-        ).pipe(Stream.runHead, Effect.forkChild);
+      const completedFiber = yield* Stream.filter(
+        adapter.streamEvents,
+        (event) => event.type === "turn.completed",
+      ).pipe(Stream.runHead, Effect.forkChild);
 
-        harness.query.emit(
-          claudeMessage({
-            type: "result",
-            subtype: "success",
-            is_error: false,
-            errors: [],
-            session_id: "sdk-session-rollback",
-            uuid: "result-first",
-          }),
-        );
-
-        const firstCompleted = yield* Fiber.join(firstCompletedFiber);
-        assert.equal(firstCompleted._tag, "Some");
-
-        if (
-          Predicate.isTagged(firstCompleted, "Some") &&
-          firstCompleted.value.type === "turn.completed"
-        ) {
-          assert.equal(String(firstCompleted.value.turnId), String(firstTurn.turnId));
-        }
-
-        const secondTurn = yield* adapter.sendTurn({
-          threadId: session.threadId,
-          input: "second",
-          attachments: [],
-        });
-
-        const secondCompletedFiber = yield* Stream.filter(
-          adapter.streamEvents,
-          (event) => event.type === "turn.completed",
-        ).pipe(Stream.runHead, Effect.forkChild);
-
-        harness.query.emit(
-          claudeMessage({
-            type: "result",
-            subtype: "success",
-            is_error: false,
-            errors: [],
-            session_id: "sdk-session-rollback",
-            uuid: "result-second",
-          }),
-        );
-
-        const secondCompleted = yield* Fiber.join(secondCompletedFiber);
-        assert.equal(secondCompleted._tag, "Some");
-
-        if (
-          Predicate.isTagged(secondCompleted, "Some") &&
-          secondCompleted.value.type === "turn.completed"
-        ) {
-          assert.equal(String(secondCompleted.value.turnId), String(secondTurn.turnId));
-        }
-
-        const threadBeforeRollback = yield* adapter.readThread(session.threadId);
-        assert.equal(threadBeforeRollback.turns.length, 2);
-
-        const rolledBack = yield* adapter.rollbackThread(session.threadId, 1);
-        assert.equal(rolledBack.turns.length, 1);
-        assert.equal(rolledBack.turns[0]?.id, firstTurn.turnId);
-
-        const threadAfterRollback = yield* adapter.readThread(session.threadId);
-        assert.equal(threadAfterRollback.turns.length, 1);
-        assert.equal(threadAfterRollback.turns[0]?.id, firstTurn.turnId);
-      }).pipe(
-        Effect.provideService(Random.Random, makeDeterministicRandomService()),
-        Effect.provide(harness.layer),
+      harness.query.emit(
+        claudeMessage({
+          type: "result",
+          subtype: "success",
+          is_error: false,
+          errors: [],
+          session_id: "sdk-session-rollback",
+          uuid: "result-first",
+        }),
       );
-    },
-  );
+      assert.equal((yield* Fiber.join(completedFiber))._tag, "Some");
+
+      const failure = yield* adapter.rollbackThread(session.threadId, 1).pipe(Effect.flip);
+      assert.equal(failure._tag, "ProviderAdapterRequestError");
+      assert.include(failure.message, "cannot be reverted");
+
+      const thread = yield* adapter.readThread(session.threadId);
+      assert.deepEqual(
+        thread.turns.map((entry) => entry.id),
+        [turn.turnId],
+      );
+    }).pipe(
+      Effect.provideService(Random.Random, makeDeterministicRandomService()),
+      Effect.provide(harness.layer),
+    );
+  });
 });
 
 describe("ClaudeAdapterLive", () => {

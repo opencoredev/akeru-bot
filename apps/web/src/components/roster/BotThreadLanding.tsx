@@ -45,6 +45,7 @@ import {
 } from "./botConversationPresentation";
 import { botEngineFailureContext, botEngineSubscriptionToConnect } from "./botEngineSelection";
 import { ProviderConnectCard, providerConnectStep } from "../chat/ProviderConnectCard";
+import { ClaudeCodeConnectCard, claudeCodeSetupFor } from "../chat/ClaudeCodeConnectCard";
 import { useSubscriptionStatuses } from "../settings/ProvidersPanel";
 import { BotTurnFailureRow } from "./BotTurnFailureRow";
 import { useBotEngineAvailability } from "./useBotEngineAvailability";
@@ -145,10 +146,14 @@ export function BotThreadLanding({
     sendBlocked ? engineUnavailability?.reason : runtime.failure?.unavailability,
   );
 
+  // A bot on a Claude Code login that is not ready gets guided setup instead.
+  const claudeCodeSetup = claudeCodeSetupFor(stickyEngine, instanceEntries);
+
   // Signing in fixes this chat, so the connect card replaces the failure copy.
   const connectNeeded =
-    subscriptionToConnect !== null &&
-    providerConnectStep(subscriptionStatuses.get(subscriptionToConnect)) !== null;
+    claudeCodeSetup !== null ||
+    (subscriptionToConnect !== null &&
+      providerConnectStep(subscriptionStatuses.get(subscriptionToConnect)) !== null);
 
   const openBotSettings = () => void navigate({ to: "/bots/$botId/settings", params: { botId } });
   const approvalState = useRosterPendingApproval(runtime.linkedThreadRef);
@@ -563,7 +568,15 @@ export function BotThreadLanding({
               onOpenDetails={() => openSettings("advanced", "errors", environmentId)}
             />
             <ThreadRuntimeWarningBanner warning={runtimeWarning} />
-            {connectNeeded && subscriptionToConnect ? (
+            {claudeCodeSetup && environmentId !== null ? (
+              <ClaudeCodeConnectCard
+                id={engineNoticeId}
+                environmentId={environmentId}
+                provider={claudeCodeSetup}
+                botName={bot.name}
+                className="mt-2"
+              />
+            ) : connectNeeded && subscriptionToConnect ? (
               <ProviderConnectCard
                 id={engineNoticeId}
                 environmentId={environmentId}

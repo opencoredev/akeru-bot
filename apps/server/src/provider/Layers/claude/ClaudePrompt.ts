@@ -144,7 +144,17 @@ export const buildUserMessageEffect = Effect.fn("buildUserMessageEffect")(functi
     );
   }
 
-  // Images go first so the slash command remains the last text block.
+  // Server-owned memory and turn context stays apart from the user's words.
+  const turnContext = input.persistentMemoryContext?.trim();
+
+  if (turnContext) {
+    sdkContent.push({
+      type: "text",
+      text: `<akeru-turn-context>\n${turnContext}\n</akeru-turn-context>`,
+    });
+  }
+
+  // Images and context go first so the slash command remains the last text block.
   if (dispatch) {
     if (dispatch.leadingText !== undefined) {
       sdkContent.push({ type: "text", text: dispatch.leadingText });

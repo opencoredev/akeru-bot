@@ -455,8 +455,9 @@ export function createSession({
       const shouldRestartForModelChange = modelChanged && sessionModelSwitch === "unsupported";
       const previousModelSelection = threadModelSelections.get(threadId);
 
+      // Claude reads fast mode, thinking, and effort only when its query starts.
       const shouldRestartForModelSelectionChange =
-        preferredProvider === "claudeAgent" &&
+        (preferredProvider === "claudeAgent" || preferredProvider === "claudeCode") &&
         effectiveRequestedModelSelection !== undefined &&
         !Equal.equals(previousModelSelection, effectiveRequestedModelSelection);
 

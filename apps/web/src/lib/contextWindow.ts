@@ -48,6 +48,8 @@ export function formatProviderDisplayName(provider: string | null | undefined): 
     case "claudeAgent":
     case "claude":
       return "Claude";
+    case "claudeCode":
+      return "Claude Agent";
     case "codex":
       return "Codex";
     case "opencode":

@@ -43,7 +43,7 @@ function subscriptionEntry(
 
 export const PROVIDER_CATALOG: ReadonlyArray<ProviderCatalogEntry> = [
   subscriptionEntry("chatgpt", "openai-codex", ["codex"]),
-  subscriptionEntry("claude", "anthropic", ["claudeAgent"]),
+  subscriptionEntry("claude", "anthropic", ["claudeAgent", "claudeCode"]),
   subscriptionEntry("grok", "xai", ["grok"]),
   subscriptionEntry("kimi-for-coding", "kimi-for-coding", ["kimi"]),
   subscriptionEntry("opencode-go", "opencode-go", ["opencodeGo"]),

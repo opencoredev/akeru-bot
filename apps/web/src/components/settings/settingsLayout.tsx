@@ -159,12 +159,14 @@ export function SettingsSection({
       tabIndex={sectionProps.id ? -1 : sectionProps.tabIndex}
       className={cn("space-y-2", className)}
     >
-      <div className="flex min-h-7 items-center justify-between gap-4 px-3 sm:px-4">
-        <h2 className="flex items-center gap-2 text-sm font-semibold tracking-title-sm text-foreground">
+      <div className="flex min-h-7 flex-wrap items-center justify-between gap-x-4 gap-y-1 px-3 sm:px-4">
+        <h2 className="flex shrink-0 items-center gap-2 text-sm font-semibold tracking-title-sm text-foreground">
           {icon}
           {title}
         </h2>
-        <div className="flex min-h-7 min-w-7 items-center justify-end">{headerAction}</div>
+        <div className="ml-auto flex min-h-7 min-w-7 flex-wrap items-center justify-end">
+          {headerAction}
+        </div>
       </div>
       <div
         className={cn("relative space-y-1 overflow-visible text-foreground", GROUPED_ROWS_CLASS)}

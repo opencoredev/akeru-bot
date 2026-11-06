@@ -1,10 +1,12 @@
 import { useAtomValue } from "@effect/atom-react";
-import type { EnvironmentId, ServerProvider } from "@akeru/contracts";
+import { ProviderDriverKind, type EnvironmentId, type ServerProvider } from "@akeru/contracts";
+import { CLAUDE_CODE_DRIVER } from "@akeru/client-runtime/claude-code-login";
 
 import { useSettingsEnvironmentId } from "../../settingsDialogStore";
 import { EMPTY_SERVER_PROVIDERS, serverEnvironment } from "../../state/server";
 import { PROVIDER_CATALOG, type ProviderCatalogEntry } from "./providerCatalog";
 import { ProviderInstancesSection } from "./ProviderInstancesSection";
+import { ClaudeCodeLoginSection } from "./ClaudeCodeLoginSection";
 import { ProviderAccountsSection } from "./ProviderLinkedAccounts";
 import { ProviderAccountSection, useSubscriptionStatuses } from "./ProvidersPanel";
 import {
@@ -17,6 +19,8 @@ import { SettingsPageContainer, SettingsSection } from "./settingsLayout";
 import { searchableSetting } from "./settingsSearch";
 import { useI18n } from "../../i18n";
 import { subscriptionProviderTargetId } from "./subscriptionProviders";
+
+const CLAUDE_CODE_DRIVER_KIND = ProviderDriverKind.make(CLAUDE_CODE_DRIVER);
 
 /**
  * The live snapshot for a catalog entry's default instance. A provider can
@@ -157,6 +161,9 @@ function ConnectedProviderDetail({
           <ProviderAccountSection environmentId={environmentId} definition={entry.account} />
           <ProviderAccountsSection environmentId={environmentId} definition={entry.account} />
         </>
+      ) : null}
+      {entry.drivers.includes(CLAUDE_CODE_DRIVER_KIND) ? (
+        <ClaudeCodeLoginSection environmentId={environmentId} />
       ) : null}
       <ProviderInstancesSection
         environmentId={environmentId}

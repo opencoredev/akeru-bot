@@ -1,9 +1,10 @@
 import { claudeMessage } from "./test-support/claudeMessages.ts";
 import type { PermissionMode } from "@anthropic-ai/claude-agent-sdk";
-import { ProviderDriverKind, type RuntimeMode } from "@akeru/contracts";
+import { ApprovalRequestId, ProviderDriverKind, type RuntimeMode } from "@akeru/contracts";
 import { assert, describe, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as Fiber from "effect/Fiber";
+import * as Predicate from "effect/Predicate";
 import * as Random from "effect/Random";
 import * as Stream from "effect/Stream";
 import {
@@ -46,6 +47,63 @@ describe("ClaudeAdapterLive", () => {
       );
     },
   );
+});
+
+describe("ClaudeAdapterLive", () => {
+  it.effect("asks before a shell command after Full access becomes Supervised", () => {
+    const harness = makeHarness({ queryPerSession: true });
+
+    return Effect.gen(function* () {
+      const adapter = yield* ClaudeAdapter;
+      const provider = ProviderDriverKind.make("claudeAgent");
+
+      yield* adapter.startSession({ threadId: THREAD_ID, provider, runtimeMode: "full-access" });
+      assert.equal(harness.getLastCreateQueryInput()?.options.permissionMode, "bypassPermissions");
+
+      const session = yield* adapter.startSession({
+        threadId: THREAD_ID,
+        provider,
+        runtimeMode: "approval-required",
+      });
+
+      const options = harness.getLastCreateQueryInput()?.options;
+      assert.notEqual(options?.permissionMode, "bypassPermissions");
+      assert.equal(options?.allowDangerouslySkipPermissions, undefined);
+
+      const canUseTool = options?.canUseTool;
+      assert.isTrue(Predicate.isFunction(canUseTool));
+
+      if (!canUseTool) return;
+
+      const requestedFiber = yield* Stream.filter(
+        adapter.streamEvents,
+        (event) => event.type === "request.opened",
+      ).pipe(Stream.runHead, Effect.forkChild);
+
+      const permission = canUseTool(
+        "Bash",
+        { command: "pwd" },
+        { signal: new AbortController().signal, toolUseID: "tool-use-supervised" },
+      );
+
+      const requested = yield* Fiber.join(requestedFiber);
+
+      if (!Predicate.isTagged(requested, "Some") || requested.value.type !== "request.opened") {
+        return assert.fail("Supervised mode did not ask before the shell command.");
+      }
+
+      assert.isTrue(Predicate.isString(requested.value.requestId));
+      yield* adapter.respondToRequest(
+        session.threadId,
+        ApprovalRequestId.make(String(requested.value.requestId)),
+        "decline",
+      );
+      assert.equal((yield* Effect.promise(() => permission)).behavior, "deny");
+    }).pipe(
+      Effect.provideService(Random.Random, makeDeterministicRandomService()),
+      Effect.provide(harness.layer),
+    );
+  });
 });
 
 describe("ClaudeAdapterLive", () => {

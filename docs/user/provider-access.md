@@ -4,17 +4,18 @@ Each provider in **Settings > Providers** says what unlocks it, what the current
 
 ## What each provider needs
 
-| Provider        | Unlocks with                                    | Other credential                                   | API access from the subscription                                                                      |
-| --------------- | ----------------------------------------------- | -------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
-| ChatGPT (Codex) | ChatGPT Plus, Pro, Business, Enterprise, or Edu | OpenAI API key, billed separately by OpenAI        | No. A ChatGPT subscription does not include OpenAI API access.                                        |
-| Claude          | Anthropic API key from the Claude Console       | None                                               | The key is API access, billed per request by Anthropic. Claude Pro and Max cannot be used in Akeru.   |
-| Grok            | SuperGrok or X Premium+ on your xAI account     | xAI API key, billed separately by xAI              | No. SuperGrok and X Premium+ do not include xAI API credits.                                          |
-| Kimi For Coding | Kimi For Coding membership                      | Kimi For Coding API key from the Kimi Code console | No. The membership works only in coding tools and does not include Moonshot Open Platform API credit. |
-| OpenCode Go     | OpenCode Go subscription API key                | None                                               | The key is API access, but only to OpenCode Go models through OpenCode.                               |
+| Provider        | Unlocks with                                                                                        | Other credential                                   | API access from the subscription                                                                                        |
+| --------------- | --------------------------------------------------------------------------------------------------- | -------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| ChatGPT (Codex) | ChatGPT Plus, Pro, Business, Enterprise, or Edu                                                     | OpenAI API key, billed separately by OpenAI        | No. A ChatGPT subscription does not include OpenAI API access.                                                          |
+| Claude          | Anthropic API key from the Claude Console                                                           | None                                               | The key is API access, billed per request by Anthropic. Claude Pro and Max cannot be used in Akeru.                     |
+| Claude Agent    | Your own Claude Code, installed and logged in with `claude auth login` on the environment's machine | None                                               | Uses whatever Claude Code is logged in with: a Claude plan, an API key, or a cloud account. Akeru never sees the login. |
+| Grok            | SuperGrok or X Premium+ on your xAI account                                                         | xAI API key, billed separately by xAI              | No. SuperGrok and X Premium+ do not include xAI API credits.                                                            |
+| Kimi For Coding | Kimi For Coding membership                                                                          | Kimi For Coding API key from the Kimi Code console | No. The membership works only in coding tools and does not include Moonshot Open Platform API credit.                   |
+| OpenCode Go     | OpenCode Go subscription API key                                                                    | None                                               | The key is API access, but only to OpenCode Go models through OpenCode.                                                 |
 
 Akeru cannot see which xAI plan an account has. Sign in with the account that has SuperGrok or X Premium+.
 
-Claude takes an API key only. Anthropic does not allow third-party apps to offer claude.ai login, so Akeru no longer offers Claude Pro or Max sign-in. A Claude login saved by an earlier version is deleted when the environment starts: the Claude row shows **Not connected**, and **Access details** explains that you need to add an Anthropic API key. See [Claude](./providers-claude.md).
+Claude takes an API key, or your own Claude Code login. Anthropic does not allow third-party apps to offer claude.ai login, so Akeru does not sign in to Claude Pro or Max itself. With **Use your Claude Code login**, Akeru runs the Claude Code you installed and logged in to on the environment's machine, and Claude Code uses its own login. See [Claude](./providers-claude.md#use-your-claude-code-login). A Claude login saved by an earlier version is deleted when the environment starts: the Claude row shows **Not connected**, and **Access details** explains that you need to add an Anthropic API key or use your Claude Code login. See [Claude](./providers-claude.md).
 
 Cursor is not a provider in Akeru.
 
