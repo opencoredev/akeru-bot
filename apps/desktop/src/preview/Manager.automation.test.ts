@@ -323,10 +323,11 @@ describe("PreviewManager", () => {
           return undefined;
         });
 
-        fromId.mockReturnValue({
-          ...makeTestPreviewWebContents(vi.fn(), 42, sendCommand),
-          hostWebContents,
-        } as never);
+        fromId.mockReturnValue(
+          Object.assign(makeTestPreviewWebContents(vi.fn(), 42, sendCommand), {
+            hostWebContents,
+          }) as never,
+        );
 
         yield* manager.setMainWindow(mainWindow as never);
         yield* manager.createTab("tab_host_snapshot");

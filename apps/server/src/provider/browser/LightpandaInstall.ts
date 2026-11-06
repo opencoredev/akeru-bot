@@ -51,14 +51,12 @@ export function platformFromUname(system: string, machine: string): LightpandaPl
         ? "x64"
         : null;
 
-  const key = normalizedOs && normalizedArch ? `${normalizedOs}-${normalizedArch}` : null;
-
-  if (!key || !(key in LIGHTPANDA_RELEASES)) {
+  if (!normalizedOs || !normalizedArch) {
     throw new Error(`The sandbox browser does not support ${system.trim()} ${machine.trim()}.`);
   }
 
-  // SAFETY: Membership in LIGHTPANDA_RELEASES above narrows the computed key to a supported platform.
-  return key as LightpandaPlatform;
+  // Every OS and architecture pair above has a release, so the key type-checks as a platform.
+  return `${normalizedOs}-${normalizedArch}`;
 }
 
 export async function execute(

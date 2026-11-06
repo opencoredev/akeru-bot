@@ -43,7 +43,7 @@ export function LanguageSetting() {
         <Select
           value={preference}
           onValueChange={(value) => {
-            if (Predicate.isString(value)) setPreference(value);
+            if (Predicate.isString(value)) void setPreference(value);
           }}
         >
           <SelectTrigger

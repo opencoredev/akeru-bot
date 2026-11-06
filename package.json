@@ -29,6 +29,7 @@
     "tc": "vp run -r --concurrency-limit 2 typecheck",
     "lint": "vp lint --report-unused-disable-directives && node scripts/check-lint-suppressions.ts",
     "lint:mobile": "node scripts/mobile-native-static-check.ts",
+    "knip": "knip --no-progress",
     "test": "vp run -r test",
     "test:resource-monitor": "cargo test --locked --manifest-path native/resource-monitor/Cargo.toml",
     "test:desktop-smoke": "vp run --filter @akeru/desktop smoke-test",
@@ -61,6 +62,7 @@
     "@shadcn/lint": "0.2.0",
     "@types/node": "catalog:",
     "@typescript/native-preview": "catalog:",
+    "knip": "6.44.0",
     "vite-plus": "catalog:"
   },
   "engines": {

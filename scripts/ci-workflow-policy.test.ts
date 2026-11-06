@@ -151,6 +151,7 @@ describe("CI workflow budget", () => {
       "plugins/schema.test.ts",
       "plugins/lifecycle-matrix.test.ts",
       "vp run lint",
+      "vp run knip",
       "vp run fmt:check",
       "vp run typecheck",
       "vp run build:desktop",

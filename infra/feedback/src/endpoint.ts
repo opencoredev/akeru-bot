@@ -74,7 +74,7 @@ const encoder = new TextEncoder();
 function rejection(
   status: number,
   body: ProductFeedbackRejection,
-  headers?: HeadersInit,
+  headers?: Readonly<Record<string, string>>,
 ): Response {
   return Response.json(body, {
     status,
