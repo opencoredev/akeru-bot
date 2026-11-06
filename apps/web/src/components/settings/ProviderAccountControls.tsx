@@ -1,7 +1,7 @@
 import { ExternalLinkIcon, LoaderIcon, LogOutIcon, RefreshCwIcon } from "lucide-react";
 import { type ReactNode } from "react";
 import type { SubscriptionProviderStatus } from "@akeru/contracts";
-import { providerUsesApiKey } from "@akeru/client-runtime/provider-auth";
+import { providerRequiresApiKey, providerUsesApiKey } from "@akeru/client-runtime/provider-auth";
 import { useI18n } from "../../i18n";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
@@ -68,7 +68,7 @@ export function ProviderAccountRows({
   const { t, locale } = useI18n();
   const connected = status?.connected === true;
   const usesKey = connected && providerUsesApiKey(status);
-  const keyOnly = definition.id === "opencode-go";
+  const keyOnly = providerRequiresApiKey(definition.id);
   const locked = busy || disabled;
   const attention = accountConnectionState(status, false);
   const problem = attention.tone === "attention" ? attention.detail : null;
@@ -282,7 +282,7 @@ export function ActiveLoginPanel({
 }) {
   const { t } = useI18n();
   const { flow } = login;
-  const isApiKey = flow.provider === "opencode-go";
+  const isApiKey = providerRequiresApiKey(flow.provider);
 
   return (
     <div data-settings-row="" className="space-y-3 rounded-xl px-3 py-3 sm:px-4">

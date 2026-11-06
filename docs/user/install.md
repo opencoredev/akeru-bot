@@ -42,13 +42,14 @@ Open **Settings > Providers**. Mobile lists these options under **Provider conne
 | Account         | Supported access                        |
 | --------------- | --------------------------------------- |
 | ChatGPT         | Plus, Pro, Business, Enterprise, or Edu |
-| Claude          | Pro or Max                              |
+| Claude          | Anthropic API key                       |
 | Grok            | Shared xAI login                        |
 | Kimi For Coding | Kimi For Coding plan                    |
 | OpenCode Go     | OpenCode Go API key                     |
 
 Select **Connect** and finish the provider's sign-in flow. ChatGPT, Grok, and Kimi use a device code.
-Claude asks you to paste the returned authorization code into Akeru. OpenCode Go asks you to paste an API key.
+Claude and OpenCode Go ask you to paste an API key. Akeru does not offer Claude Pro or Max sign-in,
+because Anthropic does not allow third-party apps to offer claude.ai login.
 
 The environment server owns the connection. It currently saves one subscription account or API
 key per provider per environment. Reconnecting replaces that credential. Separate provider instances

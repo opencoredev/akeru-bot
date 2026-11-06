@@ -1,36 +1,51 @@
 # Claude
 
-Connect a Claude Pro or Max subscription from Akeru. Claude chats run through Akeru's built-in
-runtime, with the same chat controls as other providers. The Claude CLI is not required.
+Connect Claude to Akeru with an Anthropic API key. Claude chats run through Akeru's built-in runtime,
+with the same chat controls as other providers. The Claude CLI is not required.
+
+Akeru does not offer Claude Pro or Max sign-in. Anthropic does not allow third-party apps to offer
+claude.ai login or use subscription rate limits, so Claude requests from Akeru are billed to your
+Anthropic API account in the [Claude Console](https://console.anthropic.com/settings/keys).
 
 ## Connect Claude
 
-1. Open **Settings > Providers**.
-2. Find **Claude** and select **Connect**.
-3. Finish the Anthropic sign-in flow in the browser.
-4. Copy the authorization code from Anthropic.
-5. Paste the code into Akeru and select **Connect**.
+1. Create an API key in the Claude Console.
+2. Open **Settings > Providers**.
+3. Find **Claude** and select **Connect**.
+4. Paste the key. To use an Anthropic-compatible gateway, enter its base URL too.
+5. Select **Save**.
 
-The environment server completes the exchange and stores the credential. No inbound callback to the
-Akeru server is required, so this flow also works from a remote browser or mobile client.
+The environment server stores the key. Clients never receive it, so this also works from a remote
+browser or mobile client.
+
+## If you used Claude Pro or Max sign-in before
+
+Earlier Akeru versions let you sign in with a Claude Pro or Max account. Those logins no longer work.
+When the environment starts, Akeru deletes them, including logins saved for backup accounts, so no
+Claude subscription token stays on the server. The Claude row shows **Not connected** with a note
+that subscription sign-in is no longer supported, and a bot that uses Claude says to add an
+Anthropic API key when you message it. Add a key as described above. Your bots, chats, and settings
+stay as they are.
+
+If you go back to an older Akeru version afterward, sign in to Claude Pro or Max again there. The
+deleted login is not restored.
 
 ## Check the connection
 
-The provider card reports the current state. A connected account can still show **Detected** until a
+The provider card reports the current state. A saved key can still show **Not verified yet** until a
 real provider request succeeds.
 
-- Select **Check OAuth** to test the stored login.
-- Select **Reconnect** after an expired or revoked login.
-- Disconnect the account to remove its stored credential from this environment.
+- Select **Check key** to test the stored key.
+- Select **Replace key** after you rotate or revoke a key.
+- Disconnect to remove the key from this environment.
 
-If the login expires or is revoked, reconnect Claude in **Settings > Providers**. A usage-limit
-failure means you should send the message again after the limit resets.
+A rejected key means the key was revoked or its Anthropic account has no billing. A rate-limit
+failure means you should send the message again later. Anthropic sets API rate limits by usage tier.
 
-Sign-in state belongs to one environment. Connect Claude again on each separate Akeru server that
-should use the account.
+Keys belong to one environment. Add the key again on each separate Akeru server that should use it.
 
-Chat titles and worktree branch names use the same Akeru connection as Claude chats, not a separate
-Claude Code login. On a remote connection, credentials stay on the connected environment server.
+Chat titles and worktree branch names use the same key as Claude chats. On a remote connection, the
+key stays on the connected environment server.
 
 ## Continue a Claude chat
 

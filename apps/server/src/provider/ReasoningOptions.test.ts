@@ -122,8 +122,9 @@ describe("native reasoning requests", () => {
       ).toMatchObject({ reasoning: { effort: "none" } });
     },
   );
-  it.each([false, true])(
-    "Claude API/OAuth sends native effort and explicit thinking false (%s)",
+  // Claude connects only with an API key through this path (AKR-231).
+  it.each([false])(
+    "Claude API key sends native effort and explicit thinking false (OAuth %s)",
     async (oauth) => {
       expect(
         await capturedRequest(
@@ -159,8 +160,9 @@ describe("native reasoning requests", () => {
       ).toMatchObject({ reasoning_effort: "high" });
     },
   );
-  it.each([false, true])(
-    "Haiku API/OAuth toggle uses manual thinking with the SDK minimum (%s)",
+  // Claude connects only with an API key through this path (AKR-231).
+  it.each([false])(
+    "Haiku API key toggle uses manual thinking with the SDK minimum (OAuth %s)",
     async (oauth) => {
       expect(
         await capturedRequest(
@@ -172,8 +174,9 @@ describe("native reasoning requests", () => {
       ).toMatchObject({ thinking: { type: "enabled", budget_tokens: 1024 } });
     },
   );
-  it.each([false, true])(
-    "Opus 4.5 API/OAuth sends effort without adaptive thinking (%s)",
+  // Claude connects only with an API key through this path (AKR-231).
+  it.each([false])(
+    "Opus 4.5 API key sends effort without adaptive thinking (OAuth %s)",
     async (oauth) => {
       const body = await capturedRequest(
         "claude-opus-4-5",

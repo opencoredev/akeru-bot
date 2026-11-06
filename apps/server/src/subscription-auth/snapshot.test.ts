@@ -61,7 +61,7 @@ describe("provider access capabilities", () => {
       [],
     );
 
-    expect(capabilities.find((entry) => entry.id === "claude-max")).toMatchObject({
+    expect(capabilities.find((entry) => entry.id === "claude")).toMatchObject({
       accessMethod: "api-key",
       nextAction: "Check the API key, then send a provider request to verify access.",
     });
@@ -95,7 +95,7 @@ describe("provider access capabilities", () => {
 
   it.each([
     ["openai-codex", "chatgpt", "expired"],
-    ["anthropic", "claude-max", "revoked"],
+    ["anthropic", "claude", "revoked"],
   ] as const)("reports %s subscription access on the %s row", (provider, rowId, health) => {
     const capabilities = buildProviderAccessCapabilities(
       [{ ...baseSubscription, provider, health }],

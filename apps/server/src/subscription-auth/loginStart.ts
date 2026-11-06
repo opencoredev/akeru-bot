@@ -1,6 +1,5 @@
 import * as NodeCrypto from "node:crypto";
 import type { SubscriptionAuthStartInput } from "@akeru/contracts";
-import { startAnthropicLogin } from "./providers/anthropic.ts";
 import { startCodexDeviceLogin } from "./providers/openaiCodex.ts";
 import { startKimiDeviceLogin } from "./providers/kimi.ts";
 import { startXAIDeviceLogin } from "./providers/xai.ts";
@@ -8,6 +7,8 @@ import {
   decodeBaseUrl,
   OPENCODE_GO_AUTH_URL,
   PENDING_LOGIN_CAP,
+  CLAUDE_SUBSCRIPTION_RETIRED_MESSAGE,
+  providerRequiresApiKey,
   type BoundLogin,
   type StartedLogin,
   type SubscriptionProviderId,
@@ -29,7 +30,7 @@ export async function startSubscriptionLogin(
   options: Omit<SubscriptionAuthStartInput, "provider"> = {},
 ): Promise<StartedLogin> {
   await context.reloadAsync();
-  const authMode = options.authMode ?? (provider === "opencode-go" ? "api-key" : "oauth");
+  const authMode = options.authMode ?? (providerRequiresApiKey(provider) ? "api-key" : "oauth");
 
   if (options.baseUrl !== undefined && authMode !== "api-key") {
     throw new Error("Custom base URLs require API-key authentication. Select API key first.");
@@ -66,12 +67,8 @@ export async function startSubscriptionLogin(
     };
   } else
     switch (provider) {
-      case "anthropic": {
-        const { url, verifier } = await startAnthropicLogin();
-        context.pendingLogins.set(loginId, { provider, verifier, ...binding });
-        started = { loginId, provider, url, completion: "paste" };
-        break;
-      }
+      case "anthropic":
+        throw new Error(CLAUDE_SUBSCRIPTION_RETIRED_MESSAGE);
 
       case "openai-codex": {
         const pending = await startCodexDeviceLogin();

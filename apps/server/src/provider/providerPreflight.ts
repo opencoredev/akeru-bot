@@ -124,6 +124,22 @@ export const preflightProvider = (input: {
     instanceUsesSavedCredential(subscriptionId, input.providerInstanceConfig);
 
   const sharedHealth = sharedCredential ? subscription?.health : undefined;
+
+  // A login the server ignores (a retired Claude Pro or Max sign-in) explains itself. Request
+  // health recorded before the upgrade can still say healthy, so it must not hide the reason.
+  // An instance that authenticates another way, such as an ambient API key, still runs.
+  if (
+    sharedHealth === "missing" &&
+    subscription?.credentialWarning &&
+    provider.auth.status === "unauthenticated"
+  ) {
+    return {
+      category: "missing-login",
+      detail: subscription.credentialWarning.message,
+      repairAction: "providers",
+    };
+  }
+
   const canRefreshExpiredLogin = sharedHealth === "expired" && subscription?.authMode === "oauth";
 
   const health =

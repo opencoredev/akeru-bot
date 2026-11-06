@@ -4,6 +4,7 @@ import * as NodePath from "node:path";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 import * as Effect from "effect/Effect";
 import type { SubscriptionCredentialStore } from "./credentialStore.ts";
+import { codexDeviceFetch } from "./testUtils/codexDeviceFetch.ts";
 import { makeTestSubscriptionAuthService } from "./testUtils/subscriptionAuthService.ts";
 
 const directories: string[] = [];
@@ -30,13 +31,9 @@ describe("OAuth completion ownership", () => {
         checkHealthOnConnect: false,
       });
 
-      const request = vi.fn(async (_input: string | URL | Request) =>
-        Response.json({ access_token: "access", refresh_token: "refresh", expires_in: 3600 }),
-      );
-
+      const request = codexDeviceFetch();
       vi.stubGlobal("fetch", request);
-      const login = await service.startLogin("anthropic");
-      const state = new URL(login.url!).searchParams.get("state");
+      const login = await service.startLogin("openai-codex");
       const store: SubscriptionCredentialStore = service["store"];
       const originalUpdate = store.update;
 
@@ -56,10 +53,10 @@ describe("OAuth completion ownership", () => {
       );
 
       try {
-        expect((await service.completeLogin(login.loginId, `code#${state}`)).status).toBe("failed");
-        const retry = await service.completeLogin(login.loginId, `code#${state}`);
+        await expect(service.pollLogin(login.loginId)).rejects.toThrow("disk write failed");
+        const retry = await service.pollLogin(login.loginId);
         expect(retry.status).toBe(cancelDuringWrite ? "failed" : "connected");
-        expect(service.isConnected("anthropic")).toBe(!cancelDuringWrite);
+        expect(service.isConnected("openai-codex")).toBe(!cancelDuringWrite);
         expect(
           request.mock.calls.filter(([input]) =>
             String(input instanceof Request ? input.url : input).includes("/oauth/token"),
@@ -71,7 +68,7 @@ describe("OAuth completion ownership", () => {
     });
   }
 
-  for (const provider of ["anthropic", "openai-codex"] as const) {
+  for (const provider of ["openai-codex"] as const) {
     for (const cancellation of ["cancel", "logout"] as const) {
       it(`${provider} does not undo ${cancellation} while its credential update waits`, async () => {
         const directory = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "akeru-oauth-race-"));
@@ -86,25 +83,7 @@ describe("OAuth completion ownership", () => {
           checkHealthOnConnect: false,
         });
 
-        vi.stubGlobal(
-          "fetch",
-          vi.fn(async (input) => {
-            const url = String(input instanceof Request ? input.url : input);
-
-            const body = url.endsWith("/deviceauth/usercode")
-              ? { device_auth_id: "device", user_code: "user", interval: 1 }
-              : url.endsWith("/deviceauth/token")
-                ? { authorization_code: "code", code_verifier: "verifier" }
-                : {
-                    access_token: "late-access",
-                    refresh_token: "refresh",
-                    expires_in: 3600,
-                    id_token: `header.${Buffer.from(JSON.stringify({ chatgpt_account_id: "account" })).toString("base64url")}.signature`,
-                  };
-
-            return Response.json(body);
-          }),
-        );
+        vi.stubGlobal("fetch", codexDeviceFetch());
         const login = await service.startLogin(provider);
         const store: SubscriptionCredentialStore = service["store"];
         const originalUpdate = store.update;
@@ -127,12 +106,7 @@ describe("OAuth completion ownership", () => {
         });
 
         try {
-          const state = new URL(login.url!).searchParams.get("state");
-
-          const completing =
-            provider === "anthropic"
-              ? service.completeLogin(login.loginId, `code#${state}`)
-              : service.pollLogin(login.loginId);
+          const completing = service.pollLogin(login.loginId);
 
           await Promise.race([
             reached,

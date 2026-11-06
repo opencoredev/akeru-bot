@@ -104,7 +104,11 @@ describe("provider access health", () => {
       NodeFS.writeFileSync(
         authPath,
         JSON.stringify({
-          [provider]: { type: "oauth", access: "a", refresh: "r", expires: 1_900_000_000_000 },
+          // Claude takes an Anthropic API key only.
+          [provider]:
+            provider === "anthropic"
+              ? { type: "api-key", access: "a" }
+              : { type: "oauth", access: "a", refresh: "r", expires: 1_900_000_000_000 },
         }),
       );
       const service = await makeTestSubscriptionAuthService(authPath);

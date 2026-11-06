@@ -239,14 +239,12 @@ export const settingsCatalog = {
     "ChatGPT 订阅不包含 OpenAI API 访问权限。",
   "OpenAI limits Codex use per 5-hour window and per week. The allowance depends on your plan.":
     "OpenAI 按每 5 小时窗口和每周限制 Codex 用量。额度取决于你的套餐。",
-  "Claude Pro or Max subscription.": "Claude Pro 或 Max 订阅。",
-  "Or an Anthropic API key, billed separately in the Claude Console.":
-    "也可以使用 Anthropic API 密钥，在 Claude Console 中单独计费。",
+  "An Anthropic API key from the Claude Console.": "来自 Claude Console 的 Anthropic API 密钥。",
   "Claude models.": "Claude 模型。",
-  "A Claude Pro or Max subscription does not include Anthropic API access.":
-    "Claude Pro 或 Max 订阅不包含 Anthropic API 访问权限。",
-  "Anthropic limits Claude use per 5-hour session and per week. Max allows more use than Pro.":
-    "Anthropic 按每 5 小时会话和每周限制 Claude 用量。Max 的额度高于 Pro。",
+  "Anthropic bills the key per request. Claude Pro and Max subscriptions cannot be used in Akeru.":
+    "Anthropic 按请求对该密钥计费。Akeru 无法使用 Claude Pro 和 Max 订阅。",
+  "Anthropic sets API rate limits by usage tier. The Claude Console shows them.":
+    "Anthropic 按用量等级设置 API 速率限制，可在 Claude Console 中查看。",
   "SuperGrok or X Premium+ on your xAI account. Akeru cannot see which plan the account has.":
     "你的 xAI 账号上的 SuperGrok 或 X Premium+。Akeru 无法查看该账号使用的套餐。",
   "Grok models.": "Grok 模型。",
@@ -274,8 +272,7 @@ export const settingsCatalog = {
   "API billing can be separate from your subscription.": "API 计费可能独立于你的订阅。",
   "Open OpenCode": "打开 OpenCode",
   "Use your ChatGPT subscription with Codex models.": "通过 Codex 模型使用你的 ChatGPT 订阅。",
-  "Use your Claude subscription with Claude Code models.":
-    "通过 Claude Code 模型使用你的 Claude 订阅。",
+  "Use Claude models with an Anthropic API key.": "通过 Anthropic API 密钥使用 Claude 模型。",
   "Kimi For Coding plan": "Kimi For Coding 套餐",
   "Use Kimi coding models through your Moonshot subscription.":
     "通过你的 Moonshot 订阅使用 Kimi 编程模型。",

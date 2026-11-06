@@ -332,8 +332,11 @@ describe("subscription auth storage", () => {
       service.startLogin("xai", { authMode: "api-key", baseUrl: "https://example.com" }),
     ).rejects.toThrow("does not support");
     await expect(
-      service.startLogin("anthropic", { baseUrl: "https://example.com" }),
+      service.startLogin("openai-codex", { baseUrl: "https://example.com" }),
     ).rejects.toThrow("require API-key");
+    await expect(service.startLogin("anthropic", { authMode: "oauth" })).rejects.toThrow(
+      "Claude Pro and Max sign-in is no longer supported",
+    );
     await expect(
       service.startLogin("anthropic", {
         authMode: "api-key",
@@ -348,7 +351,7 @@ describe("subscription auth storage", () => {
     NodeFS.writeFileSync(
       authPath,
       JSON.stringify({
-        anthropic: {
+        xai: {
           type: "oauth",
           access: "secret-access",
           refresh: "secret-refresh",
@@ -358,9 +361,9 @@ describe("subscription auth storage", () => {
     );
 
     const service = await makeTestSubscriptionAuthService(authPath);
-    const anthropic = service.statuses().find((status) => status.provider === "anthropic");
-    expect(anthropic).toEqual({
-      provider: "anthropic",
+    const xai = service.statuses().find((status) => status.provider === "xai");
+    expect(xai).toEqual({
+      provider: "xai",
       connected: true,
       authMode: "oauth",
       expiresAt: 1_800_000_000_000,

@@ -424,7 +424,7 @@ export const commonLabelsCatalog = {
   "Open computer": "Open computer",
   "API key saved": "API key saved",
   "Paste the API key": "Paste the API key",
-  "Pro or Max": "Pro or Max",
+  "Anthropic API key": "Anthropic API key",
   "Shared xAI login": "Shared xAI login",
   Missing: "Missing",
   Detected: "Detected",

@@ -14,7 +14,7 @@ it("uses the creator's clock for default health timestamps and token expiry", as
   NodeFS.writeFileSync(
     authPath,
     JSON.stringify({
-      anthropic: {
+      xai: {
         type: "oauth",
         access: "unexpired-access",
         refresh: "refresh",
@@ -42,18 +42,18 @@ it("uses the creator's clock for default health timestamps and token expiry", as
       }),
     );
 
-    expect(await service.getAccessToken("anthropic")).toBe("unexpired-access");
-    service.recordRequestSuccess("anthropic");
-    expect(service.statuses().find((status) => status.provider === "anthropic")).toMatchObject({
+    expect(await service.getAccessToken("xai")).toBe("unexpired-access");
+    service.recordRequestSuccess("xai");
+    expect(service.statuses().find((status) => status.provider === "xai")).toMatchObject({
       health: "healthy",
       lastSuccessfulRequestAt: "2026-09-30T12:34:56.789Z",
     });
+    expect(service.statuses([], now + 1).find((status) => status.provider === "xai")?.health).toBe(
+      "expired",
+    );
+    service.recordRequestFailure("xai", "failed");
     expect(
-      service.statuses([], now + 1).find((status) => status.provider === "anthropic")?.health,
-    ).toBe("expired");
-    service.recordRequestFailure("anthropic", "failed");
-    expect(
-      service.statuses().find((status) => status.provider === "anthropic")?.lastFailedRequest,
+      service.statuses().find((status) => status.provider === "xai")?.lastFailedRequest,
     ).toEqual({ at: "2026-09-30T12:34:56.789Z", message: "failed" });
   } finally {
     NodeFS.rmSync(directory, { recursive: true, force: true });

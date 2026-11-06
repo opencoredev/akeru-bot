@@ -84,7 +84,7 @@ describe("mastraConnectionIssue", () => {
     );
     assert.include(
       mastraConnectionIssue(ProviderDriverKind.make("claudeAgent"), connection, false) ?? "",
-      "Connect",
+      "Add an Anthropic API key",
     );
   });
 });

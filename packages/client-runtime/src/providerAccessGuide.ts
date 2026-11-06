@@ -52,7 +52,10 @@ export interface ProviderAccessGuide {
   readonly nextStep: string;
   /** Provider-reported failure text. Not translated. */
   readonly failure: string | null;
-  /** Server text about a damaged credential file it is working around. Not translated. */
+  /**
+   * Server text about saved credentials it cannot use as they are: a damaged file it
+   * works around, or a retired Claude subscription login it ignores. Not translated.
+   */
   readonly warning: string | null;
 }
 
@@ -77,14 +80,15 @@ const PROVIDER_COPY: Readonly<Record<GuidedProvider, ProviderCopy>> = {
       "OpenAI limits Codex use per 5-hour window and per week. The allowance depends on your plan.",
     connect: "Choose Connect and sign in with your ChatGPT account.",
   },
+  // Anthropic does not allow third-party apps to offer claude.ai sign-in, so Claude is key-only.
   anthropic: {
-    unlockedBy: "Claude Pro or Max subscription.",
-    alternative: "Or an Anthropic API key, billed separately in the Claude Console.",
+    unlockedBy: "An Anthropic API key from the Claude Console.",
+    alternative: null,
     models: "Claude models.",
-    apiAccess: "A Claude Pro or Max subscription does not include Anthropic API access.",
-    limits:
-      "Anthropic limits Claude use per 5-hour session and per week. Max allows more use than Pro.",
-    connect: "Choose Connect and sign in with your Claude account.",
+    apiAccess:
+      "Anthropic bills the key per request. Claude Pro and Max subscriptions cannot be used in Akeru.",
+    limits: "Anthropic sets API rate limits by usage tier. The Claude Console shows them.",
+    connect: "Choose Connect and paste an Anthropic API key from the Claude Console.",
   },
   xai: {
     unlockedBy:
@@ -188,9 +192,14 @@ function savedCredential(
   t: ProviderAccessTranslate,
 ): string {
   if (status?.connected !== true) {
-    return provider === "opencode-go"
-      ? t("Missing: no OpenCode Go API key in this environment.")
-      : t("Missing: no subscription login or API key in this environment.");
+    switch (provider) {
+      case "opencode-go":
+        return t("Missing: no OpenCode Go API key in this environment.");
+      case "anthropic":
+        return t("Missing: no Anthropic API key in this environment.");
+      default:
+        return t("Missing: no subscription login or API key in this environment.");
+    }
   }
 
   return apiKey

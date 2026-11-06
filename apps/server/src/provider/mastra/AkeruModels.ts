@@ -1,7 +1,6 @@
 import * as Schema from "effect/Schema";
 import * as Predicate from "effect/Predicate";
 import { AuthStorage } from "@mastra/code-sdk/auth/storage";
-import { opencodeClaudeMaxProvider } from "@mastra/code-sdk/providers/claude-max";
 import { xaiProvider } from "@mastra/code-sdk/providers/xai";
 import { createAnthropic } from "@ai-sdk/anthropic";
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
@@ -211,8 +210,8 @@ export function resolveAkeruMastraModel(
 
     const instanceApiKey = environment?.ANTHROPIC_API_KEY?.trim();
 
-    const instanceAuthToken =
-      environment?.ANTHROPIC_AUTH_TOKEN?.trim() || environment?.CLAUDE_CODE_OAUTH_TOKEN?.trim();
+    // CLAUDE_CODE_OAUTH_TOKEN is a claude.ai login, which third-party apps may not use.
+    const instanceAuthToken = environment?.ANTHROPIC_AUTH_TOKEN?.trim();
 
     if (instanceApiKey || instanceAuthToken) {
       return createAnthropic({
@@ -234,16 +233,11 @@ export function resolveAkeruMastraModel(
       })(model);
     }
 
-    if (!useSavedCredential) {
-      throw new Error(
-        "This Claude instance has no API key or auth token transport for Akeru Mastra.",
-      );
-    }
-
-    return opencodeClaudeMaxProvider(model, {
-      ...contextHeaders,
-      authStorage: scopedAuthStorage("anthropic"),
-    });
+    throw new Error(
+      useSavedCredential
+        ? "Claude needs an Anthropic API key. Add one for Claude in Settings."
+        : "This Claude instance needs ANTHROPIC_API_KEY or ANTHROPIC_AUTH_TOKEN for Akeru Mastra.",
+    );
   }
 
   if (trimmed.startsWith("xai/")) {

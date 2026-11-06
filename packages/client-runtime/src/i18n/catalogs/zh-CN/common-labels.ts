@@ -424,7 +424,7 @@ export const commonLabelsCatalog = {
   "Open computer": "打开电脑",
   "API key saved": "已保存 API 密钥",
   "Paste the API key": "粘贴 API 密钥",
-  "Pro or Max": "Pro 或 Max",
+  "Anthropic API key": "Anthropic API 密钥",
   "Shared xAI login": "共享 xAI 登录",
   Missing: "未连接",
   Detected: "已检测到",

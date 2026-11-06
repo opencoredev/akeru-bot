@@ -309,8 +309,8 @@ export const connectionsCatalog = {
   "This environment": "This environment",
   "Choose Connect and sign in with your ChatGPT account.":
     "Choose Connect and sign in with your ChatGPT account.",
-  "Choose Connect and sign in with your Claude account.":
-    "Choose Connect and sign in with your Claude account.",
+  "Choose Connect and paste an Anthropic API key from the Claude Console.":
+    "Choose Connect and paste an Anthropic API key from the Claude Console.",
   "Choose Connect and sign in with the xAI account that has SuperGrok or X Premium+.":
     "Choose Connect and sign in with the xAI account that has SuperGrok or X Premium+.",
   "Choose Connect and sign in with your Kimi account.":
@@ -323,6 +323,8 @@ export const connectionsCatalog = {
     "Check that the subscription is active, then choose Reconnect.",
   "Missing: no OpenCode Go API key in this environment.":
     "Missing: no OpenCode Go API key in this environment.",
+  "Missing: no Anthropic API key in this environment.":
+    "Missing: no Anthropic API key in this environment.",
   "Missing: no subscription login or API key in this environment.":
     "Missing: no subscription login or API key in this environment.",
   "API key saved in this environment.": "API key saved in this environment.",

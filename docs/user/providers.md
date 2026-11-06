@@ -54,8 +54,8 @@ prefer HTTPS for anything outside your machine.
 Once you are signed in to a provider, its page lists your accounts under **Accounts**. Choose **Add
 account** there, then sign in or use an API key. Each new account goes to the bottom of the list.
 
-Each account is named by its plan, such as **ChatGPT Pro** or **Claude Max 20x**, so the list never
-shows your email address. API keys show as **API key**. Grok and Kimi For Coding don't report a plan,
+Each account is named by its plan, such as **ChatGPT Pro**, so the list never
+shows your email address. API keys, including every Claude account, show as **API key**. Grok and Kimi For Coding don't report a plan,
 so their accounts show as **Grok account** and **Kimi For Coding account**.
 
 The list is in the order bots use it. The first account is the **Main account** and the rest are
@@ -79,7 +79,7 @@ separate account** keeps its own sign-in and does not take part in the backup or
 
 After a login or API key save completes, the environment server sends one request that costs nothing, to confirm the account can reach its models or usage endpoint. The check runs on the server, so closing the app or losing the connection right after login does not stop it. While it runs, the provider row shows **Checking health…**. It then changes to **Connected** when the request succeeds or **Failed** when it does not. A failed check does not undo a successful login. Repair the provider account, then use **Reconnect** or **Check OAuth**.
 
-The check covers ChatGPT/Codex, Claude, Grok, and Kimi For Coding logins, and OpenCode Go API keys. OpenCode Go has no device login.
+The check covers ChatGPT/Codex, Grok, and Kimi For Coding logins, and Claude and OpenCode Go API keys. Claude and OpenCode Go have no sign-in flow; they take an API key.
 
 ## Device codes
 

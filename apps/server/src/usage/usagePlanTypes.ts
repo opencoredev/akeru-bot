@@ -1,7 +1,5 @@
 import type { SubscriptionProviderId } from "@akeru/contracts";
 
-export const CLAUDE_USAGE_URL = "https://api.anthropic.com/api/oauth/usage";
-
 export const CODEX_USAGE_URL = "https://chatgpt.com/backend-api/wham/usage";
 
 export const GROK_CREDITS_URL = "https://cli-chat-proxy.grok.com/v1/billing?format=credits";
@@ -20,7 +18,6 @@ export type LiveSubscriptionProviderId = SubscriptionProviderId;
 
 export const PLAN_PROVIDER_ORDER: readonly LiveSubscriptionProviderId[] = [
   "openai-codex",
-  "anthropic",
   "xai",
   "kimi-for-coding",
   "opencode-go",

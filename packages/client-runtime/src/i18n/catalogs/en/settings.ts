@@ -244,14 +244,12 @@ export const settingsCatalog = {
     "A ChatGPT subscription does not include OpenAI API access.",
   "OpenAI limits Codex use per 5-hour window and per week. The allowance depends on your plan.":
     "OpenAI limits Codex use per 5-hour window and per week. The allowance depends on your plan.",
-  "Claude Pro or Max subscription.": "Claude Pro or Max subscription.",
-  "Or an Anthropic API key, billed separately in the Claude Console.":
-    "Or an Anthropic API key, billed separately in the Claude Console.",
+  "An Anthropic API key from the Claude Console.": "An Anthropic API key from the Claude Console.",
   "Claude models.": "Claude models.",
-  "A Claude Pro or Max subscription does not include Anthropic API access.":
-    "A Claude Pro or Max subscription does not include Anthropic API access.",
-  "Anthropic limits Claude use per 5-hour session and per week. Max allows more use than Pro.":
-    "Anthropic limits Claude use per 5-hour session and per week. Max allows more use than Pro.",
+  "Anthropic bills the key per request. Claude Pro and Max subscriptions cannot be used in Akeru.":
+    "Anthropic bills the key per request. Claude Pro and Max subscriptions cannot be used in Akeru.",
+  "Anthropic sets API rate limits by usage tier. The Claude Console shows them.":
+    "Anthropic sets API rate limits by usage tier. The Claude Console shows them.",
   "SuperGrok or X Premium+ on your xAI account. Akeru cannot see which plan the account has.":
     "SuperGrok or X Premium+ on your xAI account. Akeru cannot see which plan the account has.",
   "Grok models.": "Grok models.",
@@ -282,8 +280,7 @@ export const settingsCatalog = {
   "Open OpenCode": "Open OpenCode",
   "Use your ChatGPT subscription with Codex models.":
     "Use your ChatGPT subscription with Codex models.",
-  "Use your Claude subscription with Claude Code models.":
-    "Use your Claude subscription with Claude Code models.",
+  "Use Claude models with an Anthropic API key.": "Use Claude models with an Anthropic API key.",
   "Kimi For Coding plan": "Kimi For Coding plan",
   "Use Kimi coding models through your Moonshot subscription.":
     "Use Kimi coding models through your Moonshot subscription.",

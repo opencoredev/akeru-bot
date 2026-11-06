@@ -208,6 +208,85 @@ describe("preflightProvider", () => {
     }
   });
 
+  it("explains an ignored Claude subscription login instead of a bare connect step", () => {
+    const claude = provider({
+      instanceId: ProviderInstanceId.make("claudeAgent"),
+      driver: ProviderDriverKind.make("claudeAgent"),
+      displayName: "Claude",
+      auth: { status: "unauthenticated" },
+    });
+
+    const message =
+      "Claude Pro and Max sign-in is no longer supported. Add an Anthropic API key in Settings to keep using Claude.";
+
+    expect(
+      preflightProvider({
+        providers: [claude],
+        providerId: "claudeAgent",
+        model: "claude-sonnet",
+        now: Date.parse("2026-10-30T00:00:00.000Z"),
+        subscriptionStatuses: [
+          {
+            provider: "anthropic",
+            connected: false,
+            health: "missing",
+            credentialWarning: { at: "2026-10-30T00:00:00.000Z", message },
+            reconnectAction: "Connect API key",
+            healthTest: { status: "not-run" },
+            dependentBots: [],
+            dependentRoutines: [],
+          },
+        ],
+      }),
+    ).toMatchObject({ category: "missing-login", detail: message, repairAction: "providers" });
+  });
+
+  it("explains a removed Claude login even when old request health says healthy", () => {
+    const message =
+      "Claude Pro and Max sign-in is no longer supported. Add an Anthropic API key in Settings to keep using Claude.";
+
+    const preflight = (auth: ServerProvider["auth"]) =>
+      preflightProvider({
+        providers: [
+          provider({
+            instanceId: ProviderInstanceId.make("claudeAgent"),
+            driver: ProviderDriverKind.make("claudeAgent"),
+            status: "warning",
+            auth,
+            message,
+          }),
+        ],
+        providerId: "claudeAgent",
+        model: "claude-sonnet",
+        now: Date.parse("2026-11-05T00:00:00.000Z"),
+        // Recorded on `provider:claudeAgent` before the upgrade, while the OAuth login worked.
+        subscriptionHealth: () => ({
+          health: "healthy",
+          lastSuccessfulRequestAt: "2026-10-01T00:00:00.000Z",
+        }),
+        subscriptionStatuses: [
+          {
+            provider: "anthropic",
+            connected: false,
+            health: "missing",
+            credentialWarning: { at: "2026-11-05T00:00:00.000Z", message },
+            reconnectAction: "Connect API key",
+            healthTest: { status: "not-run" },
+            dependentBots: [],
+            dependentRoutines: [],
+          },
+        ],
+      });
+
+    expect(preflight({ status: "unauthenticated" })).toEqual({
+      category: "missing-login",
+      detail: message,
+      repairAction: "providers",
+    });
+    // An ambient Anthropic API key still authenticates the instance, so the turn runs.
+    expect(preflight({ status: "authenticated" })).toBeUndefined();
+  });
+
   it("ignores shared subscription health for an independently credentialed instance", () => {
     expect(
       preflightProvider({

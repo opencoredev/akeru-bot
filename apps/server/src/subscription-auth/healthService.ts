@@ -9,7 +9,11 @@ import type * as Clock from "effect/Clock";
 import * as DateTime from "effect/DateTime";
 import { FetchHttpClient, HttpClient, HttpClientError } from "effect/unstable/http";
 import { runOAuthPromise } from "./oauthHttp.ts";
-import { type SubscriptionAuthData, type SubscriptionCredentialStore } from "./credentialStore.ts";
+import {
+  isSubscriptionCredential,
+  type SubscriptionAuthData,
+  type SubscriptionCredentialStore,
+} from "./credentialStore.ts";
 import type { ApiKeyCredential, OAuthCredential } from "./types.ts";
 import {
   anthropicApiBaseUrl,
@@ -323,10 +327,9 @@ export class SubscriptionHealthService {
   public redactHealthMessage(message: string): string {
     this.reloadHealth();
 
-    for (const credentialId of Object.keys(this.data)) {
-      const credential = credentialAt(this.data, credentialId);
-
-      if (!credential) continue;
+    // Every stored secret, including retired logins the service no longer uses.
+    for (const credential of Object.values(this.data)) {
+      if (!isSubscriptionCredential(credential)) continue;
 
       for (const secret of [
         credential.access,
