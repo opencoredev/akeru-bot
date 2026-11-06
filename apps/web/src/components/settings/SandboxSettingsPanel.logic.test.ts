@@ -54,7 +54,7 @@ describe("sandbox settings", () => {
     });
 
     expect(isSandboxProviderConnected(connected, "railway")).toBe(true);
-    expect(selectableSandboxProviders(connected)).toEqual(["local", "railway"]);
+    expect(selectableSandboxProviders(connected)).toEqual(["local", "railway", "docker"]);
 
     const disconnected = disconnectSandboxProvider(
       { ...connected, defaultProvider: "railway" },
@@ -65,8 +65,11 @@ describe("sandbox settings", () => {
     expect(isSandboxProviderConnected(disconnected, "railway")).toBe(false);
   });
 
-  it("offers only local until a cloud provider is connected", () => {
-    expect(selectableSandboxProviders(DEFAULT_SERVER_SETTINGS.sandbox)).toEqual(["local"]);
+  it("offers only credential-free sandboxes until a cloud provider is connected", () => {
+    expect(selectableSandboxProviders(DEFAULT_SERVER_SETTINGS.sandbox)).toEqual([
+      "local",
+      "docker",
+    ]);
   });
 
   it("connects E2B and makes it available as a default", () => {
@@ -77,7 +80,7 @@ describe("sandbox settings", () => {
     });
 
     expect(isSandboxProviderConnected(sandbox, "e2b")).toBe(true);
-    expect(selectableSandboxProviders(sandbox)).toEqual(["local", "e2b"]);
+    expect(selectableSandboxProviders(sandbox)).toEqual(["local", "e2b", "docker"]);
   });
 
   it("requires all Vercel credentials", () => {

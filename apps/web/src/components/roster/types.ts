@@ -46,6 +46,8 @@ export interface Bot {
     | "ascii"
     | "railway"
     | "tenki"
+    | "boat"
+    | "docker"
     | null;
   runtimeMode: "approval-required" | "auto-accept-edits" | "auto" | "full-access";
   /** Personality baseline, 0 (chill) to 100 (professional). Absent on bots saved before the field existed. */

@@ -75,6 +75,7 @@ minimumReleaseAgeExclude:
   - "@mastra/core@1.63.0"
   - "@mastra/observability@1.17.3"
   - cn@0.2.4
+  - "@opencoredev/sandbox-sdk@1.0.3"
 
 overrides:
   # The SDK always receives the user's Claude executable, so its bundled binaries are unused.
@@ -94,6 +95,13 @@ overrides:
   "@effect/sql-sqlite-bun": "catalog:"
   "@effect/vitest": "catalog:"
   "@effect/vitest>vitest": "-"
+  # Akeru imports only sandbox-sdk's core and provider entry points. Keeping its optional
+  # framework peers (notably ai@7) out of resolution stops them from displacing ai@6 for chat.
+  "@opencoredev/sandbox-sdk>@mastra/core": "-"
+  "@opencoredev/sandbox-sdk>@openai/agents": "-"
+  "@opencoredev/sandbox-sdk>ai": "-"
+  "@opencoredev/sandbox-sdk>vitest": "-"
+  "@opencoredev/sandbox-sdk>zod": "-"
   "@expo/metro-config": 56.0.14
   "@pierre/diffs>@shikijs/transformers": ^4.2.0
   "@types/node": "catalog:"

@@ -157,115 +157,120 @@ describe("sandbox bot browser", () => {
     await workspace.destroy();
   });
 
-  it("creates and reconnects one remote browser while preserving its current URL", async () => {
-    const outputForCommand = (command: string) => (command === "sh" ? "4242\n" : "");
+  // Local Docker's endpoint is loopback: only the environment computer can reach it.
+  it.each([{ loopback: false }, { loopback: true }])(
+    "creates and reconnects one remote browser while preserving its current URL (loopback: $loopback)",
+    async ({ loopback }) => {
+      const outputForCommand = (command: string) => (command === "sh" ? "4242\n" : "");
 
-    const executeCommand = vi.fn(async (command: string, args: string[] = []) => {
-      if (command === "sh" && args[1]?.includes("while kill"))
-        return await new Promise<never>(() => {});
+      const executeCommand = vi.fn(async (command: string, args: string[] = []) => {
+        if (command === "sh" && args[1]?.includes("while kill"))
+          return await new Promise<never>(() => {});
 
-      return {
-        exitCode: 0,
-        stdout:
-          command === "uname"
-            ? args[0] === "-s"
-              ? "Linux\n"
-              : "x86_64\n"
-            : outputForCommand(command),
-        stderr: "",
-        success: true,
-        executionTimeMs: 1,
-      };
-    });
-
-    const workspace = new Workspace({
-      filesystem: new LocalFilesystem({ basePath: process.cwd() }),
-      sandbox: partialSdkFixture<WorkspaceSandbox>({
-        id: "remote-workspace",
-        provider: "e2b",
-        executeCommand,
-      }),
-    });
-
-    const browserEndpoint = vi.fn(async () => ({
-      url: "https://9223-e2b.example",
-      requestHeaders: { "e2b-traffic-access-token": "traffic-token" },
-    }));
-
-    const messages: Array<{ method?: string; params?: { name?: string } }> = [];
-    let session = 0;
-
-    const fetchMock = vi.fn(async (_url: string | URL | Request, init?: RequestInit) => {
-      if (init?.method === "DELETE") return new Response("", { status: 204 });
-
-      const message = JSON.parse(String(init?.body)) as {
-        method?: string;
-        params?: { name?: string };
-      };
-
-      messages.push(message);
-
-      const sessionId =
-        message.method === "initialize" ? `browser-session-${++session}` : undefined;
-
-      const text =
-        message.params?.name === "session_list"
-          ? JSON.stringify([{ url: "https://example.com/bottom-edge" }])
-          : "ok";
-
-      return new Response(JSON.stringify({ result: { content: [{ text }] } }), {
-        status: 200,
-        headers: sessionId ? { "mcp-session-id": sessionId } : {},
-      });
-    });
-
-    vi.stubGlobal("fetch", fetchMock);
-
-    const browser = createBotBrowser({
-      threadId: "remote-browser",
-      workspace,
-      cacheDir: "/tmp/unused-remote-browser-cache",
-      browserEndpoint,
-    });
-
-    try {
-      expect(executeCommand).not.toHaveBeenCalled();
-      expect(browserEndpoint).not.toHaveBeenCalled();
-      expect(fetchMock).not.toHaveBeenCalled();
-      await executeTool(browser.tools.browser_snapshot, {});
-      expect(executeCommand.mock.calls.filter(([command]) => command === "sh")).toHaveLength(2);
-      await expect(browser.attachment()).resolves.toMatchObject({
-        browserUrl: "https://9223-e2b.example",
-        requestHeaders: { "e2b-traffic-access-token": "traffic-token" },
-        localRequestHeaders: { "e2b-traffic-access-token": "traffic-token" },
-        availableToHostedPlugins: true,
-      });
-      await executeTool(browser.tools.browser_click, { selector: "#bottom-target" });
-      await browser.reconnect();
-      await expect(browser.attachment()).resolves.toMatchObject({
-        mcpSessionId: "browser-session-2",
+        return {
+          exitCode: 0,
+          stdout:
+            command === "uname"
+              ? args[0] === "-s"
+                ? "Linux\n"
+                : "x86_64\n"
+              : outputForCommand(command),
+          stderr: "",
+          success: true,
+          executionTimeMs: 1,
+        };
       });
 
-      expect(browserEndpoint).toHaveBeenNthCalledWith(1, 9223);
-      expect(browserEndpoint).toHaveBeenNthCalledWith(2, 9223);
-      expect(executeCommand.mock.calls.filter(([command]) => command === "sh")).toHaveLength(4);
-      expect(messages).toContainEqual(
-        expect.objectContaining({
-          method: "tools/call",
-          params: expect.objectContaining({ name: "goto" }),
+      const workspace = new Workspace({
+        filesystem: new LocalFilesystem({ basePath: process.cwd() }),
+        sandbox: partialSdkFixture<WorkspaceSandbox>({
+          id: "remote-workspace",
+          provider: "e2b",
+          executeCommand,
         }),
-      );
+      });
 
-      for (const [, init] of fetchMock.mock.calls) {
-        expect(init?.headers).toMatchObject({
-          "e2b-traffic-access-token": "traffic-token",
+      const browserEndpoint = vi.fn(async () => ({
+        url: "https://9223-e2b.example",
+        requestHeaders: { "e2b-traffic-access-token": "traffic-token" },
+        ...(loopback && { loopback: true }),
+      }));
+
+      const messages: Array<{ method?: string; params?: { name?: string } }> = [];
+      let session = 0;
+
+      const fetchMock = vi.fn(async (_url: string | URL | Request, init?: RequestInit) => {
+        if (init?.method === "DELETE") return new Response("", { status: 204 });
+
+        const message = JSON.parse(String(init?.body)) as {
+          method?: string;
+          params?: { name?: string };
+        };
+
+        messages.push(message);
+
+        const sessionId =
+          message.method === "initialize" ? `browser-session-${++session}` : undefined;
+
+        const text =
+          message.params?.name === "session_list"
+            ? JSON.stringify([{ url: "https://example.com/bottom-edge" }])
+            : "ok";
+
+        return new Response(JSON.stringify({ result: { content: [{ text }] } }), {
+          status: 200,
+          headers: sessionId ? { "mcp-session-id": sessionId } : {},
         });
+      });
+
+      vi.stubGlobal("fetch", fetchMock);
+
+      const browser = createBotBrowser({
+        threadId: "remote-browser",
+        workspace,
+        cacheDir: "/tmp/unused-remote-browser-cache",
+        browserEndpoint,
+      });
+
+      try {
+        expect(executeCommand).not.toHaveBeenCalled();
+        expect(browserEndpoint).not.toHaveBeenCalled();
+        expect(fetchMock).not.toHaveBeenCalled();
+        await executeTool(browser.tools.browser_snapshot, {});
+        expect(executeCommand.mock.calls.filter(([command]) => command === "sh")).toHaveLength(2);
+        await expect(browser.attachment()).resolves.toMatchObject({
+          browserUrl: "https://9223-e2b.example",
+          requestHeaders: { "e2b-traffic-access-token": "traffic-token" },
+          localRequestHeaders: { "e2b-traffic-access-token": "traffic-token" },
+          availableToHostedPlugins: !loopback,
+        });
+        await executeTool(browser.tools.browser_click, { selector: "#bottom-target" });
+        await browser.reconnect();
+        await expect(browser.attachment()).resolves.toMatchObject({
+          mcpSessionId: "browser-session-2",
+        });
+
+        expect(browserEndpoint).toHaveBeenNthCalledWith(1, 9223);
+        expect(browserEndpoint).toHaveBeenNthCalledWith(2, 9223);
+        expect(executeCommand.mock.calls.filter(([command]) => command === "sh")).toHaveLength(4);
+        expect(messages).toContainEqual(
+          expect.objectContaining({
+            method: "tools/call",
+            params: expect.objectContaining({ name: "goto" }),
+          }),
+        );
+
+        for (const [, init] of fetchMock.mock.calls) {
+          expect(init?.headers).toMatchObject({
+            "e2b-traffic-access-token": "traffic-token",
+          });
+        }
+      } finally {
+        await browser.close();
+        vi.unstubAllGlobals();
       }
-    } finally {
-      await browser.close();
-      vi.unstubAllGlobals();
-    }
-  });
+    },
+  );
 
   it("fails closed when a remote workspace has no browser endpoint", async () => {
     const browser = createBotBrowser({

@@ -160,3 +160,43 @@ describe("BotWorkspacePool", () => {
     }).pipe(Effect.provide(TestClock.layer())),
   );
 });
+
+describe("BotWorkspacePool lease ownership", () => {
+  it("lets only the sole lease on a freshly created workspace own it", async () => {
+    const pool = new BotWorkspacePool({ idleTimeToLive: "1 hour" });
+    const create = vi.fn(async () => remoteWorkspace({ created: true }));
+
+    const first = await pool.acquire("owned", create);
+    expect(first.unshared()).toBe(true);
+
+    const second = await pool.acquire("owned", create);
+    expect(first.unshared()).toBe(false);
+    expect(second.unshared()).toBe(false);
+    await second.release();
+    await first.release();
+
+    // Used earlier and still idle in the pool: a later lease does not own it either.
+    const later = await pool.acquire("owned", create);
+    expect(later.unshared()).toBe(false);
+    await later.release({ destroy: true });
+  });
+
+  it("never lets a lease own a reattached or woken workspace", async () => {
+    const pool = new BotWorkspacePool();
+
+    const reattached = await pool.acquire("reattached", async () =>
+      remoteWorkspace({ created: false }),
+    );
+
+    expect(reattached.unshared()).toBe(false);
+    await reattached.release({ destroy: true });
+
+    const create = vi.fn(async () => remoteWorkspace({ created: true }));
+    const fresh = await pool.acquire("woken", create);
+    await fresh.release();
+    const woken = await pool.acquire("woken", create);
+    expect(woken.wokeFromSleep).toBe(true);
+    expect(woken.unshared()).toBe(false);
+    await woken.release({ destroy: true });
+  });
+});

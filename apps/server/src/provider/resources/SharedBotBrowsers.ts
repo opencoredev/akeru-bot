@@ -1,4 +1,5 @@
 import type { BotBrowser } from "../browser/BotBrowserTypes.ts";
+import type { AkeruBotWorkspace } from "../workspace/BotWorkspaceTypes.ts";
 import type {
   AkeruSessionResourcesOptions,
   BrowserAttribution,
@@ -17,6 +18,9 @@ export class SharedBotBrowsers {
   readonly browserResourceKeys = new Map<string, string>();
 
   readonly resourceBrowsers = new Map<string, BotBrowser>();
+
+  /** The pooled workspace each browser was built against; a replacement workspace needs a new browser. */
+  readonly browserWorkspaces = new WeakMap<BotBrowser, AkeruBotWorkspace>();
 
   readonly browserReferences = new Map<string, number>();
 

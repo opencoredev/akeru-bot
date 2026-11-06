@@ -371,6 +371,9 @@ export const connectionsCatalog = {
     "由 Upstash Box 管理的云端工作区。需要 API 密钥。",
   "Cloud workspaces managed by Tenki. Requires an API key.":
     "由 Tenki 管理的云端工作区。需要 API 密钥。",
+  "Cloud VMs managed by Boat. Requires an API key.": "由 Boat 管理的云端虚拟机。需要 API 密钥。",
+  "Run bots in Docker containers on the environment computer. Requires Docker.":
+    "在环境所在计算机上的 Docker 容器中运行机器人。需要 Docker。",
   "Network access": "访问网络",
   "No models available. Check your provider connection in Settings.":
     "没有可用的模型。请在设置中检查提供商连接。",

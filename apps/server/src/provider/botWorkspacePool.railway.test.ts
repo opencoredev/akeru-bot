@@ -12,6 +12,9 @@ import { makebotWorkspacePoolTestSupport } from "./test-support/botWorkspacePool
 
 const { localWorkspace, remoteWorkspace } = makebotWorkspacePoolTestSupport();
 
+/** A sandbox-sdk workspace: it can reattach by its saved provider ID. */
+const reattachable = { pause: false, snapshot: false, browser: false, reconnect: true };
+
 describe("BotWorkspacePool", () => {
   effectIt.effect("never destroys a durable Railway VM on initial or subsequent wake failure", () =>
     Effect.promise(async () => {
@@ -330,6 +333,67 @@ describe("BotWorkspacePool", () => {
 
     await pool.destroyAll();
     expect(destroy).toHaveBeenCalledTimes(1);
+  });
+
+  it("drops a detached Railway entry that a deletion removed while its pause retry waited", async () => {
+    const pool = new BotWorkspacePool();
+
+    const key = (token: string) =>
+      botWorkspaceResourceKey({
+        resourceScope: "bot-one",
+        sandbox: "railway",
+        credentialFingerprint: botWorkspaceCredentialFingerprint({ RAILWAY_API_TOKEN: token }),
+      });
+
+    let deleting!: () => void;
+    let finishDeleting!: () => void;
+    const deletionStarted = new Promise<void>((resolve) => (deleting = resolve));
+    const deletionGate = new Promise<void>((resolve) => (finishDeleting = resolve));
+
+    const current = await pool.acquire(key("new"), async () =>
+      remoteWorkspace({
+        provider: "railway",
+        capabilities: reattachable,
+        destroy: vi.fn(async () => {
+          deleting();
+          await deletionGate;
+        }),
+      }),
+    );
+
+    // The old credential key's wake fails, leaving a detached entry for cleanup.
+    const createOld = vi.fn(async () =>
+      remoteWorkspace({
+        provider: "railway",
+        capabilities: reattachable,
+        wake: vi.fn(async () => {
+          throw new Error("wait failed");
+        }),
+      }),
+    );
+
+    await expect(pool.acquire(key("old"), createOld)).rejects.toThrow("wait failed");
+    expect(createOld).toHaveBeenCalledOnce();
+
+    // The deletion takes the identity lock first; the retry queues behind it.
+    const deletion = current.release({ destroy: true });
+    const retry = pool.retryFailedSleeps();
+    expect(createOld).toHaveBeenCalledOnce();
+    await deletionStarted;
+    expect(createOld).toHaveBeenCalledOnce();
+    finishDeleting();
+    await deletion;
+    await retry;
+
+    // Cleanup neither reattached nor created a VM, and kept no handle to the deleted one.
+    expect(createOld).toHaveBeenCalledOnce();
+    const createFresh = vi.fn(async () => remoteWorkspace({ provider: "railway" }));
+    const fresh = await pool.acquire(key("old"), createFresh);
+    expect(createFresh).toHaveBeenCalledOnce();
+    expect(fresh.wokeFromSleep).toBe(false);
+    await fresh.release();
+    await pool.destroyAll();
+    expect(createOld).toHaveBeenCalledOnce();
   });
 
   it("destroys a Railway VM created while destroyAll is waiting for acquisition", async () => {

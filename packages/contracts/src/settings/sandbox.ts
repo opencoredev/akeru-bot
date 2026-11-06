@@ -18,6 +18,8 @@ export const CLOUD_SANDBOX_PROVIDERS = [
   "ascii",
   "railway",
   "tenki",
+  "boat",
+  "docker",
 ] as const;
 
 export const SANDBOX_PROVIDER_CREDENTIALS = {
@@ -35,6 +37,9 @@ export const SANDBOX_PROVIDER_CREDENTIALS = {
     { name: "RAILWAY_ENVIRONMENT_ID", sensitive: false },
   ],
   tenki: [{ name: "TENKI_API_KEY", sensitive: true }],
+  boat: [{ name: "BOAT_API_KEY", sensitive: true }],
+  // Local Docker uses the machine's Docker socket; it needs no account.
+  docker: [],
 } as const satisfies Readonly<
   Record<
     CloudSandboxProvider,
@@ -63,6 +68,8 @@ export const SandboxSettings = Schema.Struct({
     ascii: SandboxProviderConnection,
     railway: SandboxProviderConnection,
     tenki: SandboxProviderConnection,
+    boat: SandboxProviderConnection,
+    docker: SandboxProviderConnection,
   }).pipe(Schema.withDecodingDefault(Effect.succeed({}))),
 }).pipe(Schema.withDecodingDefault(Effect.succeed({})));
 
@@ -92,6 +99,8 @@ export const SandboxSettingsPatch = Schema.Struct({
       ascii: Schema.optionalKey(SandboxProviderConnectionPatch),
       railway: Schema.optionalKey(SandboxProviderConnectionPatch),
       tenki: Schema.optionalKey(SandboxProviderConnectionPatch),
+      boat: Schema.optionalKey(SandboxProviderConnectionPatch),
+      docker: Schema.optionalKey(SandboxProviderConnectionPatch),
     }),
   ),
 });

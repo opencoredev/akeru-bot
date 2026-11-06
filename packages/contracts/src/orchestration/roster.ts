@@ -122,6 +122,8 @@ export const BotSandbox = Schema.Literals([
   "ascii",
   "railway",
   "tenki",
+  "boat",
+  "docker",
 ]);
 
 export type BotSandbox = typeof BotSandbox.Type;

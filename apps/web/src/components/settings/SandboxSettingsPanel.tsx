@@ -46,6 +46,8 @@ const SANDBOX_PROVIDER_LABELS: Readonly<Record<SandboxProvider, string>> = {
   ascii: "Ascii Box",
   railway: "Railway",
   tenki: "Tenki",
+  boat: "Boat",
+  docker: "Local Docker",
 };
 
 function errorMessage(
@@ -191,12 +193,25 @@ function EnvironmentSandboxSettingsPanel({
         />
         {SANDBOX_PROVIDER_DEFINITIONS.map((definition) => {
           const connected = isSandboxProviderConnected(sandbox, definition.id);
+          const description = t(definition.description);
+
+          // A provider without credentials has nothing to connect or disconnect.
+          if (definition.fields.length === 0) {
+            return (
+              <SettingsRow
+                key={definition.id}
+                title={definition.label}
+                description={description}
+                status={t("Available")}
+              />
+            );
+          }
 
           return (
             <SettingsRow
               key={definition.id}
               title={definition.label}
-              description={t(definition.description)}
+              description={description}
               status={connected ? t("Connected") : t("Not connected")}
               control={
                 <div className="flex flex-wrap items-center justify-end gap-1.5">

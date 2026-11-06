@@ -19,6 +19,8 @@
   "ignoreBinaries": [
     "eas",
     "file",
+    // Guest-sandbox lock tool; the append shell test runs it when the host has it.
+    "flock",
     "mkfifo",
     "openssl",
     "plutil",
@@ -65,7 +67,6 @@
       "ignoreDependencies": [
         "@akeru/web",
         "@effect/platform-node-shared",
-        "execa",
         "libsql",
         "msgpackr-extract",
         "node-pty",
