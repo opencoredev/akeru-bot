@@ -7,7 +7,7 @@ import * as NodeFS from "node:fs";
 import { expect, it } from "@effect/vitest";
 import { describe, vi } from "vite-plus/test";
 import { ProviderInstanceId } from "@akeru/contracts";
-import { HEALTH_CHECK_TIMEOUT_MS } from "./serviceTypes.ts";
+import { CLAUDE_SUBSCRIPTION_RETIRED_MESSAGE, HEALTH_CHECK_TIMEOUT_MS } from "./serviceTypes.ts";
 import {
   makeTestSubscriptionAuthService,
   runWithNodeServices,
@@ -48,7 +48,7 @@ describe("provider health checks", () => {
   it.effect.each([200, 401])("aborts an unread response body after recording status %s", (status) =>
     Effect.gen(function* () {
       const { authPath } = fixture();
-      seedOAuth(authPath, "anthropic");
+      seedOAuth(authPath, "xai");
       const requested = Deferred.makeUnsafe<AbortSignal>();
       const bodyRead = vi.fn();
       vi.stubGlobal(
@@ -68,12 +68,12 @@ describe("provider health checks", () => {
 
       try {
         const service = yield* Effect.promise(() => makeTestSubscriptionAuthService(authPath));
-        const check = service.testHealth("anthropic");
+        const check = service.testHealth("xai");
         const signal = yield* Deferred.await(requested);
         yield* Effect.promise(() => check);
         expect(signal.aborted).toBe(true);
         expect(bodyRead).not.toHaveBeenCalled();
-        expect(service.statuses().find((entry) => entry.provider === "anthropic")?.health).toBe(
+        expect(service.statuses().find((entry) => entry.provider === "xai")?.health).toBe(
           status === 200 ? "healthy" : "revoked",
         );
       } finally {
@@ -85,7 +85,7 @@ describe("provider health checks", () => {
   it.effect("aborts the actual request when the original 30-second deadline expires", () =>
     Effect.gen(function* () {
       const { authPath } = fixture();
-      seedOAuth(authPath, "anthropic");
+      seedOAuth(authPath, "xai");
       const deadline = new AbortController();
       const timeout = vi.spyOn(AbortSignal, "timeout").mockReturnValue(deadline.signal);
       const requested = Deferred.makeUnsafe<AbortSignal>();
@@ -105,7 +105,7 @@ describe("provider health checks", () => {
 
       try {
         const service = yield* Effect.promise(() => makeTestSubscriptionAuthService(authPath));
-        const check = service.testHealth("anthropic");
+        const check = service.testHealth("xai");
         const signal = yield* Deferred.await(requested);
         expect(timeout).toHaveBeenCalledWith(30_000);
         expect(HEALTH_CHECK_TIMEOUT_MS).toBe(30_000);
@@ -116,8 +116,7 @@ describe("provider health checks", () => {
         yield* Effect.promise(() => check);
         expect(signal.aborted).toBe(true);
         expect(
-          service.statuses().find((entry) => entry.provider === "anthropic")?.lastFailedRequest
-            ?.message,
+          service.statuses().find((entry) => entry.provider === "xai")?.lastFailedRequest?.message,
         ).toBe("The operation was aborted due to timeout");
       } finally {
         timeout.mockRestore();
@@ -128,7 +127,7 @@ describe("provider health checks", () => {
 
   it("keeps OAuth transport failure messages and sends only the original headers", async () => {
     const { authPath } = fixture();
-    seedOAuth(authPath, "anthropic");
+    seedOAuth(authPath, "xai");
     const calls: Headers[] = [];
     vi.stubGlobal(
       "fetch",
@@ -140,10 +139,9 @@ describe("provider health checks", () => {
 
     try {
       const service = await makeTestSubscriptionAuthService(authPath);
-      await service.testHealth("anthropic");
+      await service.testHealth("xai");
       expect(
-        service.statuses().find((status) => status.provider === "anthropic")?.lastFailedRequest
-          ?.message,
+        service.statuses().find((status) => status.provider === "xai")?.lastFailedRequest?.message,
       ).toBe("fetch failed");
       expect(calls[0]?.has("traceparent")).toBe(false);
       expect(calls[0]?.has("b3")).toBe(false);
@@ -152,19 +150,22 @@ describe("provider health checks", () => {
     }
   });
 
-  it("checks Claude OAuth against the OAuth usage endpoint with a bearer token", async () => {
+  it("ignores a saved Claude OAuth login and sends no health request", async () => {
     const { authPath } = fixture();
     seedOAuth(authPath, "anthropic");
     const calls = recordRequests();
     const service = await makeTestSubscriptionAuthService(authPath);
     await service.testHealth("anthropic");
 
-    expect(calls).toHaveLength(1);
-    expect(calls[0]?.url).toBe("https://api.anthropic.com/api/oauth/usage");
-    expect(calls[0]?.headers.get("authorization")).toBe("Bearer anthropic-access");
-    expect(calls[0]?.headers.get("anthropic-beta")).toBe("oauth-2025-04-20");
-    expect(calls[0]?.headers.get("x-api-key")).toBeNull();
-    expect(service.statuses().find((s) => s.provider === "anthropic")?.health).toBe("healthy");
+    expect(calls).toHaveLength(0);
+    expect(service.isConnected("anthropic")).toBe(false);
+    expect(await service.getAccessToken("anthropic")).toBeUndefined();
+    expect(service.statuses().find((s) => s.provider === "anthropic")).toMatchObject({
+      connected: false,
+      health: "missing",
+      reconnectAction: "Connect API key",
+      credentialWarning: { message: CLAUDE_SUBSCRIPTION_RETIRED_MESSAGE },
+    });
     vi.unstubAllGlobals();
   });
 

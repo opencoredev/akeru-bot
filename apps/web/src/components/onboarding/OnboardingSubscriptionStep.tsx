@@ -6,6 +6,7 @@ import {
 import {
   apiKeyStartInput,
   apiKeyValidationError,
+  providerRequiresApiKey,
   providerSupportsBaseUrl,
 } from "@akeru/client-runtime/provider-auth";
 import type {
@@ -208,7 +209,7 @@ export function SubscriptionStep({
   };
 
   const connect = async () => {
-    if (draft.providerId === "opencode-go" && !captureMode) {
+    if (providerRequiresApiKey(draft.providerId) && !captureMode) {
       openKey();
 
       return;
@@ -427,7 +428,7 @@ export function SubscriptionStep({
           {error}
         </p>
       ) : null}
-      {!connected && selected.id !== "opencode-go" ? (
+      {!connected && !providerRequiresApiKey(selected.id) ? (
         <Button className="w-full" variant="outline" disabled={busy} onClick={openKey}>
           {t("Use an API key")}
         </Button>

@@ -19,7 +19,10 @@ import { fakeJwt } from "../../subscription-auth/testUtils/scriptedHttpClient.ts
 import * as BackgroundPolicy from "../../background/BackgroundPolicy.ts";
 import { ServerConfig } from "../../config.ts";
 import { layerTest as settingsLayer, ServerSettingsService } from "../../serverSettings.ts";
-import { SubscriptionAuthService } from "../../subscription-auth/service.ts";
+import {
+  CLAUDE_SUBSCRIPTION_RETIRED_MESSAGE,
+  SubscriptionAuthService,
+} from "../../subscription-auth/service.ts";
 import { subscriptionProviderMutation } from "../../subscription-auth/providerMutation.ts";
 import { makeProviderInstanceRegistry } from "../Layers/ProviderInstanceRegistryLive.ts";
 import { deriveProviderInstanceConfigMap } from "../Layers/ProviderInstanceRegistryHydration.ts";
@@ -111,13 +114,7 @@ const cases = [
 ] as const;
 
 // Ambient provider keys would count as explicit credentials and mask saved-credential readiness.
-for (const name of [
-  "OPENAI_API_KEY",
-  "ANTHROPIC_API_KEY",
-  "ANTHROPIC_AUTH_TOKEN",
-  "CLAUDE_CODE_OAUTH_TOKEN",
-  "XAI_API_KEY",
-]) {
+for (const name of ["OPENAI_API_KEY", "ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN", "XAI_API_KEY"]) {
   vi.stubEnv(name, "");
 }
 
@@ -379,18 +376,37 @@ it.layer(testLayer)("Harness provider drivers without CLIs", (it) => {
               availability: "available",
               status: "warning",
               auth: { status: "unauthenticated" },
-              message: `Connect ${name} in Settings.`,
+              message:
+                provider === "anthropic"
+                  ? "Add an Anthropic API key for Claude in Settings."
+                  : `Connect ${name} in Settings.`,
             });
             expect(before.models.length).toBeGreaterThan(1);
+
+            const authPath = NodePath.join(config.secretsDir, "subscription-auth.json");
+
+            const oauth = {
+              type: "oauth",
+              access: "test-access",
+              refresh: "test-refresh",
+              expires: 4_102_444_800_000,
+            };
+
+            if (provider === "anthropic") {
+              // A Claude subscription login from an older version is ignored, with a reason.
+              yield* fs.writeFileString(authPath, JSON.stringify({ anthropic: oauth }));
+              expect(yield* instance.snapshot.refresh).toMatchObject({
+                status: "warning",
+                auth: { status: "unauthenticated" },
+                message: CLAUDE_SUBSCRIPTION_RETIRED_MESSAGE,
+              });
+            }
+
             yield* fs.writeFileString(
-              NodePath.join(config.secretsDir, "subscription-auth.json"),
+              authPath,
               JSON.stringify({
-                [provider]: {
-                  type: "oauth",
-                  access: "test-access",
-                  refresh: "test-refresh",
-                  expires: 4_102_444_800_000,
-                },
+                [provider]:
+                  provider === "anthropic" ? { type: "api-key", access: "test-key" } : oauth,
               }),
             );
             const after = yield* instance.snapshot.refresh;

@@ -149,8 +149,6 @@ export type { PlanAccess } from "./usagePlanTypes.ts";
 
 export type { GetPlanAccess } from "./usagePlanTypes.ts";
 
-export { parseClaudeUsage } from "./usagePlanParsers.ts";
-
 export { parseCodexUsage } from "./usagePlanParsers.ts";
 
 export { parseGrokUsage } from "./usagePlanParsers.ts";

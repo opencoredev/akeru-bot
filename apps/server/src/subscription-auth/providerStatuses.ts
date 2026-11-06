@@ -12,6 +12,9 @@ import {
   credentialKey,
   accountScope,
   credentialAt,
+  retiredCredentialAt,
+  providerRequiresApiKey,
+  CLAUDE_SUBSCRIPTION_RETIRED_MESSAGE,
   type SubscriptionProviderId,
   type ProviderHealthData,
   type ProviderStatus,
@@ -44,6 +47,18 @@ export function statusForKey(
 
   const credential = credentialAt(data, key);
   const health = healthData[key];
+
+  // A login from an older version that startup removed, or one another writer saved since:
+  // say why the provider shows as not connected.
+  const retiredWarning =
+    !credential && (health?.retiredLoginRemovedAt || hasRetiredCredential(data, provider, key))
+      ? {
+          at: health?.retiredLoginRemovedAt ?? DateTime.formatIso(DateTime.makeUnsafe(now)),
+          message: CLAUDE_SUBSCRIPTION_RETIRED_MESSAGE,
+        }
+      : undefined;
+
+  const warning = credentialWarning ?? retiredWarning;
   const expired = credential?.type === "oauth" && credential.expires <= now;
 
   const failedAfterSuccess =
@@ -107,9 +122,9 @@ export function statusForKey(
       : {}),
     ...(health?.lastFailedRequest ? { lastFailedRequest: health.lastFailedRequest } : {}),
     ...(health?.nextRetryAt ? { nextRetryAt: health.nextRetryAt } : {}),
-    ...(credentialWarning ? { credentialWarning } : {}),
+    ...(warning ? { credentialWarning: warning } : {}),
     reconnectAction:
-      credential?.type === "api-key" || provider === "opencode-go"
+      credential?.type === "api-key" || providerRequiresApiKey(provider)
         ? credential
           ? "Replace API key"
           : "Connect API key"
@@ -123,6 +138,23 @@ export function statusForKey(
     ),
     dependentRoutines: [],
   };
+}
+
+/** The default scope also covers logins saved under its linked accounts. */
+function hasRetiredCredential(
+  data: CredentialStoreState["data"],
+  provider: SubscriptionProviderId,
+  key: string,
+): boolean {
+  if (retiredCredentialAt(data, key)) return true;
+
+  return (
+    key === provider &&
+    Object.keys(data).some(
+      (candidate) =>
+        candidate.startsWith(`account:${provider}:`) && retiredCredentialAt(data, candidate),
+    )
+  );
 }
 
 export function providerStatuses(

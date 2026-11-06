@@ -1,10 +1,11 @@
 /**
  * Subscription provider auth: bring-your-own-subscription login flows.
  *
- * A provider here is a consumer subscription (Claude Pro/Max, ChatGPT, Cursor,
- * X Premium, Kimi For Coding) connected over OAuth. Tokens never cross this
- * contract — the server holds them; clients only see connection status and
- * login-flow progress.
+ * A provider here is a subscription connected over OAuth (ChatGPT, xAI, Kimi
+ * For Coding) or a provider API key (Anthropic, OpenCode Go, and the others).
+ * Claude takes an Anthropic API key only. Tokens never cross this contract —
+ * the server holds them; clients only see connection status and login-flow
+ * progress.
  */
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
@@ -102,9 +103,11 @@ export const SubscriptionProviderStatus = Schema.Struct({
   ),
   nextRetryAt: Schema.optional(IsoDateTime),
   /**
-   * The saved credential file changed on disk and could not be reread. The
-   * server keeps using the credentials it loaded earlier, so `connected` and
-   * health still describe them.
+   * Server text about saved credentials it cannot use as they are. Either the
+   * credential file changed on disk and could not be reread (the server keeps
+   * using the credentials it loaded earlier, so `connected` and health still
+   * describe them), or the saved login uses a retired sign-in method, such as
+   * a Claude Pro or Max login, and is ignored (`connected` is false).
    */
   credentialWarning: Schema.optional(
     Schema.Struct({

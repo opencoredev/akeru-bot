@@ -3,50 +3,7 @@ import { it } from "@effect/vitest";
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
 import * as TestClock from "effect/testing/TestClock";
-import {
-  parseClaudeUsage,
-  parseCodexUsage,
-  readPlanLimitsEffect,
-  planLimitsReader,
-} from "./usagePlanLimits.ts";
-
-describe("parseClaudeUsage", () => {
-  it("reads the 5-hour and weekly windows", () => {
-    const parsed = parseClaudeUsage({
-      five_hour: { utilization: 37, resets_at: "2026-08-27T12:00:00.000Z" },
-      seven_day: { utilization: 12, resets_at: "2026-08-31T08:00:00.000Z" },
-      limits: [
-        {
-          kind: "weekly_scoped",
-          percent: 4,
-          resets_at: "2026-08-31T08:00:00.000Z",
-          scope: { model: { display_name: "Fable" } },
-        },
-      ],
-    });
-
-    expect(parsed.windows).toEqual([
-      {
-        kind: "session",
-        label: "5-hour",
-        usedPercent: 37,
-        resetsAt: "2026-08-27T12:00:00.000Z",
-      },
-      {
-        kind: "weekly",
-        label: "Weekly",
-        usedPercent: 12,
-        resetsAt: "2026-08-31T08:00:00.000Z",
-      },
-      {
-        kind: "model",
-        label: "Fable",
-        usedPercent: 4,
-        resetsAt: "2026-08-31T08:00:00.000Z",
-      },
-    ]);
-  });
-});
+import { parseCodexUsage, readPlanLimitsEffect, planLimitsReader } from "./usagePlanLimits.ts";
 
 describe("parseCodexUsage", () => {
   it("classifies primary as 5-hour and secondary as weekly", () => {
@@ -94,9 +51,11 @@ describe("parseCodexUsage", () => {
 });
 
 describe("readPlanLimits cache", () => {
-  const claudeBody = {
-    five_hour: { utilization: 37, resets_at: "2026-08-27T12:00:00.000Z" },
-    seven_day: { utilization: 12, resets_at: "2026-08-31T08:00:00.000Z" },
+  const kimiBody = {
+    usage: {
+      rolling: { percent: 37, resetsAt: "2026-08-27T12:00:00.000Z" },
+      weekly: { percent: 12, resetsAt: "2026-08-31T08:00:00.000Z" },
+    },
   };
 
   it.effect("reads only the requested provider for a bot usage view", () =>
@@ -117,12 +76,12 @@ describe("readPlanLimits cache", () => {
     }),
   );
 
-  it.effect("backs off failures for one minute and keeps last-good Claude windows", () =>
+  it.effect("backs off failures for one minute and keeps last-good Kimi windows", () =>
     Effect.gen(function* () {
       const fetchMock = vi
         .fn()
         .mockResolvedValueOnce(
-          new Response(JSON.stringify(claudeBody), {
+          new Response(JSON.stringify(kimiBody), {
             status: 200,
             headers: { "Content-Type": "application/json" },
           }),
@@ -136,16 +95,16 @@ describe("readPlanLimits cache", () => {
 
       vi.stubGlobal("fetch", fetchMock);
 
-      const getAccessToken = async (provider: "anthropic" | string) =>
-        provider === "anthropic"
-          ? { accessToken: "token", accountId: "claude-account" }
+      const getAccessToken = async (provider: "kimi-for-coding" | string) =>
+        provider === "kimi-for-coding"
+          ? { accessToken: "token", accountId: "kimi-account" }
           : undefined;
 
       const read = yield* planLimitsReader(getAccessToken);
       const first = yield* read();
       expect(first).toEqual([
         {
-          provider: "anthropic",
+          provider: "kimi-for-coding",
           status: "ok",
           plan: null,
           message: null,
@@ -181,7 +140,7 @@ describe("readPlanLimits cache", () => {
     }).pipe(Effect.provide(TestClock.layer())),
   );
 
-  it.effect("still shows a Claude card when the first read is rate-limited", () =>
+  it.effect("still shows a Kimi card when the first read is rate-limited", () =>
     Effect.gen(function* () {
       vi.stubGlobal(
         "fetch",
@@ -194,14 +153,14 @@ describe("readPlanLimits cache", () => {
       );
 
       const limits = yield* readPlanLimitsEffect(async (provider) =>
-        provider === "anthropic"
-          ? { accessToken: "token", accountId: "claude-account" }
+        provider === "kimi-for-coding"
+          ? { accessToken: "token", accountId: "kimi-account" }
           : undefined,
       );
 
       expect(limits).toEqual([
         {
-          provider: "anthropic",
+          provider: "kimi-for-coding",
           status: "ok",
           plan: null,
           message: null,
@@ -243,7 +202,7 @@ describe("readPlanLimits cache", () => {
         "fetch",
         vi.fn(
           async () =>
-            new Response(JSON.stringify(claudeBody), {
+            new Response(JSON.stringify(kimiBody), {
               status: 200,
               headers: { "Content-Type": "application/json" },
             }),
@@ -252,14 +211,16 @@ describe("readPlanLimits cache", () => {
       let connected = true;
 
       const read = yield* planLimitsReader(async (provider) =>
-        provider === "anthropic" && connected
-          ? { accessToken: "disconnect-token", accountId: "claude-account" }
+        provider === "kimi-for-coding" && connected
+          ? { accessToken: "disconnect-token", accountId: "kimi-account" }
           : undefined,
       );
 
-      expect((yield* read("anthropic")).map((limit) => limit.provider)).toEqual(["anthropic"]);
+      expect((yield* read("kimi-for-coding")).map((limit) => limit.provider)).toEqual([
+        "kimi-for-coding",
+      ]);
       connected = false;
-      expect(yield* read("anthropic")).toEqual([]);
+      expect(yield* read("kimi-for-coding")).toEqual([]);
       vi.unstubAllGlobals();
     }),
   );

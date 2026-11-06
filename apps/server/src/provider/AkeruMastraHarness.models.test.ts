@@ -117,34 +117,41 @@ describe("AkeruMastraHarness", () => {
           getCredential,
           { environment: {}, instanceEnvironment: {}, useSavedCredential: false },
         ),
-      "has no API key or auth token transport",
+      "needs ANTHROPIC_API_KEY or ANTHROPIC_AUTH_TOKEN",
     );
     expect(getCredential).not.toHaveBeenCalled();
   });
 
-  it("uses the first nonempty trimmed Claude auth token", () => {
+  it("uses a trimmed Anthropic auth token and ignores Claude subscription tokens", () => {
     const authStorage = new AuthStorage("/tmp/akeru-unused-empty-token-auth.json");
 
+    const resolve = (instanceEnvironment: NodeJS.ProcessEnv, useSavedCredential = false) =>
+      resolveAkeruMastraModel(
+        "anthropic/claude-opus-4-6",
+        authStorage,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        { environment: instanceEnvironment, instanceEnvironment, useSavedCredential },
+      );
+
+    expect(resolve({ ANTHROPIC_AUTH_TOKEN: "  valid-token  " })).toMatchObject({
+      modelId: "claude-opus-4-6",
+      provider: "anthropic.messages",
+    });
+
     for (const token of ["", "   "]) {
-      expect(
-        resolveAkeruMastraModel(
-          "anthropic/claude-opus-4-6",
-          authStorage,
-          undefined,
-          undefined,
-          undefined,
-          undefined,
-          {
-            environment: {},
-            instanceEnvironment: {
-              ANTHROPIC_AUTH_TOKEN: token,
-              CLAUDE_CODE_OAUTH_TOKEN: "  valid-token  ",
-            },
-            useSavedCredential: false,
-          },
-        ),
-      ).toMatchObject({ modelId: "claude-opus-4-6", provider: "anthropic.messages" });
+      assert.throws(
+        () => resolve({ ANTHROPIC_AUTH_TOKEN: token, CLAUDE_CODE_OAUTH_TOKEN: "subscription" }),
+        "needs ANTHROPIC_API_KEY or ANTHROPIC_AUTH_TOKEN",
+      );
     }
+
+    assert.throws(
+      () => resolve({ CLAUDE_CODE_OAUTH_TOKEN: "subscription" }, true),
+      "Claude needs an Anthropic API key",
+    );
   });
 
   it("translates Claude 1M model selections into API headers for every credential transport", async () => {
@@ -173,8 +180,14 @@ describe("AkeruMastraHarness", () => {
       ),
     );
 
+    const environments = {
+      environment: { ANTHROPIC_API_KEY: "env-key" },
+      "saved-key": {},
+      "auth-token": { ANTHROPIC_AUTH_TOKEN: "gateway-token" },
+    } as const;
+
     try {
-      for (const transport of ["environment", "saved-key", "oauth"] as const) {
+      for (const transport of ["environment", "saved-key", "auth-token"] as const) {
         const model = resolveAkeruMastraModel(
           "anthropic/claude-opus-4-6[1m]",
           authStorage,
@@ -183,7 +196,7 @@ describe("AkeruMastraHarness", () => {
           undefined,
           transport === "saved-key" ? () => ({ type: "api-key", access: "saved-key" }) : undefined,
           {
-            environment: transport === "environment" ? { ANTHROPIC_API_KEY: "env-key" } : {},
+            environment: environments[transport],
             instanceEnvironment: {},
             useSavedCredential: true,
           },
@@ -201,6 +214,10 @@ describe("AkeruMastraHarness", () => {
         expect(request.body).toContain('"model":"claude-opus-4-6"');
         expect(request.body).not.toContain("[1m]");
         expect(request.beta).toContain("context-1m-2025-08-07");
+        // No request claims to be Claude Code.
+        expect(request.beta).not.toContain("claude-code");
+        expect(request.beta).not.toContain("oauth");
+        expect(request.body).not.toContain("You are Claude Code");
       }
     } finally {
       vi.unstubAllGlobals();

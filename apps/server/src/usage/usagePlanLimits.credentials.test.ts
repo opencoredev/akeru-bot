@@ -23,9 +23,8 @@ it.effect("drops the previous account's windows when credentials change", () =>
 
         return new Response(
           JSON.stringify({
-            five_hour: {
-              utilization: usedByToken.get(token),
-              resets_at: "2026-08-27T12:00:00.000Z",
+            usage: {
+              rolling: { percent: usedByToken.get(token), resetsAt: "2026-08-27T12:00:00.000Z" },
             },
           }),
           { status: 200, headers: { "Content-Type": "application/json" } },
@@ -36,10 +35,10 @@ it.effect("drops the previous account's windows when credentials change", () =>
     let accountId = "account-a";
 
     const read = yield* planLimitsReader(async (provider) =>
-      provider === "anthropic" ? { accessToken: token, accountId } : undefined,
+      provider === "kimi-for-coding" ? { accessToken: token, accountId } : undefined,
     );
 
-    const usedPercent = Effect.map(read("anthropic"), ([limits]) =>
+    const usedPercent = Effect.map(read("kimi-for-coding"), ([limits]) =>
       limits?.windows.map((window) => window.usedPercent),
     );
 
@@ -65,7 +64,7 @@ it.effect("keeps meters across token rotation, usage failures and unavailable to
       .mockResolvedValueOnce(
         new Response(
           JSON.stringify({
-            five_hour: { utilization: 70, resets_at: "2026-08-27T12:00:00.000Z" },
+            usage: { rolling: { percent: 70, resetsAt: "2026-08-27T12:00:00.000Z" } },
           }),
           { status: 200, headers: { "Content-Type": "application/json" } },
         ),
@@ -81,39 +80,39 @@ it.effect("keeps meters across token rotation, usage failures and unavailable to
     let accountId = "same-account";
 
     const read = yield* planLimitsReader(async (provider) => {
-      if (provider !== "anthropic" || !connected) return undefined;
+      if (provider !== "kimi-for-coding" || !connected) return undefined;
 
       return { accessToken: lookupFails ? null : accessToken, accountId };
     });
 
     try {
-      const first = yield* read("anthropic");
+      const first = yield* read("kimi-for-coding");
       expect(first[0]?.windows[0]?.usedPercent).toBe(70);
       accessToken = "refreshed-token";
-      expect(yield* read("anthropic")).toEqual(first);
+      expect(yield* read("kimi-for-coding")).toEqual(first);
       expect(fetchMock).toHaveBeenCalledTimes(1);
       yield* TestClock.adjust(Duration.minutes(5));
-      expect(yield* read("anthropic")).toEqual(first);
+      expect(yield* read("kimi-for-coding")).toEqual(first);
       expect(fetchMock).toHaveBeenCalledTimes(2);
       expect(new Headers(fetchMock.mock.calls[1]?.[1]?.headers).get("authorization")).toBe(
         "Bearer refreshed-token",
       );
       yield* TestClock.adjust(Duration.seconds(30));
-      expect(yield* read("anthropic")).toEqual(first);
+      expect(yield* read("kimi-for-coding")).toEqual(first);
       expect(fetchMock).toHaveBeenCalledTimes(2);
       lookupFails = true;
-      expect(yield* read("anthropic")).toEqual(first);
+      expect(yield* read("kimi-for-coding")).toEqual(first);
       // A replacement account whose token is unavailable never shows the old account's meters.
       accountId = "replacement-account";
-      expect((yield* read("anthropic"))[0]?.windows).toEqual([]);
+      expect((yield* read("kimi-for-coding"))[0]?.windows).toEqual([]);
       lookupFails = false;
       accountId = "different-account";
-      expect((yield* read("anthropic"))[0]?.windows).toEqual([]);
+      expect((yield* read("kimi-for-coding"))[0]?.windows).toEqual([]);
       connected = false;
-      expect(yield* read("anthropic")).toEqual([]);
+      expect(yield* read("kimi-for-coding")).toEqual([]);
       accountId = "same-account";
       connected = true;
-      expect((yield* read("anthropic"))[0]?.windows).toEqual([]);
+      expect((yield* read("kimi-for-coding"))[0]?.windows).toEqual([]);
     } finally {
       vi.unstubAllGlobals();
     }

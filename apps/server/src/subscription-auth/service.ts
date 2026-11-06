@@ -19,7 +19,6 @@ import {
   type SubscriptionAuthData,
   type SubscriptionCredentialStore,
 } from "./credentialStore.ts";
-import { completeAnthropicLogin } from "./providers/anthropic.ts";
 import { pollCodexDeviceLogin } from "./providers/openaiCodex.ts";
 import { pollKimiDeviceLogin } from "./providers/kimi.ts";
 import { pollXAIDeviceLogin } from "./providers/xai.ts";
@@ -43,6 +42,7 @@ import {
   PENDING_LOGIN_CAP,
 } from "./serviceTypes.ts";
 import { SubscriptionHealthService } from "./healthService.ts";
+import { hasRetiredLoginAt, removeRetiredLogins } from "./retiredLogins.ts";
 import { SubscriptionCredentialAccess } from "./credentialAccess.ts";
 import { providerStatuses, linkedAccountStatuses } from "./providerStatuses.ts";
 
@@ -111,8 +111,10 @@ export class SubscriptionAuthService {
 
       const clock = yield* Clock.Clock;
       const path = yield* Path.Path;
+      const service = new SubscriptionAuthService(store, clock, path, options);
+      yield* service.removeRetiredLogins();
 
-      return new SubscriptionAuthService(store, clock, path, options);
+      return service;
     });
   }
 
@@ -128,6 +130,13 @@ export class SubscriptionAuthService {
         options,
       );
     });
+  }
+
+  /** Deletes retired Claude logins from the file, then rereads it. */
+  private removeRetiredLogins(): Effect.Effect<void> {
+    return removeRetiredLogins(this.store, this.healthService, this.clock).pipe(
+      Effect.andThen(this.reload()),
+    );
   }
 
   /** Reread credentials, pending logins, and health from disk. */
@@ -161,8 +170,8 @@ export class SubscriptionAuthService {
       const entries = decodePendingLogins(NodeFS.readFileSync(this.pendingPath, "utf-8"));
 
       for (const [loginId, pending] of entries.slice(-PENDING_LOGIN_CAP)) {
-        // Logins for a retired provider (Cursor) can linger in the file.
-        if (pending.provider === "cursor") continue;
+        // Logins for a retired provider (Cursor) or flow (Claude OAuth) can linger in the file.
+        if (pending.provider === "cursor" || "verifier" in pending) continue;
         this.pendingLogins.set(loginId, pending);
       }
     } catch {
@@ -393,6 +402,11 @@ export class SubscriptionAuthService {
     return credentialAt(this.data, this.accounts.liveKey(provider, instanceId)) !== undefined;
   }
 
+  /** True when the saved login uses a sign-in method this version ignores (Claude OAuth). */
+  hasRetiredLogin(provider: SubscriptionProviderId, instanceId?: string): boolean {
+    return hasRetiredLoginAt(this.data, this.health, this.accounts.liveKey(provider, instanceId));
+  }
+
   hasOpenAICodexAccount(): boolean {
     const credential = credentialAt(this.data, this.accounts.liveKey("openai-codex"));
 
@@ -453,8 +467,6 @@ export class SubscriptionAuthService {
     if ("authMode" in login) return { status: "pending", nextPollMs: 2000 };
 
     switch (login.provider) {
-      case "anthropic":
-        return { status: "pending", nextPollMs: 2000 };
       case "openai-codex": {
         const result = await pollCodexDeviceLogin(login.pending);
 
@@ -528,7 +540,7 @@ export class SubscriptionAuthService {
     }
   }
 
-  /** Finish a paste-completion login (Anthropic) with the pasted code. */
+  /** Finish a paste-completion login (an API key) with the pasted value. */
   async completeLogin(loginId: string, code: string): Promise<LoginPollStatus> {
     await this.reloadAsync();
     const login = this.pendingLogins.get(loginId);
@@ -583,26 +595,7 @@ export class SubscriptionAuthService {
       return this.startHealthCheck(login.provider, login.instanceId);
     }
 
-    if (login.provider !== "anthropic") {
-      return { status: "failed", error: "This login completes by polling, not with a code." };
-    }
-
-    try {
-      const credentials =
-        this.completedOAuthLogins.get(loginId) ??
-        (await completeAnthropicLogin(code, login.verifier));
-
-      if (!(await this.claimOAuthLogin(loginId, login, credentials)))
-        return { status: "failed", error: "Login cancelled. Start again." };
-
-      return this.startHealthCheck("anthropic", login.instanceId);
-    } catch (error) {
-      // Keep the pending login: a mangled paste should not force a restart.
-      return {
-        status: "failed",
-        error: error instanceof Error ? error.message : String(error),
-      };
-    }
+    return { status: "failed", error: "This login completes by polling, not with a code." };
   }
 
   cancelLogin(loginId: string): void {
@@ -790,6 +783,7 @@ export class SubscriptionAuthService {
 export {
   anthropicApiBaseUrl,
   accountScope,
+  CLAUDE_SUBSCRIPTION_RETIRED_MESSAGE,
   SUBSCRIPTION_PROVIDER_IDS,
   isSubscriptionProviderId,
   type SubscriptionProviderId,

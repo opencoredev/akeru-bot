@@ -197,6 +197,9 @@ readiness. Like Kimi and OpenCode Go, they report the bundled runtime as install
 provider binary exists. The initial snapshot and each refresh reload `SubscriptionAuthService`
 from the environment's `subscription-auth.json`. A connected saved credential makes the instance
 ready; a missing credential reports unauthenticated and asks the user to connect in Settings.
+Claude counts only an Anthropic API key. A Claude Pro or Max login saved by an older version is
+deleted at startup, and readiness reports `CLAUDE_SUBSCRIPTION_RETIRED_MESSAGE` instead of the
+connect step until an API key connects.
 
 The model list comes from the [model catalog](#model-catalog) and `ModelCatalog.applyModelCatalog`.
 Codex combines catalog IDs with bundled and historical compatibility models, and takes names,
@@ -247,8 +250,9 @@ registry publishes the updated snapshot immediately, including for named instanc
 periodic health refresh is disabled.
 
 Explicit connection variables or a custom home disable saved-credential fallback. Codex then
-requires `OPENAI_API_KEY`, Claude requires `ANTHROPIC_API_KEY`, `ANTHROPIC_AUTH_TOKEN`, or
-`CLAUDE_CODE_OAUTH_TOKEN`, and Grok requires `XAI_API_KEY` in the instance's explicit environment.
+requires `OPENAI_API_KEY`, Claude requires `ANTHROPIC_API_KEY` or `ANTHROPIC_AUTH_TOKEN`, and Grok
+requires `XAI_API_KEY` in the instance's explicit environment. `CLAUDE_CODE_OAUTH_TOKEN` is a
+claude.ai login, so it is neither a Claude transport nor a connection variable.
 A CLI login or custom CLI home alone cannot make that instance ready. Ambient credentials remain
 available to saved-credential instances, matching the harness's transport precedence.
 
@@ -257,7 +261,7 @@ available to saved-credential instances, matching the harness's transport preced
 each operation and preserves instance scoping, Codex reasoning effort and service tier, and Claude
 effort and context-window selections. Claude's 1M context selection uses the same `[1m]` model
 suffix in turns and writing requests. The transport strips this CLI-style suffix from the API
-model ID and sets the extended-context beta header for API keys and OAuth alike.
+model ID and sets the extended-context beta header for API keys and auth tokens alike.
 Each writing operation has a 180-second deadline and aborts
 the generation request when it expires. Stored
 image attachments are resolved through the attachment store and sent as multimodal image parts,
@@ -333,6 +337,32 @@ emoji icons render. Codex icon paths point at the environment's disk, which a re
 cannot load, and Grok's named glyphs are open vocabulary, so both fall back to the source-kind
 glyph. The composer skill chip stores the resolved emoji on its Lexical node and still
 serializes to `$name`.
+
+## Subscription sign-in routes
+
+Akeru uses only provider access routes that a provider documents for third-party apps, and no
+request claims to be a vendor's CLI. Claude takes an Anthropic API key: Anthropic's
+[Agent SDK overview](https://code.claude.com/docs/en/agent-sdk/overview) says "Unless previously
+approved, Anthropic does not allow third party developers to offer claude.ai login or rate limits
+for their products, including agents built on the Claude Agent SDK." Akeru removed its Claude Pro and
+Max sign-in, the Claude Code user agent, and the `@mastra/code-sdk` `claude-max` transport, which
+added the Claude Code system prompt and the `claude-code-20250219` beta.
+
+The remaining OAuth routes live in `apps/server/src/subscription-auth/providers/`. Each one reuses a
+client ID that belongs to the vendor's own CLI, ported from Mastra Code. "Needs evidence" means
+Akeru has no written provider statement that a third-party app may use that route. These routes stay
+enabled until the maintainers decide.
+
+| Route           | How it authenticates                                                                                                                                                                                                                                                                                                                      | OAuth client                                                                           | Written third-party policy                                                                                                                                                                                                                                                                                                                                                                                                                                                      | Status                                                                                          |
+| --------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
+| ChatGPT (Codex) | Device authorization at `auth.openai.com` (`/api/accounts/deviceauth/*`), then an authorization-code exchange at `/oauth/token`. Turns go to `chatgpt.com/backend-api/codex/responses`; usage and health read `chatgpt.com/backend-api/wham/usage`. Requests send `originator` and `User-Agent` as `akeru` or `mastracode`.               | `app_EMoamEEZ73f0CkXaXp7hrann`, the Codex CLI's public client                          | OpenAI documents [Sign in with ChatGPT for open-source apps](https://developers.openai.com/siwc/token-sharing-open-source), but that flow registers a separate client ID for each app through a loopback sign-in. It does not cover reusing the Codex CLI client or calling `chatgpt.com/backend-api`.                                                                                                                                                                          | Needs evidence. The open-source Sign in with ChatGPT flow is the likely documented replacement. |
+| Grok (xAI)      | RFC 8628 device authorization at `auth.x.ai/oauth2/device/code` and `/oauth2/token`, with scope `openid profile email offline_access grok-cli:access api:access`. Turns use the bearer token on `api.x.ai`. Usage reads `cli-chat-proxy.grok.com`; it no longer sends `X-XAI-Token-Auth: xai-grok-cli`, so that meter may stop reporting. | `b1a00492-073a-47ea-816f-4c329264a828`, the Grok CLI's client                          | xAI announced subscription sign-in for [Kilo Code](https://x.ai/news/grok-kilocode) and [OpenCode](https://x.ai/news/grok-opencode). It publishes no policy or client registration for other third-party apps.                                                                                                                                                                                                                                                                  | Needs evidence                                                                                  |
+| Kimi For Coding | RFC 8628 device authorization at `auth.kimi.com`, with `X-Msh-*` device headers that identify the platform as `akeru`. Turns and health use the bearer token on `api.kimi.com/coding/v1`.                                                                                                                                                 | `17e5f671-d194-4dfb-9706-5516cb48c098`, the Kimi Code CLI client that Mastra Code uses | The [membership guide](https://www.kimi.com/en-cn/help/kimi-code/membership-guide) says "Kimi Code allows members to use their benefits in both the official client and third-party platforms" and that "Tampering with the client identifier (User-Agent) is considered a violation". The [third-party agent page](https://www.kimi.com/en/help/kimi-code/third-party-agents) sets those tools up with an API key. Neither page covers OAuth through the Kimi Code CLI client. | Needs evidence for OAuth. The membership API key is documented for third-party tools.           |
+| OpenCode Go     | API key only, no OAuth                                                                                                                                                                                                                                                                                                                    | None                                                                                   | The key is the product's documented access method.                                                                                                                                                                                                                                                                                                                                                                                                                              | API key                                                                                         |
+| Claude          | Anthropic API key, or `ANTHROPIC_AUTH_TOKEN` for a gateway                                                                                                                                                                                                                                                                                | None                                                                                   | The [Agent SDK overview](https://code.claude.com/docs/en/agent-sdk/overview) requires API-key authentication.                                                                                                                                                                                                                                                                                                                                                                   | API key. Subscription sign-in removed.                                                          |
+
+Every provider also accepts its own API key on its documented API, which needs no third-party
+approval.
 
 ## Temporary workers
 

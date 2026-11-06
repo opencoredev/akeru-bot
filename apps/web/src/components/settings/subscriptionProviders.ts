@@ -45,8 +45,8 @@ export const SUBSCRIPTION_PROVIDERS: readonly SubscriptionProviderDefinition[] =
   {
     id: "anthropic",
     label: "Claude",
-    subscription: "Pro or Max",
-    description: "Use your Claude subscription with Claude Code models.",
+    subscription: "Anthropic API key",
+    description: "Use Claude models with an Anthropic API key.",
     icon: ClaudeAI,
   },
   {

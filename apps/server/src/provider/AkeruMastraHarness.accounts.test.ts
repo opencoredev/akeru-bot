@@ -85,7 +85,7 @@ it("pins OpenCode Go's key, endpoint, and outcome when another thread benches it
   }
 });
 
-it.each(["openai-codex", "anthropic", "xai"] as const)(
+it.each(["openai-codex", "xai"] as const)(
   "pins %s OAuth auth when a backup uses an API key",
   async (provider) => {
     const { authPath, directory } = fixture();
@@ -120,7 +120,7 @@ it.each(["openai-codex", "anthropic", "xai"] as const)(
     vi.stubGlobal("fetch", request);
 
     try {
-      const prefix = { "openai-codex": "openai", anthropic: "anthropic", xai: "xai" }[provider];
+      const prefix = { "openai-codex": "openai", xai: "xai" }[provider];
 
       const model = resolveAkeruMastraModel(
         `${prefix}/test-model`,

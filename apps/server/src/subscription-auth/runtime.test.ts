@@ -96,7 +96,6 @@ describe("subscription runtime credentials", () => {
     ["anthropic", "ANTHROPIC_API_KEY", "instance-key"],
     ["anthropic", "ANTHROPIC_API_KEY", ""],
     ["anthropic", "ANTHROPIC_AUTH_TOKEN", "instance-token"],
-    ["anthropic", "CLAUDE_CODE_OAUTH_TOKEN", "instance-oauth"],
     ["anthropic", "ANTHROPIC_BASE_URL", "https://instance.example"],
     ["anthropic", "CLAUDE_CONFIG_DIR", "/instance/claude"],
     ["xai", "XAI_API_KEY", "instance-key"],
@@ -120,6 +119,22 @@ describe("subscription runtime credentials", () => {
       expect(JSON.stringify(environment)).not.toContain("provider-wide-key");
     },
   );
+
+  it("uses the saved Anthropic key instead of an explicit Claude subscription token", async () => {
+    const { secretsDir, auth } = await fixture();
+    const login = await auth.startLogin("anthropic");
+    await auth.completeLogin(login.loginId, "provider-wide-key");
+
+    const environment = mergeSubscriptionInstanceEnvironment(
+      [{ name: "CLAUDE_CODE_OAUTH_TOKEN", value: "instance-oauth", sensitive: true }],
+      { KEEP: "value" },
+    );
+
+    const resolved = await runtimeEnvironment(secretsDir, "anthropic", environment);
+    expect(resolved.ANTHROPIC_API_KEY).toBe("provider-wide-key");
+    expect(resolved.CLAUDE_CODE_OAUTH_TOKEN).toBeUndefined();
+    expect(resolved.KEEP).toBe("value");
+  });
 
   it("keeps a home-isolated Claude instance on its own account", async () => {
     const { secretsDir, auth } = await fixture();

@@ -7,7 +7,6 @@ import {
   type SubscriptionCredential,
   type SubscriptionCredentialStoreError,
 } from "./credentialStore.ts";
-import { refreshAnthropicToken } from "./providers/anthropic.ts";
 import { refreshCodexToken, type CodexDeviceLoginPending } from "./providers/openaiCodex.ts";
 import {
   getKimiCodingDeviceHeaders,
@@ -39,6 +38,62 @@ export const SUBSCRIPTION_PROVIDER_IDS = [
 ] as const;
 
 export type SubscriptionProviderId = (typeof SUBSCRIPTION_PROVIDER_IDS)[number];
+
+/** Providers whose only supported sign-in is an API key. */
+export function providerRequiresApiKey(provider: SubscriptionProviderId): boolean {
+  return provider === "anthropic" || provider === "opencode-go";
+}
+
+/**
+ * Shown for a Claude Pro or Max login saved by an older Akeru version. Anthropic does
+ * not allow third-party apps to offer claude.ai sign-in, so these logins are ignored.
+ */
+export const CLAUDE_SUBSCRIPTION_RETIRED_MESSAGE =
+  "Claude Pro and Max sign-in is no longer supported. Anthropic does not allow third-party apps to use claude.ai logins. Add an Anthropic API key in Settings to keep using Claude.";
+
+function isProviderKey(provider: SubscriptionProviderId, key: string): boolean {
+  return (
+    key === provider ||
+    key.startsWith(`instance:${provider}:`) ||
+    key.startsWith(`account:${provider}:`)
+  );
+}
+
+/** A saved credential this version no longer uses: a Claude subscription login. */
+export function isRetiredCredential(key: string, credential: SubscriptionCredential): boolean {
+  return credential.type === "oauth" && isProviderKey("anthropic", key);
+}
+
+export function retiredCredentialAt(data: SubscriptionAuthData, key: string): boolean {
+  const value = data[key];
+
+  return isSubscriptionCredential(value) && isRetiredCredential(key, value);
+}
+
+/** Keys of every retired Claude login in the file: default, instance, and backup accounts. */
+export function retiredLoginKeys(data: SubscriptionAuthData): string[] {
+  return Object.keys(data).filter((key) => retiredCredentialAt(data, key));
+}
+
+/** Drops retired Claude logins; with `onlyKeys`, only those whose guidance marker was saved. */
+export function withoutRetiredLogins(
+  data: SubscriptionAuthData,
+  onlyKeys?: ReadonlySet<string>,
+): SubscriptionAuthData {
+  return Object.fromEntries(
+    Object.entries(data).filter(
+      ([key]) => !(retiredCredentialAt(data, key) && (onlyKeys?.has(key) ?? true)),
+    ),
+  );
+}
+
+/**
+ * Health key that keeps the "no longer supported" guidance for a removed login. A backup
+ * account has no row of its own once removed, so its guidance shows on the default scope.
+ */
+export function retiredLoginMarkerKey(key: string): string {
+  return key.startsWith("account:anthropic:") ? "anthropic" : key;
+}
 
 export function isSubscriptionProviderId(value: string): value is SubscriptionProviderId {
   return SUBSCRIPTION_PROVIDER_IDS.some((candidate) => candidate === value);
@@ -115,6 +170,11 @@ export interface ProviderHealthRecord {
   healthCheckStartedAt?: string;
   /** Image providers only: the last request that produced an image. */
   lastGenerationAt?: string;
+  /**
+   * When startup removed a retired Claude Pro or Max login for this scope. The status keeps
+   * the upgrade guidance until an API key connects, which deletes this record.
+   */
+  retiredLoginRemovedAt?: string;
 }
 
 /** A post-login check older than this is treated as abandoned (for example, the server restarted). */
@@ -128,17 +188,6 @@ export function oauthHealthRequest(
   credential: OAuthCredentials,
 ): { readonly url: string; readonly headers: Record<string, string> } | undefined {
   switch (provider) {
-    case "anthropic":
-      // Claude Pro/Max OAuth tokens are rejected by /v1/models; the usage endpoint accepts them.
-      return {
-        url: "https://api.anthropic.com/api/oauth/usage",
-        headers: {
-          Authorization: `Bearer ${credential.access}`,
-          Accept: "application/json",
-          "anthropic-beta": "oauth-2025-04-20",
-          "User-Agent": "claude-code/2.1.69",
-        },
-      };
     case "openai-codex":
       return {
         url: "https://chatgpt.com/backend-api/wham/usage",
@@ -214,7 +263,7 @@ export function storeErrorStatus(
     connected: false,
     health: "failed-first-request",
     lastFailedRequest,
-    reconnectAction: provider === "opencode-go" ? "Connect API key" : "Connect account",
+    reconnectAction: providerRequiresApiKey(provider) ? "Connect API key" : "Connect account",
     healthTest: { status: "not-run" },
     dependentBots: dependentBots.flatMap((bot) =>
       bot.provider === provider ? [{ id: bot.id, name: bot.name }] : [],
@@ -225,7 +274,6 @@ export function storeErrorStatus(
 
 export type PendingLogin =
   | { provider: SubscriptionProviderId; authMode: "api-key"; baseUrl?: string }
-  | { provider: "anthropic"; verifier: string }
   | { provider: "openai-codex"; pending: CodexDeviceLoginPending }
   | { provider: "xai"; pending: XAIDeviceLoginPending }
   | { provider: "kimi-for-coding"; pending: KimiDeviceLoginPending }
@@ -278,7 +326,7 @@ export function credentialAt(
 ): SubscriptionCredential | undefined {
   const value = data[key];
 
-  return isSubscriptionCredential(value) ? value : undefined;
+  return isSubscriptionCredential(value) && !isRetiredCredential(key, value) ? value : undefined;
 }
 
 /** Refreshed tokens keep the stored connection identity and account ID. */
@@ -308,7 +356,7 @@ export function runRefresh(
 ): Promise<OAuthCredentials> {
   switch (provider) {
     case "anthropic":
-      return refreshAnthropicToken(credential.refresh);
+      throw new Error(CLAUDE_SUBSCRIPTION_RETIRED_MESSAGE);
     case "openai-codex":
       return refreshCodexToken(credential);
     case "xai":

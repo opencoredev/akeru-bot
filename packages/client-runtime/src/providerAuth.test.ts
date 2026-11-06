@@ -12,6 +12,7 @@ import {
   PROVIDER_CONNECTIONS,
   anyProviderHealthChecking,
   providerConnectionLabel,
+  providerRequiresApiKey,
   providerUsesApiKey,
   providerSupportsBaseUrl,
   withRefreshableSubscriptionLogin,
@@ -104,6 +105,14 @@ describe("provider API key forms", () => {
     expect(providerUsesApiKey(status)).toBe(false);
     expect(providerUsesApiKey({ ...status, authMode: "api-key" })).toBe(true);
     expect(providerUsesApiKey({ ...status, provider: "opencode-go" })).toBe(true);
+  });
+
+  it("connects Claude and OpenCode Go with an API key only", () => {
+    expect(providerRequiresApiKey("anthropic")).toBe(true);
+    expect(providerRequiresApiKey("opencode-go")).toBe(true);
+    expect(providerRequiresApiKey("openai-codex")).toBe(false);
+    expect(providerRequiresApiKey("xai")).toBe(false);
+    expect(providerRequiresApiKey("kimi-for-coding")).toBe(false);
   });
 });
 

@@ -6,8 +6,9 @@ back and forward navigation.
 
 ## Plan limits
 
-The **Limits** tab opens by default and shows available limits for ChatGPT, Claude, Grok,
-Kimi For Coding, and OpenCode Go.
+The **Limits** tab opens by default and shows available limits for ChatGPT, Grok,
+Kimi For Coding, and OpenCode Go. Claude connects with an Anthropic API key, which has rate limits
+rather than plan limits, so it has no meter here. Claude cost and tokens still appear in the other tabs.
 Disconnected accounts and limits that a provider does not report stay hidden.
 
 Each meter shows the percentage used or left and the next reset time. Provider plans expose different
