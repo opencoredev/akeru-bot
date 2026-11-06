@@ -222,6 +222,14 @@ The single bridge where Promise-based code (Mastra callbacks, tool handlers, lib
 
 The safety/access mode for a thread or session. [The contracts][1] define four values: `approval-required`, `auto-accept-edits`, `auto`, and `full-access`. See [permission modes][18].
 
+#### Bot permission policy
+
+The per-bot rules that decide `allow`, `ask`, or `deny` for each action from its risk class (`read`, `write-workspace`, `write-outside`, `environment-access`), the principal it is for, and per-tool overrides. `ask` needs the owner's answer, bound to the exact arguments, environment, and an expiry, and accepted once. Absent means the default, where only outside writes ask. See [permissions.md](./permissions.md).
+
+#### Principal
+
+Who a bot action is for: the owner, an allowlisted person, a schedule acting for the owner, or another bot carrying the origin it acts for. See [permissions.md](./permissions.md).
+
 #### Interaction mode
 
 The agent interaction style for a thread. Only `default` is in use. [The contracts][1] still accept the retired `plan` value so older stored threads, commands, and proposed plans decode, but clients no longer offer plan mode.
@@ -293,6 +301,7 @@ The file patch and changed-file summary for one turn. It is usually computed in 
 - [Architecture overview][24]
 - [Provider architecture][16]
 - [Permission modes][18]
+- [Bot permission policy](./permissions.md)
 - [Workspace layout][2]
 
 [1]: ../../packages/contracts/src/orchestration.ts

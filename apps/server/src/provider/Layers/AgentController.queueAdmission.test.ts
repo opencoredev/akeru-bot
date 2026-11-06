@@ -87,6 +87,49 @@ describe("AgentControllerLive", () => {
 });
 
 describe("AgentControllerLive", () => {
+  it.effect("reports a turn still in admission as the session's active turn", () => {
+    const bridge = makeBridge();
+    const mastra = mastraHarnessFixture();
+
+    return provideController(
+      Effect.gen(function* () {
+        const controller = yield* AgentController;
+        yield* resolveCodex(controller);
+        yield* controller.startSession(codexThreadId, {
+          threadId: codexThreadId,
+          provider: ProviderDriverKind.make("codex"),
+          providerInstanceId: codexInstanceId,
+          modelSelection: codexSelection,
+          runtimeMode: "full-access",
+        });
+
+        bridge.blockNextDispatchAdmission();
+
+        const turnFiber = yield* controller
+          .sendTurn({ threadId: codexThreadId, input: "Held in admission" })
+          .pipe(Effect.forkChild({ startImmediately: true }));
+
+        yield* Effect.promise(bridge.waitForNextDispatchAdmission);
+
+        const admitting = (yield* controller.listSessions()).find(
+          (session) => session.threadId === codexThreadId,
+        );
+
+        expect(mastra.sendMessage).not.toHaveBeenCalled();
+        assert.isDefined(admitting?.activeTurnId);
+
+        bridge.releaseNextDispatchAdmission();
+        const turn = yield* Fiber.join(turnFiber);
+        expect(admitting?.activeTurnId).toBe(turn.turnId);
+        mastra.finishSend();
+      }),
+      bridge.service,
+      mastra.factory,
+    );
+  });
+});
+
+describe("AgentControllerLive", () => {
   it.effect("ignores a stale Mastra send failure after the next turn starts", () => {
     const bridge = makeBridge();
     const mastra = mastraHarnessFixture();

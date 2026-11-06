@@ -219,6 +219,23 @@ export function threadHasQueuedTurnStart(
   );
 }
 
+/**
+ * The chat still has work its responder has not finished: a session starting or running a
+ * turn, or a turn start no session has picked up yet.
+ */
+export function threadHasWorkInFlight(
+  thread: Pick<OrchestrationReadModel["threads"][number], "messages" | "latestTurn" | "session">,
+  occurredAt: string,
+): boolean {
+  return (
+    thread.session?.status === "starting" ||
+    thread.session?.status === "running" ||
+    (thread.session?.activeTurnId ?? null) !== null ||
+    thread.latestTurn?.state === "running" ||
+    threadHasQueuedTurnStart(thread, occurredAt)
+  );
+}
+
 export function activeGroupBotIds(
   readModel: OrchestrationReadModel,
   group: OrchestrationReadModel["groups"][number],

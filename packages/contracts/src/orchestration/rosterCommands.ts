@@ -13,6 +13,7 @@ import {
   TrimmedNonEmptyString,
 } from "../baseSchemas.ts";
 import { McpServerId, McpServerInstructions, McpServerUrl } from "../mcpServer.ts";
+import { BotPermissionPolicy } from "../botPermissions.ts";
 import { ImageProviderId } from "../imageGeneration.ts";
 import { ModelSelection, RuntimeMode } from "./modelSelection.ts";
 import {
@@ -97,6 +98,8 @@ export const BotUpdateCommand = Schema.Struct({
   personalityTone: Schema.optional(BotPersonalityTone),
   voiceEnabled: Schema.optional(Schema.Boolean),
   allowedEnvironmentIds: Schema.optional(BotAllowedEnvironmentIds),
+  /** `null` restores the default policy. */
+  permissionPolicy: Schema.optional(Schema.NullOr(BotPermissionPolicy)),
   channelBindings: Schema.optional(Schema.Array(ChannelBinding)),
   groupId: Schema.optional(Schema.NullOr(GroupId)),
 });
@@ -119,6 +122,7 @@ export const ClientBotUpdateCommand = Schema.Struct({
   voiceEnabled: Schema.optional(Schema.Boolean),
   /** Replaces the whole list. `[]` returns the bot to its home environment only. */
   allowedEnvironmentIds: Schema.optional(BotAllowedEnvironmentIds),
+  permissionPolicy: Schema.optional(Schema.NullOr(BotPermissionPolicy)),
   groupId: Schema.optional(Schema.NullOr(GroupId)),
 });
 

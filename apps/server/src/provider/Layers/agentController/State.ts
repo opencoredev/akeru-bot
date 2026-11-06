@@ -2,7 +2,7 @@ import type { AkeruPluginRuntimeOptions } from "../../AkeruCatalogToolHandlers.t
 import { ProviderDriverKind } from "@akeru/contracts";
 import { ProviderInstanceId } from "@akeru/contracts";
 
-import type { RuntimeMode } from "@akeru/contracts";
+import type { BotPermissionPolicy, RuntimeMode } from "@akeru/contracts";
 
 import {
   TurnId,
@@ -140,6 +140,10 @@ export interface LegacyResourceIdentity {
   readonly personalityTone: BotPersonalityTone;
   readonly memoryAccessKey: string | undefined;
   privateBotMemory: boolean;
+  /** The mode native OpenCode built its permission rules from at session start. */
+  readonly runtimeMode: RuntimeMode;
+  /** Reads the bot's current permission policy, checked before every native OpenCode turn. */
+  readonly readPermissionPolicy: () => Promise<BotPermissionPolicy>;
 }
 
 /** Orchestration access for temporary workers and delegation. */

@@ -1,4 +1,5 @@
 import * as Effect from "effect/Effect";
+import { asRecord } from "../../ActivityPayloadBounds.ts";
 import * as Option from "effect/Option";
 import { settledTurnStateForSessionStatus } from "../../TurnSessionState.ts";
 import { type ProjectionDependencies, type ProjectorDefinition } from "./Definitions.ts";
@@ -295,6 +296,25 @@ export function createTurns({
           checkpointStatus: null,
           checkpointFiles: [],
         });
+
+        return;
+      }
+
+      // A turn start that recorded its failure is finished, even when the session stays
+      // healthy for another turn, so a restart must not replay it.
+      case "thread.activity-appended": {
+        if (event.payload.activity.kind !== "provider.turn.start.failed") return;
+        const requestId = asRecord(event.payload.activity.payload)?.requestId;
+
+        const pendingTurnStart = yield* projectionTurnRepository.getPendingTurnStartByThreadId({
+          threadId: event.payload.threadId,
+        });
+
+        if (Option.isSome(pendingTurnStart) && pendingTurnStart.value.messageId === requestId) {
+          yield* projectionTurnRepository.deletePendingTurnStartByThreadId({
+            threadId: event.payload.threadId,
+          });
+        }
 
         return;
       }

@@ -7,6 +7,7 @@ import {
   type ProviderIntentEvent,
   turnRequestKeyForEvent,
   resolveControllerBotId,
+  isGroupHandoffBusyError,
   isProviderDriverKind,
   withoutUnavailability,
   MANUAL_RECOVERY_INPUT,
@@ -132,9 +133,9 @@ export function createTurns({
 
       const { detail, unavailability, providerInstanceId } = formatFailure(cause);
 
-      // The failure activity lands before the session error clears the pending
-      // turn start, so a restart either replays the turn start or finds the
-      // failure and releases the results this turn acknowledged.
+      // The failure activity clears the pending turn start, so a restart finds
+      // the failure and releases the results this turn acknowledged instead of
+      // replaying the turn start.
       return Effect.gen(function* () {
         yield* Effect.logWarning("provider turn start failed", {
           threadId: event.payload.threadId,
@@ -151,12 +152,16 @@ export function createTurns({
           unavailability,
           providerInstanceId,
         });
-        yield* setThreadSessionErrorOnTurnStartFailure({
-          threadId: event.payload.threadId,
-          detail,
-          unavailability,
-          createdAt: event.payload.createdAt,
-        });
+
+        // A refused handoff leaves the session to the bot whose turn the provider still runs.
+        if (!isGroupHandoffBusyError(cause.reasons.find(Cause.isFailReason)?.error)) {
+          yield* setThreadSessionErrorOnTurnStartFailure({
+            threadId: event.payload.threadId,
+            detail,
+            unavailability,
+            createdAt: event.payload.createdAt,
+          });
+        }
       }).pipe(
         Effect.ensuring(failDelegationStart(thread, detail)),
         Effect.ensuring(releaseDelegationResults(event)),

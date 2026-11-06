@@ -15,6 +15,7 @@ import {
   TrimmedNonEmptyString,
 } from "../baseSchemas.ts";
 import { McpServerId } from "../mcpServer.ts";
+import { BotPermissionPolicy } from "../botPermissions.ts";
 import { ImageProviderId } from "../imageGeneration.ts";
 import { ModelSelection, RuntimeMode, DEFAULT_RUNTIME_MODE } from "./modelSelection.ts";
 
@@ -314,6 +315,8 @@ export const OrchestrationBot = Schema.Struct({
   voiceEnabled: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
   /** Absent on bots written before placement; read it through `botAllowedEnvironmentIds`. */
   allowedEnvironmentIds: Schema.optionalKey(BotAllowedEnvironmentIds),
+  /** Absent means `DEFAULT_BOT_PERMISSION_POLICY`. */
+  permissionPolicy: Schema.optionalKey(BotPermissionPolicy),
   channelBindings: Schema.Array(ChannelBinding).pipe(
     Schema.withDecodingDefault(Effect.succeed([])),
   ),

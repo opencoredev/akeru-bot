@@ -255,6 +255,8 @@ export const rosterCatalog = {
     "在 / 命令菜单中也显示技能。输入 $ 时始终会显示技能。",
   "skills in slash menu": "斜杠菜单中的技能",
   "Leave empty to open the Add Project browser in ~/.": "留空时，“添加项目”浏览器从 ~/ 打开。",
+  "Another bot is still working in this chat": "另一个机器人仍在此聊天中工作",
+  "Send again when it finishes.": "等它完成后再发送。",
   "This bot is archived": "此机器人已归档",
   "Restore it from the roster to chat with it again.": "从机器人列表中恢复它即可继续聊天。",
   "The bot couldn’t finish that request": "机器人未能完成该请求",

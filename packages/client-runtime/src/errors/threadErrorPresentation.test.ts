@@ -119,6 +119,21 @@ describe("presentThreadError", () => {
     });
   });
 
+  it("explains a group handoff refused while another bot works", () => {
+    const refusal =
+      "Orchestration command invariant failed (thread.turn.start): Another bot is still working in this chat. Send again when it finishes.";
+
+    expect(presentThreadError(refusal)).toMatchObject({
+      title: "Another bot is still working in this chat",
+      description: "Send again when it finishes.",
+      action: "none",
+    });
+    // The reactor's refusal carries a catch-all category; its text still wins.
+    expect(presentThreadError(refusal, { unavailability: "temporary-failure" }).title).toBe(
+      "Another bot is still working in this chat",
+    );
+  });
+
   it("uses the server's failure category when it has one", () => {
     expect(
       presentThreadError("OAuth token expired", {

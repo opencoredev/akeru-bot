@@ -771,6 +771,7 @@ export {
 export { resolveAkeruInstructions } from "./mastra/AkeruInstructions.ts";
 
 export {
+  POLICY_NAMED_TOOL_NAMES,
   productFeedbackToolInputSchema,
   AKERU_LIST_ROUTINES_TOOL_NAME,
   AKERU_DELETE_ROUTINES_TOOL_NAME,
@@ -782,12 +783,15 @@ export {
 
 export {
   type AkeruToolCategory,
-  type AkeruCriticalAction,
-  criticalAkeruAction,
-  akeruActionNeedsApproval,
   akeruToolCategory,
   routineToolNeedsGlobalApproval,
 } from "./mastra/AkeruActions.ts";
+
+export {
+  type AkeruCriticalAction,
+  criticalAkeruAction,
+  akeruActionNeedsApproval,
+} from "@akeru/shared/akeruActions";
 
 export {
   createAkeruObserveHooks,

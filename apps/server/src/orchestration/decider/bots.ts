@@ -223,6 +223,9 @@ export const decideBots = Effect.fn("decideBots")(function* ({
           ...(command.allowedEnvironmentIds !== undefined
             ? { allowedEnvironmentIds: command.allowedEnvironmentIds }
             : {}),
+          ...(command.permissionPolicy !== undefined
+            ? { permissionPolicy: command.permissionPolicy }
+            : {}),
           ...(command.channelBindings !== undefined
             ? { channelBindings: command.channelBindings }
             : {}),

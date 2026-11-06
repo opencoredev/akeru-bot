@@ -114,6 +114,11 @@ apart, so it holds the message and asks you to rename one of them. Mentions of p
 `@Leo`, stay plain text and the boss answers. On mobile, a reply shows the bot's avatar and name
 whenever a different bot starts speaking.
 
+One bot works in a group chat at a time. If you send a message to a different bot while another bot
+is still working, the chat shows "Another bot is still working in this chat" and asks you to send
+again when it finishes. Your message is not sent, and the working bot carries on. Send it again
+after that bot finishes.
+
 Groups hold bots only. You cannot add people to a group yet.
 
 ## Work sent to other bots

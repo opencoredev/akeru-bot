@@ -126,7 +126,8 @@ Mastra keeps approval callbacks enabled in every runtime mode. `AgentController`
 `ask_user`, then converts its suspension into a user-input request. In automatic mode, it approves
 only the routine actions allowed by the selected mode. It always asks before an MCP tool call or an action
 that can write through MCP, sends, pays, deletes, changes production, exposes secrets, publishes, signs, refunds, or changes
-an account. Unknown mutating intent also asks. The pending approval map binds the response to the
+an account. For Akeru's built-in tools, the [bot permission policy](./permissions.md) decides these
+protected actions, and an `ask` from the policy is never answered by the mode. Unknown mutating intent also asks. The pending approval map binds the response to the
 exact tool-call ID, deletes that entry before execution, and treats session-wide or permanent answers
 as one-use approval.
 

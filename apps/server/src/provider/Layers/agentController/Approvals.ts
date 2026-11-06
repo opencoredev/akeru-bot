@@ -17,8 +17,9 @@ import {
 } from "@akeru/contracts";
 
 import * as Effect from "effect/Effect";
+import * as Result from "effect/Result";
 
-import { akeruActionNeedsApproval } from "../../AkeruMastraHarness.ts";
+import { POLICY_NAMED_TOOL_NAMES, akeruActionNeedsApproval } from "../../AkeruMastraHarness.ts";
 
 import type { PendingWaiters } from "../../PendingWaiters.ts";
 
@@ -165,6 +166,31 @@ export function createApprovals(deps: {
         return;
       }
 
+      // The bot policy is read again here, so a permission revoked during review blocks creation.
+      const permitted = yield* Effect.result(
+        Effect.tryPromise({
+          try: () =>
+            deps.toolRuntime.authorizeAction(
+              routineRequest.threadId,
+              AKERU_CREATE_ROUTINE_TOOL_NAME,
+              routineRequest.input,
+            ),
+          catch: (cause) =>
+            new AgentControllerRuntimeError({
+              operation: "respondToRequest.routinePermission",
+              detail: cause instanceof Error ? cause.message : String(cause),
+              cause,
+            }),
+        }),
+      );
+
+      if (Result.isFailure(permitted)) {
+        yield* resolveReview("failed");
+        deps.pendingRoutineRequests.reject(toolCallId, permitted.failure);
+
+        return;
+      }
+
       deps.creatingRoutineReviews.set(toolCallId, key);
       let created = false;
       yield* deps
@@ -226,16 +252,19 @@ export function createApprovals(deps: {
     const { name: toolName, input: toolInput } = toolRequest;
     const akeruTool = AKERU_TOOL_CATALOG.find((tool) => tool.id === toolName);
     const runtimeToolId = akeruTool?.id ?? (isMemoryToolId(toolName) ? toolName : undefined);
+    const policyNamedTool = POLICY_NAMED_TOOL_NAMES.has(toolName);
 
     const acceptForSession =
       input.decision === "acceptForSession" &&
       !runtimeToolId &&
+      !policyNamedTool &&
       !isCodexComputerUseTool(toolName) &&
       !akeruActionNeedsApproval(toolName, toolInput) &&
       toolName !== AKERU_PRODUCT_FEEDBACK_TOOL_NAME;
 
     const enableAutoReview =
       input.decision === "acceptAlways" &&
+      !policyNamedTool &&
       !isCodexComputerUseTool(toolName) &&
       !akeruActionNeedsApproval(toolName, toolInput) &&
       toolName !== AKERU_PRODUCT_FEEDBACK_TOOL_NAME &&
@@ -259,13 +288,41 @@ export function createApprovals(deps: {
         active.approvalRequests.delete(toolCallId);
         active.pendingApprovals.delete(toolCallId);
 
-        if (runtimeToolId && input.decision !== "decline" && input.decision !== "cancel") {
-          deps.toolRuntime.grantApproval({
-            threadId: key,
+        // Environment clients authenticate as the owner, the only approver today.
+        const accepting = input.decision !== "decline" && input.decision !== "cancel";
+
+        const grant = !accepting
+          ? undefined
+          : runtimeToolId
+            ? deps.toolRuntime.grantApproval({
+                threadId: key,
+                toolCallId,
+                toolId: runtimeToolId,
+                input: toolInput,
+                answeredBy: { kind: "owner" },
+              })
+            : policyNamedTool
+              ? deps.toolRuntime.grantNamedApproval({
+                  threadId: key,
+                  toolCallId,
+                  toolName,
+                  input: toolInput,
+                  answeredBy: { kind: "owner" },
+                })
+              : undefined;
+
+        if (grant?._tag === "Rejected") {
+          if (active.activeTurn) active.activeTurn.waiting = deps.turnStillWaiting(key, active);
+          active.session.respondToToolApproval({
             toolCallId,
-            toolId: runtimeToolId,
-            input: toolInput,
+            decision: "decline",
+            declineContext: {
+              reason: "approval_rejected",
+              message: `The approval for '${toolName}' was refused (${grant.reason}). Ask again if the action is still needed.`,
+            },
           });
+
+          return { _tag: "Refused" as const, reason: grant.reason };
         }
 
         // Auto Review lets permissionPolicy run the rest of this session; risky
@@ -296,6 +353,29 @@ export function createApprovals(deps: {
         operation: "respondToRequest",
         detail: `Stale pending approval request: ${input.requestId}. The bot turn has ended. Send the request again.`,
       });
+    }
+
+    if (Predicate.isTagged(admitted, "Refused")) {
+      deps.publish({
+        ...deps.baseEvent(input.threadId, active, active.activeTurn?.turnId),
+        requestId: RuntimeRequestId.make(toolCallId),
+        type: "request.resolved",
+        payload: {
+          requestType: "dynamic_tool_call" as const,
+          decision: "decline",
+          actor: "user",
+          target,
+          action: pendingApproval.action,
+          outcome: "denied",
+        },
+      });
+      deps.publishSessionState(
+        input.threadId,
+        active,
+        active.activeTurn?.waiting ? "waiting" : "running",
+      );
+
+      return;
     }
 
     const permissionUpdate = admitted.permissionUpdate;

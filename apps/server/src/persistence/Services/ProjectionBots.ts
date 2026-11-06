@@ -3,6 +3,7 @@ import {
   BotAvatar,
   BotEngine,
   BotId,
+  BotPermissionPolicy,
   ImageProviderId,
   BotPersonalityTone,
   PersistedBotSandbox,
@@ -36,6 +37,8 @@ export const ProjectionBot = Schema.Struct({
   personalityTone: Schema.optionalKey(BotPersonalityTone),
   voiceEnabled: Schema.Boolean,
   allowedEnvironmentIds: Schema.optionalKey(BotAllowedEnvironmentIds),
+  /** Absent means the default bot permission policy. */
+  permissionPolicy: Schema.optionalKey(BotPermissionPolicy),
   channelBindings: Schema.optional(Schema.Array(ChannelBinding)),
   groupId: Schema.NullOr(GroupId),
   archivedAt: Schema.NullOr(IsoDateTime),

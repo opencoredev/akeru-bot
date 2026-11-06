@@ -3,6 +3,7 @@ import {
   AkeruDelegationRecord,
   BotAllowedEnvironmentIds,
   BotAvatar,
+  BotPermissionPolicy,
   BotEngine,
   BotId,
   GroupId,
@@ -91,6 +92,7 @@ export const ProjectionBotDbRowSchema = ProjectionBot.mapFields(
     channelBindings: Schema.fromJsonString(Schema.Array(ChannelBinding)),
     allowedEnvironmentIds: Schema.fromJsonString(BotAllowedEnvironmentIds),
     voiceEnabled: Schema.Number,
+    permissionPolicy: Schema.optionalKey(Schema.NullOr(Schema.fromJsonString(BotPermissionPolicy))),
   }),
 );
 
@@ -476,6 +478,7 @@ export function mapBotRow(
     personalityTone: row.personalityTone,
     voiceEnabled: row.voiceEnabled === 1,
     allowedEnvironmentIds: row.allowedEnvironmentIds,
+    ...(row.permissionPolicy ? { permissionPolicy: row.permissionPolicy } : {}),
     channelBindings: row.channelBindings ?? [],
     groupId: row.groupId,
     archivedAt: row.archivedAt,

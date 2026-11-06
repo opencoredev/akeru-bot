@@ -10,7 +10,7 @@ import {
 import * as Crypto from "effect/Crypto";
 import * as Effect from "effect/Effect";
 import type * as PlatformError from "effect/PlatformError";
-import { resolveGroupResponderBotId } from "../groupResponder.ts";
+import { GROUP_HANDOFF_BUSY_MESSAGE, resolveGroupResponderBotId } from "../groupResponder.ts";
 import { OrchestrationCommandInvariantError } from "../Errors.ts";
 import type { OrchestrationDispatchActor } from "../Services/OrchestrationEngine.ts";
 import {
@@ -22,6 +22,7 @@ import {
 } from "../commandInvariants.ts";
 import {
   activeGroupBotIds,
+  threadHasWorkInFlight,
   withEventBase,
   requireActiveResponder,
   userInputAnswerText,
@@ -140,6 +141,23 @@ export const decideThreadTurns = Effect.fn("decideThreadTurns")(function* ({
           groupId: group.id,
           botId: selectedBotId,
         });
+
+        // One bot works in a group chat at a time. Accepting a handoff while the current bot
+        // still works would move the chat's responder and queue a turn the provider session
+        // cannot run for the new bot, so the sender is asked to send again later.
+        const currentResponderId = targetThread.respondingBotId ?? null;
+
+        if (
+          currentResponderId !== null &&
+          currentResponderId !== selectedBotId &&
+          threadHasWorkInFlight(targetThread, command.createdAt)
+        ) {
+          return yield* new OrchestrationCommandInvariantError({
+            commandType: command.type,
+            detail: GROUP_HANDOFF_BUSY_MESSAGE,
+          });
+        }
+
         respondingBotId = selectedBotId;
         const personMembers = group.members.filter((member) => member.kind === "person");
 

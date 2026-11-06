@@ -1,5 +1,6 @@
 import { createSessionContext } from "./SessionContext.ts";
-import { createSessionCatalogHandlers } from "./CatalogToolHandlers.ts";
+import { botScopedToolSession, workspaceToolSession } from "./BotToolSession.ts";
+import { toolPermissionsFor } from "./ToolPermissions.ts";
 import type { SessionLifecycleDependencies } from "./SessionLifecycleDependencies.ts";
 import { ProviderDriverKind } from "@akeru/contracts";
 
@@ -40,7 +41,8 @@ import {
   botWorkspaceIdentity,
   botWorkspaceResourceKey,
 } from "../../botWorkspacePool.ts";
-import { AgentControllerRuntimeError } from "../../Errors.ts";
+import { AgentControllerRuntimeError, ProviderValidationError } from "../../Errors.ts";
+import { openCodePolicyBlock } from "../../opencode/OpenCodePolicyGate.ts";
 import { type AgentControllerShape } from "../../Services/AgentController.ts";
 
 import { type ActiveSession, type PendingApproval } from "./State.ts";
@@ -237,56 +239,30 @@ export function createSessionLifecycle(deps: SessionLifecycleDependencies) {
           mcpInstructions: formatMcpServerInstructions(mcpServers),
         }),
       );
-      const toolSession = { ...existing.configuredToolSession };
-      delete toolSession.botId;
-      delete toolSession.botName;
-      delete toolSession.billedBotId;
-      delete toolSession.delegation;
-      delete toolSession.workers;
-      delete toolSession.memoryHandlers;
-      delete toolSession.botState;
-      delete toolSession.imageGeneration;
       const imageGeneration = yield* deps.imageToolSettings;
       const settings = yield* deps.memorySettings();
 
-      const nextMemoryHandlers =
-        access.memoryScopes.length > 0
-          ? deps.memoryHandlers(input.memoryAccess, access.memoryScopes)
-          : undefined;
-
+      // A shared workspace can carry the session to another responding bot. Only the
+      // workspace fields carry over; everything that speaks for a bot is rebuilt for this one.
       const configuredToolSession: AkeruToolSession = {
-        ...toolSession,
-        runtimeMode: access.runtimeMode,
-        // A shared session can answer for another bot, so bot-scoped catalog tools
-        // such as list_environments must read the answering bot, not the first one.
-        catalogHandlers: createSessionCatalogHandlers(deps, {
+        ...workspaceToolSession(existing.configuredToolSession),
+        ...botScopedToolSession(deps, {
           threadId,
-          botId: input.botId,
-          botName: input.botName,
-          mcpManager: deps.sessionResources.getMcpManager(key),
+          startInput: input,
+          bot,
+          botId,
+          parentDelegation,
+          access,
+          delegated: delegatedAccess !== undefined,
+          activeChildDelegations,
+          isWorkerThread,
+          workerParentAccess,
+          memoryHandlers:
+            access.memoryScopes.length > 0
+              ? deps.memoryHandlers(input.memoryAccess, access.memoryScopes)
+              : undefined,
+          imageGeneration,
         }),
-        ...(botId ? { botId } : {}),
-        ...(input.botName ? { botName: input.botName } : {}),
-        ...(nextMemoryHandlers ? { memoryHandlers: nextMemoryHandlers } : {}),
-        ...(delegatedAccess && botId ? { billedBotId: botId } : {}),
-        ...(deps.wired().delegationRuntime && botId
-          ? {
-              delegation: deps.delegationFor({
-                threadId,
-                botId,
-                parentDelegation,
-                access,
-                activeChildDelegations,
-              }),
-            }
-          : {}),
-        ...(deps.wired().workerOrchestration && botId && !isWorkerThread
-          ? { workers: deps.workersFor(threadId, workerParentAccess) }
-          : {}),
-        ...(input.botId && deps.wired().botStateRuntime
-          ? { botState: deps.wired().botStateRuntime }
-          : {}),
-        imageGeneration,
       };
 
       existing.configuredToolSession = configuredToolSession;
@@ -315,6 +291,42 @@ export function createSessionLifecycle(deps: SessionLifecycleDependencies) {
       access.memoryScopes.length > 0
         ? deps.memoryHandlers(input.memoryAccess, access.memoryScopes)
         : undefined;
+
+    // Native OpenCode follows only the chat's permission mode, so a bot policy it
+    // cannot enforce refuses the turn before any OpenCode session runs.
+    const permissions = toolPermissionsFor(deps, {
+      bot,
+      botId,
+      parentBotId: parentDelegation?.parentBotId,
+    });
+
+    const readPermissionPolicy = () =>
+      permissions.readPolicy?.() ?? Promise.resolve(permissions.policy);
+
+    if (resolved && !deps.usesMastraCode(resolved.provider)) {
+      const policy = yield* deps.runMastra("permissions.readPolicy", readPermissionPolicy);
+
+      const block =
+        openCodePolicyBlock({
+          provider: resolved.provider,
+          policy,
+          runtimeMode: input.runtimeMode,
+        }) ??
+        (existingLegacy
+          ? openCodePolicyBlock({
+              provider: resolved.provider,
+              policy,
+              runtimeMode: existingLegacy.runtimeMode,
+            })
+          : undefined);
+
+      if (block) {
+        return yield* new ProviderValidationError({
+          operation: "AgentController.startSession",
+          issue: block,
+        });
+      }
+    }
 
     if (
       !existing &&
@@ -451,6 +463,8 @@ export function createSessionLifecycle(deps: SessionLifecycleDependencies) {
                 entityMemoryAccess: input.memoryAccess,
                 memoryAccessKey: deps.memoryAccessKey(nextMemoryAccess),
                 privateBotMemory: settings.privateBotMemory,
+                runtimeMode: input.runtimeMode,
+                readPermissionPolicy,
               });
 
               return session;
@@ -473,72 +487,24 @@ export function createSessionLifecycle(deps: SessionLifecycleDependencies) {
         ? resources.workspace
         : undefined;
 
-    const registeredMemoryHandlers = nextMemoryHandlers;
-    const mcpManager = deps.sessionResources.getMcpManager(key);
-    const imageGenerationSettings = yield* deps.imageToolSettings;
-
     const toolSession: AkeruToolSession = {
-      ...(botId ? { botId } : {}),
-      ...(input.botName ? { botName: input.botName } : {}),
-      runtimeMode: access.runtimeMode,
       workspaceType,
       ...(workspace ? { workspace } : {}),
       ...(userComputerWorkspace ? { userComputerWorkspace } : {}),
-      ...(registeredMemoryHandlers ? { memoryHandlers: registeredMemoryHandlers } : {}),
-      ...(input.botId && deps.wired().botStateRuntime
-        ? { botState: deps.wired().botStateRuntime }
-        : {}),
-      imageGeneration: imageGenerationSettings,
-      catalogHandlers: createSessionCatalogHandlers(deps, {
+      ...botScopedToolSession(deps, {
         threadId,
-        botId: input.botId,
-        botName: input.botName,
-        mcpManager,
+        startInput: input,
+        bot,
+        botId,
+        parentDelegation,
+        access,
+        delegated: delegatedAccess !== undefined,
+        activeChildDelegations,
+        isWorkerThread,
+        workerParentAccess,
+        memoryHandlers: nextMemoryHandlers,
+        imageGeneration: yield* deps.imageToolSettings,
       }),
-      ...(delegatedAccess && botId ? { billedBotId: botId } : {}),
-      ...(deps.wired().delegationRuntime && botId
-        ? {
-            sendToUser: async (request) => {
-              const active = deps.sessions.get(key);
-              const turnId = active?.activeTurn?.turnId;
-
-              if (!turnId) throw new Error("User messaging requires an active turn.");
-
-              return deps.wired().delegationRuntime!.sendToUser(
-                {
-                  threadId,
-                  turnId,
-                  botId,
-                  parentDelegationId: parentDelegation?.delegationId ?? null,
-                  ancestorBotIds: parentDelegation?.ancestorBotIds ?? [],
-                  depth: parentDelegation?.depth ?? 0,
-                  access,
-                },
-                request,
-              );
-            },
-            delegation: deps.delegationFor({
-              threadId,
-              botId,
-              parentDelegation,
-              access,
-              activeChildDelegations,
-            }),
-          }
-        : {}),
-      ...(deps.wired().workerOrchestration && botId && !isWorkerThread
-        ? { workers: deps.workersFor(threadId, workerParentAccess) }
-        : {}),
-      ...(input.botId && deps.wired().channelRuntime
-        ? {
-            reactToMessage: (request, toolCallId) =>
-              deps.wired().channelRuntime!.react(threadId, input.botId!, request, toolCallId),
-            channels: {
-              create: (request) => deps.wired().channelRuntime!.create(input.botId!, request),
-              update: (request) => deps.wired().channelRuntime!.update(input.botId!, request),
-            },
-          }
-        : {}),
     };
 
     deps.toolRuntime.registerSession(key, toolSession);

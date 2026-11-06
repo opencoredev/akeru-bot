@@ -32,6 +32,7 @@ import { AkeruMemoryTurnHarness } from "../../AkeruMemoryTurnHarness.ts";
 import { cancelActiveImageGenerations } from "../../../image-generation/ImageGenerationRuntime.ts";
 
 import { AgentControllerRuntimeError, ProviderValidationError } from "../../Errors.ts";
+import { openCodePolicyBlock } from "../../opencode/OpenCodePolicyGate.ts";
 import { type AgentControllerShape } from "../../Services/AgentController.ts";
 import { LegacyProviderBridge } from "../../Services/LegacyProviderBridge.ts";
 
@@ -142,6 +143,30 @@ export function createTurnRequests(deps: {
             operation: "sendTurn",
             detail: `Mastra session for thread '${input.threadId}' is not running.`,
           });
+        }
+
+        const legacyIdentity = deps.legacyResourceIdentity.get(key);
+
+        // The owner may tighten the policy after the session started; native
+        // OpenCode cannot enforce it, so the turn is refused before it reaches OpenCode.
+        if (legacyIdentity) {
+          const policy = yield* deps.runMastra(
+            "permissions.readPolicy",
+            legacyIdentity.readPermissionPolicy,
+          );
+
+          const block = openCodePolicyBlock({
+            provider: legacyIdentity.provider,
+            policy,
+            runtimeMode: legacyIdentity.runtimeMode,
+          });
+
+          if (block) {
+            return yield* new ProviderValidationError({
+              operation: "AgentController.sendTurn",
+              issue: block,
+            });
+          }
         }
 
         const { botUsage: _, delegationResults, ...providerInput } = input;

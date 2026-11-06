@@ -2,6 +2,10 @@ import { isGroupBotMember, type BotId, type GroupMembership } from "@akeru/contr
 import { collectComposerInlineTokens } from "@akeru/shared/composerInlineTokens";
 import * as Effect from "effect/Effect";
 
+/** Shown when a group chat is handed to another bot while the current one still works. */
+export const GROUP_HANDOFF_BUSY_MESSAGE =
+  "Another bot is still working in this chat. Send again when it finishes.";
+
 /**
  * Group members named by `@bot:<id>` tokens in a message, latest mention first. Clients may
  * send the token without resolving it to respondingBotId. Plain `@Name` stays client-resolved.

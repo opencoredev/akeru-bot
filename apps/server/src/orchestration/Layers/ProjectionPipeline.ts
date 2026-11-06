@@ -229,6 +229,7 @@ const makeOrchestrationProjectionPipeline = Effect.fn("makeOrchestrationProjecti
           "thread.turn-start-requested",
           "thread.session-set",
           "thread.message-sent",
+          "thread.activity-appended",
           "thread.turn-interrupt-requested",
           "thread.turn-diff-completed",
           "thread.reverted",
