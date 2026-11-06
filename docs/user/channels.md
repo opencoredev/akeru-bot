@@ -109,7 +109,13 @@ Without a public origin, the connection saves as **Not live**: replies can still
 
 ## Slack
 
-Create a Slack app for one workspace.
+A Slack connection is one Slack app, and it answers as one bot in one project. Every direct message to the app and every mention of it goes to that bot and project, whichever Slack channel it comes from. Mentioning the app in a different channel does not reach a different bot or project.
+
+To reach several bots from Slack, create a separate Slack app for each bot, add a Slack connection in Akeru for each app, and assign each connection to its bot. Each app shows up in Slack under its own name, so people pick a bot by mentioning that bot's app. Akeru rejects a bot token that another bot already uses. A bot holds one Slack connection at a time. To switch a bot to another Slack app, unassign its current connection first.
+
+To send one bot's Slack work to a different project, move the connection to that project. All of that app's messages move with it.
+
+Set up each Slack app for one workspace:
 
 1. Enable Socket Mode.
 2. Create an app-level token with the `connections:write` scope.
@@ -117,7 +123,7 @@ Create a Slack app for one workspace.
 4. Subscribe the app's bot events to `message.im` for direct messages, `app_mention` for channel mentions, and `message.channels` so replies inside a subscribed thread keep reaching the bot.
 5. Give the bot these scopes: `chat:write`, `reactions:write`, `app_mentions:read`, `channels:history`, `channels:read`, `im:history`, `im:read`, and `im:write`.
 6. Save the bot token and app-level token in Akeru. Akeru checks the app-level token before it connects. If Slack rejects the token, Akeru reports an invalid token. If Slack cannot be reached, Akeru says so and leaves the token alone, so you can retry once the network is back.
-7. Select a bot and click **Connect**.
+7. Select the bot and project, and click **Connect**.
 
 Socket Mode uses an outbound connection from the environment server. It works when Akeru runs locally, over SSH, or through Tailscale without a public webhook URL.
 
