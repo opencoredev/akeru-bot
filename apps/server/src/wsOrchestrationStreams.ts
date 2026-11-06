@@ -254,6 +254,7 @@ export const createWsOrchestrationStreams = ({
                   imageProvider: nextBot.imageProvider,
                   personalityTone: nextBot.personalityTone ?? BALANCED_BOT_PERSONALITY_TONE,
                   voiceEnabled: nextBot.voiceEnabled,
+                  allowedEnvironmentIds: nextBot.allowedEnvironmentIds ?? [],
                   channelBindings: channelBindingsForRuntime(nextBot.channelBindings ?? []),
                   groupId: nextBot.groupId,
                   archivedAt: nextBot.archivedAt,

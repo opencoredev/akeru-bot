@@ -42,6 +42,7 @@ export function projectBotsAndGroups(
             imageProvider: payload.imageProvider,
             personalityTone: payload.personalityTone,
             voiceEnabled: payload.voiceEnabled,
+            allowedEnvironmentIds: payload.allowedEnvironmentIds,
             channelBindings: payload.channelBindings,
             groupId: payload.groupId,
             archivedAt: null,
@@ -82,6 +83,9 @@ export function projectBotsAndGroups(
               ? { personalityTone: payload.personalityTone }
               : {}),
             ...(payload.voiceEnabled !== undefined ? { voiceEnabled: payload.voiceEnabled } : {}),
+            ...(payload.allowedEnvironmentIds !== undefined
+              ? { allowedEnvironmentIds: payload.allowedEnvironmentIds }
+              : {}),
             ...(payload.channelBindings !== undefined
               ? { channelBindings: payload.channelBindings }
               : {}),

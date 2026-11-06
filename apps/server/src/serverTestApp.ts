@@ -82,6 +82,7 @@ import * as BrowserTraceCollector from "./observability/BrowserTraceCollector.ts
 import * as RepositoryIdentityResolver from "./project/RepositoryIdentityResolver.ts";
 
 import * as ServerEnvironment from "./environment/ServerEnvironment.ts";
+import * as EnvironmentHost from "./environment/EnvironmentHost.ts";
 
 import * as WorkspaceEntries from "./workspace/WorkspaceEntries.ts";
 
@@ -102,12 +103,6 @@ import * as ServerSecretStore from "./auth/ServerSecretStore.ts";
 import * as ChannelDeliveryStore from "./channels/ChannelDeliveryStore.ts";
 
 import * as ChannelRuntime from "./channels/ChannelRuntime.ts";
-
-import * as ProcessDiagnostics from "./diagnostics/ProcessDiagnostics.ts";
-
-import * as ProcessResourceMonitor from "./diagnostics/ProcessResourceMonitor.ts";
-
-import * as TraceDiagnostics from "./diagnostics/TraceDiagnostics.ts";
 
 import * as DesktopTelemetryReceiver from "./resourceTelemetry/DesktopTelemetryReceiver.ts";
 
@@ -133,9 +128,12 @@ import {
   defaultOrchestrationReadModel,
   defaultThreadId,
   testEnvironmentDescriptor,
+  testEnvironmentHostDescriptor,
 } from "./serverTestFixtures.ts";
 
 import { authTestLayer } from "./serverTestClients.ts";
+
+import { diagnosticsTestLayer } from "./serverTestDiagnostics.ts";
 
 export const buildAppUnderTest = (options?: {
   durableMemory?: {
@@ -171,6 +169,7 @@ export const buildAppUnderTest = (options?: {
     channelRuntime?: Partial<ChannelRuntime.ChannelRuntimeShape> &
       Pick<ChannelRuntime.ChannelRuntimeShape, "channelBindingsForRuntime">;
     serverEnvironment?: Partial<ServerEnvironment.ServerEnvironment["Service"]>;
+    environmentHost?: Partial<EnvironmentHost.EnvironmentHost["Service"]>;
     repositoryIdentityResolver?: Partial<
       RepositoryIdentityResolver.RepositoryIdentityResolver["Service"]
     >;
@@ -414,68 +413,7 @@ export const buildAppUnderTest = (options?: {
           }),
         ),
       ),
-      Layer.provide(
-        Layer.mock(ProcessDiagnostics.ProcessDiagnostics)({
-          read: Effect.succeed({
-            serverPid: process.pid,
-            readAt: TEST_EPOCH,
-            processCount: 0,
-            totalRssBytes: 0,
-            totalCpuPercent: 0,
-            processes: [],
-            error: Option.none(),
-          }),
-          signal: (input) =>
-            Effect.succeed({
-              pid: input.pid,
-              signal: input.signal,
-              signaled: true,
-              message: Option.none(),
-            }),
-        }),
-      ),
-      Layer.provide(
-        Layer.mock(ProcessResourceMonitor.ProcessResourceMonitor)({
-          readHistory: (input) =>
-            Effect.succeed({
-              readAt: TEST_EPOCH,
-              windowMs: input.windowMs,
-              bucketMs: input.bucketMs,
-              sampleIntervalMs: 5_000,
-              retainedSampleCount: 0,
-              totalCpuSecondsApprox: 0,
-              buckets: [],
-              topProcesses: [],
-              error: Option.none(),
-            }),
-        }),
-      ),
-      Layer.provide(
-        Layer.mock(TraceDiagnostics.TraceDiagnostics)({
-          read: () =>
-            Effect.succeed({
-              traceFilePath: "",
-              scannedFilePaths: [],
-              readAt: TEST_EPOCH,
-              recordCount: 0,
-              parseErrorCount: 0,
-              firstSpanAt: Option.none(),
-              lastSpanAt: Option.none(),
-              failureCount: 0,
-              interruptionCount: 0,
-              slowSpanThresholdMs: 1_000,
-              slowSpanCount: 0,
-              logLevelCounts: {},
-              topSpansByCount: [],
-              slowestSpans: [],
-              commonFailures: [],
-              latestFailures: [],
-              latestWarningAndErrorLogs: [],
-              partialFailure: Option.none(),
-              error: Option.none(),
-            }),
-        }),
-      ),
+      Layer.provide(diagnosticsTestLayer),
       Layer.provide(gitVcsDriverLayer),
       Layer.provide(gitWorkflowLayer),
       Layer.provide(
@@ -749,6 +687,12 @@ export const buildAppUnderTest = (options?: {
           getEnvironmentId: Effect.succeed(testEnvironmentDescriptor.environmentId),
           getDescriptor: Effect.succeed(testEnvironmentDescriptor),
           ...options?.layers?.serverEnvironment,
+        }),
+      ),
+      Layer.provide(
+        Layer.mock(EnvironmentHost.EnvironmentHost)({
+          describe: Effect.succeed(testEnvironmentHostDescriptor),
+          ...options?.layers?.environmentHost,
         }),
       ),
       Layer.provide(

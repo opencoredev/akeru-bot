@@ -42,6 +42,7 @@ export const BACKEND_NAMES: Record<
     | "RemoveMcpAccount"
     | "RenameMcpAccount"
     | "SetMcpInstructions"
+    | "list_environments"
   >,
   ReadonlyArray<string>
 > = {

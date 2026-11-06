@@ -50,6 +50,7 @@ import {
 } from "./providers.ts";
 import { SandboxSettings, BrowserProviderSettings, SandboxSettingsPatch } from "./sandbox.ts";
 import { MemorySettings, MemorySettingsPatch } from "./memory.ts";
+import { EnvironmentHostProfile, EnvironmentHostProfilePatch } from "../environmentHost.ts";
 
 export const ObservabilitySettings = Schema.Struct({
   otlpTracesUrl: TrimmedString.pipe(Schema.withDecodingDefault(Effect.succeed(""))),
@@ -246,6 +247,8 @@ export const ServerSettings = Schema.Struct({
   sandbox: SandboxSettings,
   observability: ObservabilitySettings.pipe(Schema.withDecodingDefault(Effect.succeed({}))),
   memory: MemorySettings,
+  /** The owner's labels, note, and placement weight for this environment. */
+  environmentHost: EnvironmentHostProfile,
 });
 
 export type ServerSettings = typeof ServerSettings.Type;
@@ -355,6 +358,7 @@ const ServerSettingsPatchFields = {
   sourceControlWriterModelSelection: Schema.optionalKey(Schema.NullOr(ModelSelection)),
   sandbox: Schema.optionalKey(SandboxSettingsPatch),
   memory: Schema.optionalKey(MemorySettingsPatch),
+  environmentHost: Schema.optionalKey(EnvironmentHostProfilePatch),
   observability: Schema.optionalKey(
     Schema.Struct({
       otlpTracesUrl: Schema.optionalKey(TrimmedString),

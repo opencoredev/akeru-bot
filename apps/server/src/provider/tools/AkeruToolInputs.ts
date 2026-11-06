@@ -120,5 +120,7 @@ export function decodeAkeruRuntimeToolInput<Input>(
       return { toolId, input: decodeAkeruToolInput(toolId, normalized) };
     case "StopSubagent":
       return { toolId, input: decodeAkeruToolInput(toolId, normalized) };
+    case "list_environments":
+      return { toolId, input: decodeAkeruToolInput(toolId, normalized) };
   }
 }

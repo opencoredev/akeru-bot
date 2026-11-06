@@ -142,4 +142,27 @@ describe("AkeruToolRuntime", () => {
     ).resolves.toEqual({ text: "ok" });
     expect(fetch).toHaveBeenCalledOnce();
   });
+
+  it("runs list_environments without an approval grant, even in a restricted session", async () => {
+    const runtime = createAkeruToolRuntime();
+    runtime.registerSession("thread-environments", {
+      runtimeMode: "approval-required",
+      workspaceType: "none",
+      catalogHandlers: {
+        list_environments: async ({ input }) => decodeAkeruToolInput("list_environments", input),
+      },
+    });
+    expect(runtime.toolsForThread("thread-environments").map((tool) => tool.id)).toContain(
+      "list_environments",
+    );
+    await expect(
+      runtime.execute({
+        threadId: "thread-environments",
+        toolId: "list_environments",
+        toolCallId: "tool-environments",
+        input: { requirements: { os: "darwin" } },
+        approvalMode: "require-grant",
+      }),
+    ).resolves.toEqual({ requirements: { os: "darwin" } });
+  });
 });

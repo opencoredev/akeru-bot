@@ -1,4 +1,5 @@
 import {
+  BotAllowedEnvironmentIds,
   BotAvatar,
   BotEngine,
   BotId,
@@ -34,6 +35,7 @@ export const ProjectionBot = Schema.Struct({
   ),
   personalityTone: Schema.optionalKey(BotPersonalityTone),
   voiceEnabled: Schema.Boolean,
+  allowedEnvironmentIds: Schema.optionalKey(BotAllowedEnvironmentIds),
   channelBindings: Schema.optional(Schema.Array(ChannelBinding)),
   groupId: Schema.NullOr(GroupId),
   archivedAt: Schema.NullOr(IsoDateTime),

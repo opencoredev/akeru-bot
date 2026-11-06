@@ -1,4 +1,9 @@
-import { DEFAULT_SERVER_SETTINGS, ProviderDriverKind, ProviderInstanceId } from "@akeru/contracts";
+import {
+  CLEAR_ENVIRONMENT_HOST_DESCRIPTION_PATCH,
+  DEFAULT_SERVER_SETTINGS,
+  ProviderDriverKind,
+  ProviderInstanceId,
+} from "@akeru/contracts";
 import * as Duration from "effect/Duration";
 import { describe, expect, it } from "vite-plus/test";
 import { resolveServerBackgroundActivitySettings } from "./backgroundActivitySettings.ts";
@@ -449,5 +454,35 @@ describe("serverSettings helpers", () => {
     });
 
     expect(resolved.pauseWhenOnBattery).toBe(false);
+  });
+});
+
+describe("environmentHost settings", () => {
+  it("edits the owner's description, then clears it while keeping the weight", () => {
+    const described = applyServerSettingsPatch(DEFAULT_SERVER_SETTINGS, {
+      environmentHost: { labels: ["mac-mini", "xcode"], note: "Builds iOS apps." },
+    });
+
+    expect(described.environmentHost).toEqual({
+      labels: ["mac-mini", "xcode"],
+      note: "Builds iOS apps.",
+      placementWeight: "normal",
+    });
+
+    const weighted = applyServerSettingsPatch(described, {
+      environmentHost: { placementWeight: "manual-only", labels: ["xcode"] },
+    });
+
+    expect(weighted.environmentHost).toEqual({
+      labels: ["xcode"],
+      note: "Builds iOS apps.",
+      placementWeight: "manual-only",
+    });
+
+    expect(
+      applyServerSettingsPatch(weighted, {
+        environmentHost: CLEAR_ENVIRONMENT_HOST_DESCRIPTION_PATCH,
+      }).environmentHost,
+    ).toEqual({ labels: [], note: "", placementWeight: "manual-only" });
   });
 });

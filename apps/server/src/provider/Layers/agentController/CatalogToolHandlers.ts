@@ -1,6 +1,10 @@
 import * as NodeCrypto from "node:crypto";
+import * as Clock from "effect/Clock";
+import * as Effect from "effect/Effect";
+import * as Option from "effect/Option";
 import {
   type BotId,
+  botAllowedEnvironmentIds,
   CommandId,
   McpServerId,
   type ThreadId,
@@ -8,6 +12,7 @@ import {
 } from "@akeru/contracts";
 import { runImageGenerationTool } from "../../../image-generation/ImageGenerationRuntime.ts";
 import { createAkeruCatalogToolHandlers } from "../../AkeruCatalogToolHandlers.ts";
+import { createListEnvironmentsHandler } from "../../tools/AkeruEnvironmentTools.ts";
 import { akeruWebSearchUnavailable } from "../../AkeruWebFetch.ts";
 import { nowIso } from "./EventIdentity.ts";
 import { mcpServerDependentBots } from "./McpConfiguration.ts";
@@ -35,7 +40,7 @@ export function createSessionCatalogHandlers(
       ? { dependentBots: [{ id: input.botId, name: input.botName }], dependentRoutines: [] }
       : { dependentBots: [], dependentRoutines: [] };
 
-  return createAkeruCatalogToolHandlers(
+  const catalogHandlers = createAkeruCatalogToolHandlers(
     mcpManager,
     deps.wired().pluginRuntime,
     mcpManager
@@ -174,4 +179,31 @@ export function createSessionCatalogHandlers(
         : {}),
     },
   );
+
+  const environmentHost = Option.getOrUndefined(deps.environmentHost);
+
+  if (!environmentHost) return catalogHandlers;
+
+  const { botId } = input;
+
+  return {
+    ...catalogHandlers,
+    list_environments: createListEnvironmentsHandler({
+      describeLocal: () => deps.runPromise(environmentHost.describe),
+      allowedEnvironmentIds: async () => {
+        if (!botId) return [];
+
+        const getBotById = Option.getOrUndefined(deps.projectionSnapshotQuery)?.getBotById;
+
+        if (!getBotById) return [];
+
+        const bot = await deps.runPromise(
+          getBotById(botId).pipe(Effect.orElseSucceed(() => Option.none())),
+        );
+
+        return Option.match(bot, { onNone: () => [], onSome: botAllowedEnvironmentIds });
+      },
+      now: () => deps.runPromise(Clock.currentTimeMillis),
+    }),
+  };
 }

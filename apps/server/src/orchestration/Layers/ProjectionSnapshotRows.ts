@@ -1,6 +1,7 @@
 import * as Match from "effect/Match";
 import {
   AkeruDelegationRecord,
+  BotAllowedEnvironmentIds,
   BotAvatar,
   BotEngine,
   BotId,
@@ -88,6 +89,7 @@ export const ProjectionBotDbRowSchema = ProjectionBot.mapFields(
     personalityTone: Schema.Number,
     disabledMcpServerIds: Schema.fromJsonString(Schema.Array(McpServerId)),
     channelBindings: Schema.fromJsonString(Schema.Array(ChannelBinding)),
+    allowedEnvironmentIds: Schema.fromJsonString(BotAllowedEnvironmentIds),
     voiceEnabled: Schema.Number,
   }),
 );
@@ -473,6 +475,7 @@ export function mapBotRow(
     imageProvider: row.imageProvider,
     personalityTone: row.personalityTone,
     voiceEnabled: row.voiceEnabled === 1,
+    allowedEnvironmentIds: row.allowedEnvironmentIds,
     channelBindings: row.channelBindings ?? [],
     groupId: row.groupId,
     archivedAt: row.archivedAt,

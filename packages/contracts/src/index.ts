@@ -22,6 +22,8 @@ export * from "./auth.ts";
 
 export * from "./environment.ts";
 
+export * from "./environmentHost.ts";
+
 export * from "./environmentHttp.ts";
 
 export * from "./desktopBootstrap.ts";

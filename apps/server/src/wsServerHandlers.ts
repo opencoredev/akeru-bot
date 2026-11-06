@@ -31,6 +31,7 @@ export const createWsServerHandlers = ({
   serverSelfUpdate,
   subscriptionAuth,
   serverSettings,
+  environmentHost,
   backgroundPolicy,
   rpcClientIds,
   observeRpcEffect,
@@ -49,6 +50,7 @@ export const createWsServerHandlers = ({
   | "serverSelfUpdate"
   | "subscriptionAuth"
   | "serverSettings"
+  | "environmentHost"
   | "backgroundPolicy"
   | "rpcClientIds"
   | "observeRpcEffect"
@@ -189,6 +191,11 @@ export const createWsServerHandlers = ({
           "rpc.aggregate": "server",
         },
       ),
+
+    [WS_METHODS.serverGetEnvironmentHost]: (_input) =>
+      observeRpcEffect(WS_METHODS.serverGetEnvironmentHost, environmentHost.describe, {
+        "rpc.aggregate": "server",
+      }),
 
     [WS_METHODS.serverReportClientActivity]: (input, metadata) =>
       Ref.update(rpcClientIds, (clientIds) => {
@@ -337,6 +344,7 @@ export const createWsServerHandlers = ({
     | typeof WS_METHODS.serverRemoveKeybinding
     | typeof WS_METHODS.serverGetSettings
     | typeof WS_METHODS.serverUpdateSettings
+    | typeof WS_METHODS.serverGetEnvironmentHost
     | typeof WS_METHODS.serverReportClientActivity
     | typeof WS_METHODS.subscribeDiscoveredLocalServers
     | typeof WS_METHODS.subscribeServerConfig

@@ -86,6 +86,7 @@ import Migration0070 from "./Migrations/070_McpServerInstructions.ts";
 import Migration0071 from "./Migrations/071_RoutineDelegateToBot.ts";
 import Migration0072 from "./Migrations/072_ProjectionThreadMessageChannelDelivery.ts";
 import Migration0073 from "./Migrations/073_RoutineCanceledClaims.ts";
+import Migration0074 from "./Migrations/074_BotAllowedEnvironments.ts";
 
 /**
  * Migration loader with all migrations defined inline.
@@ -171,6 +172,7 @@ export const migrationEntries = [
   [71, "RoutineDelegateToBot", Migration0071],
   [72, "ProjectionThreadMessageChannelDelivery", Migration0072],
   [73, "RoutineCanceledClaims", Migration0073],
+  [74, "BotAllowedEnvironments", Migration0074],
 ] as const;
 
 export const migrationManifest = migrationEntries.map(([id, name]) => [id, name] as const);

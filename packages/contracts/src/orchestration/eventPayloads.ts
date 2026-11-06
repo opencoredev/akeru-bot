@@ -37,6 +37,7 @@ import {
   PersistedBotSandbox,
   BALANCED_BOT_PERSONALITY_TONE,
   BotPersonalityTone,
+  BotAllowedEnvironmentIds,
   ChannelBinding,
   GroupBotMembership,
   GroupPersonMembership,
@@ -195,6 +196,9 @@ export const BotCreatedPayload = Schema.Struct({
     Schema.withDecodingDefault(Effect.succeed(BALANCED_BOT_PERSONALITY_TONE)),
   ),
   voiceEnabled: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
+  allowedEnvironmentIds: BotAllowedEnvironmentIds.pipe(
+    Schema.withDecodingDefault(Effect.succeed([])),
+  ),
   channelBindings: Schema.Array(ChannelBinding).pipe(
     Schema.withDecodingDefault(Effect.succeed([])),
   ),
@@ -217,6 +221,7 @@ export const BotUpdatedPayload = Schema.Struct({
   imageProvider: Schema.optional(Schema.NullOr(ImageProviderId)),
   personalityTone: Schema.optional(BotPersonalityTone),
   voiceEnabled: Schema.optional(Schema.Boolean),
+  allowedEnvironmentIds: Schema.optional(BotAllowedEnvironmentIds),
   channelBindings: Schema.optional(Schema.Array(ChannelBinding)),
   groupId: Schema.optional(Schema.NullOr(GroupId)),
   updatedAt: IsoDateTime,

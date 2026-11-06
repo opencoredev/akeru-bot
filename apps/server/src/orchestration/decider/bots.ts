@@ -82,6 +82,7 @@ export const decideBots = Effect.fn("decideBots")(function* ({
           imageProvider: command.imageProvider ?? null,
           personalityTone: command.personalityTone ?? BALANCED_BOT_PERSONALITY_TONE,
           voiceEnabled: command.voiceEnabled ?? false,
+          allowedEnvironmentIds: [],
           channelBindings: [],
           groupId: command.groupId,
           createdAt: command.createdAt,
@@ -219,6 +220,9 @@ export const decideBots = Effect.fn("decideBots")(function* ({
             ? { personalityTone: command.personalityTone }
             : {}),
           ...(command.voiceEnabled !== undefined ? { voiceEnabled: command.voiceEnabled } : {}),
+          ...(command.allowedEnvironmentIds !== undefined
+            ? { allowedEnvironmentIds: command.allowedEnvironmentIds }
+            : {}),
           ...(command.channelBindings !== undefined
             ? { channelBindings: command.channelBindings }
             : {}),
