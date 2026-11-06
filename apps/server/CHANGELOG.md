@@ -1,5 +1,121 @@
 # akeru-bot
 
+## 0.3.0
+
+### Minor Changes
+
+- [#347](https://github.com/opencoredev/akeru-bot/pull/347) [`57c1afb`](https://github.com/opencoredev/akeru-bot/commit/57c1afb08cdf9c019591aaa1eefe07a286dc2fb1) Thanks [@leoisadev1](https://github.com/leoisadev1)! - Archived bots no longer appear in the sidebar. They are listed in Settings > Archived, where you can restore or delete them, and Akeru deletes them automatically 7 days after they were archived. Their chats stay in your history.
+
+- [#499](https://github.com/opencoredev/akeru-bot/pull/499) [`c16622c`](https://github.com/opencoredev/akeru-bot/commit/c16622cba535e6fdab328965a77bd3b4a7fae6aa) Thanks [@leoisadev1](https://github.com/leoisadev1)! - Each bot now has one permission policy that decides whether a built-in tool call or routine change may run, must ask you first, or is refused, based on how far the action reaches and who the bot is working for. Bots now always ask before recognized deletions, sends, payments, deploys, and secret reads, including commands like `git clean -fd` in a cloud workspace that ran without asking before. Approvals now apply only to the exact action you saw, take one answer, and expire after 24 hours. Full access and Auto review cannot answer an approval the policy reserves for you, and a bot checks its permissions again right before the approved action runs.
+
+- [#352](https://github.com/opencoredev/akeru-bot/pull/352) [`55028ce`](https://github.com/opencoredev/akeru-bot/commit/55028ceeba4e029856722f957a07fb8f5b1fe9a6) Thanks [@leoisadev1](https://github.com/leoisadev1)! - Add backup accounts to a provider, named by plan, and bots move to the next one when an account hits a usage limit. New bots start on Claude Opus 5.5 for Claude, Grok 4.7 for Grok, and GPT-6 Luna for OpenCode Go. The model picker moved from the chat composer into the bot's settings, chats show a sign-in card when a bot's provider needs connecting, and the macOS desktop sidebar no longer crowds the window controls.
+
+- [#495](https://github.com/opencoredev/akeru-bot/pull/495) [`3cbf24c`](https://github.com/opencoredev/akeru-bot/commit/3cbf24c60c88e198099ed26f86384a2c8d903361) Thanks [@leoisadev1](https://github.com/leoisadev1)! - Claude now connects with an Anthropic API key only. Anthropic does not allow third-party apps to offer Claude Pro or Max sign-in, so Akeru no longer offers it and no longer identifies itself as Claude Code. If you signed in with Claude Pro or Max before, Akeru deletes that login when it starts, and the Claude row and any bot that uses Claude say to add an API key in Settings > Providers. Claude no longer shows plan limits on the Usage page.
+
+- [#502](https://github.com/opencoredev/akeru-bot/pull/502) [`9106344`](https://github.com/opencoredev/akeru-bot/commit/9106344d7bf34539bdc221130bcd82d50eb2d2ca) Thanks [@leoisadev1](https://github.com/leoisadev1)! - Claude bots can run on your own Claude Code login. Choose **Use your Claude Code login** on the Claude provider page, during onboarding, or from a chat that needs it. Akeru runs the Claude Code installed on the environment's machine, walks you through installing it and running `claude auth login`, and verifies the login. Akeru never reads the login, starts Claude Code with only basic environment variables and none of your Claude Code settings files, and these bots follow the bot permission policy for every tool call, including file access outside their workspace. File tools cannot open Claude Code's own login and settings, and shell commands that might reach them ask you first. This is best-effort on your own computer; run bots in a sandbox to keep them away from your files.
+
+- [#342](https://github.com/opencoredev/akeru-bot/pull/342) [`51d4a5b`](https://github.com/opencoredev/akeru-bot/commit/51d4a5b481a51b4576233fdfe98643104807414c) Thanks [@robzlabz](https://github.com/robzlabz)! - Add a Custom API provider that runs bots on any OpenAI-compatible endpoint. When you add one, pick OpenRouter, Groq, Together AI, DeepSeek, Mistral, Fireworks, LM Studio, Ollama, vLLM, or Other; a preset fills in the base URL and name. Paste a key into the API key field, which stores it as a secret. The model list comes from `{baseUrl}/models`, and model names you add by hand are kept. Several instances can run side by side, such as a local server and a hosted gateway.
+
+- [#498](https://github.com/opencoredev/akeru-bot/pull/498) [`4a808db`](https://github.com/opencoredev/akeru-bot/commit/4a808db3ee7b1dc3616ff7d2d5981c6171804219) Thanks [@leoisadev1](https://github.com/leoisadev1)! - Each environment now describes its machine: OS, CPU and memory load, installed tools such as Xcode, Docker, and browsers, ready providers, and projects. Bots can call `list_environments` to see where they may run work and why other environments are left out. Bots stay on their home environment unless they are allowed others.
+
+- [#350](https://github.com/opencoredev/akeru-bot/pull/350) [`4c23d3e`](https://github.com/opencoredev/akeru-bot/commit/4c23d3ead61924a979aafcde6c069667284ce0fa) Thanks [@leoisadev1](https://github.com/leoisadev1)! - Add a second account from a provider's page with **Add account**. The dialog no longer asks which provider to use or lists providers Akeru does not support. Adding a ChatGPT, Claude, Grok, Kimi, or OpenCode Go account only asks for a name; sign in from the new account's card.
+
+- [#354](https://github.com/opencoredev/akeru-bot/pull/354) [`020a7b5`](https://github.com/opencoredev/akeru-bot/commit/020a7b5c9630fa7a2a603771cca25128b3cacc15) Thanks [@leoisadev1](https://github.com/leoisadev1)! - Bot questions now appear as a card with one question at a time, round marks for single-choice and checkboxes for multi-select, number-key shortcuts, and an in-card field for your own answer. Answers show as a summary instead of a plain text message. Replies can render charts, stats, task lists, timelines, flow diagrams, and choices in your theme's colors. The Akeru Paper and Akeru Noir themes no longer use purple, and the question card no longer links to the bot's computer.
+
+- [#496](https://github.com/opencoredev/akeru-bot/pull/496) [`e4b3830`](https://github.com/opencoredev/akeru-bot/commit/e4b383075369e5c0380a8b2e73d0089f655aaa26) Thanks [@leoisadev1](https://github.com/leoisadev1)! - Remove the Executor plugin. Composio is now the only built-in connector service, and custom MCP servers still work with a local command or a remote URL. On upgrade, Akeru removes a saved Executor installation and clears it from every bot's tools; other plugins and custom servers stay as they are. To keep using an app you reached through Executor, connect it through Composio or add its MCP server under Custom MCP servers.
+
+- [#501](https://github.com/opencoredev/akeru-bot/pull/501) [`0305121`](https://github.com/opencoredev/akeru-bot/commit/0305121a9d56e4145c93ccca7e8903c5a7a0f0b8) Thanks [@leoisadev1](https://github.com/leoisadev1)! - Bot sandboxes now run through Sandbox SDK, and Boat and Local Docker join the sandbox list. Akeru saves a new sandbox's ID before anything else can fail, so a failed setup or cleanup no longer loses track of a running VM.
+
+- [#500](https://github.com/opencoredev/akeru-bot/pull/500) [`4e1a3e0`](https://github.com/opencoredev/akeru-bot/commit/4e1a3e0e0ac717e3941595ab8d06bdb1a62db50f) Thanks [@leoisadev1](https://github.com/leoisadev1)! - Slack and Discord bots now answer only you and the people you add. Link your account by sending the bot a one-time code from Settings > Channels, and add extra user IDs per bot. After you mention a bot in a thread, it answers your later replies there without another mention, and stops when you reply "stop", after 24 quiet hours, or when you mention a different bot. Other people's mentions cost nothing, and people's names replace raw member IDs in what the bot reads.
+
+### Patch Changes
+
+- [#343](https://github.com/opencoredev/akeru-bot/pull/343) [`66ba44d`](https://github.com/opencoredev/akeru-bot/commit/66ba44dfcde1fbb3e63cf27f2afb73001baa26c5) Thanks [@leoisadev1](https://github.com/leoisadev1)! - Cancelling a new chat request no longer leaves an empty chat behind or deletes a chat whose first message was already accepted.
+
+- [#343](https://github.com/opencoredev/akeru-bot/pull/343) [`66ba44d`](https://github.com/opencoredev/akeru-bot/commit/66ba44dfcde1fbb3e63cf27f2afb73001baa26c5) Thanks [@leoisadev1](https://github.com/leoisadev1)! - Fix server startup under Node when the Bun global is absent.
+
+- [#343](https://github.com/opencoredev/akeru-bot/pull/343) [`66ba44d`](https://github.com/opencoredev/akeru-bot/commit/66ba44dfcde1fbb3e63cf27f2afb73001baa26c5) Thanks [@leoisadev1](https://github.com/leoisadev1)! - Cancelling a message with an uploaded file no longer deletes the file when the message was still sent.
+
+- [#343](https://github.com/opencoredev/akeru-bot/pull/343) [`66ba44d`](https://github.com/opencoredev/akeru-bot/commit/66ba44dfcde1fbb3e63cf27f2afb73001baa26c5) Thanks [@leoisadev1](https://github.com/leoisadev1)! - Validate remote browser connection details before opening a browser.
+
+- [#343](https://github.com/opencoredev/akeru-bot/pull/343) [`66ba44d`](https://github.com/opencoredev/akeru-bot/commit/66ba44dfcde1fbb3e63cf27f2afb73001baa26c5) Thanks [@leoisadev1](https://github.com/leoisadev1)! - Read image attachments without blocking the server or loading oversized files.
+
+- [#343](https://github.com/opencoredev/akeru-bot/pull/343) [`66ba44d`](https://github.com/opencoredev/akeru-bot/commit/66ba44dfcde1fbb3e63cf27f2afb73001baa26c5) Thanks [@leoisadev1](https://github.com/leoisadev1)! - Report database migration failures instead of accepting incomplete thread summaries.
+
+- [#343](https://github.com/opencoredev/akeru-bot/pull/343) [`66ba44d`](https://github.com/opencoredev/akeru-bot/commit/66ba44dfcde1fbb3e63cf27f2afb73001baa26c5) Thanks [@leoisadev1](https://github.com/leoisadev1)! - Keep cancelled subscription logins from reconnecting after logout.
+
+- [#343](https://github.com/opencoredev/akeru-bot/pull/343) [`66ba44d`](https://github.com/opencoredev/akeru-bot/commit/66ba44dfcde1fbb3e63cf27f2afb73001baa26c5) Thanks [@leoisadev1](https://github.com/leoisadev1)! - Respect safe integer settings when reading SQLite query values.
+
+- [#348](https://github.com/opencoredev/akeru-bot/pull/348) [`9677596`](https://github.com/opencoredev/akeru-bot/commit/967759677e942b181b58792234d87cd6d0512adc) Thanks [@leoisadev1](https://github.com/leoisadev1)! - Model lists for ChatGPT, Claude, Grok, Kimi For Coding, and OpenCode Go now come from models.dev and refresh on their own, so new models appear without an app update. The picker shows readable names such as "GPT-6.1 Sol", lists GPT-6.1 Sol, Claude Opus 5.5, Claude Sonnet 5.5, and Claude Fable 5.1, and moves older models to the legacy section.
+
+- [#343](https://github.com/opencoredev/akeru-bot/pull/343) [`66ba44d`](https://github.com/opencoredev/akeru-bot/commit/66ba44dfcde1fbb3e63cf27f2afb73001baa26c5) Thanks [@leoisadev1](https://github.com/leoisadev1)! - Stopping the server no longer waits forever on chat requests still queued behind a stalled command.
+
+- [#495](https://github.com/opencoredev/akeru-bot/pull/495) [`3cbf24c`](https://github.com/opencoredev/akeru-bot/commit/3cbf24c60c88e198099ed26f86384a2c8d903361) Thanks [@leoisadev1](https://github.com/leoisadev1)! - Grok usage requests no longer identify themselves as the Grok CLI. If xAI's usage endpoint requires that identity, the Grok meter on the Usage page stops updating instead.
+
+- [#353](https://github.com/opencoredev/akeru-bot/pull/353) [`b2ba9a8`](https://github.com/opencoredev/akeru-bot/commit/b2ba9a88add2d4024c0accd57f4d7151f03e3c84) Thanks [@leoisadev1](https://github.com/leoisadev1)! - Fix model-specific reasoning controls and runtime forwarding across all providers, with saved bot choices shared by web, desktop, and mobile.
+
+- [#343](https://github.com/opencoredev/akeru-bot/pull/343) [`66ba44d`](https://github.com/opencoredev/akeru-bot/commit/66ba44dfcde1fbb3e63cf27f2afb73001baa26c5) Thanks [@leoisadev1](https://github.com/leoisadev1)! - Recognize existing thread summary columns regardless of their SQLite identifier casing.
+
+- [#343](https://github.com/opencoredev/akeru-bot/pull/343) [`66ba44d`](https://github.com/opencoredev/akeru-bot/commit/66ba44dfcde1fbb3e63cf27f2afb73001baa26c5) Thanks [@leoisadev1](https://github.com/leoisadev1)! - Keep deeply nested tool payloads within projection limits and preserve dispatch defects and interruptions.
+
+- [#343](https://github.com/opencoredev/akeru-bot/pull/343) [`66ba44d`](https://github.com/opencoredev/akeru-bot/commit/66ba44dfcde1fbb3e63cf27f2afb73001baa26c5) Thanks [@leoisadev1](https://github.com/leoisadev1)! - Keep pending requests and queued starts blocking chat settlement after a server restart, and allow reactions on older chat messages.
+
+- [#343](https://github.com/opencoredev/akeru-bot/pull/343) [`66ba44d`](https://github.com/opencoredev/akeru-bot/commit/66ba44dfcde1fbb3e63cf27f2afb73001baa26c5) Thanks [@leoisadev1](https://github.com/leoisadev1)! - Keep Unicode characters intact when shortening long tool activity details.
+
+- [#343](https://github.com/opencoredev/akeru-bot/pull/343) [`66ba44d`](https://github.com/opencoredev/akeru-bot/commit/66ba44dfcde1fbb3e63cf27f2afb73001baa26c5) Thanks [@leoisadev1](https://github.com/leoisadev1)! - Correct shared-client classification of background policy subscriptions so they reconnect as streams rather than being treated as unary requests.
+
+- [#343](https://github.com/opencoredev/akeru-bot/pull/343) [`66ba44d`](https://github.com/opencoredev/akeru-bot/commit/66ba44dfcde1fbb3e63cf27f2afb73001baa26c5) Thanks [@leoisadev1](https://github.com/leoisadev1)! - Require approval for tool inputs that exceed the action inspection budget instead of crashing on large arrays.
+
+- [#353](https://github.com/opencoredev/akeru-bot/pull/353) [`b2ba9a8`](https://github.com/opencoredev/akeru-bot/commit/b2ba9a88add2d4024c0accd57f4d7151f03e3c84) Thanks [@leoisadev1](https://github.com/leoisadev1)! - Remove the per-bot token hard stop. Bots no longer refuse new messages after a set token count, and bot settings and usage on web, desktop, and mobile no longer show a cap.
+
+- [#501](https://github.com/opencoredev/akeru-bot/pull/501) [`0305121`](https://github.com/opencoredev/akeru-bot/commit/0305121a9d56e4145c93ccca7e8903c5a7a0f0b8) Thanks [@leoisadev1](https://github.com/leoisadev1)! - Railway and Upstash sandboxes created by an earlier Akeru version reconnect after the upgrade instead of being reported as unavailable.
+
+- [#501](https://github.com/opencoredev/akeru-bot/pull/501) [`0305121`](https://github.com/opencoredev/akeru-bot/commit/0305121a9d56e4145c93ccca7e8903c5a7a0f0b8) Thanks [@leoisadev1](https://github.com/leoisadev1)! - Large appends to a file in a remote sandbox now land whole or not at all, and two at once no longer mix their content.
+
+- [#501](https://github.com/opencoredev/akeru-bot/pull/501) [`0305121`](https://github.com/opencoredev/akeru-bot/commit/0305121a9d56e4145c93ccca7e8903c5a7a0f0b8) Thanks [@leoisadev1](https://github.com/leoisadev1)! - Remote file appends no longer risk two sessions writing at once after a lock is cleared, and a lock that stays held reports a clear error instead.
+
+- [#501](https://github.com/opencoredev/akeru-bot/pull/501) [`0305121`](https://github.com/opencoredev/akeru-bot/commit/0305121a9d56e4145c93ccca7e8903c5a7a0f0b8) Thanks [@leoisadev1](https://github.com/leoisadev1)! - Large appends to one file from several bot sessions at once no longer mix their content in remote sandboxes.
+
+- [#501](https://github.com/opencoredev/akeru-bot/pull/501) [`0305121`](https://github.com/opencoredev/akeru-bot/commit/0305121a9d56e4145c93ccca7e8903c5a7a0f0b8) Thanks [@leoisadev1](https://github.com/leoisadev1)! - Two bot sessions appending to the same file in a remote sandbox no longer overwrite each other's lines.
+
+- [#501](https://github.com/opencoredev/akeru-bot/pull/501) [`0305121`](https://github.com/opencoredev/akeru-bot/commit/0305121a9d56e4145c93ccca7e8903c5a7a0f0b8) Thanks [@leoisadev1](https://github.com/leoisadev1)! - Destroying a remote bot workspace now deletes its sandbox even when the workspace was not started since the server restarted, instead of only forgetting its saved ID.
+
+- [#501](https://github.com/opencoredev/akeru-bot/pull/501) [`0305121`](https://github.com/opencoredev/akeru-bot/commit/0305121a9d56e4145c93ccca7e8903c5a7a0f0b8) Thanks [@leoisadev1](https://github.com/leoisadev1)! - A Railway VM whose setup fails and cannot be deleted is no longer forgotten: Akeru keeps its ID and deletes it before creating a replacement.
+
+- [#501](https://github.com/opencoredev/akeru-bot/pull/501) [`0305121`](https://github.com/opencoredev/akeru-bot/commit/0305121a9d56e4145c93ccca7e8903c5a7a0f0b8) Thanks [@leoisadev1](https://github.com/leoisadev1)! - A chat whose setup fails no longer deletes a remote sandbox that another chat is using.
+
+- [#501](https://github.com/opencoredev/akeru-bot/pull/501) [`0305121`](https://github.com/opencoredev/akeru-bot/commit/0305121a9d56e4145c93ccca7e8903c5a7a0f0b8) Thanks [@leoisadev1](https://github.com/leoisadev1)! - E2B sandboxes from an earlier Akeru version keep running as their own user in its home folder, so existing files keep their owner and tools such as git keep working.
+
+- [#501](https://github.com/opencoredev/akeru-bot/pull/501) [`0305121`](https://github.com/opencoredev/akeru-bot/commit/0305121a9d56e4145c93ccca7e8903c5a7a0f0b8) Thanks [@leoisadev1](https://github.com/leoisadev1)! - Tenki sandboxes created by an earlier Akeru version reconnect after the upgrade instead of being reported as unavailable.
+
+- [#501](https://github.com/opencoredev/akeru-bot/pull/501) [`0305121`](https://github.com/opencoredev/akeru-bot/commit/0305121a9d56e4145c93ccca7e8903c5a7a0f0b8) Thanks [@leoisadev1](https://github.com/leoisadev1)! - A paused or stopped sandbox from an earlier Akeru version now reconnects instead of failing, and a reconnect that fails pauses any box it had resumed.
+
+- [#501](https://github.com/opencoredev/akeru-bot/pull/501) [`0305121`](https://github.com/opencoredev/akeru-bot/commit/0305121a9d56e4145c93ccca7e8903c5a7a0f0b8) Thanks [@leoisadev1](https://github.com/leoisadev1)! - Daytona and Ascii Box sandboxes from an earlier Akeru version reopen in the folder their old commands ran in, not the user's home folder.
+
+- [#501](https://github.com/opencoredev/akeru-bot/pull/501) [`0305121`](https://github.com/opencoredev/akeru-bot/commit/0305121a9d56e4145c93ccca7e8903c5a7a0f0b8) Thanks [@leoisadev1](https://github.com/leoisadev1)! - Bots reconnecting to a remote sandbox created by an earlier Akeru version keep using that sandbox's original folder, so their existing files stay visible.
+
+- [#501](https://github.com/opencoredev/akeru-bot/pull/501) [`0305121`](https://github.com/opencoredev/akeru-bot/commit/0305121a9d56e4145c93ccca7e8903c5a7a0f0b8) Thanks [@leoisadev1](https://github.com/leoisadev1)! - Checking on a paused E2B or Upstash sandbox no longer wakes it, and a failed reconnect pauses a sandbox it woke.
+
+- [#501](https://github.com/opencoredev/akeru-bot/pull/501) [`0305121`](https://github.com/opencoredev/akeru-bot/commit/0305121a9d56e4145c93ccca7e8903c5a7a0f0b8) Thanks [@leoisadev1](https://github.com/leoisadev1)! - A reconnect to a paused E2B or Upstash sandbox that fails partway now pauses the sandbox again, even when the failure happens while connecting.
+
+- [#501](https://github.com/opencoredev/akeru-bot/pull/501) [`0305121`](https://github.com/opencoredev/akeru-bot/commit/0305121a9d56e4145c93ccca7e8903c5a7a0f0b8) Thanks [@leoisadev1](https://github.com/leoisadev1)! - Adding the sandbox browser route on Vercel no longer drops routes added since Akeru connected, or a route added at the same time.
+
+- [#501](https://github.com/opencoredev/akeru-bot/pull/501) [`0305121`](https://github.com/opencoredev/akeru-bot/commit/0305121a9d56e4145c93ccca7e8903c5a7a0f0b8) Thanks [@leoisadev1](https://github.com/leoisadev1)! - Starting the sandbox browser on a Vercel sandbox from an earlier Akeru version adds the missing route instead of failing, and a failed session setup no longer deletes a sandbox Akeru reconnected to.
+
+- [#474](https://github.com/opencoredev/akeru-bot/pull/474) [`b480523`](https://github.com/opencoredev/akeru-bot/commit/b480523bf6f988aeea4643df6b1e749d324643cd) Thanks [@leoisadev1](https://github.com/leoisadev1)! - Update Electron and other dependencies to releases that fix known security vulnerabilities.
+
+- [#349](https://github.com/opencoredev/akeru-bot/pull/349) [`a280aa6`](https://github.com/opencoredev/akeru-bot/commit/a280aa6c8fea87f84b067152f9aaf66487112fea) Thanks [@leoisadev1](https://github.com/leoisadev1)! - A bot chat now says when its provider isn't signed in, using the account's name and logo (for example "Claude is not connected"), and its Connect button opens that provider's settings page. Before, the chat showed "Provider instance 'claudeAgent' is not available." and asked you to send feedback.
+
+- [#343](https://github.com/opencoredev/akeru-bot/pull/343) [`66ba44d`](https://github.com/opencoredev/akeru-bot/commit/66ba44dfcde1fbb3e63cf27f2afb73001baa26c5) Thanks [@leoisadev1](https://github.com/leoisadev1)! - Finish failed temporary workers when startup errors have an empty message, so waiting chats receive a result and the worker slot is released.
+
+- [#343](https://github.com/opencoredev/akeru-bot/pull/343) [`66ba44d`](https://github.com/opencoredev/akeru-bot/commit/66ba44dfcde1fbb3e63cf27f2afb73001baa26c5) Thanks [@leoisadev1](https://github.com/leoisadev1)! - Refresh saved connection health and pending logins when reading or refreshing subscription credentials.
+
+- [#343](https://github.com/opencoredev/akeru-bot/pull/343) [`66ba44d`](https://github.com/opencoredev/akeru-bot/commit/66ba44dfcde1fbb3e63cf27f2afb73001baa26c5) Thanks [@leoisadev1](https://github.com/leoisadev1)! - Mobile: snoozed chats on Home now refresh their wake time label with the minute clock, matching the iPad sidebar.
+
+- [#343](https://github.com/opencoredev/akeru-bot/pull/343) [`66ba44d`](https://github.com/opencoredev/akeru-bot/commit/66ba44dfcde1fbb3e63cf27f2afb73001baa26c5) Thanks [@leoisadev1](https://github.com/leoisadev1)! - Mobile: the new chat environment picker no longer calls a React hook while its module loads.
+
+- [#343](https://github.com/opencoredev/akeru-bot/pull/343) [`66ba44d`](https://github.com/opencoredev/akeru-bot/commit/66ba44dfcde1fbb3e63cf27f2afb73001baa26c5) Thanks [@leoisadev1](https://github.com/leoisadev1)! - Keep missing mobile theme colors from crashing rendering and retain valid saved connections when another stored row is incomplete.
+
 ## 0.2.1
 
 ### Patch Changes
