@@ -3,7 +3,7 @@ import type { Session } from "@mastra/core/agent-controller";
 import type { OpencodeClient } from "@opencode-ai/sdk/v2";
 import type { AkeruMastraState } from "../../AkeruMastraHarness.ts";
 
-type SessionFixture = Partial<
+export type SessionFixture = Partial<
   Omit<Session<AkeruMastraState>, "state" | "mode" | "model" | "permissions">
 > & {
   state?: Partial<Session<AkeruMastraState>["state"]>;

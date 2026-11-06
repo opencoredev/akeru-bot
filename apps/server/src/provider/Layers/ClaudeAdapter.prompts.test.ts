@@ -274,7 +274,7 @@ describe("ClaudeAdapterLive", () => {
         return yield* makeClaudeAdapter(claudeConfig, {
           createQuery: (input) => {
             // Simulate the SDK consuming the prompt iterable
-            (async () => {
+            void (async () => {
               try {
                 for await (const _message of input.prompt) {
                   /* SDK processes user messages */

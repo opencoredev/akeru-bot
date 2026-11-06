@@ -311,7 +311,7 @@ function ThreadRouteContent(
       return;
     }
 
-    onReconnectEnvironment(environmentId);
+    void onReconnectEnvironment(environmentId);
   }, [environmentId, onReconnectEnvironment]);
 
   const handleOpenConnectionEditor = useCallback(() => {

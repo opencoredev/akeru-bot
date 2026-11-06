@@ -9,7 +9,7 @@ Maintainers can also dispatch the workflow manually for diagnostics. Every job u
 Issue-label, PR-vouch, and PR-size jobs also use Tenki Linux runners through GitHub Actions.
 
 - **Static checks and builds.** The job rejects external local dependencies, installs the
-  committed lockfile, checks lint and formatting, runs workspace type checks, validates the plugin
+  committed lockfile, checks lint, dead code, and formatting, runs workspace type checks, validates the plugin
   directory and contribution policy, builds the desktop pipeline, checks the preload output, builds
   the marketing site, tests the resource monitor, and checks release-only configuration. On a
   dispatched run it also authorizes the version-branch revision.

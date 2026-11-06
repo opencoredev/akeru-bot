@@ -6,6 +6,9 @@ const rule = createOxlintRuleHarness("akeru/no-lint-suppressions", {
   filename: "fixture.ts",
 });
 
+// Built at runtime so this file's own text never contains an Effect diagnostics directive.
+const EFFECT_DIAGNOSTICS = ["@effect", "diagnostics"].join("-");
+
 describe("akeru/no-lint-suppressions", () => {
   rule.valid("allows ordinary comments", `// Disable the button while saving.\nconst a = 1;`);
 
@@ -43,11 +46,11 @@ describe("akeru/no-lint-suppressions", () => {
 
   rule.invalid(
     "reports a file-wide Effect diagnostics toggle",
-    `// ${"@effect"}-diagnostics nodeBuiltinImport:off\nimport * as NodeFS from "node:fs";`,
+    `// ${EFFECT_DIAGNOSTICS} nodeBuiltinImport:off\nimport * as NodeFS from "node:fs";`,
   );
 
   rule.invalid(
     "reports a next-line Effect diagnostics toggle",
-    `// ${"@effect"}-diagnostics-next-line globalDate:off\nconst now = Date.now();`,
+    `// ${EFFECT_DIAGNOSTICS}-next-line globalDate:off\nconst now = Date.now();`,
   );
 });

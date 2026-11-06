@@ -43,13 +43,11 @@ catalog:
   "@effect/tsgo": 0.13.2
   "@effect/vitest": 4.0.0-beta.103
   "@legendapp/list": 3.3.5
-  "@noble/curves": 1.9.1
   "@noble/hashes": 1.8.0
   "@pierre/diffs": 1.3.0-beta.10
   "@types/node": 24.12.4
   "@typescript/native-preview": 7.0.0-dev.20260604.1
   effect: 4.0.0-beta.103
-  jose: 6.2.2
   typescript: ~6.0.3
   vite: npm:@voidzero-dev/vite-plus-core@0.2.2
   vite-plus: 0.2.2
