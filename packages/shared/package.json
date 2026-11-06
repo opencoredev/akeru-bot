@@ -60,6 +60,10 @@
       "types": "./src/Net.ts",
       "import": "./src/Net.ts"
     },
+    "./environmentPlacement": {
+      "types": "./src/environmentPlacement.ts",
+      "import": "./src/environmentPlacement.ts"
+    },
     "./delegationProviders": {
       "types": "./src/delegationProviders.ts",
       "import": "./src/delegationProviders.ts"

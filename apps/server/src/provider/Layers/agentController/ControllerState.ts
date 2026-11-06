@@ -45,6 +45,7 @@ import { createAkeruWebFetch } from "../../AkeruWebFetch.ts";
 import { LegacyProviderBridge } from "../../Services/LegacyProviderBridge.ts";
 import { RoutineDraftDispatcher } from "../../../routines/RoutineDraftDispatcher.ts";
 import { MemoryApprovals } from "../../../memory/MemoryApprovals.ts";
+import { EnvironmentHost } from "../../../environment/EnvironmentHost.ts";
 import { type ResolvedEngine, type ActiveSession, type WorkerOrchestration } from "./State.ts";
 
 export const createControllerState = Effect.fn("createControllerState")(function* (
@@ -68,6 +69,9 @@ export const createControllerState = Effect.fn("createControllerState")(function
   const runtimeEvents = yield* PubSub.unbounded<ProviderRuntimeEvent>();
   const orchestrationEngine = yield* Effect.serviceOption(OrchestrationEngineService);
   const projectionSnapshotQuery = yield* Effect.serviceOption(ProjectionSnapshotQuery);
+  // Optional so controller test layers need not describe a machine; without it
+  // bots do not get list_environments.
+  const environmentHost = yield* Effect.serviceOption(EnvironmentHost);
   const projectionMessages = yield* Effect.serviceOption(ProjectionThreadMessageRepository);
   const projectionTurns = yield* Effect.serviceOption(ProjectionTurnRepository);
   const resolvedByThread = new Map<string, ResolvedEngine>();
@@ -207,6 +211,7 @@ export const createControllerState = Effect.fn("createControllerState")(function
     runtimeEvents,
     orchestrationEngine,
     projectionSnapshotQuery,
+    environmentHost,
     projectionMessages,
     projectionTurns,
     resolvedByThread,

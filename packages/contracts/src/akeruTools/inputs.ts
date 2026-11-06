@@ -18,6 +18,7 @@ import {
 } from "../akeruWorkers.ts";
 import { McpServerId, McpServerInstructions, McpServerUrl } from "../mcpServer.ts";
 import { ImageGenerationRequest } from "../imageGeneration.ts";
+import { EnvironmentHostRequirements } from "../environmentHost.ts";
 import { BotSandbox } from "../orchestration/roster.ts";
 import { RuntimeMode } from "../orchestration/modelSelection.ts";
 import { AkeruToolId, AkeruToolApprovalClass } from "./catalog.ts";
@@ -221,6 +222,9 @@ export const AkeruToolInputSchemas = {
   CheckSubagent: AkeruWorkerCheckInput,
   MessageSubagent: AkeruWorkerMessageInput,
   StopSubagent: AkeruWorkerStopInput,
+  list_environments: Schema.Struct({
+    requirements: Schema.optional(EnvironmentHostRequirements),
+  }),
 } as const satisfies Record<AkeruToolId, Schema.Top>;
 
 export const AkeruMessageReactionResult = Schema.Union([

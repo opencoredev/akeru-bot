@@ -43,6 +43,7 @@ export const AkeruToolId = Schema.Literals([
   "CheckSubagent",
   "MessageSubagent",
   "StopSubagent",
+  "list_environments",
 ]);
 
 export type AkeruToolId = typeof AkeruToolId.Type;
@@ -272,4 +273,10 @@ export const AKERU_TOOL_CATALOG = [
     "Send a follow-up instruction to a running temporary worker.",
   ),
   define("StopSubagent", "bot-workspace", "Cancel a temporary worker. It ends as Canceled."),
+  define(
+    "list_environments",
+    "bot-workspace",
+    'List the environments (machines) you may run work on, with OS ("darwin" is macOS), architecture, detected tools, live load, ready providers, projects, and the owner\'s labels and note. ' +
+      'Pass requirements such as { "os": "darwin", "tools": ["xcodebuild"] } to see which ones qualify; the result also says why each other environment was left out.',
+  ),
 ] satisfies ReadonlyArray<AkeruToolDefinition>;

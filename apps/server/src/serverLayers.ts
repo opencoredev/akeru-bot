@@ -44,6 +44,7 @@ import * as VcsProjectConfig from "./vcs/VcsProjectConfig.ts";
 import * as GitWorkflowService from "./git/GitWorkflowService.ts";
 import { ObservabilityLive } from "./observability/Layers/Observability.ts";
 import * as ServerEnvironment from "./environment/ServerEnvironment.ts";
+import * as EnvironmentHost from "./environment/EnvironmentHost.ts";
 import * as RemoteOpenTargets from "./environment/RemoteOpenTargets.ts";
 import * as ServerSecretStore from "./auth/ServerSecretStore.ts";
 import * as EnvironmentAuth from "./auth/EnvironmentAuth.ts";
@@ -166,11 +167,16 @@ export const MemoryApprovalsLayerLive = MemoryApprovalsLive.pipe(
   Layer.provide(RuntimeMemoryRepositoriesWithPersistenceLive),
 );
 
+// Read by the RPC surface and by the bot `list_environments` tool, so it is
+// merged into the provider layer the agent controller is built from.
+export const EnvironmentHostLayerLive = EnvironmentHost.layer;
+
 export const ProviderLayerLive = AgentControllerLive.pipe(
   Layer.provide(LegacyProviderLayerLive),
   Layer.provide(RuntimeMemoryRepositoriesWithPersistenceLive),
   Layer.provide(MemoryApprovalsLayerLive),
   Layer.provide(RoutineDraftDispatcherLive.pipe(Layer.provide(OrchestrationLayerLive))),
+  Layer.provideMerge(EnvironmentHostLayerLive),
 );
 
 export const VcsDriverRegistryLayerLive = VcsDriverRegistry.layer.pipe(

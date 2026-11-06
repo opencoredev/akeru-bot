@@ -22,6 +22,7 @@ import {
   BotEngine,
   BotSandbox,
   BotPersonalityTone,
+  BotAllowedEnvironmentIds,
   ChannelProvider,
   ChannelBinding,
   GroupMembershipRole,
@@ -95,6 +96,7 @@ export const BotUpdateCommand = Schema.Struct({
   imageProvider: Schema.optional(Schema.NullOr(ImageProviderId)),
   personalityTone: Schema.optional(BotPersonalityTone),
   voiceEnabled: Schema.optional(Schema.Boolean),
+  allowedEnvironmentIds: Schema.optional(BotAllowedEnvironmentIds),
   channelBindings: Schema.optional(Schema.Array(ChannelBinding)),
   groupId: Schema.optional(Schema.NullOr(GroupId)),
 });
@@ -115,6 +117,8 @@ export const ClientBotUpdateCommand = Schema.Struct({
   imageProvider: Schema.optional(Schema.NullOr(ImageProviderId)),
   personalityTone: Schema.optional(BotPersonalityTone),
   voiceEnabled: Schema.optional(Schema.Boolean),
+  /** Replaces the whole list. `[]` returns the bot to its home environment only. */
+  allowedEnvironmentIds: Schema.optional(BotAllowedEnvironmentIds),
   groupId: Schema.optional(Schema.NullOr(GroupId)),
 });
 

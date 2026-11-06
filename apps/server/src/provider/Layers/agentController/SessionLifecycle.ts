@@ -257,6 +257,14 @@ export function createSessionLifecycle(deps: SessionLifecycleDependencies) {
       const configuredToolSession: AkeruToolSession = {
         ...toolSession,
         runtimeMode: access.runtimeMode,
+        // A shared session can answer for another bot, so bot-scoped catalog tools
+        // such as list_environments must read the answering bot, not the first one.
+        catalogHandlers: createSessionCatalogHandlers(deps, {
+          threadId,
+          botId: input.botId,
+          botName: input.botName,
+          mcpManager: deps.sessionResources.getMcpManager(key),
+        }),
         ...(botId ? { botId } : {}),
         ...(input.botName ? { botName: input.botName } : {}),
         ...(nextMemoryHandlers ? { memoryHandlers: nextMemoryHandlers } : {}),

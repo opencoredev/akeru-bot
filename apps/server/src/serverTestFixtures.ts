@@ -1,5 +1,6 @@
 import {
   BotId,
+  type EnvironmentHostDescriptor,
   EnvironmentId,
   EventId,
   type OrchestrationThreadActivity,
@@ -97,6 +98,19 @@ export const testEnvironmentDescriptor = {
     repositoryIdentity: true,
   },
 };
+
+/** What the test server reports for `server.getEnvironmentHost` unless a test overrides it. */
+export const testEnvironmentHostDescriptor = {
+  environmentId: testEnvironmentDescriptor.environmentId,
+  label: testEnvironmentDescriptor.label,
+  platform: testEnvironmentDescriptor.platform,
+  cpuCount: 4,
+  load: null,
+  tools: [],
+  providers: [],
+  projects: [],
+  profile: { labels: [], note: "", placementWeight: "normal" },
+} satisfies EnvironmentHostDescriptor;
 
 export const defaultOrchestrationReadModel = () => {
   const now = "2026-01-01T00:00:00.000Z";

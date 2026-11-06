@@ -45,6 +45,7 @@ policy in [CONTRIBUTING.md](../CONTRIBUTING.md); agent rules in [AGENTS.md](../A
 - [Connection runtime](./internals/connection-runtime.md)
 - [Providers](./internals/providers.md)
 - [Delegation threads](./internals/delegation.md)
+- [Environment descriptors and placement](./internals/placement.md)
 - [Silence watchdog](./internals/silence-watchdog.md)
 - [Memory architecture](./internals/memory.md)
 - [External channels](./internals/channels.md)

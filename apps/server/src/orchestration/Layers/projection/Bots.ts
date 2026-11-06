@@ -23,6 +23,7 @@ export function createBots({
             imageProvider: event.payload.imageProvider,
             personalityTone: event.payload.personalityTone,
             voiceEnabled: event.payload.voiceEnabled,
+            allowedEnvironmentIds: event.payload.allowedEnvironmentIds,
             channelBindings: event.payload.channelBindings,
             groupId: event.payload.groupId,
             archivedAt: null,
@@ -60,6 +61,9 @@ export function createBots({
               : {}),
             ...(event.payload.voiceEnabled !== undefined
               ? { voiceEnabled: event.payload.voiceEnabled }
+              : {}),
+            ...(event.payload.allowedEnvironmentIds !== undefined
+              ? { allowedEnvironmentIds: event.payload.allowedEnvironmentIds }
               : {}),
             ...(event.payload.channelBindings !== undefined
               ? { channelBindings: event.payload.channelBindings }

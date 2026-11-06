@@ -31,6 +31,7 @@ import { BotMemoryStore, type BotMemoryAccess } from "../../../memory/BotMemory.
 import { type AkeruMemoryToolHandler } from "../../../memory/BotMemoryToolHandlers.ts";
 
 import { ProjectionSnapshotQuery } from "../../../orchestration/Services/ProjectionSnapshotQuery.ts";
+import { EnvironmentHost } from "../../../environment/EnvironmentHost.ts";
 
 import { SubscriptionAuthService } from "../../../subscription-auth/service.ts";
 
@@ -59,6 +60,7 @@ export interface SessionLifecycleDependencies {
   readonly webFetch: ReturnType<typeof createAkeruWebFetch>;
   readonly runPromise: AkeruRuntimeSeam["runPromise"];
   readonly projectionSnapshotQuery: Option.Option<ProjectionSnapshotQuery["Service"]>;
+  readonly environmentHost: Option.Option<EnvironmentHost["Service"]>;
   readonly workerRuntime: AkeruWorkerRuntime;
   readonly wired: () => {
     readonly channelRuntime?: AkeruChannelRuntime;

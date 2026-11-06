@@ -50,6 +50,7 @@ export const WS_METHODS = {
   serverRemoveKeybinding: "server.removeKeybinding",
   serverGetSettings: "server.getSettings",
   serverUpdateSettings: "server.updateSettings",
+  serverGetEnvironmentHost: "server.getEnvironmentHost",
   composioGetStatus: "composio.getStatus",
   composioConfigure: "composio.configure",
   composioRemove: "composio.remove",

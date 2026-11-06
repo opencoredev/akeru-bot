@@ -133,6 +133,22 @@ Work one bot sends to another with `SendToAgent`. It runs in a child thread and 
 
 A thread with queued, running, or blocked delegations. Derived by `isThreadWaitingOnChildren`, never persisted.
 
+#### Environment host descriptor
+
+What one environment's machine can do right now: OS, architecture, CPU count, live load, detected tools, ready providers, projects, and the owner's labels, note, and placement weight. Each server serves its own through `server.getEnvironmentHost`. See [placement.md](placement.md).
+
+#### Allowed environments
+
+The other environments a bot may run work on, stored as `allowedEnvironmentIds` on the bot. The bot's home environment is always allowed, so the empty default means "home only". See [placement.md](placement.md#allowed-environments).
+
+#### Placement
+
+Choosing which environment runs a piece of work. `placeWork` in `@akeru/shared/environmentPlacement` builds the eligible set, then takes the user's explicit choice, the bot's choice, or the highest score. See [placement.md](placement.md#placement).
+
+#### Placement weight
+
+The owner's setting for how often automatic placement picks an environment: `prefer`, `normal`, `less-often`, or `manual-only`. A manual-only environment runs work only when the user picks it.
+
 ### Channels
 
 External channels connect a messaging conversation (Telegram, Slack, Discord, iMessage, or WhatsApp) to normal Akeru orchestration. See [channels.md](./channels.md) and the [user guide](../user/channels.md).
