@@ -9,7 +9,7 @@ import {
 } from "./catalog";
 
 const EXPECTED_IDS =
-  "ahrefs apify apollo asana atlassian attio canva cloudflare coda computer-use context customer-io datadog docusign dropbox exa executor figma firecrawl framer github gmail help-scout hoplite hubspot intercom lemon-squeezy linear mobbin monday netlify notion paddle paper parallel-search paypal pipedrive posthog railway render salesforce semrush sentry sequenzy shopify slack stripe superside tavily typefully vercel webflow zendesk zernio".split(
+  "ahrefs apify apollo asana atlassian attio canva cloudflare coda computer-use context customer-io datadog docusign dropbox exa figma firecrawl framer github gmail help-scout hoplite hubspot intercom lemon-squeezy linear mobbin monday netlify notion paddle paper parallel-search paypal pipedrive posthog railway render salesforce semrush sentry sequenzy shopify slack stripe superside tavily typefully vercel webflow zendesk zernio".split(
     " ",
   );
 
@@ -40,13 +40,13 @@ describe("milestone 13 plugin lifecycle matrix", () => {
         plugin.catalogStatus === "verification-pending",
     );
 
-    expect(pending).toHaveLength(54);
+    expect(pending).toHaveLength(53);
     expect(pending.filter((plugin) => plugin.catalogStatus === "approval-pending")).toHaveLength(
       16,
     );
     expect(
       pending.filter((plugin) => plugin.catalogStatus === "verification-pending"),
-    ).toHaveLength(38);
+    ).toHaveLength(37);
 
     for (const plugin of pending) {
       if (plugin.connection.type === "brokered") {
@@ -68,13 +68,6 @@ describe("milestone 13 plugin lifecycle matrix", () => {
       authentication: "oauth",
       requiredCredentials: [],
       documentationUrl: "https://typefully.com/ai-agents",
-      connection: { type: "verification-pending" },
-    });
-    expect(byId.get("executor")).toMatchObject({
-      kind: "mcp-url",
-      url: "https://executor.sh/mcp",
-      transport: { type: "url", url: "https://executor.sh/mcp" },
-      authentication: "oauth",
       connection: { type: "verification-pending" },
     });
     expect(byId.get("github")).toMatchObject({

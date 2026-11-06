@@ -275,7 +275,8 @@ export function buildProviderAccessCapabilities(
       apiAccess: "not-applicable" as const,
       nextAction: "Use a supported email connector when one is available.",
       temporary: true,
-      repairAction: "Add an email connector or configure it through Executor, then reconnect it.",
+      repairAction:
+        "Add a custom email MCP server, then reconnect it. Gmail through Composio is still pending verification.",
     },
     {
       id: "shopping-browser",

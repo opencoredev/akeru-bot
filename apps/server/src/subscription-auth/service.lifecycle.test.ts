@@ -700,12 +700,12 @@ describe("subscription auth storage", () => {
     const service = await makeTestSubscriptionAuthService(authPath);
     const at = "2026-08-31T20:00:00.000Z";
 
-    service.recordMcpRequestFailure("builtin-executor", "The request failed.", at);
-    service.recordMcpRequestSuccess("builtin-executor", at);
-    expect(service.mcpRequestHealth("builtin-executor")?.health).toBe("recovered");
+    service.recordMcpRequestFailure("builtin-github", "The request failed.", at);
+    service.recordMcpRequestSuccess("builtin-github", at);
+    expect(service.mcpRequestHealth("builtin-github")?.health).toBe("recovered");
 
-    service.recordMcpRequestFailure("builtin-executor", "The retry failed.", at);
-    expect(service.mcpRequestHealth("builtin-executor")?.health).toBe("failed");
+    service.recordMcpRequestFailure("builtin-github", "The retry failed.", at);
+    expect(service.mcpRequestHealth("builtin-github")?.health).toBe("failed");
   });
 
   it("preserves health updates written by another service instance", async () => {

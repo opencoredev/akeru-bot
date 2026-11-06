@@ -9,7 +9,7 @@ Tenki previews are public: anyone with a preview URL can access it. Pausing pres
 and disk but clears `/tmp`; keep durable files under `/home/tenki`.
 The sandbox browser is not available on Tenki: Akeru does not expose browser control through a public
 preview URL. This does not prevent agents from running commands in the VM.
-Executor and Tinyfish connectors can still start, but receive no sandbox browser connection.
+Tinyfish connectors can still start, but receive no sandbox browser connection.
 
 Select **Connect** and enter the provider credentials. The environment stores secret values outside
 `settings.json`. Clients receive only a redacted marker after a secret is saved.

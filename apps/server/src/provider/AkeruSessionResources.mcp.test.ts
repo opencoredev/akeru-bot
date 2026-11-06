@@ -46,7 +46,7 @@ describe("AkeruSessionResources", () => {
     "acquires only usable connector browser attachments in %s workspaces",
     async (botSandbox) => {
       for (const transport of ["stdio", "url"] as const) {
-        for (const id of ["builtin-executor", "builtin-tinyfish", "builtin-exa", "raw-mcp"]) {
+        for (const id of ["builtin-tinyfish", "builtin-exa", "raw-mcp"]) {
           const botBrowser = browser();
 
           const attachment = {
@@ -80,7 +80,7 @@ describe("AkeruSessionResources", () => {
           try {
             const requiresBrowser =
               botSandbox !== "tenki" &&
-              (id === "builtin-executor" || id === "builtin-tinyfish") &&
+              id === "builtin-tinyfish" &&
               (transport === "stdio" || botSandbox !== "local");
 
             if (botSandbox === "railway" && requiresBrowser) {

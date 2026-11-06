@@ -1,4 +1,4 @@
-// Stdio MCP server fixture standing in for a local CLI such as `executor mcp`
+// Stdio MCP server fixture standing in for a local CLI such as a custom stdio server
 // or `akeru-codex-computer-use mcp`. Speaks newline-delimited JSON-RPC.
 process.stdin.resume();
 

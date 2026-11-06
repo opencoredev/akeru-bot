@@ -34,7 +34,11 @@ import {
   ServerRuntimeStartup,
 } from "./startupCommandGate.ts";
 import { archivedBotRetentionLoop } from "./archivedBotRetention.ts";
-import { reconcileDelegations, reconcileProviderSessions } from "./startupReconciliation.ts";
+import {
+  reconcileDelegations,
+  reconcileProviderSessions,
+  reconcileRetiredMcpServers,
+} from "./startupReconciliation.ts";
 import {
   resolveWelcomeBase,
   resolveAutoBootstrapWelcomeTargets,
@@ -102,6 +106,9 @@ export const make = (options?: StartupOptions) =>
       // Before the reactors start, so no delegation this process creates can be mistaken for an
       // orphan, and startup recovery sees the settled records.
       yield* runStartupPhase("delegations.reconcile", reconcileDelegations);
+
+      // Before the reactors start, so no session is configured with a retired connector.
+      yield* runStartupPhase("retired-mcp-servers.reconcile", reconcileRetiredMcpServers);
 
       yield* Effect.logDebug("startup phase: parking orchestration roots at activation");
       yield* runStartupPhase(
@@ -310,6 +317,8 @@ export {
   reconcileProviderSessions,
   DELEGATION_RESTART_FAILURE_MESSAGE,
   reconcileDelegations,
+  reconcileRetiredMcpServers,
+  RETIRED_MCP_SERVER_IDS,
 } from "./startupReconciliation.ts";
 
 export { restoreExternalChannels } from "./startupChannels.ts";

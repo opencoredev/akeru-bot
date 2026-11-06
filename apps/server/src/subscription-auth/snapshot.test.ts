@@ -197,7 +197,7 @@ describe("provider access capabilities", () => {
   });
 
   it("reports exact MCP health, built-in identity, and dependent bots", () => {
-    const serverId = McpServerId.make("builtin-executor");
+    const serverId = McpServerId.make("builtin-github");
 
     const rows = buildProviderAccessCapabilities(
       [],
@@ -206,9 +206,9 @@ describe("provider access capabilities", () => {
       [
         {
           id: serverId,
-          name: "Executor",
+          name: "GitHub",
           transport: "url",
-          url: "https://executor.sh/mcp",
+          url: "https://api.githubcopilot.com/mcp/",
           enabled: true,
           createdAt: "2026-08-31T18:00:00.000Z",
           updatedAt: "2026-08-31T18:00:00.000Z",
@@ -229,8 +229,8 @@ describe("provider access capabilities", () => {
     );
 
     expect(rows.find((row) => row.serverId === serverId)).toMatchObject({
-      id: "mcp-builtin-executor",
-      pluginId: "executor",
+      id: "mcp-builtin-github",
+      pluginId: "github",
       accessMethod: "mcp",
       health: "healthy",
       dependentBots: [{ id: "bot-1", name: "Research" }],
