@@ -55,6 +55,17 @@ export function isChannelIdentityConflict(result: {
   return Predicate.isString(message) && CHANNEL_IDENTITY_CONFLICT.test(message);
 }
 
+/** Whether the server rejected an assignment because this bot already has a channel. */
+export function isChannelAssignmentConflict(result: {
+  readonly cause?: Cause.Cause<unknown>;
+}): boolean {
+  if (!result.cause) return false;
+  const error = Cause.squash(result.cause);
+  const message = Predicate.isObjectOrArray(error) && "message" in error ? error.message : error;
+
+  return message === "Unassign the channel already connected to this bot first";
+}
+
 const isChannelFailureCategory = Schema.is(ChannelFailureCategory);
 
 /** Why a failed channel command failed, when the server sent a category for it. */
