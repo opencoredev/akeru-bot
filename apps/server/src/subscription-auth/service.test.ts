@@ -484,17 +484,17 @@ describe("subscription auth storage", () => {
     const service = await makeTestSubscriptionAuthService(authPath);
 
     service.recordMcpRequestFailure(
-      "builtin-executor",
+      "builtin-github",
       "The MCP tool request failed.",
       "2026-08-31T19:00:00.000Z",
     );
-    expect(service.mcpRequestHealth("builtin-executor")).toMatchObject({
+    expect(service.mcpRequestHealth("builtin-github")).toMatchObject({
       health: "failed-first-request",
       lastFailedRequest: { message: "The MCP tool request failed." },
     });
-    service.recordMcpRequestSuccess("builtin-executor", "2026-08-31T20:00:00.000Z");
+    service.recordMcpRequestSuccess("builtin-github", "2026-08-31T20:00:00.000Z");
     const restarted = await makeTestSubscriptionAuthService(authPath);
-    expect(restarted.mcpRequestHealth("builtin-executor")?.health).toBe("recovered");
-    expect(JSON.stringify(restarted.mcpRequestHealth("builtin-executor"))).not.toContain("token");
+    expect(restarted.mcpRequestHealth("builtin-github")?.health).toBe("recovered");
+    expect(JSON.stringify(restarted.mcpRequestHealth("builtin-github"))).not.toContain("token");
   });
 });

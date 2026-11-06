@@ -302,27 +302,27 @@ registryLayer("MCP server registry", (it) => {
     }),
   );
 
-  it.effect("keeps raw MCP enabled when Executor is disabled", () =>
+  it.effect("keeps a local custom MCP enabled when a hosted one is disabled", () =>
     Effect.gen(function* () {
       const engine = yield* OrchestrationEngineService;
       const snapshots = yield* ProjectionSnapshotQuery;
       const createdAt = "2026-03-23T00:00:00.000Z";
-      const executorId = McpServerId.make("builtin-executor");
+      const hostedId = McpServerId.make("hosted-docs");
       const rawId = McpServerId.make("raw-filesystem");
 
       yield* engine.dispatch({
         type: "mcp-server.create",
-        commandId: CommandId.make("cmd-executor-create"),
-        mcpServerId: executorId,
-        name: "Executor",
-        transport: "stdio",
-        command: "executor.sh",
+        commandId: CommandId.make("cmd-hosted-create"),
+        mcpServerId: hostedId,
+        name: "Hosted docs",
+        transport: "url",
+        url: "https://docs.example.com/mcp",
         createdAt,
       });
       yield* engine.dispatch({
         type: "mcp-server.disable",
-        commandId: CommandId.make("cmd-executor-disable"),
-        mcpServerId: executorId,
+        commandId: CommandId.make("cmd-hosted-disable"),
+        mcpServerId: hostedId,
       });
       yield* engine.dispatch({
         type: "mcp-server.create",
@@ -336,7 +336,7 @@ registryLayer("MCP server registry", (it) => {
       });
 
       const snapshot = yield* snapshots.getShellSnapshot();
-      assert.equal(snapshot.mcpServers?.find((server) => server.id === executorId)?.enabled, false);
+      assert.equal(snapshot.mcpServers?.find((server) => server.id === hostedId)?.enabled, false);
       assert.equal(snapshot.mcpServers?.find((server) => server.id === rawId)?.enabled, true);
     }),
   );

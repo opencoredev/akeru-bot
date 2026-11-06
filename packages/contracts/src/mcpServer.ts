@@ -68,7 +68,7 @@ export type McpServerConfiguration = typeof McpServerConfiguration.Type;
 
 /**
  * A workspace-level raw MCP server registration. Runtime launch, Mastra tool
- * attachment, Executor, Composio, and per-bot enablement are outside this registry.
+ * attachment, Composio, and per-bot enablement are outside this registry.
  * Credentials stay in external secret storage and never belong in this record.
  */
 export const McpServer = Schema.Union([

@@ -3,10 +3,7 @@ import type * as EffectAcpSchema from "effect-acp/schema";
 
 const runtimeHeaders = new WeakMap<McpServer, Readonly<Record<string, string>>>();
 
-const BROWSER_ATTACHMENT_CONNECTORS: ReadonlySet<string> = new Set([
-  "builtin-executor",
-  "builtin-tinyfish",
-]);
+const BROWSER_ATTACHMENT_CONNECTORS: ReadonlySet<string> = new Set(["builtin-tinyfish"]);
 
 export function mcpServerNeedsBrowserAttachment(
   server: McpServer,

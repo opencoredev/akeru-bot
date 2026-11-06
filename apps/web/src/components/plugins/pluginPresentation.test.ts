@@ -119,7 +119,7 @@ describe("plugin presentation", () => {
       buildPluginSections({ plugins: catalog, query: "", filter: "All" }).flatMap((section) =>
         section.plugins.map((plugin) => plugin.id),
       ),
-    ).toHaveLength(54);
+    ).toHaveLength(53);
     expect(
       buildPluginSections({
         plugins: catalog,
@@ -181,9 +181,9 @@ describe("plugin presentation", () => {
   });
 
   it("searches only the directory discovery fields", () => {
-    const executor = catalog.find((plugin) => plugin.id === "executor");
+    const computerUse = catalog.find((plugin) => plugin.id === "computer-use");
 
-    if (!executor) throw new TypeError("Executor is missing from the plugin directory.");
+    if (!computerUse) throw new TypeError("Computer Use is missing from the plugin directory.");
 
     const searchPlugin = {
       ...firecrawl,
@@ -211,7 +211,7 @@ describe("plugin presentation", () => {
       expect(pluginMatchesQuery(searchPlugin, query)).toBe(false);
     }
 
-    expect(pluginMatchesQuery(executor, "bunx")).toBe(false);
+    expect(pluginMatchesQuery(computerUse, "akeru-codex-computer-use")).toBe(false);
   });
 
   it("shows active bot dependents only for an enabled installation", () => {

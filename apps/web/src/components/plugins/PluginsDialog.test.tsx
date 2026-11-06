@@ -29,9 +29,9 @@ const listedCatalog = catalog.filter(isListedIntegration);
 
 const firecrawlEntry = catalog.find((plugin) => plugin.id === "firecrawl");
 
-const executor = catalog.find((plugin) => plugin.id === "executor");
+const paypal = catalog.find((plugin) => plugin.id === "paypal");
 
-if (!firecrawlEntry || firecrawlEntry.kind !== "mcp-url" || !executor) {
+if (!firecrawlEntry || firecrawlEntry.kind !== "mcp-url" || !paypal) {
   throw new TypeError("Required plugins are missing from the directory.");
 }
 
@@ -161,7 +161,7 @@ describe("Plugins dialog content", () => {
     );
 
     expect(markup).toContain("Disable Firecrawl");
-    expect(markup).toContain("Connect Executor");
+    expect(markup).toContain("Connect PayPal");
     expect(markup).toContain("Connect Pending Vendor");
     expect(markup).toContain(pendingPlugin.description.replaceAll("'", "&#x27;"));
     expect(markup).toContain("Approval pending");
@@ -205,7 +205,7 @@ describe("Plugins dialog content", () => {
   it("shows publisher, transport, authentication, permissions, approvals, platforms, and honest health", () => {
     const markup = renderToStaticMarkup(
       <PluginDetailsContent
-        plugin={executor}
+        plugin={paypal}
         server={undefined}
         activeDependentBotNames={[]}
         pending={false}
@@ -217,16 +217,16 @@ describe("Plugins dialog content", () => {
       />,
     );
 
-    expect(markup).toContain("By Useful Software Co.");
+    expect(markup).toContain("By PayPal");
     expect(markup).toContain("Authentication");
     expect(markup).toContain("OAuth");
     expect(markup).toContain("Hosted");
     expect(markup).toContain("Remote URL");
     expect(markup).toContain("Verification pending");
     expect(markup).toContain("Not checked");
-    expect(markup).toContain("macos, windows, linux");
-    expect(markup).toContain("Submit a payment.");
-    expect(markup).toContain("account-wide");
+    expect(markup).toContain("web, desktop, mobile");
+    expect(markup).toContain("Create or capture PayPal payments and orders.");
+    expect(markup).toContain("refunds");
     expect(markup).toContain("Documentation");
     expect(markup).toContain("Source");
     expect(markup).not.toContain("Connected");
@@ -235,18 +235,18 @@ describe("Plugins dialog content", () => {
   it("shows persisted connector health without exposing credential data", () => {
     const markup = renderToStaticMarkup(
       <PluginDetailsContent
-        plugin={executor}
+        plugin={paypal}
         server={undefined}
         accessStatus={{
-          id: "mcp-builtin-executor",
-          label: "Executor",
+          id: "mcp-builtin-paypal",
+          label: "PayPal",
           accessMethod: "mcp",
           health: "recovered",
           apiAccess: "not-applicable",
-          nextAction: "Disable or remove Executor when it is no longer needed.",
+          nextAction: "Disable or remove PayPal when it is no longer needed.",
           repairAction: "Reconnect",
-          serverId: "builtin-executor",
-          pluginId: "executor",
+          serverId: "builtin-paypal",
+          pluginId: "paypal",
           lastSuccessfulRequestAt: "2026-08-31T20:00:00.000Z",
           lastFailedRequest: {
             at: "2026-08-31T19:00:00.000Z",

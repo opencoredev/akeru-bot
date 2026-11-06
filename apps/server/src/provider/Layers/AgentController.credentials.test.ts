@@ -63,7 +63,7 @@ describe("toMcpServerConfigs", () => {
       availableToHostedPlugins: true,
     };
 
-    const local = { ...server, transport: "stdio" as const, command: "executor" };
+    const local = { ...server, transport: "stdio" as const, command: "tinyfish" };
     expect(toMcpServerConfigs([server], browser)[server.id]).toEqual({
       url: server.url,
       headers: {

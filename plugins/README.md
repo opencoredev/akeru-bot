@@ -2,6 +2,8 @@
 
 This is a curated directory, not a complete MCP registry. A valid manifest passes the file contract. It does not guarantee acceptance.
 
+Composio is the only built-in connector backend. It brokers app sign-in through the user's own Composio account. Other aggregators that proxy many apps through one MCP server belong in Custom MCP, not the directory.
+
 Use Custom MCP for experimental apps, wrappers, duplicates, and narrow utilities. This includes PostgreSQL, SQLite, Redis, Docker, Playwright, time, fetch, filesystem, and generic memory servers. Users can install those servers without a directory entry.
 
 ## Admission
