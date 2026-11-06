@@ -384,4 +384,26 @@ export const settingsCatalog = {
     "Pay per request instead of using the subscription.",
   "Finish signing in to {provider} in the browser.":
     "Finish signing in to {provider} in the browser.",
+  "Could not unlink this account": "Could not unlink this account",
+  "Connected without a saved connection": "Connected without a saved connection",
+  "Linked accounts": "Linked accounts",
+  "No linked accounts yet. Bots answer only linked accounts. Create a link code on a connection above and send it to the bot in a direct message.":
+    "No linked accounts yet. Bots answer only linked accounts. Create a link code on a connection above and send it to the bot in a direct message.",
+  "{user} in workspace {workspace}": "{user} in workspace {workspace}",
+  Unlink: "Unlink",
+  "Could not create a link code": "Could not create a link code",
+  "Could not save who this bot answers": "Could not save who this bot answers",
+  "{bot} answers only linked accounts and the people you add below.":
+    "{bot} answers only linked accounts and the people you add below.",
+  "Send this code to {bot} in a direct message within 10 minutes:":
+    "Send this code to {bot} in a direct message within 10 minutes:",
+  "Link code": "Link code",
+  "Create link code": "Create link code",
+  "Create new code": "Create new code",
+  "Also answer these {provider} user IDs": "Also answer these {provider} user IDs",
+  "Add at most {count} user IDs.": "Add at most {count} user IDs.",
+  "Tell other people whose bot this is when they mention it":
+    "Tell other people whose bot this is when they mention it",
+  "This bot answers only linked accounts and people you add. After you connect, create a link code on the connection to link your account.":
+    "This bot answers only linked accounts and people you add. After you connect, create a link code on the connection to link your account.",
 } as const;

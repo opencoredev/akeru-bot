@@ -26,6 +26,7 @@ import {
   type ChannelRuntimeContext,
 } from "./ChannelRuntimeTypes.ts";
 import { runtimeKey, randomId, channelProviderName } from "./ChannelSecrets.ts";
+import { SLACK_USERS_READ_MISSING } from "./ChannelSlackMembership.ts";
 import { replaceBinding, withChannelOperation } from "./ChannelOperations.ts";
 
 /**
@@ -34,6 +35,16 @@ import { replaceBinding, withChannelOperation } from "./ChannelOperations.ts";
  * substituted, so remote clients see the link only when the server can be
  * reached at it.
  */
+
+/**
+ * The delivery warning to record on a binding. A missing users:read scope blocks every sender,
+ * so it keeps the binding's one warning slot until a reconnect; a reply failure never replaces it.
+ */
+const deliveryWarning = <Warning extends { readonly lastError: string }>(
+  binding: { readonly lastError?: string | undefined },
+  warning: Warning,
+) => (binding.lastError === SLACK_USERS_READ_MISSING ? {} : warning);
+
 export const channelReplyTextWithFooter = (
   text: string,
   botId: BotId,
@@ -306,7 +317,7 @@ export const sendChannelMessage = (
           yield* replaceBinding(ctx, {
             ...binding,
             lastAttemptAt: yield* deps.nowIso,
-            lastError: channelDeliveryUnknownError,
+            ...deliveryWarning(binding, { lastError: channelDeliveryUnknownError }),
           });
           yield* setChannelDelivery(ctx, input.threadId, input.messageId, "unknown");
 
@@ -343,12 +354,15 @@ export const sendChannelMessage = (
             yield* replaceBinding(ctx, {
               ...binding,
               lastAttemptAt: yield* deps.nowIso,
-              ...(rejected
-                ? {
-                    lastError: channelDeliveryRejectedError,
-                    failureCategory: channelFailureCategory(failure),
-                  }
-                : { lastError: channelDeliveryUnknownError }),
+              ...deliveryWarning(
+                binding,
+                rejected
+                  ? {
+                      lastError: channelDeliveryRejectedError,
+                      failureCategory: channelFailureCategory(failure),
+                    }
+                  : { lastError: channelDeliveryUnknownError },
+              ),
             });
             yield* setChannelDelivery(
               ctx,
@@ -397,8 +411,12 @@ export const sendChannelMessage = (
           ? model.snapshotSequence
           : yield* replaceBinding(ctx, {
               ...sentBinding,
-              // A delivered reply clears every failure except another reply's unresolved delivery.
-              ...(lastError === channelDeliveryUnknownError ? { lastError } : {}),
+              // A delivered reply clears every failure except another reply's unresolved delivery
+              // and a missing users:read scope, which posting works without.
+              ...(lastError === channelDeliveryUnknownError ||
+              lastError === SLACK_USERS_READ_MISSING
+                ? { lastError }
+                : {}),
               sentMessageIds: [...binding.sentMessageIds, input.messageId],
             });
       }),

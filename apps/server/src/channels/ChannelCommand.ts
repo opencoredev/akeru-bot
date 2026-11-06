@@ -49,6 +49,9 @@ export const executeChannelCommand = (
     Match.when({ type: "channel.reconnect" }, (command) =>
       runtime.reconnect(command.botId, command.provider),
     ),
+    Match.when({ type: "channel.link-code.create" }, (command) => runtime.createLinkCode(command)),
+    Match.when({ type: "channel.owner.remove" }, (command) => runtime.removeOwner(command)),
+    Match.when({ type: "channel.access.set" }, (command) => runtime.setAccess(command)),
     Match.orElse((command) => runtime.sendChannelMessage(command)),
     Effect.map((sequence) => ({ sequence })),
   );

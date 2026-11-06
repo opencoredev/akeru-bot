@@ -16,6 +16,7 @@ import {
   type ChannelRuntimeEntry,
   type KeyedLock,
   type ChannelRuntimeContext,
+  type PendingChannelLinkCode,
 } from "./ChannelRuntimeTypes.ts";
 import { runtimeKey, randomId } from "./ChannelSecrets.ts";
 import { boundedSentMessageIds } from "./ChannelDelivery.ts";
@@ -131,6 +132,104 @@ export const replaceBinding = (ctx: ChannelRuntimeContext, binding: ChannelBindi
     }),
   );
 
+/**
+ * The one serial lane for a bot's channel on a provider. Access checks that read or write claims,
+ * follows, link codes, or owners, and every change to which transport is attached, run here one
+ * at a time, so a check never decides against an attachment that changed under it. The key is
+ * the runtime key, which also names a saved connection for as long as it is attached. Nothing in
+ * the lane waits on the network or on another lane.
+ */
+export const withAccessLane = (
+  ctx: ChannelRuntimeContext,
+  botId: BotId,
+  provider: ChannelProvider,
+) => ctx.withLock(`access:${runtimeKey(botId, provider)}`);
+
+/** Removes and returns a bot channel's pending link codes. Call it only inside the access lane. */
+const dropLinkCodes = (ctx: ChannelRuntimeContext, botId: BotId, provider: ChannelProvider) => {
+  const removed: Array<readonly [string, PendingChannelLinkCode]> = [];
+
+  for (const [code, pending] of ctx.linkCodes) {
+    if (pending.botId !== botId || pending.provider !== provider) continue;
+    ctx.linkCodes.delete(code);
+    removed.push([code, pending]);
+  }
+
+  return removed;
+};
+
+/**
+ * Attaches a running transport to a bot's channel. Replacing a different transport drops the
+ * channel's pending link codes: a code belongs to the account it was made for, and a connection
+ * without a saved connection ID gives a code nothing else to tell the accounts apart by.
+ */
+export const attachRuntime = (
+  ctx: ChannelRuntimeContext,
+  botId: BotId,
+  provider: ChannelProvider,
+  runtime: ChannelRuntimeEntry,
+) =>
+  withAccessLane(
+    ctx,
+    botId,
+    provider,
+  )(
+    Effect.sync(() => {
+      const key = runtimeKey(botId, provider);
+
+      if (ctx.runtimes.get(key) === runtime) return [];
+      ctx.runtimes.set(key, runtime);
+
+      return dropLinkCodes(ctx, botId, provider);
+    }),
+  );
+
+/**
+ * Puts back link codes a transport change removed, when that change is undone and the earlier
+ * transport listens again. A code already present is left as it is.
+ */
+export const restoreLinkCodes = (
+  ctx: ChannelRuntimeContext,
+  botId: BotId,
+  provider: ChannelProvider,
+  codes: ReadonlyArray<readonly [string, PendingChannelLinkCode]>,
+) =>
+  withAccessLane(
+    ctx,
+    botId,
+    provider,
+  )(
+    Effect.sync(() => {
+      for (const [code, pending] of codes) {
+        if (!ctx.linkCodes.has(code)) ctx.linkCodes.set(code, pending);
+      }
+    }),
+  );
+
+/**
+ * Detaches the bot's transport when it is still `expected`, and drops the channel's pending link
+ * codes, so a link attempt that resumes after an unassign or disconnect finds no code.
+ */
+export const detachRuntime = (
+  ctx: ChannelRuntimeContext,
+  botId: BotId,
+  provider: ChannelProvider,
+  expected: ChannelRuntimeEntry,
+) =>
+  withAccessLane(
+    ctx,
+    botId,
+    provider,
+  )(
+    Effect.sync(() => {
+      const key = runtimeKey(botId, provider);
+
+      if (ctx.runtimes.get(key) === expected) ctx.runtimes.delete(key);
+
+      return dropLinkCodes(ctx, botId, provider);
+    }),
+  );
+
 export const withChannelOperation = (ctx: ChannelRuntimeContext, provider: ChannelProvider) =>
   ctx.withLock(`channel:${provider}`);
 
@@ -158,18 +257,42 @@ export const stopRuntime = (
     const runtime = ctx.runtimes.get(key);
 
     if (!runtime) return Effect.void;
-    ctx.runtimes.delete(key);
+    const detach = detachRuntime(ctx, botId, provider, runtime);
 
-    if (!options?.keepOnFailure) return runtime.shutdown;
+    if (!options?.keepOnFailure) return detach.pipe(Effect.andThen(runtime.shutdown));
 
-    return runtime.shutdown.pipe(
-      Effect.onError(() =>
-        Effect.sync(() => {
-          if (!ctx.runtimes.has(key)) ctx.runtimes.set(key, runtime);
-        }),
+    // A transport that fails to stop keeps listening, so its pending link codes stay valid too.
+    return detach.pipe(
+      Effect.flatMap((removedCodes) =>
+        runtime.shutdown.pipe(
+          Effect.onError(() =>
+            withAccessLane(
+              ctx,
+              botId,
+              provider,
+            )(
+              Effect.sync(() => {
+                if (ctx.runtimes.has(key)) return;
+                ctx.runtimes.set(key, runtime);
+
+                for (const [code, pending] of removedCodes) {
+                  if (!ctx.linkCodes.has(code)) ctx.linkCodes.set(code, pending);
+                }
+              }),
+            ),
+          ),
+        ),
       ),
     );
   });
+
+/** The bot and provider a runtime key names. */
+const parseRuntimeKey = (key: string) => {
+  const separator = key.lastIndexOf(":");
+  const provider = CHANNEL_PROVIDERS.find((value) => value === key.slice(separator + 1));
+
+  return [provider ? BotId.make(key.slice(0, separator)) : undefined, provider] as const;
+};
 
 /** Runs `operation` for each running transport under its channel lock, ignoring failures. */
 export const forEachRuntime = (
@@ -218,9 +341,13 @@ export const shutdownAllChannels = (ctx: ChannelRuntimeContext) =>
   forEachRuntime(ctx, (key, runtime) =>
     Effect.suspend(() => {
       if (ctx.runtimes.get(key) !== runtime) return Effect.void;
-      ctx.runtimes.delete(key);
+      const [botId, provider] = parseRuntimeKey(key);
 
-      return runtime.shutdown;
+      return (
+        botId && provider
+          ? detachRuntime(ctx, botId, provider, runtime)
+          : Effect.sync(() => void ctx.runtimes.delete(key))
+      ).pipe(Effect.andThen(runtime.shutdown));
     }),
   );
 

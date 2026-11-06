@@ -251,6 +251,8 @@ export function applyServerSettingsPatch(
     ...(patch.channelConnections !== undefined
       ? { channelConnections: patch.channelConnections }
       : {}),
+    ...(patch.channelOwners !== undefined ? { channelOwners: patch.channelOwners } : {}),
+    ...(patch.channelBotAccess !== undefined ? { channelBotAccess: patch.channelBotAccess } : {}),
     ...(patch.sourceControlWriterModelSelection !== undefined
       ? { sourceControlWriterModelSelection: patch.sourceControlWriterModelSelection }
       : {}),
