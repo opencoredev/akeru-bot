@@ -258,6 +258,65 @@ describe("AkeruSessionResources", () => {
     await resources.shutdown();
   });
 
+  it("rebuilds the browser when the pool replaces a workspace that failed to wake", async () => {
+    const reattachable = { pause: true, snapshot: true, browser: true, reconnect: true };
+    const stale = workspace();
+    const replacement = workspace();
+    vi.spyOn(stale, "init")
+      .mockResolvedValueOnce(undefined)
+      .mockRejectedValueOnce(new Error("wake failed"));
+
+    const remoteWorkspace = (value: typeof stale) => ({
+      ...localBotWorkspace(value),
+      provider: "daytona" as const,
+      capabilities: reattachable,
+    });
+
+    const makeRemoteWorkspace = vi
+      .fn()
+      .mockResolvedValueOnce(remoteWorkspace(stale))
+      .mockResolvedValueOnce(remoteWorkspace(replacement));
+
+    const staleBrowser = browser();
+    const replacementBrowser = browser();
+
+    const makeBotBrowser = vi
+      .fn()
+      .mockReturnValueOnce(staleBrowser)
+      .mockReturnValueOnce(replacementBrowser);
+
+    const resources = new AkeruSessionResources({
+      io: workspaceIO,
+      stateDir: stateDir(),
+      makeRemoteWorkspace,
+      makeBotBrowser,
+      toMcpServerConfigs: () => ({}),
+    });
+
+    const input = {
+      ...remoteInput,
+      workspaceResourceKey: "daytona:shared",
+      botSandbox: "daytona" as const,
+    };
+
+    await resources.acquire({ ...input, threadId: "initial" });
+    await resources.release("initial");
+    await expect(resources.acquire({ ...input, threadId: "failed-wake" })).rejects.toThrow(
+      "wake failed",
+    );
+
+    const recovered = await resources.acquire({ ...input, threadId: "recovered" });
+    expect(recovered.workspace).toBe(replacement);
+    expect(makeBotBrowser).toHaveBeenCalledTimes(2);
+    expect(makeBotBrowser).toHaveBeenLastCalledWith(
+      expect.objectContaining({ workspace: replacement }),
+    );
+    expect(staleBrowser.close).toHaveBeenCalledOnce();
+    expect(staleBrowser.reconnect).not.toHaveBeenCalled();
+    await resources.shutdown();
+    expect(replacementBrowser.close).toHaveBeenCalledOnce();
+  });
+
   it("does not leave closed browser tools after a shared reconnect fails", async () => {
     const staleBrowser = browser({
       reconnect: async () => Promise.reject(new Error("shared reconnect failed")),

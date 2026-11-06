@@ -38,8 +38,11 @@ describe("botSandbox", () => {
       "ascii",
       "railway",
       "tenki",
+      "boat",
+      "docker",
     ]);
     expect(botSandboxLabel("vercel")).toBe("Vercel Sandbox");
+    expect(botSandboxLabel("docker")).toBe("Local Docker");
   });
 
   it("uses the local setting only for local workspaces", () => {

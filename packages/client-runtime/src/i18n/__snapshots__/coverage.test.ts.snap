@@ -169,7 +169,7 @@ exports[`discovered interface message coverage > covers static calls and finite 
       "state.label)}</span>;",
     ],
     "apps/web/src/components/settings/SandboxSettingsPanel.tsx": [
-      "definition.description)}",
+      "definition.description);",
       "field.label)}",
     ],
     "apps/web/src/components/settings/SettingsDialog.tsx": [

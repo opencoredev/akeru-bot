@@ -18,4 +18,4 @@ Disable browser-dependent connectors before starting a Railway bot. Akeru reject
 
 Railway also supports disk checkpoints through its SDK. Akeru does not currently expose Railway checkpoint creation or restoration, and does not use checkpoints to simulate sleeping a VM.
 
-See the [official Railway SDK](https://github.com/railwayapp/railway-ts-sdk) and [sandbox capability comparison](https://sandbox-sdk.app/docs/providers).
+Akeru reaches Railway through [Sandbox SDK](https://sandbox-sdk.app), which uses the [official Railway SDK](https://github.com/railwayapp/railway-ts-sdk). See the [sandbox capability comparison](https://sandbox-sdk.app/docs/providers).

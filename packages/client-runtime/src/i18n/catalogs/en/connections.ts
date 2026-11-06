@@ -399,6 +399,10 @@ export const connectionsCatalog = {
     "Cloud workspaces managed by Upstash Box. Requires an API key.",
   "Cloud workspaces managed by Tenki. Requires an API key.":
     "Cloud workspaces managed by Tenki. Requires an API key.",
+  "Cloud VMs managed by Boat. Requires an API key.":
+    "Cloud VMs managed by Boat. Requires an API key.",
+  "Run bots in Docker containers on the environment computer. Requires Docker.":
+    "Run bots in Docker containers on the environment computer. Requires Docker.",
   "Network access": "Network access",
   "No models available. Check your provider connection in Settings.":
     "No models available. Check your provider connection in Settings.",

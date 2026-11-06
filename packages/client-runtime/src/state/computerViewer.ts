@@ -303,6 +303,8 @@ export const COMPUTER_SANDBOX_CAPABILITY: Readonly<
   ascii: { graphical: false },
   railway: { graphical: false },
   tenki: { graphical: false },
+  boat: { graphical: false },
+  docker: { graphical: false },
 };
 
 /** Provider drivers that route browser input through the shared computer gate. */

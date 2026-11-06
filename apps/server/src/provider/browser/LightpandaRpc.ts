@@ -148,7 +148,7 @@ export class LightpandaRpc implements BotBrowserRpc {
     const browserPort = local ? await availableLocalPort() : REMOTE_BROWSER_PORT;
 
     const endpoint = local
-      ? { url: `http://127.0.0.1:${browserPort}`, requestHeaders: {} }
+      ? { url: `http://127.0.0.1:${browserPort}`, requestHeaders: {}, loopback: true }
       : await this.input.browserEndpoint!(browserPort);
 
     const browserHandle = local
@@ -175,7 +175,8 @@ export class LightpandaRpc implements BotBrowserRpc {
         mcpSessionId: this.sessionId!,
         requestHeaders: endpoint.requestHeaders,
         localRequestHeaders: endpoint.requestHeaders,
-        availableToHostedPlugins: !local,
+        // A hosted connector cannot reach a URL served only on the environment computer.
+        availableToHostedPlugins: endpoint.loopback !== true,
       };
       this.input.onReady?.();
 

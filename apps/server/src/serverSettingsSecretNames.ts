@@ -77,6 +77,8 @@ export function redactServerSettingsForClient(settings: ServerSettings): ServerS
         ascii: redactSandboxProviderConnection(settings.sandbox.providers.ascii),
         railway: redactSandboxProviderConnection(settings.sandbox.providers.railway),
         tenki: redactSandboxProviderConnection(settings.sandbox.providers.tenki),
+        boat: redactSandboxProviderConnection(settings.sandbox.providers.boat),
+        docker: redactSandboxProviderConnection(settings.sandbox.providers.docker),
       },
     },
     browserProvider: {

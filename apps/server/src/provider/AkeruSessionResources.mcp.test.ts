@@ -1,4 +1,5 @@
 import { workspaceIO } from "./test-support/workspaceIO.ts";
+import { unusedSandboxFiles } from "./test-support/botWorkspace.ts";
 import { probeTool } from "./test-support/toolProbe.ts";
 import { describe } from "vite-plus/test";
 import * as NodeFS from "node:fs";
@@ -226,6 +227,117 @@ describe("AkeruSessionResources", () => {
     expect(destroy).not.toHaveBeenCalled();
   });
 
+  it.each([
+    { created: false, destroyed: false },
+    { created: true, destroyed: true },
+  ])(
+    "destroys a Vercel sandbox on failed setup only when this open created it (created: $created)",
+    async ({ created, destroyed }) => {
+      const remote: AkeruBotWorkspace = {
+        ...localBotWorkspace(workspace()),
+        provider: "vercel",
+        created,
+      };
+
+      const destroy = vi.spyOn(remote, "destroy");
+      const manager = mcpManager({ connected: true, toolCount: 1 });
+      manager.init.mockRejectedValueOnce(new Error("connector failed"));
+
+      const resources = new AkeruSessionResources({
+        io: workspaceIO,
+        stateDir: stateDir(),
+        makeRemoteWorkspace: async () => remote,
+        makeMcpManager: () => manager as never,
+        toMcpServerConfigs: () => ({}),
+      });
+
+      await expect(
+        resources.acquire({
+          ...remoteInput,
+          botSandbox: "vercel",
+          threadId: `vercel-setup-failure-${created}`,
+          mcpServers: [exaServer],
+        }),
+      ).rejects.toThrow("connector failed");
+      expect(destroy).toHaveBeenCalledTimes(destroyed ? 1 : 0);
+      await resources.shutdown();
+    },
+  );
+
+  it("keeps a workspace another chat holds when a joining chat's setup fails", async () => {
+    const remote: AkeruBotWorkspace = {
+      ...localBotWorkspace(workspace()),
+      provider: "vercel",
+      created: true,
+    };
+
+    const destroy = vi.spyOn(remote, "destroy");
+    const manager = mcpManager({ connected: true, toolCount: 1 });
+    manager.init.mockRejectedValueOnce(new Error("connector failed"));
+
+    const resources = new AkeruSessionResources({
+      io: workspaceIO,
+      stateDir: stateDir(),
+      makeRemoteWorkspace: async () => remote,
+      makeMcpManager: () => manager as never,
+      toMcpServerConfigs: () => ({}),
+    });
+
+    // Chat A creates the sandbox and keeps using it; chat B joins the same pooled workspace.
+    await resources.acquire({ ...remoteInput, threadId: "chat-a" });
+    await expect(
+      resources.acquire({ ...remoteInput, threadId: "chat-b", mcpServers: [exaServer] }),
+    ).rejects.toThrow("connector failed");
+    expect(destroy).not.toHaveBeenCalled();
+
+    await resources.release("chat-a");
+    expect(destroy).not.toHaveBeenCalled();
+    await resources.shutdown();
+  });
+
+  it("keeps a workspace another chat joins while the failed chat cleans up", async () => {
+    const remote: AkeruBotWorkspace = {
+      ...localBotWorkspace(workspace()),
+      provider: "vercel",
+      created: true,
+    };
+
+    const destroy = vi.spyOn(remote, "destroy");
+    const manager = mcpManager({ connected: true, toolCount: 1 });
+    manager.init.mockRejectedValueOnce(new Error("connector failed"));
+    const disconnecting = Promise.withResolvers<void>();
+    const disconnected = Promise.withResolvers<void>();
+
+    manager.disconnect.mockImplementationOnce(async () => {
+      disconnecting.resolve();
+      await disconnected.promise;
+    });
+
+    const resources = new AkeruSessionResources({
+      io: workspaceIO,
+      stateDir: stateDir(),
+      makeRemoteWorkspace: async () => remote,
+      makeMcpManager: () => manager as never,
+      toMcpServerConfigs: () => ({}),
+    });
+
+    // Chat A creates the sandbox, fails setup, and is still disconnecting when chat B joins.
+    const failed = resources.acquire({
+      ...remoteInput,
+      threadId: "chat-a",
+      mcpServers: [exaServer],
+    });
+
+    await disconnecting.promise;
+    await resources.acquire({ ...remoteInput, threadId: "chat-b" });
+    disconnected.resolve();
+    await expect(failed).rejects.toThrow("connector failed");
+
+    await resources.release("chat-b");
+    expect(destroy).not.toHaveBeenCalled();
+    await resources.shutdown();
+  });
+
   it("preserves the Ascii workspace when MCP initialization fails", async () => {
     const remote: AkeruBotWorkspace = { ...localBotWorkspace(workspace()), provider: "ascii" };
     const destroy = vi.spyOn(remote, "destroy");
@@ -324,6 +436,7 @@ describe("AkeruSessionResources", () => {
     const openSession = vi.fn(
       async (providerId?: string): Promise<AkeruRemoteSession> => ({
         providerId: providerId ?? "railway-vm",
+        files: unusedSandboxFiles,
         inspect: async () => "running",
         run: async () => ({ exitCode: 0, stdout: "", stderr: "" }),
         browserEndpoint: async () => {

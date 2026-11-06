@@ -61,6 +61,8 @@ describe("ServerSettings sandbox providers", () => {
         ascii: { environment: [] },
         railway: { environment: [] },
         tenki: { environment: [] },
+        boat: { environment: [] },
+        docker: { environment: [] },
       },
     });
   });
