@@ -234,6 +234,7 @@ export function createRuntimeIngestionHarness() {
               ),
           nowIso: Effect.succeed("2026-01-01T00:00:00.000Z"),
           randomUuid: Effect.sync(() => `channel-test-${++nextChannelId}`),
+          writeAttachmentIfMissing: () => Effect.die("These channel messages share no files."),
           startTransport: (input, onMessage, context) =>
             startTransport
               ? startTransport(input, onMessage, context)

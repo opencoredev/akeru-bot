@@ -4,17 +4,22 @@ import * as Crypto from "effect/Crypto";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as FiberSet from "effect/FiberSet";
+import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
+import * as Path from "effect/Path";
 import * as Schema from "effect/Schema";
 import * as Scope from "effect/Scope";
+import * as Semaphore from "effect/Semaphore";
 import { HttpRouter, HttpServerRequest, HttpServerResponse } from "effect/unstable/http";
+import { writeAttachmentIfMissing } from "../attachmentStore.ts";
 import { ServerSecretStore } from "../auth/ServerSecretStore.ts";
 import * as ServerConfig from "../config.ts";
 import { ServerSettingsService } from "../serverSettings.ts";
 import { OrchestrationEngineService } from "../orchestration/Services/OrchestrationEngine.ts";
 import { ProjectionSnapshotQuery } from "../orchestration/Services/ProjectionSnapshotQuery.ts";
 import { ChannelDeliveryStore } from "./ChannelDeliveryStore.ts";
+import { INBOUND_DOWNLOAD_PERMITS } from "./ChannelInboundAttachments.ts";
 import {
   type ChannelRuntimeDependencies,
   type ChannelRuntimeContext,
@@ -67,6 +72,7 @@ const makeChannelRuntime = (deps: ChannelRuntimeDependencies) =>
       runtimes: new Map(),
       statuses: new WeakMap(),
       withLock: keyedLock(),
+      inboundDownloadPermits: Semaphore.makeUnsafe(INBOUND_DOWNLOAD_PERMITS),
       runSdkCallback,
       transportScope,
       connecting: new Set(),
@@ -176,8 +182,9 @@ export class ChannelRuntime extends Context.Service<ChannelRuntime, ChannelRunti
       const projectionSnapshotQuery = yield* ProjectionSnapshotQuery;
       const settings = yield* ServerSettingsService;
       const crypto = yield* Crypto.Crypto;
-      const serverConfig = yield* Effect.serviceOption(ServerConfig.ServerConfig);
-      const publicOrigin = Option.getOrUndefined(serverConfig)?.publicOrigin;
+      const { attachmentsDir, publicOrigin } = yield* ServerConfig.ServerConfig;
+      const fileSystem = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
 
       return ChannelRuntime.layerWith({
         ...(publicOrigin ? { publicOrigin } : {}),
@@ -192,6 +199,11 @@ export class ChannelRuntime extends Context.Service<ChannelRuntime, ChannelRunti
             .pipe(Effect.map(Option.getOrNull)),
         nowIso: DateTime.now.pipe(Effect.map(DateTime.formatIso)),
         randomUuid: crypto.randomUUIDv4,
+        writeAttachmentIfMissing: (attachment, bytes) =>
+          writeAttachmentIfMissing({ attachmentsDir, attachment, bytes }).pipe(
+            Effect.provideService(FileSystem.FileSystem, fileSystem),
+            Effect.provideService(Path.Path, path),
+          ),
       });
     }),
   );

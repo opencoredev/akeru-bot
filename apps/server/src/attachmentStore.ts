@@ -2,7 +2,11 @@ import * as NodeCrypto from "node:crypto";
 import * as NodeFS from "node:fs";
 import * as NodePath from "node:path";
 
-import type { ChatAttachment } from "@akeru/contracts";
+import type { ChatAttachment, ChatFileAttachment, ChatImageAttachment } from "@akeru/contracts";
+import * as Effect from "effect/Effect";
+import * as FileSystem from "effect/FileSystem";
+import * as Path from "effect/Path";
+import * as Schema from "effect/Schema";
 
 import {
   normalizeAttachmentRelativePath,
@@ -101,6 +105,18 @@ export function createAttachmentId(threadId: string): string | null {
   return `${threadSegment}-${NodeCrypto.randomUUID()}`;
 }
 
+export function deterministicAttachmentId(threadId: string, key: string): string | null {
+  const threadSegment = toSafeThreadAttachmentSegment(threadId);
+
+  if (!threadSegment) {
+    return null;
+  }
+
+  const hex = NodeCrypto.createHash("sha256").update(key).digest("hex");
+
+  return `${threadSegment}-${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20, 32)}`;
+}
+
 export function parseThreadSegmentFromAttachmentId(attachmentId: string): string | null {
   const normalizedId = normalizeAttachmentRelativePath(attachmentId);
 
@@ -166,6 +182,79 @@ export function resolveAttachmentPath(input: {
     relativePath: attachmentRelativePath(input.attachment),
   });
 }
+
+export type AttachmentToWrite =
+  | Omit<ChatImageAttachment, "sizeBytes">
+  | Omit<ChatFileAttachment, "sizeBytes">;
+
+export class AttachmentWriteError extends Schema.TaggedErrorClass<AttachmentWriteError>()(
+  "AttachmentWriteError",
+  { attachmentId: Schema.String, cause: Schema.optional(Schema.Defect()) },
+) {
+  override get message(): string {
+    return `Failed to write attachment '${this.attachmentId}'.`;
+  }
+}
+
+export const writeFileAtomically = Effect.fn("writeFileAtomically")(function* (
+  filePath: string,
+  bytes: Uint8Array,
+) {
+  const fileSystem = yield* FileSystem.FileSystem;
+  const path = yield* Path.Path;
+  const partPath = `${filePath}.${NodeCrypto.randomUUID()}.part`;
+
+  yield* Effect.gen(function* () {
+    yield* fileSystem.makeDirectory(path.dirname(filePath), { recursive: true });
+    yield* fileSystem.writeFile(partPath, bytes);
+    yield* fileSystem.rename(partPath, filePath);
+  }).pipe(Effect.onError(() => fileSystem.remove(partPath, { force: true }).pipe(Effect.ignore)));
+});
+
+const attachmentWrite = (input: {
+  readonly attachmentsDir: string;
+  readonly attachment: AttachmentToWrite;
+  readonly bytes: Uint8Array;
+}) => {
+  const attachment: ChatAttachment = { ...input.attachment, sizeBytes: input.bytes.byteLength };
+
+  return {
+    attachment,
+    path: resolveAttachmentPath({ attachmentsDir: input.attachmentsDir, attachment }),
+    fail: (cause?: unknown) => new AttachmentWriteError({ attachmentId: attachment.id, cause }),
+  };
+};
+
+export const writeAttachment = Effect.fn("writeAttachment")(function* (input: {
+  readonly attachmentsDir: string;
+  readonly attachment: AttachmentToWrite;
+  readonly bytes: Uint8Array;
+}) {
+  const { attachment, path, fail } = attachmentWrite(input);
+
+  if (!path) return yield* fail();
+  yield* writeFileAtomically(path, input.bytes).pipe(Effect.mapError(fail));
+
+  return attachment;
+});
+
+/** Renaming over a file that another process has open fails on Windows. */
+export const writeAttachmentIfMissing = Effect.fn("writeAttachmentIfMissing")(function* (input: {
+  readonly attachmentsDir: string;
+  readonly attachment: AttachmentToWrite;
+  readonly bytes: Uint8Array;
+}) {
+  const fileSystem = yield* FileSystem.FileSystem;
+  const { attachment, path, fail } = attachmentWrite(input);
+
+  if (!path) return yield* fail();
+
+  if (!(yield* fileSystem.exists(path).pipe(Effect.mapError(fail)))) {
+    yield* writeFileAtomically(path, input.bytes).pipe(Effect.mapError(fail));
+  }
+
+  return attachment;
+});
 
 export function resolveAttachmentPathById(input: {
   readonly attachmentsDir: string;

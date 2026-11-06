@@ -8,18 +8,23 @@ import {
   type ChannelBinding,
   type ChannelFailureCategory,
   type ChannelProvider,
+  type ChatAttachment,
   type ClientOrchestrationCommand,
   type OrchestrationEvent,
   type ServerSettingsError,
   type OrchestrationReadModel,
   type OrchestrationThread,
+  type PROVIDER_SEND_TURN_SUPPORTED_FILE_MIME_TYPES,
+  type PROVIDER_SEND_TURN_SUPPORTED_IMAGE_MIME_TYPES,
 } from "@akeru/contracts";
 import * as Effect from "effect/Effect";
 import type * as PlatformError from "effect/PlatformError";
 import * as Schema from "effect/Schema";
 import * as Scope from "effect/Scope";
+import type * as Semaphore from "effect/Semaphore";
 import * as Stream from "effect/Stream";
 import { HttpClient } from "effect/unstable/http";
+import { type AttachmentToWrite, type AttachmentWriteError } from "../attachmentStore.ts";
 import { ServerSecretStore, type SecretStoreError } from "../auth/ServerSecretStore.ts";
 import type { OrchestrationDispatchError } from "../orchestration/Errors.ts";
 import type { ProjectionRepositoryError } from "../persistence/Errors.ts";
@@ -101,12 +106,43 @@ export interface StartedChannel {
   readonly runtime: ChannelRuntimeEntry;
 }
 
+export interface InboundChannelAttachment {
+  readonly name: string;
+  readonly mimeType?: string;
+  readonly sizeBytes?: number;
+  readonly url?: string;
+  readonly fetch?: () => Promise<Uint8Array>;
+}
+
+export type DownloadedChannelFileKind =
+  | {
+      readonly type: "image";
+      readonly mimeType: (typeof PROVIDER_SEND_TURN_SUPPORTED_IMAGE_MIME_TYPES)[number];
+    }
+  | {
+      readonly type: "file";
+      readonly mimeType: (typeof PROVIDER_SEND_TURN_SUPPORTED_FILE_MIME_TYPES)[number];
+    };
+
+export interface DownloadedChannelFile {
+  readonly name: string;
+  readonly kind: DownloadedChannelFileKind;
+  readonly bytes: Uint8Array;
+  readonly sha256Hex: string;
+}
+
+export interface DownloadedChannelAttachments {
+  readonly files: ReadonlyArray<DownloadedChannelFile>;
+  readonly notes: ReadonlyArray<string>;
+}
+
 export interface InboundChannelMessage {
   readonly externalThreadId: string;
   readonly externalMessageId?: string;
   readonly externalSenderId?: string;
   readonly externalSenderName?: string;
   readonly text: string;
+  readonly attachments: ReadonlyArray<InboundChannelAttachment>;
 }
 
 /** SDK callback that hands an inbound message to the runtime that owns the transport. */
@@ -144,6 +180,10 @@ export interface ChannelRuntimeDependencies {
   ) => Effect.Effect<OrchestrationThread | null, ProjectionRepositoryError>;
   readonly nowIso: Effect.Effect<string>;
   readonly randomUuid: Effect.Effect<string, PlatformError.PlatformError>;
+  readonly writeAttachmentIfMissing: (
+    attachment: AttachmentToWrite,
+    bytes: Uint8Array,
+  ) => Effect.Effect<ChatAttachment, AttachmentWriteError>;
   /** HTTP client for built-in credential probes. Defaults to the fetch-backed client. */
   readonly httpClient?: HttpClient.HttpClient;
   /**
@@ -196,6 +236,7 @@ export interface ChannelRuntimeContext {
   readonly runtimes: Map<string, ChannelRuntimeEntry>;
   readonly statuses: WeakMap<ChannelRuntimeEntry, Map<string, ChannelStatus>>;
   readonly withLock: KeyedLock;
+  readonly inboundDownloadPermits: Semaphore.Semaphore;
   /** Runs SDK callback work as a fiber of the runtime scope. */
   readonly runSdkCallback: <A, E>(effect: Effect.Effect<A, E>) => Promise<A>;
   /** Parent of every transport's own scope, such as a renewing gateway. */

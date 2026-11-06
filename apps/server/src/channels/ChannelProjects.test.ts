@@ -75,6 +75,7 @@ describe("channel runtime", () => {
 
       yield* expectFailureMessage(
         dispatchInboundChannelMessage(harness.dependencies, {
+          attachments: { files: [], notes: [] },
           botId: BOT_ID,
           projectId: MISSING_PROJECT_ID,
           provider: "telegram",
@@ -369,6 +370,7 @@ describe("channel runtime", () => {
         expect(harness.readModel().snapshotSequence).toBe(sequenceBefore);
 
         const message = {
+          attachments: [],
           externalThreadId: "telegram:failed-project-move",
           externalMessageId: "still-reachable",
           text: "Use the original project",
