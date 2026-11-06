@@ -201,6 +201,9 @@ export function approvalDecision(decision: ProviderApprovalDecision): "approve" 
 }
 
 export function toProviderSession(threadId: ThreadId, active: ActiveSession): ProviderSession {
+  // A turn still in admission already owns the session, so it reports as the active turn.
+  const occupyingTurn = active.activeTurn ?? active.admittingTurn;
+
   return {
     provider: active.provider,
     providerInstanceId: active.providerInstanceId,
@@ -210,7 +213,7 @@ export function toProviderSession(threadId: ThreadId, active: ActiveSession): Pr
     model: active.model,
     threadId,
     mcpServerIds: active.mcpServerIds,
-    ...(active.activeTurn ? { activeTurnId: active.activeTurn.turnId } : {}),
+    ...(occupyingTurn ? { activeTurnId: occupyingTurn.turnId } : {}),
     createdAt: active.createdAt,
     updatedAt: nowIso(),
   };

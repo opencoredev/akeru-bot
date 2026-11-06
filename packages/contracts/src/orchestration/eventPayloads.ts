@@ -16,6 +16,7 @@ import {
   TurnId,
 } from "../baseSchemas.ts";
 import { McpServer, McpServerId } from "../mcpServer.ts";
+import { BotPermissionPolicy } from "../botPermissions.ts";
 import { AkeruDelegationRecord } from "../akeruDelegation.ts";
 import { ImageProviderId } from "../imageGeneration.ts";
 import { DelegationIdSchema } from "./identities.ts";
@@ -222,6 +223,8 @@ export const BotUpdatedPayload = Schema.Struct({
   personalityTone: Schema.optional(BotPersonalityTone),
   voiceEnabled: Schema.optional(Schema.Boolean),
   allowedEnvironmentIds: Schema.optional(BotAllowedEnvironmentIds),
+  /** `null` restores the default policy. */
+  permissionPolicy: Schema.optional(Schema.NullOr(BotPermissionPolicy)),
   channelBindings: Schema.optional(Schema.Array(ChannelBinding)),
   groupId: Schema.optional(Schema.NullOr(GroupId)),
   updatedAt: IsoDateTime,

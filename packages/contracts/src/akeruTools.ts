@@ -140,6 +140,25 @@ export function akeruToolRequiresApproval(
   return approval === "user-computer" && !(context.localFullAccess && input !== undefined);
 }
 
+/**
+ * Whether the chat's permission mode must approve this call. The bot's
+ * permission policy decides protected actions separately.
+ */
+export function akeruToolModeRequiresApproval(
+  tool: AkeruToolDefinition,
+  context: Pick<AkeruToolAvailabilityContext, "localFullAccess"> & {
+    readonly workspaceType?: AkeruToolWorkspaceType;
+  },
+  input?: Parameters<typeof decodeAkeruToolInput>[1],
+): boolean {
+  if (tool.id === "Shell" && context.workspaceType === "local") return true;
+
+  return (
+    akeruToolApprovalForInput(tool, input, context) === "user-computer" &&
+    !(context.localFullAccess && input !== undefined)
+  );
+}
+
 export function copyDirectionForTool(toolId: AkeruToolId): AkeruCopyDirection | undefined {
   return AKERU_TOOL_CATALOG.find((tool) => tool.id === toolId)?.copy;
 }

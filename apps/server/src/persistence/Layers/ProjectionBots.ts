@@ -2,6 +2,7 @@ import {
   BotAllowedEnvironmentIds,
   BotAvatar,
   BotEngine,
+  BotPermissionPolicy,
   ChannelBinding,
   McpServerId,
 } from "@akeru/contracts";
@@ -30,11 +31,18 @@ const ProjectionBotDbRow = ProjectionBot.mapFields(
     channelBindings: Schema.fromJsonString(Schema.Array(ChannelBinding)),
     allowedEnvironmentIds: Schema.fromJsonString(BotAllowedEnvironmentIds),
     voiceEnabled: Schema.Number,
+    permissionPolicy: Schema.NullOr(Schema.fromJsonString(BotPermissionPolicy)),
   }),
 );
 
 function toProjectionBot(row: Schema.Schema.Type<typeof ProjectionBotDbRow>): ProjectionBot {
-  return { ...row, voiceEnabled: row.voiceEnabled === 1 };
+  const { permissionPolicy, ...bot } = row;
+
+  return {
+    ...bot,
+    voiceEnabled: row.voiceEnabled === 1,
+    ...(permissionPolicy === null ? {} : { permissionPolicy }),
+  };
 }
 
 const makeProjectionBotRepository = Effect.gen(function* () {
@@ -47,7 +55,8 @@ const makeProjectionBotRepository = Effect.gen(function* () {
         bot_id, name, title, label, description, disabled_mcp_server_ids_json,
         avatar_json, engine_json, sandbox, runtime_mode, image_provider,
         voice_enabled, personality_tone, channel_bindings_json,
-        allowed_environment_ids_json, group_id, archived_at, created_at, updated_at
+        allowed_environment_ids_json, permission_policy_json,
+        group_id, archived_at, created_at, updated_at
       ) VALUES (
         ${row.botId}, ${row.name}, ${row.title}, ${row.label}, ${row.description},
         ${JSON.stringify(row.disabledMcpServerIds)}, ${JSON.stringify(row.avatar)},
@@ -55,7 +64,9 @@ const makeProjectionBotRepository = Effect.gen(function* () {
         ${row.runtimeMode}, ${row.imageProvider},
         ${row.voiceEnabled ? 1 : 0}, ${row.personalityTone ?? 50},
         ${JSON.stringify(row.channelBindings ?? [])},
-        ${JSON.stringify(row.allowedEnvironmentIds ?? [])}, ${row.groupId},
+        ${JSON.stringify(row.allowedEnvironmentIds ?? [])},
+        ${row.permissionPolicy === undefined ? null : JSON.stringify(row.permissionPolicy)},
+        ${row.groupId},
         ${row.archivedAt}, ${row.createdAt},
         ${row.updatedAt}
       )
@@ -74,6 +85,7 @@ const makeProjectionBotRepository = Effect.gen(function* () {
         personality_tone = excluded.personality_tone,
         channel_bindings_json = excluded.channel_bindings_json,
         allowed_environment_ids_json = excluded.allowed_environment_ids_json,
+        permission_policy_json = excluded.permission_policy_json,
         group_id = excluded.group_id,
         archived_at = excluded.archived_at,
         created_at = excluded.created_at,
@@ -92,7 +104,8 @@ const makeProjectionBotRepository = Effect.gen(function* () {
         image_provider AS "imageProvider", voice_enabled AS "voiceEnabled",
         personality_tone AS "personalityTone",
         channel_bindings_json AS "channelBindings",
-        allowed_environment_ids_json AS "allowedEnvironmentIds", group_id AS "groupId",
+        allowed_environment_ids_json AS "allowedEnvironmentIds",
+        permission_policy_json AS "permissionPolicy", group_id AS "groupId",
         archived_at AS "archivedAt", created_at AS "createdAt", updated_at AS "updatedAt"
       FROM projection_bots
       WHERE bot_id = ${botId}
@@ -110,7 +123,8 @@ const makeProjectionBotRepository = Effect.gen(function* () {
         image_provider AS "imageProvider", voice_enabled AS "voiceEnabled",
         personality_tone AS "personalityTone",
         channel_bindings_json AS "channelBindings",
-        allowed_environment_ids_json AS "allowedEnvironmentIds", group_id AS "groupId",
+        allowed_environment_ids_json AS "allowedEnvironmentIds",
+        permission_policy_json AS "permissionPolicy", group_id AS "groupId",
         archived_at AS "archivedAt", created_at AS "createdAt", updated_at AS "updatedAt"
       FROM projection_bots
       ORDER BY created_at ASC, bot_id ASC

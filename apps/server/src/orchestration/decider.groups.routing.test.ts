@@ -6,6 +6,7 @@ import {
   MessageId,
   OrchestrationEvent,
   ThreadId,
+  TurnId,
 } from "@akeru/contracts";
 import { expect, it } from "@effect/vitest";
 import * as NodeServices from "@effect/platform-node/NodeServices";
@@ -261,6 +262,27 @@ it.layer(NodeServices.layer)("group membership decider", (it) => {
       expect(
         mentioned.events.find((entry) => entry.type === "thread.message-sent")?.payload,
       ).toMatchObject({ authorPersonId: PERSON_ID, text: "@bot-specialist check the logs" });
+
+      // The specialist's turn runs and finishes before the next message hands the chat back.
+      const specialistSession = (status: "running" | "ready") =>
+        ({
+          type: "thread.session.set",
+          commandId: CommandId.make(`cmd-specialist-${status}`),
+          threadId: ThreadId.make("thread-group"),
+          session: {
+            threadId: ThreadId.make("thread-group"),
+            status,
+            providerName: "grok",
+            runtimeMode: "full-access",
+            activeTurnId: status === "running" ? TurnId.make("turn-specialist") : null,
+            lastError: null,
+            updatedAt: NOW,
+          },
+          createdAt: NOW,
+        }) as const;
+
+      model = (yield* applyCommand(model, specialistSession("running"))).readModel;
+      model = (yield* applyCommand(model, specialistSession("ready"))).readModel;
 
       const unmentioned = yield* applyCommand(
         model,

@@ -49,6 +49,7 @@ import {
 import { makeMemoryOnlyCredentialOptions } from "./test-support/agentControllerMemory.ts";
 import { mastraHarnessFixture } from "./test-support/agentControllerHarness.ts";
 import { makeImageRuntimeTestLayer } from "./test-support/agentControllerImages.ts";
+import { approveAsOwner } from "../test-support/AkeruToolRuntime.ts";
 
 describe("AgentControllerLive", () => {
   it.effect("exposes and runs the web, image, and MCP catalog tools in a live session", () => {
@@ -165,7 +166,7 @@ describe("AgentControllerLive", () => {
         const run = (toolId: AkeruRuntimeToolId, toolCallId: string, input: Schema.Json) =>
           Effect.promise(() => {
             const execution = { threadId: String(codexThreadId), toolId, toolCallId, input };
-            runtime.grantApproval(execution);
+            approveAsOwner(runtime, execution);
 
             return runtime.execute({ ...execution, approvalMode: "require-grant" });
           });
@@ -412,7 +413,7 @@ describe("AgentControllerLive", () => {
           input,
         };
 
-        runtime.grantApproval(execution);
+        approveAsOwner(runtime, execution);
 
         const result = yield* Effect.promise(() =>
           Promise.resolve(runtime.execute({ ...execution, approvalMode: "require-grant" })),
@@ -523,7 +524,7 @@ describe("AgentControllerLive", () => {
           input: { operation: "generate", prompt: "a fox" },
         };
 
-        runtime.grantApproval(execution);
+        approveAsOwner(runtime, execution);
 
         const pending = yield* Effect.forkChild(
           Effect.promise(() =>

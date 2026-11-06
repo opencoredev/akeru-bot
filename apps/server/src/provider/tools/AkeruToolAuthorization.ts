@@ -22,20 +22,6 @@ export function requiredString<Value>(value: Value, key: string): string {
   return candidate;
 }
 
-export function canonicalInput<Value>(value: Value): string {
-  if (Array.isArray(value)) return `[${value.map(canonicalInput).join(",")}]`;
-
-  if (Predicate.isObjectOrArray(value) && value !== null) {
-    return `{${Object.keys(value)
-      .filter((key) => field(value, key) !== undefined)
-      .sort()
-      .map((key) => `${JSON.stringify(key)}:${canonicalInput(field(value, key))}`)
-      .join(",")}}`;
-  }
-
-  return JSON.stringify(value) ?? "undefined";
-}
-
 export function ensureWorkspaceCwd<Input>(toolId: AkeruToolId, input: Input): void {
   if (toolId !== "Shell" && toolId !== "ExternalShell") return;
   const cwd = field(input, "cwd");

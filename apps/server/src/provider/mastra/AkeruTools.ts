@@ -17,7 +17,7 @@ import { createAkeruMastraTools } from "../AkeruMastraTools.ts";
 import { isCodexComputerUseTool } from "../CodexComputerUse.ts";
 import { type AkeruMastraToolOptions } from "./AkeruHarnessTypes.ts";
 import { controllerResourceId } from "./AkeruMemory.ts";
-import { akeruActionNeedsApproval } from "./AkeruActions.ts";
+import { akeruActionNeedsApproval } from "@akeru/shared/akeruActions";
 import {
   routineToolInputSchema,
   AKERU_LIST_ROUTINES_TOOL_NAME,
@@ -25,6 +25,14 @@ import {
   AKERU_DELETE_ROUTINES_TOOL_NAME,
   routineDeleteResultSchema,
 } from "./AkeruRoutineSchemas.ts";
+
+/**
+ * Named tools outside the catalog whose approvals the bot policy decides. The
+ * controller binds and grants their owner approvals like catalog tools.
+ */
+export const POLICY_NAMED_TOOL_NAMES: ReadonlySet<string> = new Set([
+  AKERU_LIST_ROUTINES_TOOL_NAME,
+]);
 
 export const decodeProductFeedbackToolDraft = Schema.decodeUnknownExit(ProductFeedbackToolDraft, {
   onExcessProperty: "error",
@@ -84,22 +92,34 @@ export async function resolveAkeruTools(
           "Create a disabled routine for recurring work in this chat. Call this tool as soon as the routine details are complete. The app previews the tool arguments and asks the user before execution, so do not ask for separate confirmation. Put the timing only in schedule, and make instructions describe only what each run should do. Keep the name short and specific. Use the current chat and device timezone by default. Only name plugins or skills the user explicitly requests.",
         inputSchema: routineToolInputSchema,
         requireApproval: false,
-        execute: async ({ skillNames, connectorNames, ...input }) =>
-          options.createRoutine!(
+        execute: async ({ skillNames, connectorNames, ...input }) => {
+          const routine = await decodeCreateRoutineInput(
+            {
+              ...input,
+              ...(skillNames ? { skillNames } : {}),
+              ...(connectorNames ? { connectorNames } : {}),
+            },
+            {
+              onExcessProperty: "error",
+            },
+          );
+
+          // The review card is the owner's answer; the policy can still refuse outright.
+          await options.toolRuntime.authorizeAction(
             threadId,
-            await decodeCreateRoutineInput(
-              {
-                ...input,
-                ...(skillNames ? { skillNames } : {}),
-                ...(connectorNames ? { connectorNames } : {}),
-              },
-              {
-                onExcessProperty: "error",
-              },
-            ),
-          ),
+            AKERU_CREATE_ROUTINE_TOOL_NAME,
+            routine,
+          );
+
+          return options.createRoutine!(threadId, routine);
+        },
       })
     : undefined;
+
+  // Listing reads routine metadata, so the bot policy decides it: deny refuses,
+  // and ask needs the owner's answer bound to this exact call.
+  const listRoutinesApproval: NeedsApprovalFn = (input) =>
+    options.toolRuntime.requiresNamedApproval(threadId, AKERU_LIST_ROUTINES_TOOL_NAME, input);
 
   const listRoutinesTool = options.listRoutines
     ? createTool({
@@ -109,10 +129,22 @@ export async function resolveAkeruTools(
         inputSchema: z.object({}),
         outputSchema: routineListOutputSchema,
         strict: true,
-        requireApproval: false,
-        execute: async () => options.listRoutines!(threadId),
+        requireApproval: listRoutinesApproval,
+        execute: async (input, context) => {
+          await options.toolRuntime.authorizeNamedExecution({
+            threadId,
+            toolCallId:
+              context?.agent?.toolCallId ?? `${AKERU_LIST_ROUTINES_TOOL_NAME}:unidentified`,
+            toolName: AKERU_LIST_ROUTINES_TOOL_NAME,
+            input,
+          });
+
+          return options.listRoutines!(threadId);
+        },
       })
     : undefined;
+
+  if (listRoutinesTool) listRoutinesTool.needsApprovalFn = listRoutinesApproval;
 
   const deleteRoutinesTool =
     options.listRoutines && options.deleteRoutines
@@ -139,6 +171,11 @@ export async function resolveAkeruTools(
           requireApproval: false,
           execute: async ({ routineIds }, context) => {
             const uniqueIds = [...new Set(routineIds)];
+
+            // Checked before asking and again after the answer, right before deleting.
+            await options.toolRuntime.authorizeAction(threadId, AKERU_DELETE_ROUTINES_TOOL_NAME, {
+              routineIds: uniqueIds,
+            });
             const available = await options.listRoutines!(threadId);
 
             const requested = available.routines.filter((routine) =>

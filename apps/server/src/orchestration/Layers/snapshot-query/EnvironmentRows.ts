@@ -55,7 +55,8 @@ export function createEnvironmentRows({ sql }: Pick<ProjectionSnapshotDependenci
         image_provider AS "imageProvider", voice_enabled AS "voiceEnabled",
         personality_tone AS "personalityTone",
         channel_bindings_json AS "channelBindings",
-        allowed_environment_ids_json AS "allowedEnvironmentIds", group_id AS "groupId",
+        allowed_environment_ids_json AS "allowedEnvironmentIds",
+        permission_policy_json AS "permissionPolicy", group_id AS "groupId",
         archived_at AS "archivedAt", created_at AS "createdAt", updated_at AS "updatedAt"
       FROM projection_bots
       ORDER BY created_at ASC, bot_id ASC
@@ -131,7 +132,8 @@ export function createEnvironmentRows({ sql }: Pick<ProjectionSnapshotDependenci
         voice_enabled AS "voiceEnabled",
         personality_tone AS "personalityTone",
         channel_bindings_json AS "channelBindings",
-        allowed_environment_ids_json AS "allowedEnvironmentIds", group_id AS "groupId",
+        allowed_environment_ids_json AS "allowedEnvironmentIds",
+        permission_policy_json AS "permissionPolicy", group_id AS "groupId",
         archived_at AS "archivedAt", created_at AS "createdAt", updated_at AS "updatedAt"
       FROM projection_bots
       WHERE bot_id = ${botId}

@@ -63,6 +63,16 @@ export function presentThreadError(
       t,
     );
 
+  // A group chat answers with one bot at a time; the message was not sent, so it is not a fault.
+  if (/Another bot is still working in this chat/.test(error)) {
+    return {
+      title: t("Another bot is still working in this chat"),
+      description: t("Send again when it finishes."),
+      technicalDetails: boundedTechnicalDetails(error),
+      action: "none",
+    };
+  }
+
   // A temporary failure is the server's catch-all, so the text below can
   // still say more about it than the category can.
   if (context.unavailability && context.unavailability !== "temporary-failure") {

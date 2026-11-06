@@ -110,6 +110,9 @@ export const createDependencies = Effect.fn("makeprovider-command-Dependencies")
 
   const threadBotWorkspaceKeys = new Map<string, string>();
 
+  // The bot each thread's session was last configured for, so a group handoff reconfigures it.
+  const threadRespondingBotIds = new Map<string, string | null>();
+
   const threadMcpServers = new Map<string, readonly McpServer[]>();
 
   const threadsAwaitingRestrictiveSessionCleanup = new Set<string>();
@@ -136,6 +139,7 @@ export const createDependencies = Effect.fn("makeprovider-command-Dependencies")
     hasHandledTurnRequestRecently,
     threadModelSelections,
     threadBotWorkspaceKeys,
+    threadRespondingBotIds,
     threadMcpServers,
     threadsAwaitingRestrictiveSessionCleanup,
   };

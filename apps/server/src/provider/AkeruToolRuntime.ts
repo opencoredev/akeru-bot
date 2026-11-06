@@ -8,14 +8,14 @@ import {
   type AkeruToolId,
   type AkeruToolReceipt,
   ThreadId,
-  akeruToolApprovalForInput,
-  akeruToolRequiresApproval,
+  type BotPermissionPolicy,
   filterAkeruTools,
   AkeruDelegationContextTooLongError,
   AkeruDelegationProviderUnsupportedError,
 } from "@akeru/contracts";
 import * as DateTime from "effect/DateTime";
 import * as Schema from "effect/Schema";
+import { BotApprovalCheck } from "@akeru/shared/botPermissions";
 import { redactComputerScreenshot } from "../mcp/PreviewSnapshotRedaction.ts";
 import {
   AKERU_MEMORY_TOOL_DESCRIPTION,
@@ -29,13 +29,19 @@ import {
   type AkeruRuntimeToolId,
   type AkeruToolExecution,
 } from "./tools/AkeruToolTypes.ts";
+import { requiredString, field } from "./tools/AkeruToolAuthorization.ts";
+import { createAkeruNamedActionPermissions } from "./tools/AkeruNamedActionPermissions.ts";
 import {
-  ensureWorkspaceCwd,
-  APPROVAL_RANK,
-  canonicalInput,
-  requiredString,
-  field,
-} from "./tools/AkeruToolAuthorization.ts";
+  DEFAULT_APPROVAL_TTL_MILLIS,
+  LOCAL_ENVIRONMENT_ID,
+  OWNER_PRINCIPAL,
+  AkeruToolPermissionDeniedError,
+  actionFingerprint,
+  akeruRiskClass,
+  createAkeruApprovalLedger,
+  decideAkeruTool,
+  initialPolicy,
+} from "./tools/AkeruToolPermissions.ts";
 import {
   workspaceForTool,
   toolsForWorkspace,
@@ -57,14 +63,31 @@ export function isMemoryToolId(toolId: string): toolId is AkeruMemoryToolId {
 
 export function createAkeruToolRuntime(options?: AkeruToolRuntimeOptions): AkeruToolRuntime {
   const sessions = new Map<string, AkeruToolSession>();
-  const grants = new Map<string, { readonly toolId: AkeruRuntimeToolId; readonly input: string }>();
-  const key = (threadId: string, toolCallId: string) => `${threadId}\u0000${toolCallId}`;
+  /** The last policy each thread read, for synchronous checks. */
+  const policies = new Map<string, BotPermissionPolicy>();
 
-  const clearApprovals = (threadId: string) => {
-    for (const grantKey of grants.keys()) {
-      if (grantKey.startsWith(`${threadId}\u0000`)) grants.delete(grantKey);
-    }
+  const approvals = createAkeruApprovalLedger({
+    environmentId: options?.environmentId ?? LOCAL_ENVIRONMENT_ID,
+    ttlMillis: options?.approvalTtlMillis ?? DEFAULT_APPROVAL_TTL_MILLIS,
+    clock: options?.clock ?? DateTime.nowUnsafe,
+  });
+
+  const clearApprovals = (threadId: string) => approvals.clearThread(threadId);
+
+  const currentPolicy = async (threadId: string, session: AkeruToolSession) => {
+    const policy = (await session.permissions?.readPolicy?.()) ?? initialPolicy(session);
+
+    if (sessions.get(threadId) === session) policies.set(threadId, policy);
+
+    return policy;
   };
+
+  const namedActions = createAkeruNamedActionPermissions({
+    sessions,
+    policies,
+    approvals,
+    currentPolicy,
+  });
 
   const emitReceipt = (
     input: AkeruToolExecution,
@@ -223,64 +246,122 @@ export function createAkeruToolRuntime(options?: AkeruToolRuntimeOptions): Akeru
   const decodedGrantInput = (toolId: AkeruRuntimeToolId, input: AkeruToolExecution["input"]) =>
     decodeAkeruRuntimeToolInput(toolId, input, { approvalGrant: true }).input;
 
-  const requiresApproval = async (
-    session: AkeruToolSession,
-    tool: AkeruRuntimeToolDefinition,
-    input: AkeruToolExecution["input"],
-  ) => {
-    if (tool.id === "memory") return false;
-    const akeruTool = AKERU_TOOL_CATALOG.find((candidate) => candidate.id === tool.id);
+  const sessionFor = (threadId: string) => {
+    const session = sessions.get(threadId);
 
-    if (!akeruTool) throw new Error(`Tool '${tool.id}' has no definition.`);
-    ensureWorkspaceCwd(akeruTool.id, input);
-    const ceiling = session.delegation?.access.approvalCeiling;
+    if (!session) throw new Error(`Tool session '${threadId}' is not registered.`);
 
-    if (
-      ceiling &&
-      APPROVAL_RANK.indexOf(
-        akeruToolApprovalForInput(akeruTool, input, { workspaceType: session.workspaceType }),
-      ) > APPROVAL_RANK.indexOf(ceiling)
-    ) {
-      throw new Error(`Tool '${tool.id}' exceeds this delegation's approval ceiling.`);
-    }
+    return session;
+  };
 
-    return akeruToolRequiresApproval(
-      akeruTool,
-      {
-        localFullAccess: session.runtimeMode === "full-access",
-        workspaceType: session.workspaceType,
-      },
-      input,
-    );
+  const availableTool = (threadId: string, toolId: AkeruRuntimeToolId) => {
+    const tool = toolsForThread(threadId).find((candidate) => candidate.id === toolId);
+
+    if (!tool) throw new Error(`Tool '${toolId}' is not available for this turn.`);
+
+    return tool;
+  };
+
+  const grantSubject = (input: Omit<AkeruToolExecution, "approvalMode">) => {
+    const session = sessionFor(input.threadId);
+    const decodedInput = decodedGrantInput(input.toolId, input.input);
+
+    return {
+      threadId: input.threadId,
+      toolCallId: input.toolCallId,
+      session,
+      action: actionFingerprint(input.toolId, decodedInput),
+      riskClass: akeruRiskClass(session, input.toolId, decodedInput),
+    };
   };
 
   return {
     registerSession: (threadId, session) => {
       clearApprovals(threadId);
       sessions.set(threadId, session);
+      policies.set(threadId, initialPolicy(session));
     },
     unregisterSession: (threadId) => {
       sessions.delete(threadId);
+      policies.delete(threadId);
       clearApprovals(threadId);
     },
     clearApprovals,
     toolsForThread,
     requiresApproval: async (threadId, toolId, input) => {
-      const session = sessions.get(threadId);
+      const session = sessionFor(threadId);
+      availableTool(threadId, toolId);
 
-      if (!session) throw new Error(`Tool session '${threadId}' is not registered.`);
-      const tool = toolsForThread(threadId).find((candidate) => candidate.id === toolId);
-
-      if (!tool) throw new Error(`Tool '${toolId}' is not available for this turn.`);
-
-      return requiresApproval(session, tool, decodeAkeruRuntimeToolInput(toolId, input).input);
-    },
-    grantApproval: (input) => {
-      grants.set(key(input.threadId, input.toolCallId), {
-        toolId: input.toolId,
-        input: canonicalInput(decodedGrantInput(input.toolId, input.input)),
+      const decision = decideAkeruTool({
+        session,
+        policy: await currentPolicy(threadId, session),
+        toolId,
+        decodedInput: decodeAkeruRuntimeToolInput(toolId, input).input,
       });
+
+      return decision.requirement !== "none";
     },
+    approvalRequirement: (threadId, toolId, input) => {
+      try {
+        const session = sessionFor(threadId);
+        availableTool(threadId, toolId);
+        const policy = policies.get(threadId) ?? initialPolicy(session);
+
+        const { requirement } = decideAkeruTool({
+          session,
+          policy,
+          toolId,
+          decodedInput: decodeAkeruRuntimeToolInput(toolId, input).input,
+        });
+
+        // Only an explicit allow for this tool overrides the chat's permission mode.
+        // A risk-class default leaves the mode in charge, so Supervised still asks.
+        return requirement === "none" && policy.toolOverrides[toolId] !== "allow"
+          ? "mode"
+          : requirement;
+      } catch {
+        // The run repeats the check and reports the failure to the bot.
+        return "blocked";
+      }
+    },
+    openApproval: (input) => {
+      try {
+        approvals.open(grantSubject(input));
+      } catch {
+        // An undecodable or blocked call never runs, so it needs no binding.
+      }
+    },
+    grantApproval: (input) =>
+      sessions.has(input.threadId)
+        ? approvals.answer({
+            ...grantSubject(input),
+            answeredBy: input.answeredBy ?? OWNER_PRINCIPAL,
+          })
+        : BotApprovalCheck.Rejected({ reason: "unknown-approval" }),
+    grantModeApproval: (input) => {
+      const session = sessions.get(input.threadId);
+
+      if (!session) return BotApprovalCheck.Rejected({ reason: "unknown-approval" });
+      const subject = grantSubject(input);
+      let requirement: ReturnType<typeof decideAkeruTool>["requirement"];
+
+      try {
+        requirement = decideAkeruTool({
+          session,
+          policy: policies.get(input.threadId) ?? initialPolicy(session),
+          toolId: input.toolId,
+          decodedInput: decodedGrantInput(input.toolId, input.input),
+        }).requirement;
+      } catch (cause) {
+        return BotApprovalCheck.Rejected({
+          reason:
+            cause instanceof AkeruToolPermissionDeniedError ? "denied-by-policy" : "not-approved",
+        });
+      }
+
+      return approvals.grantByMode({ ...subject, requirement });
+    },
+    ...namedActions,
     execute: async (input) => {
       let failureCode: NonNullable<AkeruToolReceipt["failureCode"]> = "internal";
       emitReceipt(input, "start");
@@ -294,31 +375,40 @@ export function createAkeruToolRuntime(options?: AkeruToolRuntimeOptions): Akeru
         executionSession = session;
         await options?.onToolStart?.(input, session);
 
-        const tool = toolsForThread(input.threadId).find(
-          (candidate) => candidate.id === input.toolId,
-        );
-
-        if (!tool) throw new Error(`Tool '${input.toolId}' is not available for this turn.`);
+        availableTool(input.threadId, input.toolId);
 
         failureCode = "validation";
         const execution = decodeAkeruRuntimeToolInput(input.toolId, input.input);
         const decoded = execution.input;
         failureCode = "denied";
 
-        if (await requiresApproval(session, tool, decoded)) {
-          const grantKey = key(input.threadId, input.toolCallId);
-          const grant = grants.get(grantKey);
+        // The policy is read again here, so a permission revoked after approval blocks the run.
+        const decision = decideAkeruTool({
+          session,
+          policy: await currentPolicy(input.threadId, session),
+          toolId: input.toolId,
+          decodedInput: decoded,
+        });
 
-          if (
-            !grant ||
-            input.approvalMode !== "require-grant" ||
-            grant.toolId !== input.toolId ||
-            grant.input !== canonicalInput(decoded)
-          ) {
+        if (decision.requirement !== "none") {
+          const rejection =
+            input.approvalMode === "require-grant"
+              ? approvals.consume({
+                  threadId: input.threadId,
+                  toolCallId: input.toolCallId,
+                  session,
+                  action: actionFingerprint(input.toolId, decoded),
+                  verdict: decision.verdict,
+                })
+              : "not-approved";
+
+          if (rejection === "not-approved") {
             throw new Error(`Tool '${input.toolId}' requires approval.`);
           }
 
-          grants.delete(grantKey);
+          if (rejection) {
+            throw new Error(`Tool '${input.toolId}' approval was refused (${rejection}).`);
+          }
         }
 
         failureCode = "not_found";

@@ -4,7 +4,10 @@ import * as NodePath from "node:path";
 import { afterEach, expect, it, vi } from "vite-plus/test";
 import { BotId, type AkeruToolReceipt } from "@akeru/contracts";
 import { createAkeruToolRuntime } from "./AkeruToolRuntime.ts";
-import { makeAkeruToolRuntimeTestSupport } from "./test-support/AkeruToolRuntime.ts";
+import {
+  approveAsOwner,
+  makeAkeruToolRuntimeTestSupport,
+} from "./test-support/AkeruToolRuntime.ts";
 
 const { directories, workspace, workspaceRoot } = makeAkeruToolRuntimeTestSupport();
 
@@ -75,15 +78,15 @@ describe("AkeruToolRuntime", () => {
     expect(receipts.map((receipt) => receipt.phase)).toEqual(["start", "failure"]);
     expect(receipts[1]).toMatchObject({ failureCode: "denied", fatalToThread: false });
     receipts.length = 0;
-    runtime.grantApproval({ ...execution, input: { command: "echo wrong" } });
+    approveAsOwner(runtime, { ...execution, input: { command: "echo wrong" } });
     await expect(runtime.execute(execution)).rejects.toThrow("requires approval");
     receipts.length = 0;
-    runtime.grantApproval({ ...execution, input: { command: " pwd " } });
+    approveAsOwner(runtime, { ...execution, input: { command: " pwd " } });
     await expect(runtime.execute(execution)).resolves.toBeDefined();
     expect(receipts.map((receipt) => receipt.phase)).toEqual(["start", "success"]);
     await expect(runtime.execute(execution)).rejects.toThrow("requires approval");
 
-    runtime.grantApproval({
+    approveAsOwner(runtime, {
       ...execution,
       toolCallId: "tool-null-cwd",
       input: { command: "pwd", cwd: null, background: false },
@@ -96,7 +99,7 @@ describe("AkeruToolRuntime", () => {
       }),
     ).resolves.toBeDefined();
 
-    runtime.grantApproval({
+    approveAsOwner(runtime, {
       ...execution,
       toolCallId: "tool-undefined-cwd",
       input: { command: "pwd", background: false },
@@ -129,7 +132,7 @@ describe("AkeruToolRuntime", () => {
     await expect(
       runtime.requiresApproval(execution.threadId, execution.toolId, execution.input),
     ).resolves.toBe(true);
-    runtime.grantApproval(execution);
+    approveAsOwner(runtime, execution);
     await expect(runtime.execute(execution)).resolves.toBeDefined();
     await expect(runtime.execute(execution)).rejects.toThrow("requires approval");
   });
@@ -154,7 +157,7 @@ describe("AkeruToolRuntime", () => {
     ).rejects.toThrow();
     expect(memory).not.toHaveBeenCalled();
     expect(() =>
-      runtime.grantApproval({
+      approveAsOwner(runtime, {
         threadId: "memory-boundary",
         toolId: "Shell",
         toolCallId: "extra-command",
@@ -162,7 +165,7 @@ describe("AkeruToolRuntime", () => {
       }),
     ).not.toThrow();
     expect(() =>
-      runtime.grantApproval({
+      approveAsOwner(runtime, {
         threadId: "memory-boundary",
         toolId: "Shell",
         toolCallId: "extra-command",
@@ -195,7 +198,7 @@ describe("AkeruToolRuntime", () => {
     };
 
     await expect(runtime.execute(execution)).rejects.toThrow("requires approval");
-    runtime.grantApproval(execution);
+    approveAsOwner(runtime, execution);
     await expect(runtime.execute(execution)).resolves.toEqual({
       servers: [{ name: "search", connected: true }],
     });
@@ -227,7 +230,7 @@ describe("AkeruToolRuntime", () => {
     await expect(runtime.execute(execution)).rejects.toThrow("requires approval");
     expect(testConnection).not.toHaveBeenCalled();
 
-    runtime.grantApproval(execution);
+    approveAsOwner(runtime, execution);
     await expect(runtime.execute(execution)).resolves.toEqual({ connected: true });
     expect(testConnection).toHaveBeenCalledOnce();
   });
@@ -298,7 +301,7 @@ describe("AkeruToolRuntime", () => {
       };
 
       await expect(runtime.execute(execution)).rejects.toThrow("requires approval");
-      runtime.grantApproval(execution);
+      approveAsOwner(runtime, execution);
       await expect(runtime.execute(execution)).resolves.toBeDefined();
       await expect(runtime.execute(execution)).rejects.toThrow("requires approval");
     }
@@ -325,7 +328,7 @@ describe("AkeruToolRuntime", () => {
       approvalMode: "require-grant" as const,
     };
 
-    runtime.grantApproval(execution);
+    approveAsOwner(runtime, execution);
     runtime.registerSession("thread-1", {
       runtimeMode: "full-access",
       workspaceType: "local",
@@ -356,7 +359,7 @@ describe("AkeruToolRuntime", () => {
     };
 
     await expect(runtime.execute(execution)).rejects.toThrow("requires approval");
-    runtime.grantApproval(execution);
+    approveAsOwner(runtime, execution);
     await expect(runtime.execute(execution)).resolves.toMatchObject({ status: "applied" });
     expect(reactToMessage).toHaveBeenCalledWith(execution.input, execution.toolCallId);
   });
