@@ -41,6 +41,7 @@ import { channelOriginForAssistantMessage } from "@akeru/client-runtime/channel-
 import {
   buildBotConversationEntries,
   isBotConversationWorking,
+  lastAssistantMessageIdByTurn,
   visibleBotChatMessages,
 } from "./botConversationPresentation";
 import { botEngineFailureContext, botEngineSubscriptionToConnect } from "./botEngineSelection";
@@ -310,6 +311,8 @@ export function BotThreadLanding({
     ),
   );
 
+  const turnDetailRows = lastAssistantMessageIdByTurn(messages);
+
   const pendingPluginResults = [...pluginResultsByTurn.entries()].filter(
     ([turnId]) => !assistantTurnIds.has(turnId),
   );
@@ -448,6 +451,12 @@ export function BotThreadLanding({
 
                         const messageIndex = item.index;
 
+                        const detailTurnId =
+                          message.turnId !== null &&
+                          turnDetailRows.get(message.turnId) === message.id
+                            ? message.turnId
+                            : null;
+
                         return (
                           <>
                             {separator ? <ConversationSeparator label={separator} /> : null}
@@ -461,14 +470,12 @@ export function BotThreadLanding({
                                 cwd={runtime.defaultProject?.workspaceRoot}
                                 threadRef={runtime.linkedThreadRef ?? undefined}
                                 stepMeter={
-                                  message.turnId === null
-                                    ? undefined
-                                    : stepMeters.get(message.turnId)
+                                  detailTurnId === null ? undefined : stepMeters.get(detailTurnId)
                                 }
                                 pluginResults={
-                                  message.turnId === null
+                                  detailTurnId === null
                                     ? undefined
-                                    : pluginResultsByTurn.get(message.turnId)
+                                    : pluginResultsByTurn.get(detailTurnId)
                                 }
                                 currentPersonId={currentPersonId}
                                 playback={replyPlayback}

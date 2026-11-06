@@ -43,6 +43,7 @@ import {
   isObservationQueueClosed,
 } from "./mastra/AkeruHarnessErrors.ts";
 import { openObservationQueueDb } from "./mastra/AkeruObservationQueueStore.ts";
+import { boundedImageToolMessage } from "../image-generation/toolContent.ts";
 import { resolveAkeruInstructions } from "./mastra/AkeruInstructions.ts";
 import {
   resolveAkeruMastraModel,
@@ -717,7 +718,9 @@ export const makeAkeruMastraHarness = Effect.fnUntraced(function* (
           });
 
           if (transcript.length > 0) {
-            await observationalMemory.memory.persistMessages([...transcript]);
+            await observationalMemory.memory.persistMessages(
+              transcript.map(boundedImageToolMessage),
+            );
           }
         };
 

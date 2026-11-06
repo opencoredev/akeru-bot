@@ -1,4 +1,9 @@
-import { MessageId, TurnId, type OrchestrationMessage } from "@akeru/contracts";
+import {
+  MessageId,
+  TurnId,
+  type ChatAttachment,
+  type OrchestrationMessage,
+} from "@akeru/contracts";
 import { describe, expect, it } from "vite-plus/test";
 
 import {
@@ -9,11 +14,20 @@ import {
   visibleBotChatMessages,
 } from "./botConversationPresentation";
 
+const IMAGE_ATTACHMENT: ChatAttachment = {
+  type: "image",
+  id: "attachment-1",
+  name: "generated-image.jpg",
+  mimeType: "image/jpeg",
+  sizeBytes: 128,
+};
+
 const message = (
   id: string,
   role: "user" | "assistant" | "system",
   streaming: boolean,
   turnId: string | null = null,
+  attachments?: ReadonlyArray<ChatAttachment>,
 ): OrchestrationMessage =>
   ({
     id: MessageId.make(id),
@@ -21,6 +35,7 @@ const message = (
     text: id,
     turnId: turnId === null ? null : TurnId.make(turnId),
     streaming,
+    ...(attachments !== undefined ? { attachments } : {}),
     createdAt: "2026-08-27T00:00:00.000Z",
     updatedAt: "2026-08-27T00:00:00.000Z",
   }) as const;
@@ -165,6 +180,33 @@ describe("bot conversation presentation", () => {
       "first-user",
       "first-answer",
       "active-user",
+    ]);
+  });
+
+  it("keeps an attachment post next to the final answer of its turn", () => {
+    const messages = [
+      message("user", "user", false),
+      message("image-post", "assistant", false, "turn-1", [IMAGE_ATTACHMENT]),
+      message("final", "assistant", false, "turn-1"),
+    ];
+
+    expect(visibleBotChatMessages(messages).map((entry) => entry.id)).toEqual([
+      "user",
+      "image-post",
+      "final",
+    ]);
+  });
+
+  it("keeps a finished image visible while its turn is still working", () => {
+    const messages = [
+      message("user", "user", false),
+      message("image-post", "assistant", false, "turn-1", [IMAGE_ATTACHMENT]),
+      message("draft-answer", "assistant", false, "turn-1"),
+    ];
+
+    expect(visibleBotChatMessages(messages, true).map((entry) => entry.id)).toEqual([
+      "user",
+      "image-post",
     ]);
   });
 

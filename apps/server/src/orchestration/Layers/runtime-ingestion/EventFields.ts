@@ -1,4 +1,5 @@
 import { asRecord } from "../../ActivityPayloadBounds.ts";
+import { boundedImageToolArgs, isImageToolName } from "../../../image-generation/toolContent.ts";
 import type { TaskAgentLinkage, RuntimeTaskUsage, RuntimeTaskStatus } from "@akeru/contracts";
 import * as Predicate from "effect/Predicate";
 import {
@@ -127,6 +128,16 @@ export function boundedApprovalArgs(
   args: Extract<ProviderRuntimeEvent, { type: "request.opened" }>["payload"]["args"],
 ) {
   if (args === undefined) return undefined;
+
+  if (isImageToolName(toolName)) {
+    // Routing fields (operation/provider/allowProvider) persist so the
+    // recorded consent stays machine-readable; prompt and image refs do not.
+    const bounded = boundedImageToolArgs(toolName, args);
+
+    return Predicate.isObject(bounded) && !Array.isArray(bounded) && Object.keys(bounded).length > 0
+      ? bounded
+      : undefined;
+  }
 
   if (toolName === AKERU_PRODUCT_FEEDBACK_TOOL_NAME) {
     const decoded = decodeProductFeedbackToolDraft(args);

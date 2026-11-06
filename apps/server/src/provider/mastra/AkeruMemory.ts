@@ -16,6 +16,7 @@ import {
   OBSERVATION_CONTINUATION_HINT,
   type ObserveHooks,
 } from "@mastra/memory/processors";
+import { boundedImageToolMessage } from "../../image-generation/toolContent.ts";
 import { selectRecentConversation } from "../RecentConversation.ts";
 import { type AkeruMastraHarnessOptions, type AkeruMastraState } from "./AkeruHarnessTypes.ts";
 import { DEFAULT_MODEL_ID, resolveAkeruMastraModel } from "./AkeruModels.ts";
@@ -169,10 +170,13 @@ export class AkeruPassiveObservationalMemoryProcessor implements Processor<"obse
   }
 
   async processOutputResult(args: ProcessOutputResultArgs) {
-    const messages = [
-      ...args.messageList.get.input.db(),
-      ...args.messageList.get.response.db(),
-    ].filter((message) => args.messageList.isNewMessage(message));
+    const messages = [...args.messageList.get.input.db(), ...args.messageList.get.response.db()]
+      // Observational memory persists every new message verbatim, including
+      // tool-invocation parts. Image calls keep their routing fields but never
+      // the prompt or input-image references.
+      .flatMap((message) =>
+        args.messageList.isNewMessage(message) ? [boundedImageToolMessage(message)] : [],
+      );
 
     if (messages.length > 0) await this.memory.persistMessages(messages);
 
