@@ -2,12 +2,27 @@ import { photon, externalAdapters } from "./channelAdapters.ts";
 
 export { photon, externalAdapters } from "./channelAdapters.ts";
 
-import * as NodeCrypto from "node:crypto";
+import { BOT_ID, NOW, PROJECT_ID, SECOND_PROJECT_ID } from "./channelFixtures.ts";
+
+export {
+  NOW,
+  BOT_ID,
+  PROJECT_ID,
+  SECOND_PROJECT_ID,
+  MISSING_PROJECT_ID,
+  telegramConnect,
+  imessageConnect,
+  whatsappConnect,
+  slackConnect,
+  discordConnect,
+  signedWhatsAppRequest,
+} from "./channelFixtures.ts";
+
 import {
   BotId,
   ChannelConnectionId,
-  CommandId,
   DEFAULT_SERVER_SETTINGS,
+  type ServerSettings,
   MessageId,
   ProjectId,
   ProviderInstanceId,
@@ -39,6 +54,7 @@ import type { ServerSecretStore } from "../../auth/ServerSecretStore.ts";
 import { createEmptyReadModel } from "../../orchestration/projector.ts";
 import type { OrchestrationEngineShape } from "../../orchestration/Services/OrchestrationEngine.ts";
 import { memoryChannelDeliveryStore } from "../ChannelDeliveryStore.ts";
+import { type ChannelFollowStoreShape, memoryChannelFollowStore } from "../ChannelFollowStore.ts";
 import {
   ChannelRuntime,
   channelFailureMessage,
@@ -274,16 +290,6 @@ const startTestGateway = (...args: Parameters<typeof startRenewingGateway>) =>
     };
   });
 
-const NOW = "2026-08-27T20:00:00.000Z";
-
-const BOT_ID = BotId.make("bot-1");
-
-const PROJECT_ID = ProjectId.make("project-1");
-
-const SECOND_PROJECT_ID = ProjectId.make("project-2");
-
-const MISSING_PROJECT_ID = ProjectId.make("project-missing");
-
 function makeBot(
   id: BotId,
   input: {
@@ -373,14 +379,19 @@ function makeChatSdkMessage(
   text: string,
   senderId: string,
   isMention = false,
-  author: { readonly isBot?: boolean | "unknown"; readonly isMe?: boolean } = {},
+  author: {
+    readonly isBot?: boolean | "unknown";
+    readonly isMe?: boolean;
+    readonly raw?: Record<string, string>;
+    readonly edited?: boolean;
+  } = {},
 ) {
   return new ChatMessage({
     id,
     threadId,
     text,
     formatted: parseMarkdown(text),
-    raw: {},
+    raw: author.raw ?? {},
     author: {
       userId: senderId,
       userName: senderId,
@@ -388,7 +399,7 @@ function makeChatSdkMessage(
       isBot: author.isBot ?? false,
       isMe: author.isMe ?? false,
     },
-    metadata: { dateSent: new Date(NOW), edited: false },
+    metadata: { dateSent: new Date(NOW), edited: author.edited ?? false },
     attachments: [],
     isMention,
   });
@@ -473,11 +484,30 @@ function makeHarness(input: {
   readonly failBotUpdate?: (updateIndex: number) => Error | undefined;
   readonly onBindings?: (bindings: ReadonlyArray<ChannelBinding>) => void;
   readonly commandModelOmitsMessages?: boolean;
+  /** Linked owner identities and per-bot access the settings start with. */
+  readonly channelOwners?: ServerSettings["channelOwners"];
+  readonly channelBotAccess?: ServerSettings["channelBotAccess"];
+  /** The clock the runtime reads. Defaults to the fixed `NOW`. */
+  readonly now?: () => string;
+  /** Wraps the in-memory follow store, for example to fail one call. */
+  readonly wrapFollowStore?: (store: ChannelFollowStoreShape) => ChannelFollowStoreShape;
+  /** Makes each read-model query yield first, as a real database query does. */
+  readonly readModelYields?: boolean;
+  /** Runs before each read-model query, for example to hold one until a test releases it. */
+  readonly beforeReadModel?: () => Effect.Effect<void>;
 }) {
   let model = makeModel(input.bots ?? [makeBot(BOT_ID)]);
-  let settings = DEFAULT_SERVER_SETTINGS;
+
+  let settings: ServerSettings = {
+    ...DEFAULT_SERVER_SETTINGS,
+    channelOwners: input.channelOwners ?? [],
+    channelBotAccess: input.channelBotAccess ?? [],
+  };
+
   const threads = [...(input.threads ?? [])];
   const commands: OrchestrationCommand[] = [];
+  const memoryFollowStore = memoryChannelFollowStore();
+  const followStore = input.wrapFollowStore?.(memoryFollowStore) ?? memoryFollowStore;
   const { store: memorySecretStore, values: secrets } = makeMemorySecretStore();
   const secretStore = input.secretStore ?? memorySecretStore;
   let sequence = model.snapshotSequence;
@@ -531,21 +561,27 @@ function makeHarness(input: {
       getSettings: Effect.sync(() => settings),
       updateSettings: (patch) =>
         Effect.sync(() => {
-          settings = { ...settings, ...patch } as typeof settings;
+          settings = { ...settings, ...patch } as ServerSettings;
 
           return settings;
         }),
     },
     deliveryStore: input.deliveryStore ?? memoryChannelDeliveryStore(),
-    readModel: Effect.sync(() => ({
-      ...model,
-      threads: input.commandModelOmitsMessages
-        ? threads.map((thread) => ({ ...thread, messages: [] }))
-        : threads,
-    })),
+    followStore,
+    readModel: (input.readModelYields ? Effect.yieldNow : Effect.void).pipe(
+      Effect.andThen(Effect.suspend(() => input.beforeReadModel?.() ?? Effect.void)),
+      Effect.andThen(
+        Effect.sync(() => ({
+          ...model,
+          threads: input.commandModelOmitsMessages
+            ? threads.map((thread) => ({ ...thread, messages: [] }))
+            : threads,
+        })),
+      ),
+    ),
     readThread: (threadId) =>
       Effect.sync(() => threads.find((thread) => thread.id === threadId) ?? null),
-    nowIso: Effect.succeed(NOW),
+    nowIso: input.now ? Effect.sync(input.now) : Effect.succeed(NOW),
     randomUuid: Effect.sync(() => `uuid-${commands.length}`),
     // Accepts the Slack app-token probe, the only request the built-in transports send here.
     httpClient: slackProbeClient(true),
@@ -577,6 +613,7 @@ function makeHarness(input: {
   return {
     commands,
     dependencies,
+    followStore,
     secrets,
     archive,
     readModel: () => model,
@@ -652,69 +689,6 @@ function mockTelegramDelivery(responses: Array<Response | Error>) {
   return sends;
 }
 
-const telegramConnect = (botId: BotId, token = "telegram-token") => ({
-  type: "channel.connect" as const,
-  commandId: CommandId.make(`connect-${botId}`),
-  botId,
-  targetProjectId: PROJECT_ID,
-  provider: "telegram" as const,
-  token,
-});
-
-const imessageConnect = (botId: BotId) => ({
-  type: "channel.connect" as const,
-  commandId: CommandId.make(`connect-imessage-${botId}`),
-  botId,
-  targetProjectId: PROJECT_ID,
-  provider: "imessage" as const,
-  mode: "hosted" as const,
-  projectId: "photon-project",
-  projectSecret: "photon-secret",
-});
-
-const whatsappConnect = (botId: BotId) => ({
-  type: "channel.connect" as const,
-  commandId: CommandId.make(`connect-whatsapp-${botId}`),
-  botId,
-  targetProjectId: PROJECT_ID,
-  provider: "whatsapp" as const,
-  accessToken: "access-token",
-  appSecret: "app-secret",
-  phoneNumberId: "phone-number-id",
-  verifyToken: "verify-token",
-});
-
-const slackConnect = (botId: BotId) => ({
-  type: "channel.connect" as const,
-  commandId: CommandId.make(`connect-slack-${botId}`),
-  botId,
-  targetProjectId: PROJECT_ID,
-  provider: "slack" as const,
-  botToken: "xoxb-token",
-  appToken: "xapp-token",
-});
-
-const discordConnect = (botId: BotId) => ({
-  type: "channel.connect" as const,
-  commandId: CommandId.make(`connect-discord-${botId}`),
-  botId,
-  targetProjectId: PROJECT_ID,
-  provider: "discord" as const,
-  botToken: "discord-token",
-  applicationId: "discord-app",
-  publicKey: "discord-public-key",
-});
-
-const signedWhatsAppRequest = (body: string) =>
-  new Request(`https://akeru.example/api/channels/whatsapp/${BOT_ID}/webhook`, {
-    method: "POST",
-    headers: {
-      "content-type": "application/json",
-      "x-hub-signature-256": `sha256=${NodeCrypto.createHmac("sha256", "app-secret").update(body).digest("hex")}`,
-    },
-    body,
-  });
-
 afterEach(() => {
   channelRuntimes.clear();
   latestChannelRuntime = undefined;
@@ -729,10 +703,21 @@ afterEach(() => {
   externalAdapters.slackDisconnects = 0;
   externalAdapters.slackIdentityAvailable = true;
   externalAdapters.slackInitializationFails = false;
+  externalAdapters.slackOnInitialize = null;
   externalAdapters.slackSubscriptions.length = 0;
   externalAdapters.slackResponses.length = 0;
   externalAdapters.slackPostRequests = 0;
   externalAdapters.slackRetryOptions = {};
+  externalAdapters.slackTeamId = "T-HOME";
+  externalAdapters.slackUserNames = {};
+  externalAdapters.slackUserLookups = 0;
+  externalAdapters.slackUserTeams = {};
+  externalAdapters.slackMissingUsers = [];
+  externalAdapters.slackScopes = undefined;
+  externalAdapters.slackUserFlags = {};
+  externalAdapters.slackThreadMessages = [];
+  externalAdapters.slackSubscribeFailures = 0;
+  externalAdapters.slackApiCalls.length = 0;
   vi.unstubAllGlobals();
   externalAdapters.discordAdapter = null;
   externalAdapters.discordChat = null;
@@ -778,11 +763,6 @@ export {
   channelBindingsForRuntime,
   makeGatewayListener,
   startTestGateway,
-  NOW,
-  BOT_ID,
-  PROJECT_ID,
-  SECOND_PROJECT_ID,
-  MISSING_PROJECT_ID,
   makeBot,
   makeModel,
   makeMessage,
@@ -793,10 +773,4 @@ export {
   makeHarness,
   makeAdapterDeliveryHarness,
   mockTelegramDelivery,
-  telegramConnect,
-  imessageConnect,
-  whatsappConnect,
-  slackConnect,
-  discordConnect,
-  signedWhatsAppRequest,
 };

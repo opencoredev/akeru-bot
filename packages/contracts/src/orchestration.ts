@@ -118,6 +118,12 @@ export {
 export { ProjectCreateCommand } from "./orchestration/rosterCommands.ts";
 
 export {
+  CHANNEL_LINK_CODE_ALPHABET,
+  CHANNEL_LINK_CODE_LENGTH,
+  ChannelLinkCode,
+} from "./orchestration/rosterCommands.ts";
+
+export {
   type ThreadTurnStartBootstrap,
   ThreadTurnStartCommand,
   ThreadVoiceTranscriptAppendCommand,

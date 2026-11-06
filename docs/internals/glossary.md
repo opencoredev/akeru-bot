@@ -163,7 +163,19 @@ The assignment of a channel connection profile to a bot and a project, carried o
 
 #### Channel origin
 
-The provenance record on a thread or message that came from an external channel: provider, connection, external conversation and message identities, and sender display name. It drives thread subscriptions restored on startup and the origin label clients render.
+The provenance record on a thread or message that came from an external channel: provider, connection, external conversation and message identities, and sender display name. It drives the origin label clients render.
+
+#### Channel owner identity
+
+A Slack or Discord account the environment owner linked, stored in server settings as `channelOwners` with its provider, workspace ID (a Slack team ID, or `discord`), and user ID. Slack and Discord bots answer only owner identities in their own workspace and the user IDs on the bot's `channelBotAccess` allowlist.
+
+#### Link code
+
+A one-time code a client generates and registers with `channel.link-code.create`. The owner sends it to the bot in a direct message, and the server records the sender as an owner identity. Codes live in server memory for ten minutes, work once, and only on the provider and connection they were made for. Reconnecting the channel voids them.
+
+#### Thread follow
+
+A durable record in `channel_thread_follows`, keyed by bot, provider, project, workspace, platform thread, and sender, that lets an admitted sender's thread replies start turns without a mention. It ends on "stop", after 24 idle hours, or when the sender tags another Akeru bot. Startup subscribes to the platform threads of active follows in the channel's assigned project. A durable claim on each admitted message (`channel_admitted_messages`) keeps a replayed message from starting a follow again.
 
 #### Channel delivery
 

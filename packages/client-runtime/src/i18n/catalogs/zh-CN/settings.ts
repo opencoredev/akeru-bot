@@ -370,4 +370,26 @@ export const settingsCatalog = {
   Subscription: "订阅",
   "Pay per request instead of using the subscription.": "按请求付费，而不使用订阅。",
   "Finish signing in to {provider} in the browser.": "在浏览器中完成 {provider} 的登录。",
+  "Could not unlink this account": "无法取消关联此账号",
+  "Connected without a saved connection": "未通过已保存的连接接入",
+  "Linked accounts": "已关联的账号",
+  "No linked accounts yet. Bots answer only linked accounts. Create a link code on a connection above and send it to the bot in a direct message.":
+    "还没有关联的账号。机器人只回复已关联的账号。请在上方的连接中创建关联码，然后通过私信发送给机器人。",
+  "{user} in workspace {workspace}": "工作区 {workspace} 中的 {user}",
+  Unlink: "取消关联",
+  "Could not create a link code": "无法创建关联码",
+  "Could not save who this bot answers": "无法保存此机器人回复的对象",
+  "{bot} answers only linked accounts and the people you add below.":
+    "{bot} 只回复已关联的账号和你在下方添加的人。",
+  "Send this code to {bot} in a direct message within 10 minutes:":
+    "请在 10 分钟内通过私信把这个代码发送给 {bot}：",
+  "Link code": "关联码",
+  "Create link code": "创建关联码",
+  "Create new code": "创建新代码",
+  "Also answer these {provider} user IDs": "同时回复这些 {provider} 用户 ID",
+  "Add at most {count} user IDs.": "最多添加 {count} 个用户 ID。",
+  "Tell other people whose bot this is when they mention it":
+    "当其他人提及此机器人时，告诉他们这是谁的机器人",
+  "This bot answers only linked accounts and people you add. After you connect, create a link code on the connection to link your account.":
+    "此机器人只回复已关联的账号和你添加的人。连接后，请在该连接上创建关联码来关联你的账号。",
 } as const;

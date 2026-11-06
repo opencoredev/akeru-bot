@@ -10,6 +10,16 @@ export {
 } from "./commands/project.ts";
 
 export {
+  type CreateChannelLinkCodeInput,
+  type RemoveChannelOwnerInput,
+  type SetChannelAccessInput,
+  channelLinkCodeFromBytes,
+  createChannelLinkCode,
+  removeChannelOwner,
+  setChannelAccess,
+} from "./commands/channelAccess.ts";
+
+export {
   type CreateBotInput,
   type UpdateBotInput,
   type ArchiveBotInput,

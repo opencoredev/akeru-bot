@@ -26,6 +26,7 @@ import type { ProjectionRepositoryError } from "../persistence/Errors.ts";
 import { ServerSettingsService } from "../serverSettings.ts";
 import { type OrchestrationEngineShape } from "../orchestration/Services/OrchestrationEngine.ts";
 import { type ChannelDeliveryStoreShape } from "./ChannelDeliveryStore.ts";
+import { type ChannelFollowStoreShape } from "./ChannelFollowStore.ts";
 import {
   ChannelPostRejectedError,
   ChannelRuntimeError,
@@ -94,6 +95,8 @@ export interface ChannelRuntimeEntry {
 export interface StartedTransport {
   readonly externalIdentity: string;
   readonly runtime: ChannelRuntimeEntry;
+  /** A problem the connected binding shows as its error, such as a missing Slack scope. */
+  readonly warning?: string;
 }
 
 export interface StartedChannel {
@@ -112,11 +115,68 @@ export interface InboundChannelMessage {
 /** SDK callback that hands an inbound message to the runtime that owns the transport. */
 export type InboundCallback = (input: InboundChannelMessage) => Promise<void>;
 
+/**
+ * What the platform says about a sender's workspace. `missing-permission` means the bot's
+ * credentials cannot look anyone up, such as a Slack token without `users:read`.
+ */
+export type ChannelSenderMembership =
+  | { readonly kind: "member"; readonly workspaceId: string }
+  | { readonly kind: "unconfirmed" }
+  | { readonly kind: "missing-permission" };
+
+/** The person behind an inbound platform message, as the access check sees them. */
+export interface ChannelSender {
+  readonly userId: string;
+  readonly displayName?: string | undefined;
+  /**
+   * The workspace the platform confirms the sender belongs to, such as the Slack team from
+   * `users.info`. Only `member` admits anyone. The access check calls it only for senders it
+   * might admit, so strangers cost no lookup.
+   */
+  readonly verifiedWorkspace: () => Promise<ChannelSenderMembership>;
+}
+
+/** How a message reached the bot: a DM, a message that mentions it, or a reply in a thread. */
+export type ChannelInboundKind = "direct" | "mention" | "thread";
+
+/** What the access check reads about one message. It runs before any subscribe or history read. */
+export interface ChannelGateInput {
+  readonly kind: ChannelInboundKind;
+  readonly externalThreadId: string;
+  readonly externalMessageId: string;
+  readonly sender: ChannelSender;
+  /** The message text without the bot's own mention. */
+  readonly text: string;
+  /** Platform user IDs the message tags, other than this bot. */
+  readonly mentionedUserIds: ReadonlyArray<string>;
+  /** The workspace the connected bot belongs to (a Slack team ID). */
+  readonly homeWorkspaceId?: string | undefined;
+}
+
+export type ChannelGateDecision =
+  | { readonly type: "ignore"; readonly unsubscribe?: boolean }
+  | { readonly type: "reply"; readonly text: string; readonly unsubscribe?: boolean }
+  | { readonly type: "turn" };
+
+/** Decides whether a message may reach the bot. Never fails; a failed check ignores the message. */
+export type ChannelGate = (input: ChannelGateInput) => Promise<ChannelGateDecision>;
+
+/** A link code the owner can send the bot once before it expires. */
+export interface PendingChannelLinkCode {
+  readonly botId: BotId;
+  readonly provider: ChannelProvider;
+  /** The connection the bot's channel used when the code was made; a code dies with it. */
+  readonly connectionId: ChannelConnectionId | undefined;
+  readonly expiresAt: number;
+}
+
 export interface ChannelTransportContext {
   readonly botName: string;
   readonly subscribedThreadIds: ReadonlyArray<string>;
   readonly onMention: InboundCallback;
   readonly onSubscribedMessage: InboundCallback;
+  /** Owner and allowlist check for Slack and Discord messages. */
+  readonly gate: ChannelGate;
   /** HTTP client for credential probes. Defaults to the fetch-backed client. */
   readonly httpClient?: HttpClient.HttpClient;
 }
@@ -126,6 +186,21 @@ export type LiveProvider = ChannelProvider;
 export type ChannelConnectInput = Extract<
   ClientOrchestrationCommand,
   { readonly type: "channel.connect" }
+>;
+
+export type ChannelLinkCodeCreateInput = Extract<
+  ClientOrchestrationCommand,
+  { readonly type: "channel.link-code.create" }
+>;
+
+export type ChannelOwnerRemoveInput = Extract<
+  ClientOrchestrationCommand,
+  { readonly type: "channel.owner.remove" }
+>;
+
+export type ChannelAccessSetInput = Extract<
+  ClientOrchestrationCommand,
+  { readonly type: "channel.access.set" }
 >;
 
 export type ChannelConnectionSaveInput = Extract<
@@ -138,6 +213,8 @@ export interface ChannelRuntimeDependencies {
   readonly secretStore: ServerSecretStore["Service"];
   readonly settings: Pick<ServerSettingsService["Service"], "getSettings" | "updateSettings">;
   readonly deliveryStore: ChannelDeliveryStoreShape;
+  /** Durable thread follows. Defaults to an in-memory store, which tests use. */
+  readonly followStore?: ChannelFollowStoreShape;
   readonly readModel: Effect.Effect<OrchestrationReadModel, ProjectionRepositoryError>;
   readonly readThread: (
     threadId: ThreadId,
@@ -202,6 +279,9 @@ export interface ChannelRuntimeContext {
   readonly transportScope: Scope.Scope;
   /** Runtime keys with a start in flight. A persisted `connecting` outside this set is stale. */
   readonly connecting: Set<string>;
+  readonly follows: ChannelFollowStoreShape;
+  /** Pending owner link codes by code. Kept in memory only, so a restart drops them. */
+  readonly linkCodes: Map<string, PendingChannelLinkCode>;
   closed: boolean;
 }
 
@@ -235,6 +315,15 @@ export interface ChannelRuntimeShape {
   readonly reconnect: (
     botId: BotId,
     provider: ChannelProvider,
+  ) => Effect.Effect<number, ChannelOperationError>;
+  readonly createLinkCode: (
+    input: ChannelLinkCodeCreateInput,
+  ) => Effect.Effect<number, ChannelOperationError>;
+  readonly removeOwner: (
+    input: ChannelOwnerRemoveInput,
+  ) => Effect.Effect<number, ChannelOperationError>;
+  readonly setAccess: (
+    input: ChannelAccessSetInput,
   ) => Effect.Effect<number, ChannelOperationError>;
   /** Reconnects every saved binding and reports the ones that failed. */
   readonly restoreConnectedChannels: Effect.Effect<

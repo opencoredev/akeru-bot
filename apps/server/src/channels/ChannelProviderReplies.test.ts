@@ -13,6 +13,7 @@ import {
   externalAdapters,
 } from "./testUtils/channelRuntime.ts";
 import * as Effect from "effect/Effect";
+import { SLACK_USERS_READ_MISSING } from "./ChannelSlackMembership.ts";
 import { it } from "@effect/vitest";
 import { describe, expect, vi } from "vite-plus/test";
 
@@ -45,6 +46,46 @@ describe("channel runtime", () => {
       yield* sendChannelMessage(harness.dependencies, input);
       expect(externalAdapters.slackPostRequests).toBe(2);
       expect(harness.readModel().bots[0]?.channelBindings[0]?.lastError).toBeUndefined();
+    }),
+  );
+
+  it.effect("keeps the users:read warning when a Slack reply goes out without that scope", () =>
+    Effect.gen(function* () {
+      const { harness, input } = makeAdapterDeliveryHarness("slack", "slack:C123:1");
+      // Posting needs only chat:write, so a delivered reply proves nothing about users:read.
+      externalAdapters.slackScopes = ["chat:write", "app_mentions:read", "im:history"];
+      externalAdapters.slackResponses.push({ status: 200, data: { ok: true, ts: "2" } });
+      yield* connectChannel(harness.dependencies, slackConnect(BOT_ID));
+      yield* sendChannelMessage(harness.dependencies, input);
+
+      expect(harness.readModel().bots[0]?.channelBindings[0]).toMatchObject({
+        status: "connected",
+        lastError: SLACK_USERS_READ_MISSING,
+        sentMessageIds: [input.messageId],
+      });
+    }),
+  );
+
+  it.effect("keeps the users:read warning through a rejected reply and its retry", () =>
+    Effect.gen(function* () {
+      const { harness, input } = makeAdapterDeliveryHarness("slack", "slack:C123:1");
+      externalAdapters.slackScopes = ["chat:write", "app_mentions:read", "im:history"];
+      externalAdapters.slackResponses.push(
+        { status: 200, data: { ok: false, error: "channel_not_found" } },
+        { status: 200, data: { ok: true, ts: "2" } },
+      );
+      yield* connectChannel(harness.dependencies, slackConnect(BOT_ID));
+      yield* failureOf(sendChannelMessage(harness.dependencies, input));
+
+      expect(harness.readModel().bots[0]?.channelBindings[0]?.lastError).toBe(
+        SLACK_USERS_READ_MISSING,
+      );
+
+      yield* sendChannelMessage(harness.dependencies, input);
+
+      expect(harness.readModel().bots[0]?.channelBindings[0]?.lastError).toBe(
+        SLACK_USERS_READ_MISSING,
+      );
     }),
   );
 

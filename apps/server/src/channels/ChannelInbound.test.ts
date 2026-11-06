@@ -36,6 +36,19 @@ import {
   mentionWithContext,
   type ChannelRuntimeDependencies,
 } from "./ChannelRuntime.ts";
+import {
+  CHANNEL_CONTEXT_END,
+  CHANNEL_CONTEXT_PREAMBLE,
+  CHANNEL_MENTION_CONTEXT_CHARACTER_LIMIT,
+  CHANNEL_MENTION_MESSAGE_CHARACTER_LIMIT,
+} from "./ChannelInbound.ts";
+
+const slackOwner = (userId: string) => ({
+  provider: "slack" as const,
+  workspaceId: "T-HOME",
+  userId,
+  linkedAt: NOW,
+});
 
 describe("channel runtime", () => {
   it("gives each external conversation a stable isolated thread", () => {
@@ -301,9 +314,12 @@ describe("channel runtime", () => {
 
       const normalized = yield* Effect.promise(() => mentionWithContext(thread, current));
 
-      expect(normalized.text).not.toContain("U0: context 0\n");
-      expect(normalized.text).not.toContain("U1: context 1\n");
-      expect(normalized.text.split("\n")).toHaveLength(11);
+      expect(normalized.text).not.toContain("> context 0\n");
+      expect(normalized.text).not.toContain("> context 1\n");
+      // The preamble, ten quoted messages of a header and one line each, the end marker, and
+      // the mention.
+      expect(normalized.text.split("\n")).toHaveLength(23);
+      expect(normalized.text).toContain("> [U11 · not the requester]\n> context 11");
       expect(normalized.externalSenderName).toBe("U-current");
       expect(normalized.externalMessageId).toBe("mention-current");
     }),
@@ -333,15 +349,30 @@ describe("channel runtime", () => {
 
       const normalized = yield* Effect.promise(() => mentionWithContext(thread, current));
 
-      expect(normalized.text.length).toBe(8_000 + 1 + current.text.length);
-      expect(normalized.text).toContain("U2: Latest detail");
+      expect(normalized.text.length).toBeLessThanOrEqual(
+        CHANNEL_CONTEXT_PREAMBLE.length +
+          1 +
+          CHANNEL_MENTION_CONTEXT_CHARACTER_LIMIT +
+          CHANNEL_CONTEXT_END.length +
+          1 +
+          current.text.length,
+      );
+      // The long message keeps its header and a bounded start; the latest one survives whole.
+      expect(normalized.text).toContain(
+        `> [U1 · not the requester]\n> ${"x".repeat(CHANNEL_MENTION_MESSAGE_CHARACTER_LIMIT)}…`,
+      );
+      expect(normalized.text).toContain("> [U2 · not the requester]\n> Latest detail");
       expect(normalized.text.endsWith(`\n${current.text}`)).toBe(true);
     }),
   );
 
-  it.effect("routes Slack direct messages and subscribed mention threads", () =>
+  it.effect("routes the owner's Slack DMs, mentions, and thread follow-ups", () =>
     Effect.gen(function* () {
-      const harness = makeHarness({ startTransport: null });
+      const harness = makeHarness({
+        startTransport: null,
+        channelOwners: [slackOwner("U1")],
+      });
+
       yield* connectChannel(harness.dependencies, slackConnect(BOT_ID));
 
       if (!externalAdapters.slackChat || !externalAdapters.slackAdapter) {
@@ -363,14 +394,14 @@ describe("channel runtime", () => {
         slackChat.processMessage(
           slackAdapter,
           channelThreadId,
-          makeChatSdkMessage(channelThreadId, "slack-mention-1", "@Akeru investigate", "U2", true),
+          makeChatSdkMessage(channelThreadId, "slack-mention-1", "@Akeru investigate", "U1", true),
         ),
       );
       yield* Effect.promise(() =>
         slackChat.processMessage(
           slackAdapter,
           channelThreadId,
-          makeChatSdkMessage(channelThreadId, "slack-followup-1", "One more detail", "U3"),
+          makeChatSdkMessage(channelThreadId, "slack-followup-1", "One more detail", "U1"),
         ),
       );
 
@@ -387,29 +418,23 @@ describe("channel runtime", () => {
     }),
   );
 
-  it.effect("restores Slack and Discord platform-thread subscriptions", () =>
+  it.effect("restores Slack and Discord subscriptions from active thread follows", () =>
     Effect.gen(function* () {
-      const slackThreadId = ThreadId.make("thread-slack-restored");
-      const discordThreadId = ThreadId.make("thread-discord-restored");
-
-      const harness = makeHarness({
-        startTransport: null,
-        commandModelOmitsMessages: true,
-        threads: [
-          makeThread(slackThreadId, BOT_ID, [
-            makeMessage(MessageId.make("slack-origin"), "user", "Mention", {
-              provider: "slack",
-              externalThreadId: "slack:C1:1",
-            }),
-          ]),
-          makeThread(discordThreadId, BOT_ID, [
-            makeMessage(MessageId.make("discord-origin"), "user", "Mention", {
-              provider: "discord",
-              externalThreadId: "discord:G1:C1:T1",
-            }),
-          ]),
-        ],
-      });
+      const harness = makeHarness({ startTransport: null });
+      const follow = { botId: BOT_ID, projectId: PROJECT_ID, senderId: "U1" } as const;
+      yield* harness.followStore.touch(
+        { ...follow, provider: "slack", workspaceId: "T-HOME", externalThreadId: "slack:C1:1" },
+        NOW,
+      );
+      yield* harness.followStore.touch(
+        {
+          ...follow,
+          provider: "discord",
+          workspaceId: "discord",
+          externalThreadId: "discord:G1:C1:T1",
+        },
+        NOW,
+      );
 
       yield* connectChannel(harness.dependencies, slackConnect(BOT_ID));
       yield* connectChannel(harness.dependencies, discordConnect(BOT_ID));
@@ -657,7 +682,7 @@ describe("channel runtime", () => {
 
   it.effect("ignores bot-authored direct and subscribed-thread messages", () =>
     Effect.gen(function* () {
-      const harness = makeHarness({ startTransport: null });
+      const harness = makeHarness({ startTransport: null, channelOwners: [slackOwner("U2")] });
       yield* connectChannel(harness.dependencies, slackConnect(BOT_ID));
 
       if (!externalAdapters.slackChat || !externalAdapters.slackAdapter) {
@@ -709,7 +734,7 @@ describe("channel runtime", () => {
       );
       yield* process(
         channelThreadId,
-        makeChatSdkMessage(channelThreadId, "slack-human-followup", "Thanks", "U3"),
+        makeChatSdkMessage(channelThreadId, "slack-human-followup", "Thanks", "U2"),
       );
 
       const turns = harness.commands.filter((command) => command.type === "thread.turn.start");

@@ -315,6 +315,46 @@ export const ChannelChangeProjectCommand = Schema.Struct({
   projectId: ProjectId,
 });
 
+/** A one-time code an owner sends a bot in a direct message to link their messaging account. */
+export const CHANNEL_LINK_CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+
+export const CHANNEL_LINK_CODE_LENGTH = 8;
+
+export const ChannelLinkCode = Schema.String.check(Schema.isPattern(/^[A-HJ-NP-Z2-9]{8}$/u));
+
+/**
+ * Starts a link for the bot's connection. The client generates the code and shows it; the server
+ * keeps it in memory for ten minutes and accepts it once.
+ */
+export const ChannelLinkCodeCreateCommand = Schema.Struct({
+  type: Schema.Literal("channel.link-code.create"),
+  commandId: CommandId,
+  botId: BotId,
+  provider: Schema.Literals(["slack", "discord"]),
+  code: ChannelLinkCode,
+});
+
+/** Unlinks one owner identity. Bots stop answering it until it is linked again. */
+export const ChannelOwnerRemoveCommand = Schema.Struct({
+  type: Schema.Literal("channel.owner.remove"),
+  commandId: CommandId,
+  provider: Schema.Literals(["slack", "discord"]),
+  workspaceId: TrimmedNonEmptyString,
+  userId: TrimmedNonEmptyString,
+});
+
+/** Replaces who besides the owner one bot answers, and whether it tells others whose bot it is. */
+export const ChannelAccessSetCommand = Schema.Struct({
+  type: Schema.Literal("channel.access.set"),
+  commandId: CommandId,
+  botId: BotId,
+  provider: Schema.Literals(["slack", "discord"]),
+  allowedUserIds: Schema.Array(TrimmedNonEmptyString.check(Schema.isMaxLength(64))).check(
+    Schema.isMaxLength(50),
+  ),
+  replyToOthers: Schema.Boolean,
+});
+
 export const ChannelSendCommand = Schema.Struct({
   type: Schema.Literal("channel.send"),
   commandId: CommandId,

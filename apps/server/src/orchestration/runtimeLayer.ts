@@ -1,6 +1,7 @@
 import * as Layer from "effect/Layer";
 
 import { ChannelDeliveryStoreLive } from "../channels/ChannelDeliveryStore.ts";
+import { ChannelFollowStoreLive } from "../channels/ChannelFollowStore.ts";
 import { OrchestrationCommandReceiptRepositoryLive } from "../persistence/Layers/OrchestrationCommandReceipts.ts";
 import { OrchestrationEventStoreLive } from "../persistence/Layers/OrchestrationEventStore.ts";
 import { ProjectionBotRepositoryLive } from "../persistence/Layers/ProjectionBots.ts";
@@ -35,6 +36,7 @@ export const OrchestrationInfrastructureLayerLive = Layer.mergeAll(
   ProjectionGroupRepositoryLive,
   BotUsageLedgerLive,
   ChannelDeliveryStoreLive,
+  ChannelFollowStoreLive,
   MemoryRepositoriesLive,
   // Shared background-liveness and plan-progress registries: written by
   // runtime ingestion, read by the snapshot query. provideMerge feeds the

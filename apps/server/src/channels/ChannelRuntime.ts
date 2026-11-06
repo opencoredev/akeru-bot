@@ -15,6 +15,8 @@ import { ServerSettingsService } from "../serverSettings.ts";
 import { OrchestrationEngineService } from "../orchestration/Services/OrchestrationEngine.ts";
 import { ProjectionSnapshotQuery } from "../orchestration/Services/ProjectionSnapshotQuery.ts";
 import { ChannelDeliveryStore } from "./ChannelDeliveryStore.ts";
+import { ChannelFollowStore, memoryChannelFollowStore } from "./ChannelFollowStore.ts";
+import { createChannelLinkCode, removeChannelOwner, setChannelAccess } from "./ChannelAccess.ts";
 import {
   type ChannelRuntimeDependencies,
   type ChannelRuntimeContext,
@@ -70,6 +72,8 @@ const makeChannelRuntime = (deps: ChannelRuntimeDependencies) =>
       runSdkCallback,
       transportScope,
       connecting: new Set(),
+      follows: deps.followStore ?? memoryChannelFollowStore(),
+      linkCodes: new Map(),
       closed: false,
     };
 
@@ -91,6 +95,9 @@ const makeChannelRuntime = (deps: ChannelRuntimeDependencies) =>
       disconnect: (botId, provider) => disconnectChannel(ctx, botId, provider),
       detach: (botId, provider) => detachChannelConnection(ctx, botId, provider),
       reconnect: (botId, provider) => reconnectChannel(ctx, botId, provider),
+      createLinkCode: (input) => createChannelLinkCode(ctx, input),
+      removeOwner: (input) => removeChannelOwner(ctx, input),
+      setAccess: (input) => setChannelAccess(ctx, input),
       restoreConnectedChannels: restoreConnectedChannels(ctx),
       dispatchInbound: (input) => dispatchInboundChannelMessage(ctx, input),
       sendChannelMessage: (input) => sendChannelMessage(ctx, input),
@@ -170,6 +177,7 @@ export class ChannelRuntime extends Context.Service<ChannelRuntime, ChannelRunti
     Effect.gen(function* () {
       const secretStore = yield* Effect.serviceOption(ServerSecretStore);
       const deliveryStore = yield* Effect.serviceOption(ChannelDeliveryStore);
+      const followStore = yield* Effect.serviceOption(ChannelFollowStore);
 
       if (Option.isNone(secretStore) || Option.isNone(deliveryStore)) return Layer.empty;
       const engine = yield* OrchestrationEngineService;
@@ -185,6 +193,7 @@ export class ChannelRuntime extends Context.Service<ChannelRuntime, ChannelRunti
         secretStore: secretStore.value,
         settings,
         deliveryStore: deliveryStore.value,
+        ...(Option.isSome(followStore) ? { followStore: followStore.value } : {}),
         readModel: projectionSnapshotQuery.getCommandReadModel(),
         readThread: (threadId) =>
           projectionSnapshotQuery
