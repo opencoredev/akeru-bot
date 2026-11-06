@@ -2,7 +2,11 @@ import * as NodeCrypto from "node:crypto";
 import * as NodeFS from "node:fs";
 import * as NodePath from "node:path";
 
-import type { ChatAttachment } from "@akeru/contracts";
+import type { ChatAttachment, ChatFileAttachment, ChatImageAttachment } from "@akeru/contracts";
+import * as Effect from "effect/Effect";
+import * as FileSystem from "effect/FileSystem";
+import * as Path from "effect/Path";
+import * as Schema from "effect/Schema";
 
 import {
   normalizeAttachmentRelativePath,
@@ -166,6 +170,51 @@ export function resolveAttachmentPath(input: {
     relativePath: attachmentRelativePath(input.attachment),
   });
 }
+
+export type AttachmentToWrite =
+  | Omit<ChatImageAttachment, "sizeBytes">
+  | Omit<ChatFileAttachment, "sizeBytes">;
+
+export class AttachmentWriteError extends Schema.TaggedErrorClass<AttachmentWriteError>()(
+  "AttachmentWriteError",
+  { attachmentId: Schema.String, cause: Schema.optional(Schema.Defect()) },
+) {
+  override get message(): string {
+    return `Failed to write attachment '${this.attachmentId}'.`;
+  }
+}
+
+export const writeFileAtomically = Effect.fn("writeFileAtomically")(function* (
+  filePath: string,
+  bytes: Uint8Array,
+) {
+  const fileSystem = yield* FileSystem.FileSystem;
+  const path = yield* Path.Path;
+  const partPath = `${filePath}.${NodeCrypto.randomUUID()}.part`;
+
+  yield* Effect.gen(function* () {
+    yield* fileSystem.makeDirectory(path.dirname(filePath), { recursive: true });
+    yield* fileSystem.writeFile(partPath, bytes);
+    yield* fileSystem.rename(partPath, filePath);
+  }).pipe(Effect.onError(() => fileSystem.remove(partPath, { force: true }).pipe(Effect.ignore)));
+});
+
+export const writeAttachment = Effect.fn("writeAttachment")(function* (input: {
+  readonly attachmentsDir: string;
+  readonly attachment: AttachmentToWrite;
+  readonly bytes: Uint8Array;
+}) {
+  const attachment: ChatAttachment = { ...input.attachment, sizeBytes: input.bytes.byteLength };
+  const path = resolveAttachmentPath({ attachmentsDir: input.attachmentsDir, attachment });
+
+  const fail = (cause?: unknown) =>
+    new AttachmentWriteError({ attachmentId: attachment.id, cause });
+
+  if (!path) return yield* fail();
+  yield* writeFileAtomically(path, input.bytes).pipe(Effect.mapError(fail));
+
+  return attachment;
+});
 
 export function resolveAttachmentPathById(input: {
   readonly attachmentsDir: string;

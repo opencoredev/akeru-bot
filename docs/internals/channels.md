@@ -90,6 +90,12 @@ Provider SDK errors can echo tokens, request bodies, or account details. `Channe
 
 `resolveCompletedChannelReply` sends a reply only for the owning bot's own turn. A delegated child thread, a turn another bot answered, and a provider subagent resolve to no reply, and each drop is logged at trace level. The decider rejects a turn that would give a delegated child thread a channel origin, so a channel message always lands in the owning bot's thread. Inbound handlers ignore blank messages and messages written by any bot, including this one, so two connected bots cannot answer each other in a loop. Discord, Slack, WhatsApp, and iMessage always mark a person's message with `isBot: false`, so an `"unknown"` author there counts as a bot. Telegram reports `"unknown"` for messages sent on behalf of a chat, such as anonymous group admins and linked channel posts, so Telegram ignores only an explicit `true`.
 
+### Inbound content
+
+`normalizedInboundMessage` in `apps/server/src/channels/ChannelInbound.ts` is the boundary parse for every provider's inbound message, Telegram included.
+
+Slack's adapter builds `message.text` as the plain-text rendering of `message.formatted`, and that rendering keeps only a link's label. When `message.text` equals `toPlainText(message.formatted)`, `plainTextWithLinks` walks the tree and renders each link as `label (url)`. A label that matches the URL or the URL without its scheme stays as written, ignoring one trailing slash on either side. An empty label becomes the URL. When no target was added, the adapter's original `message.text` is kept. Discord's `parseDiscordMessage`, which builds the messages in `recentMessages`, flattens text the same way, so Discord mention context lines also get `label (url)`. Telegram, WhatsApp, iMessage, and Discord's live gateway messages, including the content of a forwarded message, pass raw markdown through as `message.text`. Each link there already reads `[label](url)`, so that text reaches the bot unchanged. Rendering the markdown to plain text would drop code fences, list numbers, and emphasis markers.
+
 ## Security boundary
 
 The server requires the environment administrator scope, `access:write`, for every credential and assignment command. UI checks are presentation only. Secrets must not enter settings responses, orchestration events, logs, analytics, diagnostics, URLs, or client state.

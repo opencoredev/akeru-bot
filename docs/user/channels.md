@@ -83,6 +83,10 @@ A group message on Telegram, iMessage, or WhatsApp does not start Akeru work.
 
 For Slack and Discord, a direct mention starts a linked Akeru thread. Later replies in that platform thread continue the same Akeru thread without another mention. Akeru includes a small amount of recent platform-thread context with the first mention.
 
+## Links
+
+The bot sees where each link points. A link shown with a shortened label, such as `example.com/projects/…`, reaches the bot as the label followed by the full address. A link whose label already is the address reaches the bot once.
+
 ## Delegation
 
 The connected bot remains the external conversation owner. It can send work to another Akeru bot or group. Delegated work follows the existing access, memory, usage, depth, concurrency, and approval limits.
