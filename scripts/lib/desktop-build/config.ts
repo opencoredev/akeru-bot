@@ -1,14 +1,17 @@
-import type * as Schema from "effect/Schema";
+import * as Schema from "effect/Schema";
 import desktopPackageJson from "../../../apps/desktop/package.json" with { type: "json" };
 
 import * as Config from "effect/Config";
 
 import * as Effect from "effect/Effect";
 
+import * as FileSystem from "effect/FileSystem";
+
 import * as Option from "effect/Option";
 
 import * as Path from "effect/Path";
 
+import { ElectronChecksumsReadError, MissingElectronChecksumsError } from "./errors.ts";
 import { BuildArch, BuildPlatform, RepoRoot } from "./model.ts";
 
 import {
@@ -25,6 +28,7 @@ export interface DesktopBuildConfiguration {
   productName: string;
   artifactName: string;
   electronLanguages: readonly string[];
+  electronDownload: ElectronDownloadConfiguration;
   files: readonly string[];
   directories: { buildResources: string };
   extraResources: readonly {
@@ -215,6 +219,78 @@ export function resolveDesktopProductName(): string {
   return desktopPackageJson.productName ?? "Akeru Bot";
 }
 
+/**
+ * electron-builder's `electronDownload`, set so @electron/get checks the
+ * Electron zip against known checksums instead of fetching SHASUMS256.txt
+ * from the Electron GitHub release on every build. electron-builder only
+ * forwards `checksums` when an @electron/get-only key such as
+ * `unsafelyDisableChecksums` is present, so that key stays even though
+ * `false` is the default.
+ */
+interface ElectronDownloadConfiguration {
+  readonly unsafelyDisableChecksums: false;
+  readonly checksums: Readonly<Record<string, string>>;
+}
+
+const ELECTRON_PLATFORM_NAMES = {
+  mac: "darwin",
+  linux: "linux",
+  win: "win32",
+} as const satisfies Record<typeof BuildPlatform.Type, string>;
+
+const ELECTRON_ZIP_ARCH_PATTERN = /^[a-z0-9]+\.zip$/;
+
+/** Keeps the Electron zip checksums for one version and platform, one per arch. */
+export function selectElectronZipChecksums(input: {
+  readonly checksums: Readonly<Record<string, string>>;
+  readonly electronVersion: string;
+  readonly platform: typeof BuildPlatform.Type;
+}): Record<string, string> {
+  const prefix = `electron-v${input.electronVersion}-${ELECTRON_PLATFORM_NAMES[input.platform]}-`;
+
+  return Object.fromEntries(
+    Object.entries(input.checksums).filter(
+      ([fileName]) =>
+        fileName.startsWith(prefix) &&
+        ELECTRON_ZIP_ARCH_PATTERN.test(fileName.slice(prefix.length)),
+    ),
+  );
+}
+
+const decodeElectronChecksums = Schema.decodeUnknownEffect(
+  Schema.fromJsonString(Schema.Record(Schema.String, Schema.String)),
+);
+
+/**
+ * Reads the checksums the installed `electron` package ships for its own
+ * release, the same file Electron's installer validates against.
+ */
+export const resolveElectronDownloadConfig = Effect.fn("resolveElectronDownloadConfig")(function* (
+  platform: typeof BuildPlatform.Type,
+) {
+  const fs = yield* FileSystem.FileSystem;
+  const path = yield* Path.Path;
+  const repoRoot = yield* RepoRoot;
+  const checksumsPath = path.join(repoRoot, "apps/desktop/node_modules/electron/checksums.json");
+  const electronVersion = desktopPackageJson.dependencies.electron;
+
+  const checksums = yield* fs.readFileString(checksumsPath).pipe(
+    Effect.flatMap(decodeElectronChecksums),
+    Effect.mapError((cause) => new ElectronChecksumsReadError({ checksumsPath, cause })),
+  );
+
+  const zipChecksums = selectElectronZipChecksums({ checksums, electronVersion, platform });
+
+  if (Object.keys(zipChecksums).length === 0) {
+    return yield* new MissingElectronChecksumsError({ checksumsPath, electronVersion, platform });
+  }
+
+  return {
+    unsafelyDisableChecksums: false,
+    checksums: zipChecksums,
+  } satisfies ElectronDownloadConfiguration;
+});
+
 export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
   platform: typeof BuildPlatform.Type,
   target: string,
@@ -237,6 +313,7 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
         ? "Akeru-Bot-${version}-x64.${ext}"
         : "Akeru-Bot-${version}-${arch}.${ext}",
     electronLanguages: [...DESKTOP_ELECTRON_LANGUAGES],
+    electronDownload: yield* resolveElectronDownloadConfig(platform),
     files: [...DESKTOP_FILE_EXCLUSIONS, ...(platform === "mac" ? MAC_FILE_EXCLUSIONS : [])],
     directories: {
       buildResources: "apps/desktop/resources",

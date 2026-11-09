@@ -377,6 +377,31 @@ export class WslNodePtyManifestReadError extends Schema.TaggedErrorClass<WslNode
   }
 }
 
+export class ElectronChecksumsReadError extends Schema.TaggedErrorClass<ElectronChecksumsReadError>()(
+  "ElectronChecksumsReadError",
+  {
+    checksumsPath: Schema.String,
+    cause: Schema.Defect(),
+  },
+) {
+  override get message(): string {
+    return `Could not read Electron release checksums from ${this.checksumsPath}. Install desktop dependencies first.`;
+  }
+}
+
+export class MissingElectronChecksumsError extends Schema.TaggedErrorClass<MissingElectronChecksumsError>()(
+  "MissingElectronChecksumsError",
+  {
+    checksumsPath: Schema.String,
+    electronVersion: Schema.String,
+    platform: BuildPlatform,
+  },
+) {
+  override get message(): string {
+    return `${this.checksumsPath} has no ${this.platform} zip checksums for Electron ${this.electronVersion}. The installed electron package must match the version pinned in apps/desktop/package.json.`;
+  }
+}
+
 export class LinuxIconResizeError extends Schema.TaggedErrorClass<LinuxIconResizeError>()(
   "LinuxIconResizeError",
   {

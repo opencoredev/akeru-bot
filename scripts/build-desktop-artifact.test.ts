@@ -24,11 +24,13 @@ import {
   resolveMockUpdateServerPort,
   resolveMockUpdateServerUrl,
   resolvePackageManagerUserAgent,
+  selectElectronZipChecksums,
   WINDOWS_SERVER_EXTRA_RESOURCES,
   WINDOWS_SERVER_RESOURCE_SOURCE_DIR,
 } from "./build-desktop-artifact.ts";
 
 import { HostProcessArchitecture, HostProcessPlatform } from "@akeru/shared/hostProcess";
+import desktopPackageJson from "../apps/desktop/package.json" with { type: "json" };
 
 const decodeMacSignConfig = Schema.decodeUnknownEffect(
   Schema.Struct({
@@ -57,6 +59,64 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
       assert.equal(parsed.mac.sign, path.join(repoRoot, "scripts/sign-macos.ts"));
     }),
   );
+  it.effect("checks the Electron download against the installed package's checksums", () =>
+    Effect.gen(function* () {
+      const electronVersion = desktopPackageJson.dependencies.electron;
+
+      const expected = {
+        mac: ["darwin-arm64", "darwin-x64"],
+        linux: ["linux-arm64", "linux-armv7l", "linux-x64"],
+        win: ["win32-arm64", "win32-ia32", "win32-x64"],
+      } as const;
+
+      for (const platform of ["mac", "linux", "win"] as const) {
+        const config = yield* createBuildConfig(
+          platform,
+          "dir",
+          "1.2.3",
+          false,
+          false,
+          undefined,
+          undefined,
+        );
+
+        assert.equal(config.electronDownload.unsafelyDisableChecksums, false);
+        assert.deepEqual(
+          Object.keys(config.electronDownload.checksums).toSorted(),
+          expected[platform].map((suffix) => `electron-v${electronVersion}-${suffix}.zip`),
+        );
+
+        for (const checksum of Object.values(config.electronDownload.checksums)) {
+          assert.match(checksum, /^[0-9a-f]{64}$/);
+        }
+      }
+    }),
+  );
+
+  it("keeps only the Electron zips for the requested version and platform", () => {
+    const checksums = {
+      "electron-v1.2.3-darwin-arm64.zip": "a",
+      "electron-v1.2.3-darwin-x64.zip": "b",
+      "electron-v1.2.3-darwin-arm64-symbols.zip": "c",
+      "electron-v1.2.3-darwin-arm64-dsym.tar.xz": "d",
+      "electron-v1.2.3-linux-x64.zip": "e",
+      "electron-v1.2.30-darwin-arm64.zip": "f",
+      "ffmpeg-v1.2.3-darwin-arm64.zip": "g",
+    };
+
+    assert.deepEqual(
+      selectElectronZipChecksums({ checksums, electronVersion: "1.2.3", platform: "mac" }),
+      {
+        "electron-v1.2.3-darwin-arm64.zip": "a",
+        "electron-v1.2.3-darwin-x64.zip": "b",
+      },
+    );
+    assert.deepEqual(
+      selectElectronZipChecksums({ checksums, electronVersion: "9.9.9", platform: "mac" }),
+      {},
+    );
+  });
+
   it("uses the latest updater channel", () => {
     assert.equal(DESKTOP_UPDATE_CHANNEL, "latest");
   });
