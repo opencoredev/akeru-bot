@@ -7,6 +7,7 @@ import {
   AuthSessionId,
   BotId,
   ChannelConnectionId,
+  EnvironmentId,
   GroupId,
   IsoDateTime,
   MessageId,
@@ -14,6 +15,7 @@ import {
   TrimmedNonEmptyString,
 } from "../baseSchemas.ts";
 import { McpServerId } from "../mcpServer.ts";
+import { BotPermissionPolicy } from "../botPermissions.ts";
 import { ImageProviderId } from "../imageGeneration.ts";
 import { ModelSelection, RuntimeMode, DEFAULT_RUNTIME_MODE } from "./modelSelection.ts";
 
@@ -120,6 +122,8 @@ export const BotSandbox = Schema.Literals([
   "ascii",
   "railway",
   "tenki",
+  "boat",
+  "docker",
 ]);
 
 export type BotSandbox = typeof BotSandbox.Type;
@@ -148,6 +152,20 @@ export const MIN_BOT_PERSONALITY_TONE = 0;
 export const BALANCED_BOT_PERSONALITY_TONE = 50;
 
 export const MAX_BOT_PERSONALITY_TONE = 100;
+
+export const BOT_ALLOWED_ENVIRONMENTS_MAX = 32;
+
+/**
+ * Other environments a bot may run work on. The bot's home environment, the
+ * one that owns it, is always allowed and is never listed here, so the empty
+ * default means "home only".
+ */
+export const BotAllowedEnvironmentIds = Schema.Array(EnvironmentId).check(
+  Schema.isMaxLength(BOT_ALLOWED_ENVIRONMENTS_MAX),
+  Schema.isUnique(),
+);
+
+export type BotAllowedEnvironmentIds = typeof BotAllowedEnvironmentIds.Type;
 
 export const BotPersonalityTone = Schema.Int.check(
   Schema.isBetween({
@@ -297,6 +315,10 @@ export const OrchestrationBot = Schema.Struct({
   ),
   personalityTone: Schema.optionalKey(BotPersonalityTone),
   voiceEnabled: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
+  /** Absent on bots written before placement; read it through `botAllowedEnvironmentIds`. */
+  allowedEnvironmentIds: Schema.optionalKey(BotAllowedEnvironmentIds),
+  /** Absent means `DEFAULT_BOT_PERMISSION_POLICY`. */
+  permissionPolicy: Schema.optionalKey(BotPermissionPolicy),
   channelBindings: Schema.Array(ChannelBinding).pipe(
     Schema.withDecodingDefault(Effect.succeed([])),
   ),
@@ -307,6 +329,11 @@ export const OrchestrationBot = Schema.Struct({
 });
 
 export type OrchestrationBot = typeof OrchestrationBot.Type;
+
+/** The bot's allowed environments besides its home. Empty means home only. */
+export const botAllowedEnvironmentIds = (
+  bot: Pick<OrchestrationBot, "allowedEnvironmentIds">,
+): BotAllowedEnvironmentIds => bot.allowedEnvironmentIds ?? [];
 
 export const GroupMembershipRole = Schema.Literals(["boss", "specialist"]);
 

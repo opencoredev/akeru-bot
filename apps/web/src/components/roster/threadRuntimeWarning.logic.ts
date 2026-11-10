@@ -152,15 +152,26 @@ export function latestBotThreadFailure(input: {
     lastUserMessageAt !== null &&
     (latestTurn === null || latestTurn.requestedAt < lastUserMessageAt);
 
-  if (!unanswered || session?.status !== "error") return null;
-  const failure = latestTurnFailure(activities, lastUserMessageAt);
-  const message = failure?.detail ?? session.lastError;
+  if (!unanswered) return null;
+
+  // A refused turn start, such as a group handoff while another bot works, leaves the session
+  // healthy for the turn that is still running, so only its own failure explains the silence.
+  const failure =
+    session?.status === "error"
+      ? latestTurnFailure(activities, lastUserMessageAt)
+      : latestTurnFailure(
+          activities.filter((activity) => activity.kind === "provider.turn.start.failed"),
+          lastUserMessageAt,
+        );
+
+  if (session?.status !== "error" && failure === null) return null;
+  const message = failure?.detail ?? session?.lastError;
 
   if (!message) return null;
 
   return {
     message,
-    unavailability: failure?.unavailability ?? session.unavailability ?? null,
+    unavailability: failure?.unavailability ?? session?.unavailability ?? null,
     ...(failure?.providerInstanceId ? { providerInstanceId: failure.providerInstanceId } : {}),
   };
 }

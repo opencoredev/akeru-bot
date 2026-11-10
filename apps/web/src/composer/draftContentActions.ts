@@ -234,7 +234,7 @@ export function createDraftContentActions(
 
         return { draftsByThreadKey: nextDraftsByThreadKey };
       });
-      Promise.resolve().then(() => {
+      void Promise.resolve().then(() => {
         verifyPersistedAttachments(threadKey, attachments, set);
       });
     },

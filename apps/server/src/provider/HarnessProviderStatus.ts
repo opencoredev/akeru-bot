@@ -10,6 +10,7 @@ import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 
 import {
+  CLAUDE_SUBSCRIPTION_RETIRED_MESSAGE,
   SubscriptionAuthService,
   type SubscriptionProviderId,
 } from "../subscription-auth/service.ts";
@@ -127,11 +128,7 @@ export function harnessCredentialIssue(
   const connected = Match.value(driver).pipe(
     Match.when("codex", () => Boolean(environment.OPENAI_API_KEY?.trim())),
     Match.when("claudeAgent", () =>
-      Boolean(
-        environment.ANTHROPIC_API_KEY?.trim() ||
-        environment.ANTHROPIC_AUTH_TOKEN?.trim() ||
-        environment.CLAUDE_CODE_OAUTH_TOKEN?.trim(),
-      ),
+      Boolean(environment.ANTHROPIC_API_KEY?.trim() || environment.ANTHROPIC_AUTH_TOKEN?.trim()),
     ),
     Match.orElse(() => Boolean(environment.XAI_API_KEY?.trim())),
   );
@@ -139,9 +136,10 @@ export function harnessCredentialIssue(
   if (connected || (connection.useSavedCredential && savedCredentialConnected)) return undefined;
 
   if (connection.useSavedCredential) {
+    if (driver === "claudeAgent") return "Add an Anthropic API key for Claude in Settings.";
+
     const name = Match.value(driver).pipe(
       Match.when("codex", () => "ChatGPT"),
-      Match.when("claudeAgent", () => "Claude"),
       Match.orElse(() => "Grok"),
     );
 
@@ -151,7 +149,7 @@ export function harnessCredentialIssue(
   if (driver === "codex") return "This Codex instance needs OPENAI_API_KEY for the Akeru harness.";
 
   if (driver === "claudeAgent")
-    return "This Claude instance needs an API key or auth token for the Akeru harness.";
+    return "This Claude instance needs ANTHROPIC_API_KEY or ANTHROPIC_AUTH_TOKEN for the Akeru harness.";
 
   return "This Grok instance needs XAI_API_KEY for the Akeru harness.";
 }
@@ -173,11 +171,19 @@ export const makeHarnessProviderStatus = Effect.fn("makeHarnessProviderStatus")(
     const catalog = yield* modelCatalog.current;
     const { message: _draftMessage, ...draft } = yield* input.draft;
 
-    const message = harnessCredentialIssue(
+    const issue = harnessCredentialIssue(
       input.driver,
       input.connection,
       auth.isConnected(input.provider, input.instanceId),
     );
+
+    // An older version's Claude subscription login is ignored; say so instead of "connect".
+    const message =
+      issue &&
+      input.connection.useSavedCredential &&
+      auth.hasRetiredLogin(input.provider, input.instanceId)
+        ? CLAUDE_SUBSCRIPTION_RETIRED_MESSAGE
+        : issue;
 
     const entries = new Map(
       catalogModelsFor(catalog, input.driver).map((model) => [model.id, model]),

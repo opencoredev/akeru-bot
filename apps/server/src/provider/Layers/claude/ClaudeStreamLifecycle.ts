@@ -13,6 +13,7 @@ import { EventId, type ProviderRuntimeEvent, RuntimeTaskId, ThreadId } from "@ak
 import * as Cause from "effect/Cause";
 
 import * as Deferred from "effect/Deferred";
+import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
 
@@ -32,6 +33,9 @@ import {
 } from "./ClaudeProtocolValues.ts";
 import { taskLinkageFor } from "./ClaudeTasks.ts";
 import { isClaudeInterruptedCause } from "./ClaudeUsage.ts";
+
+/** How long a stop waits for Claude Code to acknowledge an interrupt before closing anyway. */
+const INTERRUPT_TIMEOUT = Duration.seconds(2);
 
 export function createClaudeStreamLifecycle(deps: {
   readonly handleSdkMessage: (
@@ -125,7 +129,22 @@ export function createClaudeStreamLifecycle(deps: {
     context: ClaudeSessionContext,
     options?: { readonly emitExitEvent?: boolean },
   ) {
-    if (context.stopped) return;
+    // A second stop still waits, so nothing can replace the session while
+    // its process runs.
+    if (context.stopped) {
+      yield* Effect.promise(() => context.query.waitForExit());
+
+      return;
+    }
+
+    // Cancel a running turn first, so a command already executing stops
+    // instead of finishing during the SDK's grace window after close.
+    if (context.turnState !== undefined && context.streamFiber !== undefined) {
+      yield* Effect.tryPromise(() => context.query.interrupt()).pipe(
+        Effect.timeout(INTERRUPT_TIMEOUT),
+        Effect.ignore,
+      );
+    }
 
     // Schedule process termination before any cleanup that can wait on the
     // provider. The SDK closes stdin, then escalates from SIGTERM to SIGKILL.
@@ -203,6 +222,10 @@ export function createClaudeStreamLifecycle(deps: {
     if (streamFiber && streamFiber.pollUnsafe() === undefined) {
       yield* Fiber.interrupt(streamFiber);
     }
+
+    // The message stream can end before the process does. The replacement
+    // session, and a change of runtime mode with it, starts only after exit.
+    yield* Effect.promise(() => context.query.waitForExit());
 
     const updatedAt = yield* deps.nowIso;
     context.session = {

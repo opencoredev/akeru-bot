@@ -528,9 +528,13 @@ export function ChannelSetupDialog({
                     role="note"
                     className="rounded-lg bg-muted/60 px-3 py-2 text-xs text-muted-foreground"
                   >
-                    {t(
-                      "Anyone who can message this bot can ask it to work in the chosen project with its enabled tools.",
-                    )}
+                    {provider === "slack" || provider === "discord"
+                      ? t(
+                          "This bot answers only linked accounts and people you add. After you connect, create a link code on the connection to link your account.",
+                        )
+                      : t(
+                          "Anyone who can message this bot can ask it to work in the chosen project with its enabled tools.",
+                        )}
                   </p>
                 </>
               ) : null}

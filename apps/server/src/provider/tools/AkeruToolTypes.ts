@@ -1,9 +1,16 @@
 import type { Tool } from "@mastra/core/tools";
+import type * as DateTime from "effect/DateTime";
+import type { BotApprovalCheck } from "@akeru/shared/botPermissions";
+import type { createAkeruNamedActionPermissions } from "./AkeruNamedActionPermissions.ts";
 import { type Workspace } from "@mastra/core/workspace";
 import {
   type AkeruDelegationAccessGrant,
   AkeruToolInputSchemas,
+  type BotActionPrincipal,
+  type BotHumanPrincipal,
   type BotId,
+  type BotPermissionPolicy,
+  type EnvironmentId,
   type AkeruToolId,
   type AkeruToolReceipt,
   type AkeruToolWorkspaceType,
@@ -28,6 +35,15 @@ export interface AkeruRuntimeToolDefinition {
   readonly description: string;
 }
 
+/** Who the session acts for and the bot policy that governs it. */
+export interface AkeruToolPermissions {
+  readonly principal: BotActionPrincipal;
+  /** The policy known when the session registered. */
+  readonly policy: BotPermissionPolicy;
+  /** Reads the current policy. Every async check and every run calls it, so revocation applies at once. */
+  readonly readPolicy?: () => Promise<BotPermissionPolicy>;
+}
+
 export interface AkeruToolSession {
   readonly botId?: BotId;
   readonly botName?: string;
@@ -38,6 +54,8 @@ export interface AkeruToolSession {
   readonly workspace?: Workspace;
   readonly userComputerWorkspace?: Workspace;
   readonly memoryHandlers?: Record<AkeruMemoryToolId, AkeruMemoryToolHandler>;
+  /** Absent means the owner, under the default bot policy. */
+  readonly permissions?: AkeruToolPermissions;
   readonly delegation?: {
     readonly depth: number;
     readonly activeDelegations: number;
@@ -103,6 +121,11 @@ export interface AkeruToolRuntimeOptions {
     readonly authorizationUrl?: string;
   }) => void | Promise<void>;
   readonly now?: () => string;
+  /** The environment approvals are bound to. */
+  readonly environmentId?: EnvironmentId;
+  readonly approvalTtlMillis?: number;
+  /** Clock for approval expiry. */
+  readonly clock?: () => DateTime.Utc;
   readonly onToolStart?: (input: AkeruToolExecution, session: AkeruToolSession) => Promise<void>;
   readonly onToolFinish?: (input: AkeruToolExecution, session: AkeruToolSession) => Promise<void>;
 }
@@ -125,6 +148,48 @@ export interface AkeruToolRuntime {
     toolId: AkeruRuntimeToolId,
     input: AkeruToolExecution["input"],
   ) => Promise<boolean>;
-  readonly grantApproval: (input: Omit<AkeruToolExecution, "approvalMode">) => void;
+  /**
+   * Who must approve a call, from the last policy this thread read. Use it to
+   * decide whether the chat mode may answer for the owner. `none` means an
+   * explicit allow for this tool, which skips the chat mode's prompt.
+   */
+  readonly approvalRequirement: (
+    threadId: string,
+    toolId: AkeruRuntimeToolId,
+    input: AkeruToolExecution["input"],
+  ) => "none" | "mode" | "owner" | "blocked";
+  /** Binds a pending approval to its requester, answerer, action, environment, and expiry. */
+  readonly openApproval: (input: Omit<AkeruToolExecution, "approvalMode">) => void;
+  /**
+   * Records an approving answer. Environment clients answer as the owner, which
+   * is the default. Returns the rejection when the answer is refused.
+   */
+  readonly grantApproval: (
+    input: Omit<AkeruToolExecution, "approvalMode"> & {
+      readonly answeredBy?: BotHumanPrincipal;
+    },
+  ) => BotApprovalCheck;
+  /**
+   * Records the chat's permission mode approving a routine call. It is refused
+   * when the bot policy currently reserves the call for the owner's answer.
+   */
+  readonly grantModeApproval: (input: Omit<AkeruToolExecution, "approvalMode">) => BotApprovalCheck;
+  /** Routine checks and owner approvals for named actions outside the tool catalog. */
+  readonly requiresNamedApproval: ReturnType<
+    typeof createAkeruNamedActionPermissions
+  >["requiresNamedApproval"];
+  readonly namedActionRequirement: ReturnType<
+    typeof createAkeruNamedActionPermissions
+  >["namedActionRequirement"];
+  readonly openNamedApproval: ReturnType<
+    typeof createAkeruNamedActionPermissions
+  >["openNamedApproval"];
+  readonly grantNamedApproval: ReturnType<
+    typeof createAkeruNamedActionPermissions
+  >["grantNamedApproval"];
+  readonly authorizeNamedExecution: ReturnType<
+    typeof createAkeruNamedActionPermissions
+  >["authorizeNamedExecution"];
+  readonly authorizeAction: ReturnType<typeof createAkeruNamedActionPermissions>["authorizeAction"];
   readonly execute: (input: AkeruToolExecution) => Promise<AkeruToolResult>;
 }

@@ -49,9 +49,9 @@ describe("subscription providers", () => {
   it("identifies saved keys and provides both key reconnect and OAuth switching", () => {
     const markup = renderToStaticMarkup(
       <ProviderAccountRows
-        definition={SUBSCRIPTION_PROVIDERS[1]!}
+        definition={SUBSCRIPTION_PROVIDERS[0]!}
         status={{
-          provider: "anthropic",
+          provider: "openai-codex",
           authMode: "api-key",
           baseUrl: "https://proxy.example/v1",
           connected: true,
@@ -75,9 +75,43 @@ describe("subscription providers", () => {
     expect(markup).toContain("Saved · https://proxy.example/v1");
     expect(markup).toContain("Replace key");
     expect(markup).toContain("Use OAuth");
-    expect(markup).toContain("Disconnect Claude");
+    expect(markup).toContain("Disconnect ChatGPT");
     expect(markup).not.toContain("Detected");
-    expect(markup).not.toContain(SUBSCRIPTION_PROVIDERS[1]!.description);
+    expect(markup).not.toContain(SUBSCRIPTION_PROVIDERS[0]!.description);
+  });
+
+  it("offers Claude only as an API key, with no OAuth switch or subscription row", () => {
+    const claude = SUBSCRIPTION_PROVIDERS.find((definition) => definition.id === "anthropic")!;
+
+    const render = (status: Parameters<typeof ProviderAccountRows>[0]["status"]) =>
+      renderToStaticMarkup(
+        <ProviderAccountRows
+          definition={claude}
+          status={status}
+          busy={false}
+          onConnect={() => undefined}
+          onApiKey={() => undefined}
+          onDisconnect={() => undefined}
+          onTest={() => undefined}
+        />,
+      );
+
+    const disconnected = render(undefined);
+    expect(disconnected).not.toContain("Subscription");
+    expect(disconnected).toContain("Use Claude models with an Anthropic API key.");
+
+    const connected = render({
+      provider: "anthropic",
+      authMode: "api-key",
+      connected: true,
+      health: "detected",
+      dependentBots: [],
+      dependentRoutines: [],
+    });
+
+    expect(connected).toContain("Replace key");
+    expect(connected).not.toContain("Use OAuth");
+    expect(connected).not.toContain("Reconnect");
   });
 
   it("disables other providers without showing false progress", () => {

@@ -38,18 +38,6 @@ const firecrawl = {
   catalogStatus: "available" as const,
 } satisfies PluginDefinition;
 
-const executorDirectory = loadDirectoryCatalog().find((plugin) => plugin.id === "executor");
-
-if (!executorDirectory || executorDirectory.kind !== "mcp-url") {
-  throw new TypeError("Executor is missing its HTTP recipe.");
-}
-
-const executor = {
-  ...executorDirectory,
-  connection: { type: "ready" as const },
-  catalogStatus: "available" as const,
-} satisfies PluginDefinition;
-
 const exaServer: McpServer = {
   id: pluginMcpServerId(exa),
   name: "Exa",
@@ -79,10 +67,10 @@ describe("plugin registry mapping", () => {
     });
   });
 
-  it("maps Executor 2 HTTP and refreshes its stale recipe before enabling", () => {
-    const existingExecutorServer: McpServer = {
-      id: pluginMcpServerId(executor),
-      name: "Executor",
+  it("refreshes a stale hosted recipe before enabling", () => {
+    const staleServer: McpServer = {
+      id: pluginMcpServerId(firecrawl),
+      name: "Firecrawl",
       transport: "url",
       url: "https://old.example/mcp",
       enabled: false,
@@ -90,15 +78,10 @@ describe("plugin registry mapping", () => {
       updatedAt: "2026-08-27T00:00:00.000Z",
     };
 
-    expect(pluginMcpConfiguration(executor)).toEqual({
-      name: "Executor",
-      transport: "url",
-      url: "https://executor.sh/mcp",
-    });
-    expect(planPluginToggle(executor, [existingExecutorServer], true)).toEqual({
+    expect(planPluginToggle(firecrawl, [staleServer], true)).toEqual({
       action: "refresh-and-enable",
-      mcpServerId: existingExecutorServer.id,
-      configuration: pluginMcpConfiguration(executor),
+      mcpServerId: staleServer.id,
+      configuration: pluginMcpConfiguration(firecrawl),
     });
   });
 

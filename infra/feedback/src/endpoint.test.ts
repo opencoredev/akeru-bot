@@ -90,7 +90,7 @@ function makeRepository() {
   };
 }
 
-function request(payload: Schema.Json, headers?: HeadersInit): Request {
+function request(payload: Schema.Json, headers?: Readonly<Record<string, string>>): Request {
   return new Request("https://feedback.akeru.test/v1/feedback", {
     method: "POST",
     headers: {

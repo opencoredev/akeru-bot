@@ -121,8 +121,6 @@ export const DevShareError = Schema.Union([
 
 export type DevShareError = typeof DevShareError.Type;
 
-export const isDevShareError = Schema.is(DevShareError);
-
 /**
  * Removes any mapping for `webPort`, reporting whether the port is now clear.
  *

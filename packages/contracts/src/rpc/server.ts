@@ -170,6 +170,7 @@ import {
   ComposioToolkit,
   ComposioToolkitSearchInput,
 } from "../composio.ts";
+import { EnvironmentHostDescriptor } from "../environmentHost.ts";
 import { WS_METHODS } from "./methods.ts";
 
 export const WsServerUpsertKeybindingRpc = Rpc.make(WS_METHODS.serverUpsertKeybinding, {
@@ -242,6 +243,13 @@ export const WsServerUpdateSettingsRpc = Rpc.make(WS_METHODS.serverUpdateSetting
   payload: Schema.Struct({ patch: ServerSettingsRpcPatch }),
   success: ServerSettings,
   error: Schema.Union([ServerSettingsError, EnvironmentAuthorizationError]),
+});
+
+/** What this environment's machine can do, for placing work across environments. */
+export const WsServerGetEnvironmentHostRpc = Rpc.make(WS_METHODS.serverGetEnvironmentHost, {
+  payload: Schema.Struct({}),
+  success: EnvironmentHostDescriptor,
+  error: EnvironmentAuthorizationError,
 });
 
 export const WsComposioGetStatusRpc = Rpc.make(WS_METHODS.composioGetStatus, {

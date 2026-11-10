@@ -57,21 +57,43 @@ describe("providerAccessGuide", () => {
   });
 
   it("does not claim that a consumer subscription includes API access", () => {
-    for (const id of ["openai-codex", "anthropic", "xai", "kimi-for-coding"] as const) {
+    for (const id of ["openai-codex", "xai", "kimi-for-coding"] as const) {
       expect(providerAccessGuide(id, undefined)?.apiAccess, id).toMatch(/do(es)? not include/);
     }
 
     expect(providerAccessGuide("opencode-go", undefined)?.alternative).toBeNull();
+    expect(providerAccessGuide("anthropic", undefined)?.alternative).toBeNull();
+  });
+
+  it("offers Claude only through an Anthropic API key", () => {
+    const warning =
+      "Claude Pro and Max sign-in is no longer supported. Add an Anthropic API key in Settings to keep using Claude.";
+
+    expect(
+      providerAccessGuide("anthropic", {
+        connected: false,
+        health: "missing",
+        credentialWarning: { at: "2026-10-30T00:00:00.000Z", message: warning },
+      }),
+    ).toMatchObject({
+      state: "not-connected",
+      unlockedBy: "An Anthropic API key from the Claude Console.",
+      apiAccess:
+        "Anthropic bills the key per request. Claude Pro and Max subscriptions cannot be used in Akeru.",
+      saved: "Missing: no Anthropic API key in this environment.",
+      nextStep: "Choose Connect and paste an Anthropic API key from the Claude Console.",
+      warning,
+    });
   });
 
   it("gives one next step that matches the credential type", () => {
-    expect(providerAccessGuide("anthropic", { connected: true, health: "detected" })).toMatchObject(
-      {
-        stateLabel: "Not verified yet",
-        saved: "Subscription login saved in this environment.",
-        nextStep: "Choose Check OAuth to send a health request.",
-      },
-    );
+    expect(
+      providerAccessGuide("openai-codex", { connected: true, health: "detected" }),
+    ).toMatchObject({
+      stateLabel: "Not verified yet",
+      saved: "Subscription login saved in this environment.",
+      nextStep: "Choose Check OAuth to send a health request.",
+    });
     expect(
       providerAccessGuide("anthropic", {
         connected: true,

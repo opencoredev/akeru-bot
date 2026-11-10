@@ -13,10 +13,12 @@ import {
   type SDKUserMessage,
 } from "@anthropic-ai/claude-agent-sdk";
 import { parseCliArgs } from "@akeru/shared/cliArgs";
+import { HostProcessPlatform } from "@akeru/shared/hostProcess";
 import {
   ApprovalRequestId,
   type ClaudeSettings,
   EventId,
+  type ProviderDriverKind,
   ProviderInstanceId,
   type ProviderRuntimeEvent,
   type ProviderSession,
@@ -78,7 +80,10 @@ import {
 
 import { selectedClaudeContextWindow } from "./ClaudeUsage.ts";
 import { CLAUDE_SETTING_SOURCES } from "./ClaudePrompt.ts";
+import { claudeChildHomeDirectory } from "./ClaudeChildHome.ts";
 import { createClaudeSessionPermissions } from "./ClaudeSessionPermissions.ts";
+import { hostPathsAreCaseInsensitive } from "../../claudeCode/ClaudeCodeToolPaths.ts";
+import { bindBotToolPermissionSession } from "../../tools/BotToolPermissionSessions.ts";
 
 export function createClaudeSessionLifecycle(deps: {
   readonly sessions: Map<ThreadId, ClaudeSessionContext>;
@@ -105,6 +110,14 @@ export function createClaudeSessionLifecycle(deps: {
     },
   ) => Effect.Effect<void, ProviderAdapterRequestError, never>;
   readonly claudeSdkExecutablePath: string;
+  /** Finds the `claude` program again for each session, so a later install is picked up. */
+  readonly resolveExecutablePath: Effect.Effect<string> | undefined;
+  /** The session environment. Defaults to the instance environment plus its saved API key. */
+  readonly sessionEnvironment: Effect.Effect<NodeJS.ProcessEnv> | undefined;
+  readonly enforceBotPermissionPolicy: boolean;
+  /** Load no Claude Code settings files and run no settings hooks. */
+  readonly isolateClaudeSettings: boolean;
+  readonly driverKind: ProviderDriverKind;
   readonly claudeSettings: ClaudeSettings;
   readonly boundInstanceId: ProviderInstanceId;
   readonly serverConfig: ServerConfig["Service"];
@@ -125,11 +138,11 @@ export function createClaudeSessionLifecycle(deps: {
 }) {
   const startSession: ClaudeAdapterShape["startSession"] = Effect.fn("startSession")(
     function* (input) {
-      if (input.provider !== undefined && input.provider !== PROVIDER) {
+      if (input.provider !== undefined && input.provider !== deps.driverKind) {
         return yield* new ProviderAdapterValidationError({
           provider: PROVIDER,
           operation: "startSession",
-          issue: `Expected provider '${PROVIDER}' but received '${input.provider}'.`,
+          issue: `Expected provider '${deps.driverKind}' but received '${input.provider}'.`,
         });
       }
 
@@ -182,8 +195,34 @@ export function createClaudeSessionLifecycle(deps: {
 
       const contextRef = yield* Ref.make<ClaudeSessionContext | undefined>(undefined);
 
-      const { canUseTool, onUserDialog } = createClaudeSessionPermissions({
+      const sessionEnvironment = deps.sessionEnvironment
+        ? yield* deps.sessionEnvironment
+        : yield* subscriptionRuntimeEnvironment(
+            deps.serverConfig.secretsDir,
+            "anthropic",
+            deps.claudeEnvironment,
+            deps.boundInstanceId,
+          ).pipe(
+            Effect.provideService(FileSystem.FileSystem, deps.fileSystem),
+            Effect.provideService(Path.Path, deps.path),
+          );
+
+      const hostPlatform = yield* HostProcessPlatform;
+
+      const { canUseTool, onUserDialog, hooks } = createClaudeSessionPermissions({
         runtimeMode: input.runtimeMode,
+        botPermissions: deps.enforceBotPermissionPolicy
+          ? bindBotToolPermissionSession(threadId)
+          : undefined,
+        fileScope: {
+          cwd: input.cwd,
+          readRoots: [deps.serverConfig.attachmentsDir],
+          homeDirectory: claudeChildHomeDirectory(sessionEnvironment, hostPlatform),
+          claudeConfigDirectory: sessionEnvironment.CLAUDE_CONFIG_DIR?.trim() || undefined,
+          caseInsensitivePaths: hostPathsAreCaseInsensitive(hostPlatform),
+        },
+        fileSystem: deps.fileSystem,
+        path: deps.path,
         contextRef,
         pendingApprovals,
         pendingUserInputs,
@@ -195,7 +234,10 @@ export function createClaudeSessionLifecycle(deps: {
         emitProposedPlanCompleted: deps.emitProposedPlanCompleted,
       });
 
-      const claudeBinaryPath = deps.claudeSdkExecutablePath;
+      const claudeBinaryPath = deps.resolveExecutablePath
+        ? yield* deps.resolveExecutablePath
+        : deps.claudeSdkExecutablePath;
+
       const extraArgs = parseCliArgs(deps.claudeSettings.launchArgs).flags;
 
       const modelSelection =
@@ -250,6 +292,9 @@ export function createClaudeSessionLifecycle(deps: {
         ...(deps.claudeSettings.autoCompactWindow
           ? { autoCompactWindow: Number(deps.claudeSettings.autoCompactWindow) }
           : {}),
+        // Command hooks from any settings layer would run shell outside the
+        // bot policy. Akeru's own PreToolUse callback is not a settings hook.
+        ...(deps.isolateClaudeSettings ? { disableAllHooks: true } : {}),
       };
 
       const mcpSession = McpProviderSession.readMcpProviderSession(input.threadId);
@@ -283,16 +328,24 @@ export function createClaudeSessionLifecycle(deps: {
         systemPrompt: {
           type: "preset",
           preset: "claude_code",
-          append: input.botId
-            ? createAkeruBotInstructions({
-                ...(input.botName ? { name: input.botName } : {}),
-                ...(input.personalityTone !== undefined
-                  ? { personalityTone: input.personalityTone }
-                  : {}),
-              })
-            : createAkeruAgentInstructions(),
+          append: [
+            input.botId
+              ? createAkeruBotInstructions({
+                  ...(input.botName ? { name: input.botName } : {}),
+                  ...(input.personalityTone !== undefined
+                    ? { personalityTone: input.personalityTone }
+                    : {}),
+                })
+              : createAkeruAgentInstructions(),
+            input.persistentMemoryContext?.trim() ?? "",
+          ]
+            .filter(Boolean)
+            .join("\n\n"),
         },
-        settingSources: [...CLAUDE_SETTING_SOURCES],
+        // A Claude Code login session reads no settings file: user, project,
+        // and local settings can set env, apiKeyHelper, and hooks that would
+        // bypass the login and the bot policy. Akeru passes what it wants.
+        settingSources: deps.isolateClaudeSettings ? [] : [...CLAUDE_SETTING_SOURCES],
         // `ultracode` is a Claude Code setting, not an API effort level. It is
         // normalized to `xhigh` above and paired with `settings.ultracode`.
         ...(effectiveEffort
@@ -311,18 +364,14 @@ export function createClaudeSessionLifecycle(deps: {
         canUseTool,
         onUserDialog,
         supportedDialogKinds: ["resume_return"],
-        env: yield* subscriptionRuntimeEnvironment(
-          deps.serverConfig.secretsDir,
-          "anthropic",
-          deps.claudeEnvironment,
-          deps.boundInstanceId,
-        ).pipe(
-          Effect.provideService(FileSystem.FileSystem, deps.fileSystem),
-          Effect.provideService(Path.Path, deps.path),
-        ),
+        env: sessionEnvironment,
+        ...(hooks ? { hooks } : {}),
         additionalDirectories,
         ...(Object.keys(extraArgs).length > 0 ? { extraArgs } : {}),
         ...(Object.keys(mcpServers).length > 0 ? { mcpServers } : {}),
+        // Only the bot's MCP servers and Akeru's own reach Claude, never the
+        // servers in the user's Claude Code settings.
+        strictMcpConfig: true,
       };
 
       yield* Effect.annotateCurrentSpan({
@@ -344,7 +393,7 @@ export function createClaudeSessionLifecycle(deps: {
         "claude.query.session_id": newSessionId ?? "",
         "claude.query.include_partial_messages": true,
         "claude.query.additional_directories": additionalDirectories,
-        "claude.query.setting_sources": [...CLAUDE_SETTING_SOURCES],
+        "claude.query.setting_sources": queryOptions.settingSources ?? [],
         "claude.query.settings_json": encodeJsonStringForDiagnostics(settings) ?? "",
         "claude.query.extra_args_json": encodeJsonStringForDiagnostics(extraArgs) ?? "",
         "claude.query.path_to_executable": claudeBinaryPath,
@@ -367,7 +416,7 @@ export function createClaudeSessionLifecycle(deps: {
 
       const session: ProviderSession = {
         threadId,
-        provider: PROVIDER,
+        provider: deps.driverKind,
         providerInstanceId: deps.boundInstanceId,
         status: "ready",
         runtimeMode: input.runtimeMode,

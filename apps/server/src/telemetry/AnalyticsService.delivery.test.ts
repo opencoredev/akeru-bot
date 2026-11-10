@@ -428,6 +428,8 @@ it.layer(NodeServices.layer)("anonymous analytics", (it) => {
                   provider_turns_cursor: 2,
                   provider_turns_other: 1,
                   browser_searches_cursor: 3,
+                  // Queued before the Executor plugin was retired.
+                  plugin_enabled_executor: 0,
                 },
               },
             ],
@@ -449,6 +451,7 @@ it.layer(NodeServices.layer)("anonymous analytics", (it) => {
         assert.equal(properties?.provider_turns_other, 3);
         assert.equal(properties?.browser_searches_other, 3);
         assert.isFalse(properties !== undefined && "provider_turns_cursor" in properties);
+        assert.isFalse(properties !== undefined && "plugin_enabled_executor" in properties);
       }).pipe(Effect.provide(analyticsLayer));
     }),
   );

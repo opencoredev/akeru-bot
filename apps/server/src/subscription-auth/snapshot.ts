@@ -12,8 +12,9 @@ import type {
 import type { ProviderStatus, RequestHealthStatus, SubscriptionProviderId } from "./service.ts";
 
 const SUBSCRIPTION_ACCESS = [
-  { id: "chatgpt", label: "ChatGPT", provider: "openai-codex" },
-  { id: "claude-max", label: "Claude Max", provider: "anthropic" },
+  { id: "chatgpt", label: "ChatGPT", provider: "openai-codex", keyOnly: false },
+  // Claude takes an Anthropic API key only; Akeru no longer offers claude.ai sign-in.
+  { id: "claude", label: "Claude", provider: "anthropic", keyOnly: true },
 ] as const;
 
 const SUBSCRIPTION_DRIVER: Readonly<Partial<Record<SubscriptionProviderId, string>>> = {
@@ -115,7 +116,9 @@ export function buildProviderAccessCapabilities(
       id: entry.id,
       label: entry.label,
       accessMethod:
-        status?.authMode === "api-key" ? ("api-key" as const) : ("subscription-oauth" as const),
+        entry.keyOnly || status?.authMode === "api-key"
+          ? ("api-key" as const)
+          : ("subscription-oauth" as const),
       health: status?.health ?? ("missing" as const),
       apiAccess: "separate" as const,
       nextAction:
@@ -125,7 +128,9 @@ export function buildProviderAccessCapabilities(
             ? status.authMode === "api-key"
               ? "Check the API key, then send a provider request to verify access."
               : "Check OAuth, then send a provider request to verify access."
-            : `Connect ${entry.label} in Settings.`,
+            : entry.keyOnly
+              ? `Add an API key for ${entry.label} in Settings.`
+              : `Connect ${entry.label} in Settings.`,
       ...(status?.lastSuccessfulRequestAt
         ? { lastSuccessfulRequestAt: status.lastSuccessfulRequestAt }
         : {}),
@@ -270,7 +275,8 @@ export function buildProviderAccessCapabilities(
       apiAccess: "not-applicable" as const,
       nextAction: "Use a supported email connector when one is available.",
       temporary: true,
-      repairAction: "Add an email connector or configure it through Executor, then reconnect it.",
+      repairAction:
+        "Add a custom email MCP server, then reconnect it. Gmail through Composio is still pending verification.",
     },
     {
       id: "shopping-browser",

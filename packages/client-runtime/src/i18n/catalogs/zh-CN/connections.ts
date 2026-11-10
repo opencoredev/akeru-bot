@@ -289,8 +289,8 @@ export const connectionsCatalog = {
   "This environment": "此环境",
   "Choose Connect and sign in with your ChatGPT account.":
     "选择“连接”，然后使用你的 ChatGPT 账号登录。",
-  "Choose Connect and sign in with your Claude account.":
-    "选择“连接”，然后使用你的 Claude 账号登录。",
+  "Choose Connect and paste an Anthropic API key from the Claude Console.":
+    "选择“连接”，然后粘贴来自 Claude Console 的 Anthropic API 密钥。",
   "Choose Connect and sign in with the xAI account that has SuperGrok or X Premium+.":
     "选择“连接”，然后使用拥有 SuperGrok 或 X Premium+ 的 xAI 账号登录。",
   "Choose Connect and sign in with your Kimi account.": "选择“连接”，然后使用你的 Kimi 账号登录。",
@@ -302,6 +302,7 @@ export const connectionsCatalog = {
     "确认订阅仍然有效，然后选择“重新连接”。",
   "Missing: no OpenCode Go API key in this environment.":
     "缺少：此环境中没有 OpenCode Go API 密钥。",
+  "Missing: no Anthropic API key in this environment.": "缺失：此环境中没有 Anthropic API 密钥。",
   "Missing: no subscription login or API key in this environment.":
     "缺少：此环境中没有订阅登录或 API 密钥。",
   "API key saved in this environment.": "API 密钥已保存在此环境中。",
@@ -370,6 +371,9 @@ export const connectionsCatalog = {
     "由 Upstash Box 管理的云端工作区。需要 API 密钥。",
   "Cloud workspaces managed by Tenki. Requires an API key.":
     "由 Tenki 管理的云端工作区。需要 API 密钥。",
+  "Cloud VMs managed by Boat. Requires an API key.": "由 Boat 管理的云端虚拟机。需要 API 密钥。",
+  "Run bots in Docker containers on the environment computer. Requires Docker.":
+    "在环境所在计算机上的 Docker 容器中运行机器人。需要 Docker。",
   "Network access": "访问网络",
   "No models available. Check your provider connection in Settings.":
     "没有可用的模型。请在设置中检查提供商连接。",

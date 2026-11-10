@@ -71,8 +71,12 @@ mobile app does not manage plugins.
 
 ## Custom MCP servers
 
-Use **Add server** under **Custom MCP servers** when a connector is not in the directory. Installed
-servers can be edited, disabled, or removed from the same section.
+Use **Add server** under **Custom MCP servers** when a connector is not in the directory or Composio.
+A server is either a local command, such as `bunx` with its arguments, or a remote `http://` or
+`https://` URL. Installed servers can be edited, disabled, or removed from the same section.
+
+Keep credentials out of the URL. When a remote server uses OAuth, ask a bot to authenticate it. The
+bot shows the service's sign-in link, and the server connects once you finish signing in.
 
 Bots can also save short guidance for an MCP server, such as which tool
 to try first. Ask the bot to set it. The bot asks for approval, and the guidance applies to every

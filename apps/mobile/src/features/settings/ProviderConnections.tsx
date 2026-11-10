@@ -19,6 +19,7 @@ import {
   HEALTH_CHECK_REFRESH_MS,
   PROVIDER_CONNECTIONS,
   providerConnectionLabel,
+  providerRequiresApiKey,
   providerUsesApiKey,
   providerSupportsBaseUrl,
 } from "@akeru/client-runtime/provider-auth";
@@ -231,7 +232,7 @@ export function ProviderConnections({ environmentId }: { readonly environmentId:
   };
 
   const connect = async (provider: SubscriptionProviderId, account: AccountTarget = {}) => {
-    if (provider === "opencode-go") {
+    if (providerRequiresApiKey(provider)) {
       openKey(provider, account);
 
       return;
@@ -582,7 +583,7 @@ export function ProviderConnections({ environmentId }: { readonly environmentId:
                           <Action
                             label={
                               status?.connected
-                                ? apiKey && provider.id !== "opencode-go"
+                                ? apiKey && !providerRequiresApiKey(provider.id)
                                   ? t("Use OAuth")
                                   : t("Reconnect")
                                 : t("Connect")
@@ -590,7 +591,7 @@ export function ProviderConnections({ environmentId }: { readonly environmentId:
                             disabled={busy || query.isPending}
                             onPress={() => void connect(provider.id, account)}
                           />
-                          {provider.id !== "opencode-go" ? (
+                          {!providerRequiresApiKey(provider.id) ? (
                             <Action
                               label={apiKey ? t("Reconnect key") : t("API key")}
                               disabled={busy || query.isPending}
@@ -632,7 +633,7 @@ export function ProviderConnections({ environmentId }: { readonly environmentId:
                   {linked.length > 0 ? (
                     <View className="gap-2">
                       <View className="flex-row flex-wrap gap-2">
-                        {provider.id !== "opencode-go" ? (
+                        {!providerRequiresApiKey(provider.id) ? (
                           <Action
                             label={t("Add account")}
                             disabled={busy || query.isPending}

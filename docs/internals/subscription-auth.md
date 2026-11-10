@@ -5,11 +5,30 @@ Akeru lets a user connect an existing AI subscription or supply an API key. The 
 Supported account flows:
 
 - ChatGPT subscription through OpenAI Codex device authorization
-- Claude Pro or Max through Anthropic paste-code PKCE
 - Grok subscription through xAI device authorization
 - Kimi For Coding through Moonshot device authorization
 
+Claude and OpenCode Go take an API key only (`providerRequiresApiKey` in `serviceTypes.ts` and `@akeru/client-runtime/provider-auth`). Claude can also run on the user's own Claude Code login, which is not a credential Akeru stores: see [Claude Code login](#claude-code-login). Akeru no longer offers Claude Pro or Max sign-in. Anthropic's [Agent SDK overview](https://code.claude.com/docs/en/agent-sdk/overview) says: "Unless previously approved, Anthropic does not allow third party developers to offer claude.ai login or rate limits for their products, including agents built on the Claude Agent SDK. Use the API key authentication methods described in the Quickstart instead." No request from Akeru claims to be a vendor CLI: there is no Claude Code user agent, no `claude-code` beta, and no Claude Code system prompt. See [the sign-in route table](./providers.md#subscription-sign-in-routes) for each remaining route and its evidence.
+
 The flow implementations are ported from Mastra Code under Apache-2.0. The Kimi flow follows `mastra-ai/mastra` pull request 22428.
+
+## Retired Claude logins
+
+Older versions stored Claude Pro or Max OAuth credentials under `anthropic`, `instance:anthropic:<id>`, and `account:anthropic:<id>`. `SubscriptionAuthService.make` deletes all of them when it loads the file, so no Claude subscription token stays on disk:
+
+- Before it deletes them, the service writes `retiredLoginRemovedAt` into the health record for each removed scope in `subscription-auth.json.health`. A backup account's marker goes on the default `anthropic` record, because a removed backup has no row of its own. Writing the marker first means a failed credential write cannot lose the guidance. Saving an API key for a scope deletes that scope's health record, which clears the marker.
+- `credentialAt` still skips an `anthropic` OAuth credential (`isRetiredCredential`), so a login that another writer saves after startup, such as an older Akeru version running against the same file, is never used. The next startup deletes it. Token redaction still covers stored secrets.
+- While a scope has a marker or an ignored login and no API key, status reports `connected: false`, health `missing`, `reconnectAction: "Connect API key"`, and a `credentialWarning` with `CLAUDE_SUBSCRIPTION_RETIRED_MESSAGE`. The access guide shows that warning on web and mobile.
+- `HarnessProviderStatus` uses the same message as the Claude instance's readiness message. Send preflight returns that `credentialWarning` for a `missing`, unauthenticated instance before it reads request health, so request health recorded before the upgrade cannot replace the message with a generic sign-in step.
+- Deletion is one-way. After a rollback to a version that still offers Claude Pro or Max sign-in, the user has to sign in again.
+- A pending Claude paste-code login in `subscription-auth.json.pending` is dropped on load, like retired Cursor logins. `subscriptionAuth.start` with `authMode: "oauth"` for Claude fails with the same message; without `authMode` it starts an API-key login.
+- `CLAUDE_CODE_OAUTH_TOKEN` is no longer a Claude transport or a connection variable. The Mastra transport accepts `ANTHROPIC_API_KEY`, `ANTHROPIC_AUTH_TOKEN` (an API gateway bearer), or the saved Anthropic API key.
+
+## Claude Code login
+
+The `claudeCode` driver runs Claude through the installed Claude Code and the login the user made with `claude auth login`. `SubscriptionAuthService` stores nothing for it, and no RPC in this document touches it. The login lives in Claude Code's own config directory (the instance's `CLAUDE_CONFIG_DIR`, or Claude Code's default), and Claude Code reads it. Akeru checks the state only by starting Claude Code through the SDK with settings isolated and reading the account from its initialize reply, never by reading credential files.
+
+Akeru never sets `CLAUDE_CODE_OAUTH_TOKEN`. It starts Claude Code with an allowlisted environment and no settings files, so no saved or ambient token, Anthropic key, base URL, header, or cloud-provider switch, and no settings `env` or `apiKeyHelper`, can replace or reroute the login. See [Claude Code login](./providers.md#claude-code-login).
 
 ## Storage boundary
 
@@ -69,7 +88,7 @@ The client drives every login over RPC:
 
 - `subscriptionAuth.start` creates a pending login. An optional `instanceId` binds it to a configured instance of that provider. An `authMode` of `api-key` selects key entry and accepts an optional `baseUrl`. OAuth remains the default for subscription providers.
 - `subscriptionAuth.poll` performs one upstream poll for a device or browser-poll flow.
-- `subscriptionAuth.complete` exchanges a pasted code for Anthropic OAuth or stores a key for an API-key login.
+- `subscriptionAuth.complete` stores the pasted key for an API-key login. No OAuth flow completes with a pasted code.
 - `subscriptionAuth.cancel` removes abandoned pending state.
 - `subscriptionAuth.logout` removes the selected instance's stored credential. Without `instanceId`, it removes the historical default account.
 
@@ -79,9 +98,9 @@ Pending login state stays on the environment server. It is bounded and contains 
 
 ## Upstream requests
 
-Each module in `apps/server/src/subscription-auth/providers/` exports an Effect API (`AnthropicOAuth`, `CodexOAuth`, `KimiOAuth`, `XAIOAuth`) that requires an `HttpClient`, plus Promise wrappers that `SubscriptionAuthService` calls. The wrappers run the Effect API with the fetch-backed client from `oauthHttp.ts`.
+Each module in `apps/server/src/subscription-auth/providers/` exports an Effect API (`CodexOAuth`, `KimiOAuth`, `XAIOAuth`) that requires an `HttpClient`, plus Promise wrappers that `SubscriptionAuthService` calls. The wrappers run the Effect API with the fetch-backed client from `oauthHttp.ts`.
 
-Response bodies are decoded with Schema. Failures use three tagged errors: `SubscriptionAuthRequestError` for transport failures, timeouts, and non-2xx responses; `SubscriptionAuthResponseError` for bodies with the wrong shape; and `SubscriptionAuthInputError` for unusable pasted codes or device ids. A request error message includes the HTTP status, because the service classifies revoked grants by matching `401`, `403`, `invalid_grant`, or `revoked` in the message. Every upstream operation has an `Effect.timeout` bound: 15 seconds for Anthropic and 30 seconds for the others. Kimi For Coding refresh retries transport failures, timeouts, 429, and 5xx responses after 1, 2, and 4 seconds.
+Response bodies are decoded with Schema. Failures use three tagged errors: `SubscriptionAuthRequestError` for transport failures, timeouts, and non-2xx responses; `SubscriptionAuthResponseError` for bodies with the wrong shape; and `SubscriptionAuthInputError` for unusable device ids. A request error message includes the HTTP status, because the service classifies revoked grants by matching `401`, `403`, `invalid_grant`, or `revoked` in the message. Every upstream operation has an `Effect.timeout` bound of 30 seconds. Kimi For Coding refresh retries transport failures, timeouts, 429, and 5xx responses after 1, 2, and 4 seconds.
 
 `deviceCode.ts` folds one RFC 8628 poll into the serializable state and reads time from the Effect `Clock`. `subscriptionAuth.poll` runs one step per request. `pollDeviceCodeUntilSettled` runs the same steps on a `Schedule` that waits the server interval and grows it after `slow_down`. The Codex device endpoint is not RFC 8628: it reports a pending login as 403 or 404 and uses a fixed 15-minute deadline.
 
@@ -91,7 +110,7 @@ Tests replace the client with `testUtils/scriptedHttpClient.ts` and drive timeou
 
 `SubscriptionAuthService.getAccessToken(provider, instanceId)` returns a valid OAuth access token or the saved API key. It serializes concurrent OAuth refresh requests per account. `getApiKeyCredential(provider, instanceId)` returns the current server-owned API key and its optional base URL for runtime use only. Omitting `instanceId` selects the historical default account; other provider instances keep their own account under an `instance:<provider>:<instanceId>` key. Both read through the store's stat check, so they see changes other writers made.
 
-Codex uses the OpenAI Responses API when an API key is saved and keeps the Codex subscription transport for OAuth. Claude, Grok, Kimi, and OpenCode Go resolve saved keys and custom endpoints through their Mastra model transports. Standard OpenCode receives saved API credentials when its adapter starts a provider process. The login, completion, and logout RPC paths stop affected sessions when the API key or endpoint changes. The next turn starts a new session with the current connection. Grok supports API keys at its default endpoint; its current transport rejects custom base URLs.
+Codex uses the OpenAI Responses API when an API key is saved and keeps the Codex subscription transport for OAuth. Claude has no subscription transport. Claude, Grok, Kimi, and OpenCode Go resolve saved keys and custom endpoints through their Mastra model transports. Standard OpenCode receives saved API credentials when its adapter starts a provider process. The login, completion, and logout RPC paths stop affected sessions when the API key or endpoint changes. The next turn starts a new session with the current connection. Grok supports API keys at its default endpoint; its current transport rejects custom base URLs.
 
 The standard OpenCode CLI driver is no longer synthesized as a default instance. Explicit old
 OpenCode instances remain routable for existing settings and chats. OpenCode Go is the supported
@@ -105,11 +124,10 @@ While a check runs, the health file holds a `healthCheckStartedAt` marker. `stat
 
 Each provider's request:
 
-- Claude OAuth: `GET https://api.anthropic.com/api/oauth/usage` with `Authorization: Bearer`, `anthropic-beta: oauth-2025-04-20`, and the Claude Code user agent, matching the plan-limit reader.
 - Codex OAuth: `GET https://chatgpt.com/backend-api/wham/usage` with the bearer token.
 - Grok OAuth: `GET https://api.x.ai/v1/models` with the bearer token.
 - Kimi OAuth: `GET https://api.kimi.com/coding/v1/models` with the bearer token and the `X-Msh-*` device headers from `getKimiCodingDeviceHeaders(credential.deviceId)`.
-- API keys, including OpenCode Go: the provider's usage or models endpoint at the saved base URL.
+- API keys, including Claude and OpenCode Go: the provider's usage or models endpoint at the saved base URL. Claude sends `x-api-key` and `anthropic-version` to `/v1/models`.
 
 Every request times out after 30 seconds.
 

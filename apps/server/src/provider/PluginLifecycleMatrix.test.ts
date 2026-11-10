@@ -160,21 +160,17 @@ describe("plugin lifecycle matrix execution", () => {
     }
   });
 
-  it("runs Executor 2 discovery with the required bearer header", async () => {
+  it("runs a hosted custom MCP lifecycle that requires a bearer header", async () => {
     const fixture = await startHttpMcpFixture({ authorization: "Bearer fixture-token" });
     fixtures.push(fixture);
 
-    const executor = loadManifestCatalog(catalogManifests()).find(
-      (entry) => entry.id === "executor",
-    );
-
-    if (executor?.transport.type !== "url") {
-      throw new TypeError("Executor is missing its HTTP recipe.");
-    }
-
-    expect(executor.transport.url).toBe("https://executor.sh/mcp");
-    expect(executor.authentication).toBe("oauth");
+    // A custom hosted server has no catalog entry. The fixture rejects requests
+    // without the header, so discovery is not an unauthenticated socket probe.
     await runLifecycle({ url: fixture.url, headers: { authorization: "Bearer fixture-token" } });
+  });
+
+  it("runs a local custom MCP lifecycle from a stdio command", async () => {
+    await runLifecycle({ command: process.execPath, args: [STDIO_FIXTURE] });
   });
 
   it("keeps every unverified entry non-installable with a named blocker", () => {

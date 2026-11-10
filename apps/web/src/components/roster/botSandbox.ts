@@ -23,6 +23,8 @@ export const BOT_SANDBOX_OPTIONS = [
   { value: "ascii", label: "Ascii Box" },
   { value: "railway", label: "Railway" },
   { value: "tenki", label: "Tenki" },
+  { value: "boat", label: "Boat" },
+  { value: "docker", label: "Local Docker" },
 ] as const;
 
 export type BotSandboxChoice = (typeof BOT_SANDBOX_OPTIONS)[number]["value"] | "default";

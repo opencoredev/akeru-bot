@@ -304,11 +304,14 @@ export function createProviderCommandHarness() {
         }),
       ),
       Layer.provideMerge(
-        ServerSettingsService.layerTest(
-          input?.enableAgentBrowserAccess === undefined
+        ServerSettingsService.layerTest({
+          ...(input?.enableAgentBrowserAccess === undefined
             ? {}
-            : { enableAgentBrowserAccess: input.enableAgentBrowserAccess },
-        ),
+            : { enableAgentBrowserAccess: input.enableAgentBrowserAccess }),
+          ...(input?.botSandboxBrowserSharing === undefined
+            ? {}
+            : { botSandboxBrowserSharing: input.botSandboxBrowserSharing }),
+        }),
       ),
       Layer.provideMerge(ServerConfig.layerTest(process.cwd(), baseDir)),
       Layer.provideMerge(NodeServices.layer),

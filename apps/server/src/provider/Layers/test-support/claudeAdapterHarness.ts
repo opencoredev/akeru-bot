@@ -43,6 +43,42 @@ export class FakeClaudeQuery implements AsyncIterable<SDKMessage> {
   public readonly setMaxThinkingTokensCalls: Array<number | null> = [];
   public closeCalls = 0;
   public closeError: unknown | undefined;
+  /** Interrupt and close calls in the order the adapter made them. */
+  public readonly lifecycleCalls: Array<"interrupt" | "close"> = [];
+  private exitWait: () => Promise<void> = () => Promise.resolve();
+
+  /**
+   * Keeps the fake process running after close until `release` is called, like
+   * a Claude Code process that takes time to exit. `awaited` resolves once the
+   * adapter starts waiting for that exit.
+   */
+  holdExit() {
+    let release = () => {};
+
+    let markAwaited = () => {};
+
+    const awaited = new Promise<void>((resolve) => {
+      markAwaited = resolve;
+    });
+
+    const exited = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+
+    this.exitWait = () => {
+      markAwaited();
+
+      return exited;
+    };
+
+    return { release, awaited };
+  }
+
+  readonly waitForExit = (): Promise<void> => this.exitWait();
+
+  readonly interrupt = async (): Promise<void> => {
+    this.lifecycleCalls.push("interrupt");
+  };
 
   emit(message: SDKMessage): void {
     if (this.done) {
@@ -100,6 +136,7 @@ export class FakeClaudeQuery implements AsyncIterable<SDKMessage> {
 
   close = (): void => {
     this.closeCalls += 1;
+    this.lifecycleCalls.push("close");
 
     if (this.closeError !== undefined) {
       throw this.closeError;
@@ -155,6 +192,9 @@ export function makeHarness(config?: {
   readonly claudeConfig?: Partial<ClaudeSettings>;
   readonly instanceId?: ProviderInstanceId;
   readonly environment?: ClaudeAdapterLiveOptions["environment"];
+  /** Gives every session after the first its own query, as separate Claude Code processes. */
+  readonly queryPerSession?: boolean;
+  readonly enforceBotPermissionPolicy?: boolean;
 }) {
   const query = new FakeClaudeQuery();
 
@@ -168,10 +208,12 @@ export function makeHarness(config?: {
   const adapterOptions: ClaudeAdapterLiveOptions = {
     ...(config?.environment ? { environment: config.environment } : {}),
     ...(config?.instanceId ? { instanceId: config.instanceId } : {}),
+    ...(config?.enforceBotPermissionPolicy ? { enforceBotPermissionPolicy: true } : {}),
     createQuery: (input) => {
+      const started = createInput !== undefined;
       createInput = input;
 
-      return query;
+      return config?.queryPerSession === true && started ? new FakeClaudeQuery() : query;
     },
     ...(config?.nativeEventLogger
       ? {

@@ -2,6 +2,7 @@ import * as NodeFS from "node:fs";
 import * as NodeOS from "node:os";
 import * as NodePath from "node:path";
 import { LocalFilesystem, LocalSandbox, Workspace } from "@mastra/core/workspace";
+import type { AkeruToolRuntime } from "../tools/AkeruToolTypes.ts";
 
 export function makeAkeruToolRuntimeTestSupport() {
   const directories = new Set<string>();
@@ -33,4 +34,14 @@ export function makeAkeruToolRuntimeTestSupport() {
   }
 
   return { directories, workspaceRoots, workspace, workspaceRoot };
+}
+
+/** The owner's path: the controller opens the binding when Mastra asks, then the owner answers. */
+export function approveAsOwner(
+  runtime: Pick<AkeruToolRuntime, "openApproval" | "grantApproval">,
+  input: Parameters<AkeruToolRuntime["grantApproval"]>[0],
+) {
+  runtime.openApproval(input);
+
+  return runtime.grantApproval(input);
 }

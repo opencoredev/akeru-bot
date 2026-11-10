@@ -86,6 +86,11 @@ import Migration0070 from "./Migrations/070_McpServerInstructions.ts";
 import Migration0071 from "./Migrations/071_RoutineDelegateToBot.ts";
 import Migration0072 from "./Migrations/072_ProjectionThreadMessageChannelDelivery.ts";
 import Migration0073 from "./Migrations/073_RoutineCanceledClaims.ts";
+import Migration0074 from "./Migrations/074_BotAllowedEnvironments.ts";
+import Migration0075 from "./Migrations/075_BotPermissionPolicy.ts";
+import Migration0076 from "./Migrations/076_ChannelThreadFollows.ts";
+import Migration0077 from "./Migrations/077_ChannelAdmittedMessages.ts";
+import Migration0078 from "./Migrations/078_ChannelAdmittedMessageStatus.ts";
 
 /**
  * Migration loader with all migrations defined inline.
@@ -171,6 +176,11 @@ export const migrationEntries = [
   [71, "RoutineDelegateToBot", Migration0071],
   [72, "ProjectionThreadMessageChannelDelivery", Migration0072],
   [73, "RoutineCanceledClaims", Migration0073],
+  [74, "BotAllowedEnvironments", Migration0074],
+  [75, "BotPermissionPolicy", Migration0075],
+  [76, "ChannelThreadFollows", Migration0076],
+  [77, "ChannelAdmittedMessages", Migration0077],
+  [78, "ChannelAdmittedMessageStatus", Migration0078],
 ] as const;
 
 export const migrationManifest = migrationEntries.map(([id, name]) => [id, name] as const);

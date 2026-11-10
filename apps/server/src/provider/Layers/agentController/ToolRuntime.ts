@@ -1,4 +1,5 @@
 import {
+  type EnvironmentId,
   AkeruUsageReservationId,
   EventId,
   ProviderDriverKind,
@@ -25,6 +26,7 @@ import { type ActiveSession } from "./State.ts";
 import { nowIso, eventId } from "./EventIdentity.ts";
 
 export function createToolRuntime(deps: {
+  readonly environmentId?: EnvironmentId;
   readonly botInbox: BotInboxService;
   readonly sessions: Map<string, ActiveSession>;
   readonly runtimeEvents: PubSub.PubSub<ProviderRuntimeEvent>;
@@ -57,6 +59,7 @@ export function createToolRuntime(deps: {
   };
 }) {
   const toolRuntime = createAkeruToolRuntime({
+    ...(deps.environmentId ? { environmentId: deps.environmentId } : {}),
     onUserActionRequired: (input) => {
       recordUserActionIncident(deps.botInbox, input);
     },

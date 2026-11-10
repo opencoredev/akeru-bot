@@ -7,12 +7,13 @@ orchestration layer does not know which one is behind a thread.
 
 ## Built-in drivers
 
-[`builtInDrivers.ts`][drivers] exports `BUILT_IN_DRIVERS` with seven entries:
+[`builtInDrivers.ts`][drivers] exports `BUILT_IN_DRIVERS` with eight entries:
 
 | Driver kind    | Driver source                                    |
 | -------------- | ------------------------------------------------ |
 | `codex`        | [`Drivers/CodexDriver.ts`][codex]                |
 | `claudeAgent`  | [`Drivers/ClaudeDriver.ts`][claude]              |
+| `claudeCode`   | [`Drivers/ClaudeCodeDriver.ts`][claude-code]     |
 | `grok`         | [`Drivers/GrokDriver.ts`][grok]                  |
 | `kimi`         | [`Drivers/KimiDriver.ts`][kimi]                  |
 | `opencode`     | [`Drivers/OpenCodeDriver.ts`][opencode]          |
@@ -21,7 +22,7 @@ orchestration layer does not know which one is behind a thread.
 
 Each driver declares its `driverKind`, a `configSchema`, and a `create` function that builds a
 provider instance in a child scope. The five subscription drivers and Custom API supply a Mastra
-connection; standard OpenCode supplies a legacy adapter. Adapter implementations live beside them in
+connection; standard OpenCode and Claude Code login supply a legacy adapter. Adapter implementations live beside them in
 `apps/server/src/provider/Layers/` (`CodexAdapter.ts`, `ClaudeAdapter.ts`, and so on) and conform to
 [`ProviderAdapter.ts`][adapter]. Read the driver plus its adapter to see how a specific agent's
 transport, config, and event shapes are mapped.
@@ -82,6 +83,146 @@ The channel, plugin, bot-state, and delegation runtimes, plus the orchestration 
 use, live in one `Ref` that `configurePluginRuntime` and `configureDelegation` update. They are not
 mutable `let` bindings.
 
+## Claude Code login
+
+`claudeCode` runs Claude through the user's own installed Claude Code and the login the user made
+with `claude auth login`. It is a separate driver, shown on the Claude page beside the API key, so
+every driver-keyed decision (routing, delegation, model validation) follows from its kind. It has no
+default instance: **Use your Claude Code login** in Settings, onboarding, or **Add separate
+account** adds a `providerInstances` entry, and **Stop using Claude Code login** removes it.
+
+Turns go through the legacy bridge to the native [`ClaudeAdapter`][claude-adapter], which runs the
+Claude Agent SDK's `query()` against the installed `claude` binary. The Mastra controller is not
+involved, because the login only works inside Claude Code.
+
+- **Binary.** The instance's binary path when it was changed, then `AKERU_CLAUDE_PATH` (like
+  OpenCode's `OPENCODE_CLAUDE_PATH`), then `claude` on `PATH`. It is resolved again for each new
+  session, so installing Claude Code later needs no restart. A Windows `claude.cmd` npm shim is
+  followed to the packaged binary with `resolveClaudeSdkExecutablePath`, because the SDK spawns the
+  path directly. When the program is not plain `claude`, the provider snapshot carries it as
+  `executable` so every client's copied login command names the same program, including an
+  `AKERU_CLAUDE_PATH` only the server process sees. A path from the account's own sensitive
+  variable is not published.
+- **Status.** [`ClaudeCodeLogin.ts`][claude-code-login] runs `claude --version`, then starts Claude
+  Code through the SDK with the same isolated settings a session uses and reads the account from
+  its initialize reply, as OpenCode's probe does. No message is sent, so no model request is made.
+  It does not use `claude auth status`, which loads the user's settings and reports an
+  `apiKeyHelper` from them as the login. The snapshot reports four states:
+  not installed (`installed: false`, `status: "error"`), logged out (`auth: "unauthenticated"`,
+  unavailability `missing-login`), ready, or error with Claude Code's own reason.
+  `@akeru/client-runtime/claude-code-login` turns the snapshot into the setup step web and mobile
+  show. Send preflight blocks a turn on a login that is not ready.
+- **Environment.** `claudeCodeLoginEnvironment` is an allowlist, applied to the inherited and the
+  instance environment alike: `PATH`, `HOME`, `USER`, `LOGNAME`, `SHELL`, `TERM`, the temp
+  folders, `LANG` and `LC_*`, the Windows variables a process needs to start and find the user's
+  profile, and network transport only: `HTTPS_PROXY`, `HTTP_PROXY`, `NO_PROXY` (either case),
+  `NODE_EXTRA_CA_CERTS`, `SSL_CERT_FILE`, and `SSL_CERT_DIR`. Everything else is dropped, so no token, API key, `ANTHROPIC_BASE_URL`, custom
+  header, beta, or Bedrock, Vertex, or Foundry switch with its cloud credentials reaches Claude
+  Code. `CLAUDE_CONFIG_DIR` comes from the account's config path, then its own variable, then, for
+  any instance other than the default `claudeCode`, the folder the server assigns it
+  (`claudeCodeAssignedConfigDirectory`: `<stateDir>/providers/claude-code/<instanceId>`, created
+  with mode 0700), so two accounts never share Claude Code's default login. It is never inherited.
+  `claudeCodeConfigDirectory` turns that value into one absolute path, reading `~` and relative
+  values from the user's home rather than the server's working folder, and the login check, the
+  session environment, and the policy all use that one value. That home is the one Claude Code
+  itself uses, read from its environment by `claudeChildHomeDirectory`: `USERPROFILE` on Windows,
+  `HOME` elsewhere, else the server's own home. The policy protects `~/.claude/**` and
+  `~/.claude.json` under that same folder, so an account that sets only `USERPROFILE` on Windows
+  keeps its login files protected. The snapshot publishes it as
+  `configDirectory` for the clients' login command, except when it came from a sensitive variable;
+  clients then see a redacted `CLAUDE_CONFIG_DIR` and show manual steps instead of a command. With
+  no published folder, `claudeCodeLoginCommandForInstance` sets the account's own `HOME` (or
+  `USERPROFILE` in PowerShell, restored after the login) on the login command, so the login lands
+  where the server checks; a redacted home variable gives the `hidden-home` manual steps. Akeru adds `CLAUDE_AGENT_SDK_CLIENT_APP`, the variable the SDK
+  documents for naming the app. `AKERU_CLAUDE_PATH` is read before the allowlist applies. Akeru
+  never reads Claude Code's credential files and never sets a user agent, beta header, or token
+  itself. `ClaudeCodeSession.test.ts` runs the real SDK with a capturing `spawnClaudeCodeProcess`
+  and fails if the spawned environment carries anything outside the allowlist.
+- **Settings.** Sessions and the status check run with `settingSources: []` and
+  `settings.disableAllHooks`, matching OpenCode's `query-options.ts`. No user, project, or local
+  settings file loads, so an `env` block, `apiKeyHelper`, or command hook cannot replace the login or
+  run shell outside the bot policy, and CLAUDE.md files, settings MCP servers, and skills do not
+  load either. Akeru passes what it wants directly: instructions, permission mode, model and
+  effort, and MCP servers. The login itself lives in Claude Code's credential store, not in
+  settings, so it still works; Akeru's PreToolUse callback is an SDK hook, not a settings hook, so
+  it still runs.
+- **Instructions and memory.** The session keeps Claude Code's own system prompt and appends the
+  bot's Akeru instructions plus the memory context AgentController freezes at start. Per-turn
+  memory, entity, and review context arrives as an `<akeru-turn-context>` block ahead of the user's
+  text.
+- **Session changes.** Claude Code reads the permission mode, fast mode, thinking, and effort only
+  when its query starts, and its permission callback keeps the start mode. A change of runtime mode
+  or of the model selection therefore starts a new Claude Code session that resumes the same
+  conversation: the provider command reactor restarts `claudeCode` on a model selection change as
+  it does `claudeAgent`, and AgentController reuses a live legacy session only when its runtime
+  mode and model selection match the request.
+- **Stopping.** The SDK's `close()` ends the message stream while the process may still be running
+  a command, then waits about two seconds before SIGTERM and SIGKILL. A Claude session stop
+  therefore interrupts a running turn, closes the query, and returns only after the Claude Code
+  process has exited, so a replacement session, and a Supervised mode with it, never overlaps the
+  old process. `ClaudeCodeProcess` spawns Claude Code through the SDK's `spawnClaudeCodeProcess`
+  hook to observe that exit. Stopping a turn stops the session the same way, so the provider no
+  longer lists it; when the chat is deleted later, AgentController still releases the chat's tool
+  permission entry, workspace leases, and MCP manager because it tracks them per chat
+  (`legacyResourceIdentity`), not per live provider session.
+- **Revert.** `ClaudeAdapter.rollbackThread` refuses with a `ProviderAdapterRequestError`. The live
+  query keeps every message it has seen, so trimming only Akeru's copy would report a rewind Claude
+  never made. Checkpoint revert restores files before it rolls the conversation back, so the
+  checkpoint reactor refuses a `claudeCode` revert that would remove turns before it touches any
+  file: the files and checkpoints stay as they are and the revert ends with
+  `checkpoint.revert.failed`. Grok needs no such check, because it runs on the Mastra controller,
+  which rebuilds the retained conversation.
+- **Tools.** Claude Code keeps its own tools. Akeru's MCP server (preview, image, and the bot's
+  memory tool) reaches it as the `akeru` HTTP server with the per-session bearer credential that
+  AgentController issues. ProviderService reissues that credential when the bridge starts the
+  session and keeps `memory` in it whenever the controller registered a memory handler for the
+  thread, so the legacy start path does not drop memory access. The bot's enabled MCP servers are passed too, and `strictMcpConfig` keeps
+  the servers from the user's Claude Code settings out.
+- **Permissions.** A PreToolUse hook checks the [bot permission policy](./permissions.md) for every
+  tool call in every permission mode, using `claudeCodeToolRiskClass` (shell is
+  `environment-access`, edits are `write-workspace`, other MCP tools and unknown tools are
+  `write-outside`, protected actions are always `write-outside`). File tools are classified by where
+  they reach: [`ClaudeCodeToolPaths.ts`][claude-code-paths] expands `~`, resolves relative paths
+  against the workspace, and walks the raw components with `readLink`, following every symlink,
+  dangling ones included. A `..` applies to the physical folder its left side resolves to, so in
+  `link/../x` the link is followed first, as POSIX does; a link target's own components go back on
+  the queue raw for the same reason. A component that cannot be resolved safely (a
+  permission error, a loop past 40 hops) makes the path outside, never inside. A read outside the
+  workspace and the attachments folder is `environment-access`; a write outside the workspace is
+  `write-outside`. Paths in Claude Code's own login and settings (`~/.claude/**`, `~/.claude.json`,
+  and the account's `CLAUDE_CONFIG_DIR`) are refused for file tools and for MCP tools whose path
+  arguments (`path`, `paths`, `file`, `filename`, `directory`, `source`, `destination`, `file://`
+  URIs, and similar) name them. A `file:` URL converts the way the host opens it, with every escape
+  decoded and, on Windows, drive letters and UNC hosts; one that does not convert is refused. `Grep` and `Glob` walk every folder below their search root, which
+  defaults to the workspace, so a search whose root holds one of those paths is refused too. On
+  Windows and macOS, whose default file systems ignore letter case, those paths and the shell names
+  below match in any case, so `.CLAUDE.JSON` is still `~/.claude.json`. A shell command cannot be parsed with certainty, so one that
+  mentions `.claude`, `.credentials`, `CLAUDE_CONFIG_DIR`, or the account's config folder always
+  asks the owner, whatever the policy allows, and a policy deny still wins. So does a `cd` or
+  `pushd` whose destination is the home folder itself (no argument, `~`, `$HOME`, `"$HOME"`,
+  `${HOME}`), the previous folder (`cd -`), or a folder built from a command substitution or
+  another variable. A change into an ordinary folder, such as `cd ~/projects/app`, follows the
+  normal policy. This is best-effort on the user's machine, not isolation: a bot with a
+  shell can read what the user can. Claude Code always runs on the environment's host, so
+  AgentController refuses to start a `claudeCode` session for a bot whose
+  [sandbox workspace](./sandbox-workspaces.md) is anything but local; the sandbox would be acquired
+  and never used. `deny` refuses the call. `ask` opens an
+  owner approval with only Approve and Decline, binds it to the call's arguments, and re-reads the
+  policy before the call runs, so a permission revoked while the prompt waited blocks it. The
+  approval carries the tool name, the exact command or path, and the policy's reason in its
+  `detail` and `args`. An MCP tool call, or any call without a command or path, puts its whole
+  input in `detail` as indented JSON instead, so arguments such as an issue body are visible; the projection keeps only those named string arguments
+  (`command`, `file_path`, `notebook_path`, `path`, `url`, `pattern`, `reason`). A value longer
+  than `PROVIDER_APPROVAL_ARGUMENT_MAX_CHARS` (8,000) is dropped, never cut, and a Claude Code login
+  session declines such a call, or one whose whole input is over that limit, instead of asking, so a card never shows part of a command as if it
+  were all of it. `canUseTool` checks the policy again when Claude Code asks, and once more after the chat's own
+  approval. AgentController publishes the bot's principal and policy reader through
+  `BotToolPermissionSessions` before the session starts and clears it when the session stops or
+  fails to start.
+
+Claude Code login bots do not get the Akeru catalog tools, workers, or delegation, like standard
+OpenCode. They have no text generation; titles and branch names use the default writer.
+
 ## Catalog tool parity
 
 The typed Akeru catalog is advertised only by the Mastra controller. Codex, Claude, Grok, Kimi
@@ -126,7 +267,8 @@ Mastra keeps approval callbacks enabled in every runtime mode. `AgentController`
 `ask_user`, then converts its suspension into a user-input request. In automatic mode, it approves
 only the routine actions allowed by the selected mode. It always asks before an MCP tool call or an action
 that can write through MCP, sends, pays, deletes, changes production, exposes secrets, publishes, signs, refunds, or changes
-an account. Unknown mutating intent also asks. The pending approval map binds the response to the
+an account. For Akeru's built-in tools, the [bot permission policy](./permissions.md) decides these
+protected actions, and an `ask` from the policy is never answered by the mode. Unknown mutating intent also asks. The pending approval map binds the response to the
 exact tool-call ID, deletes that entry before execution, and treats session-wide or permanent answers
 as one-use approval.
 
@@ -197,6 +339,9 @@ readiness. Like Kimi and OpenCode Go, they report the bundled runtime as install
 provider binary exists. The initial snapshot and each refresh reload `SubscriptionAuthService`
 from the environment's `subscription-auth.json`. A connected saved credential makes the instance
 ready; a missing credential reports unauthenticated and asks the user to connect in Settings.
+Claude counts only an Anthropic API key. A Claude Pro or Max login saved by an older version is
+deleted at startup, and readiness reports `CLAUDE_SUBSCRIPTION_RETIRED_MESSAGE` instead of the
+connect step until an API key connects.
 
 The model list comes from the [model catalog](#model-catalog) and `ModelCatalog.applyModelCatalog`.
 Codex combines catalog IDs with bundled and historical compatibility models, and takes names,
@@ -247,8 +392,9 @@ registry publishes the updated snapshot immediately, including for named instanc
 periodic health refresh is disabled.
 
 Explicit connection variables or a custom home disable saved-credential fallback. Codex then
-requires `OPENAI_API_KEY`, Claude requires `ANTHROPIC_API_KEY`, `ANTHROPIC_AUTH_TOKEN`, or
-`CLAUDE_CODE_OAUTH_TOKEN`, and Grok requires `XAI_API_KEY` in the instance's explicit environment.
+requires `OPENAI_API_KEY`, Claude requires `ANTHROPIC_API_KEY` or `ANTHROPIC_AUTH_TOKEN`, and Grok
+requires `XAI_API_KEY` in the instance's explicit environment. `CLAUDE_CODE_OAUTH_TOKEN` is a
+claude.ai login, so it is neither a Claude transport nor a connection variable.
 A CLI login or custom CLI home alone cannot make that instance ready. Ambient credentials remain
 available to saved-credential instances, matching the harness's transport precedence.
 
@@ -257,7 +403,7 @@ available to saved-credential instances, matching the harness's transport preced
 each operation and preserves instance scoping, Codex reasoning effort and service tier, and Claude
 effort and context-window selections. Claude's 1M context selection uses the same `[1m]` model
 suffix in turns and writing requests. The transport strips this CLI-style suffix from the API
-model ID and sets the extended-context beta header for API keys and OAuth alike.
+model ID and sets the extended-context beta header for API keys and auth tokens alike.
 Each writing operation has a 180-second deadline and aborts
 the generation request when it expires. Stored
 image attachments are resolved through the attachment store and sent as multimodal image parts,
@@ -333,6 +479,40 @@ emoji icons render. Codex icon paths point at the environment's disk, which a re
 cannot load, and Grok's named glyphs are open vocabulary, so both fall back to the source-kind
 glyph. The composer skill chip stores the resolved emoji on its Lexical node and still
 serializes to `$name`.
+
+## Subscription sign-in routes
+
+Akeru uses only provider access routes that a provider documents for third-party apps, and no
+request claims to be a vendor's CLI. Claude takes an Anthropic API key or the user's own Claude Code
+login. For the API key, Anthropic's
+[Agent SDK overview](https://code.claude.com/docs/en/agent-sdk/overview) says "Unless previously
+approved, Anthropic does not allow third party developers to offer claude.ai login or rate limits
+for their products, including agents built on the Claude Agent SDK." Akeru removed its Claude Pro and
+Max sign-in, the Claude Code user agent, and the `@mastra/code-sdk` `claude-max` transport, which
+added the Claude Code system prompt and the `claude-code-20250219` beta.
+
+The Claude Code login route is different: Akeru never holds the login. It runs the real Claude Code,
+which the user installed and signed in to, through Anthropic's
+[Claude Agent SDK](https://code.claude.com/docs/en/agent-sdk/overview), and Claude Code makes its
+own requests. OpenCode shipped the same design in v2.2.3
+([anomalyco/opencode#58782](https://github.com/anomalyco/opencode/pull/58782)).
+
+The remaining OAuth routes live in `apps/server/src/subscription-auth/providers/`. Each one reuses a
+client ID that belongs to the vendor's own CLI, ported from Mastra Code. "Needs evidence" means
+Akeru has no written provider statement that a third-party app may use that route. These routes stay
+enabled until the maintainers decide.
+
+| Route             | How it authenticates                                                                                                                                                                                                                                                                                                                      | OAuth client                                                                           | Written third-party policy                                                                                                                                                                                                                                                                                                                                                                                                                                                      | Status                                                                                          |
+| ----------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
+| ChatGPT (Codex)   | Device authorization at `auth.openai.com` (`/api/accounts/deviceauth/*`), then an authorization-code exchange at `/oauth/token`. Turns go to `chatgpt.com/backend-api/codex/responses`; usage and health read `chatgpt.com/backend-api/wham/usage`. Requests send `originator` and `User-Agent` as `akeru` or `mastracode`.               | `app_EMoamEEZ73f0CkXaXp7hrann`, the Codex CLI's public client                          | OpenAI documents [Sign in with ChatGPT for open-source apps](https://developers.openai.com/siwc/token-sharing-open-source), but that flow registers a separate client ID for each app through a loopback sign-in. It does not cover reusing the Codex CLI client or calling `chatgpt.com/backend-api`.                                                                                                                                                                          | Needs evidence. The open-source Sign in with ChatGPT flow is the likely documented replacement. |
+| Grok (xAI)        | RFC 8628 device authorization at `auth.x.ai/oauth2/device/code` and `/oauth2/token`, with scope `openid profile email offline_access grok-cli:access api:access`. Turns use the bearer token on `api.x.ai`. Usage reads `cli-chat-proxy.grok.com`; it no longer sends `X-XAI-Token-Auth: xai-grok-cli`, so that meter may stop reporting. | `b1a00492-073a-47ea-816f-4c329264a828`, the Grok CLI's client                          | xAI announced subscription sign-in for [Kilo Code](https://x.ai/news/grok-kilocode) and [OpenCode](https://x.ai/news/grok-opencode). It publishes no policy or client registration for other third-party apps.                                                                                                                                                                                                                                                                  | Needs evidence                                                                                  |
+| Kimi For Coding   | RFC 8628 device authorization at `auth.kimi.com`, with `X-Msh-*` device headers that identify the platform as `akeru`. Turns and health use the bearer token on `api.kimi.com/coding/v1`.                                                                                                                                                 | `17e5f671-d194-4dfb-9706-5516cb48c098`, the Kimi Code CLI client that Mastra Code uses | The [membership guide](https://www.kimi.com/en-cn/help/kimi-code/membership-guide) says "Kimi Code allows members to use their benefits in both the official client and third-party platforms" and that "Tampering with the client identifier (User-Agent) is considered a violation". The [third-party agent page](https://www.kimi.com/en/help/kimi-code/third-party-agents) sets those tools up with an API key. Neither page covers OAuth through the Kimi Code CLI client. | Needs evidence for OAuth. The membership API key is documented for third-party tools.           |
+| OpenCode Go       | API key only, no OAuth                                                                                                                                                                                                                                                                                                                    | None                                                                                   | The key is the product's documented access method.                                                                                                                                                                                                                                                                                                                                                                                                                              | API key                                                                                         |
+| Claude            | Anthropic API key, or `ANTHROPIC_AUTH_TOKEN` for a gateway                                                                                                                                                                                                                                                                                | None                                                                                   | The [Agent SDK overview](https://code.claude.com/docs/en/agent-sdk/overview) requires API-key authentication.                                                                                                                                                                                                                                                                                                                                                                   | API key. Subscription sign-in removed.                                                          |
+| Claude Code login | The installed `claude` program runs turns through the Claude Agent SDK with the login from `claude auth login`. Akeru reads no credential and sets no token, user agent, or beta header.                                                                                                                                                  | None; Claude Code's own                                                                | Anthropic's [Agent SDK overview](https://code.claude.com/docs/en/agent-sdk/overview) documents running Claude Code through the SDK. OpenCode ships the same route ([anomalyco/opencode#58782](https://github.com/anomalyco/opencode/pull/58782)).                                                                                                                                                                                                                               | Supported route                                                                                 |
+
+Every provider also accepts its own API key on its documented API, which needs no third-party
+approval.
 
 ## Temporary workers
 
@@ -536,6 +716,10 @@ when a request opens (approval) or user input is requested, via
 [drivers]: ../../apps/server/src/provider/builtInDrivers.ts
 [codex]: ../../apps/server/src/provider/Drivers/CodexDriver.ts
 [claude]: ../../apps/server/src/provider/Drivers/ClaudeDriver.ts
+[claude-code]: ../../apps/server/src/provider/Drivers/ClaudeCodeDriver.ts
+[claude-code-login]: ../../apps/server/src/provider/claudeCode/ClaudeCodeLogin.ts
+[claude-code-paths]: ../../apps/server/src/provider/claudeCode/ClaudeCodeToolPaths.ts
+[claude-adapter]: ../../apps/server/src/provider/Layers/ClaudeAdapter.ts
 [grok]: ../../apps/server/src/provider/Drivers/GrokDriver.ts
 [kimi]: ../../apps/server/src/provider/Drivers/KimiDriver.ts
 [opencode]: ../../apps/server/src/provider/Drivers/OpenCodeDriver.ts

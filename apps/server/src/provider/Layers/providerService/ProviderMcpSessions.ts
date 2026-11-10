@@ -13,6 +13,7 @@ import { ThreadId, type ProviderInstanceId } from "@akeru/contracts";
 
 import * as Effect from "effect/Effect";
 
+import * as McpMemoryToolSession from "../../../mcp/McpMemoryToolSession.ts";
 import * as McpProviderSession from "../../../mcp/McpProviderSession.ts";
 import * as McpSessionRegistry from "../../../mcp/McpSessionRegistry.ts";
 import type { McpCapability } from "../../../mcp/McpInvocationContext.ts";
@@ -48,7 +49,12 @@ export function createProviderMcpSessions(deps: {
 
   const prepareMcpSession = (threadId: ThreadId, providerInstanceId: ProviderInstanceId) =>
     Effect.gen(function* () {
-      const capabilities = yield* mcpCapabilities;
+      const capabilities = new Set(yield* mcpCapabilities);
+
+      // AgentController registers a memory handler before it starts a legacy
+      // session through this service. Reissuing without memory would revoke the
+      // controller's credential and leave the bot's memory tool refused.
+      if (McpMemoryToolSession.readMcpMemoryToolSession(threadId)) capabilities.add("memory");
 
       if (capabilities.size === 0) {
         // Revoke as well as clear. Every other prepare path reaches

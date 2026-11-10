@@ -222,5 +222,9 @@ export interface ClaudeQueryRuntime extends AsyncIterable<SDKMessage> {
   readonly setModel: (model?: string) => Promise<void>;
   readonly setPermissionMode: (mode: PermissionMode) => Promise<void>;
   readonly setMaxThinkingTokens: (maxThinkingTokens: number | null) => Promise<void>;
+  /** Asks Claude Code to stop the running turn and any command it is executing. */
+  readonly interrupt: () => Promise<void>;
   readonly close: () => void;
+  /** Resolves once the Claude Code process has exited, or at once if none was spawned. */
+  readonly waitForExit: () => Promise<void>;
 }

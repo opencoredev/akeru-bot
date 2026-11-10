@@ -133,6 +133,22 @@ Work one bot sends to another with `SendToAgent`. It runs in a child thread and 
 
 A thread with queued, running, or blocked delegations. Derived by `isThreadWaitingOnChildren`, never persisted.
 
+#### Environment host descriptor
+
+What one environment's machine can do right now: OS, architecture, CPU count, live load, detected tools, ready providers, projects, and the owner's labels, note, and placement weight. Each server serves its own through `server.getEnvironmentHost`. See [placement.md](placement.md).
+
+#### Allowed environments
+
+The other environments a bot may run work on, stored as `allowedEnvironmentIds` on the bot. The bot's home environment is always allowed, so the empty default means "home only". See [placement.md](placement.md#allowed-environments).
+
+#### Placement
+
+Choosing which environment runs a piece of work. `placeWork` in `@akeru/shared/environmentPlacement` builds the eligible set, then takes the user's explicit choice, the bot's choice, or the highest score. See [placement.md](placement.md#placement).
+
+#### Placement weight
+
+The owner's setting for how often automatic placement picks an environment: `prefer`, `normal`, `less-often`, or `manual-only`. A manual-only environment runs work only when the user picks it.
+
 ### Channels
 
 External channels connect a messaging conversation (Telegram, Slack, Discord, iMessage, or WhatsApp) to normal Akeru orchestration. See [channels.md](./channels.md) and the [user guide](../user/channels.md).
@@ -147,7 +163,19 @@ The assignment of a channel connection profile to a bot and a project, carried o
 
 #### Channel origin
 
-The provenance record on a thread or message that came from an external channel: provider, connection, external conversation and message identities, and sender display name. It drives thread subscriptions restored on startup and the origin label clients render.
+The provenance record on a thread or message that came from an external channel: provider, connection, external conversation and message identities, and sender display name. It drives the origin label clients render.
+
+#### Channel owner identity
+
+A Slack or Discord account the environment owner linked, stored in server settings as `channelOwners` with its provider, workspace ID (a Slack team ID, or `discord`), and user ID. Slack and Discord bots answer only owner identities in their own workspace and the user IDs on the bot's `channelBotAccess` allowlist.
+
+#### Link code
+
+A one-time code a client generates and registers with `channel.link-code.create`. The owner sends it to the bot in a direct message, and the server records the sender as an owner identity. Codes live in server memory for ten minutes, work once, and only on the provider and connection they were made for. Reconnecting the channel voids them.
+
+#### Thread follow
+
+A durable record in `channel_thread_follows`, keyed by bot, provider, project, workspace, platform thread, and sender, that lets an admitted sender's thread replies start turns without a mention. It ends on "stop", after 24 idle hours, or when the sender tags another Akeru bot. Startup subscribes to the platform threads of active follows in the channel's assigned project. A durable claim on each admitted message (`channel_admitted_messages`) keeps a replayed message from starting a follow again.
 
 #### Channel delivery
 
@@ -178,6 +206,10 @@ Reading an existing assistant message on the current client speaker. Identity, s
 
 A consumer AI account that a user connects through OAuth, such as ChatGPT, Claude, Grok, or Kimi For Coding. OpenCode Go uses an API key instead of OAuth. The environment server stores the credential and gives a run only the access token it needs. See [subscription authentication](./subscription-auth.md).
 
+### Claude Code login
+
+A Claude connection that runs the user's own installed Claude Code with the login from `claude auth login`, through the Claude Agent SDK. Akeru never holds that login. The driver kind is `claudeCode`; the connection shows on the Claude page beside the API key. See [providers.md](./providers.md#claude-code-login).
+
 ### Image provider
 
 The subscription that creates images for a bot, ChatGPT or Grok, chosen per bot or by the global default and independent of the bot's chat provider. Bots reach it through the `generate_image` tool, and each finished image is saved as an ordinary chat attachment. See [image-generation.md](./image-generation.md).
@@ -192,7 +224,7 @@ The live backend agent implementation and its event stream. Desktop turns cross 
 
 #### Provider
 
-The backend agent runtime that actually performs work. Six drivers ship built in: Codex, Claude, Grok, Kimi For Coding, OpenCode, and OpenCode Go. See [ProviderService.ts][14], [ProviderAdapter.ts][15], and [CodexAdapter.ts][17] as a representative adapter.
+The backend agent runtime that actually performs work. Seven drivers ship built in: Codex, Claude, Claude Code login, Grok, Kimi For Coding, OpenCode, and OpenCode Go. See [ProviderService.ts][14], [ProviderAdapter.ts][15], and [CodexAdapter.ts][17] as a representative adapter.
 
 #### Session
 
@@ -205,6 +237,14 @@ The single bridge where Promise-based code (Mastra callbacks, tool handlers, lib
 #### Runtime mode
 
 The safety/access mode for a thread or session. [The contracts][1] define four values: `approval-required`, `auto-accept-edits`, `auto`, and `full-access`. See [permission modes][18].
+
+#### Bot permission policy
+
+The per-bot rules that decide `allow`, `ask`, or `deny` for each action from its risk class (`read`, `write-workspace`, `write-outside`, `environment-access`), the principal it is for, and per-tool overrides. `ask` needs the owner's answer, bound to the exact arguments, environment, and an expiry, and accepted once. Absent means the default, where only outside writes ask. See [permissions.md](./permissions.md).
+
+#### Principal
+
+Who a bot action is for: the owner, an allowlisted person, a schedule acting for the owner, or another bot carrying the origin it acts for. See [permissions.md](./permissions.md).
 
 #### Interaction mode
 
@@ -277,6 +317,7 @@ The file patch and changed-file summary for one turn. It is usually computed in 
 - [Architecture overview][24]
 - [Provider architecture][16]
 - [Permission modes][18]
+- [Bot permission policy](./permissions.md)
 - [Workspace layout][2]
 
 [1]: ../../packages/contracts/src/orchestration.ts

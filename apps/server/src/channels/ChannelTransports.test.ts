@@ -172,6 +172,33 @@ describe("channel transports", () => {
         expect(yield* Queue.size(harness.turns)).toBe(0);
       }),
     );
+    it.effect("ignores a Discord mention from someone other than the linked owner", () =>
+      Effect.gen(function* () {
+        const harness = yield* makeHarness({});
+        yield* harness.runtime.connect(discordConnect());
+        const discord = adapters.discord;
+
+        if (!discord) throw new Error("Expected the Discord Chat runtime.");
+
+        yield* Effect.promise(() =>
+          discord.adapter.handleWebhook(
+            gatewayEvent("m-stranger", {
+              author: { id: "U2", username: "u2", global_name: "U2", bot: false },
+              mentions: [{ id: "discord-app", username: "akeru" }],
+            }),
+          ),
+        );
+
+        // The SDK opens the platform thread before any handler runs; the bot never joins it.
+        expect(adapters.discordThreadsCreated).toEqual(["m-stranger"]);
+        expect(
+          yield* Effect.promise(() =>
+            discord.chat.getState().isSubscribed("discord:G1:C1:T-m-stranger"),
+          ),
+        ).toBe(false);
+        expect(yield* Queue.size(harness.turns)).toBe(0);
+      }),
+    );
   });
 
   describe("telegram", () => {

@@ -11,6 +11,9 @@ import { makebotWorkspacePoolTestSupport } from "./test-support/botWorkspacePool
 
 const { localWorkspace, remoteWorkspace } = makebotWorkspacePoolTestSupport();
 
+/** A sandbox-sdk workspace: it can pause and reattach by its saved provider ID. */
+const reattachable = { pause: true, snapshot: true, browser: true, reconnect: true };
+
 describe("BotWorkspacePool", () => {
   it("retries failed creation", async () => {
     const pool = new BotWorkspacePool();
@@ -33,6 +36,7 @@ describe("BotWorkspacePool", () => {
     const remote = {
       id: local.id,
       provider: "ascii" as const,
+      capabilities: reattachable,
       workspace: local,
       inspect: async () => "running" as const,
       wake: () => local.init(),
@@ -52,13 +56,14 @@ describe("BotWorkspacePool", () => {
     expect(destroy).toHaveBeenCalledOnce();
   });
 
-  it("preserves and reattaches a remote workspace after idle sleep fails", async () => {
+  it("retains a remote workspace for retry after idle sleep fails", async () => {
     const pool = new BotWorkspacePool();
     const local = localWorkspace();
 
     const remote = {
       id: local.id,
       provider: "ascii" as const,
+      capabilities: reattachable,
       workspace: local,
       inspect: async () => "running" as const,
       wake: () => local.init(),
@@ -74,7 +79,8 @@ describe("BotWorkspacePool", () => {
     await expect(lease.release()).rejects.toThrow("sleep failed");
     expect(destroy).not.toHaveBeenCalled();
     const retry = await pool.acquire("remote-sleep", create);
-    expect(create).toHaveBeenCalledTimes(2);
+    expect(create).toHaveBeenCalledOnce();
+    expect(retry.workspace).toBe(remote);
     await retry.release({ destroy: true });
     expect(destroy).toHaveBeenCalledOnce();
   });
@@ -88,6 +94,7 @@ describe("BotWorkspacePool", () => {
     const create = vi.fn(async () => ({
       id: local.id,
       provider: "ascii" as const,
+      capabilities: reattachable,
       workspace: local,
       inspect: async () => "running" as const,
       wake,
@@ -150,6 +157,106 @@ describe("BotWorkspacePool", () => {
     const lease = await pool.acquire("remote-cached", create);
     expect(lease.workspace).toBe(failed);
     await lease.release({ destroy: true });
+  });
+
+  it("reconnects by saved ID to pause a reattachable workspace whose wake failed", async () => {
+    const pool = new BotWorkspacePool();
+
+    // The resume succeeded but waiting for it failed, so the sandbox may be awake.
+    const failed = remoteWorkspace({
+      capabilities: reattachable,
+      wake: vi
+        .fn()
+        .mockResolvedValueOnce(undefined)
+        .mockRejectedValueOnce(new Error("wait failed")),
+    });
+
+    const reattached = remoteWorkspace({ capabilities: reattachable });
+    const create = vi.fn().mockResolvedValueOnce(failed).mockResolvedValueOnce(reattached);
+
+    const initial = await pool.acquire("tenki-cached", create);
+    await initial.release();
+    await expect(pool.acquire("tenki-cached", create)).rejects.toThrow("wait failed");
+
+    await pool.retryFailedSleeps();
+    expect(create).toHaveBeenCalledTimes(2);
+    expect(reattached.sleep).toHaveBeenCalledOnce();
+    expect(failed.sleep).toHaveBeenCalledOnce();
+
+    await pool.destroyAll();
+    expect(reattached.destroy).toHaveBeenCalledOnce();
+    expect(failed.destroy).not.toHaveBeenCalled();
+  });
+
+  it("reconnects by saved ID to destroy a reattachable workspace whose wake failed", async () => {
+    const pool = new BotWorkspacePool();
+
+    const failed = remoteWorkspace({
+      capabilities: reattachable,
+      wake: vi.fn().mockRejectedValueOnce(new Error("wait failed")),
+    });
+
+    const reattached = remoteWorkspace({ capabilities: reattachable });
+    const create = vi.fn().mockResolvedValueOnce(failed).mockResolvedValueOnce(reattached);
+
+    await expect(pool.acquire("tenki-initial", create)).rejects.toThrow("wait failed");
+    await pool.destroyAll();
+    expect(create).toHaveBeenCalledTimes(2);
+    expect(reattached.destroy).toHaveBeenCalledOnce();
+    expect(failed.destroy).not.toHaveBeenCalled();
+  });
+
+  it("keeps a detached workspace reachable when the reconnecting acquire also fails", async () => {
+    const pool = new BotWorkspacePool();
+
+    const failed = remoteWorkspace({
+      capabilities: reattachable,
+      wake: vi.fn().mockRejectedValueOnce(new Error("wait failed")),
+    });
+
+    const paused = remoteWorkspace({ capabilities: reattachable });
+
+    const create = vi
+      .fn()
+      .mockResolvedValueOnce(failed)
+      .mockRejectedValueOnce(new Error("reconnect failed"))
+      .mockResolvedValueOnce(paused);
+
+    await expect(pool.acquire("tenki-twice", create)).rejects.toThrow("wait failed");
+    await expect(pool.acquire("tenki-twice", create)).rejects.toThrow("reconnect failed");
+
+    await pool.retryFailedSleeps();
+    expect(create).toHaveBeenCalledTimes(3);
+    expect(paused.sleep).toHaveBeenCalledOnce();
+
+    await pool.destroyAll();
+    expect(paused.destroy).toHaveBeenCalledOnce();
+    expect(failed.destroy).not.toHaveBeenCalled();
+  });
+
+  it("destroys by saved ID a detached workspace whose reconnecting acquire failed", async () => {
+    const pool = new BotWorkspacePool();
+
+    const failed = remoteWorkspace({
+      capabilities: reattachable,
+      wake: vi.fn().mockRejectedValueOnce(new Error("wait failed")),
+    });
+
+    const reattached = remoteWorkspace({ capabilities: reattachable });
+
+    const create = vi
+      .fn()
+      .mockResolvedValueOnce(failed)
+      .mockRejectedValueOnce(new Error("reconnect failed"))
+      .mockResolvedValueOnce(reattached);
+
+    await expect(pool.acquire("tenki-shutdown", create)).rejects.toThrow("wait failed");
+    await expect(pool.acquire("tenki-shutdown", create)).rejects.toThrow("reconnect failed");
+
+    await pool.destroyAll();
+    expect(create).toHaveBeenCalledTimes(3);
+    expect(reattached.destroy).toHaveBeenCalledOnce();
+    expect(failed.destroy).not.toHaveBeenCalled();
   });
 
   it("preserves and reuses a remote workspace after sleep failure", async () => {

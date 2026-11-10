@@ -1,4 +1,4 @@
-import { ThreadId } from "@akeru/contracts";
+import { type ProviderSession, ThreadId } from "@akeru/contracts";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 import type { createDependencies } from "./Dependencies.ts";
@@ -12,12 +12,18 @@ export function createContext({
 >) {
   const resolveSessionRuntimeForThread = Effect.fn("resolveSessionRuntimeForThread")(function* (
     threadId: ThreadId,
-  ): Effect.fn.Return<Option.Option<{ readonly threadId: ThreadId; readonly cwd: string }>> {
+  ): Effect.fn.Return<
+    Option.Option<{
+      readonly threadId: ThreadId;
+      readonly cwd: string;
+      readonly provider: ProviderSession["provider"];
+    }>
+  > {
     const sessions = yield* agentController.listSessions();
     const session = sessions.find((entry) => entry.threadId === threadId);
 
     return session?.cwd
-      ? Option.some({ threadId: session.threadId, cwd: session.cwd })
+      ? Option.some({ threadId: session.threadId, cwd: session.cwd, provider: session.provider })
       : Option.none();
   });
 

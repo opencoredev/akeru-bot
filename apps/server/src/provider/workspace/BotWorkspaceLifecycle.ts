@@ -29,9 +29,24 @@ export function wrap(
   };
 }
 
-const decodeIdentity = Schema.decodeUnknownOption(
-  Schema.Struct({ provider: Schema.Literals(REMOTE_BOT_SANDBOXES), providerId: Schema.String }),
-);
+/**
+ * The saved sandbox identity. `workdir` marks identities written since the sandbox-sdk
+ * migration; an identity without it belongs to a sandbox an old adapter created, whose
+ * files live in that provider's own default directory.
+ */
+const WorkspaceIdentity = Schema.Struct({
+  provider: Schema.Literals(REMOTE_BOT_SANDBOXES),
+  providerId: Schema.String,
+  workdir: Schema.optionalKey(Schema.String),
+  /** The user a legacy sandbox's commands and new files belong to, where the SDK runs as another. */
+  user: Schema.optionalKey(Schema.String),
+  /** Set for a sandbox whose setup failed: the next open deletes it instead of reattaching. */
+  cleanup: Schema.optionalKey(Schema.Literal(true)),
+});
+
+export type WorkspaceIdentity = typeof WorkspaceIdentity.Type;
+
+const decodeIdentity = Schema.decodeUnknownOption(WorkspaceIdentity);
 
 export async function readIdentity(io: BotWorkspaceIO, path: string) {
   const content = await io.readIdentity(path);
@@ -44,11 +59,7 @@ export async function readIdentity(io: BotWorkspaceIO, path: string) {
   return value;
 }
 
-export async function writeIdentity(
-  io: BotWorkspaceIO,
-  path: string,
-  identity: { provider: RemoteBotSandbox; providerId: string },
-) {
+export async function writeIdentity(io: BotWorkspaceIO, path: string, identity: WorkspaceIdentity) {
   await io.mkdir(io.path.dirname(path));
   const temporary = `${path}.${process.pid}.tmp`;
   await io.writeIdentity(temporary, `${JSON.stringify(identity)}\n`);

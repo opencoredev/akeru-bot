@@ -161,6 +161,10 @@ export { WslNodePtyManifestReadError } from "./lib/desktop-build/errors.ts";
 
 export { LinuxIconResizeError } from "./lib/desktop-build/errors.ts";
 
+export { ElectronChecksumsReadError } from "./lib/desktop-build/errors.ts";
+
+export { MissingElectronChecksumsError } from "./lib/desktop-build/errors.ts";
+
 export { STAGE_INSTALL_ARGS } from "./lib/desktop-build/workspace.ts";
 
 export { DESKTOP_ELECTRON_LANGUAGES } from "./lib/desktop-build/config.ts";
@@ -228,6 +232,10 @@ export { resolvePackageManagerUserAgent } from "./lib/desktop-build/config.ts";
 export { resolveDesktopProductName } from "./lib/desktop-build/config.ts";
 
 export { createBuildConfig } from "./lib/desktop-build/config.ts";
+
+export { resolveElectronDownloadConfig } from "./lib/desktop-build/config.ts";
+
+export { selectElectronZipChecksums } from "./lib/desktop-build/config.ts";
 
 export { packWindowsServerAsar } from "./lib/desktop-build/windows-payload.ts";
 

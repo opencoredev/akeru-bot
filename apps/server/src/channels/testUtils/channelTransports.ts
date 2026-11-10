@@ -48,6 +48,29 @@ vi.mock("@chat-adapter/slack", async (importOriginal) => {
         webClientOptions: {
           ...options.webClientOptions,
           adapter: async (config) => {
+            // Every test sender is a member of the bot's own team.
+            if (config.url === "https://slack.com/api/users.info") {
+              return {
+                status: 200,
+                data: { ok: true, user: { id: "U1", name: "u1", team_id: "T-HOME" } },
+                headers: {},
+                statusText: "",
+                config,
+                request: { path: "/api/users.info" },
+              };
+            }
+
+            if (config.url === "https://slack.com/api/auth.test") {
+              return {
+                status: 200,
+                data: { ok: true, user_id: "U-AKERU", team_id: "T-HOME" },
+                headers: {},
+                statusText: "",
+                config,
+                request: { path: "/api/auth.test" },
+              };
+            }
+
             if (config.url !== "https://slack.com/api/chat.postMessage") {
               throw new Error(`Unexpected Slack API request: ${config.url}`);
             }
@@ -315,7 +338,15 @@ const makeHarness = (input: {
       ],
     };
 
-    let settings = input.settings ?? DEFAULT_SERVER_SETTINGS;
+    // U1 sends every test message, so it is the linked owner on Slack and Discord.
+    let settings = input.settings ?? {
+      ...DEFAULT_SERVER_SETTINGS,
+      channelOwners: [
+        { provider: "slack" as const, workspaceId: "T-HOME", userId: "U1", linkedAt: NOW },
+        { provider: "discord" as const, workspaceId: "discord", userId: "U1", linkedAt: NOW },
+      ],
+    };
+
     let threads: OrchestrationThread[] = [];
     let sequence = 0;
 

@@ -46,6 +46,7 @@ export function makeDayFormatter(timeZone: string): (timestampMs: number) => str
 const HOUR_MS = 60 * 60 * 1000;
 
 interface MutableBucket {
+  readonly provider: UsageBucket["provider"];
   totals: UsageTokenTotals;
   costUsd: number;
   cacheSavingsUsd: number;
@@ -160,6 +161,7 @@ export class UsageAggregator {
 
     if (bucket === undefined) {
       bucket = {
+        provider: record.provider,
         totals: EMPTY_TOTALS,
         costUsd: 0,
         cacheSavingsUsd: 0,
@@ -196,13 +198,12 @@ export class UsageAggregator {
     const buckets: UsageBucket[] = [];
 
     for (const [key, bucket] of this.#buckets) {
-      const [day = "", hourStart = "", provider = "", model = ""] = key.split("\u0000");
+      const [day = "", hourStart = "", , model = ""] = key.split("\u0000");
       buckets.push({
         // SAFETY: Bucket keys are built only from the UsageDay passed to add.
         day: day as UsageDay,
         ...(hourStart === "" ? {} : { hourStart }),
-        // SAFETY: Bucket keys preserve the provider from the typed UsageRecord.
-        provider: provider as UsageBucket["provider"],
+        provider: bucket.provider,
         model,
         totals: bucket.totals,
         costUsd: bucket.costUsd,

@@ -598,7 +598,7 @@ describe("AgentControllerLive", () => {
       {
         provider: "claudeAgent",
         instanceId: "claudeAgent-isolated",
-        issue: "This Claude instance needs an API key or auth token",
+        issue: "This Claude instance needs ANTHROPIC_API_KEY or ANTHROPIC_AUTH_TOKEN",
       },
       {
         provider: "grok",
@@ -717,7 +717,7 @@ describe("AgentControllerLive", () => {
           assert.equal(error._tag, "AgentControllerUnsupportedEngineError");
 
           if (Predicate.isTagged(error, "AgentControllerUnsupportedEngineError")) {
-            assert.include(error.detail, "Connect Claude in Settings.");
+            assert.include(error.detail, "Add an Anthropic API key for Claude in Settings.");
             assert.equal(error.unavailability, "missing-login");
           }
         }),

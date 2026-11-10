@@ -272,6 +272,23 @@ describe("CheckpointReactor", () => {
     expect(harness.provider.rollbackConversation).toHaveBeenCalledTimes(1);
   });
 
+  it("refuses a Claude Code revert before it changes any file", async () => {
+    const harness = await createHarness({ providerName: ProviderDriverKind.make("claudeCode") });
+
+    await seedTwoTurnsAndRevertToFirst(harness);
+
+    const thread = await waitForThread(harness, (entry) =>
+      entry.activities.some((activity) => activity.kind === "checkpoint.revert.failed"),
+    );
+
+    expect(NodeFS.readFileSync(NodePath.join(harness.cwd, "README.md"), "utf8")).toBe("v3\n");
+    expect(thread.checkpoints).toHaveLength(2);
+    expect(
+      gitRefExists(harness.cwd, checkpointRefForThreadTurn(ThreadId.make("thread-1"), 2)),
+    ).toBe(true);
+    expect(harness.provider.rollbackConversation).not.toHaveBeenCalled();
+  });
+
   it("fails the revert when the provider rollback itself fails", async () => {
     const harness = await createHarness({ providerName: ProviderDriverKind.make("claudeAgent") });
     harness.provider.rollbackConversation.mockImplementationOnce((input) =>

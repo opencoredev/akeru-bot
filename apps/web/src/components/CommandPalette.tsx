@@ -187,7 +187,7 @@ function OpenCommandPaletteDialog(props: { readonly setOpen: (open: boolean) => 
     }),
     {
       value: "action:plugins",
-      searchTerms: [t("Open plugins"), "plugins", "mcp", "tools", "executor", "composio"],
+      searchTerms: [t("Open plugins"), "plugins", "mcp", "tools", "composio"],
       title: t("Open plugins"),
       icon: <PuzzleIcon className={ITEM_ICON_CLASS} />,
       run: async () => {

@@ -6,6 +6,7 @@ import { createClaudeSystemMessages } from "./claude/ClaudeSystemMessages.ts";
 import { createClaudeTurnCompletion } from "./claude/ClaudeTurnCompletion.ts";
 import { createClaudeSessionLifecycle } from "./claude/ClaudeSessionLifecycle.ts";
 import { createClaudeStreamLifecycle } from "./claude/ClaudeStreamLifecycle.ts";
+import { createClaudeCodeQuery } from "./claude/ClaudeCodeProcess.ts";
 /**
  * ClaudeAdapterLive - Scoped live implementation for the Claude Agent provider adapter.
  *
@@ -15,7 +16,6 @@ import { createClaudeStreamLifecycle } from "./claude/ClaudeStreamLifecycle.ts";
  * @module ClaudeAdapterLive
  */
 import {
-  query,
   type Options as ClaudeQueryOptions,
   type SDKMessage,
   type SDKUserMessage,
@@ -24,6 +24,7 @@ import {
 import {
   type ClaudeSettings,
   EventId,
+  type ProviderDriverKind,
   ProviderInstanceId,
   ProviderItemId,
   type ProviderRuntimeEvent,
@@ -87,7 +88,17 @@ import { buildUserMessageEffect } from "./claude/ClaudePrompt.ts";
 
 export interface ClaudeAdapterLiveOptions {
   readonly instanceId?: ProviderInstanceId;
+  /** The instance's driver. Claude Code login instances run as `claudeCode`. */
+  readonly driverKind?: ProviderDriverKind;
   readonly environment?: NodeJS.ProcessEnv;
+  /** Finds the `claude` program for each new session instead of once. */
+  readonly resolveExecutablePath?: Effect.Effect<string>;
+  /** Replaces the saved-credential session environment. */
+  readonly sessionEnvironment?: Effect.Effect<NodeJS.ProcessEnv>;
+  /** Checks the responding bot's permission policy on every tool call. */
+  readonly enforceBotPermissionPolicy?: boolean;
+  /** Loads no Claude Code settings files, hooks, or skills from disk. */
+  readonly isolateClaudeSettings?: boolean;
   readonly createQuery?: (input: {
     readonly prompt: AsyncIterable<SDKUserMessage>;
     readonly options: ClaudeQueryOptions;
@@ -101,6 +112,8 @@ export const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
   options?: ClaudeAdapterLiveOptions,
 ) {
   const boundInstanceId = options?.instanceId ?? ProviderInstanceId.make("claudeAgent");
+  const driverKind = options?.driverKind ?? PROVIDER;
+  const isolateClaudeSettings = options?.isolateClaudeSettings === true;
   const fileSystem = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
   const serverConfig = yield* ServerConfig;
@@ -127,16 +140,7 @@ export const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
   const managedNativeEventLogger =
     options?.nativeEventLogger === undefined ? nativeEventLogger : undefined;
 
-  const createQuery =
-    options?.createQuery ??
-    ((input: {
-      readonly prompt: AsyncIterable<SDKUserMessage>;
-      readonly options: ClaudeQueryOptions;
-    }) =>
-      query({
-        prompt: input.prompt,
-        options: input.options,
-      }));
+  const createQuery = options?.createQuery ?? createClaudeCodeQuery;
 
   const sessions = new Map<ThreadId, ClaudeSessionContext>();
   const runtimeEventQueue = yield* Queue.unbounded<ProviderRuntimeEvent>();
@@ -158,8 +162,12 @@ export const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
   const nextEventId = Effect.map(randomUUIDv4, (id) => EventId.make(id));
   const makeEventStamp = () => Effect.all({ eventId: nextEventId, createdAt: nowIso });
 
+  // Events carry the instance's driver, which ProviderService checks against the instance.
   const offerRuntimeEvent = (event: ProviderRuntimeEvent): Effect.Effect<void> =>
-    Queue.offer(runtimeEventQueue, event).pipe(Effect.asVoid);
+    Queue.offer(
+      runtimeEventQueue,
+      event.provider === driverKind ? event : { ...event, provider: driverKind },
+    ).pipe(Effect.asVoid);
 
   const logNativeSdkMessage = Effect.fnUntraced(function* (
     context: ClaudeSessionContext,
@@ -491,6 +499,11 @@ export const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
     offerRuntimeEvent,
     emitProposedPlanCompleted,
     claudeSdkExecutablePath,
+    resolveExecutablePath: options?.resolveExecutablePath,
+    sessionEnvironment: options?.sessionEnvironment,
+    enforceBotPermissionPolicy: options?.enforceBotPermissionPolicy === true,
+    isolateClaudeSettings,
+    driverKind,
     claudeSettings,
     boundInstanceId,
     serverConfig,
@@ -585,14 +598,13 @@ export const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
       });
     }
 
-    const skills = yield* discoverClaudeSkills(
-      claudeSettings,
-      context.session.cwd,
-      claudeEnvironment,
-    ).pipe(
-      Effect.provideService(FileSystem.FileSystem, fileSystem),
-      Effect.provideService(Path.Path, path),
-    );
+    // An isolated session loads no skills, so `$skill` text stays plain text.
+    const skills = isolateClaudeSettings
+      ? []
+      : yield* discoverClaudeSkills(claudeSettings, context.session.cwd, claudeEnvironment).pipe(
+          Effect.provideService(FileSystem.FileSystem, fileSystem),
+          Effect.provideService(Path.Path, path),
+        );
 
     const message = yield* buildUserMessageEffect(input, {
       fileSystem,
@@ -633,14 +645,18 @@ export const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
     },
   );
 
+  // The live query keeps every message it has seen, and trimming the local
+  // copy would report a rewind Claude never made, so revert is refused.
   const rollbackThread: ClaudeAdapterShape["rollbackThread"] = Effect.fn("rollbackThread")(
-    function* (threadId, numTurns) {
-      const context = yield* requireSession(threadId);
-      const nextLength = Math.max(0, context.turns.length - numTurns);
-      context.turns.splice(nextLength);
-      yield* updateResumeCursor(context);
+    function* (threadId, _numTurns) {
+      yield* requireSession(threadId);
 
-      return yield* snapshotThread(context);
+      return yield* new ProviderAdapterRequestError({
+        provider: driverKind,
+        method: "thread/rollback",
+        detail:
+          "Claude Code cannot remove turns from a running conversation, so this chat cannot be reverted.",
+      });
     },
   );
 
@@ -728,7 +744,7 @@ export const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
   );
 
   return {
-    provider: PROVIDER,
+    provider: driverKind,
     capabilities: {
       sessionModelSwitch: "in-session",
     },

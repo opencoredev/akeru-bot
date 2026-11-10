@@ -1,4 +1,3 @@
-import * as Match from "effect/Match";
 import * as NodeCrypto from "node:crypto";
 
 import { Workspace } from "@mastra/core/workspace";
@@ -11,6 +10,7 @@ import * as Scope from "effect/Scope";
 import * as Schema from "effect/Schema";
 import { Duration } from "effect";
 import type { AkeruBotWorkspace } from "./botWorkspace.ts";
+import type { BotWorkspaceReattach } from "./workspace/BotWorkspaceTypes.ts";
 
 export function botRuntimeResourceScope(input: {
   readonly sharing: BotSandboxBrowserSharing;
@@ -57,8 +57,32 @@ export function botWorkspaceIdentity(resourceKey: string): string {
 export interface BotWorkspaceLease {
   readonly workspace: AkeruBotWorkspace;
   readonly wokeFromSleep: boolean;
-  readonly release: (options?: { readonly destroy?: boolean }) => Promise<void>;
+  /**
+   * Whether this lease alone owns the workspace: the only lease the pooled entry has granted
+   * since it opened, on a workspace that was created for it rather than reattached or woken.
+   * Only then may a failed acquisition destroy it; anything else holds earlier or shared work.
+   */
+  readonly unshared: () => boolean;
+  readonly release: (options?: BotWorkspaceReleaseOptions) => Promise<void>;
 }
+
+export interface BotWorkspaceReleaseOptions {
+  /**
+   * `true` deletes the workspace once its last lease releases. `"ifUnshared"` asks the same
+   * only if this lease still alone owns the workspace when the pool accepts the release, so a
+   * chat that joined during the caller's own cleanup keeps its work.
+   */
+  readonly destroy?: boolean | "ifUnshared";
+}
+
+/**
+ * Opens a key's workspace. With no argument it reattaches by saved ID or creates a sandbox.
+ * Cleanup passes a reattach request: the creator must never create then, and resolves
+ * `undefined` when no matching sandbox is saved.
+ */
+export type BotWorkspaceCreator = (
+  reattach?: BotWorkspaceReattach,
+) => Promise<AkeruBotWorkspace | Workspace | undefined>;
 
 class BotWorkspacePoolError extends Schema.TaggedErrorClass<BotWorkspacePoolError>()(
   "BotWorkspacePoolError",
@@ -86,7 +110,8 @@ interface RailwayIdentityState {
   destroyRequested: boolean;
   deleted: boolean;
   readonly keys: Set<string>;
-  destruction?: Promise<void>;
+  /** One shared deletion per provider ID: two handles are the same VM only when their IDs match. */
+  readonly destructions: Map<string | undefined, Promise<void>>;
 }
 
 /**
@@ -99,10 +124,18 @@ export class BotWorkspacePool {
   private readonly state: Promise<PoolState>;
   private readonly clock: Clock.Clock | undefined;
   private readonly references = new Map<string, number>();
+  /** Leases granted per pooled entry since it last opened. */
+  private readonly grants = new Map<string, number>();
   private readonly acquisitions = new Map<string, number>();
-  private readonly creators = new Map<string, () => Promise<AkeruBotWorkspace | Workspace>>();
+  private readonly creators = new Map<string, BotWorkspaceCreator>();
   private readonly destroyRequested = new Set<string>();
   private readonly sleepers = new Map<string, AkeruBotWorkspace>();
+  /**
+   * Reattachable workspaces whose wake failed, with the provider ID each lost. Their handle is
+   * gone, so cleanup reattaches to that sandbox through the key's creator before it pauses or
+   * deletes it, and skips the entry when the sandbox is no longer saved.
+   */
+  private readonly detached = new Map<string, string | undefined>();
   private readonly waking = new Set<string>();
   private readonly failed = new Set<string>();
   private readonly retrying = new Set<string>();
@@ -139,37 +172,39 @@ export class BotWorkspacePool {
     const sleeping = this.sleepers.get(key);
     this.sleepers.delete(key);
     const wokeFromSleep = sleeping !== undefined;
+    this.grants.set(key, 0);
     this.waking.add(key);
     this.failed.delete(key);
 
     return Effect.tryPromise({
-      try: async () => sleeping ?? (await this.creators.get(key)!()),
+      try: async () => sleeping ?? (await this.connect(key)),
       catch: toPoolError,
     }).pipe(
-      Effect.map((created) =>
-        created instanceof Workspace ? wrapMastraWorkspace(created) : created,
-      ),
-      Effect.map((workspace) =>
-        key.startsWith("railway:")
-          ? this.withIdentityDestroy(this.identityKey(key), workspace)
-          : workspace,
-      ),
       Effect.tap((workspace) =>
         Effect.tryPromise({ try: () => workspace.wake(), catch: toPoolError }).pipe(
-          Effect.tapCause(() =>
-            Match.value(workspace.provider).pipe(
-              Match.when("local", () =>
-                Effect.promise(() => workspace.destroy().catch(() => undefined)),
-              ),
-              Match.when("ascii", () => Effect.void),
-              Match.orElse(() =>
-                Effect.sync(() => {
-                  this.sleepers.set(key, workspace);
-                }),
-              ),
-            ),
-          ),
+          Effect.tapCause(() => {
+            if (workspace.provider === "local")
+              return Effect.promise(() => workspace.destroy().catch(() => undefined));
+
+            // A reattachable workspace drops its stale handle; the next acquire, or cleanup if
+            // none comes, reconnects by saved ID. The wake may have resumed the sandbox.
+            if (workspace.capabilities?.reconnect)
+              return Effect.sync(() => {
+                this.detached.set(key, workspace.providerId);
+              });
+
+            return Effect.sync(() => {
+              this.sleepers.set(key, workspace);
+            });
+          }),
         ),
+      ),
+      // A detached entry stays until the pool holds its live workspace, so a failed reconnect
+      // leaves cleanup able to reach the sandbox by saved ID.
+      Effect.tap(() =>
+        Effect.sync(() => {
+          this.detached.delete(key);
+        }),
       ),
       Effect.map((workspace) => ({ workspace, wokeFromSleep })),
       Effect.tapCause(() =>
@@ -179,6 +214,37 @@ export class BotWorkspacePool {
       ),
       Effect.ensuring(Effect.sync(() => this.waking.delete(key))),
     );
+  }
+
+  /** Opens the key's workspace through its latest creator, reattaching by saved ID if one exists. */
+  private async connect(key: string): Promise<AkeruBotWorkspace> {
+    const workspace = await this.creators.get(key)!();
+
+    if (!workspace)
+      throw new BotWorkspacePoolError({ message: `Workspace '${key}' is unavailable.` });
+
+    return this.pooled(key, workspace);
+  }
+
+  /**
+   * Cleanup's only way to reach a detached sandbox: it reattaches to the one the entry lost and
+   * never creates one, so `undefined` means there is nothing left to pause or delete.
+   */
+  private async reattach(
+    key: string,
+    providerId: string | undefined,
+  ): Promise<AkeruBotWorkspace | undefined> {
+    const workspace = await this.creators.get(key)!(providerId === undefined ? {} : { providerId });
+
+    return workspace && this.pooled(key, workspace);
+  }
+
+  private pooled(key: string, created: AkeruBotWorkspace | Workspace): AkeruBotWorkspace {
+    const workspace = created instanceof Workspace ? wrapMastraWorkspace(created) : created;
+
+    return key.startsWith("railway:")
+      ? this.withIdentityDestroy(this.identityKey(key), workspace)
+      : workspace;
   }
 
   private close(key: string, workspace: AkeruBotWorkspace): Effect.Effect<void> {
@@ -220,28 +286,20 @@ export class BotWorkspacePool {
     return Effect.tryPromise(() => workspace.sleep()).pipe(
       Effect.tap(() => Effect.sync(() => this.sleepers.set(key, workspace))),
       // Remote workspaces can remain usable after a pause failure; retain them for retry.
+      // Without pause, sleep is a no-op and cannot fail (Railway, Daytona, Boat).
       Effect.tapError(() =>
-        Match.value(workspace.provider).pipe(
-          Match.when("local", () =>
-            Effect.promise(() => workspace.destroy().catch(() => undefined)),
-          ),
-          Match.when("ascii", () => Effect.void),
-          Match.orElse(() =>
-            Effect.sync(() => {
+        workspace.provider === "local"
+          ? Effect.promise(() => workspace.destroy().catch(() => undefined))
+          : Effect.sync(() => {
               this.sleepers.set(key, workspace);
               this.failed.add(key);
             }),
-          ),
-        ),
       ),
       Effect.catch((error) => Effect.die(error.cause)),
     );
   }
 
-  async acquire(
-    key: string,
-    create: () => Promise<AkeruBotWorkspace | Workspace>,
-  ): Promise<BotWorkspaceLease> {
+  async acquire(key: string, create: BotWorkspaceCreator): Promise<BotWorkspaceLease> {
     if (this.destroyingAll) {
       throw new BotWorkspacePoolError({ message: "Bot workspaces are shutting down." });
     }
@@ -263,7 +321,7 @@ export class BotWorkspacePool {
 
           if (state.deleted) {
             state.deleted = false;
-            delete state.destruction;
+            state.destructions.clear();
           }
 
           state.keys.add(key);
@@ -293,7 +351,10 @@ export class BotWorkspacePool {
           await this.withIdentityCoordination(key, identity, async () => {
             const state = this.railwayIdentity(identity);
 
-            if (options?.destroy) state.destroyRequested = true;
+            const destroyRequested =
+              options?.destroy === "ifUnshared" ? lease.unshared() : options?.destroy === true;
+
+            if (destroyRequested) state.destroyRequested = true;
             const remaining = --state.leases;
             const destroy = state.destroyRequested && remaining === 0;
 
@@ -301,19 +362,31 @@ export class BotWorkspacePool {
               const { map } = await this.state;
               const keys = state.keys;
               let cleanupFailure: unknown;
-              let idleDeletionFailure: unknown;
+              const idleDeletionFailures: { providerId: string | undefined; cause: unknown }[] = [];
+              const replacements: [string, string | undefined][] = [];
 
               for (const pooledKey of keys) {
                 this.destroyRequested.add(pooledKey);
                 const sleeping = this.sleepers.get(pooledKey);
                 this.sleepers.delete(pooledKey);
+
+                // The lease's deletion below covers a detached entry on the same VM. One that
+                // lost another VM, such as a replacement made after an outside deletion, is
+                // reattached and deleted after it.
+                if (this.detached.has(pooledKey)) {
+                  const lost = this.detached.get(pooledKey);
+
+                  if (lost !== lease.workspace.providerId) replacements.push([pooledKey, lost]);
+                  this.detached.delete(pooledKey);
+                }
+
                 this.failed.delete(pooledKey);
 
                 if (sleeping) {
                   try {
                     await this.run(Effect.promise(() => sleeping.destroy()));
                   } catch (cause) {
-                    idleDeletionFailure ??= cause;
+                    idleDeletionFailures.push({ providerId: sleeping.providerId, cause });
                   }
                 }
 
@@ -335,10 +408,23 @@ export class BotWorkspacePool {
                 cleanupFailure ??= cause;
               }
 
-              if (idleDeletionFailure !== undefined) {
-                // A current credential client can complete deletion after an idle client fails.
-                if (!state.destruction) throw idleDeletionFailure;
-                await state.destruction;
+              for (const [pooledKey, providerId] of replacements) {
+                try {
+                  await (await this.reattach(pooledKey, providerId))?.destroy();
+                } catch (cause) {
+                  // Kept detached, so shutdown reaches the VM again by its ID.
+                  this.detached.set(pooledKey, providerId);
+                  this.failed.add(pooledKey);
+                  cleanupFailure ??= cause;
+                }
+              }
+
+              for (const failure of idleDeletionFailures) {
+                // A current credential client can complete a VM's deletion after an idle client fails.
+                const destruction = state.destructions.get(failure.providerId);
+
+                if (!destruction) throw failure.cause;
+                await destruction;
               }
 
               if (cleanupFailure !== undefined) throw cleanupFailure;
@@ -368,7 +454,13 @@ export class BotWorkspacePool {
     let state = this.railwayIdentities.get(identity);
 
     if (!state) {
-      state = { leases: 0, destroyRequested: false, deleted: false, keys: new Set() };
+      state = {
+        leases: 0,
+        destroyRequested: false,
+        deleted: false,
+        keys: new Set(),
+        destructions: new Map(),
+      };
       this.railwayIdentities.set(identity, state);
     }
 
@@ -404,27 +496,25 @@ export class BotWorkspacePool {
     return {
       ...workspace,
       destroy: () => {
-        const state = this.railwayIdentity(identity);
-        const existing = state.destruction;
+        const { destructions } = this.railwayIdentity(identity);
+        const existing = destructions.get(workspace.providerId);
 
         if (existing) return existing;
 
         const destruction = workspace.destroy().catch((error) => {
-          if (state.destruction === destruction) delete state.destruction;
+          if (destructions.get(workspace.providerId) === destruction)
+            destructions.delete(workspace.providerId);
           throw error;
         });
 
-        state.destruction = destruction;
+        destructions.set(workspace.providerId, destruction);
 
         return destruction;
       },
     };
   }
 
-  private async acquireOnce(
-    key: string,
-    create: () => Promise<AkeruBotWorkspace | Workspace>,
-  ): Promise<BotWorkspaceLease> {
+  private async acquireOnce(key: string, create: BotWorkspaceCreator): Promise<BotWorkspaceLease> {
     // Callers that join a wake in flight also reconnect, matching the caller that started it.
     const joinedWake = this.waking.has(key);
     const { map } = await this.state;
@@ -444,7 +534,7 @@ export class BotWorkspacePool {
         await this.run(Scope.close(leaseScope, Exit.void));
 
         if (this.failed.delete(key)) {
-          const retained = this.sleepers.has(key);
+          const retained = this.sleepers.has(key) || this.detached.has(key);
           await this.run(RcMap.invalidate(map, key));
 
           if (retained) this.failed.add(key);
@@ -455,16 +545,24 @@ export class BotWorkspacePool {
     );
 
     this.references.set(key, (this.references.get(key) ?? 0) + 1);
+    this.grants.set(key, (this.grants.get(key) ?? 0) + 1);
     let released = false;
+
+    const unshared = () =>
+      this.grants.get(key) === 1 && pooled.workspace.created !== false && !pooled.wokeFromSleep;
 
     return {
       workspace: pooled.workspace,
       wokeFromSleep: joinsWake && pooled.wokeFromSleep,
+      unshared,
       release: async (options) => {
         if (released) return;
         released = true;
 
-        if (options?.destroy) this.destroyRequested.add(key);
+        if (options?.destroy === "ifUnshared" ? unshared() : options?.destroy === true) {
+          this.destroyRequested.add(key);
+        }
+
         const remaining = (this.references.get(key) ?? 1) - 1;
 
         if (remaining > 0) this.references.set(key, remaining);
@@ -498,35 +596,70 @@ export class BotWorkspacePool {
     if (this.destroyingAll) return;
 
     const results = await Promise.allSettled(
-      [...this.failed].map(async (key) => {
-        const workspace = this.sleepers.get(key);
-
-        if (
-          !workspace ||
-          this.references.has(key) ||
-          this.acquisitions.has(key) ||
-          this.retrying.has(key)
-        )
-          return;
-        this.retrying.add(key);
-        const finish = Promise.withResolvers<void>();
-        this.closing.set(key, finish.promise);
-
-        try {
-          await workspace.sleep();
-          this.failed.delete(key);
-        } finally {
-          this.retrying.delete(key);
-
-          if (this.closing.get(key) === finish.promise) this.closing.delete(key);
-          finish.resolve();
-        }
-      }),
+      // A Railway retry holds the identity lock that creation and deletion take, so a deletion
+      // through another credential key either finishes first or waits for the retry.
+      [...this.failed].map((key) =>
+        this.withIdentityCoordination(key, this.identityKey(key), () => this.retryFailedSleep(key)),
+      ),
     );
 
     const failure = results.find((result) => result.status === "rejected");
 
     if (failure?.status === "rejected") throw failure.reason;
+  }
+
+  /** Runs under the identity lock, so it rechecks the entry a deletion may have removed. */
+  private async retryFailedSleep(key: string): Promise<void> {
+    const workspace = this.sleepers.get(key);
+
+    if (
+      this.destroyingAll ||
+      !this.failed.has(key) ||
+      (!workspace && !this.detached.has(key)) ||
+      this.references.has(key) ||
+      this.acquisitions.has(key) ||
+      this.retrying.has(key)
+    )
+      return;
+    this.retrying.add(key);
+    const finish = Promise.withResolvers<void>();
+    this.closing.set(key, finish.promise);
+
+    try {
+      if (workspace) {
+        await workspace.sleep();
+      } else {
+        // The fresh handle replaces the detached entry even if its pause fails, so the
+        // next retry, acquire, or shutdown uses it directly. No saved sandbox: nothing to pause.
+        const reconnected = await this.reattach(key, this.detached.get(key));
+        this.detached.delete(key);
+
+        if (reconnected) {
+          this.sleepers.set(key, reconnected);
+          await reconnected.sleep();
+        }
+      }
+
+      this.failed.delete(key);
+    } finally {
+      this.retrying.delete(key);
+
+      if (this.closing.get(key) === finish.promise) this.closing.delete(key);
+      finish.resolve();
+    }
+  }
+
+  /**
+   * After a deletion, drops the identity's detached entries that lost the same VM. An entry
+   * that lost another VM, such as a replacement, still needs its own deletion.
+   */
+  private forgetDetachedSiblings(key: string, providerId: string | undefined): void {
+    if (providerId === undefined) return;
+    const identity = this.identityKey(key);
+
+    for (const [other, lost] of this.detached) {
+      if (lost === providerId && this.identityKey(other) === identity) this.detached.delete(other);
+    }
   }
 
   /** Destroys every pooled workspace, including idle ones that are still awake. */
@@ -541,10 +674,34 @@ export class BotWorkspacePool {
     );
     await Promise.all(this.closing.values());
     await this.run(Scope.close(scope, Exit.void));
-    const sleepers = [...this.sleepers.values()];
+    const sleepers = [...this.sleepers];
+    const detached = [...this.detached.keys()];
     this.sleepers.clear();
     this.failed.clear();
-    const results = await Promise.allSettled(sleepers.map((workspace) => workspace.destroy()));
+
+    // Every deletion takes the identity lock and then forgets the identity's detached keys that
+    // lost the same VM, so a durable Railway VM is deleted once, a replacement VM still gets its
+    // own deletion, and a key whose sandbox is gone is skipped.
+    const results = await Promise.allSettled([
+      ...sleepers.map(([key, workspace]) =>
+        this.withIdentityCoordination(key, this.identityKey(key), async () => {
+          await workspace.destroy();
+          this.forgetDetachedSiblings(key, workspace.providerId);
+        }),
+      ),
+      ...detached.map((key) =>
+        this.withIdentityCoordination(key, this.identityKey(key), async () => {
+          const providerId = this.detached.get(key);
+
+          if (!this.detached.delete(key)) return;
+          const workspace = await this.reattach(key, providerId);
+
+          if (!workspace) return;
+          await workspace.destroy();
+          this.forgetDetachedSiblings(key, workspace.providerId);
+        }),
+      ),
+    ]);
 
     for (const result of results) {
       if (result.status === "rejected") this.destroyAllFailures.push(result.reason);

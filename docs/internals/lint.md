@@ -3,8 +3,9 @@
 > For Akeru Bot maintainers and the agents that work on the repo.
 
 Oxlint runs through Vite+. The whole configuration lives in the `lint` block of the root
-[`vite.config.ts`](../../vite.config.ts). CI runs `vp run lint`, which fails on any finding.
-Every enabled rule is an `error`; the codebase carries no warnings.
+[`vite.config.ts`](../../vite.config.ts). CI runs `vp run lint`, which fails on any error.
+Every enabled rule is an `error` except `typescript/no-unsafe-type-assertion`, which is on the
+[severity ratchet](#severity-ratchet) as a counted warning.
 
 Lint the files you touched:
 
@@ -13,6 +14,9 @@ vp lint apps/web/src/components/chat/ChatView.tsx packages/shared/src
 ```
 
 `vp lint --fix <paths>` applies autofixes. Run `vp fmt <paths>` afterwards.
+
+Unused files, dependencies, and exports are a separate check, `vp run knip`. See
+[dead-code.md](./dead-code.md).
 
 ## Rule groups
 
@@ -24,6 +28,7 @@ vp lint apps/web/src/components/chat/ChatView.tsx packages/shared/src
 | `anti-slop-effect/*` | [`oxlint-plugin-anti-slop/effect/index.ts`](../../oxlint-plugin-anti-slop/effect/index.ts) | Whole repo     |
 | `shadcn/*`           | [`@shadcn/lint`](https://github.com/shadcn-ui/lint) from npm                               | `apps/web/src` |
 | `eslint/max-lines`   | Oxlint built-in                                                                            | Whole repo     |
+| Type-aware           | Oxlint built-ins run by `oxlint-tsgolint`                                                  | Whole repo     |
 
 Generated and vendored files (`**/_generated/**`, `**/*.gen.ts`, `**/vendor/**`) skip the
 anti-slop rules and `max-lines`. Fix those at the generator or upstream instead.
@@ -133,11 +138,70 @@ a fixture. Splitting at an arbitrary line count does not help.
 `max-lines` and `anti-slop/require-readable-spacing` are errors. No hand-written file is over the
 limit, and `vp lint --fix` applies the spacing rule, so run it on new files before committing.
 
+### Type-aware rules
+
+`options.typeAware` is on. Vite+ hands the type-aware rules to `oxlint-tsgolint` (0.24 with
+Vite+ 0.2.2), which builds its own TypeScript program from each package's `tsconfig.json`. It
+does not load `@effect/tsgo`, so Effect diagnostics still come from the `tsgo` typecheck and
+`options.typeCheck` stays off. A full `vp lint` takes about 28 seconds with type information,
+against about 6 seconds without it.
+
+Run lint on the Node version in `engines` (24). The JS plugins are TypeScript files, and a Node
+build without type stripping fails with `ERR_UNKNOWN_FILE_EXTENSION` before any rule runs. CI's
+`setup-vp` step reads the version from `package.json`. Locally, `vp env exec --node 24.22.2 vp lint`
+works when the shell resolves an older system Node.
+
+Turning `typeAware` on also turns on every type-aware rule in the enabled categories
+(`correctness`, `suspicious`, `perf`). Rules this repo is not ready for are listed as `"off"` in
+the config, with their finding counts below.
+
+| Rule                                                 | Setting                    | Findings                  |
+| ---------------------------------------------------- | -------------------------- | ------------------------- |
+| `no-floating-promises`                               | error                      | 0                         |
+| `no-misused-spread`                                  | error, `allow: ["string"]` | 0                         |
+| `no-unnecessary-template-expression`                 | error (category)           | 0                         |
+| `no-array-delete`, `no-for-in-array`                 | error (category)           | 0                         |
+| `no-unsafe-enum-comparison`, `no-unsafe-unary-minus` | error (category)           | 0                         |
+| `no-useless-default-assignment`                      | error (category)           | 0                         |
+| `no-unsafe-type-assertion`                           | warn, off in tests         | 121 (1,043 more in tests) |
+| `no-unnecessary-type-assertion`                      | off                        | 458 (60 outside tests)    |
+| `consistent-return`                                  | off                        | 375 (318 outside tests)   |
+| `no-unnecessary-type-arguments`                      | off                        | 217 (210 outside tests)   |
+| `unbound-method`                                     | off                        | 176 (21 outside tests)    |
+| `no-unnecessary-type-parameters`                     | off                        | 119 (91 outside tests)    |
+| `no-base-to-string`                                  | off                        | 84 (20 outside tests)     |
+| `no-unnecessary-type-conversion`                     | off                        | 64 (44 outside tests)     |
+| `no-redundant-type-constituents`                     | off                        | 44 (39 outside tests)     |
+| `await-thenable`                                     | off                        | 40 (1 outside tests)      |
+| `no-unnecessary-boolean-literal-compare`             | off                        | 35 (31 outside tests)     |
+| `no-duplicate-type-constituents`                     | off                        | 22 (22 outside tests)     |
+| `restrict-template-expressions`                      | off                        | 11 (9 outside tests)      |
+| `no-meaningless-void-operator`                       | off                        | 8 (7 outside tests)       |
+| `require-array-sort-compare`                         | off                        | 4 (1 outside tests)       |
+| `no-implied-eval`                                    | off                        | 2 (0 outside tests)       |
+
+Counts are from 2026-10-30. To refresh one, set the rule to `"error"` locally and use the count
+command in the next section. A rule moves from `off` to `error` in the change that fixes its
+findings.
+
+`no-misused-spread` allows strings because terminal key handling spreads a string on purpose to
+count Unicode code points. Spreads of class instances, `HeadersInit`, and arrays into objects
+still fail.
+
+`no-unsafe-type-assertion` reports casts that narrow a type, even when a `// SAFETY:` comment
+explains them. Each finding outside tests needs a schema decode, a type guard, or a type that no
+longer needs the cast. It is off in test files for the same reason as
+`require-safety-comment-for-type-assertion`: fixture casts such as `"thread-1" as ThreadId` are
+the point of the test.
+
 ## Severity ratchet
 
 Every enabled rule is an `error`. A new rule lands as `error` with its findings fixed in the same
 change. If a rule has too many findings to fix at once, it may land as `warn` with a recorded
 count, and it moves to `error` in the pull request that brings that count to zero.
+
+One rule is on the ratchet now: `typescript/no-unsafe-type-assertion`, at 121 warnings outside
+tests. Lower the count when you touch a file that has one, and update the number here.
 
 To count one rule:
 
@@ -259,6 +323,10 @@ Vite+ moves Oxlint, move both pins with it.
 
 - `@shadcn/lint` documents Oxlint 1.80 or later. The repo runs Oxlint 1.72 through Vite+ 0.2.2.
   The enabled rules load and report correctly there. Check again after upgrading Vite+.
+- Vite+ 1.4.0 ships Oxlint 1.89, `oxlint-tsgolint` 7.0, oxfmt 0.74, and Vitest 5. Type-aware lint
+  does not need it, so the pins stay at 0.2.2. The upgrade is its own change: Vitest 5 replaces
+  the `@vitest/*` 4.1.12 overrides in `pnpm-workspace.yaml` and the patched `@effect/vitest`, and
+  a new oxfmt version reformats files across the repo.
 - `@shadcn/lint` prints one warning per run because the web app depends on `cn` 0.2.4. It falls
   back to its bundled `cn` 0.3.2 grammar, so findings are unaffected. The message goes away when
   `apps/web` moves to `cn` 0.3.2 or later.

@@ -4,6 +4,7 @@ import { useAtomValue } from "@effect/atom-react";
 import { type BotSandboxBrowserSharing, ProviderDriverKind } from "@akeru/contracts";
 import { DEFAULT_UNIFIED_SETTINGS } from "@akeru/contracts/settings";
 import { createModelSelection } from "@akeru/shared/model";
+import { driverSupportsTextGeneration } from "@akeru/shared/textGenerationProviders";
 import * as Equal from "effect/Equal";
 import { ProviderModelPicker } from "../chat/ProviderModelPicker";
 import { TraitsPicker } from "../chat/TraitsPicker";
@@ -134,9 +135,10 @@ export function FallbackModelSettingsRow() {
   const textGenModel = textGenerationModelSelection.model;
   const textGenModelOptions = textGenerationModelSelection.options;
 
+  // Only drivers that write background text can be the fallback model.
   const textGenerationModelInstanceEntries = sortProviderInstanceEntries(
     applyProviderInstanceSettings(deriveProviderInstanceEntries(serverProviders), settings),
-  );
+  ).filter((entry) => driverSupportsTextGeneration(entry.driverKind));
 
   const textGenInstanceEntry = textGenerationModelInstanceEntries.find(
     (entry) => entry.instanceId === textGenInstanceId,

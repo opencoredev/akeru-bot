@@ -17,12 +17,14 @@ import * as Equal from "effect/Equal";
 import * as Option from "effect/Option";
 import { resolveThreadWorkspaceCwd } from "../../../checkpointing/Utils.ts";
 import { ProviderAdapterRequestError } from "../../../provider/Errors.ts";
+import { GROUP_HANDOFF_BUSY_MESSAGE } from "../../groupResponder.ts";
 import {
   botRuntimeResourceScope,
   botWorkspaceCredentialFingerprint,
   botWorkspaceResourceKey,
 } from "../../../provider/botWorkspacePool.ts";
 import {
+  GroupHandoffBusyError,
   providerErrorLabel,
   isProviderDriverKind,
   resolveControllerBotId,
@@ -51,6 +53,7 @@ export function createSession({
   threadModelSelections,
   threadMcpServers,
   threadBotWorkspaceKeys,
+  threadRespondingBotIds,
   providerSessionDirectory,
   expandComposerMentions,
 }: Pick<
@@ -74,6 +77,7 @@ export function createSession({
   | "threadModelSelections"
   | "threadMcpServers"
   | "threadBotWorkspaceKeys"
+  | "threadRespondingBotIds"
   | "providerSessionDirectory"
   | "expandComposerMentions"
 >) {
@@ -190,6 +194,27 @@ export function createSession({
       });
     }
 
+    const respondingBotId = resolveControllerBotId(thread);
+
+    // A group can hand the chat to another bot. The session's permissions, catalog handlers,
+    // and other bot-scoped tools were built for the previous bot, so reconfigure it.
+    const respondingBotChanged =
+      threadRespondingBotIds.has(threadId) &&
+      threadRespondingBotIds.get(threadId) !== respondingBotId;
+
+    // The decider refuses a handoff while the chat shows work in flight. This catches what
+    // the read model cannot see: a turn the provider is still admitting or has queued.
+    // Reconfiguring now would swap its workspace or session state mid-turn, and deferring
+    // would queue this turn with the previous bot's tools. The refusal runs before any
+    // session write so the previous bot's session keeps its status.
+    if (
+      activeThreadSession !== null &&
+      respondingBotChanged &&
+      activeSession?.activeTurnId !== undefined
+    ) {
+      return yield* new GroupHandoffBusyError({ threadId, message: GROUP_HANDOFF_BUSY_MESSAGE });
+    }
+
     const currentInstanceId =
       activeThreadSession !== null &&
       activeSession !== undefined &&
@@ -274,7 +299,6 @@ export function createSession({
     const mcpServers = yield* resolveControllerMcpServers(thread);
     const serverSettings = yield* serverSettingsService.getSettings;
     const botSandboxBrowserSharing = serverSettings.botSandboxBrowserSharing;
-    const respondingBotId = resolveControllerBotId(thread);
 
     const respondingBot =
       respondingBotId === null
@@ -431,8 +455,9 @@ export function createSession({
       const shouldRestartForModelChange = modelChanged && sessionModelSwitch === "unsupported";
       const previousModelSelection = threadModelSelections.get(threadId);
 
+      // Claude reads fast mode, thinking, and effort only when its query starts.
       const shouldRestartForModelSelectionChange =
-        preferredProvider === "claudeAgent" &&
+        (preferredProvider === "claudeAgent" || preferredProvider === "claudeCode") &&
         effectiveRequestedModelSelection !== undefined &&
         !Equal.equals(previousModelSelection, effectiveRequestedModelSelection);
 
@@ -470,9 +495,11 @@ export function createSession({
         !shouldRestartForModelChange &&
         !shouldRestartForModelSelectionChange &&
         !mcpServersChanged &&
-        !botWorkspaceChanged
+        !botWorkspaceChanged &&
+        !respondingBotChanged
       ) {
         threadBotWorkspaceKeys.set(threadId, botWorkspaceKey);
+        threadRespondingBotIds.set(threadId, respondingBotId);
         threadMcpServers.set(threadId, mcpServers);
 
         return { threadId: existingSessionThreadId, engine: desiredEngine };
@@ -503,6 +530,7 @@ export function createSession({
         shouldRestartForModelSelectionChange,
         mcpServersChanged,
         botWorkspaceChanged,
+        respondingBotChanged,
         hasResumeCursor: resumeCursor !== undefined,
       });
 
@@ -524,6 +552,7 @@ export function createSession({
       });
       yield* bindSessionToThread(restartedSession);
       threadBotWorkspaceKeys.set(threadId, botWorkspaceKey);
+      threadRespondingBotIds.set(threadId, respondingBotId);
       threadMcpServers.set(threadId, mcpServers);
 
       return { threadId: restartedSession.threadId, engine: desiredEngine };
@@ -555,6 +584,7 @@ export function createSession({
 
     yield* bindSessionToThread(startedSession);
     threadBotWorkspaceKeys.set(threadId, botWorkspaceKey);
+    threadRespondingBotIds.set(threadId, respondingBotId);
     threadMcpServers.set(threadId, mcpServers);
 
     return { threadId: startedSession.threadId, engine: desiredEngine };

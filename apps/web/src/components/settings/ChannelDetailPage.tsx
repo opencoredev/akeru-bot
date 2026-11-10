@@ -8,7 +8,9 @@ import {
 import {
   BotId,
   type ChannelConnectionProfile,
+  type ChannelOwnerProvider,
   type ChannelProvider,
+  type EnvironmentId,
   type ProjectId,
 } from "@akeru/contracts";
 import { EllipsisIcon, PlusIcon } from "lucide-react";
@@ -28,6 +30,11 @@ import {
   UNASSIGNED,
   useChannelSettings,
 } from "./BotChannelsSettings";
+import {
+  ChannelBotAccessControls,
+  ChannelLinkedAccounts,
+  isOwnerGatedProvider,
+} from "./ChannelOwnerAccess";
 import { ChannelProjectSelect } from "./ChannelProjectSelect";
 import { type ChannelReplacement, ChannelSetupDialog } from "./ChannelSetupDialog";
 import {
@@ -107,6 +114,16 @@ export function ChannelDetailPage({ provider }: { readonly provider: ChannelProv
           ))
         )}
       </SettingsSection>
+      {environmentId !== null && allowed && isOwnerGatedProvider(provider) ? (
+        <>
+          <LegacyChannelBots
+            environmentId={environmentId}
+            provider={provider}
+            bots={settings.activeBots}
+          />
+          <ChannelLinkedAccounts environmentId={environmentId} provider={provider} />
+        </>
+      ) : null}
       {environmentId !== null && allowed ? (
         <ChannelSetupDialog
           // Remount per target so a credentials update never inherits another dialog's fields.
@@ -124,6 +141,56 @@ export function ChannelDetailPage({ provider }: { readonly provider: ChannelProv
   );
 }
 
+/**
+ * Owner controls for bots connected to Slack or Discord directly, before saved connections. Their
+ * bindings have no connection row, so this is the only place to create a link code for them.
+ */
+function LegacyChannelBots({
+  environmentId,
+  provider,
+  bots,
+}: {
+  readonly environmentId: EnvironmentId;
+  readonly provider: ChannelOwnerProvider;
+  readonly bots: ChannelSettings["activeBots"];
+}) {
+  const { t } = useI18n();
+
+  const legacy = bots.flatMap((bot) => {
+    const binding = (bot.channelBindings ?? []).find(
+      (candidate) =>
+        candidate.provider === provider &&
+        !candidate.connectionId &&
+        candidate.status !== "disconnected",
+    );
+
+    return binding ? [{ bot, binding }] : [];
+  });
+
+  if (legacy.length === 0) return null;
+
+  return (
+    <SettingsSection id="channel-legacy-bots" title={t("Connected without a saved connection")}>
+      {legacy.map(({ bot, binding }) => (
+        <div key={bot.id} data-settings-row="" className="space-y-3 rounded-xl px-3 py-3 sm:px-4">
+          <div className="flex min-h-8 min-w-0 items-center gap-2.5">
+            <h3 className="truncate text-sm font-medium text-foreground">{bot.name}</h3>
+            <ChannelStatusBadge binding={binding} ownerName={bot.name} needsProject={false} />
+          </div>
+          <ChannelBotAccessControls
+            environmentId={environmentId}
+            provider={provider}
+            botId={bot.id}
+            botName={bot.name}
+            connected={binding.status === "connected"}
+            connectedAt={binding.connectedAt}
+          />
+        </div>
+      ))}
+    </SettingsSection>
+  );
+}
+
 /** One connection: its health, bot, project, repair, and management actions. */
 export function ChannelConnectionRow({
   connection,
@@ -135,6 +202,7 @@ export function ChannelConnectionRow({
   readonly onReplaceCredentials: (replacement: ChannelReplacement) => void;
 }) {
   const { t } = useI18n();
+  const environmentId = useSettingsEnvironmentId();
   const [pickedProjectId, setPickedProjectId] = useState<ProjectId | null>(null);
   const { bot, binding } = connectionAssignment(connection.id, settings.bots);
   const { liveProjects } = settings;
@@ -324,6 +392,16 @@ export function ChannelConnectionRow({
         <p className="text-13px text-muted-foreground/80">
           {channelTestInstructions(connection.provider, bot.name, t)}
         </p>
+      ) : null}
+      {bot && binding && environmentId !== null && isOwnerGatedProvider(connection.provider) ? (
+        <ChannelBotAccessControls
+          environmentId={environmentId}
+          provider={connection.provider}
+          botId={bot.id}
+          botName={bot.name}
+          connected={binding.status === "connected"}
+          connectedAt={binding.connectedAt}
+        />
       ) : null}
     </div>
   );

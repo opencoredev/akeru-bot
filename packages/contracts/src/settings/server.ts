@@ -4,7 +4,13 @@ import * as Effect from "effect/Effect";
 import * as Duration from "effect/Duration";
 import * as Schema from "effect/Schema";
 import * as Struct from "effect/Struct";
-import { ChannelConnectionId, TrimmedNonEmptyString, TrimmedString } from "../baseSchemas.ts";
+import {
+  BotId,
+  ChannelConnectionId,
+  IsoDateTime,
+  TrimmedNonEmptyString,
+  TrimmedString,
+} from "../baseSchemas.ts";
 import { ThreadEnvMode } from "../environment.ts";
 import {
   DEFAULT_TEXT_GENERATION_MODEL,
@@ -50,6 +56,7 @@ import {
 } from "./providers.ts";
 import { SandboxSettings, BrowserProviderSettings, SandboxSettingsPatch } from "./sandbox.ts";
 import { MemorySettings, MemorySettingsPatch } from "./memory.ts";
+import { EnvironmentHostProfile, EnvironmentHostProfilePatch } from "../environmentHost.ts";
 
 export const ObservabilitySettings = Schema.Struct({
   otlpTracesUrl: TrimmedString.pipe(Schema.withDecodingDefault(Effect.succeed(""))),
@@ -138,6 +145,46 @@ export const ChannelConnectionProfile = Schema.Struct({
 });
 
 export type ChannelConnectionProfile = typeof ChannelConnectionProfile.Type;
+
+/** Providers whose bots can be reached in shared spaces, so they answer only linked people. */
+export const CHANNEL_OWNER_PROVIDERS = ["slack", "discord"] as const;
+
+export const ChannelOwnerProvider = Schema.Literals(CHANNEL_OWNER_PROVIDERS);
+
+export type ChannelOwnerProvider = typeof ChannelOwnerProvider.Type;
+
+/** Discord user IDs are global, so every Discord identity shares this workspace ID. */
+export const DISCORD_OWNER_WORKSPACE_ID = "discord";
+
+/**
+ * A messaging account the environment owner linked by sending a bot a one-time code. Bots of
+ * that provider answer this account in the workspace it belongs to (a Slack team ID).
+ */
+export const ChannelOwnerIdentity = Schema.Struct({
+  provider: ChannelOwnerProvider,
+  workspaceId: TrimmedNonEmptyString,
+  userId: TrimmedNonEmptyString,
+  displayName: Schema.optional(TrimmedNonEmptyString),
+  linkedAt: IsoDateTime,
+});
+
+export type ChannelOwnerIdentity = typeof ChannelOwnerIdentity.Type;
+
+export const CHANNEL_ALLOWED_USER_LIMIT = 50;
+
+/** Extra people one bot answers besides its owner, by provider user ID. */
+export const ChannelBotAccess = Schema.Struct({
+  botId: BotId,
+  /** The provider these IDs belong to. Absent on entries saved before access was per provider. */
+  provider: Schema.optionalKey(ChannelOwnerProvider),
+  allowedUserIds: Schema.Array(TrimmedNonEmptyString.check(Schema.isMaxLength(64))).check(
+    Schema.isMaxLength(CHANNEL_ALLOWED_USER_LIMIT),
+  ),
+  /** Send one short "This is <owner>'s bot." reply when someone else mentions the bot. */
+  replyToOthers: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
+});
+
+export type ChannelBotAccess = typeof ChannelBotAccess.Type;
 
 export const ServerSettings = Schema.Struct({
   // Legacy token-by-token assistant output. Deliberately a fresh key (was
@@ -243,9 +290,17 @@ export const ServerSettings = Schema.Struct({
   channelConnections: Schema.Array(ChannelConnectionProfile).pipe(
     Schema.withDecodingDefault(Effect.succeed([])),
   ),
+  channelOwners: Schema.Array(ChannelOwnerIdentity).pipe(
+    Schema.withDecodingDefault(Effect.succeed([])),
+  ),
+  channelBotAccess: Schema.Array(ChannelBotAccess).pipe(
+    Schema.withDecodingDefault(Effect.succeed([])),
+  ),
   sandbox: SandboxSettings,
   observability: ObservabilitySettings.pipe(Schema.withDecodingDefault(Effect.succeed({}))),
   memory: MemorySettings,
+  /** The owner's labels, note, and placement weight for this environment. */
+  environmentHost: EnvironmentHostProfile,
 });
 
 export type ServerSettings = typeof ServerSettings.Type;
@@ -355,6 +410,7 @@ const ServerSettingsPatchFields = {
   sourceControlWriterModelSelection: Schema.optionalKey(Schema.NullOr(ModelSelection)),
   sandbox: Schema.optionalKey(SandboxSettingsPatch),
   memory: Schema.optionalKey(MemorySettingsPatch),
+  environmentHost: Schema.optionalKey(EnvironmentHostProfilePatch),
   observability: Schema.optionalKey(
     Schema.Struct({
       otlpTracesUrl: Schema.optionalKey(TrimmedString),
@@ -378,6 +434,8 @@ const ServerSettingsPatchFields = {
   // The web UI sends a fully-formed map every time it edits this field.
   providerInstances: Schema.optionalKey(Schema.Record(ProviderInstanceId, ProviderInstanceConfig)),
   channelConnections: Schema.optionalKey(Schema.Array(ChannelConnectionProfile)),
+  channelOwners: Schema.optionalKey(Schema.Array(ChannelOwnerIdentity)),
+  channelBotAccess: Schema.optionalKey(Schema.Array(ChannelBotAccess)),
 } as const;
 
 export const ServerSettingsPatch = Schema.Struct(ServerSettingsPatchFields);
@@ -385,7 +443,11 @@ export const ServerSettingsPatch = Schema.Struct(ServerSettingsPatchFields);
 export type ServerSettingsPatch = typeof ServerSettingsPatch.Type;
 
 export const ServerSettingsRpcPatch = Schema.Struct(
-  Struct.omit(ServerSettingsPatchFields, ["channelConnections"]),
+  Struct.omit(ServerSettingsPatchFields, [
+    "channelConnections",
+    "channelOwners",
+    "channelBotAccess",
+  ]),
 );
 
 export type ServerSettingsRpcPatch = typeof ServerSettingsRpcPatch.Type;

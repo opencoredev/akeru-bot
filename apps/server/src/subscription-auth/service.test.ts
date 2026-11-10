@@ -332,8 +332,11 @@ describe("subscription auth storage", () => {
       service.startLogin("xai", { authMode: "api-key", baseUrl: "https://example.com" }),
     ).rejects.toThrow("does not support");
     await expect(
-      service.startLogin("anthropic", { baseUrl: "https://example.com" }),
+      service.startLogin("openai-codex", { baseUrl: "https://example.com" }),
     ).rejects.toThrow("require API-key");
+    await expect(service.startLogin("anthropic", { authMode: "oauth" })).rejects.toThrow(
+      "Claude Pro and Max sign-in is no longer supported",
+    );
     await expect(
       service.startLogin("anthropic", {
         authMode: "api-key",
@@ -348,7 +351,7 @@ describe("subscription auth storage", () => {
     NodeFS.writeFileSync(
       authPath,
       JSON.stringify({
-        anthropic: {
+        xai: {
           type: "oauth",
           access: "secret-access",
           refresh: "secret-refresh",
@@ -358,9 +361,9 @@ describe("subscription auth storage", () => {
     );
 
     const service = await makeTestSubscriptionAuthService(authPath);
-    const anthropic = service.statuses().find((status) => status.provider === "anthropic");
-    expect(anthropic).toEqual({
-      provider: "anthropic",
+    const xai = service.statuses().find((status) => status.provider === "xai");
+    expect(xai).toEqual({
+      provider: "xai",
       connected: true,
       authMode: "oauth",
       expiresAt: 1_800_000_000_000,
@@ -481,17 +484,17 @@ describe("subscription auth storage", () => {
     const service = await makeTestSubscriptionAuthService(authPath);
 
     service.recordMcpRequestFailure(
-      "builtin-executor",
+      "builtin-github",
       "The MCP tool request failed.",
       "2026-08-31T19:00:00.000Z",
     );
-    expect(service.mcpRequestHealth("builtin-executor")).toMatchObject({
+    expect(service.mcpRequestHealth("builtin-github")).toMatchObject({
       health: "failed-first-request",
       lastFailedRequest: { message: "The MCP tool request failed." },
     });
-    service.recordMcpRequestSuccess("builtin-executor", "2026-08-31T20:00:00.000Z");
+    service.recordMcpRequestSuccess("builtin-github", "2026-08-31T20:00:00.000Z");
     const restarted = await makeTestSubscriptionAuthService(authPath);
-    expect(restarted.mcpRequestHealth("builtin-executor")?.health).toBe("recovered");
-    expect(JSON.stringify(restarted.mcpRequestHealth("builtin-executor"))).not.toContain("token");
+    expect(restarted.mcpRequestHealth("builtin-github")?.health).toBe("recovered");
+    expect(JSON.stringify(restarted.mcpRequestHealth("builtin-github"))).not.toContain("token");
   });
 });

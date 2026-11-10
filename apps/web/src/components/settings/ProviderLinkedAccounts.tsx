@@ -12,7 +12,11 @@ import {
 import { type ReactNode } from "react";
 import type { EnvironmentId, SubscriptionProviderStatus } from "@akeru/contracts";
 import type { MessageKey } from "@akeru/client-runtime/i18n";
-import { providerSupportsBaseUrl, providerUsesApiKey } from "@akeru/client-runtime/provider-auth";
+import {
+  providerRequiresApiKey,
+  providerSupportsBaseUrl,
+  providerUsesApiKey,
+} from "@akeru/client-runtime/provider-auth";
 
 import { useI18n } from "../../i18n";
 import { cn } from "../../lib/utils";
@@ -267,7 +271,7 @@ export function ProviderAccountsSection({
     (status) => status.provider === definition.id && status.accountId !== undefined,
   );
 
-  const keyOnly = definition.id === "opencode-go";
+  const keyOnly = providerRequiresApiKey(definition.id);
   const locked = accounts.busyProvider !== null;
   const adding = accounts.keyProvider !== null || accounts.activeLogin !== null;
 

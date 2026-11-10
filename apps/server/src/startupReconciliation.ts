@@ -1,7 +1,7 @@
 import * as Data from "effect/Data";
 
 import * as Predicate from "effect/Predicate";
-import { type AkeruDelegationRecord, CommandId } from "@akeru/contracts";
+import { type AkeruDelegationRecord, CommandId, McpServerId } from "@akeru/contracts";
 import * as Cause from "effect/Cause";
 import * as Crypto from "effect/Crypto";
 import * as DateTime from "effect/DateTime";
@@ -169,3 +169,88 @@ export const reconcileDelegations = Effect.gen(function* () {
 );
 
 const DelegationPhase = Data.taggedEnum<AkeruDelegationRecord["phase"]>();
+
+/** Built-in connectors Akeru no longer ships. Saved registrations for them are removed at startup. */
+export const RETIRED_MCP_SERVER_IDS: ReadonlySet<McpServerId> = new Set([
+  McpServerId.make("builtin-executor"),
+]);
+
+const warnOnFailure =
+  (message: string, annotations: Record<string, string>) =>
+  <A, E, R>(effect: Effect.Effect<A, E, R>) =>
+    effect.pipe(
+      Effect.retry({ times: 1 }),
+      Effect.catchCause((cause) =>
+        Cause.hasInterrupts(cause)
+          ? Effect.failCause(cause)
+          : Effect.logWarning(message, { ...annotations, cause }),
+      ),
+    );
+
+/**
+ * Removes registrations for retired built-in connectors and sweeps their ids from every bot's
+ * disabled list, so an upgraded install starts without a connector it can no longer show or
+ * manage. Custom MCP servers are untouched, and a second run changes nothing.
+ */
+export const reconcileRetiredMcpServers = Effect.gen(function* () {
+  const crypto = yield* Crypto.Crypto;
+  const orchestrationEngine = yield* OrchestrationEngine.OrchestrationEngineService;
+  const query = yield* ProjectionSnapshotQuery.ProjectionSnapshotQuery;
+
+  const { bots, mcpServers } = yield* query.getCommandReadModel();
+
+  // Delete registrations first. A bot's opt-out is only swept once the connector is gone, so a
+  // failed delete never re-enables a retired connector for a bot that had disabled it.
+  const stillRegistered = new Set<McpServerId>();
+
+  for (const server of mcpServers ?? []) {
+    if (!RETIRED_MCP_SERVER_IDS.has(server.id)) continue;
+
+    const removed = yield* crypto.randomUUIDv4.pipe(
+      Effect.flatMap((uuid) =>
+        orchestrationEngine.dispatch({
+          type: "mcp-server.delete",
+          commandId: CommandId.make(uuid),
+          mcpServerId: server.id,
+        }),
+      ),
+      Effect.retry({ times: 1 }),
+      Effect.as(true),
+      Effect.catchCause((cause) =>
+        Cause.hasInterrupts(cause)
+          ? Effect.failCause(cause)
+          : Effect.logWarning("failed to remove a retired MCP server", {
+              mcpServerId: server.id,
+              cause,
+            }).pipe(Effect.as(false)),
+      ),
+    );
+
+    if (!removed) stillRegistered.add(server.id);
+  }
+
+  const isSweepable = (id: McpServerId) =>
+    RETIRED_MCP_SERVER_IDS.has(id) && !stillRegistered.has(id);
+
+  for (const bot of bots) {
+    if (!bot.disabledMcpServerIds.some(isSweepable)) continue;
+
+    yield* crypto.randomUUIDv4.pipe(
+      Effect.flatMap((uuid) =>
+        orchestrationEngine.dispatch({
+          type: "bot.update",
+          commandId: CommandId.make(uuid),
+          botId: bot.id,
+          disabledMcpServerIds: bot.disabledMcpServerIds.filter((id) => !isSweepable(id)),
+        }),
+      ),
+      warnOnFailure("failed to sweep a retired MCP server from a bot", { botId: bot.id }),
+    );
+  }
+}).pipe(
+  Effect.catchCause((cause) =>
+    Cause.hasInterrupts(cause)
+      ? Effect.failCause(cause)
+      : Effect.logWarning("retired MCP server startup reconciliation failed", { cause }),
+  ),
+);

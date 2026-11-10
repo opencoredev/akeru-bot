@@ -6,6 +6,8 @@ export * from "./akeruTools.ts";
 
 export * from "./akeruDelegation.ts";
 
+export * from "./botPermissions.ts";
+
 export * from "./akeruWorkers.ts";
 
 export * from "./productFeedback.ts";
@@ -21,6 +23,8 @@ export * from "./routines.ts";
 export * from "./auth.ts";
 
 export * from "./environment.ts";
+
+export * from "./environmentHost.ts";
 
 export * from "./environmentHttp.ts";
 

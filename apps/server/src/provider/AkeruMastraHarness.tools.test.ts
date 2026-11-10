@@ -26,6 +26,14 @@ import { makeAkeruMastraHarnessTestSupport } from "./test-support/AkeruMastraHar
 
 const { harnessTest } = makeAkeruMastraHarnessTestSupport();
 
+/** Routine tools check the bot policy, so they need the chat's registered tool session. */
+function routineRuntime() {
+  const runtime = toolRuntimeFixture({ toolsForThread: () => [] });
+  runtime.registerSession("thread-1", { runtimeMode: "full-access", workspaceType: "none" });
+
+  return runtime;
+}
+
 describe("AkeruMastraHarness", () => {
   it.effect(
     "does not give the agent task-list tools, which cost a model round trip per update",
@@ -183,7 +191,7 @@ describe("AkeruMastraHarness", () => {
     const tools = await resolveAkeruTools(requestContext, {
       authStorage: new AuthStorage("/tmp/akeru-unused-auth.json"),
       getThreadTools: () => ({}),
-      toolRuntime: toolRuntimeFixture({ toolsForThread: () => [] }),
+      toolRuntime: routineRuntime(),
       createRoutine: async (threadId, input) => {
         calls.push({ threadId, input });
 
@@ -246,7 +254,7 @@ describe("AkeruMastraHarness", () => {
     const tools = await resolveAkeruTools(requestContext, {
       authStorage: new AuthStorage("/tmp/akeru-unused-auth.json"),
       getThreadTools: () => ({}),
-      toolRuntime: toolRuntimeFixture({ toolsForThread: () => [] }),
+      toolRuntime: routineRuntime(),
       listRoutines: async (threadId) => {
         calls.push(threadId);
 
@@ -257,7 +265,8 @@ describe("AkeruMastraHarness", () => {
     const tool = probeTool(tools[AKERU_LIST_ROUTINES_TOOL_NAME]);
 
     assert.deepEqual(calls, []);
-    assert.isFalse(tool.requireApproval);
+    // The default policy allows reads, so listing asks nobody.
+    assert.isFalse(await tool.needsApprovalFn({}));
     assert.deepEqual(await tool.execute?.({}, {}), result);
     assert.deepEqual(calls, ["thread-1"]);
   });
@@ -271,7 +280,7 @@ describe("AkeruMastraHarness", () => {
     const tools = await resolveAkeruTools(requestContext, {
       authStorage: new AuthStorage("/tmp/akeru-unused-auth.json"),
       getThreadTools: () => ({}),
-      toolRuntime: toolRuntimeFixture({ toolsForThread: () => [] }),
+      toolRuntime: routineRuntime(),
       listRoutines: async () => ({
         routines: [
           { id: "routine-1", name: "Morning brief", enabled: true, lifecycle: "enabled" },
@@ -331,7 +340,7 @@ describe("AkeruMastraHarness", () => {
     const tools = await resolveAkeruTools(requestContext, {
       authStorage: new AuthStorage("/tmp/akeru-unused-auth.json"),
       getThreadTools: () => ({}),
-      toolRuntime: toolRuntimeFixture({ toolsForThread: () => [] }),
+      toolRuntime: routineRuntime(),
       listRoutines: async () => ({ routines: [] }),
       deleteRoutines: async () => {
         deleted = true;

@@ -2,13 +2,17 @@
 
 exports[`discovered interface message coverage > covers static calls and finite label sources without translating identifiers 1`] = `
 {
-  "directMessageCount": 1786,
+  "directMessageCount": 1824,
   "expressions": {
     "apps/mobile/src/components/DictationControls.tsx": [
       "announcements[status]);",
     ],
     "apps/mobile/src/features/home/HomeScreen.tsx": [
       "'No chats matching "{query}".', { query: props.searchQuery })}",
+    ],
+    "apps/mobile/src/features/settings/ClaudeCodeLoginStatus.tsx": [
+      "copy.title)}</Text>",
+      "copy.detail)}",
     ],
     "apps/mobile/src/features/settings/ProviderConnections.tsx": [
       "providerConnectionLabel(status)) : t("Status unavailable")}",
@@ -130,6 +134,11 @@ exports[`discovered interface message coverage > covers static calls and finite 
       "BOT_SANDBOX_BROWSER_SHARING_LABELS.shared)}",
       "BOT_SANDBOX_BROWSER_SHARING_LABELS.separate)}",
     ],
+    "apps/web/src/components/settings/ClaudeCodeLoginSetup.tsx": [
+      "copy.title)}</p>",
+      "copy.detail)}",
+      "STEP_LABEL[step])} />",
+    ],
     "apps/web/src/components/settings/GeneralSettingsPanel.tsx": [
       "recordLookup(actionLabel, action) ??",
       "TIMESTAMP_FORMAT_LABELS[settings.timestampFormat])}</SelectValue>",
@@ -169,7 +178,7 @@ exports[`discovered interface message coverage > covers static calls and finite 
       "state.label)}</span>;",
     ],
     "apps/web/src/components/settings/SandboxSettingsPanel.tsx": [
-      "definition.description)}",
+      "definition.description);",
       "field.label)}",
     ],
     "apps/web/src/components/settings/SettingsDialog.tsx": [
@@ -334,6 +343,7 @@ exports[`discovered interface message coverage > covers static calls and finite 
     "apps/mobile/src/features/home/useThreadListActions.ts",
     "apps/mobile/src/features/layout/WorkspaceEmptyDetail.tsx",
     "apps/mobile/src/features/replyPlayback/ReplyReadoutPreference.tsx",
+    "apps/mobile/src/features/settings/ClaudeCodeLoginStatus.tsx",
     "apps/mobile/src/features/settings/ImageGenerationSummaryView.tsx",
     "apps/mobile/src/features/settings/LanguageSettingsSection.tsx",
     "apps/mobile/src/features/settings/MobilePolicyNotice.tsx",
@@ -397,6 +407,7 @@ exports[`discovered interface message coverage > covers static calls and finite 
     "apps/web/src/components/auth/PairingPanel.tsx",
     "apps/web/src/components/auth/PairingRouteSurface.tsx",
     "apps/web/src/components/chat/ChatActionsMenu.tsx",
+    "apps/web/src/components/chat/ClaudeCodeConnectCard.tsx",
     "apps/web/src/components/chat/ComposerBannerStack.tsx",
     "apps/web/src/components/chat/ComposerPendingApprovalActions.tsx",
     "apps/web/src/components/chat/ComposerPendingApprovalPanel.tsx",
@@ -437,6 +448,7 @@ exports[`discovered interface message coverage > covers static calls and finite 
     "apps/web/src/components/markdown/MarkdownTable.tsx",
     "apps/web/src/components/markdown/generative/GenerativeChoices.tsx",
     "apps/web/src/components/onboarding/DesktopOnboardingSurface.tsx",
+    "apps/web/src/components/onboarding/OnboardingClaudeCodeStep.tsx",
     "apps/web/src/components/onboarding/OnboardingGoalStep.tsx",
     "apps/web/src/components/onboarding/OnboardingHandoff.tsx",
     "apps/web/src/components/onboarding/OnboardingIdentityStep.tsx",
@@ -520,9 +532,12 @@ exports[`discovered interface message coverage > covers static calls and finite 
     "apps/web/src/components/settings/BotWorkspaceSettings.tsx",
     "apps/web/src/components/settings/BrowserSettings.tsx",
     "apps/web/src/components/settings/ChannelDetailPage.tsx",
+    "apps/web/src/components/settings/ChannelOwnerAccess.tsx",
     "apps/web/src/components/settings/ChannelProjectSelect.tsx",
     "apps/web/src/components/settings/ChannelSetupDialog.tsx",
     "apps/web/src/components/settings/ChannelStatus.tsx",
+    "apps/web/src/components/settings/ClaudeCodeLoginSection.tsx",
+    "apps/web/src/components/settings/ClaudeCodeLoginSetup.tsx",
     "apps/web/src/components/settings/DesktopBackendRows.tsx",
     "apps/web/src/components/settings/GeneralSettingsPanel.tsx",
     "apps/web/src/components/settings/ImageGenerationSettings.tsx",
@@ -539,6 +554,7 @@ exports[`discovered interface message coverage > covers static calls and finite 
     "apps/web/src/components/settings/PrivacySettings.tsx",
     "apps/web/src/components/settings/ProviderAccessDetails.tsx",
     "apps/web/src/components/settings/ProviderAccountControls.tsx",
+    "apps/web/src/components/settings/ProviderConnectionPicker.tsx",
     "apps/web/src/components/settings/ProviderDetailPage.tsx",
     "apps/web/src/components/settings/ProviderInstancesSection.tsx",
     "apps/web/src/components/settings/ProviderLinkedAccounts.tsx",

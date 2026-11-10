@@ -21,6 +21,7 @@ export {
 
 export {
   PROVIDER_SEND_TURN_MAX_INPUT_CHARS,
+  PROVIDER_APPROVAL_ARGUMENT_MAX_CHARS,
   PROVIDER_SEND_TURN_MAX_ATTACHMENTS,
   PROVIDER_SEND_TURN_MAX_IMAGE_BYTES,
   PROVIDER_SEND_TURN_MAX_FILE_BYTES,
@@ -60,6 +61,9 @@ export {
   ChannelFailureCategory,
   ChannelBinding,
   OrchestrationBot,
+  BotAllowedEnvironmentIds,
+  BOT_ALLOWED_ENVIRONMENTS_MAX,
+  botAllowedEnvironmentIds,
   ARCHIVED_BOT_RETENTION_DAYS,
   archivedBotDeletesAtMs,
   GroupMembershipRole,
@@ -113,6 +117,12 @@ export {
 } from "./orchestration/readModel.ts";
 
 export { ProjectCreateCommand } from "./orchestration/rosterCommands.ts";
+
+export {
+  CHANNEL_LINK_CODE_ALPHABET,
+  CHANNEL_LINK_CODE_LENGTH,
+  ChannelLinkCode,
+} from "./orchestration/rosterCommands.ts";
 
 export {
   type ThreadTurnStartBootstrap,

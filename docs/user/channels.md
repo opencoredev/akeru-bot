@@ -81,7 +81,45 @@ On Slack and Discord, the bot marks your request message with a reaction: an eye
 
 A group message on Telegram, iMessage, or WhatsApp does not start Akeru work.
 
-For Slack and Discord, a direct mention starts a linked Akeru thread. Later replies in that platform thread continue the same Akeru thread without another mention. Akeru includes a small amount of recent platform-thread context with the first mention.
+For Slack and Discord, a direct mention from you starts a linked Akeru thread. Your later replies in that platform thread continue the same Akeru thread without another mention. Akeru includes a small amount of recent platform-thread context with the first mention, and marks what other people wrote as quoted context, so the bot does not follow it as instructions from you.
+
+Mentions of other people reach the bot as their display names, such as `@Ada`. The bot's own mention is removed. Edited messages do not start new work.
+
+## Who a Slack or Discord bot answers
+
+In a shared Slack or Discord channel, anyone can mention a bot. Akeru bots answer only you and the people you add. Messages from anyone else cost nothing: the bot does not read the thread, start work, or use tokens.
+
+### Link your account
+
+1. Open the Slack or Discord page in **Settings > Channels**.
+2. On the connection, click **Create link code**. The button works while the bot is connected. A bot connected before saved connections existed has no connection row; find it under **Connected without a saved connection** on the same page.
+3. Send the code to that bot, on that service, in a direct message within 10 minutes. Each code works once, and only for the connection it was made on. If the bot disconnects first, the code stops working and the page stops showing it; create a new one after it reconnects.
+
+The bot replies that you are linked, and from then on it answers your direct messages without a mention. Until an account is linked, the bot answers every message with these instructions and does nothing else.
+
+Linked accounts appear under **Linked accounts** on the same page. Click **Unlink** to stop the bots answering that account. You can link it again with a new code.
+
+One linked account works for every bot connected to the same Slack workspace, or to Discord.
+
+### Let other people use a bot
+
+On the connection, enter extra user IDs under **Also answer these Slack user IDs** (or **Discord user IDs**), separated by commas, and click **Save**. In Slack, a user ID appears in the person's profile under **Copy member ID**. In Discord, turn on Developer Mode and choose **Copy User ID**.
+
+People from another organization in a Slack Connect channel, Slack guest accounts, and deactivated accounts cannot use the bot, even when their ID is on the list. Akeru asks Slack which workspace each person belongs to; if Slack cannot say, the bot does not answer that person, including you, until Slack can.
+
+To let others know the bot is not theirs, turn on **Tell other people whose bot this is when they mention it**. The bot then answers their mention or direct message once with "This is <your name>'s bot." It never answers their thread replies.
+
+### Thread follow-ups
+
+After you mention a bot in a thread, it answers your later replies there without a mention. It ignores replies from other people. It stops following the thread when:
+
+- you reply `stop`;
+- you have not written in the thread for 24 hours;
+- you mention a different Akeru bot in the thread.
+
+Mention the bot again to pick the thread back up. A follow belongs to the project the channel was assigned to when you mentioned the bot. If you move the channel to another project, mention the bot again in that thread to continue it there.
+
+On Discord, a mention from someone else can still open an empty Discord thread, because Discord creates it before Akeru sees who wrote the message. The bot does not join or answer it.
 
 ## Delegation
 
@@ -115,9 +153,19 @@ Create a Slack app for one workspace.
 2. Create an app-level token with the `connections:write` scope.
 3. Install the app to the workspace and copy the bot token.
 4. Subscribe the app's bot events to `message.im` for direct messages, `app_mention` for channel mentions, and `message.channels` so replies inside a subscribed thread keep reaching the bot.
-5. Give the bot these scopes: `chat:write`, `reactions:write`, `app_mentions:read`, `channels:history`, `channels:read`, `im:history`, `im:read`, and `im:write`.
+5. Give the bot these scopes: `chat:write`, `reactions:write`, `app_mentions:read`, `channels:history`, `channels:read`, `im:history`, `im:read`, `im:write`, and `users:read`. Akeru uses `users:read` to confirm that the person writing belongs to your workspace, and to show people's names instead of their member IDs. Without it the bot answers no one.
 6. Save the bot token and app-level token in Akeru. Akeru checks the app-level token before it connects. If Slack rejects the token, Akeru reports an invalid token. If Slack cannot be reached, Akeru says so and leaves the token alone, so you can retry once the network is back.
 7. Select a bot and click **Connect**.
+8. Link your Slack account with a link code. See [Link your account](#link-your-account).
+
+### Slack apps made before `users:read` was required
+
+Earlier versions of this guide did not ask for `users:read`. A bot on such an app stays connected but cannot answer anyone, because Akeru cannot confirm who is writing. The connection shows **Needs attention** with a note that the app is missing `users:read`, and a link code sent to the bot gets a reply saying the same.
+
+1. In the Slack app settings, open **OAuth & Permissions** and add the `users:read` bot token scope.
+2. Reinstall the app to the workspace when Slack asks.
+3. In Akeru, disconnect and connect the bot again so the connection checks the new scope and clears the note.
+4. Create a new link code and send it to the bot. A code sent while the scope was missing has already been used.
 
 Socket Mode uses an outbound connection from the environment server. It works when Akeru runs locally, over SSH, or through Tailscale without a public webhook URL.
 
@@ -127,11 +175,11 @@ The Slack channel connection is separate from the Slack plugin. The connection r
 
 Create a Discord application and bot. In the developer portal, enable the Message Content privileged intent; Akeru also requests the Guilds, Guild Messages, Direct Messages, Guild Message Reactions, and Direct Message Reactions intents, which need no portal switch. Copy the application ID, public key, and bot token. Invite the bot with permission to view channels, send messages, read message history, create or use threads, and add reactions.
 
-Enter the credentials in Akeru, select a bot, and click **Connect**. Direct messages reach the bot. A direct mention of the bot in a server starts a Discord thread on that message and continues the work there. Role mentions and @everyone do not start work.
+Enter the credentials in Akeru, select a bot, and click **Connect**, then link your Discord account with a link code. See [Link your account](#link-your-account). Your direct messages reach the bot. Your direct mention of the bot in a server starts a Discord thread on that message and continues the work there. Role mentions and @everyone do not start work.
 
 ## Access warning
 
-Anyone who can reach a connected bot can ask it to use the selected project and its enabled tools. The bot's permission mode still controls sensitive work, but channel membership is part of the access boundary.
+On Telegram, iMessage, and WhatsApp, anyone who can reach a connected bot can ask it to use the selected project and its enabled tools. Slack and Discord bots answer only linked accounts and the people you add; see [Who a Slack or Discord bot answers](#who-a-slack-or-discord-bot-answers). Anyone you add can use the selected project and the bot's enabled tools. The bot's permission mode still controls sensitive work.
 
 The setup form repeats this warning before you click **Connect**.
 

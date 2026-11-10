@@ -292,8 +292,10 @@ export const ComposerPendingApprovalPanel = memo(function ComposerPendingApprova
             ? t("File to read")
             : t("File change");
 
+  // An MCP tool's detail is its whole input; a `command` argument is only one part of it.
   const argsCommand =
     approval.requestKind === "command" &&
+    !approval.toolName?.startsWith("mcp__") &&
     approval.args &&
     Predicate.isObjectOrArray(approval.args) &&
     "command" in approval.args &&

@@ -30,16 +30,16 @@ afterEach(() => {
 
 describe("plugin catalog validation", () => {
   it("validates the live plugin directory", () => {
-    expect(validatePluginCatalog()).toHaveLength(54);
+    expect(validatePluginCatalog()).toHaveLength(53);
   });
 
   it("validates isolated manifests and official local assets", () => {
     const root = fixtureRoot();
     copyEntry("context", root);
-    copyEntry("executor", root);
+    copyEntry("exa", root);
     expect(validatePluginCatalog(root).map((entry) => entry.manifest.id)).toEqual([
       "context",
-      "executor",
+      "exa",
     ]);
   });
 

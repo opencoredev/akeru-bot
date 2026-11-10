@@ -63,6 +63,7 @@ import {
   botEngineTakesDelegatedWork,
 } from "./botEngineSelection";
 import { ProviderConnectCard, providerConnectStep } from "../chat/ProviderConnectCard";
+import { ClaudeCodeConnectCard, claudeCodeSetupFor } from "../chat/ClaudeCodeConnectCard";
 import { useSubscriptionStatuses } from "../settings/ProvidersPanel";
 import { buildBotStepMeters } from "@akeru/client-runtime/bot-step-usage";
 import { useGroupPresence } from "./botPresence";
@@ -177,8 +178,15 @@ export function GroupThreadLanding({ groupId }: { readonly groupId: string }) {
         ? { provider: bossConnect, botName: boss.name }
         : null;
 
+  // A boss on a Claude Code login that is not ready gets guided setup instead.
+  const claudeCodeSetup =
+    boss && !runtime.providerAvailable
+      ? claudeCodeSetupFor(bossEngine.selection, bossEngine.instanceEntries)
+      : null;
+
   const connectNeeded =
-    connect !== null && providerConnectStep(subscriptionStatuses.get(connect.provider)) !== null;
+    (claudeCodeSetup !== null && boss !== null) ||
+    (connect !== null && providerConnectStep(subscriptionStatuses.get(connect.provider)) !== null);
 
   const replyPlayback = useOptionalReplyPlayback();
   const voiceCall = useOptionalVoiceCall();
@@ -458,7 +466,15 @@ export function GroupThreadLanding({ groupId }: { readonly groupId: string }) {
             onOpenDetails={() => openSettings("advanced", "errors", environmentId)}
           />
           <ThreadRuntimeWarningBanner warning={runtimeWarning} />
-          {connectNeeded && connect ? (
+          {claudeCodeSetup && boss && environmentId !== null ? (
+            <ClaudeCodeConnectCard
+              id={noProviderNoticeId}
+              environmentId={environmentId}
+              provider={claudeCodeSetup}
+              botName={boss.name}
+              className="mt-2"
+            />
+          ) : connectNeeded && connect ? (
             <ProviderConnectCard
               id={noProviderNoticeId}
               environmentId={environmentId}

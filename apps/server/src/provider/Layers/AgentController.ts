@@ -72,6 +72,7 @@ import { authenticateMcpServer } from "../McpServerAuthentication.ts";
 
 import { AgentControllerRuntimeError } from "../Errors.ts";
 import { AgentController } from "../Services/AgentController.ts";
+import { ServerEnvironment } from "../../environment/ServerEnvironment.ts";
 
 import {
   type PendingTurn,
@@ -106,6 +107,7 @@ const make = (options?: AgentControllerLiveOptions) =>
       runtimeEvents,
       orchestrationEngine,
       projectionSnapshotQuery,
+      environmentHost,
       projectionMessages,
       projectionTurns,
       resolvedByThread,
@@ -218,7 +220,15 @@ const make = (options?: AgentControllerLiveOptions) =>
           }),
       });
 
+    // Approvals are bound to this environment. Test layers without one use the local id.
+    const serverEnvironment = yield* Effect.serviceOption(ServerEnvironment);
+
+    const environmentId = Option.isSome(serverEnvironment)
+      ? yield* serverEnvironment.value.getEnvironmentId
+      : undefined;
+
     const { toolRuntime } = createToolRuntime({
+      ...(environmentId ? { environmentId } : {}),
       botInbox,
       sessions,
       runtimeEvents,
@@ -464,6 +474,7 @@ const make = (options?: AgentControllerLiveOptions) =>
       webFetch,
       runPromise,
       projectionSnapshotQuery,
+      environmentHost,
       workerRuntime,
       wired,
       sessions,

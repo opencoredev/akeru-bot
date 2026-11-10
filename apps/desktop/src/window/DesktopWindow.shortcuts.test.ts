@@ -63,7 +63,7 @@ describe("DesktopWindow", () => {
 
       const guest = makeContents();
       const popupContents = makeContents();
-      const popupWindow = { ...popup.window, webContents: popupContents };
+      const popupWindow = Object.assign(popup.window, { webContents: popupContents });
 
       const menus = yield* Queue.unbounded<{
         input: ElectronMenu.ElectronMenuTemplateInput;

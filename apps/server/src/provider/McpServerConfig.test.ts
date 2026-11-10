@@ -38,15 +38,13 @@ describe("provider MCP configuration", () => {
       for (const hosted of [false, true]) {
         const base = servers.find((server) => server.transport === transport)!;
 
-        for (const id of ["builtin-executor", "builtin-tinyfish"]) {
-          const server = { ...base, id: McpServerId.make(id) };
-          expect(mcpServerNeedsBrowserAttachment(server, hosted)).toBe(
-            transport === "stdio" || hosted,
-          );
-          expect(mcpServerNeedsBrowserAttachment({ ...server, enabled: false }, hosted)).toBe(
-            false,
-          );
-        }
+        const tinyfish = { ...base, id: McpServerId.make("builtin-tinyfish") };
+        expect(mcpServerNeedsBrowserAttachment(tinyfish, hosted)).toBe(
+          transport === "stdio" || hosted,
+        );
+        expect(mcpServerNeedsBrowserAttachment({ ...tinyfish, enabled: false }, hosted)).toBe(
+          false,
+        );
 
         for (const id of ["builtin-exa", "composio-session", "raw-mcp", "builtin-computer-use"]) {
           expect(

@@ -1,6 +1,7 @@
 import {
   BotId,
   CommandId,
+  EnvironmentId,
   GroupId,
   McpServerId,
   ProjectId,
@@ -172,6 +173,7 @@ it.layer(TestLayer)("bot persistence", (it) => {
         imageProvider: "chatgpt",
         personalityTone: 50,
         voiceEnabled: true,
+        allowedEnvironmentIds: [],
         channelBindings: [],
         groupId: null,
         archivedAt: null,
@@ -269,6 +271,82 @@ it.layer(TestLayer)("bot persistence", (it) => {
       });
       bot = (yield* snapshots.getShellSnapshot()).bots.find((entry) => entry.id === botId);
       assert.equal(bot?.imageProvider, null);
+    }),
+  );
+
+  it.effect("persists and clears a bot's allowed environments", () =>
+    Effect.gen(function* () {
+      const engine = yield* OrchestrationEngineService;
+      const snapshots = yield* ProjectionSnapshotQuery;
+      const sql = yield* SqlClient.SqlClient;
+      const botId = BotId.make("bot-placement");
+      const mac = EnvironmentId.make("env-mac-mini");
+      const linux = EnvironmentId.make("env-linux");
+
+      const read = Effect.gen(function* () {
+        const shell = (yield* snapshots.getShellSnapshot()).bots.find(
+          (entry) => entry.id === botId,
+        );
+
+        const command = (yield* snapshots.getCommandReadModel()).bots.find(
+          (entry) => entry.id === botId,
+        );
+
+        const [row] = yield* sql<{ readonly allowed: string }>`
+          SELECT allowed_environment_ids_json AS "allowed"
+          FROM projection_bots WHERE bot_id = ${botId}
+        `;
+
+        return {
+          shell: shell?.allowedEnvironmentIds,
+          command: command?.allowedEnvironmentIds,
+          row: row?.allowed,
+        };
+      });
+
+      yield* engine.dispatch({
+        type: "bot.create",
+        commandId: CommandId.make("cmd-placement-bot-create"),
+        botId,
+        name: "Builder",
+        title: "iOS builds",
+        avatar: { kind: "dither", seed: "builder" },
+        engine: { provider: "codex", model: "gpt-5.6" },
+        sandbox: "local",
+        groupId: null,
+        createdAt: "2026-01-02T00:00:00.000Z",
+      });
+      // A new bot runs only in its home environment.
+      assert.deepStrictEqual(yield* read, { shell: [], command: [], row: "[]" });
+
+      yield* engine.dispatch({
+        type: "bot.update",
+        commandId: CommandId.make("cmd-placement-bot-allow"),
+        botId,
+        allowedEnvironmentIds: [mac, linux],
+      });
+      assert.deepStrictEqual(yield* read, {
+        shell: [mac, linux],
+        command: [mac, linux],
+        row: JSON.stringify([mac, linux]),
+      });
+
+      // An update that leaves the field out keeps the list.
+      yield* engine.dispatch({
+        type: "bot.update",
+        commandId: CommandId.make("cmd-placement-bot-rename"),
+        botId,
+        name: "Builder 2",
+      });
+      assert.deepStrictEqual((yield* read).shell, [mac, linux]);
+
+      yield* engine.dispatch({
+        type: "bot.update",
+        commandId: CommandId.make("cmd-placement-bot-clear"),
+        botId,
+        allowedEnvironmentIds: [],
+      });
+      assert.deepStrictEqual(yield* read, { shell: [], command: [], row: "[]" });
     }),
   );
 

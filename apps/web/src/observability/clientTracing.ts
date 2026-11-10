@@ -141,7 +141,7 @@ async function disposeTracerRuntime(
   }
 
   await settleAsyncResult(() => runtime.runPromiseExit(Scope.close(scope, Exit.void)));
-  runtime.dispose();
+  void runtime.dispose();
 }
 
 export async function __resetClientTracingForTests() {

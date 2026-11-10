@@ -5,6 +5,7 @@ import {
   type OrchestrationSession,
   type OrchestrationThreadShell,
   type RuntimeMode,
+  ThreadId,
 } from "@akeru/contracts";
 import { stripWorktreeBranchPrefix, WORKTREE_BRANCH_PREFIX } from "@akeru/shared/git";
 import * as Cause from "effect/Cause";
@@ -17,6 +18,17 @@ import {
 import type { AgentControllerError } from "../../../provider/Errors.ts";
 
 export const isProviderAdapterRequestError = Schema.is(ProviderAdapterRequestError);
+
+/**
+ * A group chat handed to another bot while the previous bot's turn still runs. The session
+ * belongs to that running turn, so the refusal is reported without touching it.
+ */
+export class GroupHandoffBusyError extends Schema.TaggedErrorClass<GroupHandoffBusyError>()(
+  "GroupHandoffBusyError",
+  { threadId: ThreadId, message: Schema.String },
+) {}
+
+export const isGroupHandoffBusyError = Schema.is(GroupHandoffBusyError);
 
 export const isUnsupportedEngineError = Schema.is(AgentControllerUnsupportedEngineError);
 

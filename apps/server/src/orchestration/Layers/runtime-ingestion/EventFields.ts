@@ -17,6 +17,7 @@ import {
   type OrchestrationCheckpointSummary,
   type ProviderRuntimeEvent,
   ProductFeedbackToolDraft,
+  PROVIDER_APPROVAL_ARGUMENT_MAX_CHARS,
 } from "@akeru/contracts";
 import * as Duration from "effect/Duration";
 import * as Option from "effect/Option";
@@ -140,7 +141,43 @@ export function boundedApprovalArgs(
     return Exit.isSuccess(decoded) ? decoded.value : undefined;
   }
 
-  return undefined;
+  return approvalKeyArgs(args);
+}
+
+/** Arguments an approval card shows: what runs or which file, and why it asks. */
+const APPROVAL_KEY_ARGS = [
+  "command",
+  "file_path",
+  "notebook_path",
+  "path",
+  "url",
+  "pattern",
+  "reason",
+] as const;
+
+/**
+ * Keeps only the named string arguments a person needs to judge a call. A
+ * value over the cap is dropped, not cut, so a card never shows part of a
+ * command as if it were all of it.
+ */
+function approvalKeyArgs(
+  args: Extract<ProviderRuntimeEvent, { type: "request.opened" }>["payload"]["args"],
+): Record<string, string> | undefined {
+  const record = asRecord(args);
+
+  if (!record) return undefined;
+
+  const entries = APPROVAL_KEY_ARGS.flatMap((key) => {
+    const value = record[key];
+
+    return Predicate.isString(value) &&
+      value.length > 0 &&
+      value.length <= PROVIDER_APPROVAL_ARGUMENT_MAX_CHARS
+      ? [[key, value] as const]
+      : [];
+  });
+
+  return entries.length > 0 ? Object.fromEntries(entries) : undefined;
 }
 
 export type ChannelSessionDomainEvent = Extract<OrchestrationEvent, { type: "thread.session-set" }>;

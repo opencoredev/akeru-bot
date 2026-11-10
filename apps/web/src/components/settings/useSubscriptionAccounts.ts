@@ -19,6 +19,7 @@ import {
   apiKeyStartInput,
   apiKeyValidationError,
   HEALTH_CHECK_REFRESH_MS,
+  providerRequiresApiKey,
   providerSupportsBaseUrl,
 } from "@akeru/client-runtime/provider-auth";
 import { useI18n } from "../../i18n";
@@ -279,7 +280,7 @@ export function useSubscriptionAccounts(
   ) => {
     if (environmentId === null) return;
 
-    if (definition.id === "opencode-go") {
+    if (providerRequiresApiKey(definition.id)) {
       openApiKey(definition, account);
 
       return;

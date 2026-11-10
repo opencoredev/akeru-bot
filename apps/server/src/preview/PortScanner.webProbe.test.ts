@@ -264,10 +264,16 @@ effectIt.effect("starts fresh cache entries after the probing batch completes", 
     let timeIndex = 0;
     const currentTimeMillis = () => times[Math.min(timeIndex++, times.length - 1)]!;
 
+    // Delegate explicitly: the live clock is a class instance, so a spread would drop its
+    // prototype methods (sleep and the nanosecond readers).
     const clock: Clock.Clock = {
-      ...baseClock,
       currentTimeMillisUnsafe: currentTimeMillis,
       currentTimeMillis: Effect.sync(currentTimeMillis),
+      currentTimeNanosUnsafe: () => baseClock.currentTimeNanosUnsafe(),
+      currentTimeNanos: baseClock.currentTimeNanos,
+      monotonicTimeNanosUnsafe: () => baseClock.monotonicTimeNanosUnsafe(),
+      monotonicTimeNanos: baseClock.monotonicTimeNanos,
+      sleep: (duration) => baseClock.sleep(duration),
     };
 
     const requests: string[] = [];

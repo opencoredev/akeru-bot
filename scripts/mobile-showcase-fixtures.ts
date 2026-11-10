@@ -9,7 +9,7 @@ export type ShowcaseScene = (typeof SHOWCASE_SCENES)[number];
 export const MODEL_SELECTION = JSON.stringify({ instanceId: "codex", model: "gpt-5.4" });
 
 export const BASE_ENVIRONMENT_PRESENCE = `export function environmentLabel(count: number): string {
-  return \`${"${count}"} environments\`;
+  return \`\${count} environments\`;
 }
 `;
 
@@ -17,7 +17,7 @@ export const UPDATED_ENVIRONMENT_PRESENCE = `const PULSE = ["✦", "✧", "·", 
 
 export function environmentLabel(connected: number, total: number, frame: number): string {
   const pulse = PULSE[frame % PULSE.length];
-  return \`${"${pulse} ${connected}/${total}"} ready\`;
+  return \`\${pulse} \${connected}/\${total} ready\`;
 }
 `;
 

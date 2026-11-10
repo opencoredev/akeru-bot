@@ -31,8 +31,11 @@ export const RETIRED_PROVIDER_COUNTERS = [
   ["browser_searches_cursor", "browser_searches_other"],
 ] as const;
 
-// Folds counters for retired providers into `other` so events queued before an
-// upgrade still decode and deliver.
+/** Counters for plugins Akeru no longer ships. Queued events drop them so they still decode. */
+export const RETIRED_PLUGIN_COUNTERS = ["plugin_enabled_executor"] as const;
+
+// Folds counters for retired providers into `other`, and drops counters for retired plugins,
+// so events queued before an upgrade still decode and deliver.
 export const migrateLegacyState = (encoded: string): string => {
   const state = decodeJsonString(encoded);
 
@@ -59,6 +62,8 @@ export const migrateLegacyState = (encoded: string): string => {
         record[other] = Math.min(record[other] + count, USAGE_3H_COUNTER_MAX);
       }
     }
+
+    for (const retired of RETIRED_PLUGIN_COUNTERS) delete record[retired];
 
     if (record.provider === "cursor") record.provider = "other";
 

@@ -211,6 +211,14 @@ export const ServerProvider = Schema.Struct({
   unavailability: Schema.optional(ServerProviderUnavailability),
   unavailabilityDetail: Schema.optional(TrimmedNonEmptyString),
   repairAction: Schema.optional(TrimmedNonEmptyString),
+  // The program the server runs for this instance when it is not `claude`
+  // from PATH, so clients can quote it in a setup command. Set by Claude Code
+  // login instances; omitted when the path came from a sensitive variable.
+  executable: Schema.optional(TrimmedNonEmptyString),
+  // The Claude Code config folder the server uses for this instance when it
+  // is not Claude Code's default, as an absolute path on the environment's
+  // machine. Omitted when the folder came from a sensitive variable.
+  configDirectory: Schema.optional(TrimmedNonEmptyString),
   models: Schema.Array(ServerProviderModel),
   slashCommands: Schema.Array(ServerProviderSlashCommand).pipe(
     Schema.withDecodingDefault(Effect.succeed([])),

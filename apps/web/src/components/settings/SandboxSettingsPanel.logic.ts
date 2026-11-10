@@ -73,6 +73,18 @@ const SANDBOX_PROVIDER_DEFINITION_BY_ID: Readonly<
     description: "Cloud workspaces managed by Tenki. Requires an API key.",
     fields: [{ name: "TENKI_API_KEY", label: "API key", secret: true }],
   },
+  boat: {
+    id: "boat",
+    label: "Boat",
+    description: "Cloud VMs managed by Boat. Requires an API key.",
+    fields: [{ name: "BOAT_API_KEY", label: "API key", secret: true }],
+  },
+  docker: {
+    id: "docker",
+    label: "Local Docker",
+    description: "Run bots in Docker containers on the environment computer. Requires Docker.",
+    fields: [],
+  },
 };
 
 export const SANDBOX_PROVIDER_DEFINITIONS = Object.values(SANDBOX_PROVIDER_DEFINITION_BY_ID);

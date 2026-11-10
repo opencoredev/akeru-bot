@@ -1,4 +1,5 @@
 import { workspaceIO } from "./test-support/workspaceIO.ts";
+import { unusedSandboxFiles } from "./test-support/botWorkspace.ts";
 import { describe } from "vite-plus/test";
 import * as NodeFS from "node:fs";
 import * as NodePath from "node:path";
@@ -209,6 +210,7 @@ describe("AkeruSessionResources", () => {
     const openSession = vi.fn(
       async (providerId?: string): Promise<AkeruRemoteSession> => ({
         providerId: providerId ?? "provider-1",
+        files: unusedSandboxFiles,
         inspect: async () => "running",
         run: async () => ({ exitCode: 0, stdout: "", stderr: "" }),
         browserEndpoint: async () => ({ url: "https://browser.example", requestHeaders: {} }),

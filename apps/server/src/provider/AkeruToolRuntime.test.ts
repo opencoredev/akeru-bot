@@ -6,7 +6,10 @@ import { PNG } from "pngjs";
 import { afterEach, expect, it, vi } from "vite-plus/test";
 import { BotId, ThreadId, type AkeruToolReceipt } from "@akeru/contracts";
 import { createAkeruToolRuntime } from "./AkeruToolRuntime.ts";
-import { makeAkeruToolRuntimeTestSupport } from "./test-support/AkeruToolRuntime.ts";
+import {
+  approveAsOwner,
+  makeAkeruToolRuntimeTestSupport,
+} from "./test-support/AkeruToolRuntime.ts";
 
 const { directories, workspace, workspaceRoot } = makeAkeruToolRuntimeTestSupport();
 
@@ -107,7 +110,7 @@ describe("AkeruToolRuntime", () => {
           approvalMode: "require-grant" as const,
         };
 
-        if (toolId === "Shell") runtime.grantApproval(execution);
+        if (toolId === "Shell") approveAsOwner(runtime, execution);
         await expect(runtime.execute(execution)).rejects.toThrow("must stay inside its workspace");
       }
     }
@@ -133,7 +136,7 @@ describe("AkeruToolRuntime", () => {
       approvalMode: "require-grant" as const,
     };
 
-    runtime.grantApproval(execution);
+    approveAsOwner(runtime, execution);
     await runtime.execute(execution);
     expect(await bot.filesystem?.readFile("inbox/report.txt", { encoding: "utf-8" })).toBe(
       "report",
@@ -205,7 +208,7 @@ describe("AkeruToolRuntime", () => {
         throw new Error("Message dispatch failed");
       },
     });
-    runtime.grantApproval(execution);
+    approveAsOwner(runtime, execution);
 
     await expect(runtime.execute(execution)).resolves.toMatchObject({
       receiptId: "tool-message",
@@ -249,7 +252,7 @@ describe("AkeruToolRuntime", () => {
         createdAt: "2026-09-01T00:00:00.000Z",
       }),
     });
-    runtime.grantApproval(execution);
+    approveAsOwner(runtime, execution);
 
     await expect(runtime.execute(execution)).resolves.toMatchObject({ phase: "failure" });
     expect(receipts.map((receipt) => receipt.phase)).toEqual(["start", "failure"]);

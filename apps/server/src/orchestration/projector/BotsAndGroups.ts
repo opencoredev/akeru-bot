@@ -42,6 +42,7 @@ export function projectBotsAndGroups(
             imageProvider: payload.imageProvider,
             personalityTone: payload.personalityTone,
             voiceEnabled: payload.voiceEnabled,
+            allowedEnvironmentIds: payload.allowedEnvironmentIds,
             channelBindings: payload.channelBindings,
             groupId: payload.groupId,
             archivedAt: null,
@@ -63,7 +64,7 @@ export function projectBotsAndGroups(
       return decodeForEvent(BotUpdatedPayload, event.payload, event.type, "payload").pipe(
         Effect.map((payload) => ({
           ...nextBase,
-          bots: updateBot(nextBase.bots, payload.botId, {
+          bots: updateBot(withPermissionPolicy(nextBase.bots, payload), payload.botId, {
             ...(payload.name !== undefined ? { name: payload.name } : {}),
             ...(payload.title !== undefined ? { title: payload.title } : {}),
             ...(payload.label !== undefined ? { label: payload.label } : {}),
@@ -82,6 +83,9 @@ export function projectBotsAndGroups(
               ? { personalityTone: payload.personalityTone }
               : {}),
             ...(payload.voiceEnabled !== undefined ? { voiceEnabled: payload.voiceEnabled } : {}),
+            ...(payload.allowedEnvironmentIds !== undefined
+              ? { allowedEnvironmentIds: payload.allowedEnvironmentIds }
+              : {}),
             ...(payload.channelBindings !== undefined
               ? { channelBindings: payload.channelBindings }
               : {}),
@@ -286,4 +290,21 @@ export function projectBotsAndGroups(
     default:
       throw new Error("Unexpected projector event: " + event.type);
   }
+}
+
+/** Applies a policy change; `null` removes the stored policy so the default applies. */
+function withPermissionPolicy(
+  bots: ReadonlyArray<OrchestrationBot>,
+  payload: Pick<typeof BotUpdatedPayload.Type, "botId" | "permissionPolicy">,
+): ReadonlyArray<OrchestrationBot> {
+  const policy = payload.permissionPolicy;
+
+  if (policy === undefined) return bots;
+
+  return bots.map((bot) => {
+    if (bot.id !== payload.botId) return bot;
+    const { permissionPolicy: _previous, ...rest } = bot;
+
+    return policy === null ? rest : { ...rest, permissionPolicy: policy };
+  });
 }

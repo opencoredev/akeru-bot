@@ -269,6 +269,8 @@ export const rosterCatalog = {
   "skills in slash menu": "skills in slash menu",
   "Leave empty to open the Add Project browser in ~/.":
     "Leave empty to open the Add Project browser in ~/.",
+  "Another bot is still working in this chat": "Another bot is still working in this chat",
+  "Send again when it finishes.": "Send again when it finishes.",
   "This bot is archived": "This bot is archived",
   "Restore it from the roster to chat with it again.":
     "Restore it from the roster to chat with it again.",

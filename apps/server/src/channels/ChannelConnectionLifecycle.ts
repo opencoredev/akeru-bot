@@ -8,6 +8,7 @@ import {
   type OrchestrationReadModel,
 } from "@akeru/contracts";
 import * as Cause from "effect/Cause";
+import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 import * as Scope from "effect/Scope";
@@ -27,6 +28,7 @@ import {
   type ChannelTransportContext,
   type ChannelConnectInput,
   type ChannelRuntimeContext,
+  type PendingChannelLinkCode,
 } from "./ChannelRuntimeTypes.ts";
 import { fromTransportRuntime, startBuiltInTransport } from "./ChannelTransportFactory.ts";
 import {
@@ -39,7 +41,7 @@ import {
 import {
   channelThreadId,
   legacyChannelThreadId,
-  subscribedExternalThreadIds,
+  deterministicChannelId,
   dispatchInboundChannelMessage,
 } from "./ChannelInbound.ts";
 import {
@@ -47,12 +49,30 @@ import {
   updateChannelStatus,
   clearPersistedChannelStatuses,
 } from "./ChannelDelivery.ts";
-import { replaceBinding, withChannelOperation } from "./ChannelOperations.ts";
+import {
+  attachRuntime,
+  detachRuntime,
+  replaceBinding,
+  restoreLinkCodes,
+  withChannelOperation,
+} from "./ChannelOperations.ts";
+import {
+  evaluateChannelGate,
+  followedExternalThreadIds,
+  isOwnerGatedProvider,
+} from "./ChannelAccess.ts";
 
+/**
+ * Starts a transport without committing it. `finished` completes when the start attempt that
+ * called this has committed or failed; the access check waits on it.
+ */
 export const startChannel = (
   ctx: ChannelRuntimeContext,
   input: ChannelConnectInput,
-  connectionId?: ChannelConnectionId,
+  attempt: {
+    readonly connectionId?: ChannelConnectionId | undefined;
+    readonly finished: Deferred.Deferred<void>;
+  },
 ) =>
   Effect.gen(function* () {
     const deps = ctx.deps;
@@ -63,6 +83,8 @@ export const startChannel = (
 
     if (!bot || bot.archivedAt !== null)
       return yield* failWith(`Bot '${input.botId}' is unavailable.`);
+
+    const { connectionId } = attempt;
 
     const project = model.projects.find(
       (candidate) => candidate.id === input.targetProjectId && candidate.deletedAt === null,
@@ -110,6 +132,17 @@ export const startChannel = (
             provider: input.provider,
           });
 
+          // The turn command is accepted, so a replay of this message is now ignored. Until here
+          // an admitted message's claim stays pending, and a redelivery runs it again.
+          if (message.externalMessageId) {
+            yield* ctx.follows.finishMessage({
+              botId: bot.id,
+              provider: input.provider,
+              externalThreadId: message.externalThreadId,
+              externalMessageId: message.externalMessageId,
+            });
+          }
+
           if (!duplicate) {
             for (const { origin } of ctx.statuses.get(current)?.values() ?? []) {
               if (origin.externalThreadId === message.externalThreadId)
@@ -131,15 +164,52 @@ export const startChannel = (
 
     const context: ChannelTransportContext = {
       botName: bot.name,
-      subscribedThreadIds: yield* subscribedExternalThreadIds(
+      subscribedThreadIds: yield* followedExternalThreadIds(
         ctx,
-        model,
         bot.id,
-        project.id,
         input.provider,
+        project.id,
       ),
       onMention: onInbound,
       onSubscribedMessage: onInbound,
+      gate: (message) => {
+        const provider = input.provider;
+
+        // DM-only providers keep their direct policy.
+        if (!isOwnerGatedProvider(provider)) return Promise.resolve({ type: "ignore" as const });
+        const key = runtimeKey(bot.id, provider);
+        const attached = () => runtime !== undefined && ctx.runtimes.get(key) === runtime;
+
+        // The same command ID `dispatchInboundChannelMessage` derives, so the claim names its turn.
+        const turnCommandId = deterministicChannelId("channel-turn", {
+          botId: bot.id,
+          projectId: project.id,
+          provider,
+          externalThreadId: message.externalThreadId,
+          externalMessageId: message.externalMessageId,
+        });
+
+        return ctx.runSdkCallback(
+          Effect.gen(function* () {
+            // A listener can deliver before its start has attached it, stored its secret, and
+            // saved `connected`. Waiting until that start attempt ends lets it finish. A transport
+            // that is detached afterward is retired and never admits work.
+            yield* Deferred.await(attempt.finished);
+
+            if (!attached()) return { type: "ignore" as const };
+
+            return yield* evaluateChannelGate(
+              ctx,
+              bot.id,
+              provider,
+              project.id,
+              message,
+              turnCommandId,
+              attached,
+            );
+          }),
+        );
+      },
       ...(ctx.deps.httpClient ? { httpClient: ctx.deps.httpClient } : {}),
     };
 
@@ -199,7 +269,10 @@ export const startChannel = (
         provider: input.provider,
         ...(notLive
           ? { status: "not-live" as const, lastError: WHATSAPP_NOT_LIVE_MESSAGE }
-          : { status: "connected" as const }),
+          : {
+              status: "connected" as const,
+              ...(started.warning ? { lastError: started.warning } : {}),
+            }),
         externalIdentity: started.externalIdentity,
         connectedAt: yield* deps.nowIso,
         lastAttemptAt: yield* deps.nowIso,
@@ -237,10 +310,16 @@ export const commitStartedChannel = (
     const previousRuntime = ctx.runtimes.get(key);
     const name = secretName(started.binding.botId, started.binding.provider);
     let previousSecret: Option.Option<Uint8Array> | undefined;
+    // Codes the new transport replaced, put back if the earlier transport is restored.
+    let replacedCodes: ReadonlyArray<readonly [string, PendingChannelLinkCode]> = [];
+
+    const { botId, provider } = started.binding;
 
     const rollback = Effect.gen(function* () {
-      if (previousRuntime) ctx.runtimes.set(key, previousRuntime);
-      else ctx.runtimes.delete(key);
+      if (previousRuntime) {
+        yield* attachRuntime(ctx, botId, provider, previousRuntime);
+        yield* restoreLinkCodes(ctx, botId, provider, replacedCodes);
+      } else yield* detachRuntime(ctx, botId, provider, started.runtime);
       yield* started.runtime.shutdown.pipe(Effect.ignoreCause);
       const prior = previousSecret;
 
@@ -253,7 +332,7 @@ export const commitStartedChannel = (
 
     return yield* Effect.gen(function* () {
       previousSecret = yield* deps.secretStore.get(name);
-      ctx.runtimes.set(key, started.runtime);
+      replacedCodes = yield* attachRuntime(ctx, botId, provider, started.runtime);
 
       if (secret) {
         yield* deps.secretStore.set(name, yield* encodeStoredChannelSecret(secret));
@@ -433,6 +512,7 @@ export const startAndCommitChannel = (
     const model = yield* ctx.deps.readModel;
     const previous = bindingFor(model, input.botId, input.provider);
     const liveBot = model.bots.some((bot) => bot.id === input.botId && bot.archivedAt === null);
+    const finished = yield* Deferred.make<void>();
     ctx.connecting.add(key);
 
     return yield* Effect.gen(function* () {
@@ -467,7 +547,10 @@ export const startAndCommitChannel = (
         });
       }
 
-      const started = yield* startChannel(ctx, input, options.connectionId);
+      const started = yield* startChannel(ctx, input, {
+        connectionId: options.connectionId,
+        finished,
+      });
 
       // A failed first gateway launch already failed the start with its own category. A listener
       // the provider accepted and then dropped before commit is a connection problem.
@@ -494,6 +577,10 @@ export const startAndCommitChannel = (
                 )
             : recordStartFailure(ctx, previous, input, Cause.squash(cause), options.connectionId),
       ),
-      Effect.ensuring(Effect.sync(() => ctx.connecting.delete(key))),
+      Effect.ensuring(
+        Effect.sync(() => ctx.connecting.delete(key)).pipe(
+          Effect.andThen(Deferred.succeed(finished, undefined)),
+        ),
+      ),
     );
   });

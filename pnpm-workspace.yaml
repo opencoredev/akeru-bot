@@ -43,13 +43,11 @@ catalog:
   "@effect/tsgo": 0.13.2
   "@effect/vitest": 4.0.0-beta.103
   "@legendapp/list": 3.3.5
-  "@noble/curves": 1.9.1
   "@noble/hashes": 1.8.0
   "@pierre/diffs": 1.3.0-beta.10
   "@types/node": 24.12.4
   "@typescript/native-preview": 7.0.0-dev.20260604.1
   effect: 4.0.0-beta.103
-  jose: 6.2.2
   typescript: ~6.0.3
   vite: npm:@voidzero-dev/vite-plus-core@0.2.2
   vite-plus: 0.2.2
@@ -77,6 +75,7 @@ minimumReleaseAgeExclude:
   - "@mastra/core@1.63.0"
   - "@mastra/observability@1.17.3"
   - cn@0.2.4
+  - "@opencoredev/sandbox-sdk@1.0.3"
 
 overrides:
   # The SDK always receives the user's Claude executable, so its bundled binaries are unused.
@@ -96,6 +95,13 @@ overrides:
   "@effect/sql-sqlite-bun": "catalog:"
   "@effect/vitest": "catalog:"
   "@effect/vitest>vitest": "-"
+  # Akeru imports only sandbox-sdk's core and provider entry points. Keeping its optional
+  # framework peers (notably ai@7) out of resolution stops them from displacing ai@6 for chat.
+  "@opencoredev/sandbox-sdk>@mastra/core": "-"
+  "@opencoredev/sandbox-sdk>@openai/agents": "-"
+  "@opencoredev/sandbox-sdk>ai": "-"
+  "@opencoredev/sandbox-sdk>vitest": "-"
+  "@opencoredev/sandbox-sdk>zod": "-"
   "@expo/metro-config": 56.0.14
   "@pierre/diffs>@shikijs/transformers": ^4.2.0
   "@types/node": "catalog:"

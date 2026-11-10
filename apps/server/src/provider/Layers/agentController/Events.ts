@@ -26,7 +26,11 @@ import { ServerConfig } from "../../../config.ts";
 
 import { persistAkeruPreviewSnapshot } from "../../AkeruPreviewSnapshotAttachment.ts";
 import { SubscriptionAuthService } from "../../../subscription-auth/service.ts";
-import { akeruActionNeedsApproval, criticalAkeruAction } from "../../AkeruMastraHarness.ts";
+import {
+  POLICY_NAMED_TOOL_NAMES,
+  akeruActionNeedsApproval,
+  criticalAkeruAction,
+} from "../../AkeruMastraHarness.ts";
 
 import { type AkeruChannelRuntime } from "../../AkeruChannelRuntime.ts";
 import { type AkeruBotStateRuntime } from "../../AkeruBotStateRuntime.ts";
@@ -386,17 +390,71 @@ export function createEvents(deps: {
           return;
         }
 
+        // Tools run with null fields dropped (`AkeruMastraTools`), so every approval check, binding,
+        // and grant uses the same shape.
         const toolInput = deps.omitNullToolFields(event.args);
         const action = criticalAkeruAction(event.toolName, toolInput);
 
+        const runtimeToolId =
+          AKERU_TOOL_CATALOG.find((tool) => tool.id === event.toolName)?.id ??
+          (isMemoryToolId(event.toolName) ? event.toolName : undefined);
+
+        const namedCall = POLICY_NAMED_TOOL_NAMES.has(event.toolName)
+          ? {
+              threadId: String(threadId),
+              toolCallId: event.toolCallId,
+              toolName: event.toolName,
+              input: toolInput,
+            }
+          : undefined;
+
+        // For Akeru's own tools the bot policy decides who approves. An installed
+        // connector tool with the same name keeps the connector rules below, and so
+        // does a call the policy cannot decide (unavailable tool, bad input), which
+        // then fails in the run.
+        const policyRequirement =
+          runtimeToolId !== undefined &&
+          !(connectorTools && Object.hasOwn(connectorTools, event.toolName))
+            ? deps.toolRuntime.approvalRequirement(String(threadId), runtimeToolId, toolInput)
+            : undefined;
+
+        const builtInRequirement = policyRequirement === "blocked" ? undefined : policyRequirement;
+
+        // The bot policy asked for the owner's answer, so the chat mode cannot give it.
+        const namedOwnerMustAnswer =
+          namedCall !== undefined &&
+          deps.toolRuntime.namedActionRequirement(
+            namedCall.threadId,
+            namedCall.toolName,
+            namedCall.input,
+          ) !== "none";
+
+        if (runtimeToolId) {
+          deps.toolRuntime.openApproval({
+            threadId: String(threadId),
+            toolCallId: event.toolCallId,
+            toolId: runtimeToolId,
+            input: toolInput,
+          });
+        }
+
+        if (namedCall) deps.toolRuntime.openNamedApproval(namedCall);
+
         const oneUseApproval =
-          akeruActionNeedsApproval(event.toolName, toolInput) ||
-          deps.mcpToolNeedsApproval(mcpManager, event.toolName);
+          builtInRequirement !== undefined
+            ? builtInRequirement === "owner"
+            : namedOwnerMustAnswer ||
+              akeruActionNeedsApproval(event.toolName, toolInput) ||
+              deps.mcpToolNeedsApproval(mcpManager, event.toolName);
+
+        const policySkipsPrompt = builtInRequirement === "none";
 
         if (
           event.toolName !== AKERU_PRODUCT_FEEDBACK_TOOL_NAME &&
           !oneUseApproval &&
-          deps.permissionPolicy(active.runtimeMode, akeruToolCategory(event.toolName)) === "allow"
+          (policySkipsPrompt ||
+            deps.permissionPolicy(active.runtimeMode, akeruToolCategory(event.toolName)) ===
+              "allow")
         ) {
           deps.forkPromise(
             "Akeru could not approve an allowed tool call.",
@@ -408,18 +466,28 @@ export function createEvents(deps: {
                   () => {
                     if (active.activeTurn !== turn || turn.finished) return;
 
-                    // Akeru runtime tools check their own grant before running.
-                    const runtimeToolId =
-                      AKERU_TOOL_CATALOG.find((tool) => tool.id === event.toolName)?.id ??
-                      (isMemoryToolId(event.toolName) ? event.toolName : undefined);
+                    // Akeru runtime tools check their own grant before running. The
+                    // chat mode grants routine approvals only, never an owner's answer.
+                    const modeGrant = runtimeToolId
+                      ? deps.toolRuntime.grantModeApproval({
+                          threadId: String(threadId),
+                          toolCallId: event.toolCallId,
+                          toolId: runtimeToolId,
+                          input: toolInput,
+                        })
+                      : undefined;
 
-                    if (runtimeToolId) {
-                      deps.toolRuntime.grantApproval({
-                        threadId: String(threadId),
+                    if (modeGrant && Predicate.isTagged(modeGrant, "Rejected")) {
+                      active.session.respondToToolApproval({
                         toolCallId: event.toolCallId,
-                        toolId: runtimeToolId,
-                        input: event.args,
+                        decision: "decline",
+                        declineContext: {
+                          reason: "approval_rejected",
+                          message: `Tool '${event.toolName}' needs the owner's approval (${modeGrant.reason}). Ask again if the action is still needed.`,
+                        },
                       });
+
+                      return;
                     }
 
                     active.session.respondToToolApproval({

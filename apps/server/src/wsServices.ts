@@ -74,6 +74,7 @@ import * as WorkspaceEntries from "./workspace/WorkspaceEntries.ts";
 import * as WorkspaceFileSystem from "./workspace/WorkspaceFileSystem.ts";
 import * as GitWorkflowService from "./git/GitWorkflowService.ts";
 import * as ServerEnvironment from "./environment/ServerEnvironment.ts";
+import * as EnvironmentHost from "./environment/EnvironmentHost.ts";
 import * as RemoteOpenTargets from "./environment/RemoteOpenTargets.ts";
 import * as BackgroundPolicy from "./background/BackgroundPolicy.ts";
 import * as EnvironmentAuth from "./auth/EnvironmentAuth.ts";
@@ -328,6 +329,8 @@ export const createWsServices = (
     const workspaceFileSystem = yield* WorkspaceFileSystem.WorkspaceFileSystem;
 
     const serverEnvironment = yield* ServerEnvironment.ServerEnvironment;
+
+    const environmentHost = yield* EnvironmentHost.EnvironmentHost;
 
     const backgroundPolicy = yield* BackgroundPolicy.BackgroundPolicy;
 
@@ -722,6 +725,7 @@ export const createWsServices = (
       workspaceEntries,
       workspaceFileSystem,
       serverEnvironment,
+      environmentHost,
       backgroundPolicy,
       rpcClientIds,
       serverAuth,

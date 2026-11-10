@@ -1,10 +1,9 @@
 import { emptyProviderSnapshot, providerThreadFixture } from "./projectionFixtures.ts";
-import { sessionFixture } from "./partialFixtures.ts";
-import type { AkeruMastraState } from "../../AkeruMastraHarness.ts";
+import { sessionFixture, type SessionFixture } from "./partialFixtures.ts";
 
 import * as Match from "effect/Match";
 import * as NodeServices from "@effect/platform-node/NodeServices";
-import type { AgentControllerEvent, Session } from "@mastra/core/agent-controller";
+import type { AgentControllerEvent } from "@mastra/core/agent-controller";
 import {
   BotId,
   GroupId,
@@ -454,7 +453,8 @@ export const groupParentSnapshot = {
   delegations: [],
 } satisfies OrchestrationReadModel;
 
-export const makeWorkerSession = (base: Session<AkeruMastraState>) => {
+// The base is a plain fixture object, so spreading it keeps every field.
+export const makeWorkerSession = (base: SessionFixture) => {
   const listeners = new Set<(event: AgentControllerEvent) => void>();
 
   const session = sessionFixture({

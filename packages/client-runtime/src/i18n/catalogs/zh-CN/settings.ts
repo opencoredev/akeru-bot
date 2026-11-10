@@ -239,14 +239,12 @@ export const settingsCatalog = {
     "ChatGPT 订阅不包含 OpenAI API 访问权限。",
   "OpenAI limits Codex use per 5-hour window and per week. The allowance depends on your plan.":
     "OpenAI 按每 5 小时窗口和每周限制 Codex 用量。额度取决于你的套餐。",
-  "Claude Pro or Max subscription.": "Claude Pro 或 Max 订阅。",
-  "Or an Anthropic API key, billed separately in the Claude Console.":
-    "也可以使用 Anthropic API 密钥，在 Claude Console 中单独计费。",
+  "An Anthropic API key from the Claude Console.": "来自 Claude Console 的 Anthropic API 密钥。",
   "Claude models.": "Claude 模型。",
-  "A Claude Pro or Max subscription does not include Anthropic API access.":
-    "Claude Pro 或 Max 订阅不包含 Anthropic API 访问权限。",
-  "Anthropic limits Claude use per 5-hour session and per week. Max allows more use than Pro.":
-    "Anthropic 按每 5 小时会话和每周限制 Claude 用量。Max 的额度高于 Pro。",
+  "Anthropic bills the key per request. Claude Pro and Max subscriptions cannot be used in Akeru.":
+    "Anthropic 按请求对该密钥计费。Akeru 无法使用 Claude Pro 和 Max 订阅。",
+  "Anthropic sets API rate limits by usage tier. The Claude Console shows them.":
+    "Anthropic 按用量等级设置 API 速率限制，可在 Claude Console 中查看。",
   "SuperGrok or X Premium+ on your xAI account. Akeru cannot see which plan the account has.":
     "你的 xAI 账号上的 SuperGrok 或 X Premium+。Akeru 无法查看该账号使用的套餐。",
   "Grok models.": "Grok 模型。",
@@ -274,8 +272,7 @@ export const settingsCatalog = {
   "API billing can be separate from your subscription.": "API 计费可能独立于你的订阅。",
   "Open OpenCode": "打开 OpenCode",
   "Use your ChatGPT subscription with Codex models.": "通过 Codex 模型使用你的 ChatGPT 订阅。",
-  "Use your Claude subscription with Claude Code models.":
-    "通过 Claude Code 模型使用你的 Claude 订阅。",
+  "Use Claude models with an Anthropic API key.": "通过 Anthropic API 密钥使用 Claude 模型。",
   "Kimi For Coding plan": "Kimi For Coding 套餐",
   "Use Kimi coding models through your Moonshot subscription.":
     "通过你的 Moonshot 订阅使用 Kimi 编程模型。",
@@ -373,4 +370,64 @@ export const settingsCatalog = {
   Subscription: "订阅",
   "Pay per request instead of using the subscription.": "按请求付费，而不使用订阅。",
   "Finish signing in to {provider} in the browser.": "在浏览器中完成 {provider} 的登录。",
+  "Could not unlink this account": "无法取消关联此账号",
+  "Connected without a saved connection": "未通过已保存的连接接入",
+  "Linked accounts": "已关联的账号",
+  "No linked accounts yet. Bots answer only linked accounts. Create a link code on a connection above and send it to the bot in a direct message.":
+    "还没有关联的账号。机器人只回复已关联的账号。请在上方的连接中创建关联码，然后通过私信发送给机器人。",
+  "{user} in workspace {workspace}": "工作区 {workspace} 中的 {user}",
+  Unlink: "取消关联",
+  "Could not create a link code": "无法创建关联码",
+  "Could not save who this bot answers": "无法保存此机器人回复的对象",
+  "{bot} answers only linked accounts and the people you add below.":
+    "{bot} 只回复已关联的账号和你在下方添加的人。",
+  "Send this code to {bot} in a direct message within 10 minutes:":
+    "请在 10 分钟内通过私信把这个代码发送给 {bot}：",
+  "Link code": "关联码",
+  "Create link code": "创建关联码",
+  "Create new code": "创建新代码",
+  "Also answer these {provider} user IDs": "同时回复这些 {provider} 用户 ID",
+  "Add at most {count} user IDs.": "最多添加 {count} 个用户 ID。",
+  "Tell other people whose bot this is when they mention it":
+    "当其他人提及此机器人时，告诉他们这是谁的机器人",
+  "This bot answers only linked accounts and people you add. After you connect, create a link code on the connection to link your account.":
+    "此机器人只回复已关联的账号和你添加的人。连接后，请在该连接上创建关联码来关联你的账号。",
+  "Copy command": "复制命令",
+  "Couldn't copy the command. Select it and copy it manually.": "无法复制命令。请选中后手动复制。",
+  "This account's Claude Code folder is saved as a hidden value. In a terminal on this environment's machine, set CLAUDE_CONFIG_DIR to that folder, then run:":
+    "此账号的 Claude Code 文件夹保存为隐藏值。请在此环境所在机器的终端中，将 CLAUDE_CONFIG_DIR 设为该文件夹，然后运行：",
+  "This account's home folder is saved as a hidden value. In a terminal on this environment's machine, set {variable} to that folder, then run:":
+    "此账号的主文件夹保存为隐藏值。请在此环境所在机器的终端中，将 {variable} 设为该文件夹，然后运行：",
+  "Logged in as {account}.": "已登录为 {account}。",
+  Verify: "验证",
+  "Open the Claude Code install guide": "打开 Claude Code 安装指南",
+  "Then log in on the same machine:": "然后在同一台机器上登录：",
+  "Log in on this environment's machine:": "在此环境所在的机器上登录：",
+  "Logged out": "未登录",
+  "Checking Claude Code": "正在检查 Claude Code",
+  "Akeru is looking for Claude Code on this environment's machine.":
+    "Akeru 正在此环境所在的机器上查找 Claude Code。",
+  "Install Claude Code": "安装 Claude Code",
+  "Claude Code is not installed on this environment's machine. Install it, then log in.":
+    "此环境所在的机器上未安装 Claude Code。请先安装，然后登录。",
+  "Log in to Claude Code": "登录 Claude Code",
+  "Run this in a terminal on this environment's machine, then verify.":
+    "在此环境所在机器的终端中运行此命令，然后验证。",
+  "Claude Agent ready": "Claude Agent 已就绪",
+  "Bots on this connection use your own Claude Code login.":
+    "使用此连接的机器人会使用你自己的 Claude Code 登录。",
+  "Claude Code needs attention": "Claude Code 需要处理",
+  "Akeru could not use Claude Code. Fix the problem below, then verify.":
+    "Akeru 无法使用 Claude Code。请修复下面的问题，然后验证。",
+  "Claude Agent": "Claude Agent",
+  "Stop using Claude Agent": "停止使用 Claude Agent",
+  "Use your Claude Code login": "使用你的 Claude Code 登录",
+  "Run Claude bots on the Claude Code installed on this environment's machine, with the login you made there. No API key needed.":
+    "让 Claude 机器人通过此环境所在机器上安装的 Claude Code 运行，并使用你在那里完成的登录。无需 API 密钥。",
+  "Set up your Claude Code login to chat with {bot}": "设置你的 Claude Code 登录以与 {bot} 聊天",
+  "Akeru runs Claude Code on this machine with the login you made there. It never sees your Claude password or token.":
+    "Akeru 会在这台机器上使用你在那里完成的登录来运行 Claude Code。它永远看不到你的 Claude 密码或令牌。",
+  "How should this account connect?": "此账号应如何连接？",
+  "An Anthropic API key you add from its card": "在其卡片中添加的 Anthropic API 密钥",
+  "Claude Code on this machine, with its own login": "这台机器上的 Claude Code，使用它自己的登录",
 } as const;

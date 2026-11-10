@@ -60,7 +60,7 @@ export function resolveThreadIdentity(input: {
     return {
       title: group.name,
       bots: groupChatBots(group, bots),
-      avatarSeed: `${thread.id}`,
+      avatarSeed: thread.id,
       isGroup: true,
     };
   }
@@ -71,7 +71,7 @@ export function resolveThreadIdentity(input: {
   return {
     title: bot?.name ?? providerName(providerDriver) ?? thread.title,
     bots: bot === null ? [] : [bot],
-    avatarSeed: providerDriver ?? `${thread.id}`,
+    avatarSeed: providerDriver ?? thread.id,
     isGroup: false,
   };
 }

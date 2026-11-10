@@ -1,3 +1,23 @@
+/** The Slack Web API reply bodies the mock sends back. */
+interface SlackApiReply {
+  readonly ok: boolean;
+  readonly error?: string;
+  readonly needed?: string;
+  readonly messages?: ReadonlyArray<Record<string, string>>;
+  readonly user_id?: string;
+  readonly team_id?: string;
+  readonly user?: {
+    readonly id: string;
+    readonly name: string;
+    readonly team_id: string;
+    readonly is_stranger?: boolean;
+    readonly deleted?: boolean;
+    readonly is_restricted?: boolean;
+    readonly is_ultra_restricted?: boolean;
+    readonly profile: { readonly display_name: string };
+  };
+}
+
 type SlackRetryOptions = {
   retries?: number | undefined;
   rejectRateLimitedCalls?: boolean | undefined;
@@ -22,12 +42,35 @@ const externalAdapters = vi.hoisted(() => ({
   slackDisconnects: 0,
   slackIdentityAvailable: true,
   slackInitializationFails: false,
+  /** Runs inside the adapter's `initialize`, where the real adapter starts Socket Mode. */
+  slackOnInitialize: null as (() => void) | null,
   slackSubscriptions: [] as string[],
   slackRestoredBeforeInitialize: false,
   slackResponses: [] as Array<
     { status: number; data: unknown; headers?: Record<string, string> } | Error
   >,
   slackPostRequests: 0,
+  slackTeamId: "T-HOME",
+  /** Display names `users.info` returns, by Slack user ID. */
+  slackUserNames: {} as Record<string, string>,
+  slackUserLookups: 0,
+  /** The team `users.info` reports per user ID. Users not listed belong to `T-HOME`. */
+  slackUserTeams: {} as Record<string, string>,
+  /** User IDs whose `users.info` lookup fails, so membership cannot be confirmed. */
+  slackMissingUsers: [] as string[],
+  /** The bot token's scopes, sent the way Slack does in `x-oauth-scopes`. Unset sends none. */
+  slackScopes: undefined as ReadonlyArray<string> | undefined,
+  /** Account flags `users.info` reports per user ID, such as a deactivated or guest account. */
+  slackUserFlags: {} as Record<
+    string,
+    { deleted?: boolean; is_restricted?: boolean; is_ultra_restricted?: boolean }
+  >,
+  /** The thread history `conversations.replies` returns, as raw Slack messages. */
+  slackThreadMessages: [] as Array<Record<string, string>>,
+  /** How many upcoming thread subscriptions fail, to simulate a transient Slack error. */
+  slackSubscribeFailures: 0,
+  /** Every Slack Web API call, with its form or JSON body. */
+  slackApiCalls: [] as Array<{ readonly url: string; readonly data: string }>,
   slackRetryOptions: {} as SlackRetryOptions,
   discordAdapter: null as Adapter | null,
   discordChat: null as ChatInstance | null,
@@ -93,6 +136,55 @@ vi.mock("@chat-adapter/slack", async (importOriginal) => {
         webClientOptions: {
           ...options.webClientOptions,
           adapter: async (config) => {
+            externalAdapters.slackApiCalls.push({
+              url: config.url ?? "",
+              data: String(config.data ?? ""),
+            });
+
+            const scopes = externalAdapters.slackScopes;
+
+            const reply = (data: SlackApiReply) => ({
+              status: 200,
+              data,
+              headers: scopes ? { "x-oauth-scopes": scopes.join(",") } : {},
+              statusText: "",
+              config,
+              request: { path: new URL(config.url ?? "https://slack.com").pathname },
+            });
+
+            if (config.url === "https://slack.com/api/auth.test") {
+              return reply({ ok: true, user_id: "U-AKERU", team_id: externalAdapters.slackTeamId });
+            }
+
+            if (config.url === "https://slack.com/api/users.info") {
+              externalAdapters.slackUserLookups += 1;
+              const userId = new URLSearchParams(String(config.data ?? "")).get("user") ?? "";
+              const name = externalAdapters.slackUserNames[userId];
+              const teamId = externalAdapters.slackUserTeams[userId] ?? "T-HOME";
+
+              return reply(
+                scopes && !scopes.includes("users:read")
+                  ? { ok: false, error: "missing_scope", needed: "users:read" }
+                  : externalAdapters.slackMissingUsers.includes(userId)
+                    ? { ok: false, error: "user_not_found" }
+                    : {
+                        ok: true,
+                        user: {
+                          id: userId,
+                          name: name ?? userId,
+                          team_id: teamId,
+                          ...(teamId === "T-HOME" ? {} : { is_stranger: true }),
+                          ...externalAdapters.slackUserFlags[userId],
+                          profile: { display_name: name ?? "" },
+                        },
+                      },
+              );
+            }
+
+            if (config.url === "https://slack.com/api/conversations.replies") {
+              return reply({ ok: true, messages: externalAdapters.slackThreadMessages });
+            }
+
             if (config.url !== "https://slack.com/api/chat.postMessage") {
               throw new Error("Unexpected Slack API request");
             }
@@ -116,6 +208,9 @@ vi.mock("@chat-adapter/slack", async (importOriginal) => {
       }) as ReturnType<typeof actual.createSlackAdapter> & Adapter;
 
       adapter.initialize = async (chat) => {
+        // The adapter's own event pipeline needs its Chat instance to route Socket Mode events.
+        Object.assign(adapter, { chat });
+
         if (externalAdapters.slackIdentityAvailable) {
           Object.assign(adapter, { _botUserId: "U-AKERU" });
         }
@@ -125,6 +220,8 @@ vi.mock("@chat-adapter/slack", async (importOriginal) => {
         externalAdapters.slackRestoredBeforeInitialize = await chat
           .getState()
           .isSubscribed("slack:C1:1");
+
+        externalAdapters.slackOnInitialize?.();
 
         if (externalAdapters.slackInitializationFails) throw new Error("Socket startup failed");
       };
@@ -138,6 +235,12 @@ vi.mock("@chat-adapter/slack", async (importOriginal) => {
       };
 
       adapter.onThreadSubscribe = async (threadId) => {
+        if (externalAdapters.slackSubscribeFailures > 0) {
+          externalAdapters.slackSubscribeFailures -= 1;
+
+          throw new Error("Slack subscription failed");
+        }
+
         externalAdapters.slackSubscriptions.push(threadId);
       };
 

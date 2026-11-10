@@ -70,7 +70,6 @@ export const USAGE_PLUGIN_IDS = [
   "docusign",
   "dropbox",
   "exa",
-  "executor",
   "figma",
   "firecrawl",
   "framer",

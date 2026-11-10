@@ -57,6 +57,12 @@ export const PROVIDER_CLIENT_DEFINITIONS: readonly ProviderClientDefinition[] = 
     settingsSchema: ClaudeSettings,
   },
   {
+    value: ProviderDriverKind.make("claudeCode"),
+    label: "Claude Agent",
+    icon: ClaudeAI,
+    settingsSchema: ClaudeSettings,
+  },
+  {
     value: ProviderDriverKind.make("grok"),
     label: "Grok",
     icon: GrokIcon,

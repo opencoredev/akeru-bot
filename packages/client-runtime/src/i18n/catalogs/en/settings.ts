@@ -244,14 +244,12 @@ export const settingsCatalog = {
     "A ChatGPT subscription does not include OpenAI API access.",
   "OpenAI limits Codex use per 5-hour window and per week. The allowance depends on your plan.":
     "OpenAI limits Codex use per 5-hour window and per week. The allowance depends on your plan.",
-  "Claude Pro or Max subscription.": "Claude Pro or Max subscription.",
-  "Or an Anthropic API key, billed separately in the Claude Console.":
-    "Or an Anthropic API key, billed separately in the Claude Console.",
+  "An Anthropic API key from the Claude Console.": "An Anthropic API key from the Claude Console.",
   "Claude models.": "Claude models.",
-  "A Claude Pro or Max subscription does not include Anthropic API access.":
-    "A Claude Pro or Max subscription does not include Anthropic API access.",
-  "Anthropic limits Claude use per 5-hour session and per week. Max allows more use than Pro.":
-    "Anthropic limits Claude use per 5-hour session and per week. Max allows more use than Pro.",
+  "Anthropic bills the key per request. Claude Pro and Max subscriptions cannot be used in Akeru.":
+    "Anthropic bills the key per request. Claude Pro and Max subscriptions cannot be used in Akeru.",
+  "Anthropic sets API rate limits by usage tier. The Claude Console shows them.":
+    "Anthropic sets API rate limits by usage tier. The Claude Console shows them.",
   "SuperGrok or X Premium+ on your xAI account. Akeru cannot see which plan the account has.":
     "SuperGrok or X Premium+ on your xAI account. Akeru cannot see which plan the account has.",
   "Grok models.": "Grok models.",
@@ -282,8 +280,7 @@ export const settingsCatalog = {
   "Open OpenCode": "Open OpenCode",
   "Use your ChatGPT subscription with Codex models.":
     "Use your ChatGPT subscription with Codex models.",
-  "Use your Claude subscription with Claude Code models.":
-    "Use your Claude subscription with Claude Code models.",
+  "Use Claude models with an Anthropic API key.": "Use Claude models with an Anthropic API key.",
   "Kimi For Coding plan": "Kimi For Coding plan",
   "Use Kimi coding models through your Moonshot subscription.":
     "Use Kimi coding models through your Moonshot subscription.",
@@ -387,4 +384,67 @@ export const settingsCatalog = {
     "Pay per request instead of using the subscription.",
   "Finish signing in to {provider} in the browser.":
     "Finish signing in to {provider} in the browser.",
+  "Could not unlink this account": "Could not unlink this account",
+  "Connected without a saved connection": "Connected without a saved connection",
+  "Linked accounts": "Linked accounts",
+  "No linked accounts yet. Bots answer only linked accounts. Create a link code on a connection above and send it to the bot in a direct message.":
+    "No linked accounts yet. Bots answer only linked accounts. Create a link code on a connection above and send it to the bot in a direct message.",
+  "{user} in workspace {workspace}": "{user} in workspace {workspace}",
+  Unlink: "Unlink",
+  "Could not create a link code": "Could not create a link code",
+  "Could not save who this bot answers": "Could not save who this bot answers",
+  "{bot} answers only linked accounts and the people you add below.":
+    "{bot} answers only linked accounts and the people you add below.",
+  "Send this code to {bot} in a direct message within 10 minutes:":
+    "Send this code to {bot} in a direct message within 10 minutes:",
+  "Link code": "Link code",
+  "Create link code": "Create link code",
+  "Create new code": "Create new code",
+  "Also answer these {provider} user IDs": "Also answer these {provider} user IDs",
+  "Add at most {count} user IDs.": "Add at most {count} user IDs.",
+  "Tell other people whose bot this is when they mention it":
+    "Tell other people whose bot this is when they mention it",
+  "This bot answers only linked accounts and people you add. After you connect, create a link code on the connection to link your account.":
+    "This bot answers only linked accounts and people you add. After you connect, create a link code on the connection to link your account.",
+  "Copy command": "Copy command",
+  "Couldn't copy the command. Select it and copy it manually.":
+    "Couldn't copy the command. Select it and copy it manually.",
+  "This account's Claude Code folder is saved as a hidden value. In a terminal on this environment's machine, set CLAUDE_CONFIG_DIR to that folder, then run:":
+    "This account's Claude Code folder is saved as a hidden value. In a terminal on this environment's machine, set CLAUDE_CONFIG_DIR to that folder, then run:",
+  "This account's home folder is saved as a hidden value. In a terminal on this environment's machine, set {variable} to that folder, then run:":
+    "This account's home folder is saved as a hidden value. In a terminal on this environment's machine, set {variable} to that folder, then run:",
+  "Logged in as {account}.": "Logged in as {account}.",
+  Verify: "Verify",
+  "Open the Claude Code install guide": "Open the Claude Code install guide",
+  "Then log in on the same machine:": "Then log in on the same machine:",
+  "Log in on this environment's machine:": "Log in on this environment's machine:",
+  "Logged out": "Logged out",
+  "Checking Claude Code": "Checking Claude Code",
+  "Akeru is looking for Claude Code on this environment's machine.":
+    "Akeru is looking for Claude Code on this environment's machine.",
+  "Install Claude Code": "Install Claude Code",
+  "Claude Code is not installed on this environment's machine. Install it, then log in.":
+    "Claude Code is not installed on this environment's machine. Install it, then log in.",
+  "Log in to Claude Code": "Log in to Claude Code",
+  "Run this in a terminal on this environment's machine, then verify.":
+    "Run this in a terminal on this environment's machine, then verify.",
+  "Claude Agent ready": "Claude Agent ready",
+  "Bots on this connection use your own Claude Code login.":
+    "Bots on this connection use your own Claude Code login.",
+  "Claude Code needs attention": "Claude Code needs attention",
+  "Akeru could not use Claude Code. Fix the problem below, then verify.":
+    "Akeru could not use Claude Code. Fix the problem below, then verify.",
+  "Claude Agent": "Claude Agent",
+  "Stop using Claude Agent": "Stop using Claude Agent",
+  "Use your Claude Code login": "Use your Claude Code login",
+  "Run Claude bots on the Claude Code installed on this environment's machine, with the login you made there. No API key needed.":
+    "Run Claude bots on the Claude Code installed on this environment's machine, with the login you made there. No API key needed.",
+  "Set up your Claude Code login to chat with {bot}":
+    "Set up your Claude Code login to chat with {bot}",
+  "Akeru runs Claude Code on this machine with the login you made there. It never sees your Claude password or token.":
+    "Akeru runs Claude Code on this machine with the login you made there. It never sees your Claude password or token.",
+  "How should this account connect?": "How should this account connect?",
+  "An Anthropic API key you add from its card": "An Anthropic API key you add from its card",
+  "Claude Code on this machine, with its own login":
+    "Claude Code on this machine, with its own login",
 } as const;

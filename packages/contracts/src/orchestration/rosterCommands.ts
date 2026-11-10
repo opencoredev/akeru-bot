@@ -13,6 +13,7 @@ import {
   TrimmedNonEmptyString,
 } from "../baseSchemas.ts";
 import { McpServerId, McpServerInstructions, McpServerUrl } from "../mcpServer.ts";
+import { BotPermissionPolicy } from "../botPermissions.ts";
 import { ImageProviderId } from "../imageGeneration.ts";
 import { ModelSelection, RuntimeMode } from "./modelSelection.ts";
 import {
@@ -22,6 +23,7 @@ import {
   BotEngine,
   BotSandbox,
   BotPersonalityTone,
+  BotAllowedEnvironmentIds,
   ChannelProvider,
   ChannelBinding,
   GroupMembershipRole,
@@ -95,6 +97,9 @@ export const BotUpdateCommand = Schema.Struct({
   imageProvider: Schema.optional(Schema.NullOr(ImageProviderId)),
   personalityTone: Schema.optional(BotPersonalityTone),
   voiceEnabled: Schema.optional(Schema.Boolean),
+  allowedEnvironmentIds: Schema.optional(BotAllowedEnvironmentIds),
+  /** `null` restores the default policy. */
+  permissionPolicy: Schema.optional(Schema.NullOr(BotPermissionPolicy)),
   channelBindings: Schema.optional(Schema.Array(ChannelBinding)),
   groupId: Schema.optional(Schema.NullOr(GroupId)),
 });
@@ -115,6 +120,9 @@ export const ClientBotUpdateCommand = Schema.Struct({
   imageProvider: Schema.optional(Schema.NullOr(ImageProviderId)),
   personalityTone: Schema.optional(BotPersonalityTone),
   voiceEnabled: Schema.optional(Schema.Boolean),
+  /** Replaces the whole list. `[]` returns the bot to its home environment only. */
+  allowedEnvironmentIds: Schema.optional(BotAllowedEnvironmentIds),
+  permissionPolicy: Schema.optional(Schema.NullOr(BotPermissionPolicy)),
   groupId: Schema.optional(Schema.NullOr(GroupId)),
 });
 
@@ -305,6 +313,46 @@ export const ChannelChangeProjectCommand = Schema.Struct({
   botId: BotId,
   provider: ChannelProvider,
   projectId: ProjectId,
+});
+
+/** A one-time code an owner sends a bot in a direct message to link their messaging account. */
+export const CHANNEL_LINK_CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+
+export const CHANNEL_LINK_CODE_LENGTH = 8;
+
+export const ChannelLinkCode = Schema.String.check(Schema.isPattern(/^[A-HJ-NP-Z2-9]{8}$/u));
+
+/**
+ * Starts a link for the bot's connection. The client generates the code and shows it; the server
+ * keeps it in memory for ten minutes and accepts it once.
+ */
+export const ChannelLinkCodeCreateCommand = Schema.Struct({
+  type: Schema.Literal("channel.link-code.create"),
+  commandId: CommandId,
+  botId: BotId,
+  provider: Schema.Literals(["slack", "discord"]),
+  code: ChannelLinkCode,
+});
+
+/** Unlinks one owner identity. Bots stop answering it until it is linked again. */
+export const ChannelOwnerRemoveCommand = Schema.Struct({
+  type: Schema.Literal("channel.owner.remove"),
+  commandId: CommandId,
+  provider: Schema.Literals(["slack", "discord"]),
+  workspaceId: TrimmedNonEmptyString,
+  userId: TrimmedNonEmptyString,
+});
+
+/** Replaces who besides the owner one bot answers, and whether it tells others whose bot it is. */
+export const ChannelAccessSetCommand = Schema.Struct({
+  type: Schema.Literal("channel.access.set"),
+  commandId: CommandId,
+  botId: BotId,
+  provider: Schema.Literals(["slack", "discord"]),
+  allowedUserIds: Schema.Array(TrimmedNonEmptyString.check(Schema.isMaxLength(64))).check(
+    Schema.isMaxLength(50),
+  ),
+  replyToOthers: Schema.Boolean,
 });
 
 export const ChannelSendCommand = Schema.Struct({

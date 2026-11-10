@@ -1,7 +1,6 @@
 import { fixture, requestSignal } from "./testUtils/subscriptionAuthStorage.ts";
 import * as NodeFS from "node:fs";
 import { describe, expect, it, vi } from "vite-plus/test";
-import { ProviderInstanceId } from "@akeru/contracts";
 import * as Effect from "effect/Effect";
 import type { SubscriptionCredentialStore } from "./credentialStore.ts";
 import {
@@ -15,20 +14,20 @@ describe("subscription auth storage", () => {
     NodeFS.writeFileSync(
       authPath,
       JSON.stringify({
-        anthropic: {
+        xai: {
           type: "oauth",
           access: "first-token",
-          plan: "Max 20x",
+          plan: "SuperGrok",
           refresh: "refresh",
           expires: Date.now() + 60_000,
         },
       }),
     );
     const service = await makeTestSubscriptionAuthService(authPath);
-    const first = await service.getPlanAccess("anthropic");
+    const first = await service.getPlanAccess("xai");
     expect(first?.accountId).toBeTruthy();
     const data = JSON.parse(NodeFS.readFileSync(authPath, "utf8"));
-    data.anthropic.expires = 0;
+    data.xai.expires = 0;
     NodeFS.writeFileSync(authPath, JSON.stringify(data));
     vi.stubGlobal(
       "fetch",
@@ -46,25 +45,21 @@ describe("subscription auth storage", () => {
     );
 
     try {
-      expect(await service.getPlanAccess("anthropic")).toEqual({
+      expect(await service.getPlanAccess("xai")).toEqual({
         accessToken: "refreshed-token",
         accountId: first?.accountId,
       });
-      expect(service.statuses().find((entry) => entry.provider === "anthropic")?.plan).toBe(
-        "Max 20x",
-      );
-      expect(
-        await (await makeTestSubscriptionAuthService(authPath)).getPlanAccess("anthropic"),
-      ).toEqual({
+      expect(service.statuses().find((entry) => entry.provider === "xai")?.plan).toBe("SuperGrok");
+      expect(await (await makeTestSubscriptionAuthService(authPath)).getPlanAccess("xai")).toEqual({
         accessToken: "refreshed-token",
         accountId: first?.accountId,
       });
-      await service.logout("anthropic");
-      expect(await service.getPlanAccess("anthropic")).toBeUndefined();
+      await service.logout("xai");
+      expect(await service.getPlanAccess("xai")).toBeUndefined();
       NodeFS.writeFileSync(
         authPath,
         JSON.stringify({
-          anthropic: {
+          xai: {
             type: "oauth",
             access: "new-account-token",
             refresh: "new-refresh",
@@ -72,7 +67,7 @@ describe("subscription auth storage", () => {
           },
         }),
       );
-      expect((await service.getPlanAccess("anthropic"))?.accountId).not.toBe(first?.accountId);
+      expect((await service.getPlanAccess("xai"))?.accountId).not.toBe(first?.accountId);
     } finally {
       vi.unstubAllGlobals();
       NodeFS.rmSync(directory, { recursive: true, force: true });
@@ -147,94 +142,6 @@ describe("subscription auth storage", () => {
 
     await loginService.logout("openai-codex", "codex");
     expect(runtime.isConnected("openai-codex", "codex")).toBe(false);
-  });
-
-  it("binds a completed OAuth sign-in to its selected instance", async () => {
-    const { authPath } = fixture();
-    NodeFS.writeFileSync(
-      authPath,
-      JSON.stringify({
-        anthropic: {
-          type: "oauth",
-          access: "personal-access",
-          refresh: "personal-refresh",
-          expires: Date.now() + 60_000,
-        },
-      }),
-    );
-    const service = await makeTestSubscriptionAuthService(authPath);
-
-    const login = await service.startLogin("anthropic", {
-      instanceId: ProviderInstanceId.make("claude_work"),
-    });
-
-    const state = new URL(login.url).searchParams.get("state");
-    vi.stubGlobal(
-      "fetch",
-      vi.fn().mockResolvedValue(
-        new Response(
-          JSON.stringify({
-            access_token: "work-access",
-            refresh_token: "work-refresh",
-            expires_in: 3600,
-          }),
-          { headers: { "content-type": "application/json" } },
-        ),
-      ),
-    );
-
-    try {
-      expect(await service.completeLogin(login.loginId, `code#${state}`)).toEqual({
-        status: "connected",
-      });
-      const restarted = await makeTestSubscriptionAuthService(authPath);
-      expect(await restarted.getAccessToken("anthropic", "claude_work")).toBe("work-access");
-      expect(await restarted.getAccessToken("anthropic", "claudeAgent")).toBe("personal-access");
-      await restarted.logout("anthropic", "claude_work");
-      expect(await restarted.getAccessToken("anthropic", "claudeAgent")).toBe("personal-access");
-    } finally {
-      vi.unstubAllGlobals();
-    }
-  });
-
-  it("switches back to OAuth without retaining the API endpoint or key", async () => {
-    const { authPath } = fixture();
-    const service = await makeTestSubscriptionAuthService(authPath);
-
-    const keyLogin = await service.startLogin("anthropic", {
-      authMode: "api-key",
-      baseUrl: "https://proxy.example/v1",
-    });
-
-    await service.completeLogin(keyLogin.loginId, "old-api-key");
-    service.recordRequestFailure("anthropic", "Key rejected");
-    const oauth = await service.startLogin("anthropic");
-    const state = new URL(oauth.url).searchParams.get("state");
-    vi.stubGlobal(
-      "fetch",
-      vi.fn().mockResolvedValue(
-        new Response(
-          JSON.stringify({
-            access_token: "oauth-access",
-            refresh_token: "oauth-refresh",
-            expires_in: 3600,
-          }),
-          { headers: { "content-type": "application/json" } },
-        ),
-      ),
-    );
-
-    try {
-      expect(await service.completeLogin(oauth.loginId, `code#${state}`)).toEqual({
-        status: "connected",
-      });
-      expect(service.statuses()[0]).toMatchObject({ authMode: "oauth", health: "detected" });
-      expect(service.statuses()[0]?.baseUrl).toBeUndefined();
-      expect(service.getApiKeyCredential("anthropic")).toBeUndefined();
-      expect(NodeFS.readFileSync(authPath, "utf-8")).not.toContain("old-api-key");
-    } finally {
-      vi.unstubAllGlobals();
-    }
   });
 
   it.each(["refresh", "health"] as const)(
@@ -568,7 +475,7 @@ describe("subscription auth storage", () => {
     NodeFS.writeFileSync(
       authPath,
       JSON.stringify({
-        anthropic: {
+        xai: {
           type: "oauth",
           access: "oauth",
           refresh: "refresh",
@@ -577,27 +484,44 @@ describe("subscription auth storage", () => {
       }),
     );
     const service = await makeTestSubscriptionAuthService(authPath);
-    service.recordRequestFailure("anthropic", "Old failure");
-    const started = await service.startLogin("anthropic", { authMode: "api-key" });
+    const status = () => service.statuses().find((entry) => entry.provider === "xai");
+    service.recordRequestFailure("xai", "Old failure");
+    const started = await service.startLogin("xai", { authMode: "api-key" });
     expect(await service.completeLogin(started.loginId, " \n ")).toMatchObject({
       status: "failed",
     });
-    expect(await service.getAccessToken("anthropic")).toBe("oauth");
+    expect(await service.getAccessToken("xai")).toBe("oauth");
     expect(await service.completeLogin(started.loginId, "new-key")).toEqual({
       status: "connected",
     });
-    expect(service.statuses()[0]).toMatchObject({
-      health: "detected",
-      healthTest: { status: "not-run" },
-    });
-    expect(service.statuses()[0]?.lastFailedRequest).toBeUndefined();
-    const oauth = await service.startLogin("anthropic");
-    expect(oauth.url).toContain("https://");
-    service.cancelLogin(oauth.loginId);
-    expect(await service.getAccessToken("anthropic")).toBe("new-key");
-    await service.logout("anthropic");
-    expect(service.statuses()[0]).toMatchObject({ connected: false });
-    expect(service.statuses()[0]?.authMode).toBeUndefined();
+    expect(status()).toMatchObject({ health: "detected", healthTest: { status: "not-run" } });
+    expect(status()?.lastFailedRequest).toBeUndefined();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        Response.json({
+          device_code: "device-code",
+          user_code: "ABCD-EFGH",
+          verification_uri: "https://accounts.x.ai/device",
+          verification_uri_complete: "https://accounts.x.ai/device?code=ABCD-EFGH",
+          interval: 7,
+          expires_in: 300,
+        }),
+      ),
+    );
+
+    try {
+      const oauth = await service.startLogin("xai");
+      expect(oauth.url).toContain("https://");
+      service.cancelLogin(oauth.loginId);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+
+    expect(await service.getAccessToken("xai")).toBe("new-key");
+    await service.logout("xai");
+    expect(status()).toMatchObject({ connected: false });
+    expect(status()?.authMode).toBeUndefined();
   });
 
   it("checks custom API endpoints without exposing network errors or using OAuth refresh", async () => {
@@ -682,8 +606,10 @@ describe("subscription auth storage", () => {
     const started = await first.startLogin("anthropic");
 
     const restarted = await makeTestSubscriptionAuthService(authPath);
-    const result = await restarted.completeLogin(started.loginId, "invalid-code");
-    expect(result).toEqual({ status: "failed", error: "Invalid authorization state" });
+    expect(await restarted.completeLogin(started.loginId, "restarted-key")).toEqual({
+      status: "connected",
+    });
+    expect(restarted.getApiKeyCredential("anthropic")?.access).toBe("restarted-key");
     expect(NodeFS.statSync(`${authPath}.pending`).mode & 0o777).toBe(0o600);
   });
 
@@ -691,24 +617,34 @@ describe("subscription auth storage", () => {
     const { authPath } = fixture();
     NodeFS.writeFileSync(
       authPath,
-      JSON.stringify({ anthropic: { type: "oauth", access: "a", refresh: "r", expires: 100 } }),
+      JSON.stringify({ xai: { type: "oauth", access: "a", refresh: "r", expires: 100 } }),
     );
     const service = await makeTestSubscriptionAuthService(authPath);
 
-    expect(service.statuses([], 101)[0]?.health).toBe("expired");
-    service.recordRequestFailure("anthropic", "OAuth was revoked.", "2026-08-30T20:00:00.000Z");
-    expect(service.statuses([], 50)[0]?.health).toBe("failed-first-request");
-    service.recordRequestSuccess("anthropic", "2026-08-30T20:01:00.000Z");
-    expect(service.statuses([], 50)[0]?.health).toBe("recovered");
-    service.recordRequestFailure("anthropic", "OAuth was revoked.", "2026-08-30T20:02:00.000Z");
-    expect(service.statuses([], 50)[0]?.health).toBe("failed");
+    expect(service.statuses([], 101).find((entry) => entry.provider === "xai")?.health).toBe(
+      "expired",
+    );
+    service.recordRequestFailure("xai", "OAuth was revoked.", "2026-08-30T20:00:00.000Z");
+    expect(service.statuses([], 50).find((entry) => entry.provider === "xai")?.health).toBe(
+      "failed-first-request",
+    );
+    service.recordRequestSuccess("xai", "2026-08-30T20:01:00.000Z");
+    expect(service.statuses([], 50).find((entry) => entry.provider === "xai")?.health).toBe(
+      "recovered",
+    );
+    service.recordRequestFailure("xai", "OAuth was revoked.", "2026-08-30T20:02:00.000Z");
+    expect(service.statuses([], 50).find((entry) => entry.provider === "xai")?.health).toBe(
+      "failed",
+    );
     service.recordRequestFailure(
-      "anthropic",
+      "xai",
       "OAuth was revoked.",
       "2026-08-30T20:03:00.000Z",
       "revoked",
     );
-    expect(service.statuses([], 50)[0]?.health).toBe("revoked");
+    expect(service.statuses([], 50).find((entry) => entry.provider === "xai")?.health).toBe(
+      "revoked",
+    );
   });
 
   it("does not call an automatic OAuth refresh a successful provider request", async () => {
@@ -764,12 +700,12 @@ describe("subscription auth storage", () => {
     const service = await makeTestSubscriptionAuthService(authPath);
     const at = "2026-08-31T20:00:00.000Z";
 
-    service.recordMcpRequestFailure("builtin-executor", "The request failed.", at);
-    service.recordMcpRequestSuccess("builtin-executor", at);
-    expect(service.mcpRequestHealth("builtin-executor")?.health).toBe("recovered");
+    service.recordMcpRequestFailure("builtin-github", "The request failed.", at);
+    service.recordMcpRequestSuccess("builtin-github", at);
+    expect(service.mcpRequestHealth("builtin-github")?.health).toBe("recovered");
 
-    service.recordMcpRequestFailure("builtin-executor", "The retry failed.", at);
-    expect(service.mcpRequestHealth("builtin-executor")?.health).toBe("failed");
+    service.recordMcpRequestFailure("builtin-github", "The retry failed.", at);
+    expect(service.mcpRequestHealth("builtin-github")?.health).toBe("failed");
   });
 
   it("preserves health updates written by another service instance", async () => {

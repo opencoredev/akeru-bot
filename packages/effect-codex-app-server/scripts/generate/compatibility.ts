@@ -183,6 +183,9 @@ const isEnumUnion = Schema.is(
   }),
 );
 
+// Array.isArray alone does not narrow a ReadonlyArray out of Schema.Json.
+const isJsonArray = (value: Schema.Json): value is Schema.JsonArray => Array.isArray(value);
+
 export function applyCodex0151DefinitionCompatibility(
   exportName: string,
   definitionName: string,
@@ -193,7 +196,8 @@ export function applyCodex0151DefinitionCompatibility(
     definitionName !== "CodexErrorInfo" ||
     Predicate.isString(definitionSchema) ||
     Predicate.isNumber(definitionSchema) ||
-    Predicate.isBoolean(definitionSchema)
+    Predicate.isBoolean(definitionSchema) ||
+    isJsonArray(definitionSchema)
   ) {
     return definitionSchema;
   }

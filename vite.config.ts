@@ -153,19 +153,25 @@ export default defineConfig({
       "eslint/no-shadow": "off",
       "eslint/no-await-in-loop": "off",
       "eslint/no-underscore-dangle": "off",
+      // Type-aware rules from the enabled categories that are not on yet. Each has a finding
+      // count in docs/internals/lint.md; turn one on with its findings fixed.
       "typescript/consistent-return": "off",
       "typescript/no-base-to-string": "off",
       "typescript/no-duplicate-type-constituents": "off",
-      "typescript/no-floating-promises": "off",
+      "typescript/no-floating-promises": "error",
       "typescript/no-implied-eval": "off",
       "typescript/no-meaningless-void-operator": "off",
+      // Spreading a string into code points is deliberate in terminal key handling.
+      "typescript/no-misused-spread": ["error", { allow: ["string"] }],
       "typescript/no-redundant-type-constituents": "off",
       "typescript/no-unnecessary-boolean-literal-compare": "off",
       "typescript/no-unnecessary-type-conversion": "off",
       "typescript/no-unnecessary-type-arguments": "off",
       "typescript/no-unnecessary-type-assertion": "off",
       "typescript/no-unnecessary-type-parameters": "off",
-      "typescript/no-unsafe-type-assertion": "off",
+      // Ratchet: lands as a warning with the count in docs/internals/lint.md; moves to error
+      // when that count reaches zero. Off in tests, see the test-file override.
+      "typescript/no-unsafe-type-assertion": "warn",
       "typescript/await-thenable": "off",
       "typescript/require-array-sort-compare": "off",
       "typescript/restrict-template-expressions": "off",
@@ -213,6 +219,8 @@ export default defineConfig({
         files: ["**/*.test.{ts,tsx}", "**/test/**", "**/testUtils/**", "**/test-support/**"],
         rules: {
           "anti-slop/require-safety-comment-for-type-assertion": "off",
+          // Same reason: fixture casts such as `"thread-1" as ThreadId` are the point of a test.
+          "typescript/no-unsafe-type-assertion": "off",
           "anti-slop-effect/no-manual-tagged-construction": "off",
           // The rule already exempts *.test.ts; shared test harnesses build doubles the same way.
           "anti-slop-effect/no-service-constructor-imports": "off",
@@ -302,8 +310,9 @@ export default defineConfig({
       },
     ],
     options: {
-      // Revisit once Oxlint's tsgolint path can integrate with @effect/tsgo diagnostics.
-      typeAware: false,
+      // Type-aware rules run through oxlint-tsgolint, which builds its own TypeScript program.
+      // Effect diagnostics stay in the tsgo typecheck, so typeCheck stays off here.
+      typeAware: true,
       typeCheck: false,
     },
   },

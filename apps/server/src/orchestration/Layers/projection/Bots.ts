@@ -23,6 +23,7 @@ export function createBots({
             imageProvider: event.payload.imageProvider,
             personalityTone: event.payload.personalityTone,
             voiceEnabled: event.payload.voiceEnabled,
+            allowedEnvironmentIds: event.payload.allowedEnvironmentIds,
             channelBindings: event.payload.channelBindings,
             groupId: event.payload.groupId,
             archivedAt: null,
@@ -35,8 +36,16 @@ export function createBots({
           const existing = yield* projectionBotRepository.getById({ botId: event.payload.botId });
 
           if (Option.isNone(existing)) return;
+          const { permissionPolicy: storedPolicy, ...stored } = existing.value;
+
+          const permissionPolicy =
+            event.payload.permissionPolicy === undefined
+              ? storedPolicy
+              : (event.payload.permissionPolicy ?? undefined);
+
           yield* projectionBotRepository.upsert({
-            ...existing.value,
+            ...stored,
+            ...(permissionPolicy ? { permissionPolicy } : {}),
             ...(event.payload.name !== undefined ? { name: event.payload.name } : {}),
             ...(event.payload.title !== undefined ? { title: event.payload.title } : {}),
             ...(event.payload.label !== undefined ? { label: event.payload.label } : {}),
@@ -60,6 +69,9 @@ export function createBots({
               : {}),
             ...(event.payload.voiceEnabled !== undefined
               ? { voiceEnabled: event.payload.voiceEnabled }
+              : {}),
+            ...(event.payload.allowedEnvironmentIds !== undefined
+              ? { allowedEnvironmentIds: event.payload.allowedEnvironmentIds }
               : {}),
             ...(event.payload.channelBindings !== undefined
               ? { channelBindings: event.payload.channelBindings }

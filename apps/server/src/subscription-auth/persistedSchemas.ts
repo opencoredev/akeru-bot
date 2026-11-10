@@ -25,6 +25,7 @@ const Login = Schema.Union([
     baseUrl: Schema.optionalKey(Schema.String),
     instanceId: Schema.optionalKey(Schema.String),
   }),
+  // Retired Claude OAuth logins from older versions; read so they can be dropped.
   Schema.Struct({
     provider: Schema.Literal("anthropic"),
     verifier: Schema.String,
@@ -84,6 +85,7 @@ const HealthRecord = Schema.Struct({
   failureKind: Schema.optionalKey(FailureKind),
   healthCheckStartedAt: Schema.optionalKey(Schema.String),
   lastGenerationAt: Schema.optionalKey(Schema.String),
+  retiredLoginRemovedAt: Schema.optionalKey(Schema.String),
 });
 
 export const decodePendingLogins = Schema.decodeUnknownSync(

@@ -23,6 +23,15 @@ export function providerSupportsBaseUrl(provider: SubscriptionProviderId): boole
   return provider !== "xai";
 }
 
+/**
+ * Providers that connect with an API key only. Claude is one: Anthropic does not
+ * allow third-party apps to offer claude.ai sign-in, so Akeru takes an Anthropic API key.
+ */
+export function providerRequiresApiKey(provider: SubscriptionProviderId): boolean {
+  return provider === "anthropic" || provider === "opencode-go";
+}
+
+/** What the saved credential is. Older servers can still report a Claude OAuth login. */
 export function providerUsesApiKey(status: SubscriptionProviderStatus | undefined): boolean {
   return status?.authMode === "api-key" || status?.provider === "opencode-go";
 }

@@ -251,7 +251,7 @@ it("keeps a pending bot handoff through a loaded but empty roster", async () => 
 });
 
 describe("onboarding API-key connections", () => {
-  it.each(["openai-codex", "anthropic", "kimi-for-coding"] as const)(
+  it.each(["openai-codex", "kimi-for-coding"] as const)(
     "saves a %s key and custom endpoint, then continues",
     async (provider) => {
       await render(provider);
@@ -307,7 +307,7 @@ describe("onboarding API-key connections", () => {
 
   it("keeps failed saves on the key form and cancels the pending login", async () => {
     mocks.complete.mockResolvedValue(success({ status: "failed", error: "Key rejected" }));
-    await render("anthropic");
+    await render("kimi-for-coding");
     await click("Use an API key");
     await act(async () => mocks.form?.onKeyChange("test-key"));
     await act(async () => mocks.form?.onSave());
@@ -364,31 +364,27 @@ describe("onboarding API-key connections", () => {
     expect(mocks.open).not.toHaveBeenCalled();
   });
 
-  it("preserves OAuth and enables Claude paste completion after starting", async () => {
-    mocks.start.mockResolvedValue(
-      success({
-        loginId: "oauth-login",
-        provider: "anthropic",
-        completion: "paste",
-        url: "https://claude.example/login",
-      }),
-    );
+  it("connects Claude with an API key only and never starts a claude.ai sign-in", async () => {
     await render("anthropic");
+    expect(mocks.buttons.has("Use an API key")).toBe(false);
     await click("Connect Claude");
-    expect(mocks.start).toHaveBeenCalledWith({ environmentId, input: { provider: "anthropic" } });
-    expect(mocks.open).toHaveBeenCalledWith(
-      "https://claude.example/login",
-      "_blank",
-      "noopener,noreferrer",
-    );
-    expect(mocks.form).toBeNull();
-    await act(async () => mocks.input?.onChange({ currentTarget: { value: "oauth-code" } }));
-    await click("Connect");
+    expect(mocks.start).not.toHaveBeenCalled();
+    expect(mocks.form?.supportsBaseUrl).toBe(true);
+    await act(async () => {
+      mocks.form?.onKeyChange(" sk-ant-key ");
+      mocks.form?.onBaseUrlChange("https://proxy.example/v1");
+    });
+    await act(async () => mocks.form?.onSave());
+    expect(mocks.start).toHaveBeenCalledWith({
+      environmentId,
+      input: { provider: "anthropic", authMode: "api-key", baseUrl: "https://proxy.example/v1" },
+    });
     expect(mocks.complete).toHaveBeenCalledWith({
       environmentId,
-      input: { loginId: "oauth-login", code: "oauth-code" },
+      input: { loginId: "key-login", code: "sk-ant-key" },
     });
-    expect(mocks.next).not.toHaveBeenCalled();
+    expect(mocks.open).not.toHaveBeenCalled();
+    expect(mocks.next).toHaveBeenCalledOnce();
   });
 
   it("lets an already connected API-only user continue without OAuth", async () => {
@@ -430,14 +426,14 @@ describe("onboarding API-key connections", () => {
     mocks.start.mockResolvedValue(
       success({
         loginId: "oauth-login",
-        provider: "anthropic",
+        provider: "openai-codex",
         completion: "paste",
-        url: "https://claude.example/login",
+        url: "https://chatgpt.example/login",
       }),
     );
     mocks.complete.mockResolvedValue(AsyncResult.failure(Cause.interrupt(1)));
-    await render("anthropic");
-    await click("Connect Claude");
+    await render("openai-codex");
+    await click("Connect ChatGPT");
     await act(async () => mocks.input?.onChange({ currentTarget: { value: "oauth-code" } }));
     await click("Connect");
     expect(mocks.buttons.get("Connect")?.disabled).toBe(false);

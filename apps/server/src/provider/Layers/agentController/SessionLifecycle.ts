@@ -1,5 +1,10 @@
 import { createSessionContext } from "./SessionContext.ts";
-import { createSessionCatalogHandlers } from "./CatalogToolHandlers.ts";
+import { botScopedToolSession, workspaceToolSession } from "./BotToolSession.ts";
+import { toolPermissionsFor } from "./ToolPermissions.ts";
+import {
+  clearBotToolPermissionSession,
+  setBotToolPermissionSession,
+} from "../../tools/BotToolPermissionSessions.ts";
 import type { SessionLifecycleDependencies } from "./SessionLifecycleDependencies.ts";
 import { ProviderDriverKind } from "@akeru/contracts";
 
@@ -14,6 +19,7 @@ import {
 import * as Deferred from "effect/Deferred";
 
 import * as Effect from "effect/Effect";
+import * as Equal from "effect/Equal";
 
 import * as Semaphore from "effect/Semaphore";
 
@@ -40,7 +46,8 @@ import {
   botWorkspaceIdentity,
   botWorkspaceResourceKey,
 } from "../../botWorkspacePool.ts";
-import { AgentControllerRuntimeError } from "../../Errors.ts";
+import { AgentControllerRuntimeError, ProviderValidationError } from "../../Errors.ts";
+import { openCodePolicyBlock } from "../../opencode/OpenCodePolicyGate.ts";
 import { type AgentControllerShape } from "../../Services/AgentController.ts";
 
 import { type ActiveSession, type PendingApproval } from "./State.ts";
@@ -237,48 +244,30 @@ export function createSessionLifecycle(deps: SessionLifecycleDependencies) {
           mcpInstructions: formatMcpServerInstructions(mcpServers),
         }),
       );
-      const toolSession = { ...existing.configuredToolSession };
-      delete toolSession.botId;
-      delete toolSession.botName;
-      delete toolSession.billedBotId;
-      delete toolSession.delegation;
-      delete toolSession.workers;
-      delete toolSession.memoryHandlers;
-      delete toolSession.botState;
-      delete toolSession.imageGeneration;
       const imageGeneration = yield* deps.imageToolSettings;
       const settings = yield* deps.memorySettings();
 
-      const nextMemoryHandlers =
-        access.memoryScopes.length > 0
-          ? deps.memoryHandlers(input.memoryAccess, access.memoryScopes)
-          : undefined;
-
+      // A shared workspace can carry the session to another responding bot. Only the
+      // workspace fields carry over; everything that speaks for a bot is rebuilt for this one.
       const configuredToolSession: AkeruToolSession = {
-        ...toolSession,
-        runtimeMode: access.runtimeMode,
-        ...(botId ? { botId } : {}),
-        ...(input.botName ? { botName: input.botName } : {}),
-        ...(nextMemoryHandlers ? { memoryHandlers: nextMemoryHandlers } : {}),
-        ...(delegatedAccess && botId ? { billedBotId: botId } : {}),
-        ...(deps.wired().delegationRuntime && botId
-          ? {
-              delegation: deps.delegationFor({
-                threadId,
-                botId,
-                parentDelegation,
-                access,
-                activeChildDelegations,
-              }),
-            }
-          : {}),
-        ...(deps.wired().workerOrchestration && botId && !isWorkerThread
-          ? { workers: deps.workersFor(threadId, workerParentAccess) }
-          : {}),
-        ...(input.botId && deps.wired().botStateRuntime
-          ? { botState: deps.wired().botStateRuntime }
-          : {}),
-        imageGeneration,
+        ...workspaceToolSession(existing.configuredToolSession),
+        ...botScopedToolSession(deps, {
+          threadId,
+          startInput: input,
+          bot,
+          botId,
+          parentDelegation,
+          access,
+          delegated: delegatedAccess !== undefined,
+          activeChildDelegations,
+          isWorkerThread,
+          workerParentAccess,
+          memoryHandlers:
+            access.memoryScopes.length > 0
+              ? deps.memoryHandlers(input.memoryAccess, access.memoryScopes)
+              : undefined,
+          imageGeneration,
+        }),
       };
 
       existing.configuredToolSession = configuredToolSession;
@@ -300,6 +289,18 @@ export function createSessionLifecycle(deps: SessionLifecycleDependencies) {
     }
 
     const existingLegacy = deps.legacyResourceIdentity.get(key);
+
+    // Providers that run their own tools, such as Claude Code, read the
+    // bot's policy through this session on every tool call.
+    const legacyPermissions = {
+      botId,
+      permissions: toolPermissionsFor(deps, {
+        bot,
+        botId,
+        parentBotId: parentDelegation?.parentBotId,
+      }),
+    };
+
     const settings = yield* deps.memorySettings();
     const nextMemoryAccess = delegatedAccess ? undefined : deps.memoryAccessFor(input.memoryAccess);
 
@@ -307,6 +308,52 @@ export function createSessionLifecycle(deps: SessionLifecycleDependencies) {
       access.memoryScopes.length > 0
         ? deps.memoryHandlers(input.memoryAccess, access.memoryScopes)
         : undefined;
+
+    // Native OpenCode follows only the chat's permission mode, so a bot policy it
+    // cannot enforce refuses the turn before any OpenCode session runs.
+    const permissions = toolPermissionsFor(deps, {
+      bot,
+      botId,
+      parentBotId: parentDelegation?.parentBotId,
+    });
+
+    const readPermissionPolicy = () =>
+      permissions.readPolicy?.() ?? Promise.resolve(permissions.policy);
+
+    if (resolved && !deps.usesMastraCode(resolved.provider)) {
+      const policy = yield* deps.runMastra("permissions.readPolicy", readPermissionPolicy);
+
+      const block =
+        openCodePolicyBlock({
+          provider: resolved.provider,
+          policy,
+          runtimeMode: input.runtimeMode,
+        }) ??
+        (existingLegacy
+          ? openCodePolicyBlock({
+              provider: resolved.provider,
+              policy,
+              runtimeMode: existingLegacy.runtimeMode,
+            })
+          : undefined);
+
+      if (block) {
+        return yield* new ProviderValidationError({
+          operation: "AgentController.startSession",
+          issue: block,
+        });
+      }
+    }
+
+    // Claude Code runs on this computer with its own tools, so a remote sandbox
+    // would be acquired but never used.
+    if (resolved.provider === "claudeCode" && isRemoteBotSandbox(access.sandbox)) {
+      return yield* new ProviderValidationError({
+        operation: "AgentController.startSession",
+        issue:
+          "Claude Agent bots can only use the Local sandbox for now, because Claude Code runs on this computer. Set this bot's sandbox to Local or choose another engine.",
+      });
+    }
 
     if (
       !existing &&
@@ -317,13 +364,16 @@ export function createSessionLifecycle(deps: SessionLifecycleDependencies) {
       existingLegacy.providerInstanceId === resolved.providerInstanceId &&
       existingLegacy.botName === input.botName &&
       existingLegacy.personalityTone === personalityTone &&
-      existingLegacy.memoryAccessKey === deps.memoryAccessKey(nextMemoryAccess)
+      existingLegacy.memoryAccessKey === deps.memoryAccessKey(nextMemoryAccess) &&
+      existingLegacy.runtimeMode === input.runtimeMode &&
+      Equal.equals(existingLegacy.modelSelection, input.modelSelection)
     ) {
       const live = (yield* deps.legacyProviderBridge.listSessions()).find(
         (session) => session.threadId === threadId,
       );
 
       if (live) {
+        setBotToolPermissionSession(threadId, legacyPermissions);
         existingLegacy.memoryAccess = nextMemoryAccess;
         existingLegacy.entityMemoryAccess = input.memoryAccess;
         existingLegacy.privateBotMemory = settings.privateBotMemory;
@@ -423,6 +473,8 @@ export function createSessionLifecycle(deps: SessionLifecycleDependencies) {
         .filter(Boolean)
         .join("\n\n");
 
+      setBotToolPermissionSession(threadId, legacyPermissions);
+
       return yield* deps.legacyProviderBridge
         .startSession(threadId, {
           ...input,
@@ -443,17 +495,25 @@ export function createSessionLifecycle(deps: SessionLifecycleDependencies) {
                 entityMemoryAccess: input.memoryAccess,
                 memoryAccessKey: deps.memoryAccessKey(nextMemoryAccess),
                 privateBotMemory: settings.privateBotMemory,
+                runtimeMode: input.runtimeMode,
+                modelSelection: input.modelSelection,
+                readPermissionPolicy,
               });
 
               return session;
             }),
           ),
+          // A failed start leaves no live session for the stop path to clean up.
           Effect.tapError(() =>
-            deps
-              .runMastra("resources.release", () =>
-                deps.sessionResources.release(key, { destroy: true }),
-              )
-              .pipe(Effect.ignoreCause({ log: true })),
+            Effect.gen(function* () {
+              clearBotToolPermissionSession(threadId);
+              yield* deps.clearPreviewMcpSession(threadId);
+              yield* deps
+                .runMastra("resources.release", () =>
+                  deps.sessionResources.release(key, { destroy: true }),
+                )
+                .pipe(Effect.ignoreCause({ log: true }));
+            }),
           ),
         );
     }
@@ -465,72 +525,24 @@ export function createSessionLifecycle(deps: SessionLifecycleDependencies) {
         ? resources.workspace
         : undefined;
 
-    const registeredMemoryHandlers = nextMemoryHandlers;
-    const mcpManager = deps.sessionResources.getMcpManager(key);
-    const imageGenerationSettings = yield* deps.imageToolSettings;
-
     const toolSession: AkeruToolSession = {
-      ...(botId ? { botId } : {}),
-      ...(input.botName ? { botName: input.botName } : {}),
-      runtimeMode: access.runtimeMode,
       workspaceType,
       ...(workspace ? { workspace } : {}),
       ...(userComputerWorkspace ? { userComputerWorkspace } : {}),
-      ...(registeredMemoryHandlers ? { memoryHandlers: registeredMemoryHandlers } : {}),
-      ...(input.botId && deps.wired().botStateRuntime
-        ? { botState: deps.wired().botStateRuntime }
-        : {}),
-      imageGeneration: imageGenerationSettings,
-      catalogHandlers: createSessionCatalogHandlers(deps, {
+      ...botScopedToolSession(deps, {
         threadId,
-        botId: input.botId,
-        botName: input.botName,
-        mcpManager,
+        startInput: input,
+        bot,
+        botId,
+        parentDelegation,
+        access,
+        delegated: delegatedAccess !== undefined,
+        activeChildDelegations,
+        isWorkerThread,
+        workerParentAccess,
+        memoryHandlers: nextMemoryHandlers,
+        imageGeneration: yield* deps.imageToolSettings,
       }),
-      ...(delegatedAccess && botId ? { billedBotId: botId } : {}),
-      ...(deps.wired().delegationRuntime && botId
-        ? {
-            sendToUser: async (request) => {
-              const active = deps.sessions.get(key);
-              const turnId = active?.activeTurn?.turnId;
-
-              if (!turnId) throw new Error("User messaging requires an active turn.");
-
-              return deps.wired().delegationRuntime!.sendToUser(
-                {
-                  threadId,
-                  turnId,
-                  botId,
-                  parentDelegationId: parentDelegation?.delegationId ?? null,
-                  ancestorBotIds: parentDelegation?.ancestorBotIds ?? [],
-                  depth: parentDelegation?.depth ?? 0,
-                  access,
-                },
-                request,
-              );
-            },
-            delegation: deps.delegationFor({
-              threadId,
-              botId,
-              parentDelegation,
-              access,
-              activeChildDelegations,
-            }),
-          }
-        : {}),
-      ...(deps.wired().workerOrchestration && botId && !isWorkerThread
-        ? { workers: deps.workersFor(threadId, workerParentAccess) }
-        : {}),
-      ...(input.botId && deps.wired().channelRuntime
-        ? {
-            reactToMessage: (request, toolCallId) =>
-              deps.wired().channelRuntime!.react(threadId, input.botId!, request, toolCallId),
-            channels: {
-              create: (request) => deps.wired().channelRuntime!.create(input.botId!, request),
-              update: (request) => deps.wired().channelRuntime!.update(input.botId!, request),
-            },
-          }
-        : {}),
     };
 
     deps.toolRuntime.registerSession(key, toolSession);

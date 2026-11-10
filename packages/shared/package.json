@@ -60,9 +60,29 @@
       "types": "./src/Net.ts",
       "import": "./src/Net.ts"
     },
+    "./akeruActions": {
+      "types": "./src/akeruActions.ts",
+      "import": "./src/akeruActions.ts"
+    },
+    "./botActionRisk": {
+      "types": "./src/botActionRisk.ts",
+      "import": "./src/botActionRisk.ts"
+    },
+    "./botPermissions": {
+      "types": "./src/botPermissions.ts",
+      "import": "./src/botPermissions.ts"
+    },
+    "./environmentPlacement": {
+      "types": "./src/environmentPlacement.ts",
+      "import": "./src/environmentPlacement.ts"
+    },
     "./delegationProviders": {
       "types": "./src/delegationProviders.ts",
       "import": "./src/delegationProviders.ts"
+    },
+    "./textGenerationProviders": {
+      "types": "./src/textGenerationProviders.ts",
+      "import": "./src/textGenerationProviders.ts"
     },
     "./delegationSummaryText": {
       "types": "./src/delegationSummaryText.ts",

@@ -5,7 +5,12 @@ import { createMcpManager, type McpManager } from "@mastra/code-sdk/mcp/index";
 import type { Workspace } from "@mastra/core/workspace";
 import { createBotBrowser } from "./botBrowser.ts";
 import { createBotWorkspace, isRemoteBotSandbox } from "./botWorkspace.ts";
-import { BotWorkspacePool, type BotWorkspaceLease } from "./botWorkspacePool.ts";
+import { DURABLE_REMOTE_SANDBOXES } from "./workspace/SandboxProviders.ts";
+import {
+  BotWorkspacePool,
+  type BotWorkspaceLease,
+  type BotWorkspaceReleaseOptions,
+} from "./botWorkspacePool.ts";
 import { computerRegistry } from "./computerRegistry.ts";
 import { mcpServerNeedsBrowserAttachment } from "./McpServerConfig.ts";
 import {
@@ -110,10 +115,11 @@ export class AkeruSessionResources {
 
       const workspaceLease = await this.workspacePool.acquire(
         input.workspaceResourceKey,
-        async () => {
+        async (reattach) => {
           const workspace = await createBotWorkspace({
             io: this.options.io,
             threadId: input.resourceScope,
+            ...(reattach ? { reattach } : {}),
             workspaceId: input.workspaceId,
             identityFile: this.options.io.path.join(
               this.options.stateDir,
@@ -139,7 +145,11 @@ export class AkeruSessionResources {
               : {}),
           });
 
-          if (!workspace) throw new Error(`Workspace is unavailable for thread '${key}'.`);
+          if (!workspace) {
+            // Cleanup's reattach found no saved sandbox, which leaves nothing to clean up.
+            if (reattach) return undefined;
+            throw new Error(`Workspace is unavailable for thread '${key}'.`);
+          }
 
           return workspace;
         },
@@ -168,6 +178,17 @@ export class AkeruSessionResources {
 
       if (userComputerWorkspaceLease) {
         this.userComputerWorkspaceLeases.set(key, userComputerWorkspaceLease);
+      }
+
+      const cachedBrowser = this.browsers.resourceBrowsers.get(input.workspaceResourceKey);
+
+      // A browser keeps calling the computer of the workspace it was built for. When the pool
+      // replaced that workspace, such as after a failed wake, the cached browser is unusable.
+      if (
+        cachedBrowser &&
+        this.browsers.browserWorkspaces.get(cachedBrowser) !== workspaceLease.workspace
+      ) {
+        await this.browsers.invalidateBrowser(input.workspaceResourceKey, cachedBrowser);
       }
 
       const existingBrowser = this.browsers.resourceBrowsers.get(input.workspaceResourceKey);
@@ -237,6 +258,7 @@ export class AkeruSessionResources {
               }
             : {}),
         });
+        this.browsers.browserWorkspaces.set(browser, workspaceLease.workspace);
       }
 
       if (workspaceLease.workspace.computer && input.exclusiveComputer) {
@@ -359,11 +381,12 @@ export class AkeruSessionResources {
         botWorkspace: workspaceLease.workspace.workspace,
       };
     } catch (cause) {
+      // A failed setup may take its workspace with it only when this acquisition alone owns
+      // it; a workspace another chat holds or has used, or one reattached or woken, stays.
+      // The pool checks ownership when it accepts the release, after this chat's cleanup
+      // awaits, so a chat that joins meanwhile keeps the workspace.
       await this.releaseOnce(key, {
-        destroy:
-          input.botSandbox !== "railway" &&
-          input.botSandbox !== "tenki" &&
-          input.botSandbox !== "ascii",
+        destroy: DURABLE_REMOTE_SANDBOXES.has(input.botSandbox ?? "local") ? false : "ifUnshared",
       }).catch(() => undefined);
       throw cause;
     }
@@ -436,15 +459,12 @@ export class AkeruSessionResources {
     return this.workspacePool.retryFailedSleeps();
   }
 
-  async release(threadId: string, options?: { readonly destroy?: boolean }): Promise<void> {
+  async release(threadId: string, options?: BotWorkspaceReleaseOptions): Promise<void> {
     await this.acquisitions.get(threadId)?.catch(() => undefined);
     await this.releaseOnce(threadId, options);
   }
 
-  private async releaseOnce(
-    threadId: string,
-    options?: { readonly destroy?: boolean },
-  ): Promise<void> {
+  private async releaseOnce(threadId: string, options?: BotWorkspaceReleaseOptions): Promise<void> {
     const failures: unknown[] = [];
     const manager = this.mcpManagers.get(threadId);
     this.mcpManagers.delete(threadId);
@@ -480,7 +500,12 @@ export class AkeruSessionResources {
         else this.browsers.browserAttributions.get(resourceKey)?.delete(botKey);
       }
 
-      if (options?.destroy) this.browsers.browserDestroyRequests.add(resourceKey);
+      const destroyBrowser =
+        options?.destroy === "ifUnshared"
+          ? this.workspaceLeases.get(threadId)?.unshared() === true
+          : options?.destroy === true;
+
+      if (destroyBrowser) this.browsers.browserDestroyRequests.add(resourceKey);
       const references = Math.max(0, (this.browsers.browserReferences.get(resourceKey) ?? 1) - 1);
 
       if (references > 0) {

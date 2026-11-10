@@ -6,8 +6,13 @@ import { createMemoryState } from "@chat-adapter/state-memory";
 import { createWhatsAppAdapter } from "@chat-adapter/whatsapp";
 import { TelegramProvider } from "@mastra/telegram";
 import { createiMessageAdapter } from "@photon-ai/chat-adapter-imessage";
-import { BotId, type ChannelProvider } from "@akeru/contracts";
-import { type Adapter, Chat, ConsoleLogger, type Message } from "chat";
+import { BotId, type ChannelProvider, DISCORD_OWNER_WORKSPACE_ID } from "@akeru/contracts";
+import {
+  SLACK_USERS_READ_MISSING,
+  slackMembership,
+  slackTokenCanReadUsers,
+} from "./ChannelSlackMembership.ts";
+import { type Adapter, Chat, ConsoleLogger, type Message, type Thread } from "chat";
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
@@ -33,8 +38,16 @@ import {
   type InboundCallback,
   type ChannelTransportContext,
   type ChannelConnectInput,
+  type ChannelInboundKind,
+  type ChannelSender,
+  type ChannelSenderMembership,
 } from "./ChannelRuntimeTypes.ts";
-import { normalizedInboundMessage, mentionWithContext } from "./ChannelInbound.ts";
+import {
+  normalizedInboundMessage,
+  mentionWithContext,
+  taggedUserIds,
+  withoutSelfMention,
+} from "./ChannelInbound.ts";
 
 export const fromTransportRuntime = (runtime: ChannelTransportRuntime): ChannelRuntimeEntry => {
   const { webhook, react, removeReaction, isHealthy, settled } = runtime;
@@ -261,19 +274,69 @@ export const startRenewingGateway = (
     } satisfies RenewingGateway;
   });
 
+/** What the access check needs to know about the connected bot itself. */
+export interface ChannelBotIdentity {
+  readonly botUserId: () => string | undefined;
+  /** The workspace the bot is installed in (a Slack team ID). */
+  readonly homeWorkspaceId: () => string | undefined;
+  /** The workspace the platform confirms a user belongs to. Never read from the event. */
+  readonly verifiedWorkspace: (userId: string) => Promise<ChannelSenderMembership>;
+}
+
+const gateSender = (identity: ChannelBotIdentity, message: Message): ChannelSender => ({
+  userId: message.author.userId,
+  displayName: message.author.fullName || message.author.userName,
+  verifiedWorkspace: () => identity.verifiedWorkspace(message.author.userId),
+});
+
+/**
+ * DM, mention, and thread handlers for providers whose bots answer only linked people. Each
+ * message passes the access check before the bot subscribes to its thread, reads history, or
+ * starts a turn, so a stranger's message costs nothing. Edits never start turns.
+ */
 export function registerThreadedHandlers(
   chat: Chat,
-  provider: ChannelProvider,
+  provider: "slack" | "discord",
   context: ChannelTransportContext,
+  identity: ChannelBotIdentity,
+  onDirectMessage: InboundCallback,
 ) {
+  const text = (message: Message) => withoutSelfMention(message.text, identity.botUserId());
+
+  const admitted = async (thread: Thread, message: Message, kind: ChannelInboundKind) => {
+    if (ignoredInbound(provider, message) || message.metadata.edited) return false;
+
+    const decision = await context.gate({
+      kind,
+      externalThreadId: thread.id,
+      externalMessageId: message.id,
+      sender: gateSender(identity, message),
+      text: text(message),
+      mentionedUserIds: taggedUserIds(message, identity.botUserId()),
+      homeWorkspaceId: identity.homeWorkspaceId(),
+    });
+
+    if (decision.type === "turn") return true;
+
+    if (decision.type === "reply") await thread.post(decision.text).catch(() => undefined);
+
+    if (decision.unsubscribe) await thread.unsubscribe().catch(() => undefined);
+
+    return false;
+  };
+
+  chat.onDirectMessage(async (thread, message) => {
+    if (!(await admitted(thread, message, "direct"))) return;
+    await onDirectMessage(normalizedInboundMessage(thread, message, text(message)));
+  });
   chat.onNewMention(async (thread, message) => {
-    if (ignoredInbound(provider, message)) return;
+    if (!(await admitted(thread, message, "mention"))) return;
     await thread.subscribe();
-    await context.onMention(await mentionWithContext(thread, message));
+    await context.onMention(await mentionWithContext(thread, message, identity.botUserId()));
   });
   chat.onSubscribedMessage(async (thread, message) => {
-    if (ignoredInbound(provider, message)) return;
-    await context.onSubscribedMessage(normalizedInboundMessage(thread, message));
+    if (!(await admitted(thread, message, message.isMention ? "mention" : "thread"))) return;
+    await context.onSubscribedMessage(normalizedInboundMessage(thread, message, text(message)));
   });
 }
 
@@ -459,6 +522,17 @@ export const startSlack = (
       webClientOptions: { retryConfig: { retries: 0 }, rejectRateLimitedCalls: true },
     });
 
+    // The bot's own team: people from other organizations in Slack Connect channels never count.
+    // Read before Socket Mode starts in `initialize`, so the first delivered message already has it.
+    const auth = yield* fromPromise(() => adapter.webClient.auth.test());
+
+    if (!auth.team_id) return yield* failWith("Slack bot credentials are invalid.");
+    const teamId = auth.team_id;
+
+    // Slack lists the token's scopes on every reply. Without `users:read` no one can be confirmed
+    // as a member, so the connected binding says what to fix.
+    const canReadUsers = slackTokenCanReadUsers(auth.response_metadata?.scopes);
+
     const state = createMemoryState();
     yield* fromPromise(() => state.connect());
     yield* fromPromise(() =>
@@ -472,8 +546,19 @@ export const startSlack = (
       state,
     });
 
-    onDirectText(chat, "slack", onDirectMessage);
-    registerThreadedHandlers(chat, "slack", context);
+    const verifiedWorkspace = slackMembership({
+      lookup: (userId) => adapter.webClient.users.info({ user: userId }),
+      homeTeamId: () => teamId,
+      now: () => performance.now(),
+    });
+
+    registerThreadedHandlers(
+      chat,
+      "slack",
+      context,
+      { botUserId: () => adapter.botUserId, homeWorkspaceId: () => teamId, verifiedWorkspace },
+      onDirectMessage,
+    );
     yield* initializeChannelChat(chat);
 
     if (!adapter.botUserId) {
@@ -494,6 +579,7 @@ export const startSlack = (
         post: (externalThreadId, text) => postChannelText(chat, "slack", externalThreadId, text),
         shutdown: shutdownChat(chat),
       },
+      ...(canReadUsers ? {} : { warning: SLACK_USERS_READ_MISSING }),
     } satisfies StartedTransport;
   });
 
@@ -525,8 +611,21 @@ export const startDiscord = (
       state: createMemoryState(),
     });
 
-    onDirectText(chat, "discord", onDirectMessage);
-    registerThreadedHandlers(chat, "discord", context);
+    registerThreadedHandlers(
+      chat,
+      "discord",
+      context,
+      {
+        botUserId: () => adapter.botUserId,
+        homeWorkspaceId: () => undefined,
+        // Discord user IDs are global, so every Discord account shares one workspace.
+        verifiedWorkspace: async () => ({
+          kind: "member",
+          workspaceId: DISCORD_OWNER_WORKSPACE_ID,
+        }),
+      },
+      onDirectMessage,
+    );
     yield* initializeChannelChat(chat);
 
     const identity = yield* fromPromise(() => adapter.getUser(input.applicationId)).pipe(

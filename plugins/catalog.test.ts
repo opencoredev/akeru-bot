@@ -27,7 +27,6 @@ const EXPECTED_DIRECTORY_IDS = [
   "docusign",
   "dropbox",
   "exa",
-  "executor",
   "figma",
   "firecrawl",
   "framer",
@@ -175,7 +174,7 @@ describe("plugin catalog loader", () => {
     const directory = loadDirectoryCatalog();
     const catalog = loadCatalog();
     expect(directory.map((plugin) => plugin.id).toSorted()).toEqual(EXPECTED_DIRECTORY_IDS);
-    expect(new Set(directory.map((plugin) => plugin.id)).size).toBe(54);
+    expect(new Set(directory.map((plugin) => plugin.id)).size).toBe(53);
     expect(catalog.map((plugin) => plugin.id)).toEqual(EXPECTED_INSTALLABLE_IDS);
     expect(catalog.map((plugin) => `builtin-${plugin.id}`)).toEqual(
       EXPECTED_INSTALLABLE_IDS.map((id) => `builtin-${id}`),
@@ -262,13 +261,13 @@ describe("plugin catalog loader", () => {
         plugin.catalogStatus === "verification-pending",
     );
 
-    expect(pending).toHaveLength(54);
+    expect(pending).toHaveLength(53);
     expect(pending.filter((plugin) => plugin.catalogStatus === "approval-pending")).toHaveLength(
       16,
     );
     expect(
       pending.filter((plugin) => plugin.catalogStatus === "verification-pending"),
-    ).toHaveLength(38);
+    ).toHaveLength(37);
 
     for (const plugin of pending) {
       expect(["approval-pending", "verification-pending"]).toContain(plugin.catalogStatus);
@@ -318,15 +317,6 @@ describe("plugin catalog loader", () => {
       requiredCredentials: [],
       documentationUrl: "https://typefully.com/ai-agents",
       transport: { type: "url", url: "https://mcp.typefully.com/mcp" },
-      connection: { type: "verification-pending" },
-      catalogStatus: "verification-pending",
-    });
-    expect(byId.get("executor")).toMatchObject({
-      kind: "mcp-url",
-      url: "https://executor.sh/mcp",
-      authentication: "oauth",
-      requiredCredentials: [],
-      transport: { type: "url", url: "https://executor.sh/mcp" },
       connection: { type: "verification-pending" },
       catalogStatus: "verification-pending",
     });

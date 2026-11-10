@@ -1,0 +1,155 @@
+{
+  // Dead-code check: unused files, dependencies, and exports. Run `vp run knip`.
+  // Findings and exceptions are explained in docs/internals/dead-code.md.
+  "$schema": "https://unpkg.com/knip@6/schema-jsonc.json",
+  "ignore": [
+    ".repos/**",
+    // Installed from the tripwire.sh registry; apps/web/dither-kit.json tracks these files.
+    "apps/web/src/components/dither-kit/**",
+    // Design-system primitives stay available whether or not a screen uses them yet.
+    "apps/web/src/components/ui/**",
+    // Backlog: unused files that need a product or device check before removal. Each is
+    // described in docs/internals/dead-code.md; delete the entry with the file.
+    "apps/web/src/components/roster/ActiveBotHeaderChip.tsx",
+    "apps/mobile/src/features/usage/UsageDailyChart.tsx",
+  ],
+  // Exports used only inside their own module are not dead code.
+  "ignoreExportsUsedInFile": true,
+  // System tools invoked from scripts and tests, plus the globally installed EAS CLI.
+  "ignoreBinaries": [
+    "eas",
+    "file",
+    // Guest-sandbox lock tool; the append shell test runs it when the host has it.
+    "flock",
+    "mkfifo",
+    "openssl",
+    "plutil",
+    "schtasks.exe",
+    "sha256sum",
+    "sips",
+  ],
+  "ignoreDependencies": [
+    // The @effect/tsgo patch provides the language service named in tsconfig plugins.
+    "@effect/language-service",
+    // Backlog, see docs/internals/dead-code.md: Android userInterfaceStyle needs it installed.
+    "expo-system-ui",
+  ],
+  "rules": {
+    // Ratchet: unused exports and types are counted in docs/internals/dead-code.md and do not
+    // fail the run yet. Every other issue type fails.
+    "exports": "warn",
+    "types": "warn",
+    "duplicates": "warn",
+  },
+  "workspaces": {
+    ".": {
+      // plugins/ holds the curated plugin catalog code, imported by the server and scripts.
+      "project": ["*.ts", "plugins/**/*.ts"],
+      "ignoreDependencies": [
+        // Pinned to the Oxlint version Vite+ resolves; see docs/internals/lint.md.
+        "@oxlint/plugins",
+        // Hoisted for babel-preset-expo in EAS builds (added with the EAS CI setup).
+        "@babel/plugin-transform-react-jsx",
+      ],
+    },
+    "apps/server": {
+      "entry": [
+        "src/service-launcher.ts",
+        "scripts/*.ts",
+        "integration/**/*.ts",
+        "src/**/*.test.ts",
+        // Compile-only type tests; the typecheck is their runner.
+        "src/**/*.types.ts",
+      ],
+      "project": ["src/**/*.ts", "scripts/**/*.ts", "integration/**/*.ts"],
+      // Kept external by the CLI bundle (scripts/lib/cli-external-packages.ts) and loaded at
+      // runtime by bundled code. @akeru/web is a build dependency for the bundled web client.
+      "ignoreDependencies": [
+        "@akeru/web",
+        "@effect/platform-node-shared",
+        "libsql",
+        "msgpackr-extract",
+        "node-pty",
+      ],
+    },
+    "apps/web": {
+      "entry": ["index.html", "scripts/*.ts", "src/**/*.test.{ts,tsx}", "test/**/*.{ts,tsx}"],
+      "project": ["src/**/*.{ts,tsx,css}", "scripts/**/*.ts", "test/**/*.{ts,tsx,css}"],
+      // Backlog, see docs/internals/dead-code.md: no test starts the MSW worker.
+      "ignoreDependencies": ["msw"],
+    },
+    "apps/desktop": {
+      "entry": [
+        "src/main.ts",
+        "src/preload.ts",
+        "src/preview-pick-preload.ts",
+        "src/preview-pip-preload.ts",
+        "scripts/*.{ts,mjs,cjs}",
+        "src/**/*.test.ts",
+        // Read by scripts/build-preview-annotation-css.mjs, which generates the styles module.
+        "src/preview/Annotation.css",
+      ],
+      "project": ["src/**/*.{ts,css}", "scripts/**/*.{ts,mjs,cjs}"],
+      // The desktop artifact build in scripts/ drives electron-builder for this package.
+      "ignoreDependencies": ["electron-builder"],
+    },
+    "apps/mobile": {
+      "entry": [
+        // Local Expo modules are installed as file: dependencies, so their index is an entry.
+        "modules/*/index.ts",
+        // Metro resolves platform files such as Foo.ios.tsx for `import "./Foo"`.
+        "src/**/*.{ios,android}.{ts,tsx}",
+        "modules/*/src/**/*.{ios,android}.{ts,tsx}",
+        "src/**/*.test.{ts,tsx}",
+        // app.config.ts loads its Expo config plugins by path, some only for certain builds.
+        "plugins/*.cjs",
+      ],
+      // plugins/ holds the Expo config plugins app.config.ts loads.
+      "project": [
+        "*.ts",
+        "*.css",
+        "src/**/*.{ts,tsx,css}",
+        "modules/**/*.{ts,tsx}",
+        "plugins/**/*.cjs",
+      ],
+      // dm-sans: loaded by the expo-font config plugin from a path in app.config.ts.
+      // xcode: only named in a JSDoc type in plugins/lib; @expo/config-plugins provides it.
+      "ignoreDependencies": ["@expo-google-fonts/dm-sans", "xcode"],
+    },
+    "apps/marketing": {
+      // Vercel routing middleware, deployed beside the Astro build.
+      "entry": ["middleware.ts", "src/**/*.test.ts"],
+    },
+    "infra/feedback": {
+      "entry": ["alchemy.run.ts", "src/**/*.test.ts"],
+      "project": ["*.ts", "src/**/*.ts"],
+    },
+    "oxlint-plugin-akeru": {
+      "entry": ["index.ts", "**/*.test.ts"],
+      "project": ["**/*.ts"],
+    },
+    // Vendored from upstream anti-slop; its README records local changes.
+    "oxlint-plugin-anti-slop": {
+      "ignore": ["**"],
+    },
+    "packages/*": {
+      "entry": ["src/**/*.test.ts"],
+      "project": ["src/**/*.ts"],
+    },
+    // The generated protocol packages also carry generator scripts and probes.
+    "packages/effect-acp": {
+      "entry": ["scripts/*.ts", "test/**/*.ts", "src/**/*.test.ts"],
+      "project": ["src/**/*.ts", "scripts/**/*.ts", "test/**/*.ts"],
+    },
+    "packages/effect-codex-app-server": {
+      "entry": ["scripts/*.ts", "test/**/*.ts", "src/**/*.test.ts"],
+      "project": ["src/**/*.ts", "scripts/**/*.ts", "test/**/*.ts"],
+    },
+    "scripts": {
+      "entry": ["*.{ts,mjs,cjs}", "mobile-showcase/**/*.ts"],
+      "project": ["**/*.{ts,mjs,cjs}"],
+      // Backlog, see docs/internals/dead-code.md: the dev runner names it only as a --filter.
+      "ignoreDependencies": ["@akeru/contracts"],
+    },
+  },
+}

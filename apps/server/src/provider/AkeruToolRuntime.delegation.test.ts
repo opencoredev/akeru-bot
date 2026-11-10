@@ -9,7 +9,10 @@ import {
 } from "@akeru/contracts";
 import { createAkeruToolRuntime, type AkeruToolSession } from "./AkeruToolRuntime.ts";
 import { AkeruWorkerError } from "./AkeruWorkerRuntime.ts";
-import { makeAkeruToolRuntimeTestSupport } from "./test-support/AkeruToolRuntime.ts";
+import {
+  approveAsOwner,
+  makeAkeruToolRuntimeTestSupport,
+} from "./test-support/AkeruToolRuntime.ts";
 
 const { directories, workspace } = makeAkeruToolRuntimeTestSupport();
 
@@ -68,7 +71,7 @@ describe("AkeruToolRuntime", () => {
     };
 
     await expect(runtime.execute(execution)).rejects.toThrow("requires approval");
-    runtime.grantApproval(execution);
+    approveAsOwner(runtime, execution);
     await expect(runtime.execute(execution)).resolves.toEqual({ delivered: true });
     expect(send).toHaveBeenCalledOnce();
   });
@@ -252,7 +255,7 @@ describe("AkeruToolRuntime", () => {
       },
     ]) {
       await expect(runtime.execute(execution)).rejects.toThrow("requires approval");
-      runtime.grantApproval(execution);
+      approveAsOwner(runtime, execution);
       await expect(runtime.execute(execution)).resolves.toBeDefined();
     }
 
@@ -314,7 +317,7 @@ describe("AkeruToolRuntime", () => {
         approvalMode: "require-grant" as const,
       },
     ]) {
-      if (execution.toolId === "StopAgent") runtime.grantApproval(execution);
+      if (execution.toolId === "StopAgent") approveAsOwner(runtime, execution);
       receipts.length = 0;
       await expect(runtime.execute(execution)).resolves.toMatchObject({
         receiptId: execution.toolCallId,
@@ -367,7 +370,7 @@ describe("AkeruToolRuntime", () => {
         },
       },
     });
-    runtime.grantApproval(execution);
+    approveAsOwner(runtime, execution);
 
     await expect(runtime.execute(execution)).resolves.toMatchObject({
       phase: "failure",

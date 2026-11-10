@@ -160,6 +160,38 @@ describe("latestBotThreadFailure", () => {
     ).toEqual({ message: "Claude is not signed in.", unavailability: "missing-login" });
   });
 
+  it("explains a refused handoff while the working bot keeps a healthy session", () => {
+    const refusal: OrchestrationThreadActivity = {
+      ...startFailed,
+      payload: {
+        detail: "Another bot is still working in this chat. Send again when it finishes.",
+        requestId: "message-specialist",
+      },
+    };
+
+    const bossTurn = { ...runningTurn, state: "completed" as const, completedAt: timestamp };
+
+    const failure = latestBotThreadFailure({
+      activities: [refusal],
+      latestTurn: bossTurn,
+      session: { status: "ready", lastError: null },
+      lastUserMessageAt: laterTimestamp,
+    });
+
+    expect(failure?.message).toBe(
+      "Another bot is still working in this chat. Send again when it finishes.",
+    );
+    // A healthy session with no refusal recorded for the newest message shows nothing.
+    expect(
+      latestBotThreadFailure({
+        activities: [{ ...warning, kind: "runtime.error", createdAt: laterTimestamp }],
+        latestTurn: bossTurn,
+        session: { status: "ready", lastError: null },
+        lastUserMessageAt: laterTimestamp,
+      }),
+    ).toBeNull();
+  });
+
   it("explains a newer request after an earlier turn completed", () => {
     const completedTurn = { ...runningTurn, state: "completed" as const, completedAt: timestamp };
     expect(
