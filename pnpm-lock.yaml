@@ -65,10 +65,11 @@ overrides:
   '@fastify/busboy@<3.2.2': 3.2.2
   '@grpc/grpc-js@<1.14.5': 1.14.5
   '@hono/node-server@<2.1.3': 2.1.3
-  '@modelcontextprotocol/client@<2.2.0': 2.2.0
+  '@modelcontextprotocol/client@>=2.0.0 <2.3.0': 2.3.0
   '@modelcontextprotocol/node@<2.1.0': 2.1.0
   '@modelcontextprotocol/sdk@<1.32.0': 1.32.0
-  '@modelcontextprotocol/server@<2.1.0': 2.1.0
+  '@modelcontextprotocol/server@>=2.0.0 <2.3.0': 2.3.0
+  '@modelcontextprotocol/server-legacy@>=2.0.0 <2.3.1': 2.3.1
   '@opentelemetry/core@<2.8.0': 2.8.0
   '@vitest/browser@>=4.1.0 <4.1.12': 4.1.12
   '@vitest/browser-preview@>=4.1.0 <4.1.12': 4.1.12
@@ -133,7 +134,7 @@ patchedDependencies:
   '@ff-labs/fff-node@0.9.4': ab9ff544009e1891cfe3930105862d3699007f38922a79f3c98d90018deca368
   '@legendapp/list@3.3.5': 064530db83875fa671559a81ae42dc159726dc2dd6ec4c982da44ff7c7a74706
   '@mastra/mcp@1.17.2': 9b6d63569c5225bf2803a5ce1bbf1e470192f3fc21af9e2a4dd321d64dc9cbc4
-  '@modelcontextprotocol/client@2.2.0': b2032d3afa62e1572259ee982fb6185f74769ef8f57c6e14aaac610e783ac9f9
+  '@modelcontextprotocol/client@2.3.0': b2032d3afa62e1572259ee982fb6185f74769ef8f57c6e14aaac610e783ac9f9
   '@pierre/diffs@1.3.0-beta.10': 7ef7cb0cbabb17c15cdb137554068b36f15f6f5265e73fb51452aa3380db91aa
   '@react-native-menu/menu@2.0.0': c7f66d121c726ade4f5c4e1aed11a691e5711d244c544084e289ac26132a0045
   '@react-native/gradle-plugin@0.85.3': c1b594a16e682d621b6a960926f8ce13fc92edfb397884cfe7fcb0518996a784
@@ -1096,8 +1097,8 @@ importers:
         specifier: 1.17.2
         version: 1.17.2(patch_hash=9b6d63569c5225bf2803a5ce1bbf1e470192f3fc21af9e2a4dd321d64dc9cbc4)(@mastra/core@1.63.0(@bufbuild/protobuf@2.14.0)(@grpc/grpc-js@1.14.5)(ai@6.0.266(zod@4.6.7))(bufferutil@4.1.0)(express@5.2.1)(utf-8-validate@6.0.6)(zod@4.6.7))(express@5.2.1)(hono@4.13.11)(react-dom@19.2.6(react@19.2.6))(react@19.2.6)(zod@4.4.3)
       '@modelcontextprotocol/client':
-        specifier: 2.2.0
-        version: 2.2.0(patch_hash=b2032d3afa62e1572259ee982fb6185f74769ef8f57c6e14aaac610e783ac9f9)
+        specifier: 2.3.0
+        version: 2.3.0(patch_hash=b2032d3afa62e1572259ee982fb6185f74769ef8f57c6e14aaac610e783ac9f9)
       '@types/pngjs':
         specifier: 6.0.5
         version: 6.0.5
@@ -4016,20 +4017,20 @@ packages:
   '@mermaid-js/parser@1.2.1':
     resolution: {integrity: sha512-n12NohV3mrUyUL2o93IgG/ifeW9FTyeJn3zDxkhwa8MJ9Fxg3HQMlA3RiGmD/3UnJvheztkjjQAjA2T4LmUcpw==}
 
-  '@modelcontextprotocol/client@2.2.0':
-    resolution: {integrity: sha512-LxCou/CSYQ6dwEnjhLZY0KnEuc8V4UJ3IEQCl/uR2yHobSQIEdJKUlKLRYRF5i5FqRGHy1eK7une3aAWDHLtig==}
+  '@modelcontextprotocol/client@2.3.0':
+    resolution: {integrity: sha512-pbHtGj6EeFCHngFE8gtNPaKrsj8Mb1IMw45BLcaPML/m2WTxI7pyYmeNQvaux88Lw8BSO5r7nyRbUyIkICmGrg==}
     engines: {node: '>=20'}
 
   '@modelcontextprotocol/core@2.0.0':
     resolution: {integrity: sha512-pJCEwGG7Lfr/+PQp9ZTwKXNeO5wzbfKL7H3MYpCorM4oFBoQrdjnBgEoqG+RjhsvS1FKrDbKux+M1HhlnGWqcA==}
     engines: {node: '>=20'}
 
-  '@modelcontextprotocol/core@2.1.0':
-    resolution: {integrity: sha512-YdFj5gMRHr0gYNAhTbQDgjLHiEJdIAUYxomhKseUNye7ZGlISQmUoLh2sveFFCiQ7j2YMffT1kgSND0FSfIFjQ==}
+  '@modelcontextprotocol/core@2.3.0':
+    resolution: {integrity: sha512-09BHFaNVBe5pB2AhzCfLj0cqmsKLERvZQ4FblzP90UMGLaXVqdZPByFjURwsUYCmxonUW2yAwgTTvle+8O2/8w==}
     engines: {node: '>=20'}
 
-  '@modelcontextprotocol/core@2.2.0':
-    resolution: {integrity: sha512-iLhmprRmWI8EcosOA3wVvww22z02NkgqhV4fBH6f/odQBsi7xnJc0HGmi21yWO+/iKw2yzqVE127Zhna5/+JXw==}
+  '@modelcontextprotocol/core@2.3.1':
+    resolution: {integrity: sha512-laVmIhPGpWi7rG9q+0UigblRN0Hws/Yjlb6qLFtVqryXVLkc4h+yN8z731POD2LnAGQlFe7/tXhUm7Bi0YB91g==}
     engines: {node: '>=20'}
 
   '@modelcontextprotocol/ext-apps@1.7.5':
@@ -4050,7 +4051,7 @@ packages:
     resolution: {integrity: sha512-6xg3iWVcOfiL8Y7rI6xUqXD0lI2AY5q3djsa/cOi1IJUSwx06t0gvhSwU/6mIIohrFlt40/ANUG56DQ0HLhILQ==}
     engines: {node: '>=20'}
     peerDependencies:
-      '@modelcontextprotocol/server': ^2.1.0
+      '@modelcontextprotocol/server': 2.3.0
       hono: 4.13.11
     peerDependenciesMeta:
       hono:
@@ -4066,8 +4067,8 @@ packages:
       '@cfworker/json-schema':
         optional: true
 
-  '@modelcontextprotocol/server-legacy@2.0.0':
-    resolution: {integrity: sha512-LnffC1BSqFMHtMQxEz92lqDpHWma+ErV3ghdHDgdkCyYzVcCYKcUT5loq4kflty+Bf9C9qjJqbnphyBWyCqo8Q==}
+  '@modelcontextprotocol/server-legacy@2.3.1':
+    resolution: {integrity: sha512-+cuB+hl7s8DiFXIt13le3cD2wZPOeDYwlycAkRMPljqqNbOLekGRiyslx8WXfqaXSCveS1eDD8/B8rmxz9BZFQ==}
     engines: {node: '>=20'}
     deprecated: This package is a frozen copy of v1's SSE transport and OAuth Authorization Server helpers for migration purposes only. Use StreamableHTTP from @modelcontextprotocol/server and a dedicated OAuth server in production. Will not receive new features.
     peerDependencies:
@@ -4076,8 +4077,8 @@ packages:
       express:
         optional: true
 
-  '@modelcontextprotocol/server@2.1.0':
-    resolution: {integrity: sha512-FdvwZU5N03O77Suh35JqjAqq5R1ZTEPFtwu6N4BgBq28qrQtrCnpbLL5U2pwYCuE194jAw0xnlOVmIqhfoYuUQ==}
+  '@modelcontextprotocol/server@2.3.0':
+    resolution: {integrity: sha512-+6b0LdsQLmHsvS7J6sQJ4weTpzUn61fU1JKS+321/+IyDYoHW5CR2Tgqcs6GgAAQvlesCo6yX3xttgmx+XGtJw==}
     engines: {node: '>=20'}
 
   '@mongodb-js/saslprep@1.4.13':
@@ -17903,7 +17904,7 @@ snapshots:
       '@isaacs/ttlcache': 2.1.5
       '@lukeed/uuid': 2.0.1
       '@mastra/schema-compat': 1.3.7(zod@4.4.3)
-      '@modelcontextprotocol/server': 2.1.0
+      '@modelcontextprotocol/server': 2.3.0
       '@sindresorhus/slugify': 2.2.1
       '@standard-schema/spec': 1.1.0
       ajv: 8.20.0
@@ -17949,7 +17950,7 @@ snapshots:
       '@isaacs/ttlcache': 2.1.5
       '@lukeed/uuid': 2.0.1
       '@mastra/schema-compat': 1.3.7(zod@4.6.7)
-      '@modelcontextprotocol/server': 2.1.0
+      '@modelcontextprotocol/server': 2.3.0
       '@sindresorhus/slugify': 2.2.1
       '@standard-schema/spec': 1.1.0
       ajv: 8.20.0
@@ -18011,13 +18012,13 @@ snapshots:
   '@mastra/mcp@1.17.2(patch_hash=9b6d63569c5225bf2803a5ce1bbf1e470192f3fc21af9e2a4dd321d64dc9cbc4)(@mastra/core@1.63.0(@bufbuild/protobuf@2.12.1)(@grpc/grpc-js@1.14.5)(ai@6.0.266(zod@4.4.3))(bufferutil@4.1.0)(express@5.2.1)(utf-8-validate@6.0.6)(zod@4.4.3))(express@5.2.1)(hono@4.13.11)(zod@4.4.3)':
     dependencies:
       '@mastra/core': 1.63.0(@bufbuild/protobuf@2.12.1)(@grpc/grpc-js@1.14.5)(ai@6.0.266(zod@4.4.3))(bufferutil@4.1.0)(express@5.2.1)(utf-8-validate@6.0.6)(zod@4.4.3)
-      '@modelcontextprotocol/client': 2.2.0(patch_hash=b2032d3afa62e1572259ee982fb6185f74769ef8f57c6e14aaac610e783ac9f9)
+      '@modelcontextprotocol/client': 2.3.0(patch_hash=b2032d3afa62e1572259ee982fb6185f74769ef8f57c6e14aaac610e783ac9f9)
       '@modelcontextprotocol/core': 2.0.0
       '@modelcontextprotocol/ext-apps': 1.7.5(@modelcontextprotocol/sdk@1.32.0(zod@4.4.3))(zod@4.4.3)
-      '@modelcontextprotocol/node': 2.1.0(@modelcontextprotocol/server@2.1.0)(hono@4.13.11)
+      '@modelcontextprotocol/node': 2.1.0(@modelcontextprotocol/server@2.3.0)(hono@4.13.11)
       '@modelcontextprotocol/sdk': 1.32.0(zod@4.4.3)
-      '@modelcontextprotocol/server': 2.1.0
-      '@modelcontextprotocol/server-legacy': 2.0.0(express@5.2.1)
+      '@modelcontextprotocol/server': 2.3.0
+      '@modelcontextprotocol/server-legacy': 2.3.1(express@5.2.1)
       exit-hook: 5.1.0
       fast-deep-equal: 3.1.3
     transitivePeerDependencies:
@@ -18032,13 +18033,13 @@ snapshots:
   '@mastra/mcp@1.17.2(patch_hash=9b6d63569c5225bf2803a5ce1bbf1e470192f3fc21af9e2a4dd321d64dc9cbc4)(@mastra/core@1.63.0(@bufbuild/protobuf@2.14.0)(@grpc/grpc-js@1.14.5)(ai@6.0.266(zod@4.6.7))(bufferutil@4.1.0)(express@5.2.1)(utf-8-validate@6.0.6)(zod@4.6.7))(express@5.2.1)(hono@4.13.11)(react-dom@19.2.6(react@19.2.6))(react@19.2.6)(zod@4.4.3)':
     dependencies:
       '@mastra/core': 1.63.0(@bufbuild/protobuf@2.14.0)(@grpc/grpc-js@1.14.5)(ai@6.0.266(zod@4.6.7))(bufferutil@4.1.0)(express@5.2.1)(utf-8-validate@6.0.6)(zod@4.6.7)
-      '@modelcontextprotocol/client': 2.2.0(patch_hash=b2032d3afa62e1572259ee982fb6185f74769ef8f57c6e14aaac610e783ac9f9)
+      '@modelcontextprotocol/client': 2.3.0(patch_hash=b2032d3afa62e1572259ee982fb6185f74769ef8f57c6e14aaac610e783ac9f9)
       '@modelcontextprotocol/core': 2.0.0
       '@modelcontextprotocol/ext-apps': 1.7.5(@modelcontextprotocol/sdk@1.32.0(zod@4.6.7))(react-dom@19.2.6(react@19.2.6))(react@19.2.6)(zod@4.4.3)
-      '@modelcontextprotocol/node': 2.1.0(@modelcontextprotocol/server@2.1.0)(hono@4.13.11)
+      '@modelcontextprotocol/node': 2.1.0(@modelcontextprotocol/server@2.3.0)(hono@4.13.11)
       '@modelcontextprotocol/sdk': 1.32.0(zod@4.6.7)
-      '@modelcontextprotocol/server': 2.1.0
-      '@modelcontextprotocol/server-legacy': 2.0.0(express@5.2.1)
+      '@modelcontextprotocol/server': 2.3.0
+      '@modelcontextprotocol/server-legacy': 2.3.1(express@5.2.1)
       exit-hook: 5.1.0
       fast-deep-equal: 3.1.3
     transitivePeerDependencies:
@@ -18135,25 +18136,25 @@ snapshots:
     dependencies:
       '@chevrotain/types': 11.1.2
 
-  '@modelcontextprotocol/client@2.2.0(patch_hash=b2032d3afa62e1572259ee982fb6185f74769ef8f57c6e14aaac610e783ac9f9)':
+  '@modelcontextprotocol/client@2.3.0(patch_hash=b2032d3afa62e1572259ee982fb6185f74769ef8f57c6e14aaac610e783ac9f9)':
     dependencies:
-      '@modelcontextprotocol/core': 2.2.0
+      '@modelcontextprotocol/core': 2.3.0
       cross-spawn: 7.0.6
       eventsource: 3.0.7
       eventsource-parser: 3.1.0
       jose: 6.2.3
       pkce-challenge: 5.0.1
-      zod: 4.4.3
+      zod: 4.6.7
 
   '@modelcontextprotocol/core@2.0.0':
     dependencies:
       zod: 4.6.7
 
-  '@modelcontextprotocol/core@2.1.0':
+  '@modelcontextprotocol/core@2.3.0':
     dependencies:
       zod: 4.6.7
 
-  '@modelcontextprotocol/core@2.2.0':
+  '@modelcontextprotocol/core@2.3.1':
     dependencies:
       zod: 4.6.7
 
@@ -18172,10 +18173,10 @@ snapshots:
       react: 19.2.6
       react-dom: 19.2.6(react@19.2.6)
 
-  '@modelcontextprotocol/node@2.1.0(@modelcontextprotocol/server@2.1.0)(hono@4.13.11)':
+  '@modelcontextprotocol/node@2.1.0(@modelcontextprotocol/server@2.3.0)(hono@4.13.11)':
     dependencies:
       '@hono/node-server': 2.1.3(hono@4.13.11)
-      '@modelcontextprotocol/server': 2.1.0
+      '@modelcontextprotocol/server': 2.3.0
     optionalDependencies:
       hono: 4.13.11
 
@@ -18223,9 +18224,9 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  '@modelcontextprotocol/server-legacy@2.0.0(express@5.2.1)':
+  '@modelcontextprotocol/server-legacy@2.3.1(express@5.2.1)':
     dependencies:
-      '@modelcontextprotocol/core': 2.0.0
+      '@modelcontextprotocol/core': 2.3.1
       content-type: 1.0.5
       cors: 2.8.6
       express-rate-limit: 8.5.2(express@5.2.1)
@@ -18235,9 +18236,9 @@ snapshots:
     optionalDependencies:
       express: 5.2.1
 
-  '@modelcontextprotocol/server@2.1.0':
+  '@modelcontextprotocol/server@2.3.0':
     dependencies:
-      '@modelcontextprotocol/core': 2.1.0
+      '@modelcontextprotocol/core': 2.3.0
       zod: 4.6.7
 
   '@mongodb-js/saslprep@1.4.13':
