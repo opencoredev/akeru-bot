@@ -1,5 +1,26 @@
 ## @akeru/web@0.0.41
 
+## 0.3.0
+
+### Patch Changes
+
+- [#343](https://github.com/opencoredev/akeru-bot/pull/343) [`66ba44d`](https://github.com/opencoredev/akeru-bot/commit/66ba44dfcde1fbb3e63cf27f2afb73001baa26c5) Thanks [@leoisadev1](https://github.com/leoisadev1)! - Use the selected terminal scrollbar colors and keep waiting labels and placeholders static.
+
+- [#343](https://github.com/opencoredev/akeru-bot/pull/343) [`66ba44d`](https://github.com/opencoredev/akeru-bot/commit/66ba44dfcde1fbb3e63cf27f2afb73001baa26c5) Thanks [@leoisadev1](https://github.com/leoisadev1)! - Fix stacked charts and chart fragment children, and restore input focus when clicking an addon icon.
+
+- [#346](https://github.com/opencoredev/akeru-bot/pull/346) [`0e8ddb1`](https://github.com/opencoredev/akeru-bot/commit/0e8ddb1c42106a493299d77a1ac686860d3f71d6) Thanks [@leoisadev1](https://github.com/leoisadev1)! - Buttons next to text fields, such as Connect on the provider sign-in code field, now match the field's height.
+
+- [#343](https://github.com/opencoredev/akeru-bot/pull/343) [`66ba44d`](https://github.com/opencoredev/akeru-bot/commit/66ba44dfcde1fbb3e63cf27f2afb73001baa26c5) Thanks [@leoisadev1](https://github.com/leoisadev1)! - Restore image compression fallbacks when browser APIs are missing, and preserve valid composer model selections when another stored provider selection is malformed.
+
+- [#344](https://github.com/opencoredev/akeru-bot/pull/344) [`f6ae162`](https://github.com/opencoredev/akeru-bot/commit/f6ae1623eb53fcc0fbd5a0f2b0a5d6f0a95bebc0) Thanks [@leoisadev1](https://github.com/leoisadev1)! - Usage now opens as a full page like Plugins, hiding the bot list and using the window width.
+
+- [#343](https://github.com/opencoredev/akeru-bot/pull/343) [`66ba44d`](https://github.com/opencoredev/akeru-bot/commit/66ba44dfcde1fbb3e63cf27f2afb73001baa26c5) Thanks [@leoisadev1](https://github.com/leoisadev1)! - Make markdown alerts, connection status, and quit feedback follow the selected theme colors.
+
+- Updated dependencies []:
+  - @akeru/contracts@0.3.0
+  - @akeru/client-runtime@0.0.5
+  - @akeru/shared@0.0.5
+
 ## 0.2.1
 
 ### Patch Changes
