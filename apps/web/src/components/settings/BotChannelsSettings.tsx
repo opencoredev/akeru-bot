@@ -24,6 +24,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
   channelFailureCategoryOf,
   isChannelIdentityConflict,
+  isChannelAssignmentConflict,
   resolveChannelSettingsAccess,
 } from "../../channelAccess";
 import { requestConfirmDialog } from "../../confirmDialog";
@@ -260,6 +261,10 @@ export function useChannelSettings(environmentId: EnvironmentId | null) {
     result: Parameters<typeof channelFailureCategoryOf>[0],
     provider: ChannelProvider,
   ) => {
+    if (isChannelAssignmentConflict(result)) {
+      return { description: t("Unassign the channel already connected to this bot first") };
+    }
+
     if (isChannelIdentityConflict(result)) {
       return {
         description: t(
@@ -357,7 +362,11 @@ export function useChannelSettings(environmentId: EnvironmentId | null) {
     if (assignedBot) {
       const result = await detach({
         environmentId,
-        input: { botId: assignedBot.id, provider: connection.provider },
+        input: {
+          botId: assignedBot.id,
+          provider: connection.provider,
+          expectedConnectionId: connection.id,
+        },
       });
 
       if (Predicate.isTagged(result, "Failure")) {
@@ -394,7 +403,11 @@ export function useChannelSettings(environmentId: EnvironmentId | null) {
         const released = assignedBot
           ? await detach({
               environmentId,
-              input: { botId: BotId.make(nextBotId), provider: connection.provider },
+              input: {
+                botId: BotId.make(nextBotId),
+                provider: connection.provider,
+                expectedConnectionId: connection.id,
+              },
             })
           : null;
 

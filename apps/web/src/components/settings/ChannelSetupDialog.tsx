@@ -14,7 +14,11 @@ import { defaultProjectIdForBot } from "@akeru/shared/channelProject";
 import { ExternalLinkIcon } from "lucide-react";
 import { useRef, useState } from "react";
 import { useAtomValue } from "@effect/atom-react";
-import { channelFailureCategoryOf, isChannelIdentityConflict } from "../../channelAccess";
+import {
+  channelFailureCategoryOf,
+  isChannelIdentityConflict,
+  isChannelAssignmentConflict,
+} from "../../channelAccess";
 import { useI18n } from "../../i18n";
 import { cn } from "../../lib/utils";
 import { botEnvironment } from "../../state/bots";
@@ -203,7 +207,7 @@ export function ChannelSetupDialog({
       ? null
       : await detach({
           environmentId,
-          input: { botId: current.botId, provider },
+          input: { botId: current.botId, provider, expectedConnectionId: current.connectionId },
         });
 
     if (Predicate.isTagged(detached ?? {}, "Failure")) {
@@ -222,15 +226,22 @@ export function ChannelSetupDialog({
     });
 
     if (Predicate.isTagged(attached, "Failure")) {
-      const restored = await attach({
+      const released = await detach({
         environmentId,
-        input: {
-          botId: current.botId,
-          connectionId: current.connectionId,
-          provider,
-          projectId: current.projectId ?? projectId,
-        },
+        input: { botId: current.botId, provider, expectedConnectionId: connectionId },
       });
+
+      const restored = Predicate.isTagged(released, "Failure")
+        ? released
+        : await attach({
+            environmentId,
+            input: {
+              botId: current.botId,
+              connectionId: current.connectionId,
+              provider,
+              projectId: current.projectId ?? projectId,
+            },
+          });
 
       if (Predicate.isTagged(restored, "Failure")) {
         // The failed attach may still have persisted a binding to the new connection.
@@ -247,18 +258,25 @@ export function ChannelSetupDialog({
 
       setBusy(false);
       const reason = failureReason(attached);
+
+      const conflict = isChannelAssignmentConflict(attached)
+        ? t("Unassign the channel already connected to this bot first")
+        : isChannelIdentityConflict(attached)
+          ? conflictCopy
+          : null;
+
       setConnectError(
         Predicate.isTagged(restored, "Failure")
-          ? isChannelIdentityConflict(attached)
-            ? `${conflictCopy} ${t("The old connection could not be restored.")}`
+          ? conflict
+            ? `${conflict} ${t("The old connection could not be restored.")}`
             : [
                 t("Could not connect with the new credentials or restore the old connection."),
                 reason,
               ]
                 .filter(Boolean)
                 .join(" ")
-          : isChannelIdentityConflict(attached)
-            ? conflictCopy
+          : conflict
+            ? conflict
             : [
                 t("Could not connect with the new credentials. The old connection is unchanged."),
                 reason,
@@ -293,6 +311,24 @@ export function ChannelSetupDialog({
       setBusy(true);
       setConnectError(null);
       await replace(replacing);
+
+      return;
+    }
+
+    const destinationBinding = snapshot?.bots
+      ?.find((bot) => bot.id === botId)
+      ?.channelBindings?.find((binding) => binding.provider === provider);
+
+    if (
+      destinationBinding &&
+      (destinationBinding.connectionId
+        ? destinationBinding.connectionId !== savedConnection.current?.connectionId
+        : destinationBinding.status !== "disconnected")
+    ) {
+      toastManager.add({
+        type: "error",
+        title: t("Unassign the channel already connected to this bot first"),
+      });
 
       return;
     }
@@ -335,17 +371,19 @@ export function ChannelSetupDialog({
         onSaved(connectionId);
         const reason = failureReason(attached);
         setConnectError(
-          isChannelIdentityConflict(attached)
-            ? conflictCopy
-            : reason
-              ? t("{name} is saved but could not connect. {reason}", {
-                  name: name.trim(),
-                  reason,
-                })
-              : t(
-                  "{name} is saved but could not connect. Try again or check the connection settings.",
-                  { name: name.trim() },
-                ),
+          isChannelAssignmentConflict(attached)
+            ? t("Unassign the channel already connected to this bot first")
+            : isChannelIdentityConflict(attached)
+              ? conflictCopy
+              : reason
+                ? t("{name} is saved but could not connect. {reason}", {
+                    name: name.trim(),
+                    reason,
+                  })
+                : t(
+                    "{name} is saved but could not connect. Try again or check the connection settings.",
+                    { name: name.trim() },
+                  ),
         );
 
         return;

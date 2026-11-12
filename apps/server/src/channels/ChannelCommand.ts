@@ -44,7 +44,7 @@ export const executeChannelCommand = (
       runtime.disconnect(command.botId, command.provider),
     ),
     Match.when({ type: "channel.detach" }, (command) =>
-      runtime.detach(command.botId, command.provider),
+      runtime.detach(command.botId, command.provider, command.expectedConnectionId),
     ),
     Match.when({ type: "channel.reconnect" }, (command) =>
       runtime.reconnect(command.botId, command.provider),
