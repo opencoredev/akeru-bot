@@ -64,7 +64,7 @@ overrides:
   yaml: ^2.9.0
   '@fastify/busboy@<3.2.2': 3.2.2
   '@grpc/grpc-js@<1.14.5': 1.14.5
-  '@hono/node-server@<2.1.3': 2.1.3
+  '@hono/node-server@>=1.0.0 <2.1.6': 2.1.6
   '@modelcontextprotocol/client@>=2.0.0 <2.3.0': 2.3.0
   '@modelcontextprotocol/node@<2.1.0': 2.1.0
   '@modelcontextprotocol/sdk@<1.32.0': 1.32.0
@@ -84,7 +84,7 @@ overrides:
   '@xmldom/xmldom@>=0.9.0 <0.9.12': 0.9.12
   adm-zip@<0.6.1: 0.6.1
   baseline-browser-mapping@<2.11.0: 2.11.0
-  basic-ftp@<6.2.1: 6.2.1
+  basic-ftp@>=5.0.0 <6.2.4: 6.2.4
   brace-expansion@<1.1.21: 1.1.21
   brace-expansion@>=2.0.0 <2.1.7: 2.1.7
   brace-expansion@>=5.0.0 <5.0.12: 5.0.12
@@ -99,7 +99,7 @@ overrides:
   fast-xml-parser@>=5.0.0 <5.12.0: 5.12.0
   follow-redirects@>=1.0.0 <1.16.2: 1.16.2
   glob@>=9.0.0 <14.0.2: 14.0.2
-  hono@<4.13.11: 4.13.11
+  hono@>=4.0.0 <4.13.16: 4.13.16
   ip-address@<10.7.4: 10.7.4
   js-yaml@<3.15.2: 3.15.2
   js-yaml@>=4.0.0 <4.3.2: 4.3.2
@@ -555,7 +555,7 @@ importers:
         version: 0.9.4(patch_hash=ab9ff544009e1891cfe3930105862d3699007f38922a79f3c98d90018deca368)
       '@mastra/code-sdk':
         specifier: 1.5.1
-        version: 1.5.1(@bufbuild/protobuf@2.12.1)(@grpc/grpc-js@1.14.5)(bufferutil@4.1.0)(express@5.2.1)(hono@4.13.11)(playwright-core@1.60.0)(utf-8-validate@6.0.6)
+        version: 1.5.1(@bufbuild/protobuf@2.12.1)(@grpc/grpc-js@1.14.5)(bufferutil@4.1.0)(express@5.2.1)(hono@4.13.16)(playwright-core@1.60.0)(utf-8-validate@6.0.6)
       '@mastra/core':
         specifier: 1.63.0
         version: 1.63.0(@bufbuild/protobuf@2.12.1)(@grpc/grpc-js@1.14.5)(ai@6.0.266(zod@4.4.3))(bufferutil@4.1.0)(express@5.2.1)(utf-8-validate@6.0.6)(zod@4.4.3)
@@ -1096,7 +1096,7 @@ importers:
         version: 4.0.0-beta.103(patch_hash=a16b1e870d8c29e4a98b17cc4c638a4ff471753d8ca3487f78a22b759caf951b)(effect@4.0.0-beta.103(patch_hash=af36b7948b6f9c56623074662b51dade5699880c1a7c71245de73e13c3185fb6))
       '@mastra/mcp':
         specifier: 1.17.2
-        version: 1.17.2(patch_hash=9b6d63569c5225bf2803a5ce1bbf1e470192f3fc21af9e2a4dd321d64dc9cbc4)(@mastra/core@1.63.0(@bufbuild/protobuf@2.14.0)(@grpc/grpc-js@1.14.5)(ai@6.0.266(zod@4.6.7))(bufferutil@4.1.0)(express@5.2.1)(utf-8-validate@6.0.6)(zod@4.6.7))(express@5.2.1)(hono@4.13.11)(react-dom@19.2.6(react@19.2.6))(react@19.2.6)(zod@4.4.3)
+        version: 1.17.2(patch_hash=9b6d63569c5225bf2803a5ce1bbf1e470192f3fc21af9e2a4dd321d64dc9cbc4)(@mastra/core@1.63.0(@bufbuild/protobuf@2.14.0)(@grpc/grpc-js@1.14.5)(ai@6.0.266(zod@4.6.7))(bufferutil@4.1.0)(express@5.2.1)(utf-8-validate@6.0.6)(zod@4.6.7))(express@5.2.1)(hono@4.13.16)(react-dom@19.2.6(react@19.2.6))(react@19.2.6)(zod@4.4.3)
       '@modelcontextprotocol/client':
         specifier: 2.3.0
         version: 2.3.0(patch_hash=b2032d3afa62e1572259ee982fb6185f74769ef8f57c6e14aaac610e783ac9f9)
@@ -3448,11 +3448,11 @@ packages:
     engines: {node: '>=6'}
     hasBin: true
 
-  '@hono/node-server@2.1.3':
-    resolution: {integrity: sha512-TA//nWMqPhbfdfneACk6t5a9eqbS9lABEPyKn0/xZTah3H3U2XaVg85rJFl0/Fyit0I552YDHgXGVSf3GwqbUw==}
+  '@hono/node-server@2.1.6':
+    resolution: {integrity: sha512-p/KH9MnfNcsm3sR6x4lNgm5j+QN4Et8srKredl9DZfXiyZ1UQ3aQ2YVpFLbqktYN5JI+DB+VZFKM2PqE5hLKjQ==}
     engines: {node: '>=20'}
     peerDependencies:
-      hono: 4.13.11
+      hono: 4.13.16
 
   '@hugeicons/core-free-icons@4.3.0':
     resolution: {integrity: sha512-5DC5gq2psNDKBQThOjpuFCtMco8nl2FkrBzZgG15cFGM0kSwUoych/pw0DmjBygF9qRDITdBPtmzJqLsOeImMg==}
@@ -4053,7 +4053,7 @@ packages:
     engines: {node: '>=20'}
     peerDependencies:
       '@modelcontextprotocol/server': 2.3.0
-      hono: 4.13.11
+      hono: 4.13.16
     peerDependenciesMeta:
       hono:
         optional: true
@@ -6099,12 +6099,16 @@ packages:
   '@smithy/core@3.24.6':
     resolution: {integrity: sha512-wBXDRup6UU97VKyaiRo8AssnfStPtG0oAAfpq/bC0a1YYau8pM86YB4kM6ccoVi1mS8l/UHbn9oDM+7uozr/ug==}
     engines: {node: '>=18.0.0'}
-    deprecated: Deprecated due to a bug in custom logger data redaction. See https://github.com/aws/aws-sdk-js-v3/issues/8393.
+    deprecated: |-
+      Deprecated due to a bug in custom logger data redaction. Upgrade to the latest version. If you used a custom logger with this
+        version, review your logs and rotate any credentials or other secrets. See https://github.com/aws/aws-sdk-js-v3/issues/8393.
 
   '@smithy/core@3.33.3':
     resolution: {integrity: sha512-CsOeKq/9kA3y6VJHt+/+VTCtBaxJ4OTFpgrjIUhPpDIKxBci1k2bJaQASF2h/ELWrulGp+t97DZ0mevfAD8idg==}
     engines: {node: '>=18.0.0'}
-    deprecated: Deprecated due to a bug in custom logger data redaction. See https://github.com/aws/aws-sdk-js-v3/issues/8393.
+    deprecated: |-
+      Deprecated due to a bug in custom logger data redaction. Upgrade to the latest version. If you used a custom logger with this
+        version, review your logs and rotate any credentials or other secrets. See https://github.com/aws/aws-sdk-js-v3/issues/8393.
 
   '@smithy/credential-provider-imds@4.3.8':
     resolution: {integrity: sha512-5cAM+KZC02sTqDt6NaLXyu50M/GNMd1eTzDVR8Lb0BBsVtu7RWHo47VPPEEv1vt3Yub6uzr+M5FHC+GtoT0USg==}
@@ -7618,8 +7622,8 @@ packages:
     engines: {node: '>=6.0.0'}
     hasBin: true
 
-  basic-ftp@6.2.1:
-    resolution: {integrity: sha512-bK67isD+lKq46AU8vNtjvMaT2ZqAOAmNCbxUHlFBRD4k15NWxyEjmaKtZPlgce58So4BNTjITGQOVTjL9y0ECA==}
+  basic-ftp@6.2.4:
+    resolution: {integrity: sha512-6ACKOQxSlv5xka4i03ujfncNr9qp5yZNK3u0+yUFTAU4HfG5AeztCC9+R1I9dm8oq+1vt4RZ7cIRTBrdHqL2mw==}
     engines: {node: '>=10.0.0'}
 
   before-after-hook@4.0.0:
@@ -9799,8 +9803,8 @@ packages:
     resolution: {integrity: sha512-eSmmWE5bZTK2Nou4g0AI3zZ9rswp7GRKoKXS1BLUkvPviOqs4YTN1djQIqrXy9k5gEtdLPy86JjRwsNM9tnDcA==}
     engines: {node: '>=0.10.0'}
 
-  hono@4.13.11:
-    resolution: {integrity: sha512-/SMX/RQNJn7oNmFwH6DtwDqcrzZU2otm1FD6OJe2cWF6cfy/F8hq0XVBv7xW3FTJshRQwuBnXHDq2kNsdZnshg==}
+  hono@4.13.16:
+    resolution: {integrity: sha512-AOLOEhvrV+iH92xXCnFr/5+3KjPKcI3xP63XJtX5spAnkznPdHijlIsUTpi7/9EhWqrTCekw5c5zh1K+YsVw7A==}
     engines: {node: '>=16.9.0'}
 
   hosted-git-info@4.1.0:
@@ -17306,9 +17310,9 @@ snapshots:
       protobufjs: 7.6.5
       yargs: 17.7.2
 
-  '@hono/node-server@2.1.3(hono@4.13.11)':
+  '@hono/node-server@2.1.6(hono@4.13.16)':
     dependencies:
-      hono: 4.13.11
+      hono: 4.13.16
 
   '@hugeicons/core-free-icons@4.3.0': {}
 
@@ -17838,7 +17842,7 @@ snapshots:
       - supports-color
       - utf-8-validate
 
-  '@mastra/code-sdk@1.5.1(@bufbuild/protobuf@2.12.1)(@grpc/grpc-js@1.14.5)(bufferutil@4.1.0)(express@5.2.1)(hono@4.13.11)(playwright-core@1.60.0)(utf-8-validate@6.0.6)':
+  '@mastra/code-sdk@1.5.1(@bufbuild/protobuf@2.12.1)(@grpc/grpc-js@1.14.5)(bufferutil@4.1.0)(express@5.2.1)(hono@4.13.16)(playwright-core@1.60.0)(utf-8-validate@6.0.6)':
     dependencies:
       '@agentclientprotocol/sdk': 0.21.1(zod@4.4.3)
       '@ai-sdk/amazon-bedrock': 3.0.120(zod@4.4.3)
@@ -17853,7 +17857,7 @@ snapshots:
       '@mastra/fastembed': 1.3.0
       '@mastra/github-signals': 0.3.0(@mastra/core@1.63.0(@bufbuild/protobuf@2.12.1)(@grpc/grpc-js@1.14.5)(ai@6.0.266(zod@4.4.3))(bufferutil@4.1.0)(express@5.2.1)(utf-8-validate@6.0.6)(zod@4.4.3))(zod@4.4.3)
       '@mastra/libsql': 1.22.0(@mastra/core@1.63.0(@bufbuild/protobuf@2.12.1)(@grpc/grpc-js@1.14.5)(ai@6.0.266(zod@4.4.3))(bufferutil@4.1.0)(express@5.2.1)(utf-8-validate@6.0.6)(zod@4.4.3))(bufferutil@4.1.0)(utf-8-validate@6.0.6)
-      '@mastra/mcp': 1.17.2(patch_hash=9b6d63569c5225bf2803a5ce1bbf1e470192f3fc21af9e2a4dd321d64dc9cbc4)(@mastra/core@1.63.0(@bufbuild/protobuf@2.12.1)(@grpc/grpc-js@1.14.5)(ai@6.0.266(zod@4.4.3))(bufferutil@4.1.0)(express@5.2.1)(utf-8-validate@6.0.6)(zod@4.4.3))(express@5.2.1)(hono@4.13.11)(zod@4.4.3)
+      '@mastra/mcp': 1.17.2(patch_hash=9b6d63569c5225bf2803a5ce1bbf1e470192f3fc21af9e2a4dd321d64dc9cbc4)(@mastra/core@1.63.0(@bufbuild/protobuf@2.12.1)(@grpc/grpc-js@1.14.5)(ai@6.0.266(zod@4.4.3))(bufferutil@4.1.0)(express@5.2.1)(utf-8-validate@6.0.6)(zod@4.4.3))(express@5.2.1)(hono@4.13.16)(zod@4.4.3)
       '@mastra/memory': 1.28.0(@mastra/core@1.63.0(@bufbuild/protobuf@2.12.1)(@grpc/grpc-js@1.14.5)(ai@6.0.266(zod@4.4.3))(bufferutil@4.1.0)(express@5.2.1)(utf-8-validate@6.0.6)(zod@4.4.3))
       '@mastra/observability': 1.17.3(@mastra/core@1.63.0(@bufbuild/protobuf@2.12.1)(@grpc/grpc-js@1.14.5)(ai@6.0.266(zod@4.4.3))(bufferutil@4.1.0)(express@5.2.1)(utf-8-validate@6.0.6)(zod@4.4.3))(zod@4.4.3)
       '@mastra/parallel': 0.1.0(@mastra/core@1.63.0(@bufbuild/protobuf@2.12.1)(@grpc/grpc-js@1.14.5)(ai@6.0.266(zod@4.4.3))(bufferutil@4.1.0)(express@5.2.1)(utf-8-validate@6.0.6)(zod@4.4.3))(zod@4.4.3)
@@ -18012,13 +18016,13 @@ snapshots:
       - bufferutil
       - utf-8-validate
 
-  '@mastra/mcp@1.17.2(patch_hash=9b6d63569c5225bf2803a5ce1bbf1e470192f3fc21af9e2a4dd321d64dc9cbc4)(@mastra/core@1.63.0(@bufbuild/protobuf@2.12.1)(@grpc/grpc-js@1.14.5)(ai@6.0.266(zod@4.4.3))(bufferutil@4.1.0)(express@5.2.1)(utf-8-validate@6.0.6)(zod@4.4.3))(express@5.2.1)(hono@4.13.11)(zod@4.4.3)':
+  '@mastra/mcp@1.17.2(patch_hash=9b6d63569c5225bf2803a5ce1bbf1e470192f3fc21af9e2a4dd321d64dc9cbc4)(@mastra/core@1.63.0(@bufbuild/protobuf@2.12.1)(@grpc/grpc-js@1.14.5)(ai@6.0.266(zod@4.4.3))(bufferutil@4.1.0)(express@5.2.1)(utf-8-validate@6.0.6)(zod@4.4.3))(express@5.2.1)(hono@4.13.16)(zod@4.4.3)':
     dependencies:
       '@mastra/core': 1.63.0(@bufbuild/protobuf@2.12.1)(@grpc/grpc-js@1.14.5)(ai@6.0.266(zod@4.4.3))(bufferutil@4.1.0)(express@5.2.1)(utf-8-validate@6.0.6)(zod@4.4.3)
       '@modelcontextprotocol/client': 2.3.0(patch_hash=b2032d3afa62e1572259ee982fb6185f74769ef8f57c6e14aaac610e783ac9f9)
       '@modelcontextprotocol/core': 2.0.0
       '@modelcontextprotocol/ext-apps': 1.7.5(@modelcontextprotocol/sdk@1.32.0(zod@4.4.3))(zod@4.4.3)
-      '@modelcontextprotocol/node': 2.1.0(@modelcontextprotocol/server@2.3.0)(hono@4.13.11)
+      '@modelcontextprotocol/node': 2.1.0(@modelcontextprotocol/server@2.3.0)(hono@4.13.16)
       '@modelcontextprotocol/sdk': 1.32.0(zod@4.4.3)
       '@modelcontextprotocol/server': 2.3.0
       '@modelcontextprotocol/server-legacy': 2.3.1(express@5.2.1)
@@ -18033,13 +18037,13 @@ snapshots:
       - supports-color
       - zod
 
-  '@mastra/mcp@1.17.2(patch_hash=9b6d63569c5225bf2803a5ce1bbf1e470192f3fc21af9e2a4dd321d64dc9cbc4)(@mastra/core@1.63.0(@bufbuild/protobuf@2.14.0)(@grpc/grpc-js@1.14.5)(ai@6.0.266(zod@4.6.7))(bufferutil@4.1.0)(express@5.2.1)(utf-8-validate@6.0.6)(zod@4.6.7))(express@5.2.1)(hono@4.13.11)(react-dom@19.2.6(react@19.2.6))(react@19.2.6)(zod@4.4.3)':
+  '@mastra/mcp@1.17.2(patch_hash=9b6d63569c5225bf2803a5ce1bbf1e470192f3fc21af9e2a4dd321d64dc9cbc4)(@mastra/core@1.63.0(@bufbuild/protobuf@2.14.0)(@grpc/grpc-js@1.14.5)(ai@6.0.266(zod@4.6.7))(bufferutil@4.1.0)(express@5.2.1)(utf-8-validate@6.0.6)(zod@4.6.7))(express@5.2.1)(hono@4.13.16)(react-dom@19.2.6(react@19.2.6))(react@19.2.6)(zod@4.4.3)':
     dependencies:
       '@mastra/core': 1.63.0(@bufbuild/protobuf@2.14.0)(@grpc/grpc-js@1.14.5)(ai@6.0.266(zod@4.6.7))(bufferutil@4.1.0)(express@5.2.1)(utf-8-validate@6.0.6)(zod@4.6.7)
       '@modelcontextprotocol/client': 2.3.0(patch_hash=b2032d3afa62e1572259ee982fb6185f74769ef8f57c6e14aaac610e783ac9f9)
       '@modelcontextprotocol/core': 2.0.0
       '@modelcontextprotocol/ext-apps': 1.7.5(@modelcontextprotocol/sdk@1.32.0(zod@4.6.7))(react-dom@19.2.6(react@19.2.6))(react@19.2.6)(zod@4.4.3)
-      '@modelcontextprotocol/node': 2.1.0(@modelcontextprotocol/server@2.3.0)(hono@4.13.11)
+      '@modelcontextprotocol/node': 2.1.0(@modelcontextprotocol/server@2.3.0)(hono@4.13.16)
       '@modelcontextprotocol/sdk': 1.32.0(zod@4.6.7)
       '@modelcontextprotocol/server': 2.3.0
       '@modelcontextprotocol/server-legacy': 2.3.1(express@5.2.1)
@@ -18176,16 +18180,16 @@ snapshots:
       react: 19.2.6
       react-dom: 19.2.6(react@19.2.6)
 
-  '@modelcontextprotocol/node@2.1.0(@modelcontextprotocol/server@2.3.0)(hono@4.13.11)':
+  '@modelcontextprotocol/node@2.1.0(@modelcontextprotocol/server@2.3.0)(hono@4.13.16)':
     dependencies:
-      '@hono/node-server': 2.1.3(hono@4.13.11)
+      '@hono/node-server': 2.1.6(hono@4.13.16)
       '@modelcontextprotocol/server': 2.3.0
     optionalDependencies:
-      hono: 4.13.11
+      hono: 4.13.16
 
   '@modelcontextprotocol/sdk@1.32.0(zod@4.4.3)':
     dependencies:
-      '@hono/node-server': 2.1.3(hono@4.13.11)
+      '@hono/node-server': 2.1.6(hono@4.13.16)
       ajv: 8.20.0
       ajv-formats: 3.0.1(ajv@8.20.0)
       content-type: 1.0.5
@@ -18195,7 +18199,7 @@ snapshots:
       eventsource-parser: 3.1.0
       express: 5.2.1
       express-rate-limit: 8.5.2(express@5.2.1)
-      hono: 4.13.11
+      hono: 4.13.16
       jose: 6.2.3
       json-schema-typed: 8.0.2
       pkce-challenge: 5.0.1
@@ -18207,7 +18211,7 @@ snapshots:
 
   '@modelcontextprotocol/sdk@1.32.0(zod@4.6.7)':
     dependencies:
-      '@hono/node-server': 2.1.3(hono@4.13.11)
+      '@hono/node-server': 2.1.6(hono@4.13.16)
       ajv: 8.20.0
       ajv-formats: 3.0.1(ajv@8.20.0)
       content-type: 1.0.5
@@ -18217,7 +18221,7 @@ snapshots:
       eventsource-parser: 3.1.0
       express: 5.2.1
       express-rate-limit: 8.5.2(express@5.2.1)
-      hono: 4.13.11
+      hono: 4.13.16
       jose: 6.2.3
       json-schema-typed: 8.0.2
       pkce-challenge: 5.0.1
@@ -22026,7 +22030,7 @@ snapshots:
 
   baseline-browser-mapping@2.11.0: {}
 
-  basic-ftp@6.2.1: {}
+  basic-ftp@6.2.4: {}
 
   before-after-hook@4.0.0: {}
 
@@ -24384,7 +24388,7 @@ snapshots:
 
   get-uri@6.0.5:
     dependencies:
-      basic-ftp: 6.2.1
+      basic-ftp: 6.2.4
       data-uri-to-buffer: 6.0.2
       debug: 4.4.3
     transitivePeerDependencies:
@@ -24642,7 +24646,7 @@ snapshots:
     dependencies:
       parse-passwd: 1.0.0
 
-  hono@4.13.11: {}
+  hono@4.13.16: {}
 
   hosted-git-info@4.1.0:
     dependencies:
