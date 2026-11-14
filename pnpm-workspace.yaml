@@ -121,6 +121,7 @@ overrides:
   "@modelcontextprotocol/server@>=2.0.0 <2.3.0": 2.3.0
   "@modelcontextprotocol/server-legacy@>=2.0.0 <2.3.1": 2.3.1
   "@opentelemetry/core@<2.8.0": 2.8.0
+  "@opentelemetry/instrumentation-http@>=0.204.0 <0.222.0": 0.222.0
   "@vitest/browser@>=4.1.0 <4.1.12": 4.1.12
   "@vitest/browser-preview@>=4.1.0 <4.1.12": 4.1.12
   "@vitest/expect@>=4.1.0 <4.1.12": 4.1.12
