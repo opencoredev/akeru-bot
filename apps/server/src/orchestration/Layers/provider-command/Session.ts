@@ -24,7 +24,8 @@ import {
   botWorkspaceResourceKey,
 } from "../../../provider/botWorkspacePool.ts";
 import {
-  GroupHandoffBusyError,
+  SessionBusyError,
+  WORKSPACE_MOVE_BUSY_MESSAGE,
   providerErrorLabel,
   isProviderDriverKind,
   resolveControllerBotId,
@@ -212,7 +213,7 @@ export function createSession({
       respondingBotChanged &&
       activeSession?.activeTurnId !== undefined
     ) {
-      return yield* new GroupHandoffBusyError({ threadId, message: GROUP_HANDOFF_BUSY_MESSAGE });
+      return yield* new SessionBusyError({ threadId, message: GROUP_HANDOFF_BUSY_MESSAGE });
     }
 
     const currentInstanceId =
@@ -477,7 +478,14 @@ export function createSession({
 
       const activeTurnId = activeSession?.activeTurnId;
 
+      // A running turn finishes in its old workspace, which stays until the move. A mode change
+      // cannot wait for the move, or the next turn would run under the previous mode, so new
+      // work is refused until the turn finishes.
       if (botWorkspaceChanged && activeTurnId !== undefined) {
+        if (runtimeModeChanged) {
+          return yield* new SessionBusyError({ threadId, message: WORKSPACE_MOVE_BUSY_MESSAGE });
+        }
+
         yield* Effect.logInfo("provider command reactor deferred bot workspace migration", {
           threadId,
           activeTurnId,

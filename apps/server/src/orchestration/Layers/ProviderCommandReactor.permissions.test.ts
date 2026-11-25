@@ -1,8 +1,9 @@
 import { ComposioOperationError, ProviderInstanceId } from "@akeru/contracts";
-import { CommandId, DEFAULT_PROVIDER_INTERACTION_MODE, ThreadId } from "@akeru/contracts";
+import { CommandId, DEFAULT_PROVIDER_INTERACTION_MODE, ThreadId, TurnId } from "@akeru/contracts";
 import * as Effect from "effect/Effect";
-import { afterEach, describe, expect, it } from "vite-plus/test";
+import { afterEach, assert, describe, expect, it } from "vite-plus/test";
 import { ProviderAdapterRequestError } from "../../provider/Errors.ts";
+import { ServerSettingsService } from "../../serverSettings.ts";
 import {
   asMessageId,
   createProviderCommandHarness,
@@ -520,5 +521,80 @@ describe("ProviderCommandReactor", () => {
     expect(thread?.activities).toContainEqual(
       expect.objectContaining({ kind: "provider.session.update.failed" }),
     );
+  });
+
+  it("stops a session whose mode tightens while a running turn defers a workspace move", async () => {
+    const harness = await createHarness({
+      botEngine: { provider: "codex", model: "gpt-5.6-sol" },
+      botSandboxBrowserSharing: "shared",
+    });
+
+    const threadId = ThreadId.make("thread-1");
+    const now = "2026-01-01T00:00:00.000Z";
+
+    await harness.run(
+      harness.engine.dispatch({
+        type: "thread.runtime-mode.set",
+        commandId: CommandId.make("cmd-runtime-mode-full-access"),
+        threadId,
+        runtimeMode: "full-access",
+        createdAt: now,
+      }),
+    );
+    await harness.run(
+      harness.engine.dispatch({
+        type: "thread.turn.start",
+        commandId: CommandId.make("cmd-turn-start-deferred-move"),
+        threadId,
+        message: {
+          messageId: asMessageId("user-message-deferred-move"),
+          role: "user",
+          text: "first",
+          attachments: [],
+        },
+        interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
+        runtimeMode: "full-access",
+        createdAt: now,
+      }),
+    );
+    await harness.waitFor(() => harness.sendTurn.mock.calls.length === 1);
+    await harness.drain();
+
+    // The provider is still running the first turn when the bot's workspace changes.
+    const sessionIndex = harness.runtimeSessions.findIndex(
+      (session) => session.threadId === threadId,
+    );
+
+    const running = harness.runtimeSessions[sessionIndex];
+    assert.isDefined(running);
+    harness.runtimeSessions[sessionIndex] = {
+      ...running,
+      activeTurnId: TurnId.make("turn-running"),
+    };
+
+    const runtime = testScope.runtime;
+    assert.isNotNull(runtime);
+    await runtime.runPromise(
+      Effect.service(ServerSettingsService).pipe(
+        Effect.flatMap((settings) =>
+          settings.updateSettings({ botSandboxBrowserSharing: "separate" }),
+        ),
+      ),
+    );
+    await harness.run(
+      harness.engine.dispatch({
+        type: "thread.runtime-mode.set",
+        commandId: CommandId.make("cmd-runtime-mode-supervised"),
+        threadId,
+        runtimeMode: "approval-required",
+        createdAt: now,
+      }),
+    );
+    await harness.waitFor(() => harness.stopSession.mock.calls.length === 1);
+
+    // The turn keeps its workspace: the session stops in place instead of moving or keeping
+    // Full access.
+    expect(harness.interruptTurn).toHaveBeenCalled();
+    expect(harness.startSession).toHaveBeenCalledTimes(1);
   });
 });
