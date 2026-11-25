@@ -282,6 +282,10 @@ describe("claudeCodeToolPathReach", () => {
         { uri: `file://${credentials}` },
         { uri: `file://${home.root}/%2Eclaude/.credentials.json` },
         { filename: NodePath.join(home.root, ".claude.json") },
+        { edits: [{ path: credentials, text: "x" }] },
+        { options: { target: { uri: NodeURL.pathToFileURL(credentials).href } } },
+        { paths: [["src/a.ts", credentials]] },
+        { attachment: NodeURL.pathToFileURL(credentials).href },
       ]) {
         assert.equal(
           yield* reach("mcp__filesystem__read_file", input, home.scope),
