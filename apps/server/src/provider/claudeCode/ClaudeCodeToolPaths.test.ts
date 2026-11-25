@@ -180,6 +180,20 @@ describe("claudeCodeToolPathReach", () => {
         "claude-config",
       );
 
+      // A config folder named like `..claude` is still a child of the search root.
+      const dotted = NodePath.join(home.documents, "..claude");
+      NodeFS.mkdirSync(dotted);
+
+      assert.equal(
+        yield* reach(
+          "Grep",
+          { pattern: ".", path: home.documents },
+          { ...home.scope, claudeConfigDirectory: dotted },
+        ),
+        "claude-config",
+      );
+      assert.equal(yield* reach("Read", { file_path: "..notes" }, home.scope), "inside");
+
       // A sibling folder, and a plain listing of the home folder, stay ordinary reads.
       assert.equal(
         yield* reach("Grep", { pattern: ".", path: home.documents }, home.scope),

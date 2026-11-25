@@ -345,10 +345,12 @@ export const claudeCodeToolPathReach = Effect.fn("claudeCodeToolPathReach")(func
     return physical === resolved ? [resolved] : [resolved, physical];
   });
 
+  /** A child folder may itself be named like `..cache`, so only a whole `..` part climbs out. */
   const isWithin = (target: string, root: string) => {
     const relative = path.relative(root, target);
+    const climbsOut = relative === ".." || relative.startsWith(`..${path.sep}`);
 
-    return relative === "" || (!relative.startsWith("..") && !path.isAbsolute(relative));
+    return !climbsOut && !path.isAbsolute(relative);
   };
 
   /** Protected paths compare the way the host file system does. */
