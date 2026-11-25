@@ -604,6 +604,102 @@ describe("ProviderCommandReactor", () => {
     expect(harness.startSession).toHaveBeenCalledTimes(1);
   });
 
+  it("keeps the running session's mode on record while a workspace move refuses new turns", async () => {
+    const harness = await createHarness({
+      botEngine: { provider: "codex", model: "gpt-5.6-sol" },
+      botSandboxBrowserSharing: "shared",
+    });
+
+    const threadId = ThreadId.make("thread-1");
+    const now = "2026-01-01T00:00:00.000Z";
+
+    const startTurn = (id: string) =>
+      harness.run(
+        harness.engine.dispatch({
+          type: "thread.turn.start",
+          commandId: CommandId.make(`cmd-turn-start-${id}`),
+          threadId,
+          message: {
+            messageId: asMessageId(`user-message-${id}`),
+            role: "user",
+            text: id,
+            attachments: [],
+          },
+          interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
+          runtimeMode: "approval-required",
+          createdAt: now,
+        }),
+      );
+
+    const readThread = async () =>
+      (await harness.readModel()).threads.find((entry) => entry.id === threadId);
+
+    await harness.run(
+      harness.engine.dispatch({
+        type: "thread.runtime-mode.set",
+        commandId: CommandId.make("cmd-runtime-mode-supervised"),
+        threadId,
+        runtimeMode: "approval-required",
+        createdAt: now,
+      }),
+    );
+    await startTurn("supervised");
+    await harness.waitFor(() => harness.sendTurn.mock.calls.length === 1);
+    await harness.drain();
+
+    // The provider is still running the first turn when the bot's workspace changes.
+    const sessionIndex = harness.runtimeSessions.findIndex(
+      (session) => session.threadId === threadId,
+    );
+
+    const running = harness.runtimeSessions[sessionIndex];
+    assert.isDefined(running);
+    harness.runtimeSessions[sessionIndex] = {
+      ...running,
+      activeTurnId: TurnId.make("turn-running"),
+    };
+
+    const runtime = testScope.runtime;
+    assert.isNotNull(runtime);
+    await runtime.runPromise(
+      Effect.service(ServerSettingsService).pipe(
+        Effect.flatMap((settings) =>
+          settings.updateSettings({ botSandboxBrowserSharing: "separate" }),
+        ),
+      ),
+    );
+    await harness.run(
+      harness.engine.dispatch({
+        type: "thread.runtime-mode.set",
+        commandId: CommandId.make("cmd-runtime-mode-full-access"),
+        threadId,
+        runtimeMode: "full-access",
+        createdAt: now,
+      }),
+    );
+    await harness.waitFor(
+      async () =>
+        (await readThread())?.activities.some(
+          (activity) => activity.kind === "provider.session.update.failed",
+        ) === true,
+    );
+    await startTurn("refused");
+    await harness.waitFor(
+      async () =>
+        (await readThread())?.activities.some(
+          (activity) => activity.kind === "provider.turn.start.failed",
+        ) === true,
+    );
+
+    // The refused turn must not record Full access, or the next turn would skip the restart.
+    expect((await readThread())?.session).toMatchObject({
+      status: "error",
+      runtimeMode: "approval-required",
+    });
+    expect(harness.startSession).toHaveBeenCalledTimes(1);
+    expect(harness.sendTurn).toHaveBeenCalledTimes(1);
+  });
+
   it("does not queue Claude Agent work on this computer once its bot moves to a remote sandbox", async () => {
     const harness = await createHarness({
       botEngine: { provider: "claudeCode", model: "claude-sonnet-5" },

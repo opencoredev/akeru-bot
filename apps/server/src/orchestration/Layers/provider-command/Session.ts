@@ -257,24 +257,6 @@ export function createSession({
 
     const preferredProvider: ProviderDriverKind = desiredDriverKind;
 
-    if (options?.pendingTurnStart === true && thread.session?.status !== "running") {
-      yield* setThreadSession({
-        threadId,
-        session: {
-          threadId,
-          status: "starting",
-          providerName: activeSession?.provider ?? preferredProvider,
-          providerInstanceId: activeSession?.providerInstanceId ?? desiredInstanceId,
-          runtimeMode: desiredRuntimeMode,
-          mcpServerIds: activeSession?.mcpServerIds ?? [],
-          activeTurnId: null,
-          lastError: null,
-          updatedAt: createdAt,
-        },
-        createdAt,
-      });
-    }
-
     if (thread.session !== null) {
       yield* rejectStartedThreadModelChangeIfRequired({
         threadId,
@@ -362,6 +344,48 @@ export function createSession({
         : {}),
     });
 
+    const runtimeModeChanged = thread.runtimeMode !== thread.session?.runtimeMode;
+    const previousBotWorkspaceKey = threadBotWorkspaceKeys.get(threadId);
+
+    const botWorkspaceChanged =
+      previousBotWorkspaceKey !== undefined && previousBotWorkspaceKey !== botWorkspaceKey;
+
+    const activeTurnId = activeSession?.activeTurnId;
+
+    // A running turn finishes in its old workspace, which stays until the move. A mode change
+    // cannot wait for the move, or the next turn would run under the previous mode, and Claude
+    // Agent, which runs on this computer, must not take new work for a remote sandbox. Both
+    // refuse new work until the turn finishes, before anything is written to the session.
+    const claudeCodeLeavesThisComputer =
+      preferredProvider === "claudeCode" && effectiveSandbox !== "local";
+
+    if (
+      thread.session?.status !== "stopped" &&
+      botWorkspaceChanged &&
+      activeTurnId !== undefined &&
+      (runtimeModeChanged || claudeCodeLeavesThisComputer)
+    ) {
+      return yield* new SessionBusyError({ threadId, message: WORKSPACE_MOVE_BUSY_MESSAGE });
+    }
+
+    if (options?.pendingTurnStart === true && thread.session?.status !== "running") {
+      yield* setThreadSession({
+        threadId,
+        session: {
+          threadId,
+          status: "starting",
+          providerName: activeSession?.provider ?? preferredProvider,
+          providerInstanceId: activeSession?.providerInstanceId ?? desiredInstanceId,
+          runtimeMode: thread.session?.runtimeMode ?? desiredRuntimeMode,
+          mcpServerIds: activeSession?.mcpServerIds ?? [],
+          activeTurnId: null,
+          lastError: null,
+          updatedAt: createdAt,
+        },
+        createdAt,
+      });
+    }
+
     const startProviderSession = (input?: {
       readonly resumeCursor?: unknown;
       readonly provider?: ProviderDriverKind;
@@ -441,7 +465,6 @@ export function createSession({
       thread.session && thread.session.status !== "stopped" && activeSession ? thread.id : null;
 
     if (existingSessionThreadId) {
-      const runtimeModeChanged = thread.runtimeMode !== thread.session?.runtimeMode;
       const cwdChanged = effectiveCwd !== activeSession?.cwd;
       const sessionModelSwitch = desiredEngine.capabilities.sessionModelSwitch;
 
@@ -471,25 +494,7 @@ export function createSession({
             mcpServers.map((server) => server.id),
           );
 
-      const previousBotWorkspaceKey = threadBotWorkspaceKeys.get(threadId);
-
-      const botWorkspaceChanged =
-        previousBotWorkspaceKey !== undefined && previousBotWorkspaceKey !== botWorkspaceKey;
-
-      const activeTurnId = activeSession?.activeTurnId;
-
-      // A running turn finishes in its old workspace, which stays until the move. A mode change
-      // cannot wait for the move, or the next turn would run under the previous mode, and Claude
-      // Agent, which runs on this computer, must not take new work for a remote sandbox. Both
-      // refuse new work until the turn finishes.
-      const claudeCodeLeavesThisComputer =
-        preferredProvider === "claudeCode" && effectiveSandbox !== "local";
-
       if (botWorkspaceChanged && activeTurnId !== undefined) {
-        if (runtimeModeChanged || claudeCodeLeavesThisComputer) {
-          return yield* new SessionBusyError({ threadId, message: WORKSPACE_MOVE_BUSY_MESSAGE });
-        }
-
         yield* Effect.logInfo("provider command reactor deferred bot workspace migration", {
           threadId,
           activeTurnId,
