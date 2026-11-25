@@ -338,6 +338,43 @@ describe("AkeruSessionResources", () => {
     await resources.shutdown();
   });
 
+  it("keeps the workspace a restarted session acquires while the old release disconnects", async () => {
+    const manager = mcpManager({ connected: true, toolCount: 1 });
+    const disconnecting = Promise.withResolvers<void>();
+    const disconnected = Promise.withResolvers<void>();
+
+    manager.disconnect.mockImplementationOnce(async () => {
+      disconnecting.resolve();
+      await disconnected.promise;
+    });
+
+    const resources = new AkeruSessionResources({
+      io: workspaceIO,
+      stateDir: stateDir(),
+      makeRemoteWorkspace: async () => ({
+        ...localBotWorkspace(workspace()),
+        provider: "vercel",
+        created: true,
+      }),
+      makeMcpManager: () => manager as never,
+      toMcpServerConfigs: () => ({}),
+    });
+
+    await resources.acquire({ ...remoteInput, threadId: "chat", mcpServers: [exaServer] });
+
+    // The old session's stop is still disconnecting MCP when the replacement acquires.
+    const stopping = resources.release("chat");
+    await disconnecting.promise;
+    await resources.acquire({ ...remoteInput, threadId: "chat" });
+    const replacement = resources.getWorkspace("chat");
+    disconnected.resolve();
+    await stopping;
+
+    expect(replacement).toBeDefined();
+    expect(resources.getWorkspace("chat")).toBe(replacement);
+    await resources.shutdown();
+  });
+
   it("preserves the Ascii workspace when MCP initialization fails", async () => {
     const remote: AkeruBotWorkspace = { ...localBotWorkspace(workspace()), provider: "ascii" };
     const destroy = vi.spyOn(remote, "destroy");
