@@ -128,6 +128,20 @@ describe("AgentControllerLive native OpenCode permission policy", () => {
     ),
   );
 
+  it.effect("stops a recovered OpenCode session that never passed the policy check", () =>
+    withOpenCodeBot(denyOutside, ({ controller, bridge }) =>
+      Effect.gen(function* () {
+        const failure = yield* controller
+          .sendTurn({ threadId, input: "Push the branch." })
+          .pipe(Effect.flip);
+
+        expect(failure.message).toContain("refused because the OpenCode chat reconnected");
+        expect(bridge.sendTurn).not.toHaveBeenCalled();
+        expect(bridge.stopSession).toHaveBeenCalledWith({ threadId });
+      }),
+    ),
+  );
+
   it.effect("starts and runs a turn under the default policy", () =>
     withOpenCodeBot(DEFAULT_BOT_PERMISSION_POLICY, ({ controller, bridge }) =>
       Effect.gen(function* () {

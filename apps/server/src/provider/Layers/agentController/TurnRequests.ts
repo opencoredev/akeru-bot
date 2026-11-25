@@ -169,6 +169,20 @@ export function createTurnRequests(deps: {
           }
         }
 
+        // A native OpenCode session that startSession did not create, such as one recovered after
+        // a restart, has no policy to check. It is stopped, so the next message starts a checked one.
+        if (!legacyIdentity && resolved?.provider === ProviderDriverKind.make("opencode")) {
+          yield* deps.legacyProviderBridge
+            .stopSession({ threadId: input.threadId })
+            .pipe(Effect.ignoreCause({ log: true }));
+
+          return yield* new ProviderValidationError({
+            operation: "AgentController.sendTurn",
+            issue:
+              "This message was refused because the OpenCode chat reconnected without its bot's permission check. Send it again to start a checked session.",
+          });
+        }
+
         const { botUsage: _, delegationResults, ...providerInput } = input;
         // memory.enabled is authoritative per turn: while it is off the turn
         // must not read the durable snapshot or reserve review cadence. The
