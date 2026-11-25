@@ -271,6 +271,7 @@ export function createSessionLifecycle(deps: SessionLifecycleDependencies) {
       };
 
       existing.configuredToolSession = configuredToolSession;
+      existing.requestedRuntimeMode = input.runtimeMode;
       existing.startInput = input;
       existing.configuredMemoryAccess = delegatedAccess
         ? undefined
@@ -388,7 +389,9 @@ export function createSessionLifecycle(deps: SessionLifecycleDependencies) {
       }
 
       yield* deps
-        .runMastra("resources.release", () => deps.sessionResources.release(key))
+        .runMastra("resources.release", () =>
+          deps.sessionResources.release(key, undefined, existingLegacy.resourceOwner),
+        )
         .pipe(Effect.ignoreCause({ log: true }));
       deps.legacyResourceIdentity.delete(key);
     }
@@ -486,6 +489,7 @@ export function createSessionLifecycle(deps: SessionLifecycleDependencies) {
             Effect.sync(() => {
               deps.legacyResourceIdentity.set(key, {
                 workspaceResourceKey,
+                resourceOwner: "owner" in resources ? resources.owner : undefined,
                 cwd: input.cwd,
                 provider: resolved.provider,
                 providerInstanceId: resolved.providerInstanceId,
@@ -653,6 +657,7 @@ export function createSessionLifecycle(deps: SessionLifecycleDependencies) {
         mcpServerIds: mcpServers.map((server) => server.id),
         mcpServers,
         runtimeMode: access.runtimeMode,
+        requestedRuntimeMode: input.runtimeMode,
         model: resolved.modelSelection.model,
         status: "ready" as const,
         turnAdmissionGeneration: 0,
@@ -671,6 +676,7 @@ export function createSessionLifecycle(deps: SessionLifecycleDependencies) {
         configuredEntityMemoryAccess: input.memoryAccess,
         privateBotMemory: settings.privateBotMemory,
         workspaceResourceKey,
+        resourceOwner: "owner" in resources ? resources.owner : undefined,
         pendingApprovals: new Map<string, PendingApproval>(),
         unsubscribe,
       } satisfies ActiveSession;

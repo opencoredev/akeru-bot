@@ -609,6 +609,203 @@ describe("AgentControllerLive", () => {
 });
 
 describe("AgentControllerLive", () => {
+  it.effect("lets a stop issued while a session starts stop that session", () => {
+    const bridge = makeBridge();
+    const mastra = mastraHarnessFixture();
+    const mcpManager = computerUseMcpManager();
+    const initGate = Promise.withResolvers<undefined>();
+
+    const start = {
+      threadId: codexThreadId,
+      provider: ProviderDriverKind.make("codex"),
+      providerInstanceId: codexInstanceId,
+      modelSelection: codexSelection,
+      runtimeMode: "full-access" as const,
+      mcpServers: [computerUseServer()],
+    };
+
+    return provideController(
+      Effect.gen(function* () {
+        const controller = yield* AgentController;
+        yield* resolveCodex(controller);
+        yield* controller.startSession(codexThreadId, start);
+        yield* controller.stopSession({ threadId: codexThreadId });
+        mcpManager.init.mockImplementationOnce(() => initGate.promise);
+
+        // The replacement is still acquiring its resources when the stop arrives.
+        const starting = yield* Effect.forkChild(controller.startSession(codexThreadId, start), {
+          startImmediately: true,
+        });
+
+        yield* Effect.promise(() =>
+          vi.waitFor(() => expect(mcpManager.init).toHaveBeenCalledTimes(2)),
+        );
+
+        const stopping = yield* Effect.forkChild(
+          controller.stopSession({ threadId: codexThreadId }),
+          {
+            startImmediately: true,
+          },
+        );
+
+        yield* Effect.yieldNow;
+        initGate.resolve(undefined);
+        yield* Fiber.join(starting);
+        yield* Fiber.join(stopping);
+
+        const listed = (yield* controller.listSessions()).find(
+          (session) => session.threadId === codexThreadId,
+        );
+
+        expect(listed).toBeUndefined();
+        expect(mcpManager.disconnect).toHaveBeenCalledTimes(2);
+      }),
+      bridge.service,
+      mastra.factory,
+      (() => mcpManager as never) as NonNullable<AgentControllerLiveOptions["makeMcpManager"]>,
+      undefined,
+      undefined,
+      {
+        resolveComputerUseServer: async () => ({
+          command: "/local/launcher",
+          args: ["mcp"],
+          env: {},
+        }),
+      },
+    );
+  });
+
+  it.effect("keeps a replacement session when an earlier stop finishes late", () => {
+    const bridge = makeBridge();
+    const mastra = mastraHarnessFixture();
+    const mcpManager = computerUseMcpManager();
+    const deleteGate = Promise.withResolvers<boolean>();
+
+    const start = (mcpServers: ReturnType<typeof computerUseServer>[]) => ({
+      threadId: codexThreadId,
+      provider: ProviderDriverKind.make("codex"),
+      providerInstanceId: codexInstanceId,
+      modelSelection: codexSelection,
+      runtimeMode: "full-access" as const,
+      mcpServers,
+    });
+
+    return provideController(
+      Effect.gen(function* () {
+        const controller = yield* AgentController;
+        yield* resolveCodex(controller);
+        yield* controller.startSession(codexThreadId, start([]));
+        mastra.deleteSession.mockImplementationOnce(() => deleteGate.promise);
+
+        const stopping = yield* Effect.forkChild(
+          controller.stopSession({ threadId: codexThreadId }),
+          {
+            startImmediately: true,
+          },
+        );
+
+        yield* Effect.promise(() =>
+          vi.waitFor(() => expect(mastra.deleteSession).toHaveBeenCalledTimes(1)),
+        );
+
+        // The replacement starts while the first stop is still deleting its session.
+        yield* controller.startSession(codexThreadId, start([computerUseServer()]));
+        deleteGate.resolve(true);
+        yield* Fiber.join(stopping);
+
+        const listed = (yield* controller.listSessions()).find(
+          (session) => session.threadId === codexThreadId,
+        );
+
+        expect(listed).toBeDefined();
+        expect(mcpManager.disconnect).not.toHaveBeenCalled();
+      }),
+      bridge.service,
+      mastra.factory,
+      (() => mcpManager as never) as NonNullable<AgentControllerLiveOptions["makeMcpManager"]>,
+      undefined,
+      undefined,
+      {
+        resolveComputerUseServer: async () => ({
+          command: "/local/launcher",
+          args: ["mcp"],
+          env: {},
+        }),
+      },
+    );
+  });
+
+  it.effect("keeps a replacement's resources when a duplicate stop resumes late", () => {
+    const bridge = makeBridge();
+    const mastra = mastraHarnessFixture();
+    const mcpManager = computerUseMcpManager();
+    const listGate = Promise.withResolvers<boolean>();
+    let gateListing = false;
+
+    const service: typeof bridge.service = {
+      ...bridge.service,
+      listSessions: () =>
+        gateListing
+          ? Effect.promise(() => listGate.promise).pipe(
+              Effect.andThen(bridge.service.listSessions()),
+            )
+          : bridge.service.listSessions(),
+    };
+
+    const start = {
+      threadId: codexThreadId,
+      provider: ProviderDriverKind.make("codex"),
+      providerInstanceId: codexInstanceId,
+      modelSelection: codexSelection,
+      runtimeMode: "full-access" as const,
+      mcpServers: [computerUseServer()],
+    };
+
+    return provideController(
+      Effect.gen(function* () {
+        const controller = yield* AgentController;
+        yield* resolveCodex(controller);
+        yield* controller.startSession(codexThreadId, start);
+        yield* controller.stopSession({ threadId: codexThreadId });
+
+        // A duplicate stop finds no session and pauses before it cleans up.
+        gateListing = true;
+
+        const stopping = yield* Effect.forkChild(
+          controller.stopSession({ threadId: codexThreadId }),
+          {
+            startImmediately: true,
+          },
+        );
+
+        yield* Effect.yieldNow;
+        gateListing = false;
+        yield* controller.startSession(codexThreadId, start);
+        listGate.resolve(true);
+        yield* Fiber.join(stopping);
+
+        const listed = (yield* controller.listSessions()).find(
+          (session) => session.threadId === codexThreadId,
+        );
+
+        expect(listed).toBeDefined();
+        expect(mcpManager.disconnect).toHaveBeenCalledTimes(1);
+      }),
+      service,
+      mastra.factory,
+      (() => mcpManager as never) as NonNullable<AgentControllerLiveOptions["makeMcpManager"]>,
+      undefined,
+      undefined,
+      {
+        resolveComputerUseServer: async () => ({
+          command: "/local/launcher",
+          args: ["mcp"],
+          env: {},
+        }),
+      },
+    );
+  });
+
   it.effect("releases Computer Use when session setup and deletion fail", () => {
     const bridge = makeBridge();
     const mastra = mastraHarnessFixture();

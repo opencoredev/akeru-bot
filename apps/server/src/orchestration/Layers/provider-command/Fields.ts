@@ -20,15 +20,19 @@ import type { AgentControllerError } from "../../../provider/Errors.ts";
 export const isProviderAdapterRequestError = Schema.is(ProviderAdapterRequestError);
 
 /**
- * A group chat handed to another bot while the previous bot's turn still runs. The session
- * belongs to that running turn, so the refusal is reported without touching it.
+ * New work refused while the previous turn still runs: a group chat handed to another bot, or a
+ * workspace move that waits for the turn. The session belongs to that running turn, so the
+ * refusal is reported without touching it.
  */
-export class GroupHandoffBusyError extends Schema.TaggedErrorClass<GroupHandoffBusyError>()(
-  "GroupHandoffBusyError",
+export class SessionBusyError extends Schema.TaggedErrorClass<SessionBusyError>()(
+  "SessionBusyError",
   { threadId: ThreadId, message: Schema.String },
 ) {}
 
-export const isGroupHandoffBusyError = Schema.is(GroupHandoffBusyError);
+export const isSessionBusyError = Schema.is(SessionBusyError);
+
+export const WORKSPACE_MOVE_BUSY_MESSAGE =
+  "This bot is still finishing work in its current workspace. Send again when it finishes.";
 
 export const isUnsupportedEngineError = Schema.is(AgentControllerUnsupportedEngineError);
 

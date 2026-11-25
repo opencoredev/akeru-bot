@@ -97,6 +97,91 @@ describe("AkeruSessionResources", () => {
     await resources.shutdown();
   });
 
+  it("keeps Computer Use reserved until the stopping controller has disconnected", async () => {
+    const manager = mcpManager({ connected: true, toolCount: 1 });
+    const disconnecting = Promise.withResolvers<void>();
+    const disconnected = Promise.withResolvers<void>();
+
+    manager.disconnect.mockImplementationOnce(async () => {
+      disconnecting.resolve();
+      await disconnected.promise;
+    });
+
+    const resources = new AkeruSessionResources({
+      io: workspaceIO,
+      stateDir: stateDir(),
+      hostPlatform: "darwin",
+      makeRemoteWorkspace: async () => workspace(),
+      makeBotBrowser: () => browser(),
+      makeMcpManager: () => manager as never,
+      resolveComputerUseServer: async () => ({
+        command: "/local/launcher",
+        args: ["mcp"],
+        env: {},
+      }),
+      toMcpServerConfigs: () => ({
+        [CODEX_COMPUTER_USE_SERVER_ID]: { command: "sentinel" },
+      }),
+    });
+
+    const input = { ...remoteInput, mcpServers: [computerServer()] };
+
+    await resources.acquire({ ...input, threadId: "controller" });
+    const stopping = resources.release("controller");
+    await disconnecting.promise;
+    await resources.release("controller");
+    await expect(resources.acquire({ ...input, threadId: "early" })).rejects.toThrow(
+      "already controlled",
+    );
+    disconnected.resolve();
+    await stopping;
+    await resources.acquire({ ...input, threadId: "after" });
+    await resources.shutdown();
+  });
+
+  it("waits in shutdown for a stop that is still disconnecting", async () => {
+    const manager = mcpManager({ connected: true, toolCount: 1 });
+    const disconnecting = Promise.withResolvers<void>();
+    const disconnected = Promise.withResolvers<void>();
+
+    manager.disconnect.mockImplementationOnce(async () => {
+      disconnecting.resolve();
+      await disconnected.promise;
+    });
+
+    const resources = new AkeruSessionResources({
+      io: workspaceIO,
+      stateDir: stateDir(),
+      hostPlatform: "darwin",
+      makeRemoteWorkspace: async () => workspace(),
+      makeBotBrowser: () => browser(),
+      makeMcpManager: () => manager as never,
+      resolveComputerUseServer: async () => ({
+        command: "/local/launcher",
+        args: ["mcp"],
+        env: {},
+      }),
+      toMcpServerConfigs: () => ({
+        [CODEX_COMPUTER_USE_SERVER_ID]: { command: "sentinel" },
+      }),
+    });
+
+    await resources.acquire({ ...remoteInput, mcpServers: [computerServer()], threadId: "late" });
+    const stopping = resources.release("late");
+    await disconnecting.promise;
+    let shutDown = false;
+
+    const shutdown = resources.shutdown().then(() => {
+      shutDown = true;
+    });
+
+    for (let turn = 0; turn < 100; turn += 1) await Promise.resolve();
+    expect(shutDown).toBe(false);
+    disconnected.resolve();
+    await Promise.all([stopping, shutdown]);
+    expect(shutDown).toBe(true);
+  });
+
   it("redacts Computer Use results at the MCP tool boundary", async () => {
     const execute = vi.fn(async () => ({ screenshot: { url: "https://example.com/frame.png" } }));
     const toolName = `${CODEX_COMPUTER_USE_SERVER_ID}_control`;

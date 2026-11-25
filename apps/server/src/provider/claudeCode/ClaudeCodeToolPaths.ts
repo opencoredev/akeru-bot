@@ -154,19 +154,38 @@ export function mcpPathArgument(
   return { kind: "path", path: trimmed };
 }
 
+type McpInputValue = SdkRecord[string];
+
+/**
+ * The path arguments one MCP input value holds, at any depth: a server may nest
+ * them, as in `{ edits: [{ path }] }`. Strings in a list keep the list's key.
+ * A `file:` URL names a file under any key; other strings count only under a path key.
+ */
+function mcpValueArguments(
+  key: string,
+  value: McpInputValue,
+  options: { readonly windows: boolean },
+): ReadonlyArray<McpPathArgument> {
+  if (Predicate.isString(value)) {
+    return MCP_PATH_KEYS.has(key) || /^\s*file:/i.test(value)
+      ? [mcpPathArgument(key, value, options)]
+      : [];
+  }
+
+  if (Array.isArray(value)) {
+    return value.flatMap((entry) => mcpValueArguments(key, entry, options));
+  }
+
+  return Predicate.isObject(value) ? mcpToolArguments(value, options) : [];
+}
+
 function mcpToolArguments(
   input: SdkRecord,
   options: { readonly windows: boolean },
 ): ReadonlyArray<McpPathArgument> {
-  return Object.entries(input).flatMap(([key, value]) => {
-    if (!MCP_PATH_KEYS.has(key.toLowerCase())) return [];
-
-    const values = Array.isArray(value) ? value : [value];
-
-    return values.flatMap((entry) =>
-      Predicate.isString(entry) ? [mcpPathArgument(key.toLowerCase(), entry, options)] : [],
-    );
-  });
+  return Object.entries(input).flatMap(([key, value]) =>
+    mcpValueArguments(key.toLowerCase(), value, options),
+  );
 }
 
 /**
@@ -345,10 +364,12 @@ export const claudeCodeToolPathReach = Effect.fn("claudeCodeToolPathReach")(func
     return physical === resolved ? [resolved] : [resolved, physical];
   });
 
+  /** A child folder may itself be named like `..cache`, so only a whole `..` part climbs out. */
   const isWithin = (target: string, root: string) => {
     const relative = path.relative(root, target);
+    const climbsOut = relative === ".." || relative.startsWith(`..${path.sep}`);
 
-    return relative === "" || (!relative.startsWith("..") && !path.isAbsolute(relative));
+    return !climbsOut && !path.isAbsolute(relative);
   };
 
   /** Protected paths compare the way the host file system does. */

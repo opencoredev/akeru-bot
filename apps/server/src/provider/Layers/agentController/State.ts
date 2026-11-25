@@ -84,6 +84,8 @@ export interface ActiveSession {
   readonly mcpServerIds: readonly McpServer["id"][];
   readonly mcpServers: readonly McpServer[];
   runtimeMode: RuntimeMode;
+  /** The mode the session was started or last updated with; Auto Review raises only runtimeMode. */
+  requestedRuntimeMode: RuntimeMode;
   model: string;
   status: ProviderSession["status"];
   turnAdmissionGeneration: number;
@@ -104,6 +106,8 @@ export interface ActiveSession {
   configuredEntityMemoryAccess: AkeruMemoryThreadAccess | undefined;
   privateBotMemory: boolean;
   readonly workspaceResourceKey: string;
+  /** The session-resource acquisition this session owns, when it acquired any. */
+  readonly resourceOwner: symbol | undefined;
   readonly pendingApprovals: Map<string, PendingApproval>;
   readonly unsubscribe: () => void;
 }
@@ -131,6 +135,8 @@ export interface LegacyTurnMemoryState {
 
 export interface LegacyResourceIdentity {
   readonly workspaceResourceKey: string;
+  /** The session-resource acquisition this session owns, when it acquired any. */
+  readonly resourceOwner: symbol | undefined;
   readonly cwd: string | undefined;
   readonly provider: ProviderDriverKind;
   readonly providerInstanceId: ProviderInstanceId;

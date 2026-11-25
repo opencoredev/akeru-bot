@@ -7,7 +7,7 @@ import {
   type ProviderIntentEvent,
   turnRequestKeyForEvent,
   resolveControllerBotId,
-  isGroupHandoffBusyError,
+  isSessionBusyError,
   isProviderDriverKind,
   withoutUnavailability,
   MANUAL_RECOVERY_INPUT,
@@ -153,8 +153,8 @@ export function createTurns({
           providerInstanceId,
         });
 
-        // A refused handoff leaves the session to the bot whose turn the provider still runs.
-        if (!isGroupHandoffBusyError(cause.reasons.find(Cause.isFailReason)?.error)) {
+        // A busy refusal leaves the session to the turn the provider still runs.
+        if (!isSessionBusyError(cause.reasons.find(Cause.isFailReason)?.error)) {
           yield* setThreadSessionErrorOnTurnStartFailure({
             threadId: event.payload.threadId,
             detail,
