@@ -8,6 +8,7 @@ import {
   requireActiveGroupMember,
   requireBot,
   requireGroup,
+  requireGroupMember,
   requireThread,
 } from "../commandInvariants.ts";
 import {
@@ -78,7 +79,21 @@ export const decideThreadMessages = Effect.fn("decideThreadMessages")(function* 
             : (thread.botId ?? command.respondingBotId),
         });
       } else if (command.respondingBotId !== undefined) {
-        yield* requireBot({ readModel, command, botId: command.respondingBotId });
+        if (thread.groupId !== null && thread.groupId !== undefined) {
+          yield* requireGroupMember({
+            readModel,
+            command,
+            groupId: thread.groupId,
+            botId: command.respondingBotId,
+          });
+        } else if (thread.botId !== null && command.respondingBotId !== thread.botId) {
+          return yield* new OrchestrationCommandInvariantError({
+            commandType: command.type,
+            detail: `Chat '${thread.id}' cannot address a different bot.`,
+          });
+        } else {
+          yield* requireBot({ readModel, command, botId: command.respondingBotId });
+        }
       }
 
       return {
