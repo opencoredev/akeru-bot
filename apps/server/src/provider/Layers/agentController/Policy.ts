@@ -12,14 +12,11 @@ import {
   AKERU_TOOL_CATALOG,
   type ProviderApprovalDecision,
   type ProviderSession,
-  type RuntimeMode,
   ThreadId,
 } from "@akeru/contracts";
 import { driverSupportsDelegation } from "@akeru/shared/delegationProviders";
 
 import { nativeModelOptions } from "../../ReasoningOptions.ts";
-
-import { akeruToolCategory } from "../../AkeruMastraHarness.ts";
 
 import { type AkeruPluginRuntimeOptions } from "../../AkeruCatalogToolHandlers.ts";
 
@@ -121,19 +118,6 @@ export function messageText(message: MastraDBMessage): string {
     )
     .map((part) => part.text)
     .join("");
-}
-
-export function permissionPolicy(
-  runtimeMode: RuntimeMode,
-  category: ReturnType<typeof akeruToolCategory>,
-): "allow" | "ask" {
-  if (runtimeMode === "full-access" || runtimeMode === "auto") return "allow";
-
-  if (category === "read") return "allow";
-
-  if (runtimeMode === "auto-accept-edits" && category === "edit") return "allow";
-
-  return "ask";
 }
 
 export function mcpToolNeedsApproval(manager: McpManager | undefined, toolName: string): boolean {

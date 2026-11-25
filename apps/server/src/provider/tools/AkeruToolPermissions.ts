@@ -31,6 +31,7 @@ import {
 } from "@akeru/shared/botPermissions";
 import { akeruToolRiskClassForInput } from "@akeru/shared/botActionRisk";
 
+import { permissionPolicy } from "../mastra/AkeruActions.ts";
 import { APPROVAL_RANK, ensureWorkspaceCwd } from "./AkeruToolAuthorization.ts";
 import type { AkeruRuntimeToolId, AkeruToolSession } from "./AkeruToolTypes.ts";
 
@@ -59,6 +60,13 @@ export class AkeruToolPermissionDeniedError extends Error {
     super(`Tool '${toolId}' is not allowed by this bot's permission policy.`);
   }
 }
+
+const MODE_APPROVAL_EXEMPT_TOOL_IDS: ReadonlySet<AkeruRuntimeToolId> = new Set([
+  "request_box_help",
+  "Task",
+  "MessageSubagent",
+  "StopSubagent",
+]);
 
 export function principalOf(session: AkeruToolSession): BotActionPrincipal {
   return session.permissions?.principal ?? OWNER_PRINCIPAL;
@@ -121,11 +129,21 @@ export function decideAkeruTool<Input>(input: {
     }
 
     riskClass = akeruToolRiskClassForInput(akeruTool, decodedInput, context);
-    modeAsks = akeruToolModeRequiresApproval(
-      akeruTool,
-      { ...context, localFullAccess: session.runtimeMode === "full-access" },
-      decodedInput,
-    );
+
+    // Supervised and Auto-accept edits ask before anything but a read, wherever it runs, unless
+    // the bot policy explicitly allows the tool. No catalog tool is a plain file edit. A human
+    // handoff only asks the user for help, and a worker cannot pass an approval itself, so
+    // neither needs one to start.
+    modeAsks =
+      akeruToolModeRequiresApproval(
+        akeruTool,
+        { ...context, localFullAccess: session.runtimeMode === "full-access" },
+        decodedInput,
+      ) ||
+      (riskClass !== "read" &&
+        !MODE_APPROVAL_EXEMPT_TOOL_IDS.has(toolId) &&
+        input.policy.toolOverrides[toolId] !== "allow" &&
+        permissionPolicy(session.runtimeMode, "execute") === "ask");
   }
 
   const verdict = decideBotAction({

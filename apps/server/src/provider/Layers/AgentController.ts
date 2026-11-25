@@ -11,7 +11,6 @@ import {
   sessionFailureDetail,
   deleteCatalogMcpServer,
   messageText,
-  permissionPolicy,
   mcpToolNeedsApproval,
   approvalDetail,
   usesMastraCode,
@@ -21,6 +20,8 @@ import {
   approvalDecision,
   toProviderSession,
 } from "./agentController/Policy.ts";
+
+import { permissionPolicy } from "../mastra/AkeruActions.ts";
 
 export { usesMastraCode } from "./agentController/Policy.ts";
 
