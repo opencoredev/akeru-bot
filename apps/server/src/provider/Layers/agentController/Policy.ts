@@ -192,7 +192,7 @@ export function toProviderSession(threadId: ThreadId, active: ActiveSession): Pr
     provider: active.provider,
     providerInstanceId: active.providerInstanceId,
     status: active.status,
-    runtimeMode: active.runtimeMode,
+    runtimeMode: active.requestedRuntimeMode,
     ...(active.cwd ? { cwd: active.cwd } : {}),
     model: active.model,
     threadId,

@@ -700,6 +700,63 @@ describe("ProviderCommandReactor", () => {
     expect(harness.sendTurn).toHaveBeenCalledTimes(1);
   });
 
+  it("restarts a Full access Claude session that a stale Supervised record hides", async () => {
+    const harness = await createHarness({
+      botEngine: { provider: "claudeCode", model: "claude-sonnet-5" },
+    });
+
+    const threadId = ThreadId.make("thread-1");
+    const now = "2026-01-01T00:00:00.000Z";
+
+    const startTurn = (id: string) =>
+      harness.run(
+        harness.engine.dispatch({
+          type: "thread.turn.start",
+          commandId: CommandId.make(`cmd-turn-start-${id}`),
+          threadId,
+          message: {
+            messageId: asMessageId(`user-message-${id}`),
+            role: "user",
+            text: id,
+            attachments: [],
+          },
+          interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
+          runtimeMode: "approval-required",
+          createdAt: now,
+        }),
+      );
+
+    await harness.run(
+      harness.engine.dispatch({
+        type: "thread.runtime-mode.set",
+        commandId: CommandId.make("cmd-runtime-mode-supervised"),
+        threadId,
+        runtimeMode: "approval-required",
+        createdAt: now,
+      }),
+    );
+    await startTurn("first");
+    await harness.waitFor(() => harness.sendTurn.mock.calls.length === 1);
+    await harness.drain();
+
+    // The chat records Supervised, but the provider's query still runs with Full access.
+    const sessionIndex = harness.runtimeSessions.findIndex(
+      (session) => session.threadId === threadId,
+    );
+
+    const live = harness.runtimeSessions[sessionIndex];
+    assert.isDefined(live);
+    harness.runtimeSessions[sessionIndex] = { ...live, runtimeMode: "full-access" };
+
+    await startTurn("second");
+    await harness.waitFor(() => harness.sendTurn.mock.calls.length === 2);
+
+    expect(harness.startSession).toHaveBeenCalledTimes(2);
+    expect(harness.startSession.mock.calls[1]?.[1]).toMatchObject({
+      runtimeMode: "approval-required",
+    });
+  });
+
   it("does not queue Claude Agent work on this computer once its bot moves to a remote sandbox", async () => {
     const harness = await createHarness({
       botEngine: { provider: "claudeCode", model: "claude-sonnet-5" },

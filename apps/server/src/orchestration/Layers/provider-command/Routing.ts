@@ -143,6 +143,17 @@ export const createRouting = Effect.fn("makeprovider-command-Routing")(function*
         }
 
         const session = thread.session;
+
+        // The record can trail the provider, so the live session decides whether this change
+        // takes Full access away.
+        const liveSession = (yield* agentController.listSessions()).find(
+          (candidate) => candidate.threadId === thread.id,
+        );
+
+        const restrictsActiveSession =
+          (liveSession?.runtimeMode ?? session.runtimeMode) === "full-access" &&
+          thread.runtimeMode === "approval-required";
+
         const cachedModelSelection = threadModelSelections.get(event.payload.threadId);
         yield* ensureSessionForThread(
           event.payload.threadId,
@@ -155,9 +166,6 @@ export const createRouting = Effect.fn("makeprovider-command-Routing")(function*
             }
 
             const detail = formatFailureDetail(cause);
-
-            const restrictsActiveSession =
-              session.runtimeMode === "full-access" && thread.runtimeMode === "approval-required";
 
             if (restrictsActiveSession) {
               threadsAwaitingRestrictiveSessionCleanup.add(thread.id);

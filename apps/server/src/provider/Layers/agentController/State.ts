@@ -84,6 +84,8 @@ export interface ActiveSession {
   readonly mcpServerIds: readonly McpServer["id"][];
   readonly mcpServers: readonly McpServer[];
   runtimeMode: RuntimeMode;
+  /** The mode the session was started or last updated with; Auto Review raises only runtimeMode. */
+  requestedRuntimeMode: RuntimeMode;
   model: string;
   status: ProviderSession["status"];
   turnAdmissionGeneration: number;

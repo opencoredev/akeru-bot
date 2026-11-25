@@ -10,7 +10,7 @@ import { it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as Fiber from "effect/Fiber";
 import * as Stream from "effect/Stream";
-import { assert, describe, expect } from "vite-plus/test";
+import { assert, describe, expect, vi } from "vite-plus/test";
 import { AgentController } from "../Services/AgentController.ts";
 import {
   codexThreadId,
@@ -87,6 +87,44 @@ describe("AgentControllerLive", () => {
 });
 
 describe("AgentControllerLive", () => {
+  it.effect("keeps reporting the previous mode when an in-place mode update fails", () => {
+    const bridge = makeBridge();
+    const mastra = mastraHarnessFixture();
+
+    const start = (runtimeMode: "full-access" | "auto-accept-edits") => ({
+      threadId: codexThreadId,
+      provider: ProviderDriverKind.make("codex"),
+      providerInstanceId: codexInstanceId,
+      cwd: process.cwd(),
+      modelSelection: codexSelection,
+      runtimeMode,
+    });
+
+    return provideController(
+      Effect.gen(function* () {
+        const controller = yield* AgentController;
+        yield* resolveCodex(controller);
+        yield* controller.startSession(codexThreadId, start("full-access"));
+        vi.mocked(mastra.session.state.set).mockRejectedValueOnce(new Error("setup failed"));
+
+        const failed = yield* Effect.exit(
+          controller.startSession(codexThreadId, start("auto-accept-edits")),
+        );
+
+        expect(failed._tag).toBe("Failure");
+
+        // The tool policy still reflects Full access, so the next turn must retry the change.
+        const listed = (yield* controller.listSessions()).find(
+          (session) => session.threadId === codexThreadId,
+        );
+
+        expect(listed?.runtimeMode).toBe("full-access");
+      }),
+      bridge.service,
+      mastra.factory,
+    );
+  });
+
   it.effect("keeps a pending approval across reconnect and grants one exact tool call", () => {
     const bridge = makeBridge();
     const mastra = mastraHarnessFixture();
@@ -123,6 +161,13 @@ describe("AgentControllerLive", () => {
           requestId: ApprovalRequestId.make("shell-tool-1"),
           decision: "acceptAlways",
         });
+
+        // Auto Review changes how this session asks, not the mode it was started with.
+        const listed = (yield* controller.listSessions()).find(
+          (session) => session.threadId === codexThreadId,
+        );
+
+        expect(listed?.runtimeMode).toBe("approval-required");
 
         const runtime = mastra.harnessOptions[0]?.toolRuntime;
         assert.isDefined(runtime);

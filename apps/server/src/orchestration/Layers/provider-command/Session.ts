@@ -344,7 +344,9 @@ export function createSession({
         : {}),
     });
 
-    const runtimeModeChanged = thread.runtimeMode !== thread.session?.runtimeMode;
+    const runtimeModeChanged =
+      thread.runtimeMode !== (activeSession?.runtimeMode ?? thread.session?.runtimeMode);
+
     const previousBotWorkspaceKey = threadBotWorkspaceKeys.get(threadId);
 
     const botWorkspaceChanged =

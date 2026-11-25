@@ -271,6 +271,7 @@ export function createSessionLifecycle(deps: SessionLifecycleDependencies) {
       };
 
       existing.configuredToolSession = configuredToolSession;
+      existing.requestedRuntimeMode = input.runtimeMode;
       existing.startInput = input;
       existing.configuredMemoryAccess = delegatedAccess
         ? undefined
@@ -653,6 +654,7 @@ export function createSessionLifecycle(deps: SessionLifecycleDependencies) {
         mcpServerIds: mcpServers.map((server) => server.id),
         mcpServers,
         runtimeMode: access.runtimeMode,
+        requestedRuntimeMode: input.runtimeMode,
         model: resolved.modelSelection.model,
         status: "ready" as const,
         turnAdmissionGeneration: 0,
