@@ -51,6 +51,7 @@ export class AkeruSessionResources {
   private readonly computerUseTemporaryDirectories = new Map<string, string>();
   private readonly tenkiThreads = new Set<string>();
   private readonly pendingReleases = new Set<Promise<void>>();
+  private readonly owners = new Map<string, symbol>();
   /** One hold per session that took Computer Use; only those sessions' releases count it down. */
   private computerUseReservation: { readonly threadId: string; holds: number } | undefined;
   private readonly computerUseHolders = new Set<string>();
@@ -100,6 +101,8 @@ export class AkeruSessionResources {
 
   private async acquireOnce(input: AkeruSessionResourceInput): Promise<AkeruSessionResourceView> {
     const key = input.threadId;
+    const owner = Symbol(key);
+    this.owners.set(key, owner);
 
     const usesComputer = input.mcpServers.some((server) =>
       isCodexComputerUseServer(String(server.id)),
@@ -384,6 +387,7 @@ export class AkeruSessionResources {
         workspace:
           userComputerWorkspaceLease?.workspace.workspace ?? workspaceLease.workspace.workspace,
         botWorkspace: workspaceLease.workspace.workspace,
+        owner,
       };
     } catch (cause) {
       // A failed setup may take its workspace with it only when this acquisition alone owns
@@ -464,8 +468,20 @@ export class AkeruSessionResources {
     return this.workspacePool.retryFailedSleeps();
   }
 
-  async release(threadId: string, options?: BotWorkspaceReleaseOptions): Promise<void> {
+  /** The acquisition that holds the thread's resources, if any. */
+  ownerOf(threadId: string): symbol | undefined {
+    return this.owners.get(threadId);
+  }
+
+  /** With `owner`, releases only while that acquisition still holds the thread's resources. */
+  async release(
+    threadId: string,
+    options?: BotWorkspaceReleaseOptions,
+    owner?: symbol,
+  ): Promise<void> {
     await this.acquisitions.get(threadId)?.catch(() => undefined);
+
+    if (owner !== undefined && this.owners.get(threadId) !== owner) return;
     await this.releaseOnce(threadId, options);
   }
 
@@ -486,6 +502,7 @@ export class AkeruSessionResources {
    */
   private async teardown(threadId: string, options?: BotWorkspaceReleaseOptions): Promise<void> {
     const failures: unknown[] = [];
+    this.owners.delete(threadId);
     const heldComputerUse = this.computerUseHolders.delete(threadId);
     const manager = this.mcpManagers.get(threadId);
     this.mcpManagers.delete(threadId);

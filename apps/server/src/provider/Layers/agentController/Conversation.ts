@@ -90,14 +90,31 @@ export function createConversation(deps: {
   const stopSessionWithResources = Effect.fn("AgentController.stopSession")(function* (
     input: Parameters<AgentControllerShape["stopSession"]>[0],
     destroyResources: boolean,
+    onlySession?: ActiveSession,
   ) {
+    const key = String(input.threadId);
+    // The stop belongs to the resources and legacy session it finds now. Once a replacement
+    // holds either, everything left to clean up is the replacement's.
+    const observedOwner = deps.sessionResources.ownerOf(key);
+    const observedIdentity = deps.legacyResourceIdentity.get(key);
+    let expectedOwner = observedOwner;
+
+    const current = () =>
+      deps.sessionResources.ownerOf(key) === expectedOwner &&
+      deps.legacyResourceIdentity.get(key) === observedIdentity;
+
+    // A reset for a session that failed must not stop the session that replaced it.
+    if (onlySession && deps.sessions.get(key) !== onlySession) return;
     // A stopped chat must not receive an image that finishes later.
     yield* cancelActiveImageGenerations(input.threadId);
-    const key = String(input.threadId);
     const active = deps.sessions.get(key);
+
+    if (onlySession && active !== onlySession) return;
 
     if (!active) {
       const legacySessions = yield* deps.legacyProviderBridge.listSessions();
+
+      if (!current()) return;
 
       // A legacy session can exit before its chat is deleted, as Claude Agent's
       // does on interrupt. Its tracked resources are released all the same.
@@ -105,9 +122,6 @@ export function createConversation(deps: {
         legacySessions.some((session) => session.threadId === input.threadId) ||
         deps.legacyResourceIdentity.has(key)
       ) {
-        // Release only the resources of the session this stop found. A new session that starts
-        // on the thread while the provider is stopping owns its own resources and identity.
-        const stoppingIdentity = deps.legacyResourceIdentity.get(key);
         const pendingTurns = deps.legacyPending(key);
 
         for (const pending of pendingTurns) deps.restoreLegacyMemoryHandler(key, pending);
@@ -123,23 +137,33 @@ export function createConversation(deps: {
               : Effect.void,
           { discard: true },
         );
+
+        if (!current()) return;
         yield* deps.legacyProviderBridge.stopSession(input).pipe(
           Effect.ensuring(
             Effect.gen(function* () {
               // Each await can let a restart take the thread, so ownership is checked again.
-              const owned = () => deps.legacyResourceIdentity.get(key) === stoppingIdentity;
+              const resourceOwner = observedIdentity?.resourceOwner ?? observedOwner;
 
-              if (!owned()) return;
-              yield* deps
-                .runMastra("resources.release", () =>
-                  deps.sessionResources.release(key, { destroy: destroyResources }),
-                )
-                .pipe(Effect.ignoreCause({ log: true }));
+              if (!current()) return;
 
-              if (!owned()) return;
+              if (resourceOwner !== undefined) {
+                yield* deps
+                  .runMastra("resources.release", () =>
+                    deps.sessionResources.release(
+                      key,
+                      { destroy: destroyResources },
+                      resourceOwner,
+                    ),
+                  )
+                  .pipe(Effect.ignoreCause({ log: true }));
+                expectedOwner = undefined;
+              }
+
+              if (!current()) return;
               yield* deps.clearPreviewMcpSession(input.threadId);
 
-              if (!owned()) return;
+              if (!current()) return;
               clearBotToolPermissionSession(input.threadId);
               deps.legacyResourceIdentity.delete(key);
             }),
@@ -154,11 +178,19 @@ export function createConversation(deps: {
           deps.resolvedByThread.get(key)?.provider ?? ProviderDriverKind.make("codex"),
         )
       ) {
-        yield* deps
-          .runMastra("resources.release", () =>
-            deps.sessionResources.release(key, { destroy: destroyResources }),
-          )
-          .pipe(Effect.ignoreCause({ log: true }));
+        // A session that started on the thread since this stop began owns everything below.
+        if (!current()) return;
+
+        if (observedOwner !== undefined) {
+          yield* deps
+            .runMastra("resources.release", () =>
+              deps.sessionResources.release(key, { destroy: destroyResources }, observedOwner),
+            )
+            .pipe(Effect.ignoreCause({ log: true }));
+          expectedOwner = undefined;
+        }
+
+        if (!current()) return;
         yield* deps.clearPreviewMcpSession(input.threadId);
         deps.toolRuntime.unregisterSession(key);
 
@@ -189,9 +221,16 @@ export function createConversation(deps: {
           Effect.gen(function* () {
             yield* deps
               .runMastra("resources.release", () =>
-                deps.sessionResources.release(key, { destroy: destroyResources }),
+                deps.sessionResources.release(
+                  key,
+                  { destroy: destroyResources },
+                  active.resourceOwner,
+                ),
               )
               .pipe(Effect.ignoreCause({ log: true }));
+
+            // A session that started on the thread while this one was deleted keeps its state.
+            if (deps.sessions.get(key) !== active) return;
             yield* deps.clearPreviewMcpSession(input.threadId);
             deps.toolRuntime.unregisterSession(key);
             deps.sessions.delete(key);

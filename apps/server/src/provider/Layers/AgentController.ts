@@ -50,6 +50,7 @@ import * as Option from "effect/Option";
 import * as PubSub from "effect/PubSub";
 import * as Schedule from "effect/Schedule";
 import * as Ref from "effect/Ref";
+import * as Deferred from "effect/Deferred";
 
 import { type BotMemoryAccess } from "../../memory/BotMemory.ts";
 
@@ -138,6 +139,33 @@ const make = (options?: AgentControllerLiveOptions) =>
       fork,
       forkPromise,
     } = yield* createControllerState(options);
+
+    // A user's stop that arrives while a session is starting waits for it, so it stops that session
+    // instead of releasing resources the session is still acquiring. A start never waits on a stop.
+    const startingSessions = new Map<string, Deferred.Deferred<void>>();
+
+    const trackSessionStart = <A, E, R>(threadId: ThreadId, effect: Effect.Effect<A, E, R>) =>
+      Effect.suspend(() => {
+        const key = String(threadId);
+        const started = Deferred.makeUnsafe<void>();
+        startingSessions.set(key, started);
+
+        return effect.pipe(
+          Effect.ensuring(
+            Effect.sync(() => {
+              if (startingSessions.get(key) === started) startingSessions.delete(key);
+              Deferred.doneUnsafe(started, Effect.void);
+            }),
+          ),
+        );
+      });
+
+    const afterSessionStart = <A, E, R>(threadId: ThreadId, effect: Effect.Effect<A, E, R>) =>
+      Effect.suspend(() => {
+        const starting = startingSessions.get(String(threadId));
+
+        return starting ? Deferred.await(starting).pipe(Effect.andThen(effect)) : effect;
+      });
 
     // A turn waits on the user while any tool approval, question, or routine review
     // it opened is unanswered, or an accepted routine is still being created.
@@ -569,6 +597,9 @@ const make = (options?: AgentControllerLiveOptions) =>
       runMastra,
     });
 
+    const trackedStartSession: typeof startSession = (threadId, input) =>
+      trackSessionStart(threadId, startSession(threadId, input));
+
     const { stopSessionWithResources, stopSession, rollbackConversation } = createConversation({
       fileSystem,
       sessions,
@@ -597,7 +628,7 @@ const make = (options?: AgentControllerLiveOptions) =>
       projectionTurns,
       config,
       interruptTurn,
-      startSession,
+      startSession: trackedStartSession,
     });
 
     yield* Effect.addFinalizer(() =>
@@ -747,12 +778,12 @@ const make = (options?: AgentControllerLiveOptions) =>
 
       resolveEngine,
       inspectEngine,
-      startSession,
+      startSession: trackedStartSession,
       sendTurn,
       interruptTurn,
       respondToRequest,
       respondToUserInput,
-      stopSession,
+      stopSession: (input) => afterSessionStart(input.threadId, stopSession(input)),
 
       rollbackConversation,
       uploadFeedback: legacyProviderBridge.uploadFeedback,

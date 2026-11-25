@@ -106,6 +106,8 @@ export interface ActiveSession {
   configuredEntityMemoryAccess: AkeruMemoryThreadAccess | undefined;
   privateBotMemory: boolean;
   readonly workspaceResourceKey: string;
+  /** The session-resource acquisition this session owns, when it acquired any. */
+  readonly resourceOwner: symbol | undefined;
   readonly pendingApprovals: Map<string, PendingApproval>;
   readonly unsubscribe: () => void;
 }
@@ -133,6 +135,8 @@ export interface LegacyTurnMemoryState {
 
 export interface LegacyResourceIdentity {
   readonly workspaceResourceKey: string;
+  /** The session-resource acquisition this session owns, when it acquired any. */
+  readonly resourceOwner: symbol | undefined;
   readonly cwd: string | undefined;
   readonly provider: ProviderDriverKind;
   readonly providerInstanceId: ProviderInstanceId;

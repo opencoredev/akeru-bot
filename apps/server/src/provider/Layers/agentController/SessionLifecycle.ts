@@ -389,7 +389,9 @@ export function createSessionLifecycle(deps: SessionLifecycleDependencies) {
       }
 
       yield* deps
-        .runMastra("resources.release", () => deps.sessionResources.release(key))
+        .runMastra("resources.release", () =>
+          deps.sessionResources.release(key, undefined, existingLegacy.resourceOwner),
+        )
         .pipe(Effect.ignoreCause({ log: true }));
       deps.legacyResourceIdentity.delete(key);
     }
@@ -487,6 +489,7 @@ export function createSessionLifecycle(deps: SessionLifecycleDependencies) {
             Effect.sync(() => {
               deps.legacyResourceIdentity.set(key, {
                 workspaceResourceKey,
+                resourceOwner: "owner" in resources ? resources.owner : undefined,
                 cwd: input.cwd,
                 provider: resolved.provider,
                 providerInstanceId: resolved.providerInstanceId,
@@ -673,6 +676,7 @@ export function createSessionLifecycle(deps: SessionLifecycleDependencies) {
         configuredEntityMemoryAccess: input.memoryAccess,
         privateBotMemory: settings.privateBotMemory,
         workspaceResourceKey,
+        resourceOwner: "owner" in resources ? resources.owner : undefined,
         pendingApprovals: new Map<string, PendingApproval>(),
         unsubscribe,
       } satisfies ActiveSession;

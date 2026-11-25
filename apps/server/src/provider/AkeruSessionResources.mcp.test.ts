@@ -375,6 +375,35 @@ describe("AkeruSessionResources", () => {
     await resources.shutdown();
   });
 
+  it("ignores a late stop for a session the thread has already replaced", async () => {
+    const replacementManager = mcpManager({ connected: true, toolCount: 1 });
+
+    const resources = new AkeruSessionResources({
+      io: workspaceIO,
+      stateDir: stateDir(),
+      makeRemoteWorkspace: async () => ({
+        ...localBotWorkspace(workspace()),
+        provider: "vercel",
+        created: true,
+      }),
+      makeMcpManager: () => replacementManager as never,
+      toMcpServerConfigs: () => ({}),
+    });
+
+    const first = await resources.acquire({ ...remoteInput, threadId: "chat" });
+    await resources.release("chat", undefined, first.owner);
+    await resources.acquire({ ...remoteInput, threadId: "chat", mcpServers: [exaServer] });
+    const replacement = resources.getWorkspace("chat");
+
+    // A duplicate stop for the first session arrives after the replacement started.
+    await resources.release("chat", undefined, first.owner);
+
+    expect(replacement).toBeDefined();
+    expect(resources.getWorkspace("chat")).toBe(replacement);
+    expect(replacementManager.disconnect).not.toHaveBeenCalled();
+    await resources.shutdown();
+  });
+
   it("preserves the Ascii workspace when MCP initialization fails", async () => {
     const remote: AkeruBotWorkspace = { ...localBotWorkspace(workspace()), provider: "ascii" };
     const destroy = vi.spyOn(remote, "destroy");
