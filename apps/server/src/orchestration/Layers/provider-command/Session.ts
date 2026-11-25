@@ -479,10 +479,14 @@ export function createSession({
       const activeTurnId = activeSession?.activeTurnId;
 
       // A running turn finishes in its old workspace, which stays until the move. A mode change
-      // cannot wait for the move, or the next turn would run under the previous mode, so new
-      // work is refused until the turn finishes.
+      // cannot wait for the move, or the next turn would run under the previous mode, and Claude
+      // Agent, which runs on this computer, must not take new work for a remote sandbox. Both
+      // refuse new work until the turn finishes.
+      const claudeCodeLeavesThisComputer =
+        preferredProvider === "claudeCode" && effectiveSandbox !== "local";
+
       if (botWorkspaceChanged && activeTurnId !== undefined) {
-        if (runtimeModeChanged) {
+        if (runtimeModeChanged || claudeCodeLeavesThisComputer) {
           return yield* new SessionBusyError({ threadId, message: WORKSPACE_MOVE_BUSY_MESSAGE });
         }
 
