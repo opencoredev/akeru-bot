@@ -201,6 +201,35 @@ describe("first admin pairing", () => {
   );
 });
 
+describe("first admin pairing as a bot", () => {
+  it.effect("counts a redeemed admin link that claims to be a bot as the first admin", () =>
+    Effect.gen(function* () {
+      const environmentAuth = yield* EnvironmentAuth.EnvironmentAuth;
+      const noOverrides = { ttl: Option.none(), label: Option.none() };
+      const first = yield* issueAdminPairingLink(noOverrides);
+      const second = yield* issueAdminPairingLink(noOverrides);
+
+      yield* environmentAuth.exchangeBootstrapCredentialForAccessToken(
+        first.credential,
+        undefined,
+        { deviceType: "bot" },
+      );
+
+      const refused = yield* environmentAuth
+        .exchangeBootstrapCredentialForAccessToken(second.credential, undefined, {
+          deviceType: "mobile",
+        })
+        .pipe(Effect.flip);
+
+      expect(refused._tag).toBe("ServerAuthInvalidCredentialError");
+
+      const another = yield* issueAdminPairingLink(noOverrides).pipe(Effect.flip);
+
+      expect(another).toBeInstanceOf(AdminAlreadyPairedError);
+    }).pipe(Effect.provide(InMemoryEnvironmentAuthLayer)),
+  );
+});
+
 describe("pair tailscale local target", () => {
   it("proxies the dev web port for dev servers", () => {
     expect(resolveTailscaleLocalTarget({ ...baseState, devUrl: "http://localhost:5733/" })).toEqual(

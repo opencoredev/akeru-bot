@@ -308,19 +308,25 @@ export const make = Effect.gen(function* () {
 
   /**
    * Issues a session for a redeemed pairing grant. The first person-held admin session closes
-   * first-admin bootstrap, so admin links issued before it stop working.
+   * first-admin bootstrap, so admin links issued before it stop working. Only the server mints
+   * bot sessions, so a redeemed grant never records the bot device type a client presents.
    */
   const issueGrantSession = <A, E, R>(
     scopes: ReadonlyArray<AuthEnvironmentScope>,
-    client: AuthClientMetadata,
-    issue: Effect.Effect<A, E, R>,
+    requestMetadata: AuthClientMetadata,
+    issue: (client: AuthClientMetadata) => Effect.Effect<A, E, R>,
   ) =>
     Effect.gen(function* () {
+      const client: AuthClientMetadata =
+        requestMetadata.deviceType === "bot"
+          ? { ...requestMetadata, deviceType: "unknown" }
+          : requestMetadata;
+
       const firstAdmin =
         hasPairedAdminClient([{ scopes, client }]) &&
         !hasPairedAdminClient(yield* sessions.listActive());
 
-      const session = yield* issue;
+      const session = yield* issue(client);
 
       if (firstAdmin) {
         const links = yield* bootstrapCredentials.listActive();
@@ -341,15 +347,13 @@ export const make = Effect.gen(function* () {
     bootstrapCredentials.consume(credential).pipe(
       Effect.mapError(toBootstrapExchangeError),
       Effect.flatMap((grant) =>
-        issueGrantSession(
-          grant.scopes,
-          requestMetadata,
+        issueGrantSession(grant.scopes, requestMetadata, (client) =>
           sessions.issue({
             method: "browser-session-cookie",
             subject: grant.subject,
             scopes: grant.scopes,
             client: {
-              ...requestMetadata,
+              ...client,
               ...(grant.label ? { label: grant.label } : {}),
             },
           }),
@@ -383,15 +387,13 @@ export const make = Effect.gen(function* () {
               return yield* new ServerAuthScopeNotGrantedError({});
             }
 
-            return yield* issueGrantSession(
-              grantedScopes,
-              requestMetadata,
+            return yield* issueGrantSession(grantedScopes, requestMetadata, (client) =>
               sessions.issue({
                 method: "bearer-access-token",
                 subject: grant.subject,
                 scopes: grantedScopes,
                 client: {
-                  ...requestMetadata,
+                  ...client,
                   ...(grant.label ? { label: grant.label } : {}),
                 },
               }),
