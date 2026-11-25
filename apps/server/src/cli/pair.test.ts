@@ -119,6 +119,52 @@ describe("pair admin link", () => {
   );
 });
 
+describe("pair admin link race", () => {
+  it.effect("revokes a link inserted while an admin paired", () =>
+    Effect.gen(function* () {
+      const environmentAuth = yield* EnvironmentAuth.EnvironmentAuth;
+      const sessions = yield* environmentAuth.listSessions();
+      const before = (yield* environmentAuth.listPairingLinks()).length;
+      let listed = 0;
+
+      const racing = Layer.succeed(EnvironmentAuth.EnvironmentAuth, {
+        ...environmentAuth,
+        listSessions: () => {
+          listed += 1;
+
+          return Effect.succeed(
+            listed === 1
+              ? sessions
+              : [
+                  {
+                    sessionId: "admin" as never,
+                    subject: "person",
+                    role: "client",
+                    method: "browser-session-cookie",
+                    scopes: ["access:write"],
+                    client: { deviceType: "mobile" },
+                    issuedAt: "2026-01-01T00:00:00.000Z",
+                    expiresAt: "2026-02-01T00:00:00.000Z",
+                    lastConnectedAt: null,
+                    connected: false,
+                    current: false,
+                  } as never,
+                ],
+          );
+        },
+      });
+
+      const refused = yield* issueAdminPairingLink({
+        ttl: Option.none(),
+        label: Option.none(),
+      }).pipe(Effect.flip, Effect.provide(racing));
+
+      expect(refused).toBeInstanceOf(AdminAlreadyPairedError);
+      expect(yield* environmentAuth.listPairingLinks()).toHaveLength(before);
+    }).pipe(Effect.provide(InMemoryEnvironmentAuthLayer)),
+  );
+});
+
 describe("first admin pairing", () => {
   it.effect("revokes admin links issued before it", () =>
     Effect.gen(function* () {

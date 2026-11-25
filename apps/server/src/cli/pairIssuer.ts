@@ -83,12 +83,22 @@ export const issueAdminPairingLink = Effect.fn("pair.issueAdminPairingLink")(fun
     return yield* new AdminAlreadyPairedError();
   }
 
-  return yield* environmentAuth.createPairingLink({
+  const link = yield* environmentAuth.createPairingLink({
     scopes: AuthAdministrativeScopes,
     subject: "one-time-token",
     label: Option.getOrElse(input.label, () => "akeru pair --admin"),
     ...(Option.isSome(input.ttl) ? { ttl: input.ttl.value } : {}),
   });
+
+  // The server pairs admins outside this process, so an admin can pair between the check above
+  // and the insert, after the server revoked the admin links it could see.
+  if (hasPairedAdminClient(yield* environmentAuth.listSessions())) {
+    yield* environmentAuth.revokePairingLink(link.id);
+
+    return yield* new AdminAlreadyPairedError();
+  }
+
+  return link;
 });
 
 export const mintPairingLink = Effect.fn("pair.mintPairingLink")(function* (input: {
