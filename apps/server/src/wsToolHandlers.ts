@@ -5,6 +5,10 @@ import { WS_METHODS, WsRpcGroup } from "@akeru/contracts";
 
 import type { WsConnection } from "./wsConnection.ts";
 
+const voiceAttributes = { "rpc.aggregate": "voice" } as const;
+
+const computerAttributes = { "rpc.aggregate": "computer" } as const;
+
 export const createWsToolHandlers = ({
   voiceCallOwnerId,
   computerClient,
@@ -28,21 +32,53 @@ export const createWsToolHandlers = ({
   | "voiceCalls"
 >) =>
   ({
-    [WS_METHODS.voiceProviders]: () => voiceCalls.providers,
+    [WS_METHODS.voiceProviders]: () =>
+      observeRpcEffect(WS_METHODS.voiceProviders, voiceCalls.providers, voiceAttributes),
 
-    [WS_METHODS.voiceConnect]: ({ provider, apiKey }) => voiceCalls.connect(provider, apiKey),
+    [WS_METHODS.voiceConnect]: ({ provider, apiKey }) =>
+      observeRpcEffect(
+        WS_METHODS.voiceConnect,
+        voiceCalls.connect(provider, apiKey),
+        voiceAttributes,
+      ),
 
-    [WS_METHODS.voiceDisconnect]: ({ provider }) => voiceCalls.disconnect(provider),
+    [WS_METHODS.voiceDisconnect]: ({ provider }) =>
+      observeRpcEffect(
+        WS_METHODS.voiceDisconnect,
+        voiceCalls.disconnect(provider),
+        voiceAttributes,
+      ),
 
-    [WS_METHODS.voiceTest]: ({ provider }) => voiceCalls.test(provider),
+    [WS_METHODS.voiceTest]: ({ provider }) =>
+      observeRpcEffect(WS_METHODS.voiceTest, voiceCalls.test(provider), voiceAttributes),
 
-    [WS_METHODS.voiceListVoices]: ({ provider, cursor }) => voiceCalls.listVoices(provider, cursor),
+    [WS_METHODS.voiceListVoices]: ({ provider, cursor }) =>
+      observeRpcEffect(
+        WS_METHODS.voiceListVoices,
+        voiceCalls.listVoices(provider, cursor),
+        voiceAttributes,
+      ),
 
-    [WS_METHODS.voiceTranscribe]: (input) => voiceCalls.transcribe(input, voiceCallOwnerId),
+    [WS_METHODS.voiceTranscribe]: (input) =>
+      observeRpcEffect(
+        WS_METHODS.voiceTranscribe,
+        voiceCalls.transcribe(input, voiceCallOwnerId),
+        voiceAttributes,
+      ),
 
-    [WS_METHODS.voiceSynthesize]: (input) => voiceCalls.synthesize(input, voiceCallOwnerId),
+    [WS_METHODS.voiceSynthesize]: (input) =>
+      observeRpcEffect(
+        WS_METHODS.voiceSynthesize,
+        voiceCalls.synthesize(input, voiceCallOwnerId),
+        voiceAttributes,
+      ),
 
-    [WS_METHODS.voiceCancel]: ({ operationId }) => voiceCalls.cancel(operationId, voiceCallOwnerId),
+    [WS_METHODS.voiceCancel]: ({ operationId }) =>
+      observeRpcEffect(
+        WS_METHODS.voiceCancel,
+        voiceCalls.cancel(operationId, voiceCallOwnerId),
+        voiceAttributes,
+      ),
 
     [WS_METHODS.voiceCallGet]: (_input) =>
       observeRpcEffect(WS_METHODS.voiceCallGet, voiceCalls.get, {
@@ -60,36 +96,64 @@ export const createWsToolHandlers = ({
       }),
 
     [WS_METHODS.computerGetState]: (input) =>
-      Effect.sync(() => computerRegistry.state(input.threadId)),
+      observeRpcEffect(
+        WS_METHODS.computerGetState,
+        Effect.sync(() => computerRegistry.state(input.threadId)),
+        computerAttributes,
+      ),
 
     [WS_METHODS.computerOpen]: (input, metadata) =>
-      computerOperation(computerClient(metadata.client.id), () =>
-        computerRegistry.open(input.threadId),
+      observeRpcEffect(
+        WS_METHODS.computerOpen,
+        computerOperation(computerClient(metadata.client.id), () =>
+          computerRegistry.open(input.threadId),
+        ),
+        computerAttributes,
       ),
 
     [WS_METHODS.computerAcquire]: (input, metadata) =>
-      computerOperation(computerClient(metadata.client.id), () =>
-        computerRegistry.acquire(input.threadId, computerClient(metadata.client.id)),
+      observeRpcEffect(
+        WS_METHODS.computerAcquire,
+        computerOperation(computerClient(metadata.client.id), () =>
+          computerRegistry.acquire(input.threadId, computerClient(metadata.client.id)),
+        ),
+        computerAttributes,
       ),
 
     [WS_METHODS.computerInput]: (input, metadata) =>
-      computerOperation(computerClient(metadata.client.id), () =>
-        computerRegistry.input(input, computerClient(metadata.client.id)),
+      observeRpcEffect(
+        WS_METHODS.computerInput,
+        computerOperation(computerClient(metadata.client.id), () =>
+          computerRegistry.input(input, computerClient(metadata.client.id)),
+        ),
+        computerAttributes,
       ),
 
     [WS_METHODS.computerRelease]: (input, metadata) =>
-      computerOperation(computerClient(metadata.client.id), () =>
-        computerRegistry.release(input, computerClient(metadata.client.id)),
+      observeRpcEffect(
+        WS_METHODS.computerRelease,
+        computerOperation(computerClient(metadata.client.id), () =>
+          computerRegistry.release(input, computerClient(metadata.client.id)),
+        ),
+        computerAttributes,
       ),
 
     [WS_METHODS.computerClose]: (input, metadata) =>
-      computerOperation(computerClient(metadata.client.id), () =>
-        computerRegistry.close(input.threadId, computerClient(metadata.client.id)),
+      observeRpcEffect(
+        WS_METHODS.computerClose,
+        computerOperation(computerClient(metadata.client.id), () =>
+          computerRegistry.close(input.threadId, computerClient(metadata.client.id)),
+        ),
+        computerAttributes,
       ),
 
     [WS_METHODS.computerStop]: (input, metadata) =>
-      computerOperation(computerClient(metadata.client.id), () =>
-        Promise.resolve(computerRegistry.stop(input.threadId)),
+      observeRpcEffect(
+        WS_METHODS.computerStop,
+        computerOperation(computerClient(metadata.client.id), () =>
+          Promise.resolve(computerRegistry.stop(input.threadId)),
+        ),
+        computerAttributes,
       ),
 
     [WS_METHODS.computerEvents]: (input, metadata) =>
