@@ -368,6 +368,45 @@ it.layer(NodeServices.layer)("delegation decider", (it) => {
       }).pipe(Effect.flip);
 
       expect(String(changed)).toContain("immutable");
+
+      const failed = makeDelegation({
+        groupId,
+        phase: {
+          _tag: "Failed",
+          childThreadId: CHILD_THREAD_ID,
+          childTurnId: CHILD_TURN_ID,
+          startedAt: NOW,
+          completedAt: NOW,
+          failure: { failureCode: "child_failed", message: "The child failed." },
+          acknowledgedAt: null,
+        },
+      });
+
+      const retry = (retryGroupId: GroupId | null) =>
+        makeDelegation({
+          delegationId: DelegationId.make("delegation-retry"),
+          retryOfDelegationId: failed.delegationId,
+          groupId: retryGroupId,
+        });
+
+      const kept = yield* decideOne(makeReadModel([failed]), {
+        type: "delegation.create",
+        commandId: CommandId.make("command-retry"),
+        delegation: retry(groupId),
+      });
+
+      expect(kept.payload.delegation.groupId).toBe(groupId);
+
+      const lost = yield* decideOrchestrationCommand({
+        readModel: makeReadModel([failed]),
+        command: {
+          type: "delegation.create",
+          commandId: CommandId.make("command-retry-lost"),
+          delegation: retry(null),
+        },
+      }).pipe(Effect.flip);
+
+      expect(String(lost)).toContain("must keep the group");
     }),
   );
 

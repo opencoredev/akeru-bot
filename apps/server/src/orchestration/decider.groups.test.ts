@@ -18,6 +18,7 @@ import {
   PERSON_ID,
   startTurnCommand,
 } from "./test-support/GroupDeciderFixtures.ts";
+import { makeDelegation } from "./test-support/DelegationDeciderFixtures.ts";
 
 it.layer(NodeServices.layer)("group membership decider", (it) => {
   it.effect("rejects group creation without a boss", () =>
@@ -38,6 +39,34 @@ it.layer(NodeServices.layer)("group membership decider", (it) => {
       }
 
       expect(error.detail).toContain("requires a boss");
+    }),
+  );
+
+  it.effect("keeps a deleted group's ID reserved while bot work still names it", () =>
+    Effect.gen(function* () {
+      const error = yield* decideOrchestrationCommand({
+        command: {
+          type: "group.create",
+          commandId: CommandId.make("cmd-group-create"),
+          groupId: GROUP_ID,
+          name: "Product",
+          bossBotId: BOSS_ID,
+          specialistBotIds: [SPECIALIST_ID],
+          createdAt: NOW,
+        },
+        readModel: {
+          ...makeReadModel({
+            bots: [makeBot({ id: BOSS_ID }), makeBot({ id: SPECIALIST_ID })],
+          }),
+          delegations: [makeDelegation({ groupId: GROUP_ID })],
+        },
+      }).pipe(Effect.flip);
+
+      if (!Predicate.isTagged(error, "OrchestrationCommandInvariantError")) {
+        throw new Error("Expected group reuse invariant error");
+      }
+
+      expect(error.detail).toContain("cannot be reused");
     }),
   );
 

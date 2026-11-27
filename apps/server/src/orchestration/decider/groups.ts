@@ -48,6 +48,14 @@ export const decideGroups = Effect.fn("decideGroups")(function* ({
     case "group.create": {
       yield* requireGroupAbsent({ readModel, command, groupId: command.groupId });
 
+      // Bot work keeps its group's ID, so a deleted group's ID stays reserved.
+      if (readModel.delegations.some((delegation) => delegation.groupId === command.groupId)) {
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: `Group '${command.groupId}' belonged to a deleted group and cannot be reused.`,
+        });
+      }
+
       if (command.bossBotId === undefined) {
         return yield* new OrchestrationCommandInvariantError({
           commandType: command.type,
