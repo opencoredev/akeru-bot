@@ -26,6 +26,13 @@ const playwright = vi.hoisted(() => {
 
   const contexts: FakeContext[] = [];
 
+  // Lets a test hold or fail the next newPage() call.
+  interface NewPageHook {
+    current: (() => Promise<void>) | null;
+  }
+
+  const newPageHook: NewPageHook = { current: null };
+
   const fakePage = () => {
     const onClose: Array<() => void> = [];
 
@@ -48,6 +55,11 @@ const playwright = vi.hoisted(() => {
       pages: [] as FakePage[],
       close: vi.fn(async () => undefined),
       newPage: async () => {
+        const hook = newPageHook.current;
+        newPageHook.current = null;
+
+        if (hook) await hook();
+
         const page = fakePage();
         context.pages.push(page);
 
@@ -72,7 +84,7 @@ const playwright = vi.hoisted(() => {
     return browser;
   });
 
-  return { browsers, contexts, connectOverCDP };
+  return { browsers, contexts, newPageHook, connectOverCDP };
 });
 
 vi.mock("playwright-core", () => ({ chromium: { connectOverCDP: playwright.connectOverCDP } }));
@@ -155,6 +167,54 @@ it.layer(testLayer)("ServerPreviewBrowser", (it) => {
       yield* Effect.promise(() => browser.handle(openRequest("iso-a", "iso-open-4")));
       expect(shared.newContext).toHaveBeenCalledTimes(3);
       expect(playwright.contexts.at(-1)).not.toBe(contextA);
+
+      yield* Effect.promise(() => browser.close());
+    }),
+  );
+
+  it.effect("keeps a thread's context open while another tab is still opening", () =>
+    Effect.gen(function* () {
+      const browser = yield* ServerPreviewBrowser.ServerPreviewBrowser;
+      yield* Effect.promise(() => browser.handle(openRequest("pending-a", "pending-open-1")));
+      const context = playwright.contexts.at(-1)!;
+
+      let entered!: () => void;
+      let release!: () => void;
+      const hookEntered = new Promise<void>((resolve) => (entered = resolve));
+      const gate = new Promise<void>((resolve) => (release = resolve));
+      playwright.newPageHook.current = async () => {
+        entered();
+        await gate;
+      };
+
+      const opening = browser.handle(openRequest("pending-a", "pending-open-2"));
+      yield* Effect.promise(() => hookEntered);
+      yield* Effect.promise(() => context.pages[0]!.close());
+      release();
+      yield* Effect.promise(() => opening);
+      expect(context.close).not.toHaveBeenCalled();
+
+      yield* Effect.promise(() => context.pages[1]!.close());
+      yield* Effect.promise(() => vi.waitFor(() => expect(context.close).toHaveBeenCalledOnce()));
+
+      yield* Effect.promise(() => browser.close());
+    }),
+  );
+
+  it.effect("closes the context when a thread's first tab fails to open", () =>
+    Effect.gen(function* () {
+      const browser = yield* ServerPreviewBrowser.ServerPreviewBrowser;
+      playwright.newPageHook.current = async () => {
+        throw new Error("page failed");
+      };
+
+      yield* Effect.promise(() =>
+        expect(browser.handle(openRequest("failing-a", "failing-open"))).rejects.toThrow(
+          "page failed",
+        ),
+      );
+      const context = playwright.contexts.at(-1)!;
+      yield* Effect.promise(() => vi.waitFor(() => expect(context.close).toHaveBeenCalledOnce()));
 
       yield* Effect.promise(() => browser.close());
     }),
