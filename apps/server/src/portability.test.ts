@@ -30,6 +30,7 @@ import {
   GROUP_ID,
   URL_MCP_ID,
 } from "./portabilityTestSupport.ts";
+import { makeDelegation } from "./orchestration/test-support/DelegationDeciderFixtures.ts";
 
 describe("portability archive", () => {
   it("creates deterministic sorted records and an exact manifest", () => {
@@ -555,6 +556,36 @@ describe("portability import", () => {
       `group:${GROUP_ID}`,
       `mcp-server:${URL_MCP_ID}`,
     ]);
+  });
+
+  it("reports a deleted group as a conflict while bot work still names its ID", () => {
+    const archive = createPortabilityArchive(makeSnapshot(), makeSettings(), NOW);
+
+    const target = {
+      ...makeSnapshot(),
+      groups: [],
+      delegations: [makeDelegation({ groupId: GROUP_ID })],
+    };
+
+    const preview = previewPortabilityImport(
+      archive,
+      target,
+      makeSettings(),
+      AVAILABLE_PROVIDER_IDS,
+    );
+
+    expect(preview.conflicts.map((entry) => `${entry.recordType}:${entry.id}`)).toContain(
+      `group:${GROUP_ID}`,
+    );
+
+    const plan = commandsForPortabilityImport(
+      archive,
+      target,
+      makeSettings(),
+      AVAILABLE_PROVIDER_IDS,
+    );
+
+    expect(plan.commands.some((command) => command.type === "group.create")).toBe(false);
   });
 
   it("derives the current projection only from safe records", () => {

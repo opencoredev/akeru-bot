@@ -156,6 +156,16 @@ export function previewPortabilityImport(
     ),
   );
 
+  // A deleted group's ID stays reserved while bot work still names it.
+  const reservedGroupIds = new Set<string>(
+    snapshot.delegations.flatMap((delegation) =>
+      delegation.groupId != null &&
+      !snapshot.groups.some((group) => group.id === delegation.groupId)
+        ? [delegation.groupId]
+        : [],
+    ),
+  );
+
   const unavailableGroupIds = new Set(
     archive.records.flatMap((record) => {
       if (record.type !== "group") return [];
@@ -164,7 +174,11 @@ export function previewPortabilityImport(
         unavailableBotIds.has(member.botId),
       );
 
-      return record.data.bossBotId === null || hasUnavailableMember ? [record.id] : [];
+      return record.data.bossBotId === null ||
+        hasUnavailableMember ||
+        reservedGroupIds.has(record.id)
+        ? [record.id]
+        : [];
     }),
   );
 
