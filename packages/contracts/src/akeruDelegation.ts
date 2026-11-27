@@ -9,6 +9,7 @@ import { AkeruMemoryTargetScope } from "./akeruMemory/base.ts";
 import { AkeruToolApprovalClass, AkeruToolId } from "./akeruTools/catalog.ts";
 import {
   BotId,
+  GroupId,
   IsoDateTime,
   MessageId,
   PositiveInt,
@@ -103,6 +104,8 @@ const AkeruDelegationRecordFields = {
   parentBotId: BotId,
   childBotId: BotId,
   parentThreadId: ThreadId,
+  /** Group of the chat the root delegation came from. Absent on records made before it was kept. */
+  groupId: Schema.optionalKey(Schema.NullOr(GroupId)),
   parentTurnId: TurnId,
   ancestorBotIds: Schema.Array(BotId),
   depth: PositiveInt.check(Schema.isLessThanOrEqualTo(AKERU_DELEGATION_MAX_DEPTH)),

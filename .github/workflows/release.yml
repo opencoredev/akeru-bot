@@ -47,6 +47,10 @@ jobs:
           RUN_ID: ${{ github.run_id }}
           RUN_ATTEMPT: ${{ github.run_attempt }}
         run: |
+          if test "$GITHUB_REF" != refs/heads/main; then
+            printf 'Releases run only from refs/heads/main, not %s.\n' "$GITHUB_REF" >&2
+            exit 1
+          fi
           version="$(node -p "require('./apps/server/package.json').version")"
           if ! [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
             printf 'Stable release version is invalid: %s\n' "$version" >&2
@@ -93,7 +97,7 @@ jobs:
 
       - name: Setup Vite+
         if: steps.version.outputs.publish == 'true'
-        uses: voidzero-dev/setup-vp@v1
+        uses: voidzero-dev/setup-vp@8a7496fd44e8a1b0a88a7459e36213b2fefc1d15 # v1
         with:
           node-version-file: package.json
           cache: true

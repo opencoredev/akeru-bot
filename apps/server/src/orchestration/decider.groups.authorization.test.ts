@@ -2,6 +2,8 @@ import * as Predicate from "effect/Predicate";
 import {
   AuthSessionId,
   CommandId,
+  DelegationId,
+  GroupId,
   MessageId,
   ProjectId,
   ProviderInstanceId,
@@ -25,6 +27,7 @@ import {
   makeGroupThread,
   startTurnCommand,
 } from "./test-support/GroupDeciderFixtures.ts";
+import { makeDelegation } from "./test-support/DelegationDeciderFixtures.ts";
 
 it.layer(NodeServices.layer)("group membership decider", (it) => {
   it.effect("lets paired clients configure groups but not create group-owned threads", () =>
@@ -532,5 +535,237 @@ it.layer(NodeServices.layer)("group membership decider", (it) => {
 
       expect(error.detail).toContain("A person member must send turns");
     }),
+  );
+
+  it.effect("rejects nested bot work retries and cancels in a group thread from an outsider", () =>
+    Effect.gen(function* () {
+      const group = makeGroupThread();
+
+      // A delegated child chat is a direct chat whose ID can be reused after deletion, so this
+      // one has lost its link back to the group.
+      const child = {
+        ...group,
+        id: ThreadId.make("thread-child"),
+        groupId: null,
+        parentThreadId: null,
+      };
+
+      const root = makeDelegation({
+        delegationId: DelegationId.make("delegation-root"),
+        parentBotId: BOSS_ID,
+        childBotId: SPECIALIST_ID,
+        parentThreadId: group.id,
+      });
+
+      const failed = makeDelegation({
+        parentDelegationId: root.delegationId,
+        parentBotId: SPECIALIST_ID,
+        childBotId: BOSS_ID,
+        parentThreadId: child.id,
+        phase: {
+          _tag: "Failed",
+          childThreadId: ThreadId.make("thread-grandchild"),
+          childTurnId: null,
+          startedAt: NOW,
+          completedAt: NOW,
+          failure: { failureCode: "child_failed", message: "The child failed." },
+          acknowledgedAt: null,
+        },
+      });
+
+      const readModel = {
+        ...makeReadModel({
+          bots: [makeBot({ id: BOSS_ID }), makeBot({ id: SPECIALIST_ID })],
+          groups: [makeGroup()],
+          threads: [group, child],
+        }),
+        delegations: [root, failed],
+      };
+
+      const commands = [
+        {
+          type: "delegation.retry",
+          commandId: CommandId.make("cmd-delegation-retry"),
+          delegationId: failed.delegationId,
+          createdAt: NOW,
+        },
+        {
+          type: "delegation.cancel",
+          commandId: CommandId.make("cmd-delegation-cancel"),
+          delegationId: failed.delegationId,
+          keep: true,
+          createdAt: NOW,
+        },
+      ] as const satisfies ReadonlyArray<OrchestrationCommand>;
+
+      const decide = (personId: AuthSessionId) =>
+        Effect.all(
+          commands.map((command) =>
+            Effect.result(
+              decideOrchestrationCommand({
+                command,
+                readModel,
+                actor: { personId, canManageGroups: false },
+              }),
+            ),
+          ),
+        );
+
+      const outsider = yield* decide(AuthSessionId.make("person-outsider"));
+      const member = yield* decide(PERSON_ID);
+
+      expect(outsider.map((result) => result._tag)).toEqual(["Failure", "Failure"]);
+      expect(member.map((result) => result._tag)).toEqual(["Success", "Success"]);
+    }),
+  );
+  it.effect("refuses bot work retries and cancels once the work's group is deleted", () =>
+    Effect.gen(function* () {
+      // Deleting a group leaves its chats with no bot and no group.
+      const detached = { ...makeGroupThread(), botId: null, groupId: null };
+
+      const failed = makeDelegation({
+        parentBotId: BOSS_ID,
+        childBotId: SPECIALIST_ID,
+        parentThreadId: detached.id,
+        groupId: GROUP_ID,
+        phase: {
+          _tag: "Failed",
+          childThreadId: ThreadId.make("thread-child"),
+          childTurnId: null,
+          startedAt: NOW,
+          completedAt: NOW,
+          failure: { failureCode: "child_failed", message: "The child failed." },
+          acknowledgedAt: null,
+        },
+      });
+
+      const commands = [
+        {
+          type: "delegation.retry",
+          commandId: CommandId.make("cmd-delegation-retry"),
+          delegationId: failed.delegationId,
+          createdAt: NOW,
+        },
+        {
+          type: "delegation.cancel",
+          commandId: CommandId.make("cmd-delegation-cancel"),
+          delegationId: failed.delegationId,
+          keep: true,
+          createdAt: NOW,
+        },
+      ] as const satisfies ReadonlyArray<OrchestrationCommand>;
+
+      const decide = (
+        groups: ReadonlyArray<ReturnType<typeof makeGroup>>,
+        actor?: { readonly personId: AuthSessionId; readonly canManageGroups: boolean },
+      ) =>
+        Effect.all(
+          commands.map((command) =>
+            Effect.result(
+              decideOrchestrationCommand({
+                command,
+                readModel: {
+                  ...makeReadModel({
+                    bots: [makeBot({ id: BOSS_ID }), makeBot({ id: SPECIALIST_ID })],
+                    groups: [...groups],
+                    threads: [detached],
+                  }),
+                  delegations: [failed],
+                },
+                ...(actor ? { actor } : {}),
+              }),
+            ),
+          ),
+        );
+
+      const tags = (results: ReadonlyArray<{ readonly _tag: string }>) =>
+        results.map((result) => result._tag);
+
+      const outsider = { personId: AuthSessionId.make("person-outsider"), canManageGroups: false };
+      const member = { personId: PERSON_ID, canManageGroups: false };
+
+      expect(tags(yield* decide([makeGroup()], outsider))).toEqual(["Failure", "Failure"]);
+      expect(tags(yield* decide([makeGroup()], member))).toEqual(["Success", "Success"]);
+      expect(tags(yield* decide([], member))).toEqual(["Failure", "Failure"]);
+      expect(tags(yield* decide([], outsider))).toEqual(["Failure", "Failure"]);
+      // The server still settles the work, for example when its parent turn ends.
+      expect(tags(yield* decide([]))).toEqual(["Success", "Success"]);
+    }),
+  );
+
+  it.effect(
+    "refuses bot work retries and cancels when its root chat now belongs to another group",
+    () =>
+      Effect.gen(function* () {
+        const otherGroupId = GroupId.make("group-other");
+
+        // A reused chat ID that another group now owns.
+        const reused = { ...makeGroupThread(), groupId: otherGroupId };
+
+        const otherGroup = {
+          ...makeGroup({
+            members: [
+              { kind: "bot", botId: BOSS_ID, role: "boss" },
+              { kind: "bot", botId: SPECIALIST_ID, role: "specialist" },
+            ],
+          }),
+          id: otherGroupId,
+        };
+
+        const failed = makeDelegation({
+          parentBotId: BOSS_ID,
+          childBotId: SPECIALIST_ID,
+          parentThreadId: reused.id,
+          groupId: GROUP_ID,
+          phase: {
+            _tag: "Failed",
+            childThreadId: ThreadId.make("thread-child"),
+            childTurnId: null,
+            startedAt: NOW,
+            completedAt: NOW,
+            failure: { failureCode: "child_failed", message: "The child failed." },
+            acknowledgedAt: null,
+          },
+        });
+
+        const readModel = {
+          ...makeReadModel({
+            bots: [makeBot({ id: BOSS_ID }), makeBot({ id: SPECIALIST_ID })],
+            groups: [makeGroup(), otherGroup],
+            threads: [reused],
+          }),
+          delegations: [failed],
+        };
+
+        const results = yield* Effect.all(
+          (
+            [
+              {
+                type: "delegation.retry",
+                commandId: CommandId.make("cmd-delegation-retry"),
+                delegationId: failed.delegationId,
+                createdAt: NOW,
+              },
+              {
+                type: "delegation.cancel",
+                commandId: CommandId.make("cmd-delegation-cancel"),
+                delegationId: failed.delegationId,
+                keep: true,
+                createdAt: NOW,
+              },
+            ] as const satisfies ReadonlyArray<OrchestrationCommand>
+          ).map((command) =>
+            Effect.result(
+              decideOrchestrationCommand({
+                command,
+                readModel,
+                actor: { personId: PERSON_ID, canManageGroups: false },
+              }),
+            ),
+          ),
+        );
+
+        expect(results.map((result) => result._tag)).toEqual(["Failure", "Failure"]);
+      }),
   );
 });

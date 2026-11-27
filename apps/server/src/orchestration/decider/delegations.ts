@@ -59,7 +59,13 @@ export const decideDelegations = Effect.fn("decideDelegations")(function* ({
       });
       yield* requireBotNotArchived({ readModel, command, botId: delegation.parentBotId });
       yield* requireBotNotArchived({ readModel, command, botId: delegation.childBotId });
-      yield* requireThread({ readModel, command, threadId: delegation.parentThreadId });
+
+      const parentThread = yield* requireThread({
+        readModel,
+        command,
+        threadId: delegation.parentThreadId,
+      });
+
       const createdChildThreadId = delegationChildThreadId(delegation.phase);
 
       if (createdChildThreadId !== null) {
@@ -86,6 +92,16 @@ export const decideDelegations = Effect.fn("decideDelegations")(function* ({
         return yield* new OrchestrationCommandInvariantError({
           commandType: command.type,
           detail: `Parent delegation '${parentDelegation.delegationId}' does not belong to bot '${delegation.parentBotId}'.`,
+        });
+      }
+
+      const expectedGroupId =
+        parentDelegation === null ? (parentThread.groupId ?? null) : parentDelegation.groupId;
+
+      if (delegation.groupId !== undefined && delegation.groupId !== expectedGroupId) {
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: `Delegation '${delegation.delegationId}' must keep the group of the chat its work came from.`,
         });
       }
 
