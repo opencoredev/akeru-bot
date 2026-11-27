@@ -95,8 +95,17 @@ export const decideDelegations = Effect.fn("decideDelegations")(function* ({
         });
       }
 
+      // A retry keeps the group of the work it retries, even if its chat changed since.
+      const retried = readModel.delegations.find(
+        (candidate) => candidate.delegationId === delegation.retryOfDelegationId,
+      );
+
       const expectedGroupId =
-        parentDelegation === null ? (parentThread.groupId ?? null) : parentDelegation.groupId;
+        retried?.groupId !== undefined
+          ? retried.groupId
+          : parentDelegation === null
+            ? (parentThread.groupId ?? null)
+            : parentDelegation.groupId;
 
       if (delegation.groupId !== undefined && delegation.groupId !== expectedGroupId) {
         return yield* new OrchestrationCommandInvariantError({

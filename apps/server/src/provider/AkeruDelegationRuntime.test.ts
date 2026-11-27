@@ -2,6 +2,7 @@ import * as Predicate from "effect/Predicate";
 import { describe } from "vite-plus/test";
 import {
   DelegationId,
+  GroupId,
   McpServerId,
   MessageId,
   ThreadId,
@@ -209,6 +210,7 @@ describe("AkeruDelegationRuntime", () => {
 
   it("retries failed work as a new record and never changes the original", async () => {
     const original = delegation(DelegationId.make("delegation-original"), {
+      groupId: GroupId.make("group-deleted"),
       anchorMessageId: MessageId.make("message-user"),
       access: access({ memoryScopes: ["project"], allowedToolIds: ["Read"] }),
       phase: {
@@ -246,6 +248,7 @@ describe("AkeruDelegationRuntime", () => {
 
     expect(retried).toMatchObject({
       retryOfDelegationId: original.delegationId,
+      groupId: "group-deleted",
       anchorMessageId: "message-user",
       trigger: "bot",
       parentBotId: PARENT_BOT_ID,

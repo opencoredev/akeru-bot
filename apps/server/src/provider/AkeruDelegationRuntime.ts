@@ -214,12 +214,20 @@ export function createAkeruDelegationRuntime(options: AkeruDelegationRuntimeOpti
       createdAt,
     });
 
+    const retried = origin?.retryOfDelegationId
+      ? snapshot.delegations.find(
+          (candidate) => candidate.delegationId === origin.retryOfDelegationId,
+        )
+      : undefined;
+
     const groupId =
-      parent.parentDelegationId === null
-        ? (parentThread.groupId ?? null)
-        : snapshot.delegations.find(
-            (candidate) => candidate.delegationId === parent.parentDelegationId,
-          )?.groupId;
+      retried?.groupId !== undefined
+        ? retried.groupId
+        : parent.parentDelegationId === null
+          ? (parentThread.groupId ?? null)
+          : snapshot.delegations.find(
+              (candidate) => candidate.delegationId === parent.parentDelegationId,
+            )?.groupId;
 
     let delegation: AkeruDelegationRecord = {
       delegationId,
