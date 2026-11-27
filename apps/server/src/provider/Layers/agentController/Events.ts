@@ -48,6 +48,8 @@ import { AkeruSessionResources } from "../../AkeruSessionResources.ts";
 
 import { isCodexComputerUseTool } from "../../CodexComputerUse.ts";
 
+import { boundedImageToolArgs, imageConsentDetail } from "../../../image-generation/toolContent.ts";
+
 import { LegacyProviderBridge } from "../../Services/LegacyProviderBridge.ts";
 
 import {
@@ -281,7 +283,7 @@ export function createEvents(deps: {
             title: isCodexComputerUseTool(event.toolName) ? "Computer Use" : event.toolName,
             data: isCodexComputerUseTool(event.toolName)
               ? { action: "computer-use" }
-              : { args: event.args },
+              : { args: boundedImageToolArgs(event.toolName, event.args) },
           },
         });
 
@@ -555,10 +557,13 @@ export function createEvents(deps: {
                 ? "Review product feedback"
                 : event.toolName === AKERU_CREATE_ROUTINE_TOOL_NAME
                   ? "Review routine"
-                  : deps.approvalDetail(event.toolName, action, oneUseApproval),
+                  : (imageConsentDetail(toolInput) ??
+                    deps.approvalDetail(event.toolName, action, oneUseApproval)),
             toolName: isCodexComputerUseTool(event.toolName) ? "Computer Use" : event.toolName,
             ...(action ? { action } : {}),
-            args: isCodexComputerUseTool(event.toolName) ? undefined : toolInput,
+            args: isCodexComputerUseTool(event.toolName)
+              ? undefined
+              : boundedImageToolArgs(event.toolName, toolInput),
             options: isCodexComputerUseTool(event.toolName)
               ? [
                   { decision: "accept", label: "Allow" },

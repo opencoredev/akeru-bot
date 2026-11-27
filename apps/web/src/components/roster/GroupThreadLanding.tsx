@@ -45,6 +45,7 @@ import { GroupMemberStack } from "./GroupMemberStack";
 import {
   buildBotConversationEntries,
   isBotConversationWorking,
+  lastAssistantMessageIdByTurn,
   visibleBotChatMessages,
 } from "./botConversationPresentation";
 import { BotPromptComposer } from "./BotPromptComposer";
@@ -248,6 +249,8 @@ export function GroupThreadLanding({ groupId }: { readonly groupId: string }) {
     [runtime.messages, working],
   );
 
+  const turnDetailRows = useMemo(() => lastAssistantMessageIdByTurn(messages), [messages]);
+
   const answeredUserInputs = useAnsweredUserInputs(activities, messages);
 
   const today = useLocalDay();
@@ -391,6 +394,11 @@ export function GroupThreadLanding({ groupId }: { readonly groupId: string }) {
                     ? members.find((bot) => bot.id === message.respondingBotId)
                     : boss;
 
+                  const detailTurnId =
+                    message.turnId !== null && turnDetailRows.get(message.turnId) === message.id
+                      ? message.turnId
+                      : null;
+
                   return (
                     <Fragment key={message.id}>
                       {separator ? <ConversationSeparator label={separator} /> : null}
@@ -402,9 +410,7 @@ export function GroupThreadLanding({ groupId }: { readonly groupId: string }) {
                         startsGroup={startsGroup}
                         cwd={runtime.defaultProject?.workspaceRoot}
                         threadRef={runtime.linkedThreadRef ?? undefined}
-                        stepMeter={
-                          message.turnId === null ? undefined : stepMeters.get(message.turnId)
-                        }
+                        stepMeter={detailTurnId === null ? undefined : stepMeters.get(detailTurnId)}
                         pluginResults={undefined}
                         currentPersonId={currentPersonId}
                         playback={replyPlayback}

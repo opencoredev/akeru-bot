@@ -150,6 +150,16 @@ export const AssistantMessageRow = memo(function AssistantMessageRow({
     <ChatMarkdown className="mt-1" cwd={cwd} text={message.text} threadRef={threadRef} />
   );
 
+  const attachments =
+    (message.attachments?.length ?? 0) > 0 ? (
+      <div className={message.text ? "mt-2" : "mt-1"}>
+        <BotMessageAttachments
+          attachments={message.attachments ?? []}
+          environmentId={threadRef?.environmentId ?? NO_ENVIRONMENT}
+        />
+      </div>
+    ) : null;
+
   if (!author) {
     return (
       <div
@@ -163,6 +173,7 @@ export const AssistantMessageRow = memo(function AssistantMessageRow({
       >
         <div className="text-sm font-medium">{label}</div>
         {markdown}
+        {attachments}
         <div className={`mt-0.5 flex ${HOVER_CONTROLS_CLASS}`}>
           <MessageControls
             flushStart
@@ -203,6 +214,7 @@ export const AssistantMessageRow = memo(function AssistantMessageRow({
         {startsGroup ? <div className="text-sm font-medium">{author.name}</div> : null}
         <BotStepMeter meter={stepMeter} />
         {markdown}
+        {attachments}
         {pluginResults?.map(({ id, result }) => (
           <PluginSearchResultCard className="mt-3" key={id} result={result} />
         ))}

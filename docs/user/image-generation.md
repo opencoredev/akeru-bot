@@ -96,8 +96,9 @@ also edit an image that is already in the chat. ChatGPT accepts up to four
 images for one edit. Grok accepts one and returns one edited image.
 
 If the provider the bot tried first fails, Akeru does not quietly send your
-image to the other provider. The bot tells you which provider it would use
-instead, and only tries it after you agree.
+image to the other provider. The bot asks first, and its retry shows an
+approval card that names the provider that would get your images. It only
+tries that provider after you approve.
 
 ### When a request fails
 

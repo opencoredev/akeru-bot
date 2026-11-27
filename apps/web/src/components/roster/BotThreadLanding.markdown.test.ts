@@ -46,7 +46,11 @@ describe("BotThreadLanding message formatting", () => {
 
   it("renders step meters for bot and group replies", () => {
     for (const file of ["BotThreadLanding.tsx", "GroupThreadLanding.tsx"]) {
-      expect(readSibling(file)).toContain("stepMeters.get(message.turnId)");
+      const source = readSibling(file);
+      // Turn details belong to the turn's last visible assistant row so an
+      // attachment post does not repeat the meter.
+      expect(source).toContain("turnDetailRows.get(message.turnId) === message.id");
+      expect(source).toContain("stepMeters.get(detailTurnId)");
     }
 
     const assistantRow = rowComponent(readSibling("BotChatMessageRows.tsx"), "AssistantMessageRow");

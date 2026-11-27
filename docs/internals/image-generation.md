@@ -52,7 +52,7 @@ Adapter errors become `ImageAdapterFailure` with a kind: `unavailable`, `revoked
 
 Each attempt runs under a 150 second timeout (`IMAGE_REQUEST_TIMEOUT`) and aborts its `AbortSignal` on timeout or interruption. Only `unavailable`, `revoked`, `provider-failed`, and `timeout` move to the next candidate. `invalid-request` and `unsupported` stop the route. An unsupported combination for the intended provider, such as two input images for Grok, is rejected before any request.
 
-When an edit carries input images and the route would move past the intended provider, the router returns `needs-consent` instead of sending the images. The model asks the user and retries with `allowProvider` set to the provider the user accepted. Consent is therefore mediated by the bot's own reply rather than a dedicated approval card.
+When an edit carries input images and the route would move past the intended provider, the router returns `needs-consent` instead of sending the images. The model asks the user and retries with `allowProvider` set to the provider the user accepted. Because every image call already runs under the catalog's `production` approval, the retried call opens the standard one-shot tool approval and its card names the provider that would receive the images (`Send the chat images to <provider>?`). The user's answer lands as `request.resolved` with `actor: "user"`, and the persisted `approval.requested` activity keeps the bounded args (`operation`, `provider`, `allowProvider`), so consent is recorded rather than implied by the retry.
 
 ## Runtime
 
@@ -70,7 +70,7 @@ Codex, Claude, Grok, Kimi For Coding, and OpenCode Go run on the Mastra controll
 
 ## Privacy
 
-Prompts and image bytes stay inside the runtime and the provider request. Orchestration events carry attachment metadata only, usage rows carry provider, model, and tokens, and logs carry the thread id. The tool result returned to the model lists artifact metadata, not bytes or the raw provider response. Nothing about the request reaches analytics, observational memory, entity memory, or product feedback.
+Prompts and image bytes stay inside the runtime and the provider request. `boundedImageToolArgs` in `apps/server/src/image-generation/toolContent.ts` drops `prompt` and `inputImages` before tool args reach `item.started` events, `request.opened` payloads, persisted approval activities, and observational-memory message storage; routing fields (`operation`, `provider`, `allowProvider`, `count`, `quality`, `aspectRatio`) stay so activities and approval records keep their meaning. Orchestration events carry attachment metadata only, usage rows carry provider, model, and tokens, and logs carry the thread id. The tool result returned to the model lists artifact metadata, not bytes or the raw provider response. Nothing about the request reaches analytics, observational memory, entity memory, or product feedback.
 
 ## Attachment actions
 

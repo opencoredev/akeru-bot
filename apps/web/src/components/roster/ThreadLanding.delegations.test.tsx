@@ -1,4 +1,4 @@
-import type { TestValue } from "../test-support/reactTree";
+import type { TestElement, TestValue } from "../test-support/reactTree";
 import type { ReactElement } from "react";
 import {
   AkeruDelegationRecord,
@@ -563,6 +563,103 @@ describe("thread landing delegations", () => {
 
     expect(result?.query).toBe("email");
     expect(result?.recommendations[0]?.name).toBe("Gmail");
+  });
+
+  it("renders turn details once, on the last assistant row of the turn", () => {
+    const turnId = TurnId.make("turn-image-details");
+    const timestamp = "2026-09-02T20:00:00.000Z";
+    mocks.messages = [
+      {
+        id: MessageId.make("message-user"),
+        role: "user",
+        text: "Search plugins and draw a logo.",
+        turnId,
+        streaming: false,
+        createdAt: timestamp,
+        updatedAt: timestamp,
+      },
+      {
+        id: MessageId.make("message-image"),
+        role: "assistant",
+        text: "Here is the rendered image.",
+        turnId,
+        respondingBotId: BotId.make(parentBot.id),
+        attachments: [
+          {
+            type: "image",
+            id: "attachment-generated",
+            name: "logo.png",
+            mimeType: "image/png",
+            sizeBytes: 42,
+          },
+        ],
+        streaming: false,
+        createdAt: timestamp,
+        updatedAt: timestamp,
+      },
+      {
+        id: MessageId.make("message-final"),
+        role: "assistant",
+        text: "Gmail plus a logo, done.",
+        turnId,
+        respondingBotId: BotId.make(parentBot.id),
+        streaming: false,
+        createdAt: timestamp,
+        updatedAt: timestamp,
+      },
+    ];
+    mocks.activities = [
+      {
+        id: EventId.make("activity-plugin-search"),
+        tone: "tool",
+        kind: "tool.completed",
+        summary: "SearchPlugins",
+        turnId,
+        createdAt: timestamp,
+        payload: {
+          itemType: "dynamic_tool_call",
+          title: "SearchPlugins",
+          data: {
+            result: {
+              kind: "plugin-search-results",
+              query: "email",
+              total: 1,
+              sources: { directory: "available", composio: "available" },
+              recommendations: [
+                {
+                  id: "composio:gmail",
+                  source: "composio",
+                  name: "Gmail",
+                  description: "Read and send email.",
+                  action: "connect",
+                  logoUrl: "https://logos.composio.dev/api/gmail",
+                },
+              ],
+            },
+          },
+        },
+      },
+    ];
+
+    hooks.beginRender();
+
+    type RowDetails = Pick<Parameters<typeof AssistantMessageRow>[0], "message" | "pluginResults">;
+
+    const rows: TestElement[] = [];
+    visitElements(BotThreadLanding({ botId: parentBot.id }), (element) => {
+      if (element.type === AssistantMessageRow) rows.push(element);
+
+      return false;
+    });
+
+    const details = rows.map((row) => row.props as RowDetails);
+
+    expect(details.map((row) => String(row.message.id))).toEqual([
+      "message-image",
+      "message-final",
+    ]);
+    expect(details[0]?.pluginResults).toBeUndefined();
+    expect(details[1]?.pluginResults?.[0]?.result.query).toBe("email");
   });
 
   it("renders provider questions inside the bot conversation", () => {
