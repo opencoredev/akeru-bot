@@ -6,20 +6,6 @@
 
 import * as Schema from "effect/Schema";
 
-const TAB_ID_PREFIX = "tab_";
-
-let nextPreviewTabSequence = 0;
-
-/**
- * Generate a fresh preview tab id. Lives in shared (not contracts) because
- * the contracts package is schema-only — runtime helpers belong here.
- */
-export function newPreviewTabId(): string {
-  nextPreviewTabSequence += 1;
-
-  return `${TAB_ID_PREFIX}${nextPreviewTabSequence.toString(36)}`;
-}
-
 const LOOPBACK_HOSTS: ReadonlySet<string> = new Set(["localhost", "127.0.0.1", "0.0.0.0", "::1"]);
 
 /** Internal — used by `lsof` parsing where the host string is wire-formatted. */

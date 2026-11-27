@@ -21,11 +21,7 @@ import {
   type PreviewSessionSnapshot,
   type PreviewViewportSetting,
 } from "@akeru/contracts";
-import {
-  isPreviewUrlNormalizationError,
-  newPreviewTabId,
-  normalizePreviewUrl,
-} from "@akeru/shared/preview";
+import { isPreviewUrlNormalizationError, normalizePreviewUrl } from "@akeru/shared/preview";
 import * as NodeCrypto from "node:crypto";
 import * as Context from "effect/Context";
 import * as DateTime from "effect/DateTime";
@@ -240,7 +236,8 @@ export const make = Effect.gen(function* PreviewManagerMake() {
 
   const open: PreviewManager["Service"]["open"] = Effect.fn("PreviewManager.open")(
     function* (input) {
-      const tabId = newPreviewTabId();
+      // Random so one chat cannot guess another chat's tab id.
+      const tabId = `tab_${NodeCrypto.randomUUID()}`;
       const updatedAt = yield* currentIsoTimestamp;
       // Clients with a configured default send the viewport up front so the
       // session is born at the right size; older clients omit it and keep the
