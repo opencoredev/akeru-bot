@@ -245,6 +245,67 @@ describe("AkeruToolRuntime permission policy", () => {
     expect(runtime.approvalRequirement("thread-allowed", "Shell", install)).toBe("none");
   });
 
+  it("leaves a cloud command to the chat mode in Supervised, on every path that decides", async () => {
+    const runtime = createAkeruToolRuntime();
+
+    const cloudSession = (
+      runtimeMode: "approval-required" | "auto-accept-edits" | "full-access",
+      policy: BotPermissionPolicy,
+    ) => ({
+      runtimeMode,
+      workspaceType: "cloud" as const,
+      workspace: workspace(`mode-${runtimeMode}`),
+      permissions: { principal: { kind: "owner" as const }, policy },
+    });
+
+    const allowShell = {
+      ...DEFAULT_BOT_PERMISSION_POLICY,
+      toolOverrides: { Shell: "allow" as const },
+    };
+
+    runtime.registerSession(
+      "thread-supervised",
+      cloudSession("approval-required", DEFAULT_BOT_PERMISSION_POLICY),
+    );
+    runtime.registerSession(
+      "thread-edits",
+      cloudSession("auto-accept-edits", DEFAULT_BOT_PERMISSION_POLICY),
+    );
+    runtime.registerSession(
+      "thread-full",
+      cloudSession("full-access", DEFAULT_BOT_PERMISSION_POLICY),
+    );
+    runtime.registerSession("thread-allowed", cloudSession("approval-required", allowShell));
+
+    const install = { command: "npm install" };
+
+    for (const threadId of ["thread-supervised", "thread-edits"]) {
+      await expect(runtime.requiresApproval(threadId, "Shell", install)).resolves.toBe(true);
+      expect(runtime.approvalRequirement(threadId, "Shell", install)).toBe("mode");
+    }
+
+    // A read, polling a command, and a call the bot policy explicitly allows run without asking.
+    await expect(
+      runtime.requiresApproval("thread-supervised", "Read", { path: "notes.md" }),
+    ).resolves.toBe(false);
+    await expect(
+      runtime.requiresApproval("thread-supervised", "AwaitShell", { handleId: "1" }),
+    ).resolves.toBe(false);
+    await expect(runtime.requiresApproval("thread-full", "Shell", install)).resolves.toBe(false);
+    await expect(runtime.requiresApproval("thread-allowed", "Shell", install)).resolves.toBe(false);
+
+    // Without an answer, the run itself refuses the command.
+    await expect(
+      runtime.execute({
+        threadId: "thread-supervised",
+        toolId: "Shell",
+        toolCallId: "shell-1",
+        input: install,
+        approvalMode: "require-grant",
+      }),
+    ).rejects.toThrow("requires approval");
+  });
+
   it("makes the owner answer a read the bot policy marks ask", async () => {
     const runtime = createAkeruToolRuntime();
     runtime.registerSession("thread-read", {

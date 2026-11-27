@@ -64,7 +64,10 @@ const withClaudeCodeBot = <A, E>(
   options: Pick<
     AgentControllerLiveOptions,
     "makeMcpManager" | "issueMcpCredential" | "revokeMcpCredential"
-  > & { readonly permissionPolicy?: BotPermissionPolicy } = {},
+  > & {
+    readonly permissionPolicy?: BotPermissionPolicy;
+    readonly beforeListSessions?: () => Effect.Effect<void>;
+  } = {},
 ) => {
   const bridge = makeBridge();
   const mastra = mastraHarnessFixture();
@@ -114,9 +117,15 @@ const withClaudeCodeBot = <A, E>(
   const service = {
     ...bridge.service,
     listSessions: () =>
-      adapter
-        ? adapter.listSessions().pipe(Effect.map((sessions) => sessions.map(asClaudeCodeSession)))
-        : Effect.sync(() => [...live.values()]),
+      (options.beforeListSessions?.() ?? Effect.void).pipe(
+        Effect.andThen(
+          adapter
+            ? adapter
+                .listSessions()
+                .pipe(Effect.map((sessions) => sessions.map(asClaudeCodeSession)))
+            : Effect.sync(() => [...live.values()]),
+        ),
+      ),
   };
 
   return provideController(
@@ -435,6 +444,62 @@ describe("AgentControllerLive Claude Agent sessions", () => {
                 disconnects.push(manager);
               }),
             });
+          },
+        },
+      );
+    }).pipe(Effect.provide(harness.layer));
+  });
+
+  it.effect("does not stop a replacement that a duplicate stop finds late", () => {
+    const threadId = ThreadId.make("thread-claude-code-duplicate-stop");
+    const harness = makeHarness({ queryPerSession: true });
+
+    let listingGate:
+      | { readonly paused: Deferred.Deferred<void>; readonly resume: Deferred.Deferred<void> }
+      | undefined;
+
+    return Effect.gen(function* () {
+      const adapter = yield* ClaudeAdapter;
+
+      yield* withClaudeCodeBot(
+        threadId,
+        ({ controller, bridge }) =>
+          Effect.gen(function* () {
+            yield* controller.startSession(threadId, {
+              ...startInput(threadId),
+              cwd: process.cwd(),
+            });
+            yield* controller.stopSession({ threadId });
+
+            // A duplicate stop finds nothing to stop yet and pauses while it lists sessions.
+            const paused = yield* Deferred.make<void>();
+            const resume = yield* Deferred.make<void>();
+            listingGate = { paused, resume };
+            const duplicate = yield* controller.stopSession({ threadId }).pipe(Effect.forkChild);
+            yield* Deferred.await(paused);
+            listingGate = undefined;
+
+            yield* controller.startSession(threadId, {
+              ...startInput(threadId),
+              cwd: process.cwd(),
+            });
+            const stopsBefore = bridge.stopSession.mock.calls.length;
+            yield* Deferred.succeed(resume, undefined);
+            yield* Fiber.join(duplicate);
+
+            expect(bridge.stopSession.mock.calls.length).toBe(stopsBefore);
+            expect(readBotToolPermissionSession(threadId)?.botId).toBe(botId);
+          }),
+        adapter,
+        {
+          beforeListSessions: () => {
+            const gate = listingGate;
+
+            return gate
+              ? Deferred.succeed(gate.paused, undefined).pipe(
+                  Effect.andThen(Deferred.await(gate.resume)),
+                )
+              : Effect.void;
           },
         },
       );

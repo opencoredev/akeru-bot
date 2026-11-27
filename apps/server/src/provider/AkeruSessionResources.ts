@@ -50,7 +50,11 @@ export class AkeruSessionResources {
   private readonly computerRegistrations = new Map<string, () => void>();
   private readonly computerUseTemporaryDirectories = new Map<string, string>();
   private readonly tenkiThreads = new Set<string>();
-  private controllingThreadId: string | undefined;
+  private readonly pendingReleases = new Set<Promise<void>>();
+  private readonly owners = new Map<string, symbol>();
+  /** One hold per session that took Computer Use; only those sessions' releases count it down. */
+  private computerUseReservation: { readonly threadId: string; holds: number } | undefined;
+  private readonly computerUseHolders = new Set<string>();
   private shuttingDown = false;
 
   constructor(options: AkeruSessionResourcesOptions) {
@@ -97,6 +101,8 @@ export class AkeruSessionResources {
 
   private async acquireOnce(input: AkeruSessionResourceInput): Promise<AkeruSessionResourceView> {
     const key = input.threadId;
+    const owner = Symbol(key);
+    this.owners.set(key, owner);
 
     const usesComputer = input.mcpServers.some((server) =>
       isCodexComputerUseServer(String(server.id)),
@@ -104,13 +110,15 @@ export class AkeruSessionResources {
 
     try {
       if (usesComputer) {
-        if (this.controllingThreadId && this.controllingThreadId !== key) {
+        if (this.computerUseReservation && this.computerUseReservation.threadId !== key) {
           throw new Error(
-            `Computer Use is already controlled by thread '${this.controllingThreadId}'. Stop it before starting another controller.`,
+            `Computer Use is already controlled by thread '${this.computerUseReservation.threadId}'. Stop it before starting another controller.`,
           );
         }
 
-        this.controllingThreadId = key;
+        this.computerUseReservation ??= { threadId: key, holds: 0 };
+        this.computerUseReservation.holds += 1;
+        this.computerUseHolders.add(key);
       }
 
       const workspaceLease = await this.workspacePool.acquire(
@@ -379,6 +387,7 @@ export class AkeruSessionResources {
         workspace:
           userComputerWorkspaceLease?.workspace.workspace ?? workspaceLease.workspace.workspace,
         botWorkspace: workspaceLease.workspace.workspace,
+        owner,
       };
     } catch (cause) {
       // A failed setup may take its workspace with it only when this acquisition alone owns
@@ -459,20 +468,61 @@ export class AkeruSessionResources {
     return this.workspacePool.retryFailedSleeps();
   }
 
-  async release(threadId: string, options?: BotWorkspaceReleaseOptions): Promise<void> {
+  /** The acquisition that holds the thread's resources, if any. */
+  ownerOf(threadId: string): symbol | undefined {
+    return this.owners.get(threadId);
+  }
+
+  /** With `owner`, releases only while that acquisition still holds the thread's resources. */
+  async release(
+    threadId: string,
+    options?: BotWorkspaceReleaseOptions,
+    owner?: symbol,
+  ): Promise<void> {
     await this.acquisitions.get(threadId)?.catch(() => undefined);
+
+    if (owner !== undefined && this.owners.get(threadId) !== owner) return;
     await this.releaseOnce(threadId, options);
   }
 
-  private async releaseOnce(threadId: string, options?: BotWorkspaceReleaseOptions): Promise<void> {
+  /** Shutdown waits on `pendingReleases`, because a teardown in flight is no longer in the maps. */
+  private releaseOnce(threadId: string, options?: BotWorkspaceReleaseOptions): Promise<void> {
+    const release = this.teardown(threadId, options);
+    const settle = () => this.pendingReleases.delete(release);
+    this.pendingReleases.add(release);
+    release.then(settle, settle);
+
+    return release;
+  }
+
+  /**
+   * Everything the thread holds is detached before the first await, so a session that starts
+   * on the thread while this release waits keeps the resources it acquires. The Computer Use
+   * reservation is the exception: it is cleared last, so no other thread takes control mid-teardown.
+   */
+  private async teardown(threadId: string, options?: BotWorkspaceReleaseOptions): Promise<void> {
     const failures: unknown[] = [];
+    this.owners.delete(threadId);
+    const heldComputerUse = this.computerUseHolders.delete(threadId);
     const manager = this.mcpManagers.get(threadId);
     this.mcpManagers.delete(threadId);
     this.tenkiThreads.delete(threadId);
-
-    if (manager) await manager.disconnect().catch((cause) => failures.push(cause));
     const computerUseTemporaryDirectory = this.computerUseTemporaryDirectories.get(threadId);
     this.computerUseTemporaryDirectories.delete(threadId);
+    this.computerRegistrations.get(threadId)?.();
+    this.computerRegistrations.delete(threadId);
+    const browser = this.browsers.threadBrowsers.get(threadId);
+    const resourceKey = this.browsers.browserResourceKeys.get(threadId);
+    this.browsers.threadBrowsers.delete(threadId);
+    this.browsers.browserResourceKeys.delete(threadId);
+    const botKey = this.browsers.browserThreadBots.get(threadId);
+    this.browsers.browserThreadBots.delete(threadId);
+    const workspaceLease = this.workspaceLeases.get(threadId);
+    this.workspaceLeases.delete(threadId);
+    const userComputerLease = this.userComputerWorkspaceLeases.get(threadId);
+    this.userComputerWorkspaceLeases.delete(threadId);
+
+    if (manager) await manager.disconnect().catch((cause) => failures.push(cause));
 
     if (computerUseTemporaryDirectory) {
       try {
@@ -482,17 +532,7 @@ export class AkeruSessionResources {
       }
     }
 
-    this.computerRegistrations.get(threadId)?.();
-    this.computerRegistrations.delete(threadId);
-    const browser = this.browsers.threadBrowsers.get(threadId);
-    const resourceKey = this.browsers.browserResourceKeys.get(threadId);
-    this.browsers.threadBrowsers.delete(threadId);
-    this.browsers.browserResourceKeys.delete(threadId);
-
     if (browser && resourceKey) {
-      const botKey = this.browsers.browserThreadBots.get(threadId);
-      this.browsers.browserThreadBots.delete(threadId);
-
       if (botKey) {
         const attribution = this.browsers.browserAttributions.get(resourceKey)?.get(botKey);
 
@@ -502,7 +542,7 @@ export class AkeruSessionResources {
 
       const destroyBrowser =
         options?.destroy === "ifUnshared"
-          ? this.workspaceLeases.get(threadId)?.unshared() === true
+          ? workspaceLease?.unshared() === true
           : options?.destroy === true;
 
       if (destroyBrowser) this.browsers.browserDestroyRequests.add(resourceKey);
@@ -523,9 +563,6 @@ export class AkeruSessionResources {
       }
     }
 
-    const workspaceLease = this.workspaceLeases.get(threadId);
-    this.workspaceLeases.delete(threadId);
-
     if (workspaceLease) {
       await workspaceLease.release(options).catch(async (cause) => {
         failures.push(cause);
@@ -534,14 +571,17 @@ export class AkeruSessionResources {
       });
     }
 
-    const userComputerLease = this.userComputerWorkspaceLeases.get(threadId);
-    this.userComputerWorkspaceLeases.delete(threadId);
-
     if (userComputerLease) {
       await userComputerLease.release(options).catch((cause) => failures.push(cause));
     }
 
-    if (this.controllingThreadId === threadId) this.controllingThreadId = undefined;
+    // Computer Use stays reserved until its MCP session has disconnected, and while a session that
+    // restarted on this thread holds it.
+    if (heldComputerUse && this.computerUseReservation) {
+      this.computerUseReservation.holds -= 1;
+
+      if (this.computerUseReservation.holds === 0) this.computerUseReservation = undefined;
+    }
 
     if (failures.length > 0) throw failures[0];
   }
@@ -566,6 +606,8 @@ export class AkeruSessionResources {
     for (const result of releases) {
       if (result.status === "rejected") failures.push(result.reason);
     }
+
+    await Promise.allSettled(this.pendingReleases);
 
     try {
       await this.workspacePool.retryFailedSleeps();

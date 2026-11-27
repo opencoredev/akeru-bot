@@ -88,6 +88,7 @@ export function createTurnLifecycle(deps: {
   readonly stopSessionWithResources: (
     input: { readonly threadId: ThreadId },
     destroyResources: boolean,
+    onlySession?: ActiveSession,
   ) => Effect.Effect<void, ProviderServiceError | AgentControllerRuntimeError, never>;
   readonly memorySettings: () =>
     | Effect.Effect<
@@ -217,7 +218,7 @@ export function createTurnLifecycle(deps: {
     });
     finishTurn(threadId, active, "failed", detail);
     await deps.runPromise(
-      deps.stopSessionWithResources({ threadId }, false).pipe(
+      deps.stopSessionWithResources({ threadId }, false, active).pipe(
         Effect.catchCause((resetCause) =>
           Effect.logWarning("provider session reset failed", {
             threadId,

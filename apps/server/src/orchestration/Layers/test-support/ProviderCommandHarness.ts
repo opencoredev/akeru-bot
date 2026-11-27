@@ -58,7 +58,11 @@ export * from "./ProviderCommandFixtures.ts";
 
 export function createProviderCommandHarness() {
   let runtime: ManagedRuntime.ManagedRuntime<
-    OrchestrationEngineService | ProviderCommandReactor | ProjectionSnapshotQuery | BotUsageLedger,
+    | OrchestrationEngineService
+    | ProviderCommandReactor
+    | ProjectionSnapshotQuery
+    | BotUsageLedger
+    | ServerSettingsService,
     unknown
   > | null = null;
 

@@ -31,6 +31,8 @@ export interface AkeruSessionResourceInput {
 export interface AkeruSessionResourceView {
   readonly workspace: Workspace;
   readonly botWorkspace: Workspace;
+  /** Names this acquisition, so a stop issued for it cannot release a later session's resources. */
+  readonly owner: symbol;
 }
 
 export interface AkeruSessionResourcesOptions {
