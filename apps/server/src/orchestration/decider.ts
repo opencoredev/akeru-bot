@@ -6,6 +6,7 @@ import { OrchestrationCommandInvariantError } from "./Errors.ts";
 import type { OrchestrationDispatchActor } from "./Services/OrchestrationEngine.ts";
 import {
   requireDelegation,
+  requireDelegationGroupAuthorized,
   requireGroupOwnedThreadMutationAuthorized,
   requireThread,
 } from "./commandInvariants.ts";
@@ -113,6 +114,17 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
         command,
         delegationId: command.delegationId,
       });
+
+      // Work keeps the group its root chat had when it was delegated, so deleting the group
+      // does not hand its work to everyone. The root chat's current group is checked too.
+      if (delegation.groupId != null) {
+        yield* requireDelegationGroupAuthorized({
+          readModel,
+          groupId: delegation.groupId,
+          command,
+          actor,
+        });
+      }
 
       // Nested work runs in direct child chats whose IDs can be reused, so it answers to the chat
       // its root delegation came from. Delegation records never change.

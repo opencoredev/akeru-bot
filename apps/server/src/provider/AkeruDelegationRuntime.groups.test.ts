@@ -54,6 +54,8 @@ describe("AkeruDelegationRuntime", () => {
 
     const create = test.commands.find((command) => command.type === "thread.create");
     expect(create).toMatchObject({ botId: CHILD_BOT_ID, groupId: null });
+    const delegated = test.commands.find((command) => command.type === "delegation.create");
+    expect(delegated).toMatchObject({ delegation: { groupId } });
     const childTurn = test.commands.find((command) => command.type === "thread.turn.start");
     expect(childTurn).not.toHaveProperty("respondingBotId");
     expect(childTurn && "threadId" in childTurn ? childTurn.threadId : null).toBe(
