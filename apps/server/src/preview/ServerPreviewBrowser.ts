@@ -177,6 +177,10 @@ export const make = Effect.gen(function* ServerPreviewBrowserMake() {
     tabId: PreviewTabId,
     generation: number,
   ): Promise<BrowserTab> => {
+    if (generation !== closeGeneration) {
+      throw new Error("The browser was closed while this tab was opening.");
+    }
+
     pendingOpens.set(threadId, (pendingOpens.get(threadId) ?? 0) + 1);
 
     try {
@@ -213,13 +217,18 @@ export const make = Effect.gen(function* ServerPreviewBrowserMake() {
     }
   };
 
-  const resolveTab = (request: PreviewAutomationRequest): BrowserTab => {
+  // A tab belonging to another thread is treated exactly like a missing one.
+  const ownedTab = (request: PreviewAutomationRequest): BrowserTab | undefined => {
     const tabId = request.tabId ?? activeByThread.get(request.threadId);
     const tab = tabId ? tabs.get(tabId) : undefined;
 
-    if (!tab || tab.threadId !== request.threadId) {
-      throw new Error("No active browser tab exists for this chat.");
-    }
+    return tab?.threadId === request.threadId ? tab : undefined;
+  };
+
+  const resolveTab = (request: PreviewAutomationRequest): BrowserTab => {
+    const tab = ownedTab(request);
+
+    if (!tab) throw new Error("No active browser tab exists for this chat.");
 
     return tab;
   };
@@ -326,16 +335,12 @@ export const make = Effect.gen(function* ServerPreviewBrowserMake() {
     const generation = closeGeneration;
     await runPromise(requireApiKey);
 
-    if (request.operation === "status") {
-      const tabId = request.tabId ?? activeByThread.get(request.threadId);
-
-      return await status(tabId ? (tabs.get(tabId) ?? null) : null);
-    }
+    if (request.operation === "status") return await status(ownedTab(request) ?? null);
 
     if (request.operation === "open") {
       const input = decodeOpenInput(request.input);
-      let tabId = request.tabId ?? activeByThread.get(request.threadId);
-      let tab = tabId ? tabs.get(tabId) : undefined;
+      let tab = ownedTab(request);
+      let tabId = tab ? tabIdFor(tab) : undefined;
 
       if (!tab || input.reuseExistingTab === false) {
         const snapshot = await runPromise(

@@ -1,7 +1,8 @@
 import { it } from "@effect/vitest";
-import { ThreadId, type PreviewAutomationRequest } from "@akeru/contracts";
+import { PreviewTabId, ThreadId, type PreviewAutomationRequest } from "@akeru/contracts";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
+import * as Schema from "effect/Schema";
 import { HttpClient, HttpClientResponse } from "effect/unstable/http";
 import { expect, vi } from "vite-plus/test";
 
@@ -111,6 +112,8 @@ const testLayer = ServerPreviewBrowser.layer.pipe(
   ),
   Layer.provide(Layer.succeed(HttpClient.HttpClient, browserbase)),
 );
+
+const decodeTabStatus = Schema.decodeUnknownSync(Schema.Struct({ tabId: Schema.String }));
 
 const openRequest = (threadId: string, requestId: string): PreviewAutomationRequest => ({
   requestId,
@@ -265,6 +268,73 @@ it.layer(testLayer)("ServerPreviewBrowser", (it) => {
 
       // No Browserbase session outlives the close.
       for (const opened of playwright.browsers) expect(opened.close).toHaveBeenCalledOnce();
+
+      // The rejected open must not keep the thread's next context alive.
+      yield* Effect.promise(() => browser.handle(openRequest("thread-race", "open-race-2")));
+      const context = playwright.contexts.at(-1)!;
+      yield* Effect.promise(() => context.pages[0]!.close());
+      yield* Effect.promise(() => vi.waitFor(() => expect(context.close).toHaveBeenCalledOnce()));
+
+      yield* Effect.promise(() => browser.close());
+    }),
+  );
+
+  it.effect("does not let one thread reach another thread's tab by id", () =>
+    Effect.gen(function* () {
+      const browser = yield* ServerPreviewBrowser.ServerPreviewBrowser;
+
+      const opened = yield* Effect.promise(() =>
+        browser.handle(openRequest("owner-a", "owner-open-a")),
+      );
+
+      const foreignTabId = PreviewTabId.make(decodeTabStatus(opened).tabId);
+      const contextA = playwright.contexts.at(-1)!;
+      const intruder = ThreadId.make("intruder-b");
+
+      expect(foreignTabId).toMatch(/^tab_[0-9a-f-]{36}$/);
+
+      const peeked = yield* Effect.promise(() =>
+        browser.handle({
+          requestId: "intruder-status",
+          threadId: intruder,
+          tabId: foreignTabId,
+          operation: "status",
+          input: {},
+          timeoutMs: 1_000,
+        }),
+      );
+
+      expect(peeked).toMatchObject({ visible: false, tabId: null, url: null });
+
+      yield* Effect.promise(() =>
+        expect(
+          browser.handle({
+            requestId: "intruder-navigate",
+            threadId: intruder,
+            tabId: foreignTabId,
+            operation: "navigate",
+            input: { url: "https://example.com" },
+            timeoutMs: 1_000,
+          }),
+        ).rejects.toThrow("No active browser tab"),
+      );
+
+      const reopened = yield* Effect.promise(() =>
+        browser.handle({
+          requestId: "intruder-open",
+          threadId: intruder,
+          tabId: foreignTabId,
+          operation: "open",
+          input: {},
+          timeoutMs: 1_000,
+        }),
+      );
+
+      expect(decodeTabStatus(reopened).tabId).not.toBe(foreignTabId);
+      expect(contextA.pages).toHaveLength(1);
+      expect(playwright.contexts.at(-1)).not.toBe(contextA);
+
+      yield* Effect.promise(() => browser.close());
     }),
   );
 });

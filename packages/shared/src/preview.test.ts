@@ -3,19 +3,9 @@ import { describe, expect, it } from "vite-plus/test";
 import {
   isLoopbackHost,
   isPreviewableUrl,
-  newPreviewTabId,
   normalizePreviewUrl,
   PreviewUrlNormalizationError,
 } from "./preview.ts";
-
-describe("newPreviewTabId", () => {
-  it("returns a unique tab id every call", () => {
-    const a = newPreviewTabId();
-    const b = newPreviewTabId();
-    expect(a).not.toBe(b);
-    expect(a.startsWith("tab_")).toBe(true);
-  });
-});
 
 describe("isLoopbackHost", () => {
   it.each(["localhost", "127.0.0.1", "0.0.0.0", "::1", "[::1]"])("%s is loopback", (host) => {
