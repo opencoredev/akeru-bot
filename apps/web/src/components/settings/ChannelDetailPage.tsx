@@ -6,7 +6,6 @@ import {
   channelRepairAction,
 } from "@akeru/client-runtime/channel-presentation";
 import {
-  BotId,
   type ChannelConnectionProfile,
   type ChannelOwnerProvider,
   type ChannelProvider,
@@ -309,14 +308,8 @@ export function ChannelConnectionRow({
                 return;
               }
 
-              const selectedProject = liveProjects.some((project) => project.id === pickedProjectId)
-                ? pickedProjectId
-                : null;
-
-              const destinationProject = selectedProject ?? settings.projectHint(BotId.make(next));
-
-              if (!destinationProject) return;
-              void settings.updateAssignment(connection, next, destinationProject);
+              if (!projectId) return;
+              void settings.updateAssignment(connection, next, projectId);
             }}
           >
             <SelectTrigger

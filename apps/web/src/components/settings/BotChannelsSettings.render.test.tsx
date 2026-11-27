@@ -218,7 +218,7 @@ describe("channel project selection", () => {
     });
   });
 
-  it("uses the destination bot's recent project when changing an existing assignment", async () => {
+  it("keeps the project the picker shows when changing an existing assignment", async () => {
     fixtures.projects = [
       liveProject,
       {
@@ -256,7 +256,7 @@ describe("channel project selection", () => {
         botId: "bot-other",
         connectionId: "profile-1",
         provider: "imessage",
-        projectId: "project-other",
+        projectId: "project-uuid",
       },
     });
   });

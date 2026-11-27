@@ -4,7 +4,11 @@ import * as Effect from "effect/Effect";
 import type * as PlatformError from "effect/PlatformError";
 import { OrchestrationCommandInvariantError } from "./Errors.ts";
 import type { OrchestrationDispatchActor } from "./Services/OrchestrationEngine.ts";
-import { requireGroupOwnedThreadMutationAuthorized, requireThread } from "./commandInvariants.ts";
+import {
+  requireDelegation,
+  requireGroupOwnedThreadMutationAuthorized,
+  requireThread,
+} from "./commandInvariants.ts";
 import { projectEvent } from "./projector.ts";
 import { decideProjects } from "./decider/projects.ts";
 import { decideBots } from "./decider/bots.ts";
@@ -99,6 +103,41 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
     case "thread.session.stop": {
       const thread = yield* requireThread({ readModel, command, threadId: command.threadId });
       yield* requireGroupOwnedThreadMutationAuthorized({ readModel, thread, command, actor });
+      break;
+    }
+
+    case "delegation.retry":
+    case "delegation.cancel": {
+      const delegation = yield* requireDelegation({
+        readModel,
+        command,
+        delegationId: command.delegationId,
+      });
+
+      // Nested work runs in direct child chats whose IDs can be reused, so it answers to the chat
+      // its root delegation came from. Delegation records never change.
+      let root = delegation;
+      const visited = new Set<string>();
+
+      while (root.parentDelegationId !== null) {
+        if (visited.has(root.delegationId)) {
+          return yield* new OrchestrationCommandInvariantError({
+            commandType: command.type,
+            detail: `Delegation '${delegation.delegationId}' has a looping delegation chain.`,
+          });
+        }
+
+        visited.add(root.delegationId);
+        root = yield* requireDelegation({
+          readModel,
+          command,
+          delegationId: root.parentDelegationId,
+        });
+      }
+
+      const thread = yield* requireThread({ readModel, command, threadId: root.parentThreadId });
+      yield* requireGroupOwnedThreadMutationAuthorized({ readModel, thread, command, actor });
+
       break;
     }
   }
