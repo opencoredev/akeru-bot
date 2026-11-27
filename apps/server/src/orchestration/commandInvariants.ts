@@ -320,6 +320,27 @@ function requireMutationActorAuthorized(input: {
   );
 }
 
+export function requireDelegationGroupAuthorized(input: {
+  readonly readModel: OrchestrationReadModel;
+  readonly groupId: GroupId;
+  readonly command: OrchestrationCommand;
+  readonly actor: OrchestrationDispatchActor | undefined;
+}): Effect.Effect<void, OrchestrationCommandInvariantError> {
+  if (input.actor === undefined) return Effect.void;
+  const group = findGroupById(input.readModel, input.groupId);
+
+  if (!group) {
+    return Effect.fail(
+      invariantError(
+        input.command.type,
+        `The group this bot work came from was deleted, so command '${input.command.type}' is refused.`,
+      ),
+    );
+  }
+
+  return requireMutationActorAuthorized({ group, command: input.command, actor: input.actor });
+}
+
 export function requireGroupThreadCreateAuthorized(input: {
   readonly group: OrchestrationGroup;
   readonly command: Extract<OrchestrationCommand, { readonly type: "thread.create" }>;

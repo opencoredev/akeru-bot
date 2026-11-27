@@ -214,12 +214,20 @@ export function createAkeruDelegationRuntime(options: AkeruDelegationRuntimeOpti
       createdAt,
     });
 
+    const groupId =
+      parent.parentDelegationId === null
+        ? (parentThread.groupId ?? null)
+        : snapshot.delegations.find(
+            (candidate) => candidate.delegationId === parent.parentDelegationId,
+          )?.groupId;
+
     let delegation: AkeruDelegationRecord = {
       delegationId,
       parentDelegationId: parent.parentDelegationId,
       parentBotId: parent.botId,
       childBotId: bot.id,
       parentThreadId: parent.threadId,
+      ...(groupId !== undefined ? { groupId } : {}),
       parentTurnId: parent.turnId,
       ancestorBotIds: [...parent.ancestorBotIds, parent.botId],
       depth: parent.depth + 1,

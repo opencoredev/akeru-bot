@@ -1,5 +1,11 @@
 import * as NodeServices from "@effect/platform-node/NodeServices";
-import { BotId, CommandId, DelegationId, type AkeruDelegationRecord } from "@akeru/contracts";
+import {
+  BotId,
+  CommandId,
+  DelegationId,
+  GroupId,
+  type AkeruDelegationRecord,
+} from "@akeru/contracts";
 import { expect, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import { decideOrchestrationCommand } from "./decider.ts";
@@ -291,6 +297,77 @@ it.layer(NodeServices.layer)("delegation decider", (it) => {
       }).pipe(Effect.flip);
 
       expect(String(concurrencyError)).toContain("3 active delegations");
+    }),
+  );
+
+  it.effect("records the group of the chat the root delegation came from", () =>
+    Effect.gen(function* () {
+      const groupId = GroupId.make("group-1");
+      const readModel = makeReadModel();
+
+      const direct = yield* decideOne(readModel, {
+        type: "delegation.create",
+        commandId: CommandId.make("command-direct"),
+        delegation: makeDelegation({ groupId: null }),
+      });
+
+      expect(direct.payload.delegation.groupId).toBeNull();
+
+      const forged = yield* decideOrchestrationCommand({
+        readModel,
+        command: {
+          type: "delegation.create",
+          commandId: CommandId.make("command-forged"),
+          delegation: makeDelegation({ groupId }),
+        },
+      }).pipe(Effect.flip);
+
+      expect(String(forged)).toContain("must keep the group");
+
+      const parent = makeDelegation({ groupId });
+
+      const nested = (childGroupId: GroupId | null) =>
+        makeDelegation({
+          delegationId: DelegationId.make("delegation-nested"),
+          parentDelegationId: parent.delegationId,
+          parentBotId: CHILD_BOT_ID,
+          childBotId: OTHER_BOT_ID,
+          parentThreadId: CHILD_THREAD_ID,
+          ancestorBotIds: [PARENT_BOT_ID, CHILD_BOT_ID],
+          depth: 2,
+          billedBotId: OTHER_BOT_ID,
+          groupId: childGroupId,
+        });
+
+      const inherited = yield* decideOne(makeReadModel([parent]), {
+        type: "delegation.create",
+        commandId: CommandId.make("command-nested"),
+        delegation: nested(groupId),
+      });
+
+      expect(inherited.payload.delegation.groupId).toBe(groupId);
+
+      const dropped = yield* decideOrchestrationCommand({
+        readModel: makeReadModel([parent]),
+        command: {
+          type: "delegation.create",
+          commandId: CommandId.make("command-nested-dropped"),
+          delegation: nested(null),
+        },
+      }).pipe(Effect.flip);
+
+      expect(String(dropped)).toContain("must keep the group");
+
+      const changed = yield* decideOrchestrationCommand({
+        readModel: makeReadModel([parent]),
+        command: {
+          type: "delegation.state.set",
+          commandId: CommandId.make("command-group-change"),
+          delegation: { ...parent, groupId: null, updatedAt: LATER },
+        },
+      }).pipe(Effect.flip);
+
+      expect(String(changed)).toContain("immutable");
     }),
   );
 
