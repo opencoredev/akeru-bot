@@ -10,19 +10,60 @@ import * as PreviewManager from "./Manager.ts";
 import * as ServerPreviewBrowser from "./ServerPreviewBrowser.ts";
 
 const playwright = vi.hoisted(() => {
-  const browsers: Array<{ readonly close: ReturnType<typeof vi.fn> }> = [];
+  interface FakePage {
+    readonly close: () => Promise<void>;
+  }
 
-  const fakePage = () => ({
-    url: () => "about:blank",
-    title: async () => "",
-    viewportSize: () => ({ width: 1280, height: 800 }),
-    screenshot: async () => Buffer.from("png"),
-    close: vi.fn(async () => undefined),
-  });
+  interface FakeContext {
+    readonly pages: FakePage[];
+    readonly close: ReturnType<typeof vi.fn>;
+  }
+
+  const browsers: Array<{
+    readonly close: ReturnType<typeof vi.fn>;
+    readonly newContext: ReturnType<typeof vi.fn>;
+  }> = [];
+
+  const contexts: FakeContext[] = [];
+
+  const fakePage = () => {
+    const onClose: Array<() => void> = [];
+
+    return {
+      url: () => "about:blank",
+      title: async () => "",
+      viewportSize: () => ({ width: 1280, height: 800 }),
+      screenshot: async () => Buffer.from("png"),
+      once: (event: string, listener: () => void) => {
+        if (event === "close") onClose.push(listener);
+      },
+      close: vi.fn(async () => {
+        for (const listener of onClose.splice(0)) listener();
+      }),
+    };
+  };
+
+  const fakeContext = (): FakeContext & { readonly newPage: () => Promise<FakePage> } => {
+    const context = {
+      pages: [] as FakePage[],
+      close: vi.fn(async () => undefined),
+      newPage: async () => {
+        const page = fakePage();
+        context.pages.push(page);
+
+        return page;
+      },
+    };
+
+    contexts.push(context);
+
+    return context;
+  };
 
   const connectOverCDP = vi.fn(async () => {
     const browser = {
-      contexts: () => [{ newPage: async () => fakePage() }],
+      contexts: () => [fakeContext()],
+      newContext: vi.fn(async () => fakeContext()),
       close: vi.fn(async () => undefined),
     };
 
@@ -31,7 +72,7 @@ const playwright = vi.hoisted(() => {
     return browser;
   });
 
-  return { browsers, connectOverCDP };
+  return { browsers, contexts, connectOverCDP };
 });
 
 vi.mock("playwright-core", () => ({ chromium: { connectOverCDP: playwright.connectOverCDP } }));
@@ -87,6 +128,35 @@ it.layer(testLayer)("ServerPreviewBrowser", (it) => {
       yield* Effect.promise(() => browser.close());
       expect(playwright.browsers[1]!.close).toHaveBeenCalledOnce();
       expect(playwright.browsers[0]!.close).toHaveBeenCalledOnce();
+    }),
+  );
+
+  it.effect("gives each thread its own context and closes it with the thread's last tab", () =>
+    Effect.gen(function* () {
+      const browser = yield* ServerPreviewBrowser.ServerPreviewBrowser;
+      yield* Effect.promise(() => browser.handle(openRequest("iso-a", "iso-open-1")));
+      yield* Effect.promise(() => browser.handle(openRequest("iso-a", "iso-open-2")));
+      yield* Effect.promise(() => browser.handle(openRequest("iso-b", "iso-open-3")));
+
+      const shared = playwright.browsers.at(-1)!;
+      expect(shared.newContext).toHaveBeenCalledTimes(2);
+      const [contextA, contextB] = playwright.contexts.slice(-2);
+      expect(contextA).not.toBe(contextB);
+      expect(contextA!.pages).toHaveLength(2);
+      expect(contextB!.pages).toHaveLength(1);
+
+      yield* Effect.promise(() => contextA!.pages[0]!.close());
+      expect(contextA!.close).not.toHaveBeenCalled();
+
+      yield* Effect.promise(() => contextA!.pages[1]!.close());
+      yield* Effect.promise(() => vi.waitFor(() => expect(contextA!.close).toHaveBeenCalledOnce()));
+      expect(contextB!.close).not.toHaveBeenCalled();
+
+      yield* Effect.promise(() => browser.handle(openRequest("iso-a", "iso-open-4")));
+      expect(shared.newContext).toHaveBeenCalledTimes(3);
+      expect(playwright.contexts.at(-1)).not.toBe(contextA);
+
+      yield* Effect.promise(() => browser.close());
     }),
   );
 

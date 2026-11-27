@@ -35,7 +35,7 @@ import * as Layer from "effect/Layer";
 import * as RcMap from "effect/RcMap";
 import * as Scope from "effect/Scope";
 import { HttpClient } from "effect/unstable/http";
-import { type BrowserContext, type Page } from "playwright-core";
+import { type Browser, type BrowserContext, type Page } from "playwright-core";
 import * as ServerSettings from "../serverSettings.ts";
 import * as PreviewManager from "./Manager.ts";
 
@@ -93,24 +93,26 @@ export const make = Effect.gen(function* ServerPreviewBrowserMake() {
   const requireApiKey = requireBrowserbaseApiKey(settingsService);
   const tabs = new Map<PreviewTabId, BrowserTab>();
   const activeByThread = new Map<string, PreviewTabId>();
+  // Each thread gets its own browser context so cookies, storage and sessions
+  // never leak between threads that share the Browserbase session.
+  const threadContexts = new Map<string, Promise<BrowserContext>>();
 
   const contexts = yield* browserbaseContexts(httpClient, settingsService);
 
   // One lease holds the shared browser open. close() releases it, which closes the
   // Browserbase session; the next getContext() opens a fresh one.
-  let lease: { readonly scope: Scope.Closeable; readonly context: Promise<BrowserContext> } | null =
-    null;
+  let lease: { readonly scope: Scope.Closeable; readonly browser: Promise<Browser> } | null = null;
 
   // Bumped by close() so an open that raced it does not leave a tab behind.
   let closeGeneration = 0;
 
-  const getContext = (): Promise<BrowserContext> => {
-    if (lease) return lease.context;
+  const getBrowser = (): Promise<Browser> => {
+    if (lease) return lease.browser;
     const scope = runSync(Scope.make());
 
-    const context = runPromise(
+    const browser = runPromise(
       RcMap.get(contexts, "browser").pipe(
-        Effect.map(({ context }) => context),
+        Effect.map(({ browser }) => browser),
         Scope.provide(scope),
       ),
     ).catch(async (cause: unknown) => {
@@ -119,21 +121,47 @@ export const make = Effect.gen(function* ServerPreviewBrowserMake() {
       throw cause;
     });
 
-    const current = { scope, context };
+    const current = { scope, browser };
     lease = current;
 
-    return context;
+    return browser;
   };
 
   // A request that raced close() must not open a new session: nothing would
-  // close it again. getContext() claims the lease synchronously, so checking
+  // close it again. getBrowser() claims the lease synchronously, so checking
   // right before the call leaves no gap.
-  const contextFor = (generation: number): Promise<BrowserContext> => {
+  const contextFor = (threadId: ThreadId, generation: number): Promise<BrowserContext> => {
     if (generation !== closeGeneration) {
       return Promise.reject(new Error("The browser was closed while this request was running."));
     }
 
-    return getContext();
+    const existing = threadContexts.get(threadId);
+
+    if (existing) return existing;
+
+    const context = getBrowser()
+      .then((browser) => browser.newContext({ viewport: DEFAULT_VIEWPORT }))
+      .catch((cause: unknown) => {
+        if (threadContexts.get(threadId) === context) threadContexts.delete(threadId);
+        throw cause;
+      });
+
+    threadContexts.set(threadId, context);
+
+    return context;
+  };
+
+  const releaseTab = (tabId: PreviewTabId, tab: BrowserTab) => {
+    if (tabs.get(tabId) !== tab) return;
+    tabs.delete(tabId);
+
+    if (activeByThread.get(tab.threadId) === tabId) activeByThread.delete(tab.threadId);
+
+    for (const other of tabs.values()) if (other.threadId === tab.threadId) return;
+
+    const context = threadContexts.get(tab.threadId);
+    threadContexts.delete(tab.threadId);
+    void context?.then((opened) => opened.close()).catch(() => undefined);
   };
 
   const resolveTab = (request: PreviewAutomationRequest): BrowserTab => {
@@ -269,15 +297,18 @@ export const make = Effect.gen(function* ServerPreviewBrowserMake() {
         );
 
         tabId = snapshot.tabId;
-        const page = await (await contextFor(generation)).newPage();
+        const page = await (await contextFor(request.threadId, generation)).newPage();
 
         if (generation !== closeGeneration) {
           await page.close().catch(() => undefined);
           throw new Error("The browser was closed while this tab was opening.");
         }
 
-        tab = { threadId: request.threadId, page, loading: false };
-        tabs.set(tabId, tab);
+        const opened: BrowserTab = { threadId: request.threadId, page, loading: false };
+        const openedTabId = tabId;
+        tab = opened;
+        tabs.set(openedTabId, opened);
+        page.once("close", () => releaseTab(openedTabId, opened));
       }
 
       activeByThread.set(request.threadId, tabId!);
@@ -402,7 +433,7 @@ export const make = Effect.gen(function* ServerPreviewBrowserMake() {
 
       case "evaluate": {
         const input = decodeEvaluateInput(request.input);
-        const session = await (await contextFor(generation)).newCDPSession(tab.page);
+        const session = await tab.page.context().newCDPSession(tab.page);
 
         try {
           const result = await session.send("Runtime.evaluate", {
@@ -480,9 +511,10 @@ export const make = Effect.gen(function* ServerPreviewBrowserMake() {
     // Pages die with the browser session.
     tabs.clear();
     activeByThread.clear();
+    threadContexts.clear();
 
     if (!current) return;
-    await current.context.catch(() => undefined);
+    await current.browser.catch(() => undefined);
     await runPromise(Scope.close(current.scope, Exit.void));
   };
 
