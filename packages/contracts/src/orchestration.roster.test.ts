@@ -1,6 +1,6 @@
 import { assert, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
-import { ChannelConnectionId, ProjectId } from "./baseSchemas.ts";
+import { BotId, CommandId, ChannelConnectionId, ProjectId } from "./baseSchemas.ts";
 import { CHANNEL_TRANSPORT_CAPABILITIES } from "./orchestration.ts";
 import {
   decodeBotAvatar,
@@ -429,5 +429,21 @@ it.effect("decodes exclusive thread ownership", () =>
     );
 
     assert.equal(invalid._tag, "Failure");
+  }),
+);
+
+it.effect("preserves conditional channel detach while accepting older clients", () =>
+  Effect.gen(function* () {
+    const legacy = {
+      type: "channel.detach" as const,
+      commandId: CommandId.make("detach-channel"),
+      botId: BotId.make("bot-1"),
+      provider: "slack" as const,
+    };
+
+    assert.deepStrictEqual(yield* decodeClientOrchestrationCommand(legacy), legacy);
+
+    const conditional = { ...legacy, expectedConnectionId: ChannelConnectionId.make("slack-old") };
+    assert.deepStrictEqual(yield* decodeClientOrchestrationCommand(conditional), conditional);
   }),
 );

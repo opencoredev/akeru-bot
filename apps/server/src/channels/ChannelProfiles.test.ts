@@ -16,6 +16,7 @@ import {
   makeMemorySecretStore,
   makeHarness,
   telegramConnect,
+  slackConnect,
   whatsappConnect,
 } from "./testUtils/channelRuntime.ts";
 import { BotId, ChannelConnectionId, CommandId, DEFAULT_SERVER_SETTINGS } from "@akeru/contracts";
@@ -89,6 +90,147 @@ describe("channel runtime", () => {
       yield* deleteChannelConnection(harness.dependencies, connectionId);
       expect(harness.secrets.size).toBe(0);
       expect(harness.readSettings().channelConnections).toEqual([]);
+    }),
+  );
+
+  for (const disconnected of [false, true]) {
+    it.effect(
+      `refuses a different Slack profile while the bot is ${disconnected ? "disconnected" : "connected"} but assigned`,
+      () =>
+        Effect.gen(function* () {
+          let starts = 0;
+          let stops = 0;
+
+          const harness = makeHarness({
+            startTransport: async () => {
+              starts += 1;
+
+              return {
+                externalIdentity: "slack-bot",
+                runtime: { post: async () => undefined, shutdown: async () => void (stops += 1) },
+              };
+            },
+          });
+
+          const oldId = ChannelConnectionId.make("slack-old");
+          const newId = ChannelConnectionId.make("slack-new");
+
+          for (const connectionId of [oldId, newId]) {
+            yield* saveChannelConnection(harness.dependencies, {
+              ...slackConnect(BOT_ID),
+              type: "channel.connection.save",
+              connectionId,
+              name: connectionId,
+            });
+          }
+
+          yield* attachChannelConnection(harness.dependencies, BOT_ID, oldId, PROJECT_ID, "slack");
+
+          if (disconnected) yield* disconnectChannel(harness.dependencies, BOT_ID, "slack");
+          const binding = harness.readModel().bots[0]?.channelBindings[0];
+          const commands = harness.commands.length;
+          const stopped = stops;
+          const secrets = [...harness.secrets.entries()];
+
+          yield* expectFailureMessage(
+            attachChannelConnection(harness.dependencies, BOT_ID, newId, PROJECT_ID, "slack"),
+            "Unassign the channel already connected to this bot first",
+          );
+          yield* expectFailureMessage(
+            connectChannel(harness.dependencies, slackConnect(BOT_ID)),
+            "Unassign the channel already connected to this bot first",
+          );
+          expect(harness.readModel().bots[0]?.channelBindings[0]).toEqual(binding);
+          expect(harness.commands).toHaveLength(commands);
+          expect([...harness.secrets.entries()]).toEqual(secrets);
+          expect(starts).toBe(1);
+          expect(stops).toBe(stopped);
+
+          yield* attachChannelConnection(harness.dependencies, BOT_ID, oldId, PROJECT_ID, "slack");
+          expect(harness.readModel().bots[0]?.channelBindings[0]).toMatchObject({
+            connectionId: oldId,
+            status: "connected",
+          });
+          yield* disconnectChannel(harness.dependencies, BOT_ID, "slack");
+          yield* reconnectChannel(harness.dependencies, BOT_ID, "slack");
+          expect(harness.readModel().bots[0]?.channelBindings[0]).toMatchObject({
+            connectionId: oldId,
+            status: "connected",
+          });
+          yield* detachChannelConnection(harness.dependencies, BOT_ID, "slack");
+          yield* attachChannelConnection(harness.dependencies, BOT_ID, newId, PROJECT_ID, "slack");
+          expect(harness.readModel().bots[0]?.channelBindings[0]?.connectionId).toBe(newId);
+        }),
+    );
+  }
+
+  it.effect("keeps direct Slack credential replacement and reconnect available", () =>
+    Effect.gen(function* () {
+      const harness = makeHarness({});
+      yield* connectChannel(harness.dependencies, slackConnect(BOT_ID));
+      yield* connectChannel(harness.dependencies, {
+        ...slackConnect(BOT_ID),
+        botToken: "xoxb-replacement",
+        appToken: "xapp-replacement",
+      });
+      yield* disconnectChannel(harness.dependencies, BOT_ID, "slack");
+      yield* reconnectChannel(harness.dependencies, BOT_ID, "slack");
+      expect(harness.readModel().bots[0]?.channelBindings[0]).toMatchObject({
+        provider: "slack",
+        status: "connected",
+      });
+      expect(harness.readModel().bots[0]?.channelBindings[0]?.connectionId).toBeUndefined();
+      const connectionId = ChannelConnectionId.make("slack-saved");
+      yield* saveChannelConnection(harness.dependencies, {
+        ...slackConnect(BOT_ID),
+        type: "channel.connection.save",
+        connectionId,
+        name: "Saved Slack",
+      });
+      yield* expectFailureMessage(
+        attachChannelConnection(harness.dependencies, BOT_ID, connectionId, PROJECT_ID, "slack"),
+        "Unassign the channel already connected to this bot first",
+      );
+      yield* detachChannelConnection(harness.dependencies, BOT_ID, "slack");
+      yield* attachChannelConnection(
+        harness.dependencies,
+        BOT_ID,
+        connectionId,
+        PROJECT_ID,
+        "slack",
+      );
+    }),
+  );
+
+  it.effect("serializes competing Slack profile assignments to the same bot", () =>
+    Effect.gen(function* () {
+      const harness = makeHarness({});
+
+      const ids = [
+        ChannelConnectionId.make("slack-first"),
+        ChannelConnectionId.make("slack-second"),
+      ];
+
+      for (const connectionId of ids) {
+        yield* saveChannelConnection(harness.dependencies, {
+          ...slackConnect(BOT_ID),
+          type: "channel.connection.save",
+          connectionId,
+          name: connectionId,
+        });
+      }
+
+      const results = yield* Effect.all(
+        ids.map((id) =>
+          Effect.exit(
+            attachChannelConnection(harness.dependencies, BOT_ID, id, PROJECT_ID, "slack"),
+          ),
+        ),
+        { concurrency: "unbounded" },
+      );
+
+      expect(results.filter(Exit.isSuccess)).toHaveLength(1);
+      expect(results.filter(Exit.isFailure)).toHaveLength(1);
     }),
   );
 
