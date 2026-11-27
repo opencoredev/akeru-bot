@@ -1,7 +1,8 @@
 import { it } from "@effect/vitest";
-import { ThreadId, type PreviewAutomationRequest } from "@akeru/contracts";
+import { PreviewTabId, ThreadId, type PreviewAutomationRequest } from "@akeru/contracts";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
+import * as Schema from "effect/Schema";
 import { HttpClient, HttpClientResponse } from "effect/unstable/http";
 import { expect, vi } from "vite-plus/test";
 
@@ -10,19 +11,72 @@ import * as PreviewManager from "./Manager.ts";
 import * as ServerPreviewBrowser from "./ServerPreviewBrowser.ts";
 
 const playwright = vi.hoisted(() => {
-  const browsers: Array<{ readonly close: ReturnType<typeof vi.fn> }> = [];
+  interface FakePage {
+    readonly close: () => Promise<void>;
+  }
 
-  const fakePage = () => ({
-    url: () => "about:blank",
-    title: async () => "",
-    viewportSize: () => ({ width: 1280, height: 800 }),
-    screenshot: async () => Buffer.from("png"),
-    close: vi.fn(async () => undefined),
-  });
+  interface FakeContext {
+    readonly pages: FakePage[];
+    readonly close: ReturnType<typeof vi.fn>;
+  }
+
+  const browsers: Array<{
+    readonly close: ReturnType<typeof vi.fn>;
+    readonly newContext: ReturnType<typeof vi.fn>;
+  }> = [];
+
+  const contexts: FakeContext[] = [];
+
+  // Lets a test hold or fail the next newPage() call.
+  interface NewPageHook {
+    current: (() => Promise<void>) | null;
+  }
+
+  const newPageHook: NewPageHook = { current: null };
+
+  const fakePage = () => {
+    const onClose: Array<() => void> = [];
+
+    return {
+      url: () => "about:blank",
+      title: async () => "",
+      viewportSize: () => ({ width: 1280, height: 800 }),
+      screenshot: async () => Buffer.from("png"),
+      once: (event: string, listener: () => void) => {
+        if (event === "close") onClose.push(listener);
+      },
+      close: vi.fn(async () => {
+        for (const listener of onClose.splice(0)) listener();
+      }),
+    };
+  };
+
+  const fakeContext = (): FakeContext & { readonly newPage: () => Promise<FakePage> } => {
+    const context = {
+      pages: [] as FakePage[],
+      close: vi.fn(async () => undefined),
+      newPage: async () => {
+        const hook = newPageHook.current;
+        newPageHook.current = null;
+
+        if (hook) await hook();
+
+        const page = fakePage();
+        context.pages.push(page);
+
+        return page;
+      },
+    };
+
+    contexts.push(context);
+
+    return context;
+  };
 
   const connectOverCDP = vi.fn(async () => {
     const browser = {
-      contexts: () => [{ newPage: async () => fakePage() }],
+      contexts: () => [fakeContext()],
+      newContext: vi.fn(async () => fakeContext()),
       close: vi.fn(async () => undefined),
     };
 
@@ -31,7 +85,7 @@ const playwright = vi.hoisted(() => {
     return browser;
   });
 
-  return { browsers, connectOverCDP };
+  return { browsers, contexts, newPageHook, connectOverCDP };
 });
 
 vi.mock("playwright-core", () => ({ chromium: { connectOverCDP: playwright.connectOverCDP } }));
@@ -58,6 +112,8 @@ const testLayer = ServerPreviewBrowser.layer.pipe(
   ),
   Layer.provide(Layer.succeed(HttpClient.HttpClient, browserbase)),
 );
+
+const decodeTabStatus = Schema.decodeUnknownSync(Schema.Struct({ tabId: Schema.String }));
 
 const openRequest = (threadId: string, requestId: string): PreviewAutomationRequest => ({
   requestId,
@@ -90,6 +146,119 @@ it.layer(testLayer)("ServerPreviewBrowser", (it) => {
     }),
   );
 
+  it.effect("gives each thread its own context and closes it with the thread's last tab", () =>
+    Effect.gen(function* () {
+      const browser = yield* ServerPreviewBrowser.ServerPreviewBrowser;
+      yield* Effect.promise(() => browser.handle(openRequest("iso-a", "iso-open-1")));
+      yield* Effect.promise(() => browser.handle(openRequest("iso-a", "iso-open-2")));
+      yield* Effect.promise(() => browser.handle(openRequest("iso-b", "iso-open-3")));
+
+      const shared = playwright.browsers.at(-1)!;
+      expect(shared.newContext).toHaveBeenCalledTimes(2);
+      const [contextA, contextB] = playwright.contexts.slice(-2);
+      expect(contextA).not.toBe(contextB);
+      expect(contextA!.pages).toHaveLength(2);
+      expect(contextB!.pages).toHaveLength(1);
+
+      yield* Effect.promise(() => contextA!.pages[0]!.close());
+      expect(contextA!.close).not.toHaveBeenCalled();
+
+      yield* Effect.promise(() => contextA!.pages[1]!.close());
+      yield* Effect.promise(() => vi.waitFor(() => expect(contextA!.close).toHaveBeenCalledOnce()));
+      expect(contextB!.close).not.toHaveBeenCalled();
+
+      yield* Effect.promise(() => browser.handle(openRequest("iso-a", "iso-open-4")));
+      expect(shared.newContext).toHaveBeenCalledTimes(3);
+      expect(playwright.contexts.at(-1)).not.toBe(contextA);
+
+      yield* Effect.promise(() => browser.close());
+    }),
+  );
+
+  it.effect("keeps a thread's context open while another tab is still opening", () =>
+    Effect.gen(function* () {
+      const browser = yield* ServerPreviewBrowser.ServerPreviewBrowser;
+      yield* Effect.promise(() => browser.handle(openRequest("pending-a", "pending-open-1")));
+      const context = playwright.contexts.at(-1)!;
+
+      let entered!: () => void;
+      let release!: () => void;
+      const hookEntered = new Promise<void>((resolve) => (entered = resolve));
+      const gate = new Promise<void>((resolve) => (release = resolve));
+      playwright.newPageHook.current = async () => {
+        entered();
+        await gate;
+      };
+
+      const opening = browser.handle(openRequest("pending-a", "pending-open-2"));
+      yield* Effect.promise(() => hookEntered);
+      yield* Effect.promise(() => context.pages[0]!.close());
+      release();
+      yield* Effect.promise(() => opening);
+      expect(context.close).not.toHaveBeenCalled();
+
+      yield* Effect.promise(() => context.pages[1]!.close());
+      yield* Effect.promise(() => vi.waitFor(() => expect(context.close).toHaveBeenCalledOnce()));
+
+      yield* Effect.promise(() => browser.close());
+    }),
+  );
+
+  it.effect("does not let an open that raced close keep the next context alive", () =>
+    Effect.gen(function* () {
+      const browser = yield* ServerPreviewBrowser.ServerPreviewBrowser;
+      yield* Effect.promise(() => browser.handle(openRequest("stale-a", "stale-open-1")));
+      const staleContext = playwright.contexts.at(-1)!;
+
+      let entered!: () => void;
+      let release!: () => void;
+      const hookEntered = new Promise<void>((resolve) => (entered = resolve));
+      const gate = new Promise<void>((resolve) => (release = resolve));
+      playwright.newPageHook.current = async () => {
+        entered();
+        await gate;
+      };
+
+      const stale = browser.handle(openRequest("stale-a", "stale-open-2"));
+      yield* Effect.promise(() => hookEntered);
+      yield* Effect.promise(() => browser.close());
+
+      yield* Effect.promise(() => browser.handle(openRequest("stale-a", "stale-open-3")));
+      const freshContext = playwright.contexts.at(-1)!;
+      expect(freshContext).not.toBe(staleContext);
+
+      yield* Effect.promise(() => freshContext.pages[0]!.close());
+      yield* Effect.promise(() =>
+        vi.waitFor(() => expect(freshContext.close).toHaveBeenCalledOnce()),
+      );
+
+      release();
+      yield* Effect.promise(() => expect(stale).rejects.toThrow("browser was closed"));
+      expect(staleContext.close).toHaveBeenCalled();
+
+      yield* Effect.promise(() => browser.close());
+    }),
+  );
+
+  it.effect("closes the context when a thread's first tab fails to open", () =>
+    Effect.gen(function* () {
+      const browser = yield* ServerPreviewBrowser.ServerPreviewBrowser;
+      playwright.newPageHook.current = async () => {
+        throw new Error("page failed");
+      };
+
+      yield* Effect.promise(() =>
+        expect(browser.handle(openRequest("failing-a", "failing-open"))).rejects.toThrow(
+          "page failed",
+        ),
+      );
+      const context = playwright.contexts.at(-1)!;
+      yield* Effect.promise(() => vi.waitFor(() => expect(context.close).toHaveBeenCalledOnce()));
+
+      yield* Effect.promise(() => browser.close());
+    }),
+  );
+
   it.effect("does not keep a tab or session from an open that raced close", () =>
     Effect.gen(function* () {
       const browser = yield* ServerPreviewBrowser.ServerPreviewBrowser;
@@ -99,6 +268,73 @@ it.layer(testLayer)("ServerPreviewBrowser", (it) => {
 
       // No Browserbase session outlives the close.
       for (const opened of playwright.browsers) expect(opened.close).toHaveBeenCalledOnce();
+
+      // The rejected open must not keep the thread's next context alive.
+      yield* Effect.promise(() => browser.handle(openRequest("thread-race", "open-race-2")));
+      const context = playwright.contexts.at(-1)!;
+      yield* Effect.promise(() => context.pages[0]!.close());
+      yield* Effect.promise(() => vi.waitFor(() => expect(context.close).toHaveBeenCalledOnce()));
+
+      yield* Effect.promise(() => browser.close());
+    }),
+  );
+
+  it.effect("does not let one thread reach another thread's tab by id", () =>
+    Effect.gen(function* () {
+      const browser = yield* ServerPreviewBrowser.ServerPreviewBrowser;
+
+      const opened = yield* Effect.promise(() =>
+        browser.handle(openRequest("owner-a", "owner-open-a")),
+      );
+
+      const foreignTabId = PreviewTabId.make(decodeTabStatus(opened).tabId);
+      const contextA = playwright.contexts.at(-1)!;
+      const intruder = ThreadId.make("intruder-b");
+
+      expect(foreignTabId).toMatch(/^tab_[0-9a-f-]{36}$/);
+
+      const peeked = yield* Effect.promise(() =>
+        browser.handle({
+          requestId: "intruder-status",
+          threadId: intruder,
+          tabId: foreignTabId,
+          operation: "status",
+          input: {},
+          timeoutMs: 1_000,
+        }),
+      );
+
+      expect(peeked).toMatchObject({ visible: false, tabId: null, url: null });
+
+      yield* Effect.promise(() =>
+        expect(
+          browser.handle({
+            requestId: "intruder-navigate",
+            threadId: intruder,
+            tabId: foreignTabId,
+            operation: "navigate",
+            input: { url: "https://example.com" },
+            timeoutMs: 1_000,
+          }),
+        ).rejects.toThrow("No active browser tab"),
+      );
+
+      const reopened = yield* Effect.promise(() =>
+        browser.handle({
+          requestId: "intruder-open",
+          threadId: intruder,
+          tabId: foreignTabId,
+          operation: "open",
+          input: {},
+          timeoutMs: 1_000,
+        }),
+      );
+
+      expect(decodeTabStatus(reopened).tabId).not.toBe(foreignTabId);
+      expect(contextA.pages).toHaveLength(1);
+      expect(playwright.contexts.at(-1)).not.toBe(contextA);
+
+      yield* Effect.promise(() => browser.close());
     }),
   );
 });
