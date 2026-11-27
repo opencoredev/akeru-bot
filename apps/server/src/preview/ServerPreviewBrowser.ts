@@ -201,12 +201,15 @@ export const make = Effect.gen(function* ServerPreviewBrowserMake() {
 
       return tab;
     } finally {
-      const remaining = (pendingOpens.get(threadId) ?? 1) - 1;
+      // close() reset the counts, so a stale open must not touch the new generation's.
+      if (generation === closeGeneration) {
+        const remaining = (pendingOpens.get(threadId) ?? 1) - 1;
 
-      if (remaining > 0) pendingOpens.set(threadId, remaining);
-      else pendingOpens.delete(threadId);
+        if (remaining > 0) pendingOpens.set(threadId, remaining);
+        else pendingOpens.delete(threadId);
 
-      closeIdleContext(threadId);
+        closeIdleContext(threadId);
+      }
     }
   };
 
@@ -547,6 +550,7 @@ export const make = Effect.gen(function* ServerPreviewBrowserMake() {
     tabs.clear();
     activeByThread.clear();
     threadContexts.clear();
+    pendingOpens.clear();
 
     if (!current) return;
     await current.browser.catch(() => undefined);

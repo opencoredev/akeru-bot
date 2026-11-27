@@ -201,6 +201,42 @@ it.layer(testLayer)("ServerPreviewBrowser", (it) => {
     }),
   );
 
+  it.effect("does not let an open that raced close keep the next context alive", () =>
+    Effect.gen(function* () {
+      const browser = yield* ServerPreviewBrowser.ServerPreviewBrowser;
+      yield* Effect.promise(() => browser.handle(openRequest("stale-a", "stale-open-1")));
+      const staleContext = playwright.contexts.at(-1)!;
+
+      let entered!: () => void;
+      let release!: () => void;
+      const hookEntered = new Promise<void>((resolve) => (entered = resolve));
+      const gate = new Promise<void>((resolve) => (release = resolve));
+      playwright.newPageHook.current = async () => {
+        entered();
+        await gate;
+      };
+
+      const stale = browser.handle(openRequest("stale-a", "stale-open-2"));
+      yield* Effect.promise(() => hookEntered);
+      yield* Effect.promise(() => browser.close());
+
+      yield* Effect.promise(() => browser.handle(openRequest("stale-a", "stale-open-3")));
+      const freshContext = playwright.contexts.at(-1)!;
+      expect(freshContext).not.toBe(staleContext);
+
+      yield* Effect.promise(() => freshContext.pages[0]!.close());
+      yield* Effect.promise(() =>
+        vi.waitFor(() => expect(freshContext.close).toHaveBeenCalledOnce()),
+      );
+
+      release();
+      yield* Effect.promise(() => expect(stale).rejects.toThrow("browser was closed"));
+      expect(staleContext.close).toHaveBeenCalled();
+
+      yield* Effect.promise(() => browser.close());
+    }),
+  );
+
   it.effect("closes the context when a thread's first tab fails to open", () =>
     Effect.gen(function* () {
       const browser = yield* ServerPreviewBrowser.ServerPreviewBrowser;
